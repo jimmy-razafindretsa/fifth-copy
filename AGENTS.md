@@ -29,6 +29,10 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: Linear, 
 - governing ADRs for a path: `npx tsx scripts/adr-governing.ts <path>`
 - Linear operations: `npx tsx scripts/linear.ts <op> ...` (see agents/PROTOCOL.md section 11)
 - DB guard (run before any DB command): `scripts/db-guard.sh`
+- local DB up: `npm run db:up` · test DB prepare: `scripts/test-db.sh`
+- visual baselines (pinned image, needs `visual-change` label): `scripts/visual-baselines.sh [--check]`
+- seed an epic + cards into Linear: `npx tsx scripts/linear-seed.ts work/plan/<epic>.json [--validate|--dry-run]`
+- loop (mode C): `AGENT_CMD="claude -p" scripts/loop.sh [--max-cards N]`
 
 ## Where memory lives (write each fact to exactly ONE place)
 - Rules and hazards that must always apply: this file (add max 3 lines per card, via the card's PR).

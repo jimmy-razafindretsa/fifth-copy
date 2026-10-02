@@ -12,7 +12,7 @@ Placeholder values used: TEAM_KEY=`ENG` (change in AGENTS.md if your Linear team
 - [x] 3. Tooling scripts: `check.sh`, `adr-index.ts`, `adr-governing.ts`, first ADRs, `linear.ts`, `deploy-smoke.sh`, `loop.sh`
 - [x] 4. Unit test runner (vitest)
 - [x] 5. Playwright harness + `scripts/see.ts` + visual test config
-- [ ] 6. Design tokens + base UI primitives + `docs/design/components.md`
+- [x] 6. Design tokens + base UI primitives + `docs/design/components.md`
 - [ ] 7. CI pipeline (GitHub Actions) + CODEOWNERS + PR template
 - [ ] 8. Linear workspace bootstrap script (states, labels) + Foundations epic/cards seed files
 - [ ] 9. Final verification: `scripts/check.sh` green, `next build` green, e2e green

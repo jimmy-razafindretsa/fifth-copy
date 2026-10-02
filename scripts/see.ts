@@ -83,7 +83,7 @@ async function main() {
         (v) => v.impact === "serious" || v.impact === "critical",
       );
 
-      const file = path.join(outDir, `${slug}-${name}`);
+      const file = path.join(outDir, `${slug}-${name}${theme === "light" ? "" : `-${theme}`}`);
       await page.screenshot({ path: `${file}.png`, fullPage: true });
       fs.writeFileSync(`${file}.aria.yml`, await page.locator("body").ariaSnapshot());
       const overflow = await page.evaluate(

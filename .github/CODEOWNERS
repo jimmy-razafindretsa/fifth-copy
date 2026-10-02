@@ -1,0 +1,8 @@
+# Decisions and always-loaded rules require a human reviewer (agent-kit PHASE0).
+# Replace @jimmy-razafindretsa with your GitHub user or team if different.
+/docs/adr/            @jimmy-razafindretsa
+/AGENTS.md            @jimmy-razafindretsa
+/CLAUDE.md            @jimmy-razafindretsa
+/agents/              @jimmy-razafindretsa
+/.github/             @jimmy-razafindretsa
+/prisma/migrations/   @jimmy-razafindretsa

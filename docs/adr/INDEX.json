@@ -1,0 +1,70 @@
+{
+  "generated": "by scripts/adr-index.ts, do not edit",
+  "adrs": [
+    {
+      "id": "0001",
+      "title": "Feature-sliced src/ layout with enforced import boundaries",
+      "status": "proposed",
+      "category": "architecture",
+      "scope": [
+        "src/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "app -> features -> server/lib; cross-feature imports only via index.ts; components/ui imports no features/server; enforced by .dependency-cruiser.cjs.",
+      "file": "docs/adr/0001-architecture-boundaries.md"
+    },
+    {
+      "id": "0002",
+      "title": "Prisma 7 with the pg driver adapter, schema folder, server-only client",
+      "status": "proposed",
+      "category": "data",
+      "scope": [
+        "prisma/**",
+        "prisma.config.ts",
+        "src/server/**",
+        "src/features/*/queries/**",
+        "src/features/*/actions/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Use the client from src/server/db.ts (or createPrismaClient in scripts/tests); schema in prisma/schema/*.prisma; migrations fix forward only.",
+      "file": "docs/adr/0002-data-access-prisma.md"
+    },
+    {
+      "id": "0003",
+      "title": "Separate local test database, migrated with migrate deploy",
+      "status": "proposed",
+      "category": "data",
+      "scope": [
+        "e2e/**",
+        "src/**/*.test.ts",
+        "scripts/test-db.sh",
+        "prisma/docker-init/**",
+        ".github/workflows/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Tests that touch the DB use TEST_DATABASE_URL (database app_test), prepared by scripts/test-db.sh; never the dev DB, never a remote DB.",
+      "file": "docs/adr/0003-test-database-strategy.md"
+    },
+    {
+      "id": "0004",
+      "title": "Tooling baseline (npm, Vitest, Playwright + axe, GitHub Actions)",
+      "status": "proposed",
+      "category": "tooling",
+      "scope": [
+        "package.json",
+        "package-lock.json",
+        "scripts/**",
+        "vitest.config.ts",
+        "playwright.config.ts",
+        ".github/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Use npm (npx for binaries), Vitest for unit tests, Playwright + @axe-core/playwright for e2e/eyes; new dependencies need a one-line PR justification.",
+      "file": "docs/adr/0004-tooling.md"
+    }
+  ]
+}

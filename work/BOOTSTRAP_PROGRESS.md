@@ -10,7 +10,7 @@ Placeholder values used: TEAM_KEY=`ENG` (change in AGENTS.md if your Linear team
 - [x] 1. Scaffold: move app to `src/`, folder architecture, TS strict, prettier, boundary lint, `src/env.ts`
 - [x] 2. Prisma + Postgres: `prisma/schema/`, docker compose, test DB strategy, `scripts/db-guard.sh`, seed
 - [ ] 3. Tooling scripts: `check.sh`, `adr-index.ts`, `adr-governing.ts`, first ADRs, `linear.ts`, `deploy-smoke.sh`, `loop.sh`
-- [ ] 4. Unit test runner (vitest)
+- [x] 4. Unit test runner (vitest)
 - [ ] 5. Playwright harness + `scripts/see.ts` + visual test config
 - [ ] 6. Design tokens + base UI primitives + `docs/design/components.md`
 - [ ] 7. CI pipeline (GitHub Actions) + CODEOWNERS + PR template

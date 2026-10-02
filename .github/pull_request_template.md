@@ -1,4 +1,5 @@
-Card: <ISSUE>   Epic: <ISSUE>   Autonomy: afk|hitl
+Card: #<n>   Epic: #<n>   Autonomy: afk|hitl
+<!-- Use "Card: #n" / "Refs #n", never "Closes/Fixes #n": Picker closes the card after the post-merge checks. -->
 
 ## Contract results
 - [ ] C1 ... evidence: <test path or command output summary>
@@ -10,7 +11,7 @@ Card: <ISSUE>   Epic: <ISSUE>   Autonomy: afk|hitl
 <migration name or none; additive|breaking>
 
 ## UI evidence (ui cards)
-<paths under .eyes/<ISSUE>/ and viewport results; visual baseline changes: yes/no (label visual-change)>
+<paths under .eyes/<n>/ and viewport results; visual baseline changes: yes/no (label visual-change)>
 
 ## ADRs
 <governing ids; proposed ids>

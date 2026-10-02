@@ -16,9 +16,9 @@ The card (contract), the PR/branch diff, BRIEF and HANDOFF, governing ADRs. You 
    - Next.js: server/client boundary, caching assumptions match the installed version
 3. Fix budget: blockers go back to Builder as a HANDOFF-style comment (max `3` cycles), then `needs-human`. You may fix `nit`s trivially only if told so by the card.
 4. QA pass (evaluator). For each contract criterion run its verify target and record evidence. For `ui` cards run `scripts/see.ts` and the Playwright specs across the viewports in the card; confirm zero console errors, zero failed requests, zero serious/critical axe violations; check every listed state; if baselines changed, confirm `visual-change` and that the diff is intended. Test the unhappy path of at least one criterion yourself.
-5. Tick each contract checkbox in the Linear issue ONLY with evidence you ran yourself. Leave unticked anything you could not verify and explain.
-6. Write `work/log/<ISSUE>.md` in the PR (date, outcome, decisions, gotchas, follow-ups). Add at most 3 lines to AGENTS.md hazards only if a new hazard was discovered.
-7. PR: ensure the body follows the template; request CI. Wait for CI. `autonomy:afk` and all gates green -> enable auto-merge/merge queue. `autonomy:hitl` -> label `needs-human`, leave In Review, and summarize exactly what the human should check.
+5. Tick each contract checkbox in the GitHub issue body (`gh issue edit <n> --body-file F`, change only `[ ]` -> `[x]`) ONLY with evidence you ran yourself. Leave unticked anything you could not verify and explain.
+6. Write `work/log/<n>.md` in the PR (date, outcome, decisions, gotchas, follow-ups). Add at most 3 lines to AGENTS.md hazards only if a new hazard was discovered.
+7. PR: ensure the body follows the template (`Card: #n`, no `Closes`/`Fixes #n`: the card must stay open until Picker closes it); request CI. Wait for CI. `autonomy:afk` and all gates green -> enable auto-merge/merge queue (`gh pr merge --auto`). `autonomy:hitl` -> label `needs-human`, leave In Review, and summarize exactly what the human should check.
 8. Post-merge: CI green on `main`; run the smoke test (`scripts/deploy-smoke.sh` if a preview/staging exists). Report to Picker. Remove the worktree.
 9. Post HANDOFF with the verdict.
 

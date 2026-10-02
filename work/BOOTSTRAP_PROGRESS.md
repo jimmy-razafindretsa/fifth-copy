@@ -17,20 +17,25 @@ Placeholder values used: TEAM_KEY=`AEG` (Linear team Aegis, project "fifth copy"
 - [x] 8. Linear: `linear.ts bootstrap` (states + labels) and `work/plan/foundations.json` + `scripts/linear-seed.ts` (Analyst self-check built in)
 - [x] 9. Verified 2026-10-01: `scripts/check.sh` all green; `next build` ok; e2e 45/45 with `--repeat-each=3 --retries=0` in CI mode; visual 6/6 in pinned container; smoke ok on `next start`; seed ok; test-db ok; no schema drift
 
-## Linear (done 2026-10-02 via the Linear connector)
+## Board moved to GitHub (2026-10-02)
+- The tracker is now GitHub: issues in `jimmy-razafindretsa/fifth-copy` with native sub-issues and "blocked by" dependencies, all on the user Project "Fifth Copy" (#2). Status options Backlog, Ready, In Progress, In Review, QA, Done (real Ready/QA, no workarounds). Playbook: `agents/BOARD.md`.
+- Old ids: AEG-1 -> #2 Foundations, AEG-2..AEG-8 -> #3..#9 (#9 is `needs-replan`, its contract was Linear-specific). 12 product epics and their issues/sub-issues were built from `work/plan/fifth-copy-requirements.md`; record in `work/plan/fifth-copy-board.json`.
+- `scripts/linear.ts` / `linear-seed.ts` were replaced by `scripts/board.ts` / `board-seed.ts` (same ops plus `dump`, `import`, `link`, `verify`). The old AEG-* issues in Linear are left as they are; archiving them is the human's call.
+
+## Linear (history: done 2026-10-02 via the Linear connector, superseded by the GitHub board above)
 - Verified access to workspace `philJim`, team Aegis (`AEG`), project "fifth copy" (was empty).
 - Created 23 labels (kit labels + `qa` + the 7 `area:*` used by Foundations). The team has no `Ready`/`QA` states and the connector cannot create states, so the kit is adapted: Ready = `Todo`, QA = `In Review` + `qa` (see `agents/BOARD.md`).
 - Created epic AEG-1 Foundations and cards AEG-2..AEG-8 (Backlog, estimates, labels, `blocks` relations verified by re-reading). Cards are for Deliver to verify the existing work, not rebuild it.
 - `docs/product-spec.md` holds the project description for the Analyst. No product epics exist yet.
 
 ## Needs a human (an agent cannot or must not do these)
-1. Add the label `plan-approved` to AEG-1 (Picker will not promote cards until you do).
-2. In Linear's GitHub integration settings: disable "PR merged -> Done" for the team (AEG-8 C3).
-3. Open the PR for `chore/agent-kit-foundations`; set branch protection on `main` requiring `check`, `migrations`, `e2e`, `visual` and CODEOWNERS review; optionally enable merge queue (AEG-7).
+1. Run `npx tsx scripts/board.ts bootstrap` once (creates the missing kit labels, including `plan-approved`; `--fields` adds the Estimate and Priority project fields), then add `plan-approved` to #2 (Picker will not promote cards until you do).
+2. Keep the Project automations "Item closed", "Pull request merged" and "Auto-close issue" off (they are off on 2026-10-02; `bootstrap` reports them). Replan #9 for the GitHub board.
+3. Open the PR for `chore/agent-kit-foundations`; set branch protection on `main` requiring `check`, `migrations`, `e2e`, `visual` and CODEOWNERS review; optionally enable merge queue (#8).
 4. Review ADRs 0001-0004 in `docs/adr/` and set `status: accepted` on the ones you agree with (then `npm run adr:index`).
-5. Approve the visual direction of the design tokens at `/design` (AEG-6 C4).
-6. Answer the open questions in `docs/product-spec.md`, then ask an agent to run the Analyst role to propose product epics (it stops for your approval).
-7. Optional: put `LINEAR_API_KEY` in `.env.local` to use `scripts/linear.ts` (`next`, `dag_check`, loop.sh). Without it, agents use the connector.
+5. Approve the visual direction of the design tokens at `/design` (#7 C4).
+6. Answer the open questions (`work/plan/fifth-copy-board.json` `stats.openQuestions`), approve product epics with `plan-approved`, then ask an agent to run the Analyst role to write their Contracts.
+7. `gh auth login` (scopes `repo`, `project`) on any machine that runs `scripts/board.ts` or `loop.sh`. No API key goes in `.env*`.
 8. Auth/session skeleton (Phase 0 item 8) is not built; it depends on the answer to the accounts question.
 
 ## Notes for the next agent
@@ -40,5 +45,5 @@ Placeholder values used: TEAM_KEY=`AEG` (Linear team Aegis, project "fifth copy"
 - `npm run typecheck` = `next typegen && tsc` (LayoutProps/PageProps are generated).
 - macOS ships bash 3.2: scripts avoid associative arrays and `${arr[@]}` on empty arrays.
 - If the dev server reports "Can't resolve docs/design/tokens.css" after files move, delete `.next/` (stale Turbopack cache).
-- `linear.ts` GraphQL fields were checked against Linear's published schema but have not run against a live workspace yet (no API key); the board itself was set up through the connector.
+- `board.ts` read ops and `--dry-run` writes were run against the live GitHub board on 2026-10-02; real writes have not been exercised by the kit yet.
 - Regenerate visual baselines only with `scripts/visual-baselines.sh` (same image as CI). Bump the image tag in `ci.yml` together with `@playwright/test`.

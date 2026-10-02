@@ -10,7 +10,7 @@ Follow everything in roles/builder.md, plus:
 
 ## Eyes (verify as you build)
 After each meaningful change, with the dev server running:
-`npx tsx scripts/see.ts <ISSUE> <route>` -> writes screenshots and accessibility snapshots to `.eyes/<ISSUE>/` and prints one line per viewport: console errors, failed requests, axe violations.
+`npx tsx scripts/see.ts <n> <route>` -> writes screenshots and accessibility snapshots to `.eyes/<n>/` and prints one line per viewport: console errors, failed requests, axe violations.
 - Default to the accessibility snapshot for structure; open a screenshot only for layout, spacing, visual polish or when a number looks wrong.
 - Loop: snapshot -> act -> verify a semantic postcondition -> snapshot again. Element refs are not stable across navigation.
 - Zero console errors, zero failed requests, zero serious/critical axe violations, or the card is not done.

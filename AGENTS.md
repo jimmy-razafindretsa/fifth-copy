@@ -28,6 +28,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: Linear, 
 - UI eyes: `npx tsx scripts/see.ts <ISSUE> <route>`
 - governing ADRs for a path: `npx tsx scripts/adr-governing.ts <path>`
 - Linear board playbook (read before touching Linear): `agents/BOARD.md`
+- Build a whole board from requirements: workflow `build-board` (see agents/BOARD.md)
 - Linear operations: `npx tsx scripts/linear.ts <op> ...` (see agents/PROTOCOL.md section 11)
 - DB guard (run before any DB command): `scripts/db-guard.sh`
 - local DB up: `npm run db:up` · test DB prepare: `scripts/test-db.sh`

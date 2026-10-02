@@ -34,6 +34,7 @@ const eslintConfig = defineConfig([
     "src/generated/**",
     ".eyes/**",
     ".worktrees/**",
+    ".claude/**",
     "playwright-report/**",
     "test-results/**",
   ]),

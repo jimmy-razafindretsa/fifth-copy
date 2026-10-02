@@ -62,6 +62,21 @@ Write comments and descriptions as Markdown with literal newlines. Linear auto-l
 6. Gates: In Review when PR is open and check is green; add `qa` when review has zero blockers; Done only after merge, CI green on `main`, smoke passed.
 7. `autonomy:hitl` card: stop and tell the human exactly what to review.
 
+## Building a board from requirements (workflow `build-board`)
+`.claude/workflows/build-board.js` turns requirements into the whole hierarchy in one run: **features** (Linear epics) > **issues** > **sub-issues**, technical and non-technical, with `blocked by` links.
+
+Run it (Claude Code Workflow tool, name `build-board`) with args:
+```json
+{ "requirementsFile": "docs/requirements.md", "dryRun": true }
+```
+Other args: `requirements` (pasted text instead of a file), `team` (Aegis), `project` (fifth copy), `foundationsEpic` (AEG-1, blocks every root feature; `""` disables), `planName` (record file name), `criticRounds` (2).
+
+Stages: **Gather** (extract atomic requirements R1..Rn; scan the existing board; 4 parallel lenses: user journeys, non-technical work, architecture and data, quality and ops) -> **Regroup** (merge duplicates, completeness-critic loop, independent dependency pass, then deterministic code: re-key, drop duplicates/self/ancestor links, break cycles, transitive reduction, requirement coverage check) -> **Prepare** (labels) -> **Create** (one agent per feature, top-down, searches by title first so reruns reuse instead of duplicating) -> **Link** (blocked-by, once every identifier exists) -> **Verify** (reads everything back from Linear, fixes deviations once) -> **Record** (`work/plan/<planName>.json`: plan + key-to-identifier map).
+
+Conventions it follows: everything lands in `Backlog`; titles plus one or two sentences, no Contracts; features get `epic` + `needs-replan` (= details pending, the Analyst writes Contracts later); each item gets `type:*` and `track:technical|non-technical`; no estimates or priorities; **never `plan-approved`** (a human sets it per epic). Skeleton cards without a Contract cannot pass the Backlog -> Todo precondition, so the Picker leaves them alone until the Analyst details them.
+
+Always do a `dryRun: true` first and read the returned outline, uncovered requirements and open questions; then rerun without it (resume is cheap for the unchanged stages).
+
 ## Current state (2026-10-02)
 - Epic AEG-1 Foundations (no `plan-approved` yet, so Picker will not promote its cards) with cards AEG-2 scaffold, AEG-3 prisma, AEG-4 tooling, AEG-5 playwright, AEG-6 design, AEG-7 ci, AEG-8 board config. All in Backlog.
 - The Foundations work already exists on branch `chore/agent-kit-foundations`. These cards are for **verification by Deliver (not the builder)**, not for rebuilding: Deliver runs each card's `verify:` commands, ticks boxes with evidence, merges the PR, and Picker closes the cards. Hitl criteria (AEG-4, AEG-6, AEG-7, AEG-8) need a human.

@@ -57,9 +57,9 @@ export function parseContract(description: string): Criterion[] {
 }
 
 export type CardNode = {
-  id: string; // identifier, e.g. ENG-12
+  id: string; // card id, e.g. #12
   done: boolean;
-  blockedBy: string[]; // identifiers
+  blockedBy: string[]; // card ids
 };
 
 export type DagResult = {
@@ -142,7 +142,7 @@ export function dagCheck(nodes: CardNode[]): DagResult {
 export type Candidate = {
   id: string;
   epic: string | null;
-  priority: number; // Linear: 0 none, 1 urgent, 2 high, 3 medium, 4 low
+  priority: number; // 0 none, 1 urgent, 2 high, 3 medium, 4 low (scripts/lib/board.ts priorityRank)
   estimate: number | null;
   labels: string[];
   blockersDone: boolean;
@@ -160,11 +160,11 @@ export type PickContext = {
 
 const prioRank = (p: number) => (p === 0 ? 5 : p); // "no priority" sorts after low
 
-/** Compares identifiers like ENG-9 < ENG-10 numerically. */
+/** Compares card ids like #9 < #10 numerically (any prefix, e.g. ENG-9, compares as text first). */
 export function compareIdentifiers(a: string, b: string): number {
-  const [pa, na] = a.split("-");
-  const [pb, nb] = b.split("-");
-  if (pa !== pb) return (pa ?? "").localeCompare(pb ?? "");
+  const [, pa = a, na = ""] = /^(.*?)(\d*)$/.exec(a) ?? [];
+  const [, pb = b, nb = ""] = /^(.*?)(\d*)$/.exec(b) ?? [];
+  if (pa !== pb) return pa.localeCompare(pb);
   return Number(na) - Number(nb);
 }
 

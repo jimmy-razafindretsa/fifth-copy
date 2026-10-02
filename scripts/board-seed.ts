@@ -1,9 +1,10 @@
 /**
- * Creates an epic and its cards in Linear from a plan file, then sets `blocks` relations and runs dag_check.
- * Idempotent: linear.ts create searches by title (+epic) first and never duplicates.
- *   npx tsx scripts/linear-seed.ts work/plan/foundations.json [--dry-run | --validate]
- *   --validate runs the Analyst self-check offline (no Linear calls).
- * Cards land in Backlog. A human adds `plan-approved` to the epic; Picker promotes cards to Ready.
+ * Creates an epic and its cards on the GitHub board from a plan file, then sets "blocked by" dependencies and runs dag_check.
+ * Idempotent: board.ts create reuses an issue with the same title under the same parent and never duplicates.
+ *   npx tsx scripts/board-seed.ts work/plan/<epic>.json [--dry-run | --validate]
+ *   --validate runs the Analyst self-check offline (no GitHub calls).
+ * Cards land in Backlog as sub-issues of the epic. A human adds `plan-approved` to the epic; Picker promotes cards to Ready.
+ * Note: work/plan/foundations.json was already seeded (epic #2, cards #3-#9); do not re-seed it.
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -28,12 +29,12 @@ type Plan = {
 const file = process.argv[2];
 const dry = process.argv.includes("--dry-run");
 if (!file) {
-  console.error("usage: linear-seed.ts <plan.json> [--dry-run]");
+  console.error("usage: board-seed.ts <plan.json> [--dry-run | --validate]");
   process.exit(2);
 }
 const plan = JSON.parse(fs.readFileSync(file, "utf8")) as Plan;
 
-// Analyst self-check (agents/roles/analyst.md step 12) before touching Linear.
+// Analyst self-check (agents/roles/analyst.md step 12) before touching the board.
 const keys = new Set(plan.cards.map((c) => c.key));
 const problems: string[] = [];
 for (const c of plan.cards) {
@@ -56,15 +57,15 @@ if (problems.length) {
 console.log(`plan: ok (${plan.cards.length} cards, self-check passed)`);
 if (process.argv.includes("--validate")) process.exit(0);
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "linear-seed-"));
-function linear(args: string[]): string {
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "board-seed-"));
+function board(args: string[]): string {
   let out: string;
   try {
     out = run(args);
   } catch (e) {
     const err = e as { stderr?: string; stdout?: string };
     console.error(
-      `seed: stopped at \`linear ${args[0]}\`: ${(err.stderr || err.stdout || String(e)).trim()}`,
+      `seed: stopped at \`board ${args[0]}\`: ${(err.stderr || err.stdout || String(e)).trim()}`,
     );
     process.exit(1);
   }
@@ -78,13 +79,13 @@ function linear(args: string[]): string {
   return out;
 }
 function run(args: string[]): string {
-  return execFileSync("npx", ["tsx", "scripts/linear.ts", ...args, ...(dry ? ["--dry-run"] : [])], {
+  return execFileSync("npx", ["tsx", "scripts/board.ts", ...args, ...(dry ? ["--dry-run"] : [])], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
 function idFrom(out: string, fallback: string): string {
-  return /(?:created|exists): ([A-Z]+-\d+)/.exec(out)?.[1] ?? fallback;
+  return /(?:created|exists): #(\d+)/.exec(out)?.[1] ?? fallback;
 }
 function create(
   title: string,
@@ -95,7 +96,7 @@ function create(
 ) {
   const f = path.join(tmp, `${title.replace(/\W+/g, "_").slice(0, 40)}.md`);
   fs.writeFileSync(f, body);
-  return linear([
+  return board([
     "create",
     "--title",
     title,
@@ -112,8 +113,15 @@ function create(
 
 const epicId = idFrom(
   create(plan.epic.title, plan.epic.body, plan.epic.labels, plan.epic.priority),
-  "EPIC",
+  "",
 );
+if (!epicId) {
+  // --dry-run on a new epic: nothing exists yet to hang the cards on, so list what would be created.
+  for (const c of plan.cards)
+    console.log(`[dry-run] card ${c.key} "${c.title}" blocked by ${c.blockedBy.join(",") || "-"}`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+  process.exit(0);
+}
 const ids = new Map<string, string>();
 for (const c of plan.cards) {
   const out = create(c.title, c.body, c.labels, c.priority, [
@@ -122,12 +130,16 @@ for (const c of plan.cards) {
     "--estimate",
     String(c.estimate),
   ]);
-  ids.set(c.key, idFrom(out, `<${c.key}>`));
+  ids.set(c.key, idFrom(out, ""));
 }
 for (const c of plan.cards)
-  for (const b of c.blockedBy) linear(["relate", ids.get(b)!, "blocks", ids.get(c.key)!]);
-if (!dry) linear(["dag_check", epicId]);
+  for (const b of c.blockedBy) {
+    const [from, to] = [ids.get(b), ids.get(c.key)];
+    if (from && to) board(["relate", from, "blocks", to]);
+    else console.log(`[dry-run] relate ${b} blocks ${c.key}`);
+  }
+if (!dry) board(["dag_check", epicId]);
 console.log(
-  `\nseed: epic ${epicId}, ${plan.cards.length} cards. Human: add label plan-approved to ${epicId} to let Picker promote cards.`,
+  `\nseed: epic #${epicId}, ${plan.cards.length} cards. Human: add label plan-approved to #${epicId} to let Picker promote cards.`,
 );
 fs.rmSync(tmp, { recursive: true, force: true });

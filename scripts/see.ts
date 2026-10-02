@@ -1,8 +1,9 @@
 /**
  * UI eyes (agents/roles/ui.md). With the dev server running:
- *   npx tsx scripts/see.ts <ISSUE> <route> [--base http://localhost:3000] [--viewports mobile,tablet,desktop] [--theme light|dark]
+ *   npx tsx scripts/see.ts <n> <route> [--base http://localhost:3000] [--viewports mobile,tablet,desktop] [--theme light|dark]
  *
- * Writes to .eyes/<ISSUE>/ (gitignored): <slug>-<viewport>.png and <slug>-<viewport>.aria.yml
+ * <n> is the card's issue number (`12`; a leading `#` is stripped).
+ * Writes to .eyes/<n>/ (gitignored): <slug>-<viewport>.png and <slug>-<viewport>.aria.yml
  * Prints one line per viewport: console errors, failed requests, axe serious/critical violations.
  * Exit 1 if any viewport has errors, failed requests or serious/critical violations.
  * Only localhost / preview URLs: anything else is refused.
@@ -18,15 +19,16 @@ const flag = (n: string) => {
   const i = argv.indexOf(`--${n}`);
   return i >= 0 ? argv[i + 1] : undefined;
 };
-const [issue, route] = argv.filter((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
+const [rawIssue, route] = argv.filter(
+  (a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"),
+);
+const issue = rawIssue?.replace(/^#/, "");
 if (!issue || !route) {
-  console.error(
-    "usage: see.ts <ISSUE> <route> [--base URL] [--viewports a,b] [--theme light|dark]",
-  );
+  console.error("usage: see.ts <n> <route> [--base URL] [--viewports a,b] [--theme light|dark]");
   process.exit(2);
 }
 if (!/^[A-Za-z0-9_-]+$/.test(issue)) {
-  console.error("see: ISSUE must be an identifier like ENG-12");
+  console.error("see: <n> must be a card number like 12");
   process.exit(2);
 }
 

@@ -98,28 +98,22 @@ describe("orderCandidates", () => {
 
   it("applies the tie-break chain in order", () => {
     const ids = (cs: Candidate[]) => cs.map((c) => c.id);
-    expect(ids(orderCandidates([mk("ENG-2"), mk("ENG-1")], ctx()))).toEqual(["ENG-1", "ENG-2"]);
-    expect(ids(orderCandidates([mk("ENG-10"), mk("ENG-9")], ctx()))).toEqual(["ENG-9", "ENG-10"]);
-    expect(ids(orderCandidates([mk("ENG-1"), mk("ENG-2", { estimate: 1 })], ctx()))).toEqual([
-      "ENG-2",
-      "ENG-1",
+    expect(ids(orderCandidates([mk("#2"), mk("#1")], ctx()))).toEqual(["#1", "#2"]);
+    expect(ids(orderCandidates([mk("#10"), mk("#9")], ctx()))).toEqual(["#9", "#10"]);
+    expect(ids(orderCandidates([mk("#1"), mk("#2", { estimate: 1 })], ctx()))).toEqual([
+      "#2",
+      "#1",
     ]);
-    expect(ids(orderCandidates([mk("ENG-1"), mk("ENG-2", { priority: 1 })], ctx()))).toEqual([
-      "ENG-2",
-      "ENG-1",
+    expect(ids(orderCandidates([mk("#1"), mk("#2", { priority: 1 })], ctx()))).toEqual([
+      "#2",
+      "#1",
     ]);
-    expect(ids(orderCandidates([mk("ENG-1"), mk("ENG-2")], ctx([], { "ENG-2": 4 })))).toEqual([
-      "ENG-2",
-      "ENG-1",
-    ]);
-    expect(ids(orderCandidates([mk("ENG-1"), mk("ENG-2")], ctx(["ENG-2"])))).toEqual([
-      "ENG-2",
-      "ENG-1",
-    ]);
+    expect(ids(orderCandidates([mk("#1"), mk("#2")], ctx([], { "#2": 4 })))).toEqual(["#2", "#1"]);
+    expect(ids(orderCandidates([mk("#1"), mk("#2")], ctx(["#2"])))).toEqual(["#2", "#1"]);
   });
 
   it("drops cards with open blockers", () => {
-    expect(orderCandidates([mk("ENG-1", { blockersDone: false })], ctx())).toEqual([]);
+    expect(orderCandidates([mk("#1", { blockersDone: false })], ctx())).toEqual([]);
   });
 });
 

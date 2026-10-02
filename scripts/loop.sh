@@ -5,7 +5,7 @@
 #
 #   scripts/loop.sh [--max-cards N] [--dry-run]
 #
-# The durable handoff is Linear + repo, never this script's memory. Stop conditions follow PROTOCOL section 8.
+# The durable handoff is the GitHub board (issues + project) + repo, never this script's memory. Stop conditions follow PROTOCOL section 8.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -22,10 +22,10 @@ done
 : "${AGENT_CMD:?set AGENT_CMD, e.g. AGENT_CMD=\"claude -p\"}"
 LOG_DIR=.cache/loop
 mkdir -p "$LOG_DIR"
-linear() { npx tsx scripts/linear.ts "$@"; }
+board() { npx tsx scripts/board.ts "$@"; }
 
-run_role() { # role, card, extra instructions
-  local role="$1" card="$2" extra="$3" log="$LOG_DIR/$card-$1.log"
+run_role() { # role, card (#n), extra instructions
+  local role="$1" card="$2" extra="$3" log="$LOG_DIR/${2#\#}-$1.log"
   local prompt="You are running ONE role of the agent kit. Read AGENTS.md, agents/PROTOCOL.md and agents/roles/$role.md (and no other role file). Your card: $card. $extra Follow the session start and end rituals. End by posting your HANDOFF (or BRIEF for explorer) on the card and print one final line: RESULT: done|partial|blocked."
   echo "  -> $role ($card) log: $log"
   if (( DRY )); then echo "     [dry-run] $AGENT_CMD \"<prompt for $role>\""; echo "RESULT: done" >"$log"; return 0; fi
@@ -37,7 +37,7 @@ run_role() { # role, card, extra instructions
   [[ "$result" == "done" ]]
 }
 
-card_labels() { linear get "$1" --comments 0 2>/dev/null | sed -n 's/^labels: //p'; }
+card_labels() { board get "${1#\#}" --comments 0 2>/dev/null | sed -n 's/^labels: //p'; }
 
 blocked_streak=0
 for ((n = 1; n <= MAX_CARDS; n++)); do
@@ -45,9 +45,9 @@ for ((n = 1; n <= MAX_CARDS; n++)); do
   if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "STOP: working tree on $(git branch --show-current) is not clean"; exit 1
   fi
-  next_out="$(linear next 2>&1)"; rc=$?
+  next_out="$(board next 2>&1)"; rc=$?
   echo "$next_out" | tail -5 | sed 's/^/  /'
-  if (( rc != 0 )); then echo "STOP: $(echo "$next_out" | grep -E '^(STOP|linear):' | tail -1)"; exit 0; fi
+  if (( rc != 0 )); then echo "STOP: $(echo "$next_out" | grep -E '^(STOP|board):' | tail -1)"; exit 0; fi
   card="$(echo "$next_out" | sed -n 's/^next: //p' | tail -1)"
   [[ -z "$card" ]] && { echo "STOP: picker returned no card"; exit 1; }
   labels="$(card_labels "$card")"

@@ -20,7 +20,7 @@
     "db:test:prepare": "scripts/test-db.sh",
     "adr:index": "tsx scripts/adr-index.ts",
     "adr:governing": "tsx scripts/adr-governing.ts",
-    "linear": "tsx scripts/linear.ts",
+    "board": "tsx scripts/board.ts",
     "see": "tsx scripts/see.ts",
     "postinstall": "prisma generate"
   },

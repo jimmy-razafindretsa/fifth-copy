@@ -1,0 +1,16 @@
+.next
+node_modules
+src/generated
+prisma/migrations
+docs/adr/INDEX.json
+package-lock.json
+.eyes
+test-results
+playwright-report
+# kit docs stay verbatim
+AGENTS.md
+CLAUDE.md
+agents/
+work/
+docs/
+*.md

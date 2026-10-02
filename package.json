@@ -6,21 +6,56 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "boundaries": "depcruise src --config .dependency-cruiser.cjs --output-type err",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "check": "scripts/check.sh",
+    "db:up": "docker compose up -d --wait",
+    "db:guard": "scripts/db-guard.sh",
+    "db:test:prepare": "scripts/test-db.sh",
+    "adr:index": "tsx scripts/adr-index.ts",
+    "adr:governing": "tsx scripts/adr-governing.ts",
+    "linear": "tsx scripts/linear.ts",
+    "see": "tsx scripts/see.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "next": "16.3.8",
+    "pg": "^8.23.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.1",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dependency-cruiser": "^18.5.0",
+    "dotenv": "^18.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
+    "minimatch": "^10.2.6",
+    "prettier": "^3.9.9",
+    "prisma": "^7.10.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^5.0.3",
+    "yaml": "^2.9.1"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

@@ -8,7 +8,7 @@ const eslintConfig = defineConfig([
   {
     // AGENTS.md: env access only through src/env.ts (validated).
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/env.ts"],
+    ignores: ["src/env.ts", "src/env.test.ts"],
     rules: {
       "no-restricted-properties": [
         "error",

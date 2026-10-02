@@ -1,7 +1,9 @@
 {
   "epic": {
     "title": "Foundations",
-    "labels": ["epic"],
+    "labels": [
+      "epic"
+    ],
     "priority": 1,
     "body": "## Goal\nEverything the agent loop needs before any feature card: scaffold, data layer, gates, eyes, design system, CI, Linear config.\n\n## User-visible outcome\nA green `scripts/check.sh`, a running app at `/` and `/design`, and a Linear team the Picker can drive.\n\n## Entities\nnone (no product models yet)\n\n## Dependencies\nNothing outside Foundations is picked until Foundations is Done.\n\n## Status\nImplemented on branch `chore/agent-kit-foundations` (see `work/BOOTSTRAP_PROGRESS.md`). Each card below needs Deliver verification, then Done.\n"
   },
@@ -9,7 +11,12 @@
     {
       "key": "scaffold",
       "title": "Scaffold: src/ architecture, strict TS, lint, format, boundaries, env",
-      "labels": ["type:chore", "area:scaffold", "touches:deps", "autonomy:afk"],
+      "labels": [
+        "type:chore",
+        "area:scaffold",
+        "touches:deps",
+        "autonomy:afk"
+      ],
       "estimate": 2,
       "priority": 1,
       "blockedBy": [],
@@ -18,56 +25,97 @@
     {
       "key": "prisma",
       "title": "Prisma 7 + local Postgres, db-guard, test DB, seed",
-      "labels": ["type:chore", "area:data", "touches:prisma", "touches:deps", "autonomy:afk"],
+      "labels": [
+        "type:chore",
+        "area:data",
+        "touches:prisma",
+        "touches:deps",
+        "autonomy:afk"
+      ],
       "estimate": 2,
       "priority": 1,
-      "blockedBy": ["scaffold"],
+      "blockedBy": [
+        "scaffold"
+      ],
       "body": "## Outcome\nA local Postgres, a Prisma 7 schema folder and a guarded migration flow exist; no DB command can hit a remote host.\n\n## Context\nEpic: Foundations. Governing ADRs: 0002, 0003. Related paths: prisma/, prisma.config.ts, docker-compose.yml, scripts/db-guard.sh, scripts/test-db.sh, src/server/.\n\n## Contract\n- [ ] C1 schema is valid | verify: `npx prisma validate`\n- [ ] C2 db-guard accepts local and designated hosts, refuses others without leaking credentials | verify: `npx vitest run scripts/db-guard.test.ts`\n- [ ] C3 test DB can be prepared | verify: `npm run db:up && scripts/test-db.sh`\n- [ ] C4 seed runs idempotently | verify: `npx prisma db seed`\n- [ ] C5 app reports DB reachability | verify: `e2e/smoke.spec.ts`\n\n## Out of scope\nProduct models (first `touches:prisma` feature card creates the first migration).\n\n## Data model\nchange (touches:prisma): none yet, additive\n\n## UI\nnone\n\n## Dependencies\nblocked by: scaffold\n\n## Autonomy\nafk, every criterion has a command.\n\n## Size rationale\nestimate 2: config, two scripts, one route.\n"
     },
     {
       "key": "tooling",
       "title": "Tooling scripts: check.sh, adr-index/governing, linear.ts, deploy-smoke, loop",
-      "labels": ["type:chore", "area:tooling", "autonomy:hitl"],
+      "labels": [
+        "type:chore",
+        "area:tooling",
+        "autonomy:hitl"
+      ],
       "estimate": 3,
       "priority": 1,
-      "blockedBy": ["scaffold"],
-      "body": "## Outcome\nAgents have deterministic scripts for the gate, ADR lookup, Linear operations, smoke checks and the loop.\n\n## Context\nEpic: Foundations. Governing ADRs: 0004. Related paths: scripts/.\n\n## Contract\n- [ ] C1 check.sh runs every gate and prints <= 20 lines | verify: `scripts/check.sh | wc -l`\n- [ ] C2 ADR index is generated and linted; governing lookup works | verify: `npx tsx scripts/adr-index.ts --check && npx tsx scripts/adr-governing.ts src/server/db.ts`\n- [ ] C3 contract hash, DAG and Picker ordering logic is unit tested | verify: `npx vitest run scripts/lib`\n- [ ] C4 linear.ts reaches the workspace | verify: `npx tsx scripts/linear.ts whoami`\n- [ ] C5 smoke checks pass against a running app | verify: `scripts/deploy-smoke.sh`\n\n## Out of scope\nHosting a preview environment.\n\n## Data model\nnone\n\n## UI\nnone\n\n## Dependencies\nblocked by: scaffold\n\n## Autonomy\nhitl, the kit says to keep tooling cards hitl until the scripts are trusted.\n\n## Size rationale\nestimate 3: several scripts, but each is small and tested.\n"
+      "blockedBy": [
+        "scaffold"
+      ],
+      "body": "## Outcome\nAgents have deterministic scripts for the gate, ADR lookup, Linear operations, smoke checks and the loop.\n\n## Context\nEpic: Foundations. Governing ADRs: 0004. Related paths: scripts/.\n\n## Contract\n- [ ] C1 the `scripts/check.sh` gate runs every step and prints <= 20 lines | verify: `scripts/check.sh | wc -l`\n- [ ] C2 ADR index is generated and linted; governing lookup works | verify: `npx tsx scripts/adr-index.ts --check && npx tsx scripts/adr-governing.ts src/server/db.ts`\n- [ ] C3 contract hash, DAG and Picker ordering logic is unit tested | verify: `npx vitest run scripts/lib`\n- [ ] C4 linear.ts reaches the workspace | verify: `npx tsx scripts/linear.ts whoami`\n- [ ] C5 smoke checks pass against a running app | verify: `scripts/deploy-smoke.sh`\n\n## Out of scope\nHosting a preview environment.\n\n## Data model\nnone\n\n## UI\nnone\n\n## Dependencies\nblocked by: scaffold\n\n## Autonomy\nhitl, the kit says to keep tooling cards hitl until the scripts are trusted.\n\n## Size rationale\nestimate 3: several scripts, but each is small and tested.\n"
     },
     {
       "key": "playwright",
       "title": "Playwright harness, see.ts eyes, visual test config",
-      "labels": ["type:chore", "area:e2e", "touches:deps", "autonomy:afk"],
+      "labels": [
+        "type:chore",
+        "area:e2e",
+        "touches:deps",
+        "autonomy:afk"
+      ],
       "estimate": 2,
       "priority": 2,
-      "blockedBy": ["prisma"],
-      "body": "## Outcome\nE2E tests fail on console errors, failed requests and serious axe violations; agents can look at any route per viewport.\n\n## Context\nEpic: Foundations. Governing ADRs: 0003, 0004. Related paths: playwright.config.ts, e2e/, scripts/see.ts, scripts/visual-baselines.sh.\n\n## Contract\n- [ ] C1 smoke e2e passes on mobile, tablet, desktop | verify: `npx playwright test e2e/smoke.spec.ts`\n- [ ] C2 see.ts writes screenshots + aria snapshots and prints one line per viewport | verify: `npx tsx scripts/see.ts ENG-0 / && ls .eyes/ENG-0`\n- [ ] C3 see.ts refuses non-local hosts | verify: `! npx tsx scripts/see.ts ENG-0 / --base https://example.com`\n\n## Out of scope\nFeature e2e specs.\n\n## Data model\nnone\n\n## UI\nnone\n\n## Dependencies\nblocked by: prisma\n\n## Autonomy\nafk, every criterion has a command.\n\n## Size rationale\nestimate 2.\n"
+      "blockedBy": [
+        "prisma"
+      ],
+      "body": "## Outcome\nE2E tests fail on console errors, failed requests and serious axe violations; agents can look at any route per viewport.\n\n## Context\nEpic: Foundations. Governing ADRs: 0003, 0004. Related paths: playwright.config.ts, e2e/, scripts/see.ts, scripts/visual-baselines.sh.\n\n## Contract\n- [ ] C1 smoke e2e passes on mobile, tablet, desktop | verify: `npx playwright test e2e/smoke.spec.ts`\n- [ ] C2 see.ts writes screenshots + aria snapshots and prints one line per viewport | verify: `npx tsx scripts/see.ts AEG-0 / && ls .eyes/AEG-0`\n- [ ] C3 see.ts refuses non-local hosts | verify: `! npx tsx scripts/see.ts AEG-0 / --base https://example.com`\n\n## Out of scope\nFeature e2e specs.\n\n## Data model\nnone\n\n## UI\nnone\n\n## Dependencies\nblocked by: prisma\n\n## Autonomy\nafk, every criterion has a command.\n\n## Size rationale\nestimate 2.\n"
     },
     {
       "key": "design",
       "title": "Design tokens, base UI primitives, components.md",
-      "labels": ["type:feature", "area:design-system", "ui", "autonomy:hitl"],
+      "labels": [
+        "type:feature",
+        "area:design-system",
+        "ui",
+        "autonomy:hitl"
+      ],
       "estimate": 3,
       "priority": 2,
-      "blockedBy": ["playwright"],
+      "blockedBy": [
+        "playwright"
+      ],
       "body": "## Outcome\nA token-only design system with accessible primitives covering empty, loading, error and populated states, visible at /design.\n\n## Context\nEpic: Foundations. Governing ADRs: 0001. Related paths: docs/design/, src/components/ui/, src/app/design/.\n\n## Contract\n- [ ] C1 every primitive state renders accessibly with keyboard focus and no overflow | verify: `e2e/design.spec.ts`\n- [ ] C2 visual baselines (light, dark x 3 viewports) match in the pinned image | verify: `scripts/visual-baselines.sh --check`\n- [ ] C3 inventory documents every primitive | verify: `ls src/components/ui/*.tsx | xargs -n1 basename | sed 's/.tsx//' | xargs -I{} grep -q {}.tsx docs/design/components.md`\n- [ ] C4 human approves visual direction | verify: human review of .eyes/ screenshots (hitl)\n\n## Out of scope\nFeature screens.\n\n## Data model\nnone\n\n## UI\nscreens: /design; states: empty, loading, error, populated; viewports: 375, 768, 1280; theme: light + dark; reference: none\n\n## Dependencies\nblocked by: playwright\n\n## Autonomy\nhitl, first UI card: human approves visual direction.\n\n## Size rationale\nestimate 3: tokens + 7 primitives + showcase.\n"
     },
     {
       "key": "ci",
       "title": "CI pipeline: required checks, migration check, e2e, visual, merge queue",
-      "labels": ["type:chore", "area:ci", "autonomy:hitl"],
+      "labels": [
+        "type:chore",
+        "area:ci",
+        "autonomy:hitl"
+      ],
       "estimate": 2,
       "priority": 2,
-      "blockedBy": ["tooling", "playwright"],
+      "blockedBy": [
+        "tooling",
+        "playwright"
+      ],
       "body": "## Outcome\nEvery PR runs the gate, a migration check on a throwaway Postgres, e2e and visual tests; main is protected.\n\n## Context\nEpic: Foundations. Governing ADRs: 0003, 0004. Related paths: .github/.\n\n## Contract\n- [ ] C1 CI is green on the Foundations PR | verify: `gh pr checks`\n- [ ] C2 branch protection requires check, migrations, e2e, visual and CODEOWNERS review | verify: `gh api repos/{owner}/{repo}/branches/main/protection`\n- [ ] C3 editing a merged migration fails CI | verify: migrations job step \"Merged migrations are immutable\"\n\n## Out of scope\nPreview deploys (add when a host is chosen; needs an ADR).\n\n## Data model\nnone\n\n## UI\nnone\n\n## Dependencies\nblocked by: tooling, playwright\n\n## Autonomy\nhitl, branch protection is a human setting.\n\n## Size rationale\nestimate 2.\n"
     },
     {
       "key": "linear",
-      "title": "Linear workspace config: Ready/QA states, kit labels, GitHub automation off",
-      "labels": ["type:chore", "area:linear", "autonomy:hitl"],
+      "title": "Linear board config: state mapping, kit labels, GitHub automation off",
+      "labels": [
+        "type:chore",
+        "area:linear",
+        "autonomy:hitl"
+      ],
       "estimate": 1,
       "priority": 2,
-      "blockedBy": ["tooling"],
-      "body": "## Outcome\nThe Linear team has the kit's states and labels, and merging a PR never marks an issue Done by itself.\n\n## Context\nEpic: Foundations. Governing ADRs: none. Related paths: scripts/linear.ts.\n\n## Contract\n- [ ] C1 states Ready and QA and all kit labels exist | verify: `npx tsx scripts/linear.ts bootstrap --dry-run` prints only `ok` lines\n- [ ] C2 Picker ordering runs against the real workspace | verify: `npx tsx scripts/linear.ts next`\n- [ ] C3 GitHub integration \"PR merged -> Done\" is disabled | verify: human check in Linear team settings (hitl)\n\n## Out of scope\nAnything beyond the kit's states and labels.\n\n## Data model\nnone\n\n## UI\nnone\n\n## Dependencies\nblocked by: tooling\n\n## Autonomy\nhitl, workspace settings are human-owned.\n\n## Size rationale\nestimate 1.\n"
+      "blockedBy": [
+        "tooling"
+      ],
+      "body": "## Outcome\nThe Aegis team board works with the kit: Ready = `Todo`, QA = `In Review` + label `qa`, all kit labels exist, and merging a PR never marks an issue Done by itself.\n\n## Context\nEpic: Foundations. Governing ADRs: none. Related paths: scripts/linear.ts, agents/PROTOCOL.md (section \"Board mapping\").\n\n## Contract\n- [ ] C1 all kit labels exist in team AEG | verify: `npx tsx scripts/linear.ts bootstrap --dry-run` prints only `ok` lines\n- [ ] C2 Picker ordering runs against the real workspace | verify: `npx tsx scripts/linear.ts next`\n- [ ] C3 GitHub integration \"PR merged -> Done\" is disabled | verify: human check in Linear team settings (hitl)\n\n## Out of scope\nCreating new workflow states (the kit is adapted to the existing ones).\n\n## Data model\nnone\n\n## UI\nnone\n\n## Dependencies\nblocked by: tooling\n\n## Autonomy\nhitl, workspace settings are human-owned.\n\n## Size rationale\nestimate 1.\n"
     }
   ]
 }

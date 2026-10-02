@@ -13,7 +13,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 Keep this file under 150 lines. It is always loaded. Everything else is loaded on demand.
 
 ## Project
-Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: Linear, team `ENG`. Package manager: `npm` (use `npx` for binaries). Base branch: `main`.
+Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: Linear, team `AEG` (Aegis), project "fifth copy". Package manager: `npm` (use `npx` for binaries). Base branch: `main`.
 
 ## Commands (do not guess)
 - install: `npm install`
@@ -27,6 +27,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: Linear, 
 - prisma status: `npx prisma migrate status`
 - UI eyes: `npx tsx scripts/see.ts <ISSUE> <route>`
 - governing ADRs for a path: `npx tsx scripts/adr-governing.ts <path>`
+- Linear board playbook (read before touching Linear): `agents/BOARD.md`
 - Linear operations: `npx tsx scripts/linear.ts <op> ...` (see agents/PROTOCOL.md section 11)
 - DB guard (run before any DB command): `scripts/db-guard.sh`
 - local DB up: `npm run db:up` · test DB prepare: `scripts/test-db.sh`

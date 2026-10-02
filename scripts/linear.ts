@@ -11,16 +11,16 @@
  *   create --title T --body-file F [--parent EPIC] [--labels a,b] [--estimate N] [--priority P]
  *                                              searches by title (+epic) first; never duplicates
  *   relate <A> blocks <B>
- *   move <ISSUE> <state>                       Picker only
+ *   move <ISSUE> <state>                       Picker only. `Ready` = Todo, `QA` = In Review + label qa
  *   label <ISSUE> +x -y [--create-missing]
  *   comment <ISSUE> --body-file F
  *   dag_check <EPIC> | dag_check --epics       cycles, topological order, critical path (exit 1 on cycle)
- *   hash <ISSUE> [--expect H]                  contract hash (exit 1 if --expect differs)
+ *   hash <ISSUE> [--expect H] [--body-file F]  contract hash (exit 1 if --expect differs); --body-file hashes a local file offline
  *   next                                       Picker ordering (PROTOCOL 6) + locks (7); last line `next: <ISSUE>` or `STOP: <why>`
  *   bootstrap                                  create missing workflow states (Ready, QA) and kit labels
  *
  * Writes are re-read and verified. --dry-run prints the mutation instead of sending it.
- * Env: LINEAR_API_KEY, LINEAR_TEAM_KEY (default ENG), LINEAR_WIP_LIMIT (default 1). Loaded from .env.local / .env.
+ * Env: LINEAR_API_KEY, LINEAR_TEAM_KEY (default AEG), LINEAR_STATE_READY (default Todo), LINEAR_WIP_LIMIT (default 1). Loaded from .env.local / .env.
  */
 import fs from "node:fs";
 import { config as loadEnv } from "dotenv";
@@ -36,15 +36,18 @@ import {
 loadEnv({ path: [".env.local", ".env"], quiet: true });
 
 const API = "https://api.linear.app/graphql";
-const TEAM_KEY = process.env.LINEAR_TEAM_KEY || "ENG";
+const TEAM_KEY = process.env.LINEAR_TEAM_KEY || "AEG";
 const WIP_LIMIT = Number(process.env.LINEAR_WIP_LIMIT || 1);
 const argv = process.argv.slice(2);
 const DRY = argv.includes("--dry-run");
 
-export const KIT_STATES = [
-  { name: "Ready", type: "unstarted", color: "#4ea7fc" },
-  { name: "QA", type: "started", color: "#f2c94c" },
-] as const;
+/**
+ * Board mapping (agents/PROTOCOL.md "Board mapping"): the Aegis team has no Ready/QA states and the connector cannot
+ * create them, so the kit's Ready is the team's `Todo` and the kit's QA is `In Review` + label `qa`.
+ */
+export const READY_STATE = process.env.LINEAR_STATE_READY || "Todo";
+export const QA_LABEL = "qa";
+const REQUIRED_STATES = ["Backlog", READY_STATE, "In Progress", "In Review", "Done", "Canceled"];
 
 export const KIT_LABELS = [
   "type:feature",
@@ -63,9 +66,10 @@ export const KIT_LABELS = [
   "needs-human",
   "needs-adr",
   "needs-replan",
+  QA_LABEL,
 ];
 const NEEDS = ["needs-human", "needs-adr", "needs-replan"];
-const IN_FLIGHT_STATES = ["In Progress", "In Review", "QA"];
+const IN_FLIGHT_STATES = ["In Progress", "In Review"];
 
 class LinearError extends Error {}
 
@@ -296,7 +300,7 @@ async function opGet(id: string) {
 }
 
 async function opListReady() {
-  const issues = await teamIssues({ state: { name: { eq: "Ready" } } });
+  const issues = await teamIssues({ state: { name: { eq: READY_STATE } } });
   if (!issues.length) return console.log("no Ready cards");
   for (const i of issues) {
     const b = blockers(i);
@@ -408,7 +412,14 @@ async function opRelate(a: string, verb: string, b: string) {
   console.log(`related: ${a} blocks ${b}`);
 }
 
-async function opMove(id: string, stateName: string) {
+async function opMove(id: string, requested: string) {
+  // Kit names -> this board (see READY_STATE / QA_LABEL above).
+  const isQa = requested.toLowerCase() === "qa";
+  const stateName = isQa
+    ? "In Review"
+    : requested.toLowerCase() === "ready"
+      ? READY_STATE
+      : requested;
   const t = await team();
   const state = t.states.nodes.find((s) => s.name.toLowerCase() === stateName.toLowerCase());
   if (!state)
@@ -416,16 +427,27 @@ async function opMove(id: string, stateName: string) {
       `state "${stateName}" not in team ${t.key}: ${t.states.nodes.map((s) => s.name).join(", ")}`,
     );
   const i = await getIssue(id);
-  if (i.state.name === state.name) return console.log(`unchanged: ${id} already ${state.name}`);
-  const r = await mutate(
-    `move ${id} ${i.state.name} -> ${state.name}`,
-    `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }`,
-    { id: i.id, input: { stateId: state.id } },
-  );
-  if (!r) return;
-  const again = await getIssue(id);
-  if (again.state.name !== state.name) throw new LinearError("verify failed: state not updated");
-  console.log(`moved: ${id} ${i.state.name} -> ${again.state.name}`);
+  if (i.state.name !== state.name) {
+    const r = await mutate(
+      `move ${id} ${i.state.name} -> ${state.name}`,
+      `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }`,
+      { id: i.id, input: { stateId: state.id } },
+    );
+    if (!r) {
+      if (isQa || labelNames(i).includes(QA_LABEL))
+        await opLabel(id, [isQa ? `+${QA_LABEL}` : `-${QA_LABEL}`]);
+      return;
+    }
+    const again = await getIssue(id);
+    if (again.state.name !== state.name) throw new LinearError("verify failed: state not updated");
+    console.log(`moved: ${id} ${i.state.name} -> ${again.state.name}`);
+  } else {
+    console.log(`unchanged: ${id} already ${state.name}`);
+  }
+  // QA is a label on top of In Review; leaving In Review (or re-entering it as plain review) clears it.
+  const hasQa = labelNames(await getIssue(id)).includes(QA_LABEL);
+  if (isQa && !hasQa) await opLabel(id, [`+${QA_LABEL}`]);
+  if (!isQa && hasQa) await opLabel(id, [`-${QA_LABEL}`]);
 }
 
 async function opLabel(id: string, changes: string[]) {
@@ -496,8 +518,9 @@ async function opDagCheck(epic: string | undefined) {
 }
 
 async function opHash(id: string) {
-  const i = await getIssue(id);
-  const h = contractHash(i.description ?? "");
+  const bodyFile = flag("body-file");
+  const i = bodyFile ? null : await getIssue(id);
+  const h = contractHash(bodyFile ? fs.readFileSync(bodyFile, "utf8") : (i!.description ?? ""));
   if (!h) throw new LinearError(`${id} has no ## Contract section`);
   const expect = flag("expect");
   if (expect && expect !== h) {
@@ -510,7 +533,7 @@ async function opHash(id: string) {
 
 async function opNext() {
   const [ready, inFlightIssues] = await Promise.all([
-    teamIssues({ state: { name: { eq: "Ready" } } }),
+    teamIssues({ state: { name: { eq: READY_STATE } } }),
     teamIssues({ state: { name: { in: IN_FLIGHT_STATES } } }),
   ]);
   const inFlight = inFlightIssues.map((i) => ({ id: i.identifier, labels: labelNames(i) }));
@@ -601,17 +624,9 @@ async function opNext() {
 
 async function opBootstrap() {
   const t = await team();
-  for (const s of KIT_STATES) {
-    if (t.states.nodes.some((x) => x.name === s.name)) {
-      console.log(`state ok: ${s.name}`);
-      continue;
-    }
-    await mutate(
-      `create state ${s.name} [${s.type}]`,
-      `mutation($input: WorkflowStateCreateInput!) { workflowStateCreate(input: $input) { success } }`,
-      { input: { teamId: t.id, name: s.name, type: s.type, color: s.color } },
-    );
-    if (!DRY) console.log(`state created: ${s.name}`);
+  for (const name of REQUIRED_STATES) {
+    if (t.states.nodes.some((x) => x.name === name)) console.log(`state ok: ${name}`);
+    else console.log(`state MISSING: ${name} (set LINEAR_STATE_READY or add it in team settings)`);
   }
   const existing = await labelsForTeam();
   const missing = KIT_LABELS.filter((n) => !existing.some((l) => l.name === n));
@@ -619,14 +634,8 @@ async function opBootstrap() {
   if (missing.length) await resolveLabelIds(missing, true);
   if (!DRY && missing.length) console.log(`labels created: ${missing.join(", ")}`);
   if (!DRY) {
-    teamCache = null;
-    const again = await team();
-    const absent = KIT_STATES.filter((s) => !again.states.nodes.some((x) => x.name === s.name));
-    if (absent.length)
-      throw new LinearError(`verify failed: states missing ${absent.map((s) => s.name)}`);
-    for (const s of ["Backlog", "In Progress", "In Review", "Done", "Canceled"])
-      if (!again.states.nodes.some((x) => x.name === s))
-        console.log(`warning: expected state "${s}" not found; rename in Linear team settings`);
+    const absent = REQUIRED_STATES.filter((n) => !t.states.nodes.some((x) => x.name === n));
+    if (absent.length) throw new LinearError(`verify failed: states missing ${absent.join(", ")}`);
   }
   console.log(
     "reminder (human): disable Linear's GitHub automation that moves issues to Done on PR merge.",

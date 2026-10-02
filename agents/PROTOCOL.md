@@ -37,6 +37,8 @@ Workflow states (create `Ready` and `QA` in team settings):
 | Done | completed | merged, CI green on base, smoke passed |
 | Canceled | canceled | dropped with a reason comment |
 
+> **Board mapping for this repo**: the Linear team (Aegis, `AEG`) has no `Ready` or `QA` state. Wherever this file says Ready read `Todo`, and wherever it says QA read `In Review` + label `qa`. Full mapping, tool usage and the connector call for every operation: `agents/BOARD.md`.
+
 Labels:
 - type: `type:feature` `type:bug` `type:chore` `type:adr` `type:spike`
 - scope: `area:<feature-or-module>`, `epic`

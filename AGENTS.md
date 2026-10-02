@@ -75,6 +75,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: Linear, 
 - Prisma client only in `src/server/**` and `src/features/*/{queries,actions}`. Never in client components.
 - Env access only through `src/env.ts` (validated).
 - New dependencies need a one-line justification in the PR.
+- Playwright: Next.js renders a hidden route announcer with `role="alert"`. Filter `getByRole("alert")` by text.
 
 ## Architecture map
 ```

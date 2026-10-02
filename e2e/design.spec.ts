@@ -10,7 +10,8 @@ test.describe("design system page", () => {
       "aria-invalid",
       "true",
     );
-    await expect(page.getByRole("alert")).toContainText("Could not save");
+    // Next.js injects a route announcer with role="alert"; always filter alerts by text.
+    await expect(page.getByRole("alert").filter({ hasText: "Could not save" })).toBeVisible();
     await expectNoA11yViolations(page);
   });
 

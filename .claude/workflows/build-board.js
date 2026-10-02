@@ -1,9 +1,9 @@
 export const meta = {
   name: "build-board",
   description:
-    "Turn requirements into a full Linear board: features > issues > sub-issues (technical and non-technical) with dependency links",
+    "Turn requirements into a full GitHub board: features > issues > sub-issues (technical and non-technical) with blocked-by dependencies, on the Project",
   whenToUse:
-    "You have requirements (pasted text or a file) and want the whole board built in Linear: gather from several angles, regroup into one hierarchy, derive dependencies, create the cards, verify them.",
+    "You have requirements (pasted text or a file) and want the whole board built as GitHub issues on the Project: gather from several angles, regroup into one hierarchy, derive dependencies, create the cards, verify them.",
   phases: [
     {
       title: "Gather",
@@ -13,14 +13,20 @@ export const meta = {
       title: "Regroup",
       detail: "merge into one hierarchy, derive dependencies, critic loop, deterministic checks",
     },
-    { title: "Prepare", detail: "make sure the labels exist in Linear" },
+    { title: "Prepare", detail: "board.ts bootstrap: make sure the labels exist in the repo" },
     {
       title: "Create",
-      detail: "one agent per feature creates feature, issues and sub-issues top-down",
+      detail: "one agent per feature runs board.ts import: feature, issues and sub-issues top-down",
     },
-    { title: "Link", detail: "set blocked-by relations once every identifier is known" },
-    { title: "Verify", detail: "read everything back from Linear and compare with the plan" },
-    { title: "Record", detail: "write the plan and key-to-identifier map into the repo" },
+    {
+      title: "Link",
+      detail: "board.ts link: set blocked-by dependencies once every issue number is known",
+    },
+    {
+      title: "Verify",
+      detail: "board.ts verify: read everything back from GitHub and compare with the plan",
+    },
+    { title: "Record", detail: "write the plan and key-to-issue map into the repo" },
   ],
 };
 
@@ -28,21 +34,25 @@ export const meta = {
  * args (all optional except one of requirements / requirementsFile):
  *   requirements      string  the requirements, pasted
  *   requirementsFile  string  path to a file with the requirements (read by the agents)
- *   team              string  default "Aegis"
- *   project           string  default "fifth copy"
- *   foundationsEpic   string  existing epic that blocks every root feature (default "AEG-1"; "" to disable)
- *   dryRun            bool    stop after Regroup and return the plan; nothing is written to Linear
+ *   repo              string  default "jimmy-razafindretsa/fifth-copy" (passed to board.ts as BOARD_REPO)
+ *   projectOwner      string  default the repo owner (BOARD_PROJECT_OWNER)
+ *   projectNumber     number  default 2 (BOARD_PROJECT_NUMBER)
+ *   foundationsEpic   number  existing epic issue that blocks every root feature (default 2; 0 to disable)
+ *   dryRun            bool    stop after Regroup and return the plan; nothing is written to GitHub
  *   planName          string  file name under work/plan/ for the record (default "board")
  *   criticRounds      number  max completeness-critic rounds (default 2)
  *
+ * All board I/O goes through `npx tsx scripts/board.ts` (dump, bootstrap, import, link, verify), run by agents via Bash.
  * Board rules (agents/BOARD.md): cards start in Backlog, features get `epic` + `needs-replan` (= "details pending",
  * the Analyst writes Contracts later), `plan-approved` is NEVER set here, descriptions stay minimal.
  */
 
 const A = args || {};
-const TEAM = A.team || "Aegis";
-const PROJECT = A.project || "fifth copy";
-const FOUNDATIONS = A.foundationsEpic === undefined ? "AEG-1" : A.foundationsEpic;
+const REPO = A.repo || "jimmy-razafindretsa/fifth-copy";
+const PROJECT_OWNER = A.projectOwner || REPO.split("/")[0];
+const PROJECT_NUMBER = Number(A.projectNumber || 2);
+const FOUNDATIONS_NUM = A.foundationsEpic === undefined ? 2 : Number(A.foundationsEpic) || 0;
+const FOUNDATIONS = FOUNDATIONS_NUM ? `#${FOUNDATIONS_NUM}` : "";
 const DRY = !!A.dryRun;
 const PLAN_NAME = A.planName || "board";
 const CRITIC_ROUNDS = typeof A.criticRounds === "number" ? A.criticRounds : 2;
@@ -50,11 +60,12 @@ if (!A.requirements && !A.requirementsFile) {
   throw new Error("Pass args.requirements (text) or args.requirementsFile (path).");
 }
 
-const LINEAR_TOOLS =
-  "Linear connector tools. Load their schemas first with ToolSearch, query " +
-  '"select:mcp__055d0e82-1972-4a2c-99a6-fa05a3811ae2__save_issue,mcp__055d0e82-1972-4a2c-99a6-fa05a3811ae2__list_issues,' +
-  "mcp__055d0e82-1972-4a2c-99a6-fa05a3811ae2__get_issue,mcp__055d0e82-1972-4a2c-99a6-fa05a3811ae2__list_issue_labels," +
-  'mcp__055d0e82-1972-4a2c-99a6-fa05a3811ae2__save_issue_label" (if that finds nothing, ToolSearch "linear save_issue").';
+const BOARD_ENV = `BOARD_REPO=${REPO} BOARD_PROJECT_OWNER=${PROJECT_OWNER} BOARD_PROJECT_NUMBER=${PROJECT_NUMBER}`;
+const BOARD = `${BOARD_ENV} npx tsx scripts/board.ts`;
+const BOARD_TOOLS =
+  `Board access: run the repo's board CLI with Bash, exactly as \`${BOARD} <op>\` (see agents/BOARD.md; it uses the gh login). ` +
+  "Long ops: give the Bash call a 600000 ms timeout; if it still times out, rerun the same command (every op is idempotent). " +
+  "Write JSON input files under .cache/build-board/ (gitignored). Never add the label plan-approved; never close, move or delete issues.";
 
 const REPO_CONTEXT =
   "Read-only repo context (read what exists, skip what does not): docs/product-spec.md, AGENTS.md, agents/BOARD.md, " +
@@ -118,12 +129,12 @@ const DEP = {
     blocker: {
       type: "string",
       description:
-        "Key (or existing identifier like AEG-3, or exact title for lens output) that must finish first",
+        "Key (or existing issue number like #3, or exact title for lens output) that must finish first",
     },
     blocked: {
       type: "string",
       description:
-        "Key (or existing identifier / exact title) that cannot start until the blocker is done",
+        "Key (or existing issue number / exact title) that cannot start until the blocker is done",
     },
     why: { type: "string", maxLength: 140 },
   },
@@ -163,7 +174,7 @@ const EXISTING_SCHEMA = {
         properties: {
           identifier: { type: "string" },
           title: { type: "string" },
-          parent: { type: "string", description: "parent identifier or empty" },
+          parent: { type: "string", description: "parent issue number as #n, or empty" },
           state: { type: "string" },
         },
         required: ["identifier", "title"],
@@ -240,10 +251,10 @@ const CREATE_SCHEMA = {
         type: "object",
         properties: {
           key: { type: "string" },
-          identifier: { type: "string" },
+          issue: { type: "number", description: "GitHub issue number" },
           reused: { type: "boolean" },
         },
-        required: ["key", "identifier"],
+        required: ["key", "issue"],
       },
     },
     failures: { type: "array", items: { type: "string" } },
@@ -272,7 +283,7 @@ const VERIFY_SCHEMA = {
 
 // ---------- pure helpers ----------
 
-const IDENT = /^[A-Z]+-\d+$/;
+const IDENT = /^#\d+$/; // existing issue on the board
 const norm = (s) =>
   String(s || "")
     .trim()
@@ -383,7 +394,7 @@ function allNodes(plan) {
 /** fromNewKeys=true: refs already use the regenerated keys (dependency pass). false: refs use the model's own keys or titles. */
 function resolveRef(ref, keyMap, validKeys, fromNewKeys) {
   const r = String(ref || "").trim();
-  if (IDENT.test(r)) return r; // existing Linear identifier
+  if (/^#?\d+$/.test(r)) return `#${r.replace("#", "")}`; // existing issue number
   if (fromNewKeys && validKeys.has(r)) return r;
   if (!fromNewKeys && keyMap.has(r)) return keyMap.get(r);
   const byTitle = keyMap.get("t:" + norm(r));
@@ -503,9 +514,9 @@ phase("Gather");
 log("Gather: extracting requirements, scanning the existing board, running 4 lenses");
 
 const existingP = agent(
-  `List every issue that already exists in the Linear project "${PROJECT}" (team ${TEAM}), including parents and archived=false. ` +
-    `${LINEAR_TOOLS} Use list_issues with project "${PROJECT}", team "${TEAM}", fields [title, parentId, status], paging with the cursor until hasNextPage is false. ` +
-    `Return identifier, title, parent identifier (or empty) and state for each. Do not create or change anything.`,
+  `List every issue that already exists on the board (repo ${REPO}, project ${PROJECT_OWNER}/${PROJECT_NUMBER}). ${BOARD_TOOLS} ` +
+    `Run \`${BOARD} dump --json\` once; it prints a JSON array of cards with number, title, status and parent. Return, for every card, ` +
+    `identifier "#<number>", title, parent "#<parent>" (or empty) and state (= status). Do not create or change anything.`,
   { label: "scan existing board", phase: "Gather", schema: EXISTING_SCHEMA, effort: "low" },
 );
 
@@ -526,7 +537,7 @@ log(
 );
 
 const SHAPE_RULES =
-  "Output shape: FEATURES (a user- or business-meaningful capability, becomes a Linear epic), each with ISSUES (a deliverable unit " +
+  "Output shape: FEATURES (a user- or business-meaningful capability, becomes an epic issue), each with ISSUES (a deliverable unit " +
   "of work a person could finish in a few days), each optionally with SUB-ISSUES (concrete steps of an issue, 2-6 when it naturally " +
   "splits, e.g. data model, API, screen, tests, copy). Titles unique among siblings. Descriptions: ONE or TWO plain sentences, " +
   "no markdown, no acceptance criteria (those come later). Tag every item track=technical or track=non-technical and type " +
@@ -606,7 +617,7 @@ const MERGE_RULES =
   `one item; group related issues under the feature a stakeholder would recognise; technical and non-technical items live side by side under ` +
   `the same feature when they serve the same capability, and a feature may be purely technical or purely non-technical when it is a ` +
   `foundation or a workstream. Aim for 5-12 features. Give EVERY feature, issue and sub-issue a unique "key" you invent (F1, F1.1, F1.1.1 style) ` +
-  `and refer to items ONLY by those keys in dependencies (or by an existing Linear identifier such as AEG-3 for already existing work). ` +
+  `and refer to items ONLY by those keys in dependencies (or by an existing issue number such as #3 for already existing work). ` +
   `Do not recreate anything on the existing board.`;
 
 let raw = await agent(
@@ -658,7 +669,7 @@ const depPass = await agent(
     `real-time load testing; tests after the thing they test. Prefer dependencies between ISSUES (and between features when whole ` +
     `capabilities depend on others); use sub-issues only for steps inside one issue's chain across issues. Never link an item to its own ` +
     `parent or child. Do not add edges that are implied by a chain (A>B>C needs no A>C). Reference items ONLY by their keys, or by existing ` +
-    `identifiers: ${existingList.split("\n").slice(0, 40).join(" | ")}.\n\nPLAN:\n${outline(plan)}\n\nDESCRIPTIONS:\n` +
+    `issue numbers: ${existingList.split("\n").slice(0, 40).join(" | ")}.\n\nPLAN:\n${outline(plan)}\n\nDESCRIPTIONS:\n` +
     allNodes(plan)
       .map((n) => `${n.key}: ${n.description}`)
       .join("\n"),
@@ -768,11 +779,22 @@ if (DRY) return { dryRun: true, stats, plan, edges, edgeDropped };
 // ---------- 3. Prepare ----------
 
 phase("Prepare");
+const REQUIRED_LABELS = [
+  "epic",
+  "needs-replan",
+  "type:feature",
+  "type:chore",
+  "type:spike",
+  "type:adr",
+  "track:technical",
+  "track:non-technical",
+];
 const prep = await agent(
-  `Make sure these labels exist for team ${TEAM} in Linear; create any that are missing and leave existing ones alone: ` +
-    `epic, needs-replan, type:feature, type:chore, type:spike, type:adr, track:technical, track:non-technical. ` +
-    `${LINEAR_TOOLS} Use list_issue_labels (team "${TEAM}", limit 250) then save_issue_label (teamId 091a3ad5-8458-4f95-a238-e1385cedd55d) for missing ones. ` +
-    `Do NOT create or apply the label plan-approved. Return ok=true when all eight exist.`,
+  `Make sure the board's labels exist; create missing ones and leave existing ones alone. ${BOARD_TOOLS}\n\n` +
+    `Run \`${BOARD} bootstrap\` once (it checks the Project's Status options and automations and creates every missing kit label). ` +
+    `Then confirm from its output that each of these labels is reported ok or created: ${REQUIRED_LABELS.join(", ")}. ` +
+    `Return ok=true when all ${REQUIRED_LABELS.length} exist and bootstrap reported no MISSING status; otherwise ok=false and failures with the offending lines. ` +
+    `labelsCreated = the labels bootstrap created. Do NOT apply plan-approved to anything.`,
   { label: "ensure labels", phase: "Prepare", schema: OK_SCHEMA, effort: "low" },
 );
 if (!prep || !prep.ok) throw new Error(`Label preparation failed: ${JSON.stringify(prep)}`);
@@ -789,7 +811,7 @@ const created = await pipeline(plan.features, (f) => {
     key: f.key,
     parentKey: null,
     title: f.title,
-    description: f.description,
+    body: f.description,
     labels: ["epic", "needs-replan", trackLabel(f.track)],
   });
   for (const i of f.issues) {
@@ -797,28 +819,30 @@ const created = await pipeline(plan.features, (f) => {
       key: i.key,
       parentKey: f.key,
       title: i.title,
-      description: i.description,
+      body: i.description,
       labels: [typeLabel(i.type), trackLabel(i.track)],
     });
-    for (const s of i.subissues) {
+    for (const sub of i.subissues) {
       items.push({
-        key: s.key,
+        key: sub.key,
         parentKey: i.key,
-        title: s.title,
-        description: s.description,
-        labels: [typeLabel(s.type), trackLabel(s.track)],
+        title: sub.title,
+        body: sub.description,
+        labels: [typeLabel(sub.type), trackLabel(sub.track)],
       });
     }
   }
+  const file = `.cache/build-board/${PLAN_NAME}-${f.key}.json`;
+  const out = `.cache/build-board/${PLAN_NAME}-${f.key}.out.json`;
   return agent(
-    `Create Linear issues for ONE feature subtree, top-down, in the order given (a parent always comes before its children). ` +
-      `${LINEAR_TOOLS}\n\nFor each item: (1) call list_issues with team "${TEAM}", project "${PROJECT}", query = the exact title, and check whether an ` +
-      `issue with the SAME title and the same parent already exists; if so reuse its identifier and do not create (reused=true). (2) otherwise call ` +
-      `save_issue with team "${TEAM}", project "${PROJECT}", state "Backlog", the exact title, the exact description (do not edit or extend it), ` +
-      `labels exactly as given, and parentId = the identifier you got for parentKey (omit for the feature). Do NOT set estimate, priority, assignee ` +
-      `or any label not listed. Never add the label plan-approved. Keep titles/descriptions verbatim; wrap nothing in markdown.\n\n` +
-      `Return created = [{key, identifier, reused}] for every item you handled and failures = strings for anything that failed (do not retry a ` +
-      `failing item more than once).\n\nITEMS (in order):\n${JSON.stringify(items, null, 1)}`,
+    `Create the GitHub issues for ONE feature subtree. ${BOARD_TOOLS}\n\n` +
+      `1. Write the ITEMS below, byte for byte (pretty-printing is fine, but do not change any title, body or label), as a JSON array to ${file}.\n` +
+      `2. Run \`${BOARD} import --file ${file} --out ${out}\`. It creates the issues top-down as sub-issues (a parent always comes before its ` +
+      `children), adds each to the Project in Backlog, appends a board-key marker to each body, and reuses an existing issue with the same title ` +
+      `and parent instead of duplicating it.\n` +
+      `3. Read ${out}: {keyToIssue, reused, failures}. Return created = one {key, issue, reused} per entry of keyToIssue (reused = key is in reused) ` +
+      `and failures = the failures array plus any error the command printed. If the command failed midway, rerun it once (it is idempotent) before ` +
+      `reporting. Do not create, edit or label issues any other way.\n\nITEMS (in order):\n${JSON.stringify(items, null, 1)}`,
     {
       label: `create ${f.key} ${f.title.slice(0, 40)}`,
       phase: "Create",
@@ -828,14 +852,14 @@ const created = await pipeline(plan.features, (f) => {
   );
 });
 
-const idByKey = new Map();
+const idByKey = new Map(); // plan key -> issue number
 const createFailures = [];
 for (const r of created) {
   if (!r) {
     createFailures.push("a feature agent returned nothing");
     continue;
   }
-  for (const c of r.created) idByKey.set(c.key, c.identifier);
+  for (const c of r.created) idByKey.set(c.key, c.issue);
   createFailures.push(...r.failures);
 }
 const missingKeys = nodes.filter((n) => !idByKey.has(n.key)).map((n) => n.key);
@@ -846,26 +870,24 @@ log(
 // ---------- 5. Link ----------
 
 phase("Link");
-const idOf = (k) => (IDENT.test(k) ? k : idByKey.get(k));
+const idOf = (k) => (IDENT.test(k) ? Number(k.slice(1)) : idByKey.get(k));
 const resolvedEdges = edges
   .map((e) => ({ ...e, blockerId: idOf(e.blocker), blockedId: idOf(e.blocked) }))
   .filter((e) => e.blockerId && e.blockedId);
 const skippedEdges = edges.length - resolvedEdges.length;
-const byBlocked = new Map();
-for (const e of resolvedEdges) {
-  if (!byBlocked.has(e.blockedId)) byBlocked.set(e.blockedId, []);
-  byBlocked.get(e.blockedId).push(e.blockerId);
-}
 const linkJobs = chunk(
-  [...byBlocked.entries()].map(([id, blockers]) => ({ id, blockedBy: blockers })),
-  12,
+  resolvedEdges.map((e) => ({ blocker: e.blockerId, blocked: e.blockedId })),
+  40,
 );
 const linkResults = await parallel(
   linkJobs.map(
     (job, idx) => () =>
       agent(
-        `Set dependencies in Linear. ${LINEAR_TOOLS}\n\nFor each entry call save_issue with id = entry.id and blockedBy = entry.blockedBy (append-only, safe to repeat). ` +
-          `Change nothing else. Return ok=true if every call succeeded, otherwise ok=false and failures listing the ids.\n\n${JSON.stringify(job)}`,
+        `Set "blocked by" dependencies on GitHub. ${BOARD_TOOLS}\n\n` +
+          `Write this JSON array exactly to .cache/build-board/${PLAN_NAME}-link-${idx + 1}.json, then run ` +
+          `\`${BOARD} link --file .cache/build-board/${PLAN_NAME}-link-${idx + 1}.json\` (each entry: blocker blocks blocked; existing links are kept, ` +
+          `so repeating is safe). Change nothing else. Return ok=true if its summary line reports 0 failed, otherwise ok=false and failures = the ` +
+          `FAILED lines.\n\n${JSON.stringify(job)}`,
         {
           label: `link batch ${idx + 1}/${linkJobs.length}`,
           phase: "Link",
@@ -879,7 +901,7 @@ const linkFailures = linkResults.flatMap((r, i) =>
   r && r.ok ? [] : (r && r.failures) || [`batch ${i + 1} returned nothing`],
 );
 log(
-  `${resolvedEdges.length} dependency links set (${skippedEdges} skipped for missing identifiers, ${linkFailures.length} failures)`,
+  `${resolvedEdges.length} dependency links set (${skippedEdges} skipped for missing issue numbers, ${linkFailures.length} failures)`,
 );
 
 // ---------- 6. Verify ----------
@@ -893,22 +915,29 @@ for (const e of resolvedEdges) {
 const expectation = nodes
   .filter((n) => idByKey.has(n.key))
   .map((n) => ({
-    id: idByKey.get(n.key),
+    number: idByKey.get(n.key),
     title: n.title,
     parent: n.parent ? idByKey.get(n.parent) || null : null,
+    status: "Backlog",
     mustHaveLabels: n.level === 0 ? ["epic", "needs-replan"] : [typeLabel(n.type)],
-    blockedBy: (expectedBlockers.get(idByKey.get(n.key)) || []).sort(),
+    mustNotHaveLabels: ["plan-approved"],
+    blockedBy: (expectedBlockers.get(idByKey.get(n.key)) || []).sort((a, b) => a - b),
   }));
+const verifyPrompt = (group, name) =>
+  `Verify issues on GitHub against expectations. ${BOARD_TOOLS}\n\n` +
+  `Write this JSON array exactly to .cache/build-board/${PLAN_NAME}-${name}.json, then run ` +
+  `\`${BOARD} verify --expect-file .cache/build-board/${PLAN_NAME}-${name}.json\`. It prints one "#n: what differs" line per deviation ` +
+  `(title, parent, status, missing or unexpected labels, missing blocked-by) and a summary line. Return checked = the number of entries and ` +
+  `mismatches = the deviation lines verbatim. Read only; change nothing.\n\n${JSON.stringify(group)}`;
 const verifyResults = await parallel(
-  chunk(expectation, 15).map(
+  chunk(expectation, 60).map(
     (group, idx) => () =>
-      agent(
-        `Verify issues in Linear against expectations. ${LINEAR_TOOLS}\n\nFor each entry call get_issue with id and includeRelations=true and check: title equals; ` +
-          `project is "${PROJECT}"; status is Backlog; parent identifier equals entry.parent (null means no parent); every label in mustHaveLabels is present; ` +
-          `the label plan-approved is NOT present; relations.blockedBy identifiers (as a set) include every identifier in entry.blockedBy. ` +
-          `Report each deviation as one short string "ID: what differs". Read only; change nothing.\n\n${JSON.stringify(group)}`,
-        { label: `verify batch ${idx + 1}`, phase: "Verify", schema: VERIFY_SCHEMA, effort: "low" },
-      ),
+      agent(verifyPrompt(group, `verify-${idx + 1}`), {
+        label: `verify batch ${idx + 1}`,
+        phase: "Verify",
+        schema: VERIFY_SCHEMA,
+        effort: "low",
+      }),
   ),
 );
 let mismatches = verifyResults.flatMap((r) =>
@@ -917,34 +946,43 @@ let mismatches = verifyResults.flatMap((r) =>
 log(`verify: ${mismatches.length} deviations`);
 
 if (mismatches.length) {
+  const affected = expectation.filter((e) => mismatches.some((m) => m.startsWith(`#${e.number}:`)));
   await agent(
-    `Fix these deviations in Linear using save_issue (labels: use addLabels/removeLabels; relations: blockedBy is append-only; for a wrong parent set parentId). ` +
-      `${LINEAR_TOOLS}\n\nExpected state per issue:\n${JSON.stringify(expectation.filter((e) => mismatches.some((m) => m.startsWith(e.id + ":"))))}\n\nDeviations:\n${mismatches.join("\n")}\n\n` +
+    `Fix these deviations on GitHub. ${BOARD_TOOLS}\n\nTools per deviation: labels -> \`${BOARD} label <n> +x -y --create-missing\`; ` +
+      `missing blocked-by -> \`${BOARD} relate <blocker> blocks <n>\`; wrong title -> \`gh issue edit <n> -R ${REPO} --title "<expected>"\`; ` +
+      `wrong or missing parent -> the GraphQL mutation addSubIssue(input: {issueId: <parent node id>, subIssueId: <child node id>, replaceParent: true}) ` +
+      `via \`gh api graphql\` (node ids from \`gh issue view <n> -R ${REPO} --json id\`); wrong status -> \`${BOARD} move <n> Backlog\`.\n\n` +
+      `Expected state per issue:\n${JSON.stringify(affected)}\n\nDeviations:\n${mismatches.join("\n")}\n\n` +
       `Fix only what is listed. Never add plan-approved. Return ok and failures.`,
     { label: "fix deviations", phase: "Verify", schema: OK_SCHEMA, effort: "low" },
   );
-  const again = await agent(
-    `Re-verify these issues. ${LINEAR_TOOLS} For each id call get_issue with includeRelations=true and compare with the expectation ` +
-      `(title, parent, mustHaveLabels, blockedBy superset, no plan-approved). Return the remaining deviations.\n\n` +
-      JSON.stringify(expectation.filter((e) => mismatches.some((m) => m.startsWith(e.id + ":")))),
-    { label: "re-verify", phase: "Verify", schema: VERIFY_SCHEMA, effort: "low" },
-  );
+  const again = await agent(verifyPrompt(affected, "reverify"), {
+    label: "re-verify",
+    phase: "Verify",
+    schema: VERIFY_SCHEMA,
+    effort: "low",
+  });
   mismatches = again ? again.mismatches : mismatches;
 }
 
 // ---------- 7. Record ----------
 
 phase("Record");
+const keyOf = new Map([...idByKey].map(([k, n]) => [n, k]));
 const record = {
   planName: PLAN_NAME,
-  team: TEAM,
-  project: PROJECT,
+  tracker: "GitHub Projects",
+  repo: REPO,
+  project: { owner: PROJECT_OWNER, number: PROJECT_NUMBER },
+  requirements: A.requirementsFile || null,
   stats,
-  keyToIdentifier: Object.fromEntries(idByKey),
+  keyToIssue: Object.fromEntries(idByKey),
   plan,
   dependencies: resolvedEdges.map((e) => ({
     blocker: e.blockerId,
     blocked: e.blockedId,
+    blockerKey: keyOf.get(e.blockerId) || e.blocker,
+    blockedKey: keyOf.get(e.blockedId) || e.blocked,
     why: e.why,
   })),
   problems: { missingKeys, createFailures, linkFailures, remainingMismatches: mismatches },
@@ -969,6 +1007,7 @@ return {
       "Features carry needs-replan (details pending) and no plan-approved: a human approves epics, then the Analyst writes Contracts.",
   },
   featureOutline: plan.features.map(
-    (f) => `${idByKey.get(f.key) || f.key} ${f.title}: ${f.issues.length} issues`,
+    (f) =>
+      `${idByKey.has(f.key) ? `#${idByKey.get(f.key)}` : f.key} ${f.title}: ${f.issues.length} issues`,
   ),
 };

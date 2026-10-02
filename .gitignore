@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# agent kit
+/.eyes/
+/.worktrees/
+/src/generated/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/.cache/

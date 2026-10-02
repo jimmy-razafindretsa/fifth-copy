@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# App (agent kit)
 
-## Getting Started
+Next.js 16 (App Router) · Prisma 7 · PostgreSQL 17 · Linear · agent-agnostic delivery loop.
 
-First, run the development server:
+Agents: start with [AGENTS.md](AGENTS.md) (always loaded), then [agents/PROTOCOL.md](agents/PROTOCOL.md) plus **one** role file in [agents/roles/](agents/roles/).
 
+## Setup
 ```bash
+npm install                 # also runs prisma generate
+cp .env.example .env        # Prisma CLI
+cp .env.example .env.local  # Next.js (add LINEAR_API_KEY here)
+npm run db:up               # local Postgres (docker compose), creates app + app_test
+npx playwright install chromium
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Gates
+| What | Command |
+|---|---|
+| Cheap gate (format, lint, types, boundaries, unit, ADR lint, prisma validate) | `scripts/check.sh` |
+| E2E (mobile/tablet/desktop, console + network + axe) | `npm run e2e` |
+| Visual (pinned Playwright image) | `scripts/visual-baselines.sh --check` |
+| Look at a route | `npx tsx scripts/see.ts <ISSUE> <route>` |
+| Post-deploy smoke | `scripts/deploy-smoke.sh [url]` |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Starting the loop
+1. The Linear board is already set up (team Aegis `AEG`, project "fifth copy": kit labels, epic AEG-1 Foundations with cards AEG-2..8). Read `agents/BOARD.md` for the state mapping (Ready = Todo, QA = In Review + `qa`) and the connector calls. `scripts/linear.ts` (optional, needs `LINEAR_API_KEY`) does the same.
+3. Human: add `plan-approved` to AEG-1, accept ADRs in `docs/adr/` you agree with.
+4. Run Picker (`agents/roles/picker.md`) in your agent runtime, or `AGENT_CMD="claude -p" scripts/loop.sh`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Bootstrap status and remaining human steps: [work/BOOTSTRAP_PROGRESS.md](work/BOOTSTRAP_PROGRESS.md).

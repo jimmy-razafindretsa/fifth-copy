@@ -1,0 +1,118 @@
+/*
+ * Design tokens: the single source of truth (docs/design/components.md explains usage).
+ * Imported by src/app/globals.css. Tailwind's default palette is removed (--color-*: initial),
+ * so only these semantic tokens exist as utilities: bg-surface, text-fg, border-border, ...
+ * Status: STARTER SET, needs human approval of visual direction (Foundations design-tokens card is autonomy:hitl).
+ */
+
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* semantic colors (values switch per theme below) */
+  --color-bg: var(--t-bg);
+  --color-surface: var(--t-surface);
+  --color-surface-muted: var(--t-surface-muted);
+  --color-fg: var(--t-fg);
+  --color-fg-muted: var(--t-fg-muted);
+  --color-border: var(--t-border);
+  --color-primary: var(--t-primary);
+  --color-primary-hover: var(--t-primary-hover);
+  --color-primary-fg: var(--t-primary-fg);
+  --color-danger: var(--t-danger);
+  --color-danger-surface: var(--t-danger-surface);
+  --color-success: var(--t-success);
+  --color-success-surface: var(--t-success-surface);
+  --color-focus: var(--t-focus);
+
+  /* typography */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+
+  /* spacing: Tailwind multiplies this base (p-4 = 1rem) */
+  --spacing: 0.25rem;
+
+  /* radius and elevation */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.06);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.12);
+
+  /* breakpoints (mobile first): md = tablet 768px, xl = desktop 1280px */
+  --breakpoint-md: 48rem;
+  --breakpoint-xl: 80rem;
+}
+
+/* Light (default). Contrast targets: fg/bg >= 7:1, fg-muted/bg >= 4.5:1, primary-fg/primary >= 4.5:1. */
+:root {
+  color-scheme: light;
+  --t-bg: #ffffff;
+  --t-surface: #ffffff;
+  --t-surface-muted: #f4f4f5;
+  --t-fg: #18181b;
+  --t-fg-muted: #52525b;
+  --t-border: #d4d4d8;
+  --t-primary: #1d4ed8;
+  --t-primary-hover: #1e40af;
+  --t-primary-fg: #ffffff;
+  --t-danger: #b91c1c;
+  --t-danger-surface: #fef2f2;
+  --t-success: #15803d;
+  --t-success-surface: #f0fdf4;
+  --t-focus: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --t-bg: #09090b;
+    --t-surface: #18181b;
+    --t-surface-muted: #27272a;
+    --t-fg: #fafafa;
+    --t-fg-muted: #a1a1aa;
+    --t-border: #3f3f46;
+    --t-primary: #60a5fa;
+    --t-primary-hover: #93c5fd;
+    --t-primary-fg: #09090b;
+    --t-danger: #f87171;
+    --t-danger-surface: #2a1215;
+    --t-success: #4ade80;
+    --t-success-surface: #0f2417;
+    --t-focus: #93c5fd;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --t-bg: #09090b;
+  --t-surface: #18181b;
+  --t-surface-muted: #27272a;
+  --t-fg: #fafafa;
+  --t-fg-muted: #a1a1aa;
+  --t-border: #3f3f46;
+  --t-primary: #60a5fa;
+  --t-primary-hover: #93c5fd;
+  --t-primary-fg: #09090b;
+  --t-danger: #f87171;
+  --t-danger-surface: #2a1215;
+  --t-success: #4ade80;
+  --t-success-surface: #0f2417;
+  --t-focus: #93c5fd;
+}

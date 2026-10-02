@@ -1,0 +1,160 @@
+# Required checks for main (configure branch protection to require: check, migrations, e2e, visual).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      update-baselines:
+        description: "Regenerate visual baselines in the pinned container and upload them as an artifact (a human commits them, PR label visual-change)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Placeholder for steps that only validate config; real DB jobs override it.
+  DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  check:
+    name: check (format, lint, types, boundaries, unit, ADR lint, prisma validate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: scripts/check.sh
+      - name: Show failing logs
+        if: failure()
+        run: tail -n 60 .cache/check/*.log
+
+  migrations:
+    name: migrations (deploy to throwaway Postgres, drift check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: scripts/db-guard.sh
+      - name: Merged migrations are immutable
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          changed=$(git diff --name-only --diff-filter=MDR "origin/${{ github.base_ref }}" -- prisma/migrations || true)
+          if [ -n "$changed" ]; then echo "Edited/deleted merged migrations (fix forward instead):"; echo "$changed"; exit 1; fi
+      - run: npx prisma migrate deploy
+      - run: npx prisma migrate status
+      - name: Schema drift (schema changed without a migration)
+        run: |
+          set +e
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code > drift.txt
+          code=$?
+          set -e
+          if [ "$code" = "2" ]; then cat drift.txt; echo "Schema has changes with no migration. Run prisma migrate dev locally."; exit 1; fi
+          exit $code
+
+  e2e:
+    name: e2e (Playwright, functional + a11y)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx prisma migrate deploy
+      - run: npm run build
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+  visual:
+    name: visual (pinned Playwright image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Pinned to the @playwright/test version in package.json. Bump both together.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        options: >-
+          --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
+      DB_GUARD_ALLOWED_HOSTS: postgres
+      PW_VISUAL: "1"
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: scripts/db-guard.sh
+      - run: npx prisma migrate deploy
+      - run: npm run build
+      - name: Visual tests
+        if: ${{ !inputs.update-baselines }}
+        run: npx playwright test --grep @visual
+      - name: Regenerate baselines
+        if: ${{ inputs.update-baselines }}
+        run: npx playwright test --grep @visual --update-snapshots
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: visual-results
+          path: |
+            e2e/__screenshots__
+            test-results
+          retention-days: 7

@@ -1,0 +1,11 @@
+// Data model lives in prisma/schema/*.prisma (one file per area). Never copy field lists elsewhere.
+// Datasource URL is configured in prisma.config.ts (Prisma 7 convention).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -9,9 +9,9 @@ Placeholder values used: TEAM_KEY=`ENG` (change in AGENTS.md if your Linear team
 - [x] 0. Split kit into files (AGENTS.md kept the `next dev` block; appendix saved as `agents/PHASE0.md`)
 - [x] 1. Scaffold: move app to `src/`, folder architecture, TS strict, prettier, boundary lint, `src/env.ts`
 - [x] 2. Prisma + Postgres: `prisma/schema/`, docker compose, test DB strategy, `scripts/db-guard.sh`, seed
-- [ ] 3. Tooling scripts: `check.sh`, `adr-index.ts`, `adr-governing.ts`, first ADRs, `linear.ts`, `deploy-smoke.sh`, `loop.sh`
+- [x] 3. Tooling scripts: `check.sh`, `adr-index.ts`, `adr-governing.ts`, first ADRs, `linear.ts`, `deploy-smoke.sh`, `loop.sh`
 - [x] 4. Unit test runner (vitest)
-- [ ] 5. Playwright harness + `scripts/see.ts` + visual test config
+- [x] 5. Playwright harness + `scripts/see.ts` + visual test config
 - [ ] 6. Design tokens + base UI primitives + `docs/design/components.md`
 - [ ] 7. CI pipeline (GitHub Actions) + CODEOWNERS + PR template
 - [ ] 8. Linear workspace bootstrap script (states, labels) + Foundations epic/cards seed files

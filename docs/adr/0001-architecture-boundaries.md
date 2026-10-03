@@ -1,7 +1,7 @@
 ---
 id: "0001"
 title: Feature-sliced src/ layout with enforced import boundaries
-status: proposed
+status: accepted
 category: architecture
 scope: ["src/**"]
 supersedes: []

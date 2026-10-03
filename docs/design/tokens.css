@@ -2,7 +2,8 @@
  * Design tokens: the single source of truth (docs/design/components.md explains usage).
  * Imported by src/app/globals.css. Tailwind's default palette is removed (--color-*: initial),
  * so only these semantic tokens exist as utilities: bg-surface, text-fg, border-border, ...
- * Status: STARTER SET, needs human approval of visual direction (Foundations design-tokens card is autonomy:hitl).
+ * Status: STARTER SET, placeholder skin (mechanism reviewed in #7). Replaced by #15 (Fifth Copy palette and
+ * semantic colour roles), #19 (Night shift dark theme) and #20 (typography roles and font loading).
  */
 
 @theme {

@@ -1,6 +1,6 @@
 # Component inventory (`src/components/ui`)
 
-Status: starter set. Visual direction needs human approval (Foundations design-tokens card is `ui` + `autonomy:hitl`).
+Status: starter set, placeholder skin (token mechanism, primitives and states reviewed in #7). The skin is replaced by #15 (Fifth Copy palette and semantic colour roles), #19 (Night shift dark theme) and #20 (typography roles and font loading).
 Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` (visual baselines tagged `@visual`).
 
 ## Rules

@@ -52,7 +52,9 @@ describe("db-guard", () => {
   });
 
   it("accepts harmless query parameters on a local host", () => {
-    expect(guard("postgresql://app:app@localhost:5432/app?schema=public&sslmode=disable").status).toBe(0);
+    expect(
+      guard("postgresql://app:app@localhost:5432/app?schema=public&sslmode=disable").status,
+    ).toBe(0);
   });
 
   it("accepts designated test hosts", () => {

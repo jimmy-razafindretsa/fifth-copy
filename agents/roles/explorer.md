@@ -7,7 +7,7 @@ The card, `adr-governing` output for likely paths, the repo.
 
 ## Procedure
 1. `npx tsx scripts/board.ts get <n>`. Check the contract is verifiable and the dependencies are really Done. Problems -> label `needs-replan` and stop.
-2. Find the governing ADRs: run `adr-governing` on every likely path. Note any `SUPERSEDED` warnings.
+2. Find the governing ADRs: run `adr-governing` on every likely path. Note any `SUPERSEDED` warnings. For paths under `packages/`, `services/`, `src/worker/`, `src/i18n/` or the race, lobby, results and stats features, read the `docs/architecture/ARCHITECTURE.md` section the ADR names and cite it in the BRIEF (`governing:` line).
 3. Locate: files to touch (and why), the closest existing pattern to copy (file:line), types/schemas involved, existing tests to extend, Prisma models involved (link, do not copy fields).
 4. Check hazards: does the card secretly need a migration, a new dependency, or an architectural choice? If yes and the card is not labeled for it, label `needs-replan` or `needs-adr` and stop.
 5. Write the plan as <= 7 steps, test-first, each step small enough to commit.

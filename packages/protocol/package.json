@@ -1,0 +1,18 @@
+{
+  "name": "@fifth-copy/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zod schemas and types for every message between the browser, the Next.js app and the race server: socket events, race tokens, internal HTTP payloads, host race settings.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@fifth-copy/engine": "0.1.0",
+    "zod": "^4.6.5"
+  }
+}

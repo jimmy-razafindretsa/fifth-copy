@@ -14,6 +14,7 @@
 |---|---|---|---|
 | Rules, hazards | `AGENTS.md` | humans; agents add <=3 lines via PR | always |
 | Decisions | `docs/adr/` + `INDEX.json` | agents propose, humans accept | before touching a path (`adr-governing`) |
+| System shape | `docs/architecture/ARCHITECTURE.md` | humans + architecture sessions; agents edit only via an ADR | when a card touches `packages/`, `services/`, `src/worker/`, `src/i18n/` or the race, lobby, results and stats features |
 | Data model | `prisma/schema/` | builders on `touches:prisma` cards | when the card touches data |
 | Card spec + state | GitHub issue body + Project Status | analyst (spec), picker (state) | start of every session |
 | In-flight notes | issue comments (BRIEF, HANDOFF) | explorer, builder, deliver | start of every session |

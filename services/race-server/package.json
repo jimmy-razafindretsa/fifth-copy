@@ -1,0 +1,18 @@
+{
+  "name": "@fifth-copy/race-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Server-authoritative real-time race service (Socket.IO + Redis). Runs the shared engine, bots, bonuses, presence and anti-cheat; persists through the web app's internal API, never through Prisma.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "node build.mjs",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@fifth-copy/engine": "0.1.0",
+    "@fifth-copy/protocol": "0.1.0",
+    "zod": "^4.6.5"
+  }
+}

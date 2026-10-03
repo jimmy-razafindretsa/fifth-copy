@@ -4,13 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:race": "npm run dev --workspace @fifth-copy/race-server",
     "build": "next build",
+    "build:race": "npm run build --workspace @fifth-copy/race-server",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
+    "typecheck:workspaces": "tsc --noEmit -p packages/engine && tsc --noEmit -p packages/protocol && tsc --noEmit -p services/race-server",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "boundaries": "depcruise src --config .dependency-cruiser.cjs --output-type err",
+    "boundaries": "depcruise src packages services --config .dependency-cruiser.cjs --output-type err",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
@@ -44,6 +47,7 @@
     "@types/react-dom": "^19",
     "dependency-cruiser": "^18.5.0",
     "dotenv": "^18.0.5",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "minimatch": "^10.2.6",
@@ -57,5 +61,9 @@
   },
   "engines": {
     "node": ">=24"
-  }
+  },
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ]
 }

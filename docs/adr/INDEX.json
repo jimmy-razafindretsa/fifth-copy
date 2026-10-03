@@ -65,6 +65,159 @@
       "supersededBy": [],
       "rule": "Use npm (npx for binaries), Vitest for unit tests, Playwright + @axe-core/playwright for e2e/eyes; new dependencies need a one-line PR justification.",
       "file": "docs/adr/0004-tooling.md"
+    },
+    {
+      "id": "0005",
+      "title": "npm workspaces: root Next.js app, shared packages/, separate services/",
+      "status": "proposed",
+      "category": "architecture",
+      "scope": [
+        "packages/**",
+        "services/**",
+        "package.json",
+        "tsconfig.base.json",
+        "next.config.ts",
+        "vitest.config.ts",
+        ".dependency-cruiser.cjs"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "The Next.js app stays at the repo root; shared code lives in packages/* (TypeScript source, consumed via @fifth-copy/*); other processes live in services/*; src/ never imports services/, services never import src/.",
+      "file": "docs/adr/0005-monorepo-workspaces.md"
+    },
+    {
+      "id": "0006",
+      "title": "Real-time races run on a separate Socket.IO server, server-authoritative, 10 Hz snapshots",
+      "status": "proposed",
+      "category": "architecture",
+      "scope": [
+        "services/race-server/**",
+        "packages/protocol/**",
+        "src/features/race/**",
+        "src/features/lobby/**",
+        "src/app/api/internal/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Live race traffic goes browser <-> services/race-server over Socket.IO (WebSocket, polling fallback on) with messages declared in @fifth-copy/protocol; the server is the authority, the web app only mints race tokens and persists; the race server never touches Prisma.",
+      "file": "docs/adr/0006-real-time-race-server.md"
+    },
+    {
+      "id": "0007",
+      "title": "One pure, deterministic race engine package shared by server (authority) and client (prediction)",
+      "status": "proposed",
+      "category": "architecture",
+      "scope": [
+        "packages/engine/**",
+        "src/features/race/**",
+        "services/race-server/src/rooms/**",
+        "services/race-server/src/bots/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "All race rules (text normalisation, continue/block reducers, backspace, WPM/accuracy, ranking, bonus effects, bot typing model, anti-cheat analysis) live in @fifth-copy/engine as pure functions with injected time and randomness; the server applies them as the authority and the client applies the same functions for instant feedback, never its own copy.",
+      "file": "docs/adr/0007-shared-race-engine.md"
+    },
+    {
+      "id": "0008",
+      "title": "Redis holds ephemeral room state with TTLs; Postgres is the only system of record, written by the web app",
+      "status": "proposed",
+      "category": "data",
+      "scope": [
+        "services/race-server/src/redis/**",
+        "services/race-server/src/rooms/**",
+        "services/race-server/src/persist/**",
+        "prisma/schema/race.prisma",
+        "prisma/schema/stats.prisma",
+        "prisma/schema/lobby.prisma",
+        "src/features/results/**",
+        "src/features/stats/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Anything that must survive a restart or feed statistics is written to Postgres through a web-app internal route (zod + HMAC) and owned by one Prisma schema file per feature; Redis keeps only live room state, presence, resume keys, invite tokens and rate limits, every key with a TTL; raw keystrokes are a compressed per-player blob kept 30 days and rolled up daily into per-character stats in America/Toronto.",
+      "file": "docs/adr/0008-room-state-and-persistence.md"
+    },
+    {
+      "id": "0009",
+      "title": "Auth.js with JWT sessions, a signed guest cookie, no email, and short-lived race tokens",
+      "status": "proposed",
+      "category": "security",
+      "scope": [
+        "src/server/auth/**",
+        "src/features/identity/**",
+        "src/proxy.ts",
+        "prisma/schema/identity.prisma",
+        "src/app/(auth)/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Identity is resolved only by getViewer() in src/server/auth (session user or guest cookie); Auth.js uses the JWT session strategy with Credentials, GitHub and Discord providers; no email is ever stored; authorization happens inside server actions and route handlers, with proxy.ts doing optimistic redirects only; the race server trusts only race tokens minted by the web app.",
+      "file": "docs/adr/0009-identity-and-sessions.md"
+    },
+    {
+      "id": "0010",
+      "title": "UI language from a cookie (no URL prefix), typed message catalogs in src/i18n, race language independent",
+      "status": "proposed",
+      "category": "ui",
+      "scope": [
+        "src/i18n/**",
+        "src/app/**",
+        "src/proxy.ts",
+        "src/components/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "UI strings come from typed catalogs in src/i18n (fr, en) through t() on the server and useT() on the client; the locale is a cookie chosen in the header and remembered per user, never a URL segment; race texts carry their own language and are never translated.",
+      "file": "docs/adr/0010-ui-internationalisation.md"
+    },
+    {
+      "id": "0011",
+      "title": "Background jobs run in a worker entry point of the web package with a Prisma-owned schedule table",
+      "status": "proposed",
+      "category": "architecture",
+      "scope": [
+        "src/worker/**",
+        "src/features/*/jobs/**",
+        "prisma/schema/jobs.prisma"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Scheduled and deferred work (daily char-stat rollup, keystroke purge, lobby and guest expiry, retention) is a job module under the owning feature's jobs/ folder, registered in src/worker/main.ts, run by a single worker process that claims runs through a Postgres advisory lock and records them in JobRun; jobs are idempotent and never run inside a request or the race server.",
+      "file": "docs/adr/0011-background-jobs.md"
+    },
+    {
+      "id": "0012",
+      "title": "One VPS, Docker Compose, Caddy TLS, images built in CI, deploy on merge with race-server draining",
+      "status": "proposed",
+      "category": "tooling",
+      "scope": [
+        "deploy/**",
+        "Dockerfile.web",
+        "Dockerfile.race",
+        ".github/workflows/**",
+        "scripts/deploy-smoke.sh"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Production is docker compose on one VPS behind Caddy (automatic Let's Encrypt TLS; /socket.io/* and /internal/* proxied to race-server, everything else to web); CI builds versioned images for web and race-server, runs prisma migrate deploy, replaces web immediately and race-server only when it reports zero live rooms (or after a hard timeout), then runs deploy-smoke.",
+      "file": "docs/adr/0012-hosting-and-deploy.md"
+    },
+    {
+      "id": "0013",
+      "title": "three.js lives only in src/features/race-3d, loaded lazily on the race route; all text and input are HTML; budgets are tested",
+      "status": "proposed",
+      "category": "ui",
+      "scope": [
+        "src/features/race-3d/**",
+        "src/features/race/**",
+        "src/app/race/**",
+        "e2e/perf/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "WebGL code is confined to src/features/race-3d (client-only, next/dynamic with ssr:false, imported only by the race route after the HUD mounts); the telex strip, typed sheet, keyboard, counters, race card, stamps and plaques are HTML overlays driven by the same race store; the scene reads the store and never owns state; bundle, fps and draw-call budgets are checked in CI.",
+      "file": "docs/adr/0013-frontend-performance-and-3d.md"
     }
   ]
 }

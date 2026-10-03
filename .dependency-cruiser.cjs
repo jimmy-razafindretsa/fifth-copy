@@ -4,7 +4,12 @@
  *   a feature imports another feature only through its index.ts
  *   components/ui imports nothing from features
  *   Prisma client only in src/server/** and src/features/*\/{queries,actions}
- * Run via scripts/check.sh.
+ * Workspace boundaries (docs/adr/0005, 0006, 0007):
+ *   packages/engine is pure (imports nothing outside itself)
+ *   packages/protocol imports only zod and the engine
+ *   services/race-server never imports the Next.js app (src/) and never Prisma
+ *   src/ never imports services/
+ * Run via scripts/check.sh (depcruise src packages services).
  */
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -71,6 +76,49 @@ module.exports = {
       },
     },
     {
+      name: "engine-is-pure",
+      comment: "The race engine is deterministic and dependency-free (ADR 0007).",
+      severity: "error",
+      from: { path: "^packages/engine/" },
+      to: { pathNot: "^packages/engine/" },
+    },
+    {
+      name: "protocol-only-zod-and-engine",
+      comment: "Protocol declares wire shapes: zod and engine types only (ADR 0006).",
+      severity: "error",
+      from: { path: "^packages/protocol/" },
+      to: { pathNot: ["^packages/(protocol|engine)/", "node_modules/zod"] },
+    },
+    {
+      name: "race-server-no-web-app",
+      comment:
+        "The race server is a separate process: never the Next.js app, never Prisma (ADR 0006, 0008).",
+      severity: "error",
+      from: { path: "^services/race-server/" },
+      to: {
+        path: [
+          "^src/",
+          "^prisma/",
+          "node_modules/(next|react|react-dom|@prisma)/",
+          "node_modules/@prisma/",
+        ],
+      },
+    },
+    {
+      name: "web-app-no-services",
+      comment: "The web app talks to services over the network, never by import (ADR 0005).",
+      severity: "error",
+      from: { path: "^src/" },
+      to: { path: "^services/" },
+    },
+    {
+      name: "no-package-internals",
+      comment: "Workspace packages are consumed through their package entry point only.",
+      severity: "error",
+      from: { pathNot: "^packages/([^/]+)/" },
+      to: { path: "^packages/[^/]+/src/(?!index\\.ts$).+" },
+    },
+    {
       name: "prisma-only-in-server",
       comment: "Prisma client only in src/server/** and src/features/*/{queries,actions}.",
       severity: "error",
@@ -78,6 +126,7 @@ module.exports = {
         pathNot: [
           "^src/server/",
           "^src/features/[^/]+/(queries|actions)/",
+          "^src/worker/",
           "^src/generated/",
           "^prisma/",
           "^scripts/",
@@ -90,7 +139,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: "node_modules" },
-    exclude: { path: ["^src/generated/", "\\.next/"] },
+    exclude: { path: ["^src/generated/", "\\.next/", "/dist/"] },
     tsConfig: { fileName: "tsconfig.json" },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {

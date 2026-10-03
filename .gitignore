@@ -50,3 +50,7 @@ next-env.d.ts
 /blob-report/
 /playwright/.cache/
 /.cache/
+
+# workspaces
+/packages/*/dist/
+/services/*/dist/

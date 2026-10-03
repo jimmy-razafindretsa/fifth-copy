@@ -9,7 +9,7 @@ The card (contract), the PR/branch diff, BRIEF and HANDOFF, governing ADRs. You 
 1. Preconditions: contract hash equals the PICKUP hash; worktree clean; `scripts/check.sh` green; `prisma validate` and `prisma migrate status` clean if the card touches data.
 2. Review pass (diff + card + ADRs only). Produce findings as `blocker | major | minor | nit`:
    - scope: anything beyond the contract?
-   - decisions: new architecture without an ADR is a blocker; conflict with an accepted ADR is a blocker
+   - decisions: new architecture without an ADR is a blocker; conflict with an accepted ADR is a blocker; a boundary bypass (engine impurity, wire shape outside `@fifth-copy/protocol`, Prisma or `src/` imports in `services/`, Redis data without a TTL) is a blocker even if `check.sh` is green
    - security: input validation (zod), authorization inside actions/handlers, no secrets, no Prisma in client code, no unscoped queries
    - data: migration is additive unless the card says breaking; no edits to merged migrations; indexes and nullability sensible
    - quality: tests assert behavior (not implementation), no weakened or skipped tests, no dead code, no new dependency without a note

@@ -1,0 +1,14 @@
+{
+  "name": "@fifth-copy/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure, deterministic race engine shared by the race server (authority) and the web client (prediction). No IO, no clocks, no randomness unless injected.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "sideEffects": false
+}

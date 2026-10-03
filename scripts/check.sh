@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The cheap gate: format, lint, types, boundaries, unit tests, ADR index freshness, prisma validate.
+# The cheap gate: format, lint, types (app + workspaces), boundaries, unit tests, ADR index freshness, prisma validate.
 # Prints <= 20 lines. Full logs go to .cache/check/<step>.log (gitignored).
 #   scripts/check.sh            run all steps
 #   scripts/check.sh lint unit  run only named steps
@@ -13,8 +13,8 @@ cmd_for() {
   case "$1" in
     format) echo "npx prettier --check . --log-level warn" ;;
     lint) echo "npx eslint . --max-warnings=0" ;;
-    types) echo "npx next typegen && npx tsc --noEmit" ;;
-    boundaries) echo "npx depcruise src --config .dependency-cruiser.cjs --output-type err" ;;
+    types) echo "npx next typegen && npx tsc --noEmit && npm run -s typecheck:workspaces" ;;
+    boundaries) echo "npx depcruise src packages services --config .dependency-cruiser.cjs --output-type err" ;;
     unit) echo "npx vitest run --reporter=dot" ;;
     adr) echo "npx tsx scripts/adr-index.ts --check" ;;
     prisma) echo "npx prisma validate" ;;

@@ -1,6 +1,8 @@
 # App (agent kit)
 
-Next.js 16 (App Router) · Prisma 7 · PostgreSQL 17 · GitHub Issues + Projects · agent-agnostic delivery loop.
+Next.js 16 (App Router) · Prisma 7 · PostgreSQL 17 · Socket.IO race server · Redis · GitHub Issues + Projects · agent-agnostic delivery loop.
+
+Architecture: [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) (web app at the root, `packages/engine` + `packages/protocol` shared, `services/race-server` separate process; ADRs 0005-0013).
 
 Agents: start with [AGENTS.md](AGENTS.md) (always loaded), then [agents/PROTOCOL.md](agents/PROTOCOL.md) plus **one** role file in [agents/roles/](agents/roles/).
 
@@ -10,9 +12,10 @@ npm install                 # also runs prisma generate
 cp .env.example .env        # Prisma CLI
 cp .env.example .env.local  # Next.js
 gh auth login               # board access for scripts/board.ts (scopes repo, project)
-npm run db:up               # local Postgres (docker compose), creates app + app_test
+npm run db:up               # local Postgres + Redis (docker compose), creates app + app_test
 npx playwright install chromium
-npm run dev
+npm run dev                 # web app
+npm run dev:race            # race server (separate terminal), http://localhost:4000/health
 ```
 
 ## Gates

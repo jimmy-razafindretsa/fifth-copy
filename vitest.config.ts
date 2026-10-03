@@ -10,8 +10,13 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
-    exclude: ["node_modules", ".worktrees/**", "e2e/**"],
+    include: [
+      "src/**/*.test.{ts,tsx}",
+      "scripts/**/*.test.ts",
+      "packages/*/src/**/*.test.ts",
+      "services/*/src/**/*.test.ts",
+    ],
+    exclude: ["node_modules", ".worktrees/**", "e2e/**", "**/dist/**"],
     environment: "node",
   },
 });

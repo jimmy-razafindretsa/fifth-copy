@@ -79,12 +79,13 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Breaking data changes use expand, migrate data, contract, across separate cards. They need an accepted ADR and `autonomy:hitl`.
 - After any schema change: generate, validate, status check, commit the migration SQL.
 - Check the installed Prisma version in `package.json` and follow its config conventions. Do not assume.
+- Worktrees have no `.env`: export `DATABASE_URL` (any `postgresql://` URL) before `npm install`, or postinstall `prisma generate` aborts and typecheck fails.
 
 ## Next.js hazards
 - Check the installed Next.js version before relying on caching or rendering defaults. Confirm against that version's docs.
 - Server Components by default. `"use client"` only on leaf components that need state, effects or browser APIs.
 - Mutations through Server Actions or Route Handlers. Validate all input with zod. Authorize inside the action, never only in the UI.
-- Prisma client only in `src/server/**` and `src/features/*/{queries,actions}`. Never in client components.
+- Prisma client only in `src/server/**`, `src/features/*/{queries,actions,jobs}/**` and `src/worker/**`. Never in client components.
 - Env access only through `src/env.ts` (validated).
 - New dependencies need a one-line justification in the PR.
 - Playwright: Next.js renders a hidden route announcer with `role="alert"`. Filter `getByRole("alert")` by text.

@@ -3,7 +3,7 @@
  *   app -> features -> server/lib
  *   a feature imports another feature only through its index.ts
  *   components/ui imports nothing from features
- *   Prisma client only in src/server/** and src/features/*\/{queries,actions}
+ *   Prisma client only in src/server/**, src/features/*\/{queries,actions,jobs} and src/worker/**
  * Workspace boundaries (docs/adr/0005, 0006, 0007):
  *   packages/engine is pure (imports nothing outside itself)
  *   packages/protocol imports only zod and the engine
@@ -120,12 +120,13 @@ module.exports = {
     },
     {
       name: "prisma-only-in-server",
-      comment: "Prisma client only in src/server/** and src/features/*/{queries,actions}.",
+      comment:
+        "Prisma client only in src/server/**, src/features/*/{queries,actions,jobs} and src/worker/** (ADR 0011).",
       severity: "error",
       from: {
         pathNot: [
           "^src/server/",
-          "^src/features/[^/]+/(queries|actions)/",
+          "^src/features/[^/]+/(queries|actions|jobs)/",
           "^src/worker/",
           "^src/generated/",
           "^prisma/",

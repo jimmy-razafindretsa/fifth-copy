@@ -12,11 +12,33 @@ if [[ -z "$url" ]]; then
   exit 2
 fi
 
-# postgresql://user:pass@host:port/db?params -> host
+# postgresql://user:pass@host:port/db?params -> host. Mirror the URL parsers (WHATWG URL,
+# pg-connection-string, Prisma): the authority ends at the first / ? or #, and the host follows
+# its LAST "@" (a password may contain "@" or ":").
 rest="${url#*://}"
-rest="${rest#*@}"
-host="${rest%%[:/?]*}"
-if [[ "$rest" == \[* ]]; then host="${rest%%]*}]"; fi
+authority="${rest%%[/?#]*}"
+hostport="${authority##*@}"
+host="${hostport%%:*}"
+if [[ "$hostport" == \[* ]]; then host="${hostport%%]*}]"; fi
+
+# Fail closed on query keys that can redirect the connection (pg-connection-string and libpq read
+# host/hostaddr/port/service/dbname from the query, overriding the authority). Keys are compared
+# case-insensitively; percent-encoded keys are refused outright, since parsers decode them.
+# Never print the query: it may carry a password.
+if [[ "$rest" == *\?* ]]; then
+  query="${rest#*\?}"
+  query="${query%%#*}"
+  IFS="&" read -r -a pairs <<< "$query"
+  for pair in "${pairs[@]+"${pairs[@]}"}"; do
+    key="$(printf '%s' "${pair%%=*}" | tr '[:upper:]' '[:lower:]')"
+    case "$key" in
+      *%*|host|hostaddr|port|service|servicefile|dbname|socket)
+        echo "db-guard: REFUSED. Connection URL query overrides the target (host, port, service or encoded key)." >&2
+        exit 1
+        ;;
+    esac
+  done
+fi
 
 allowed=("localhost" "127.0.0.1" "[::1]" "::1")
 extra=(); IFS="," read -r -a extra <<< "${DB_GUARD_ALLOWED_HOSTS:-}"

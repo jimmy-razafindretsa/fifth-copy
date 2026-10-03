@@ -1,6 +1,6 @@
 # FIFTH COPY: atomic requirements
 
-Extracted 2026-10-02 by the `build-board` workflow from `FIFTH_COPY_SPEC.md` v1.0 and the Art Direction PDF (`Design.pdf`). Board cards cite these ids in their **Covers** line. The spec stays the source of truth; regenerate this list when it changes.
+Extracted 2026-10-02 by the `build-board` workflow from `docs/spec/fifth-copy-spec.md` (v1.0) and the Art Direction PDF (`docs/spec/art-direction.pdf`, text in `docs/spec/art-direction.md`). Board cards cite these ids in their **Covers** line. The spec stays the source of truth; regenerate this list when it changes.
 
 | Id | Kind | Requirement |
 |---|---|---|

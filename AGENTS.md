@@ -41,6 +41,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Decisions: `docs/adr/NNNN-slug.md` (id is a quoted string). `docs/adr/INDEX.json` is generated, never hand-edited.
 - Data model: `prisma/schema/*.prisma`. Never copy field lists elsewhere; link to the file.
 - Card spec, dependencies, in-flight notes: the GitHub issue (body, sub-issues, "blocked by", comments). Card state: the Project's Status field.
+- Product spec: `docs/spec/fifth-copy-spec.md` + art direction `docs/spec/art-direction.{pdf,md}` (source of truth for what to build).
 - Board plan and key-to-issue map: `work/plan/fifth-copy-board.json`; requirements: `work/plan/fifth-copy-requirements.md`.
 - Executable form of a card's contract: tests in `e2e/` and `src/**/*.test.ts`, committed in the card's PR.
 - Milestones and findings after delivery: `work/log/<n>.md`, one file per card.

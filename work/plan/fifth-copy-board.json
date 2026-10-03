@@ -10,8 +10,8 @@
   },
   "generated": "2026-10-02",
   "sources": [
-    "FIFTH_COPY_SPEC.md v1.0",
-    "Design.pdf (Art Direction)"
+    "docs/spec/fifth-copy-spec.md (FIFTH_COPY_SPEC.md v1.0)",
+    "docs/spec/art-direction.pdf (text: docs/spec/art-direction.md)"
   ],
   "requirements": "work/plan/fifth-copy-requirements.md",
   "stats": {
@@ -538,7 +538,8 @@
     "F12.19": 442,
     "F12.19.1": 443,
     "F12.19.2": 444,
-    "F12.20": 445
+    "F12.20": 445,
+    "F12.21": 446
   },
   "plan": {
     "features": [
@@ -6683,11 +6684,11 @@
       "why": "Avatar reference lives on the user"
     },
     {
-      "blocker": 60,
+      "blocker": 61,
       "blocked": 65,
-      "blockerKey": "F2.10",
+      "blockerKey": "F2.10.1",
       "blockedKey": "F2.11",
-      "why": "Scoped serving needs stored avatars"
+      "why": "Lobby only needs the default portrait; changed for Iteration 1"
     },
     {
       "blocker": 96,
@@ -11065,5 +11066,107 @@
       "why": "Nothing outside Foundations is picked until it is Done"
     }
   ],
-  "problems": []
+  "problems": [],
+  "extraIssues": [
+    {
+      "key": "F12.21",
+      "number": 446,
+      "parent": 401,
+      "title": "Requirements traceability matrix",
+      "labels": [
+        "type:chore",
+        "track:non-technical"
+      ]
+    }
+  ],
+  "iterations": {
+    "Iteration 1": {
+      "start": "2026-10-02",
+      "end": "2026-10-05",
+      "label": "iteration:1",
+      "projectView": "https://github.com/users/jimmy-razafindretsa/projects/2/views/3",
+      "issues": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        59,
+        61,
+        65,
+        68,
+        96,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        117,
+        118,
+        119,
+        142,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        165,
+        167,
+        168,
+        179,
+        368,
+        371,
+        372,
+        373,
+        374,
+        376,
+        377,
+        402,
+        404,
+        405,
+        406,
+        409,
+        410,
+        411,
+        413,
+        445,
+        446
+      ]
+    }
+  }
 }

@@ -1,5 +1,7 @@
 # Role: UI (builder for `ui` cards, with eyes)
 
+Model: **Opus** (`claude-opus-5-5`). See PROTOCOL section 12.
+
 Follow everything in roles/builder.md, plus:
 
 ## Design system first

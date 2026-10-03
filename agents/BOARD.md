@@ -28,7 +28,7 @@ Status option ids (for raw calls; re-read them with the fields query below if a 
 Automation: the project workflows **Item closed**, **Pull request merged** and **Auto-close issue** must stay OFF (Done is set by Picker after post-merge checks; `board.ts bootstrap` reports them). **Auto-add sub-issues to project** stays ON. PR bodies say `Card: #n` / `Refs #n` and never `Closes`/`Fixes`/`Resolves #n`, because GitHub would close the issue on merge.
 
 ## Labels, estimate, priority
-Kit labels: `type:feature|bug|chore|adr|spike`, `track:technical|non-technical`, `epic`, `area:<name>`, `ui`, `touches:prisma`, `touches:deps`, `discovered`, `autonomy:afk|hitl`, `plan-approved`, `needs-human|needs-adr|needs-replan`, `visual-change` (PR label). There is no `qa` label any more (QA is a real Status). Ignore GitHub's default labels (`bug`, `enhancement`, ...); use the `type:*` ones.
+Kit labels: `type:feature|bug|chore|adr|spike`, `track:technical|non-technical`, `epic`, `area:<name>`, `ui`, `touches:prisma`, `touches:deps`, `pentest`, `discovered`, `autonomy:afk|hitl`, `plan-approved`, `needs-human|needs-adr|needs-replan`, `visual-change` (PR label). There is no `qa` label any more (QA is a real Status). Ignore GitHub's default labels (`bug`, `enhancement`, ...); use the `type:*` ones.
 `board.ts bootstrap` creates missing kit labels (on 2026-10-02 missing: `type:bug`, `discovered`, `plan-approved`, `needs-human`, `needs-adr`, `visual-change`). New `area:*` labels are allowed: pass `--create-missing`.
 **Never add `plan-approved` yourself**; only the human does (board.ts refuses to).
 
@@ -85,7 +85,7 @@ Write comments and bodies as Markdown files (`--body-file`). GitHub turns `#n` i
 ## Who touches what (restates PROTOCOL 5 and 10)
 - **Picker** is the only role that changes Status or closes/reopens issues. Everyone else changes only labels and comments (and creates `discovered` cards in Backlog).
 - **Analyst** creates epics and cards (Backlog, as sub-issues), sets "blocked by" dependencies, comments PLAN. Stops after the epic list for human approval; details cards only for an epic carrying `plan-approved`.
-- **Explorer / Builder / UI / Deliver** read the card, post BRIEF / HANDOFF comments, never edit the `## Contract` section, never move cards.
+- **Explorer / Builder / UI / Pen tester / Deliver** read the card, post BRIEF / HANDOFF / PENTEST comments, never edit the `## Contract` section, never move cards. Explorer adds the `pentest` label when its analysis requires a penetration test.
 - Deliver ticks contract checkboxes only with evidence it produced (`gh issue edit <n> --body-file`). Ticking boxes changes the body, not the contract hash (the hash ignores checkbox state).
 
 ## One loop iteration, concretely (Picker)
@@ -93,7 +93,7 @@ Write comments and bodies as Markdown files (`--body-file`). GitHub turns `#n` i
 2. `board.ts next` -> filters Ready cards: nearest `epic` ancestor has `plan-approved`, no `needs-*` label, every blocker Done, no open sub-issues; orders by PROTOCOL 6 and applies locks (PROTOCOL 7) against cards in In Progress / In Review / QA.
 3. None eligible: report why (unapproved epic / blockers / needs-* / hitl waiting) and STOP. Do not promote cards from Backlog unless the Backlog -> Ready preconditions hold; then `move <n> Ready` first.
 4. Pick the top card, `board.ts hash <n>`, `move <n> "In Progress"`, comment `PICKUP #n contract_hash=<12> branch=<n>-<slug> worktree=.worktrees/<n>` (the branch is the `branch:` line of `board.ts get`), then `git worktree add .worktrees/<n> -b <n>-<slug>`.
-5. Dispatch Explorer -> Builder (UI for `ui` cards) -> Deliver, fresh context each. Verify each HANDOFF yourself (re-run `scripts/check.sh` in the worktree).
+5. Dispatch Explorer -> Builder (UI for `ui` cards) -> Pen tester (only if labeled `pentest`) -> Deliver, fresh context each, with the models of PROTOCOL section 12. Verify each HANDOFF yourself (re-run `scripts/check.sh` in the worktree).
 6. Gates: `In Review` when the PR is open and check is green; `QA` when review has zero blockers; `Done` only after merge, CI green on `main`, smoke passed.
 7. `autonomy:hitl` card: stop and tell the human exactly what to review.
 

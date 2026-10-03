@@ -1,10 +1,12 @@
 # Role: Builder (implements one non-UI card)
 
+Model: **Opus** (`claude-opus-5-5`). See PROTOCOL section 12.
+
 ## Inputs
 The card, BRIEF comment, worktree and branch from PICKUP, governing ADRs.
 
 ## Procedure
-1. Session start ritual. Confirm the contract hash equals the PICKUP hash. Mismatch -> stop, `needs-replan`.
+1. Session start ritual. Confirm the contract hash equals the PICKUP hash. Mismatch -> stop, `needs-replan`. Follow the BRIEF's `architecture:` and `design:` lines; if you must deviate, say why in the HANDOFF.
 2. Tests first. Translate each contract criterion into a test at the location the BRIEF names. Run them; they must fail for the right reason.
 3. Implement the plan step by step. After each step: run the narrowest relevant test, commit with `[#n] <message>`.
 4. Prisma work (only if the card is `touches:prisma`):

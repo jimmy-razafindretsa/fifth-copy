@@ -3,7 +3,7 @@
 ## 1. Principles
 1. Chat is RAM. Anything a future session needs must be written to disk or the board (GitHub issue) before the session ends.
 2. Repo owns decisions, rules, data model, tests and logs. The board (GitHub issues + Project) owns card state, order and dependencies.
-3. The agent that builds never grades. Only Deliver ticks contract checkboxes and closes cards.
+3. The agent that builds never grades. Only Deliver ticks contract checkboxes and closes cards. Analysis (Explorer, Analyst) and attack (Pen tester) run on the strongest model; building and grading run on Opus (section 12).
 4. "Done" is machine-checked: every contract criterion has a command or a test path. If it cannot be verified, the card is `autonomy:hitl`.
 5. Small cards, fresh context per card. The card, its comments and the logs are the handoff, not conversation history.
 6. Stop early and loudly. A blocked card with a clear note beats a guessed implementation.
@@ -13,7 +13,7 @@
 | Layer | Where | Writer | Read when |
 |---|---|---|---|
 | Rules, hazards | `AGENTS.md` | humans; agents add <=3 lines via PR | always |
-| Decisions | `docs/adr/` + `INDEX.json` | agents propose, humans accept | before touching a path (`adr-governing`) |
+| Decisions | `docs/adr/` + `INDEX.json` | agents propose; Deliver accepts in the card's PR when consistent with the architecture (roles/deliver.md 3b); humans reject or supersede | before touching a path (`adr-governing`) |
 | System shape | `docs/architecture/ARCHITECTURE.md` | humans + architecture sessions; agents edit only via an ADR | when a card touches `packages/`, `services/`, `src/worker/`, `src/i18n/` or the race, lobby, results and stats features |
 | Data model | `prisma/schema/` | builders on `touches:prisma` cards | when the card touches data |
 | Card spec + state | GitHub issue body + Project Status | analyst (spec), picker (state) | start of every session |
@@ -43,7 +43,7 @@ Tool usage, ids and the exact call for every operation: `agents/BOARD.md`.
 Labels:
 - type: `type:feature` `type:bug` `type:chore` `type:adr` `type:spike`; track: `track:technical` `track:non-technical`
 - scope: `area:<feature-or-module>`, `epic`
-- flags: `ui`, `touches:prisma`, `touches:deps` (package.json/lockfile), `discovered`, `visual-change` (PR)
+- flags: `ui`, `touches:prisma`, `touches:deps` (package.json/lockfile), `pentest` (set by Explorer: a Pen tester runs before Deliver), `discovered`, `visual-change` (PR)
 - autonomy: `autonomy:afk` (loop may run it end to end) or `autonomy:hitl` (loop stops for a human)
 - gates: `plan-approved` (on the epic, human only), `needs-human`, `needs-adr`, `needs-replan`
 
@@ -90,7 +90,7 @@ estimate N because ...
 |---|---|
 | Backlog -> Ready | contract complete and verifiable; dependencies set as blocked-by relationships; estimate <= 3; epic has `plan-approved`; no `needs-*` label |
 | Ready -> In Progress | all blockers Done; WIP limit not exceeded; no lock conflict (section 7); contract hash recorded in a PICKUP comment |
-| In Progress -> In Review | `scripts/check.sh` green; branch pushed; PR open; HANDOFF posted; contract hash unchanged |
+| In Progress -> In Review | `scripts/check.sh` green; branch pushed; PR open; HANDOFF posted; contract hash unchanged; PENTEST comment present if the card carries `pentest` |
 | In Review -> QA | reviewer verdict has zero blockers |
 | QA -> Done | every contract checkbox ticked by Deliver with evidence; PR merged; CI green on base; smoke passed |
 | any -> Backlog + `needs-replan` | contract invalid, unverifiable, or dependency missing |
@@ -132,7 +132,17 @@ files: <paths touched>
 verify: <commands run -> result>
 blockers: <or none>
 ```
-BRIEF comment (Explorer): see roles/explorer.md.
+BRIEF comment (Explorer): see roles/explorer.md (includes `architecture:`, `design:`, `criteria:` and `pentest:` lines).
+PENTEST comment (Pen tester, <= ~600 tokens):
+```
+PENTEST #n <ISO-datetime>
+verdict: clean | findings
+threat model: <<= 5 lines>
+findings:
+- blocker|major|minor <title> | repro: <steps or request> | observed: ... | expected control: <ARCHITECTURE 10 / ADR>
+tested: <list of attack classes tried, incl. the ones that held>
+blockers: n  majors: n
+```
 PICKUP comment (Picker): `PICKUP #n contract_hash=<12 chars> branch=<n>-<slug> worktree=.worktrees/<n>`.
 
 PR body:
@@ -162,7 +172,8 @@ Log file `work/log/<n>.md` (<= ~200 words): date, one-line outcome, decisions, g
 | analyst | repo read, board create/relate/comment | edit source, merge |
 | explorer | repo read, shell read-only, board comment | edit any file, network |
 | builder / ui | repo write in its worktree, local shell, local DB, board comment | prod credentials, merge, tick contract, edit Contract |
-| deliver | repo read, test runners, browser to localhost/preview only, `gh pr`, board (labels, comments, contract checkboxes) | edit source (except fix-forward within budget as builder), prod credentials |
+| deliver | repo read, test runners, browser to localhost/preview only, `gh pr`, board (labels, comments, contract checkboxes), set `status: accepted` on ADRs proposed in the card's PR | edit source (except fix-forward within budget as builder), prod credentials |
+| pentester | repo read, local shell and browser against localhost only, test DB, board comment | edit any file, non-local URLs, prod credentials |
 - Destructive commands denied: `git push --force` to base, `rm -rf` outside the worktree, `prisma migrate reset`, dropping databases, any command against a non-local `DATABASE_URL`.
 - Never print or log secrets. Never place secrets in issues, comments, PRs, logs or `.eyes/`.
 
@@ -180,8 +191,20 @@ Use, in this order: (1) `npx tsx scripts/board.ts <op>`, a wrapper over GitHub's
 - `next` -> Picker ordering (section 6) with locks (section 7)
 Write bodies via files, not inline arguments, to avoid quoting bugs. Verify state after every write (re-read).
 
-## 12. Orchestration modes
+## 12. Models per role
+Set by the human on 2026-10-02. Deep analysis and attack use the strongest model; building and grading use Opus.
+| Role | Model | Fallback if unavailable | When it runs |
+|---|---|---|---|
+| analyst | Fable `claude-fable-5-1` | Opus `claude-opus-5-5` | planning, contracts (success criteria) |
+| explorer | Fable `claude-fable-5-1` | Opus | every card, before building (architecture, SOLID, maintainability, criteria, pentest decision) |
+| builder / ui | Opus `claude-opus-5-5` | none | every card |
+| pentester | Fable `claude-fable-5-1` | Opus | only cards labeled `pentest` by the Explorer; after the PR is open, before Deliver |
+| deliver (review + QA) | Opus `claude-opus-5-5` | none | every card |
+| picker | Opus `claude-opus-5-5` | none | gates and dispatch |
+Implementations: `scripts/loop.sh` (`MODEL_*` env vars, defaults above, one availability probe for Fable per run) and `.claude/agents/<role>.md` (`model:` frontmatter for subagent mode B).
+
+## 13. Orchestration modes
 - A. Single session, sequential: run roles as phases; reset context between cards (new session per card).
-- B. Subagents: Picker spawns Explorer (and parallel Builders in worktrees) with clean context; they return a HANDOFF, not transcripts.
+- B. Subagents: Picker spawns Explorer (and parallel Builders in worktrees) with clean context; they return a HANDOFF, not transcripts. Subagent definitions with their models: `.claude/agents/<role>.md`.
 - C. Separate sessions driven by a script: `scripts/loop.sh` invokes the runtime once per role per card.
 In every mode the durable handoff is the board + repo, never the conversation.

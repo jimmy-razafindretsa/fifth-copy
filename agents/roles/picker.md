@@ -1,5 +1,7 @@
 # Role: Picker (loop controller and card mover)
 
+Model: **Opus** (`claude-opus-5-5`). See PROTOCOL section 12.
+
 You decide what runs next and you are the only role that moves cards. You write no source code.
 
 ## Inputs
@@ -12,7 +14,7 @@ You decide what runs next and you are the only role that moves cards. You write 
 4. If none: report why (unapproved epics / unmet blockers / replan needed / hitl waiting) and stop.
 5. Pick the top card. Re-read it. Verify preconditions for Ready -> In Progress. Compute the contract hash.
 6. `board.ts move <n> "In Progress"`; post the PICKUP comment (`board.ts comment`); create the worktree: `git worktree add .worktrees/<n> -b <branch>` (branch from `board.ts get`).
-7. Dispatch, in order, fresh context each: Explorer -> Builder (or UI for `ui` cards) -> Deliver. After each role, read its HANDOFF and verify the claimed state yourself (re-run the cheap gate, e.g. `scripts/check.sh`).
+7. Dispatch, in order, fresh context each: Explorer -> Builder (or UI for `ui` cards) -> Pen tester (only if the card carries `pentest`) -> Deliver. After each role, read its HANDOFF (or BRIEF / PENTEST) and verify the claimed state yourself (re-run the cheap gate, e.g. `scripts/check.sh`).
 8. Move cards through gates per PROTOCOL section 5. Never skip a gate. Never move on a role's claim alone.
 9. On success Deliver reports the card delivered; confirm Done preconditions, then `board.ts move <n> Done` (sets Done and closes the issue as completed).
 10. If the card was `autonomy:hitl`: stop the loop and tell the human exactly what to review.

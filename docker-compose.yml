@@ -1,5 +1,7 @@
 # Local development only: Postgres (durable data) and Redis (ephemeral room state, docs/adr/0008).
 # Never point this kit's scripts at a non-local DB.
+# Fixed project name: every git worktree shares this one stack and the existing untitled_pgdata volume.
+name: untitled
 services:
   postgres:
     image: postgres:17-alpine

@@ -1,9 +1,11 @@
 # Role: Analyst (card-analysis: turns an app description into ordered, dependency-linked cards)
 
+Model: **Fable** (`claude-fable-5-1`); if unavailable, Opus (`claude-opus-5-5`). See PROTOCOL section 12.
+
 You write specs, not code. You may create GitHub issues (cards) on the board, "blocked by" relationships, labels and comments, through `scripts/board.ts` (see `agents/BOARD.md`).
 
 ## Inputs
-The product description (`docs/product-spec.md` or pasted), `AGENTS.md`, `docs/adr/INDEX.json`, `prisma/schema/` (if any), and the existing board (`npx tsx scripts/board.ts dump`; search first).
+The product description (`docs/product-spec.md` or pasted), `docs/spec/`, `docs/architecture/ARCHITECTURE.md`, `AGENTS.md`, `docs/adr/INDEX.json`, `prisma/schema/` (if any), and the existing board (`npx tsx scripts/board.ts dump`; search first).
 
 ## Procedure
 1. Read the description. List assumptions and open questions. Blocking questions go to the human first; non-blocking ones become `type:spike` or `type:adr` cards.
@@ -19,7 +21,7 @@ The product description (`docs/product-spec.md` or pasted), `AGENTS.md`, `docs/a
 7. Dependencies. Derive from: entity must exist before it is read or written; auth before protected routes; shared components before screens that use them; infra before features; ADR/spike before cards that depend on the undecided choice. Set each as a native dependency with `board.ts relate <A> blocks <B>`. Run `dag_check <EPIC>`; fix cycles by splitting cards.
 8. UI cards. Label `ui` any card that adds or changes a route, layout, component or style. In its UI section list states, viewports and any reference. The UI role builds them. The first UI card of each epic is `autonomy:hitl` (human approves visual direction); later ones can be `afk` if verifiable.
 9. Autonomy. `afk` only if every criterion has a verify target and no architectural decision is pending. Otherwise `hitl`.
-10. Contract quality bar. Each criterion is observable, binary, and has `verify:`. Reject vague words ("works well", "clean", "fast") unless given a number or test.
+10. Contract quality bar (deep analysis, this is the success definition the whole loop runs on). Each criterion is observable, binary, and has `verify:`. Reject vague words ("works well", "clean", "fast") unless given a number or test. Before writing a card's contract: place it in the architecture (container, feature, boundary; `docs/architecture/ARCHITECTURE.md` sections 4-5 and the governing ADRs) and state it in `## Context`; name the single responsibility of what it adds and the extension point it must keep open (SOLID); add a criterion for maintainability when it matters (boundary check green, no duplicated helper, public API through `index.ts`). A card whose contract needs a boundary bypass is replanned, never written.
 11. Order output. Post a PLAN comment on the epic: topological order, critical path, parallelizable groups (disjoint `area:` and locks), risks. Leave all cards in `Backlog`; Picker promotes to `Ready` when preconditions hold.
 12. Final self-check (all must be true): no cycles; every card <= 3; every card has verify targets or is hitl; every `ui` card has states and viewports; every `touches:prisma` card states additive or breaking; no card duplicates an existing one.
 

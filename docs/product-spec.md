@@ -6,6 +6,6 @@ FIFTH COPY is a multiplayer typing race for secondary-school students (ages 12-1
 
 ## Open questions for the human (Analyst: raise before planning)
 - Accounts: do students sign in, or join with a nickname + room code only? (Drives auth, stats persistence and privacy for minors.)
-- Real-time transport: hosting target (long-lived WebSocket/SSE server vs. serverless) is undecided and needs an ADR before any live-race card.
+- Real-time transport: decided as proposed ADRs 0006 and 0008 (separate Socket.IO race server, Redis live state, web app persists); see `docs/architecture/ARCHITECTURE.md`. A human must accept the ADRs before live-race cards are built.
 - Text sources: curated passages per language and age band, or teacher-supplied text?
 - Privacy: students are 12-17; data retention and consent rules for stored statistics.

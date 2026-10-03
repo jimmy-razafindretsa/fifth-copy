@@ -87,6 +87,7 @@ export const KIT_LABELS = [
   "ui",
   "touches:prisma",
   "touches:deps",
+  "pentest",
   "discovered",
   "autonomy:afk",
   "autonomy:hitl",

@@ -38,6 +38,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: scripts/check.sh
+      - name: Race server bundles (docs/adr/0006)
+        run: npm run build:race
       - name: Show failing logs
         if: failure()
         run: tail -n 60 .cache/check/*.log

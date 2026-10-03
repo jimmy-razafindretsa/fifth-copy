@@ -14,3 +14,6 @@ agents/
 work/
 docs/
 *.md
+packages/*/dist
+services/*/dist
+.claude

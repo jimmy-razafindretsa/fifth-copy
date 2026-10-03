@@ -1,7 +1,7 @@
 ---
 id: "0010"
 title: UI language from a cookie (no URL prefix), typed message catalogs in src/i18n, race language independent
-status: proposed
+status: accepted
 category: ui
 scope: ["src/i18n/**", "src/app/**", "src/proxy.ts", "src/components/**"]
 supersedes: []

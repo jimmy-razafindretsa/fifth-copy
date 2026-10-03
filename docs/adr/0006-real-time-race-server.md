@@ -1,7 +1,7 @@
 ---
 id: "0006"
 title: Real-time races run on a separate Socket.IO server, server-authoritative, 10 Hz snapshots
-status: proposed
+status: accepted
 category: architecture
 scope: ["services/race-server/**", "packages/protocol/**", "src/features/race/**", "src/features/lobby/**", "src/app/api/internal/**"]
 supersedes: []

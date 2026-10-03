@@ -1,7 +1,7 @@
 ---
 id: "0013"
 title: three.js lives only in src/features/race-3d, loaded lazily on the race route; all text and input are HTML; budgets are tested
-status: proposed
+status: accepted
 category: ui
 scope: ["src/features/race-3d/**", "src/features/race/**", "src/app/race/**", "e2e/perf/**"]
 supersedes: []

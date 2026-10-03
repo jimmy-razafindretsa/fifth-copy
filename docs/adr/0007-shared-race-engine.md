@@ -1,7 +1,7 @@
 ---
 id: "0007"
 title: One pure, deterministic race engine package shared by server (authority) and client (prediction)
-status: proposed
+status: accepted
 category: architecture
 scope: ["packages/engine/**", "src/features/race/**", "services/race-server/src/rooms/**", "services/race-server/src/bots/**"]
 supersedes: []

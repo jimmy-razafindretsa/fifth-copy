@@ -1,7 +1,7 @@
 ---
 id: "0012"
 title: One VPS, Docker Compose, Caddy TLS, images built in CI, deploy on merge with race-server draining
-status: proposed
+status: accepted
 category: tooling
 scope: ["deploy/**", "Dockerfile.web", "Dockerfile.race", ".github/workflows/**", "scripts/deploy-smoke.sh"]
 supersedes: []

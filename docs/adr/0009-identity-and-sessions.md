@@ -1,7 +1,7 @@
 ---
 id: "0009"
 title: Auth.js with JWT sessions, a signed guest cookie, no email, and short-lived race tokens
-status: proposed
+status: accepted
 category: security
 scope: ["src/server/auth/**", "src/features/identity/**", "src/proxy.ts", "prisma/schema/identity.prisma", "src/app/(auth)/**"]
 supersedes: []

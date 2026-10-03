@@ -1,7 +1,7 @@
 ---
 id: "0008"
 title: Redis holds ephemeral room state with TTLs; Postgres is the only system of record, written by the web app
-status: proposed
+status: accepted
 category: data
 scope: ["services/race-server/src/redis/**", "services/race-server/src/rooms/**", "services/race-server/src/persist/**", "prisma/schema/race.prisma", "prisma/schema/stats.prisma", "prisma/schema/lobby.prisma", "src/features/results/**", "src/features/stats/**"]
 supersedes: []

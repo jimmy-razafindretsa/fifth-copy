@@ -1,7 +1,7 @@
 ---
 id: "0011"
 title: Background jobs run in a worker entry point of the web package with a Prisma-owned schedule table
-status: proposed
+status: accepted
 category: architecture
 scope: ["src/worker/**", "src/features/*/jobs/**", "prisma/schema/jobs.prisma"]
 supersedes: []

@@ -69,7 +69,7 @@
     {
       "id": "0005",
       "title": "npm workspaces: root Next.js app, shared packages/, separate services/",
-      "status": "proposed",
+      "status": "accepted",
       "category": "architecture",
       "scope": [
         "packages/**",
@@ -88,7 +88,7 @@
     {
       "id": "0006",
       "title": "Real-time races run on a separate Socket.IO server, server-authoritative, 10 Hz snapshots",
-      "status": "proposed",
+      "status": "accepted",
       "category": "architecture",
       "scope": [
         "services/race-server/**",
@@ -105,7 +105,7 @@
     {
       "id": "0007",
       "title": "One pure, deterministic race engine package shared by server (authority) and client (prediction)",
-      "status": "proposed",
+      "status": "accepted",
       "category": "architecture",
       "scope": [
         "packages/engine/**",
@@ -121,7 +121,7 @@
     {
       "id": "0008",
       "title": "Redis holds ephemeral room state with TTLs; Postgres is the only system of record, written by the web app",
-      "status": "proposed",
+      "status": "accepted",
       "category": "data",
       "scope": [
         "services/race-server/src/redis/**",
@@ -141,7 +141,7 @@
     {
       "id": "0009",
       "title": "Auth.js with JWT sessions, a signed guest cookie, no email, and short-lived race tokens",
-      "status": "proposed",
+      "status": "accepted",
       "category": "security",
       "scope": [
         "src/server/auth/**",
@@ -158,7 +158,7 @@
     {
       "id": "0010",
       "title": "UI language from a cookie (no URL prefix), typed message catalogs in src/i18n, race language independent",
-      "status": "proposed",
+      "status": "accepted",
       "category": "ui",
       "scope": [
         "src/i18n/**",
@@ -174,7 +174,7 @@
     {
       "id": "0011",
       "title": "Background jobs run in a worker entry point of the web package with a Prisma-owned schedule table",
-      "status": "proposed",
+      "status": "accepted",
       "category": "architecture",
       "scope": [
         "src/worker/**",
@@ -189,7 +189,7 @@
     {
       "id": "0012",
       "title": "One VPS, Docker Compose, Caddy TLS, images built in CI, deploy on merge with race-server draining",
-      "status": "proposed",
+      "status": "accepted",
       "category": "tooling",
       "scope": [
         "deploy/**",
@@ -206,7 +206,7 @@
     {
       "id": "0013",
       "title": "three.js lives only in src/features/race-3d, loaded lazily on the race route; all text and input are HTML; budgets are tested",
-      "status": "proposed",
+      "status": "accepted",
       "category": "ui",
       "scope": [
         "src/features/race-3d/**",

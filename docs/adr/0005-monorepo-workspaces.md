@@ -1,7 +1,7 @@
 ---
 id: "0005"
 title: "npm workspaces: root Next.js app, shared packages/, separate services/"
-status: proposed
+status: accepted
 category: architecture
 scope: ["packages/**", "services/**", "package.json", "tsconfig.base.json", "next.config.ts", "vitest.config.ts", ".dependency-cruiser.cjs"]
 supersedes: []

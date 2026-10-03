@@ -1,7 +1,7 @@
 ---
 id: "0002"
 title: Prisma 7 with the pg driver adapter, schema folder, server-only client
-status: proposed
+status: accepted
 category: data
 scope: ["prisma/**", "prisma.config.ts", "src/server/**", "src/features/*/queries/**", "src/features/*/actions/**"]
 supersedes: []

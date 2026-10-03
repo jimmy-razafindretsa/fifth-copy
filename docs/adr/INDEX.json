@@ -17,7 +17,7 @@
     {
       "id": "0002",
       "title": "Prisma 7 with the pg driver adapter, schema folder, server-only client",
-      "status": "proposed",
+      "status": "accepted",
       "category": "data",
       "scope": [
         "prisma/**",
@@ -34,7 +34,7 @@
     {
       "id": "0003",
       "title": "Separate local test database, migrated with migrate deploy",
-      "status": "proposed",
+      "status": "accepted",
       "category": "data",
       "scope": [
         "e2e/**",

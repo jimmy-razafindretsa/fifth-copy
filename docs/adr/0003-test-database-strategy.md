@@ -1,7 +1,7 @@
 ---
 id: "0003"
 title: Separate local test database, migrated with migrate deploy
-status: proposed
+status: accepted
 category: data
 scope: ["e2e/**", "src/**/*.test.ts", "scripts/test-db.sh", "prisma/docker-init/**", ".github/workflows/**"]
 supersedes: []

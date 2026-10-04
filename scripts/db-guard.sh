@@ -18,6 +18,12 @@ fi
 rest="${url#*://}"
 authority="${rest%%[/?#]*}"
 hostport="${authority##*@}"
+# Fail closed on libpq-style multi-host authorities (host1:p1,host2:p2) and percent-encoded hosts:
+# a parser may connect to a host the comparison below never sees. Never print the authority.
+if [[ "$hostport" == *,* || "$hostport" == *%* ]]; then
+  echo "db-guard: REFUSED. Connection URL authority lists several hosts or is percent-encoded." >&2
+  exit 1
+fi
 host="${hostport%%:*}"
 if [[ "$hostport" == \[* ]]; then host="${hostport%%]*}]"; fi
 

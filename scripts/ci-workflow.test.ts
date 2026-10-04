@@ -48,7 +48,8 @@ describe("CI workflow prepares the test database (ADR 0003)", () => {
 
   it("C3 migrations keeps the production deploy path and does not use scripts/test-db.sh", () => {
     const job = workflow.jobs[DEPLOY_PATH];
-    const all = runs(job).join("\n");
+    expect(job).toBeDefined();
+    const all = runs(job ?? { steps: [] }).join("\n");
     expect(all).toContain("prisma migrate deploy");
     expect(all).toContain("prisma migrate status");
     expect(all).toContain("prisma migrate diff");

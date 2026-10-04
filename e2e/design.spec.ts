@@ -15,6 +15,15 @@ test.describe("design system page", () => {
     await expectNoA11yViolations(page);
   });
 
+  test("renders accessibly in the dark scheme", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/design");
+    await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible();
+    const scheme = await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches);
+    expect(scheme).toBe(true);
+    await expectNoA11yViolations(page);
+  });
+
   test("is keyboard navigable with visible focus", async ({ page }) => {
     await page.goto("/design");
     await page.keyboard.press("Tab");

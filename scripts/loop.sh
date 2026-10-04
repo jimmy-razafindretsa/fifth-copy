@@ -73,7 +73,7 @@ for ((n = 1; n <= MAX_CARDS; n++)); do
   fi
   next_out="$(board next 2>&1)"; rc=$?
   echo "$next_out" | tail -5 | sed 's/^/  /'
-  if (( rc != 0 )); then echo "STOP: $(echo "$next_out" | grep -E '^(STOP|board):' | tail -1)"; exit 0; fi
+  if (( rc != 0 )); then echo "STOP: $(echo "$next_out" | grep -E '^(STOP|board):' | tail -1 | sed 's/^STOP: //')"; exit 0; fi
   card="$(echo "$next_out" | sed -n 's/^next: //p' | tail -1)"
   [[ -z "$card" ]] && { echo "STOP: picker returned no card"; exit 1; }
   labels="$(card_labels "$card")"

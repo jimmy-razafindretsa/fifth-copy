@@ -79,7 +79,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Breaking data changes use expand, migrate data, contract, across separate cards. They need an accepted ADR and `autonomy:hitl`.
 - After any schema change: generate, validate, status check, commit the migration SQL.
 - Check the installed Prisma version in `package.json` and follow its config conventions. Do not assume.
-- Worktrees have no `.env`: export `DATABASE_URL` (any `postgresql://` URL) before `npm install`, or postinstall `prisma generate` aborts and typecheck fails; e2e and see.ts need it to be the local DB (the dev server's `/api/health` queries it).
+- Worktrees have no `.env`: export `DATABASE_URL` (any `postgresql://` URL) before `npm install`, or postinstall `prisma generate` aborts and typecheck fails; e2e and see.ts need it to be the local DB (the dev server's `/api/health` queries it). Worktrees also lack `node_modules`: `npm install` there before `check.sh`, or `npx` uses the parent checkout's install and the gate fails falsely.
 
 ## Next.js hazards
 - Check the installed Next.js version before relying on caching or rendering defaults. Confirm against that version's docs.

@@ -9,7 +9,9 @@ fail=0
 check() { # name, path, expected status, optional body substring
   local name="$1" path="$2" want="$3" needle="${4:-}" body code
   body="$(mktemp)"
-  code="$(curl -s -o "$body" -w '%{http_code}' --max-time 15 "$BASE$path" || echo 000)"
+  # curl already writes 000 on connection failure; default only when it printed nothing.
+  code="$(curl -s -o "$body" -w '%{http_code}' --max-time 15 "$BASE$path" || true)"
+  code="${code:-000}"
   if [[ "$code" != "$want" ]]; then
     echo "FAIL $name: GET $path -> $code (want $want)"; fail=1
   elif [[ -n "$needle" ]] && ! grep -q "$needle" "$body"; then

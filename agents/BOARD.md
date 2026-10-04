@@ -112,6 +112,9 @@ Conventions it follows: everything lands in `Backlog`; titles plus one or two se
 
 Always do a `dryRun: true` first and read the returned outline, uncovered requirements and open questions; then rerun without it (resume is cheap for the unchanged stages).
 
+## Hardening epic
+`discovered` follow-ups and sweep findings go under the Hardening epic #475 (`HARDENING_EPIC`, default 475, for `scripts/loop.sh`), priority Low, with a full Contract, never into the active product epic (PROTOCOL section 8).
+
 ## Current state (2026-10-02)
 - 444 issues on the board, all `Backlog`, none `plan-approved` yet (the label does not exist until `bootstrap` runs).
 - Epic #2 Foundations with cards #3 scaffold, #4 prisma, #5 tooling, #6 playwright, #7 design, #8 ci, #9 board config. The work already exists on branch `chore/agent-kit-foundations`: these cards are for **verification by Deliver (not the builder)**, not for rebuilding. Hitl criteria (#5, #7, #8, #9) need a human. #9 carries `needs-replan`: its Contract is still the Linear version and must be rewritten for this board.

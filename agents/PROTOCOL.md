@@ -43,9 +43,9 @@ Tool usage, ids and the exact call for every operation: `agents/BOARD.md`.
 Labels:
 - type: `type:feature` `type:bug` `type:chore` `type:adr` `type:spike`; track: `track:technical` `track:non-technical`
 - scope: `area:<feature-or-module>`, `epic`
-- flags: `ui`, `touches:prisma`, `touches:deps` (package.json/lockfile), `pentest` (set by Explorer: a Pen tester runs before Deliver), `discovered`, `visual-change` (PR)
+- flags: `ui`, hotspot locks `touches:prisma|deps|protocol|i18n|arch|tokens` (section 7), `pentest` (set by Explorer: a Pen tester runs before Deliver), `discovered`, `visual-change` (PR)
 - autonomy: `autonomy:afk` (loop may run it end to end) or `autonomy:hitl` (loop stops for a human)
-- gates: `plan-approved` (on the epic, human only), `needs-human`, `needs-adr`, `needs-replan`
+- gates: `plan-approved` (on the epic: the human, or the Analyst under section 5a), `needs-human`, `needs-adr`, `needs-replan`
 
 Estimate scale: 1 (small), 2 (medium), 3 (large, near `~400 changed lines`). Anything above 3 must be split. Estimate and priority are the optional Project fields `Estimate` and `Priority` (Urgent, High, Medium, Low); without them the estimate is stated in the card's `## Size rationale` and priority counts as none.
 
@@ -85,16 +85,29 @@ afk | hitl, with one-line reason
 estimate N because ...
 ```
 
-## 5. Transitions and gates (only Picker moves cards)
+## 5. Transitions and gates (only Picker or the loop's scripts move cards)
+Script-checkable preconditions are enforced by `board.ts`: `promote` (Backlog -> Ready), `pickup` (Ready -> In Progress, posts PICKUP), `gate <n> "In Review"|QA|Done` (moves only when they hold). `scripts/check.sh` green is run by the caller in the card worktree before the In Review gate. An LLM Picker is only needed outside `scripts/loop.sh`.
+
 | From -> To | Preconditions |
 |---|---|
 | Backlog -> Ready | contract complete and verifiable; dependencies set as blocked-by relationships; estimate <= 3; epic has `plan-approved`; no `needs-*` label |
 | Ready -> In Progress | all blockers Done; WIP limit not exceeded; no lock conflict (section 7); contract hash recorded in a PICKUP comment |
 | In Progress -> In Review | `scripts/check.sh` green; branch pushed; PR open; HANDOFF posted; contract hash unchanged; PENTEST comment present if the card carries `pentest` |
 | In Review -> QA | reviewer verdict has zero blockers |
-| QA -> Done | every contract checkbox ticked by Deliver with evidence; PR merged; CI green on base; smoke passed |
+| In Review -> QA (script) | Deliver HANDOFF `verdict: pass` (or `verdict: needs-human` after the human removed the label); every box ticked |
+| QA -> Done | every contract checkbox ticked by Deliver with evidence; PR merged through `scripts/merge.sh`; CI green on the merge commit on base; smoke passed (when a preview exists) |
 | any -> Backlog + `needs-replan` | contract invalid, unverifiable, or dependency missing |
 | any -> `needs-human` (state unchanged) | `autonomy:hitl` reached, ADR conflict, fix budget exhausted |
+
+### 5a. Human review policy (set by the human on 2026-10-04)
+The human reviews **major design choices only**. Everything else runs `afk` end to end. A card stops for the human (`autonomy:hitl` or `needs-human`) only when it:
+1. proposes an ADR that conflicts with or supersedes an accepted ADR, or changes architecture beyond its card (consistent ADRs are accepted by Deliver, roles/deliver.md 3b);
+2. makes a breaking data change (expand/migrate/contract), or deletes user data;
+3. adds a runtime dependency (`dependencies` in package.json; dev dependencies stay afk with a PR note);
+4. changes the security model: auth, sessions, token formats, the internal HMAC API contract, privacy flows (a `pentest` alone is not a stop: PENTEST blockers are fixed in the card);
+5. sets the visual direction of a screen family for the first time where `docs/spec/art-direction.md` and `docs/design/` leave a real choice open. Later screens of that family, and screens fully specified by the art direction, are afk with see.ts evidence and baselines.
+Not reasons to stop: an unverifiable wording (rewrite it as an observable criterion), naming, copy, refactors, test strategy, CI and tooling, `discovered` follow-ups.
+Epic plans: the Analyst may add `plan-approved` itself (`board.ts label <epic> +plan-approved --analyst`) when every card of the epic is detailed, none carries `needs-*`, and the PLAN comment lists no item from 1-5. Otherwise it stops for the human with the exact questions.
 
 Contract hash: sha256 of the card's Contract section, recorded at pickup and re-checked at every later gate. A mismatch means someone edited the contract mid-build: stop and label `needs-replan`.
 
@@ -107,17 +120,27 @@ Candidates = cards in Ready whose blockers are all Done, in epics labeled `plan-
 5. issue number ascending (deterministic tie-break)
 Then drop candidates that violate a lock (section 7).
 
-## 7. Locks and WIP
-- WIP limit: `1` cards in In Progress/In Review/QA combined.
-- At most one `touches:prisma` card in flight at a time.
-- At most one `touches:deps` card in flight at a time.
-- Two parallel cards must have disjoint `area:` labels.
-- Each parallel card gets its own git worktree and branch: `git worktree add .worktrees/<n> -b <n>-<title-slug>`. Remove the worktree after merge.
+## 7. Locks, WIP and isolation
+- WIP limit: `BOARD_WIP_LIMIT` (default 1; `scripts/loop.sh --parallel N` sets N) cards in In Progress/In Review/QA combined. Cards parked on `needs-human` do not count against WIP but keep their locks.
+- Hotspot locks: at most one in-flight card per `touches:*` label. Analyst sets them; Explorer adds any it finds; Builder adds one before committing to an unlabeled hotspot. `board.ts locks <n>` checks; the loop waits before Builder starts.
+| Label | Paths |
+|---|---|
+| `touches:prisma` | `prisma/schema/**`, `prisma/migrations/**` |
+| `touches:deps` | `package.json`, `package-lock.json`, workspace `package.json` |
+| `touches:protocol` | `packages/protocol/**` (wire schemas, `PROTOCOL_VERSION`) |
+| `touches:i18n` | `src/i18n/**` catalogs |
+| `touches:arch` | `docs/architecture/**`, `AGENTS.md`, `agents/**`, `scripts/check.sh`, `.github/**`, lint/boundary configs |
+| `touches:tokens` | design tokens, `src/app/globals.css`, `e2e/__screenshots__/**` (visual baselines) |
+- Area lock: two parallel cards must have disjoint `area:` labels (cheap predictor of file overlap).
+- Isolation: each card gets `scripts/worktree.sh <n>`: its own worktree and branch, its own ports (web 5000+n, Playwright 6000+n, race 7000+n, mod 1000), its own databases (`app_c<n>`, `app_c<n>_test`), its own Redis db index, deps installed. Agents load `.env` in the worktree first. `scripts/worktree.sh --remove <n>` after merge.
+- Merge queue: `scripts/merge.sh <n>` merges one PR at a time, only when its head contains current `main` and every CI check on that head is green (it updates the branch when behind; exit 4 = conflict, Builder resolves it in the worktree). Never merge by hand around it.
 
 ## 8. Failure budget and stop conditions
 - A gate failure gets `3` fix cycles. Then label `needs-human`, post the failure summary, and move on to an independent card.
 - Same error three times in a row means stop. You are in a loop.
-- Loop halts when: the next card is `autonomy:hitl`; `3` consecutive cards blocked; GitHub is unreachable; the dependency graph has a cycle; the cost or time budget is exhausted; no Ready cards remain (report why: blockers, unapproved epics, or replan needed).
+- `discovered` follow-ups: at most one per delivered card unless it is a correctness or security bug; file it under the Hardening epic (agents/BOARD.md) with priority Low and a full Contract, never in the active epic. The loop picks Hardening cards only when a parallel slot has nothing else to do (they sort last by priority).
+- In parallel mode a card that reaches `needs-human` is parked (stays In Review, frees its WIP slot, keeps its locks) and the human is notified; removing `needs-human` lets the loop merge it (`scripts/loop.sh --finish <n>` does it by hand).
+- Loop halts when: (sequential mode only) the next card is `autonomy:hitl`; `3` consecutive cards blocked; GitHub is unreachable; the dependency graph has a cycle; the cost or time budget is exhausted; no Ready cards remain (report why: blockers, unapproved epics, or replan needed).
 - Rolling-wave planning: when Ready cards in approved epics are fewer than `3 x WIP_LIMIT`, or the active epic is >=80% Done, Picker labels the next epic `needs-replan` so Analyst details it.
 
 ## 9. Formats
@@ -174,6 +197,7 @@ Log file `work/log/<n>.md` (<= ~200 words): date, one-line outcome, decisions, g
 | builder / ui | repo write in its worktree, local shell, local DB, board comment | prod credentials, merge, tick contract, edit Contract |
 | deliver | repo read, test runners, browser to localhost/preview only, `gh pr`, board (labels, comments, contract checkboxes), set `status: accepted` on ADRs proposed in the card's PR | edit source (except fix-forward within budget as builder), prod credentials |
 | pentester | repo read, local shell and browser against localhost only, test DB, board comment | edit any file, non-local URLs, prod credentials |
+| sweep | repo read, git read, board create (`discovered` under Hardening) | edit any file, move cards |
 - Destructive commands denied: `git push --force` to base, `rm -rf` outside the worktree, `prisma migrate reset`, dropping databases, any command against a non-local `DATABASE_URL`.
 - Never print or log secrets. Never place secrets in issues, comments, PRs, logs or `.eyes/`.
 
@@ -189,6 +213,7 @@ Use, in this order: (1) `npx tsx scripts/board.ts <op>`, a wrapper over GitHub's
 - `dag_check <EPIC>` -> cycles, topological order, critical path
 - `hash <n>` -> contract hash
 - `next` -> Picker ordering (section 6) with locks (section 7)
+- `pickup <n>` / `gate <n> <status>` / `promote` / `locks <n>` -> the script-checked transitions of section 5 and the lock check of section 7
 Write bodies via files, not inline arguments, to avoid quoting bugs. Verify state after every write (re-read).
 
 ## 12. Models per role
@@ -200,11 +225,21 @@ Set by the human on 2026-10-02. Deep analysis and attack use the strongest model
 | builder / ui | Opus `claude-opus-5-5` | none | every card |
 | pentester | Fable `claude-fable-5-1` | Opus | only cards labeled `pentest` by the Explorer; after the PR is open, before Deliver |
 | deliver (review + QA) | Opus `claude-opus-5-5` | none | every card |
-| picker | Opus `claude-opus-5-5` | none | gates and dispatch |
+| picker | Opus `claude-opus-5-5` | none | manual mode only; `scripts/loop.sh` does gates and dispatch with scripts |
+| sweep | Fable `claude-fable-5-1` | Opus | after every `SWEEP_EVERY` delivered cards: cross-card drift review (roles/sweep.md) |
+Explorer model by tier (section 13): Fable for `full`, Opus for `standard`, not run for `lite`.
 Implementations: `scripts/loop.sh` (`MODEL_*` env vars, defaults above, one availability probe for Fable per run) and `.claude/agents/<role>.md` (`model:` frontmatter for subagent mode B).
 
 ## 13. Orchestration modes
 - A. Single session, sequential: run roles as phases; reset context between cards (new session per card).
 - B. Subagents: Picker spawns Explorer (and parallel Builders in worktrees) with clean context; they return a HANDOFF, not transcripts. Subagent definitions with their models: `.claude/agents/<role>.md`.
-- C. Separate sessions driven by a script: `scripts/loop.sh` invokes the runtime once per role per card.
+- C. Separate sessions driven by a script: `scripts/loop.sh [--parallel N]` invokes the runtime once per role per card, N cards at a time, and does every deterministic step itself (promote, next, pickup, worktree, check, gates, merge queue, cleanup).
+
+Pipeline tiers (`scripts/lib/flow.ts` `cardTier`), so ceremony scales with risk, not with card count:
+| Tier | When | Pipeline |
+|---|---|---|
+| lite | estimate 1, or `type:chore` (and not full) | Builder/UI -> check -> Deliver |
+| standard | estimate 2 or unknown | Explorer (Opus) -> Builder/UI -> check -> Deliver |
+| full | estimate 3, any `touches:*`, `pentest`, `type:adr`, `type:spike` | Explorer (Fable) -> Builder/UI -> check -> Pen tester (if `pentest`) -> Deliver |
+Deliver always runs in a fresh context; no tier skips review.
 In every mode the durable handoff is the board + repo, never the conversation.

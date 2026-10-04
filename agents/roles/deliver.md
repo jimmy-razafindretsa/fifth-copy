@@ -22,12 +22,11 @@ The card (contract), the PR/branch diff, BRIEF, HANDOFF and PENTEST (if the card
 4. QA pass (evaluator). For each contract criterion run its verify target and record evidence. For `ui` cards run `scripts/see.ts` and the Playwright specs across the viewports in the card; confirm zero console errors, zero failed requests, zero serious/critical axe violations; check every listed state; if baselines changed, confirm `visual-change` and that the diff is intended. Test the unhappy path of at least one criterion yourself.
 5. Tick each contract checkbox in the GitHub issue body (`gh issue edit <n> --body-file F`, change only `[ ]` -> `[x]`) ONLY with evidence you ran yourself. Leave unticked anything you could not verify and explain.
 6. Write `work/log/<n>.md` in the PR (date, outcome, decisions, gotchas, follow-ups). Add at most 3 lines to AGENTS.md hazards only if a new hazard was discovered.
-7. PR: ensure the body follows the template (`Card: #n`, no `Closes`/`Fixes #n`: the card must stay open until Picker closes it); request CI. Wait for CI. `autonomy:afk` and all gates green -> enable auto-merge/merge queue (`gh pr merge --auto`). `autonomy:hitl` -> label `needs-human`, leave In Review, and summarize exactly what the human should check.
-8. Post-merge: CI green on `main`; run the smoke test (`scripts/deploy-smoke.sh` if a preview/staging exists). Report to Picker. Remove the worktree.
-9. Post HANDOFF with the verdict.
+7. PR: ensure the body follows the template (`Card: #n`, no `Closes`/`Fixes #n`: the card must stay open until Picker closes it). **Do not merge.** `scripts/merge.sh <n>` (run by the loop, or by the human in manual mode) merges after your pass verdict: it serializes merges, syncs the branch with `main` and waits for every CI check. Card hits a stop item of PROTOCOL 5a -> label `needs-human`, verdict `needs-human`, and summarize exactly what the human should decide (one decision per bullet). Anything else is not a reason to stop.
+8. Post HANDOFF (`HANDOFF deliver <ISO-datetime>`) with the verdict lines below included; the QA gate reads `verdict: pass`. Post-merge checks (CI on `main`, Done, worktree removal) are the loop's.
 
 ## Verdict format (<= 15 lines)
-`verdict: pass | fail | needs-human` / blockers: n / majors: n / contract: x of y ticked / evidence: <paths> / follow-ups: <ISSUES>
+`verdict: pass | fail | needs-human` (exactly this line, in the HANDOFF) / blockers: n / majors: n / contract: x of y ticked / evidence: <paths> / follow-ups: <ISSUES>
 
 ## Never
-Tick a box without running its check, weaken a test, edit the Contract, update visual baselines to pass, merge with a failing gate, or move the card (Picker does).
+Tick a box without running its check, weaken a test, edit the Contract, update visual baselines to pass, merge (scripts/merge.sh does), or move the card (the loop's gates do).

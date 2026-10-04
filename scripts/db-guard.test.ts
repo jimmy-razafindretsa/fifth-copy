@@ -80,4 +80,26 @@ describe("db-guard", () => {
   it("accepts designated test hosts", () => {
     expect(guard("postgresql://u:p@postgres:5432/db", "postgres,ci-db").status).toBe(0);
   });
+
+  it.each([
+    ["postgres, ci-db", "postgresql://u:p@ci-db:5432/db"],
+    [" postgres ,ci-db ", "postgresql://u:p@postgres:5432/db"],
+    [" postgres ,ci-db ", "postgresql://u:p@ci-db/db"],
+    ["postgres,\tci-db", "postgresql://u:p@ci-db:5432/db"],
+  ])("ignores spaces and tabs around allowed host entries (%j, %s)", (allowed, url) => {
+    expect(guard(url, allowed).status).toBe(0);
+  });
+
+  it.each(["postgres, ,ci-db", " "])(
+    "never matches an empty host with an empty or blank entry (%j)",
+    (allowed) => {
+      expect(guard("postgresql://u:p@:5432/db", allowed).status).toBe(1);
+    },
+  );
+
+  it("refuses remote hosts with only blank entries, without printing credentials", () => {
+    const r = guard("postgresql://u:hunter2@db.prod.example.com/db", ", ");
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).not.toContain("hunter2");
+  });
 });

@@ -1,4 +1,6 @@
-# Required checks for main (configure branch protection to require: check, migrations, e2e, visual).
+# Required checks for main: check, migrations, e2e, visual. The merge gate is scripts/merge.sh (private
+# free-plan repo, no branch protection); .github/branch-protection.json lists these job names as the
+# required contexts, so renaming a job means updating that file (scripts/lib/protection.test.ts).
 name: CI
 
 on:
@@ -25,7 +27,8 @@ env:
 
 jobs:
   check:
-    name: check (format, lint, types, boundaries, unit, ADR lint, prisma validate)
+    # format, lint, types, boundaries, unit, ADR lint, prisma validate
+    name: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -43,7 +46,8 @@ jobs:
         run: tail -n 60 .cache/check/*.log
 
   migrations:
-    name: migrations (deploy to throwaway Postgres, drift check)
+    # deploy to a throwaway Postgres, merged migrations immutable, drift check
+    name: migrations
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -70,8 +74,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git fetch --depth=1 origin "${{ github.base_ref }}"
-          changed=$(git diff --name-only --diff-filter=MDR "origin/${{ github.base_ref }}" -- prisma/migrations || true)
-          if [ -n "$changed" ]; then echo "Edited/deleted merged migrations (fix forward instead):"; echo "$changed"; exit 1; fi
+          scripts/merged-migrations.sh "origin/${{ github.base_ref }}"
       - run: npx prisma migrate deploy
       - run: npx prisma migrate status
       - name: Schema drift (schema changed without a migration)
@@ -84,7 +87,8 @@ jobs:
           exit $code
 
   e2e:
-    name: e2e (Playwright, functional + a11y)
+    # Playwright, functional + a11y
+    name: e2e
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -120,7 +124,8 @@ jobs:
           retention-days: 7
 
   visual:
-    name: visual (pinned Playwright image)
+    # pinned Playwright image
+    name: visual
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Pinned to the @playwright/test version in package.json. Bump both together.

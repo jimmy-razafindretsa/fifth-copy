@@ -10,7 +10,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 // below would never answer and curl would time out with 000.
 const runSmoke = (base: string, path = process.env.PATH ?? "") =>
   new Promise<{ status: number | null; stdout: string }>((resolve, reject) => {
-    const child = spawn("scripts/deploy-smoke.sh", [base], { env: { PATH: path } });
+    const child = spawn("scripts/deploy-smoke.sh", [base], {
+      env: { NODE_ENV: "test", PATH: path },
+    });
     let stdout = "";
     child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
     child.on("error", reject);

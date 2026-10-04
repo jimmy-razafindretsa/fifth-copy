@@ -48,7 +48,11 @@ fi
 
 allowed=("localhost" "127.0.0.1" "[::1]" "::1")
 extra=(); IFS="," read -r -a extra <<< "${DB_GUARD_ALLOWED_HOSTS:-}"
-allowed+=("${extra[@]+"${extra[@]}"}")
+# Trim spaces and tabs around each entry ("postgres, ci-db"); a blank entry stays empty and never matches.
+for e in "${extra[@]+"${extra[@]}"}"; do
+  e="${e#"${e%%[![:blank:]]*}"}"
+  allowed+=("${e%"${e##*[![:blank:]]}"}")
+done
 
 for a in "${allowed[@]}"; do
   if [[ -n "$a" && "$host" == "$a" ]]; then

@@ -16,11 +16,20 @@
  *   relate <A> blocks <B>                      native "blocked by" dependency
  *   move <n> <status>                          Picker only. Backlog|Ready|In Progress|In Review|QA|Done; Done closes the
  *                                              issue, leaving Done reopens it; `Canceled` closes it as not planned
- *   label <n> +x -y [--create-missing]         never adds plan-approved (humans only)
+ *   label <n> +x -y [--create-missing]         plan-approved only with --analyst, on an epic none of whose cards
+ *                                              carries needs-* (PROTOCOL 5, human review policy)
  *   comment <n> --body-file F
  *   dag_check <EPIC> | dag_check --epics       cycles, topological order, critical path (exit 1 on cycle)
  *   hash <n> [--expect H] [--body-file F]      contract hash (exit 1 if --expect differs); --body-file hashes a local file offline
  *   next                                       Picker ordering (PROTOCOL 6) + locks (7); last line `next: #n` or `STOP: <why>`
+ *   pickup <n>                                 Ready -> In Progress after re-checking blockers and locks; posts PICKUP
+ *                                              (contract hash, branch); prints `branch: <name>`
+ *   gate <n> <In Review|QA|Done> [--check]     script-checkable PROTOCOL 5 preconditions; moves the card if they
+ *                                              hold (--check: report only); exit 1 with the failures otherwise
+ *   promote [--epic n]                         Backlog -> Ready for every card in a plan-approved epic that passes
+ *                                              the Backlog -> Ready preconditions; prints why the others stay
+ *   locks <n>                                  exit 1 if a hotspot (touches:*) or area lock conflicts with another
+ *                                              in-flight card (WIP not counted)
  *   dump [--json]                              every card on the board, one line each (or a JSON array)
  *   import --file F [--out F]                  batch create: JSON [{key, parentKey?|parent?, title, body, labels}], top-down
  *   link --file F                              batch relate: JSON [{blocker, blocked}] (issue numbers)
@@ -56,6 +65,16 @@ import {
   type Expectation,
 } from "./lib/board";
 import {
+  cardTier,
+  estimateOf,
+  evaluateGate,
+  GATE_TARGETS,
+  latestPickup,
+  pickupComment,
+  promotionBlockers,
+  type GateTarget,
+} from "./lib/flow";
+import {
   contractHash,
   dagCheck,
   lockViolation,
@@ -87,6 +106,10 @@ export const KIT_LABELS = [
   "ui",
   "touches:prisma",
   "touches:deps",
+  "touches:protocol",
+  "touches:i18n",
+  "touches:arch",
+  "touches:tokens",
   "pentest",
   "discovered",
   "autonomy:afk",
@@ -106,7 +129,15 @@ function flag(name: string): string | undefined {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
 }
-const BOOL_FLAGS = ["--dry-run", "--epics", "--create-missing", "--json", "--fields"];
+const BOOL_FLAGS = [
+  "--dry-run",
+  "--epics",
+  "--create-missing",
+  "--json",
+  "--fields",
+  "--check",
+  "--analyst",
+];
 function positional(): string[] {
   const out: string[] = [];
   for (let i = 1; i < argv.length; i++) {
@@ -693,8 +724,7 @@ async function opLabel(n: number, changes: string[]) {
   const add = changes.filter((c) => c.startsWith("+")).map((c) => c.slice(1));
   const remove = changes.filter((c) => c.startsWith("-")).map((c) => c.slice(1));
   if (!add.length && !remove.length) throw new BoardError("usage: label <n> +x -y");
-  if (add.includes(PLAN_APPROVED))
-    throw new BoardError(`${PLAN_APPROVED} is applied by a human only`);
+  if (add.includes(PLAN_APPROVED)) await checkSelfApproval(n);
   const i = await getIssue(n);
   const current = names(i.labels);
   const toAdd = add.filter((x) => !current.includes(x));
@@ -721,6 +751,30 @@ async function opLabel(n: number, changes: string[]) {
   const ok = add.every((a) => now.includes(a)) && remove.every((x) => !now.includes(x));
   if (!ok) throw new BoardError("verify failed: labels not updated");
   console.log(`labels: ${cardId(n)} ${now.join(", ")}`);
+}
+
+/** Analyst self-approval (PROTOCOL 5): an epic whose cards are all detailed and none needs a human. */
+async function checkSelfApproval(epic: number) {
+  if (!argv.includes("--analyst"))
+    throw new BoardError(
+      `${PLAN_APPROVED} needs --analyst (Analyst self-approval, PROTOCOL 5) or a human`,
+    );
+  const index = await boardIndex();
+  if (!index.get(epic)?.labels.includes("epic"))
+    throw new BoardError(`${cardId(epic)} is not an epic`);
+  const flagged = descendants(epic, index).filter(
+    (c) => c.state === "OPEN" && c.labels.some((l) => NEEDS_LABELS.includes(l)),
+  );
+  if (flagged.length)
+    throw new BoardError(
+      `cannot self-approve ${cardId(epic)}: ${flagged
+        .slice(0, 8)
+        .map(
+          (c) =>
+            `${cardId(c.number)}(${c.labels.filter((l) => NEEDS_LABELS.includes(l)).join(",")})`,
+        )
+        .join(" ")}`,
+    );
 }
 
 async function opComment(n: number) {
@@ -792,9 +846,7 @@ async function opNext() {
   const index = await boardIndex();
   const all = [...index.values()];
   const ready = all.filter((c) => c.status === "Ready");
-  const inFlight = all
-    .filter((c) => c.status !== null && IN_FLIGHT_STATUSES.includes(c.status))
-    .map((c) => ({ id: cardId(c.number), labels: c.labels }));
+  const inFlight = inFlightOf(all);
   console.log(
     `in flight: ${inFlight.map((c) => c.id).join(", ") || "none"} (WIP limit ${WIP_LIMIT})`,
   );
@@ -881,6 +933,175 @@ async function opNext() {
     `STOP: no startable Ready card (${ready.length} Ready, ${eligible.length} eligible, ${inFlight.length} in flight)`,
   );
   process.exitCode = 3;
+}
+
+const inFlightOf = (all: Item[]) =>
+  all
+    .filter((c) => c.status !== null && IN_FLIGHT_STATUSES.includes(c.status))
+    .map((c) => ({ id: cardId(c.number), labels: c.labels }));
+
+async function opPickup(n: number) {
+  const index = await boardIndex();
+  const c = index.get(n);
+  if (!c) throw new BoardError(`${cardId(n)} is not on the board`);
+  if (c.status !== "Ready")
+    throw new BoardError(`${cardId(n)} is ${c.status ?? "unset"}, not Ready`);
+  const epic = epicOf(c, index);
+  if (epic === null || !index.get(epic)?.labels.includes(PLAN_APPROVED))
+    throw new BoardError(`${cardId(n)}: epic not plan-approved`);
+  const open = c.blockedBy.filter((b) => !blockerDone(b, index));
+  if (open.length)
+    throw new BoardError(`${cardId(n)}: blocked by ${open.map((b) => cardId(b.number)).join(",")}`);
+  const lock = lockViolation(c, inFlightOf([...index.values()]), WIP_LIMIT);
+  if (lock) throw new BoardError(`${cardId(n)}: ${lock}`);
+  const i = await getIssue(n);
+  const hash = contractHash(i.body);
+  if (!hash) throw new BoardError(`${cardId(n)} has no ## Contract section`);
+  const branch = branchName(n, i.title);
+  await setStatus(c.itemId, "In Progress", `move ${cardId(n)} Ready -> In Progress`);
+  const body = pickupComment(n, hash, branch);
+  await mutate(
+    `comment ${cardId(n)} PICKUP`,
+    `mutation($input: AddCommentInput!) { addComment(input: $input) { commentEdge { node { id } } } }`,
+    { input: { subjectId: i.id, body } },
+  );
+  if (DRY) return;
+  const again = await getIssue(n, 5);
+  if ((await itemOf(again)).status !== "In Progress")
+    throw new BoardError("verify failed: status not updated");
+  if (!latestPickup(n, again.comments.nodes))
+    throw new BoardError("verify failed: PICKUP not found");
+  const est = estimateOf(i.body, c.estimate);
+  console.log(body);
+  console.log(`tier: ${cardTier(c.labels, est)} | estimate: ${est ?? "-"}`);
+  console.log(`branch: ${branch}`);
+}
+
+function prFor(branch: string): GateFactsPr {
+  const out = gh([
+    "pr",
+    "list",
+    "--repo",
+    REPO,
+    "--head",
+    branch,
+    "--state",
+    "all",
+    "--json",
+    "number,state,mergeCommit,createdAt",
+  ]);
+  const prs = JSON.parse(out) as {
+    number: number;
+    state: string;
+    mergeCommit: { oid: string } | null;
+    createdAt: string;
+  }[];
+  const pr = prs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  return pr
+    ? {
+        number: pr.number,
+        state: pr.state as "OPEN" | "MERGED" | "CLOSED",
+        mergeCommit: pr.mergeCommit?.oid ?? null,
+      }
+    : null;
+}
+type GateFactsPr = {
+  number: number;
+  state: "OPEN" | "MERGED" | "CLOSED";
+  mergeCommit: string | null;
+} | null;
+
+function mainCiFor(sha: string): "success" | "failure" | "pending" | "missing" {
+  const runs = JSON.parse(
+    gh([
+      "run",
+      "list",
+      "--repo",
+      REPO,
+      "--branch",
+      "main",
+      "--commit",
+      sha,
+      "--json",
+      "status,conclusion,event",
+    ]),
+  ) as { status: string; conclusion: string | null; event: string }[];
+  const push = runs.filter((r) => r.event === "push");
+  if (!push.length) return "missing";
+  if (push.some((r) => r.status !== "completed")) return "pending";
+  return push.every((r) => r.conclusion === "success") ? "success" : "failure";
+}
+
+async function opGate(n: number, requested: string) {
+  const target = GATE_TARGETS.find((t) => t.toLowerCase() === requested.trim().toLowerCase());
+  if (!target) throw new BoardError(`gate target must be one of: ${GATE_TARGETS.join(", ")}`);
+  const i = await getIssue(n, 100);
+  const pickup = latestPickup(n, i.comments.nodes);
+  const pr = pickup ? prFor(pickup.branch) : null;
+  const mainCi =
+    target === "Done" && pr?.state === "MERGED" && pr.mergeCommit
+      ? mainCiFor(pr.mergeCommit)
+      : null;
+  const failures = evaluateGate({
+    n,
+    target: target as GateTarget,
+    body: i.body,
+    labels: names(i.labels),
+    comments: i.comments.nodes,
+    pr,
+    mainCi,
+  });
+  if (failures.length) {
+    for (const f of failures) console.log(`FAIL ${cardId(n)} -> ${target}: ${f}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(
+    `PASS ${cardId(n)} -> ${target}${pr ? ` (PR #${pr.number} ${pr.state.toLowerCase()})` : ""}`,
+  );
+  if (!argv.includes("--check")) await opMove(n, target);
+}
+
+async function opPromote() {
+  const index = await boardIndex();
+  const only = flag("epic") ? cardArg(flag("epic"), "promote [--epic n]") : null;
+  let promoted = 0;
+  const held: string[] = [];
+  for (const c of [...index.values()].sort((a, b) => a.number - b.number)) {
+    if (c.status !== "Backlog" || c.state !== "OPEN") continue;
+    const epic = epicOf(c, index);
+    if (epic === null || (only !== null && epic !== only)) continue;
+    const epicApproved = !!index.get(epic)?.labels.includes(PLAN_APPROVED);
+    if (!epicApproved && only === null) continue; // unapproved epics are the Analyst's, stay quiet
+    const i = await getIssue(c.number);
+    const why = promotionBlockers({
+      body: i.body,
+      labels: c.labels,
+      estimate: c.estimate,
+      epicApproved,
+    });
+    if (why.length) {
+      held.push(`${cardId(c.number)}: ${why.join("; ")}`);
+      continue;
+    }
+    await setStatus(c.itemId, "Ready", `move ${cardId(c.number)} Backlog -> Ready`);
+    promoted++;
+    if (!DRY) console.log(`promoted: ${cardId(c.number)} ${c.title}`);
+  }
+  for (const h of held.slice(0, 15)) console.log(`  held ${h}`);
+  console.log(`promote: ${promoted} promoted, ${held.length} held`);
+}
+
+async function opLocks(n: number) {
+  const index = await boardIndex();
+  const c = index.get(n);
+  if (!c) throw new BoardError(`${cardId(n)} is not on the board`);
+  const others = inFlightOf([...index.values()]).filter((x) => x.id !== cardId(n));
+  const lock = lockViolation(c, others, Number.MAX_SAFE_INTEGER);
+  if (lock) {
+    console.log(`LOCKED ${cardId(n)}: ${lock}`);
+    process.exitCode = 1;
+  } else console.log(`locks ok: ${cardId(n)}`);
 }
 
 async function opDump() {
@@ -1064,6 +1285,17 @@ async function main() {
       return opHash(pos[0]);
     case "next":
       return opNext();
+    case "pickup":
+      return opPickup(cardArg(pos[0], "pickup <n>"));
+    case "gate":
+      return opGate(
+        cardArg(pos[0], "gate <n> <status>"),
+        req(pos.slice(1).join(" "), "gate <n> <In Review|QA|Done>"),
+      );
+    case "promote":
+      return opPromote();
+    case "locks":
+      return opLocks(cardArg(pos[0], "locks <n>"));
     case "dump":
       return opDump();
     case "import":

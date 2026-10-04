@@ -182,16 +182,21 @@ export function orderCandidates(cands: Candidate[], ctx: PickContext): Candidate
     );
 }
 
-/** PROTOCOL section 7. Returns a reason string if the card may not start now, else null. */
+/**
+ * PROTOCOL section 7. Returns a reason string if the card may not start now, else null.
+ * Cards parked on `needs-human` do not count against the WIP limit but keep their locks.
+ * Every `touches:*` label is a hotspot lock (at most one in-flight card per label).
+ */
 export function lockViolation(
   card: { labels: string[] },
   inFlight: InFlight[],
   wipLimit: number,
 ): string | null {
-  if (inFlight.length >= wipLimit) return `WIP limit ${wipLimit} reached`;
-  for (const flag of ["touches:prisma", "touches:deps"]) {
-    if (card.labels.includes(flag) && inFlight.some((c) => c.labels.includes(flag)))
-      return `another ${flag} card is in flight`;
+  const active = inFlight.filter((c) => !c.labels.includes("needs-human"));
+  if (active.length >= wipLimit) return `WIP limit ${wipLimit} reached`;
+  for (const flag of card.labels.filter((l) => l.startsWith("touches:"))) {
+    const holder = inFlight.find((c) => c.labels.includes(flag));
+    if (holder) return `another ${flag} card is in flight (${holder.id})`;
   }
   const areas = card.labels.filter((l) => l.startsWith("area:"));
   for (const c of inFlight) {

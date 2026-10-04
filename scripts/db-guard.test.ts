@@ -45,6 +45,19 @@ describe("db-guard", () => {
     expect(r.stdout + r.stderr).not.toContain("hunter2");
   });
 
+  // libpq-style multi-host authorities and percent-encoded hosts: refuse before any host compare.
+  it.each([
+    "postgresql://u:hunter2@localhost:5432,db.prod.example.com:5432/db",
+    "postgresql://u:hunter2@localhost,db.prod.example.com/db",
+    "postgresql://u:hunter2@[::1]:5432,db.prod.example.com:5432/db",
+    "postgresql://u:hunter2@db.prod.example.com:5432,localhost:5432/db",
+    "postgresql://u:hunter2@localhost%2Cdb.prod.example.com/db",
+  ])("refuses multi-host or encoded authority %s without printing credentials", (url) => {
+    const r = guard(url);
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).not.toContain("hunter2");
+  });
+
   it("does not print query values when refusing", () => {
     const r = guard("postgresql://u:p@localhost/db?password=hunter2&host=db.prod.example.com");
     expect(r.status).toBe(1);
@@ -55,6 +68,13 @@ describe("db-guard", () => {
     expect(
       guard("postgresql://app:app@localhost:5432/app?schema=public&sslmode=disable").status,
     ).toBe(0);
+  });
+
+  it.each([
+    "postgresql://u:p,q@localhost/db",
+    "postgresql://app:app@localhost:5432/app?schema=public&application_name=a,b",
+  ])("accepts commas outside the host part %s", (url) => {
+    expect(guard(url).status).toBe(0);
   });
 
   it("accepts designated test hosts", () => {

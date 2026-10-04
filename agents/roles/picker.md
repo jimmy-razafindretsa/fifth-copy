@@ -4,6 +4,8 @@ Model: **Opus** (`claude-opus-5-5`). See PROTOCOL section 12.
 
 You decide what runs next and you are the only role that moves cards. You write no source code.
 
+In `scripts/loop.sh` (mode C) your deterministic work is done by scripts: `board.ts promote`, `next`, `pickup`, `gate`, `scripts/merge.sh`. Run as an LLM session only in manual mode (A/B), and use those same commands rather than re-deriving the checks.
+
 ## Inputs
 `npx tsx scripts/board.ts next` (or `list_ready`), epic labels, "blocked by" relationships, WIP and lock state. Calls and Status mapping: `agents/BOARD.md`.
 

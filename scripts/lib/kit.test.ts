@@ -128,4 +128,19 @@ describe("lockViolation", () => {
     ).toMatch(/area overlap/);
     expect(lockViolation({ labels: ["area:a"] }, [{ id: "X", labels: ["area:b"] }], 3)).toBeNull();
   });
+
+  it("treats every touches:* label as a hotspot lock", () => {
+    expect(
+      lockViolation({ labels: ["touches:i18n"] }, [{ id: "X", labels: ["touches:i18n"] }], 3),
+    ).toMatch(/touches:i18n card is in flight \(X\)/);
+    expect(
+      lockViolation({ labels: ["touches:i18n"] }, [{ id: "X", labels: ["touches:protocol"] }], 3),
+    ).toBeNull();
+  });
+
+  it("does not count needs-human cards against WIP, but keeps their locks", () => {
+    const parked = { id: "X", labels: ["needs-human", "touches:prisma"] };
+    expect(lockViolation({ labels: [] }, [parked], 1)).toBeNull();
+    expect(lockViolation({ labels: ["touches:prisma"] }, [parked], 1)).toMatch(/touches:prisma/);
+  });
 });

@@ -1,4 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
+import { config as loadEnv } from "dotenv";
+
+// Card worktrees carry their own ports and DB in .env (scripts/worktree.sh); a set variable still wins.
+loadEnv({ path: [".env.local", ".env"], quiet: true });
 
 /**
  * E2E + visual tests (docs/adr/0004). Viewports match the kit's UI contract: mobile, tablet, desktop.

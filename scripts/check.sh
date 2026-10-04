@@ -22,6 +22,13 @@ cmd_for() {
   esac
 }
 
+# A worktree without its own node_modules makes npx fall back to the parent checkout's install and fail
+# falsely (#456). Bootstrap card worktrees with scripts/worktree.sh <n>.
+if [[ ! -d node_modules ]]; then
+  echo "check: no node_modules in $(pwd). Run scripts/worktree.sh <n> (card worktree) or npm install."
+  exit 2
+fi
+
 if [[ $# -gt 0 ]]; then selected=("$@"); else selected=("${NAMES[@]}"); fi
 
 failed=0

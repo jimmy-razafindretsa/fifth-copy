@@ -1,6 +1,6 @@
-# Required checks for main: check, migrations, e2e, visual. Branch protection lives in
-# .github/branch-protection.json (applied by scripts/branch-protection.sh); job names are the
-# required check contexts, so renaming a job means updating that file (scripts/ci-workflow.test.ts).
+# Required checks for main: check, migrations, e2e, visual. The merge gate is scripts/merge.sh (private
+# free-plan repo, no branch protection); .github/branch-protection.json lists these job names as the
+# required contexts, so renaming a job means updating that file (scripts/lib/protection.test.ts).
 name: CI
 
 on:

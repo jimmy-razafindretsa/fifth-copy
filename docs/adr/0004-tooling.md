@@ -1,7 +1,7 @@
 ---
 id: "0004"
 title: Tooling baseline (npm, Vitest, Playwright + axe, GitHub Actions)
-status: proposed
+status: accepted
 category: tooling
 scope: ["package.json", "package-lock.json", "scripts/**", "vitest.config.ts", "playwright.config.ts", ".github/**"]
 supersedes: []

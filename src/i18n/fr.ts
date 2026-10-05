@@ -211,6 +211,24 @@ export const fr = {
       privacyLine: "Pas de courriel. Pas de clavardage. Ta frappe t'appartient.",
     },
   },
+  system: {
+    notFound: {
+      kicker: "MINISTÈRE DE LA DACTYLO · FORMULAIRE 404",
+      title: "T'ES PERDU, LE JEUNE ?",
+      stamp: "DOSSIER INTROUVABLE",
+      body: "Ce bureau n'existe pas. Le dossier que tu demandes n'a jamais été émis, ou il est passé à la déchiqueteuse. Le Major l'a remarqué.",
+      body2: "Retourne à ton bureau. Les salles en anneau tapent toujours.",
+      rows: [
+        ["FORMULAIRE", "404"],
+        ["STATUT", "PAS AU DOSSIER"],
+        ["BUREAU", "NON ASSIGNÉ"],
+      ],
+      home: "PRÉSENTE-TOI À TON BUREAU",
+      join: "ENTRER AVEC UN CODE →",
+      stageTitle: "Le Major, qui surveille, en 3D",
+      stageHint: "LE MAJOR · IL SUIT TON CURSEUR",
+    },
+  },
   lobby: {
     kicker: "SALLE D'ATTENTE · COURSE PRIVÉE",
     heading: "PRÉSENTE-TOI À TON BUREAU",

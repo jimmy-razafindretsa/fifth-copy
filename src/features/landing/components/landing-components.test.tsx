@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { Star } from "@/components/ui";
 import { en } from "@/i18n/en";
 import { ClerkSection } from "./clerk-section";
 import { LiveFeed } from "./live-feed";
-import { Star } from "./star";
 import { TypingStrip } from "./typing-strip";
 
 // Server render of the landing's client leaves (card 497): first paint carries the bible's structure.

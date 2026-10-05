@@ -1,8 +1,8 @@
 import { getT } from "@/i18n";
 import { cn } from "@/lib/cn";
+import { Star } from "@/components/ui";
 import shared from "./landing.module.css";
 import styles from "./sections.module.css";
-import { Star } from "./star";
 
 /** The story (bible 14.1 item 4): headline, pull-quote stamp, three paragraphs, a big faint star. */
 export async function StorySection() {

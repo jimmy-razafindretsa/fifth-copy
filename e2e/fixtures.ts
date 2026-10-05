@@ -59,7 +59,31 @@ async function describeFailure(r: Request): Promise<FailedRequest> {
 export function watchPage(page: Page): { errors: string[]; settle: () => Promise<string[]> } {
   const errors: string[] = [];
   const pending: Promise<void>[] = [];
-  page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text()}`));
+  // Paths the main document answered 404 for: the page under test is a not-found page (#397), so
+  // Chromium's "Failed to load resource" for that document (and the server actions it posts to the
+  // same path) is the expected outcome, not a defect. A 404 asset on any page is still flagged.
+  const notFoundPaths = new Set<string>();
+  const pathOf = (url: string) => {
+    try {
+      return new URL(url).pathname;
+    } catch {
+      return null;
+    }
+  };
+  page.on("response", (r) => {
+    const req = r.request();
+    if (r.status() === 404 && req.isNavigationRequest() && req.frame() === page.mainFrame()) {
+      notFoundPaths.add(pathOf(r.url()) ?? "");
+    }
+  });
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    const resource = m.text().startsWith("Failed to load resource")
+      ? pathOf(m.location().url)
+      : null;
+    if (resource !== null && notFoundPaths.has(resource)) return;
+    errors.push(`console: ${m.text()}`);
+  });
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("requestfailed", (r) =>
     pending.push(

@@ -1,7 +1,7 @@
 import { getT } from "@/i18n";
 import { cn } from "@/lib/cn";
+import { EmbedFrame } from "@/components/ui";
 import { EMBEDS } from "../links";
-import { EmbedFrame } from "./embed-frame";
 import shared from "./landing.module.css";
 import styles from "./sections.module.css";
 

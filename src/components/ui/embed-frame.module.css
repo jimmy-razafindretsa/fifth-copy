@@ -1,0 +1,14 @@
+/*
+ * A lazily mounted embed fills its frame; the reference 3D pages size themselves to the iframe. The
+ * light colour scheme matches the embeds' own, so Chrome keeps the frame transparent on Night shift (a
+ * frame whose scheme differs from its page is painted on an opaque backdrop). Design bible 9, 16.
+ */
+.embed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color-scheme: light;
+}

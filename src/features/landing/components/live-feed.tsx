@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { EmbedFrame, useEmbedBridge } from "@/components/ui";
 import { fill } from "@/i18n/format";
 import { FEED_VIEWS, setViewMessage, type FeedView } from "../embed-messages";
 import { timecode } from "../feed";
 import { EMBEDS } from "../links";
-import { EmbedFrame } from "./embed-frame";
 import styles from "./hero.module.css";
 import shared from "./landing.module.css";
-import { useEmbedBridge } from "./use-embed-bridge";
 
 export type FeedLabels = {
   frameTitle: string;

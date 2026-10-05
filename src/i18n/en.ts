@@ -209,6 +209,24 @@ export const en = {
       privacyLine: "No email. No chat. Your typing stays yours.",
     },
   },
+  system: {
+    notFound: {
+      kicker: "MINISTRY OF TYPING · FORM 404",
+      title: "ARE YOU LOST, KID?",
+      stamp: "FILE NOT FOUND",
+      body: "This desk does not exist. The file you asked for was never issued, or it went through the shredder. The Major has noticed.",
+      body2: "Report back to your desk. The ring rooms are still typing.",
+      rows: [
+        ["FORM", "404"],
+        ["STATUS", "NOT ON FILE"],
+        ["DESK", "UNASSIGNED"],
+      ],
+      home: "REPORT TO YOUR DESK",
+      join: "JOIN WITH CODE →",
+      stageTitle: "The Major, watching, in 3D",
+      stageHint: "THE MAJOR · HE'S WATCHING YOUR CURSOR",
+    },
+  },
   lobby: {
     kicker: "WAITING ROOM · PRIVATE RACE",
     heading: "REPORT TO YOUR DESK",

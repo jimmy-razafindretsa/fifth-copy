@@ -1,7 +1,7 @@
 import { getT } from "@/i18n";
 import { cn } from "@/lib/cn";
+import { Star } from "@/components/ui";
 import styles from "./sections.module.css";
-import { Star } from "./star";
 
 /** Ticker band (bible 6, 8.4): two identical halves scroll on the skewed ink band; decorative only. */
 export async function TickerBand() {

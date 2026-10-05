@@ -1,17 +1,17 @@
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/cn";
-import styles from "./landing.module.css";
+import styles from "./star.module.css";
 
 export type StarTone = "red" | "ink" | "gold" | "paper" | "faintRed" | "faintInk" | "faintPaper";
 
 const TONES: Record<StarTone, string> = {
-  red: styles.starRed!,
-  ink: styles.starInk!,
-  gold: styles.starGold!,
-  paper: styles.starPaper!,
-  faintRed: styles.starFaintRed!,
-  faintInk: styles.starFaintInk!,
-  faintPaper: styles.starFaintPaper!,
+  red: styles.red!,
+  ink: styles.ink!,
+  gold: styles.gold!,
+  paper: styles.paper!,
+  faintRed: styles.faintRed!,
+  faintInk: styles.faintInk!,
+  faintPaper: styles.faintPaper!,
 };
 
 type Props = {
@@ -24,7 +24,7 @@ type Props = {
   className?: string;
 };
 
-/** A decorative spinning star (bible 6). */
+/** A decorative spinning star (design bible 6). */
 export function Star({ size, tone, spin, at, className }: Props) {
   return (
     <div

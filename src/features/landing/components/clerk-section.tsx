@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { EmbedFrame, Star, useEmbedBridge } from "@/components/ui";
 import {
   clerkMessageSchema,
   lookMessage,
@@ -11,11 +12,8 @@ import {
   type OutfitCategory,
 } from "../embed-messages";
 import { EMBEDS } from "../links";
-import { EmbedFrame } from "./embed-frame";
 import shared from "./landing.module.css";
 import styles from "./sections.module.css";
-import { Star } from "./star";
-import { useEmbedBridge } from "./use-embed-bridge";
 
 export type ClerkLabels = {
   stageTitle: string;

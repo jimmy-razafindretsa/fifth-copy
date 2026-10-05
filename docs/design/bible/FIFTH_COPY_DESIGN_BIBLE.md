@@ -422,6 +422,8 @@ Extensions (#497), the landing in the app:
 ### 14.3 Next screens (to design using this bible)
 Sign-in / sign-up (guest, username + password + one-time recovery code, GitHub, Discord) · Lobby (seat ring diagram, host settings as a form, invite code/link docket, START) · Race seat view (3D POV + telex strip + nixie counters + race card + overtake stamps `ОБГОН! · OVERTAKE +1` / `ОБОГНАЛИ · PASSED −1`) · Projector view (overview + top-10 sidebar + rank plaques) · Results "Dawn report" (podium with medals pinned, full ranking, personal stats card, keyboard heatmap paper → gold → red) · Personnel file (profile/stats, enamel pins) · Settings · How to type special characters. **Reuse the components above. No new colours or fonts.**
 
+Not found (#397): the in-world form 404, composed from the "your clerk" section (14.1 item 5). Left: a sun-ray stage (6) with **the Major** alone in 3D (10.3, `docs/design/embeds/Fifth Copy The Major.html`, served as `/3d/major.html`): breathing, head following the cursor page-wide (`fc-look`, 15), scanning and staring when left alone, leaning in on a click or `fc-stare`; no desk, no props, no cigarette or bottle (they stay set dressing of the room, 2). Right, on newsprint: kicker `MINISTRY OF TYPING · FORM 404`, H1 `ARE YOU LOST, KID?` / `T'ES PERDU, LE JEUNE ?` at the story-headline scale, a `FILE NOT FOUND` / `DOSSIER INTROUVABLE` stamp slamming in at −6° (7.3, 8; still under reduced motion), two deadpan sentences, a docket of rows `FORM | 404`, `STATUS | NOT ON FILE`, `DESK | UNASSIGNED` (7.4), then the primary stamp button `REPORT TO YOUR DESK` (to `/`) and the secondary `JOIN WITH CODE →` (to `/#play`). The header stays. Phones stack the stage over the file; the Major's `fc-look` only has a cursor on pointer devices, so phones see his idle scan.
+
 Lobby, MVP (#107): kicker `WAITING ROOM · PRIVATE RACE`, H1 `REPORT TO YOUR DESK` (Stardos 700, section H2 scale), then the room docket (7.4: header `KGB-4821` mono 500 18px `.08em` + `ROOM CODE` tag, rows `TYPISTS | n / 30`, `STATUS | WAITING`) beside the roll (7.4 roll rows), wrapping under each other (`flex-wrap`, docket max 420px). Paper ground, gutters `clamp(16px,4vw,48px)`. The seat ring, host settings, invite docket and START come with #498 and #108.
 
 ---
@@ -459,7 +461,7 @@ URL flags: lobby `?embed=1` (pixelRatio 1), clerk `?locker=1` (starts in the def
 
 `.dc.html` files are self-contained HTML design components. Open them in a browser. Port them to Next.js/React components by keeping the markup and styles 1:1 and moving the logic class into hooks.
 
-The three 3D pages are deployed verbatim as `public/3d/{lobby,clerk,medal}.html` by `scripts/embeds.ts` (importmap to `/3d/vendor/`, fonts to `/3d/fonts/`); `scripts/embeds.test.ts` fails when a served copy drifts from its reference. Never edit `public/3d/*.html`; change the reference and rerun `npm run embeds`.
+App-authored 3D pages built from these references live in `docs/design/embeds/` (`Fifth Copy The Major.html`: the Full Lobby's Major, verbatim geometry and colours, alone on a transparent stage for the not-found page). The four 3D pages are deployed verbatim as `public/3d/{lobby,clerk,medal,major}.html` by `scripts/embeds.ts` (importmap to `/3d/vendor/`, fonts to `/3d/fonts/`); `scripts/embeds.test.ts` fails when a served copy drifts from its reference. Never edit `public/3d/*.html`; change the reference and rerun `npm run embeds`.
 
 ---
 

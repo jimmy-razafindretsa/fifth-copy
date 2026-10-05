@@ -24,4 +24,5 @@ model User {
   avatarStatus       AvatarStatus @default(NONE)
   createdAt          DateTime     @default(now())
   lastSeenAt         DateTime     @default(now())
+  hostedLobbies      Lobby[]      @relation("LobbyHost")
 }

@@ -1,0 +1,26 @@
+// Lobby (ADR 0008): the durable lobby record, owned by src/features/lobby.
+// Live membership and presence stay in Redis; later schema files relate to Lobby.id additively.
+
+enum LobbyType {
+  PRIVATE
+  PUBLIC
+}
+
+enum LobbyStatus {
+  WAITING
+  CLOSED
+}
+
+model Lobby {
+  id         String      @id @default(cuid())
+  /// Room code `AAA-0000` (e.g. `KGB-4821`); the format is validated in the protocol (#103).
+  code       String      @unique
+  type       LobbyType   @default(PRIVATE)
+  status     LobbyStatus @default(WAITING)
+  hostUserId String
+  host       User        @relation("LobbyHost", fields: [hostUserId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+  closedAt   DateTime?
+
+  @@index([hostUserId])
+}

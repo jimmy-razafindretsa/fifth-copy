@@ -1,6 +1,6 @@
 # FIFTH COPY: target architecture (A to Z)
 
-Status: proposed 2026-10-02, pending human acceptance of ADRs 0005-0013. Source of truth for *what* to build: `docs/spec/fifth-copy-spec.md` (v1.0) and `docs/spec/art-direction.pdf`. This document says *how* the system is shaped, why this shape beat the alternatives, and where every piece lives. Decisions are recorded as ADRs in `docs/adr/`; this page links them and never contradicts them.
+Status: proposed 2026-10-02, pending human acceptance of ADRs 0005-0013. Source of truth for *what* to build: `docs/spec/fifth-copy-spec.md` (v1.0) ; *how it looks* (every design decision): `docs/design/bible/FIFTH_COPY_DESIGN_BIBLE.md`. This document says *how* the system is shaped, why this shape beat the alternatives, and where every piece lives. Decisions are recorded as ADRs in `docs/adr/`; this page links them and never contradicts them.
 
 How to read it: sections 1-2 are the reasoning (read once). Sections 3-11 are the reference an agent consults for the container it touches (`adr-governing <path>` names the ADR; the ADR names the section). Section 12 maps it to the GitHub board.
 

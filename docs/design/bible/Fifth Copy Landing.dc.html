@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Oswald:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#F1E8D6}
+*{box-sizing:border-box}
+a{color:#B81D24;text-decoration:none}a:hover{color:#7E1015;text-decoration:underline}
+input::placeholder{color:rgba(42,36,32,.4)}
+@keyframes fcBlink{0%{opacity:1}100%{opacity:.15}}
+@keyframes fcCaret{0%,49%{background:#B81D24;color:#F1E8D6}50%,100%{background:transparent;color:#3E3A78;box-shadow:inset 0 -4px 0 #B81D24}}
+@keyframes fcMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes fcSpin{to{transform:rotate(360deg)}}
+@keyframes fcBob{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-8px) rotate(-3deg)}}
+@keyframes fcPop{0%{transform:scale(1.6);opacity:0}60%{transform:scale(.92);opacity:1}100%{transform:scale(1)}}
+body{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpolygon points='11,1 13.6,8.2 21,8.2 15,12.6 17.3,20 11,15.4 4.7,20 7,12.6 1,8.2 8.4,8.2' fill='%23B81D24' stroke='%232A2420' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 11 11, auto}
+a,button{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpolygon points='11,1 13.6,8.2 21,8.2 15,12.6 17.3,20 11,15.4 4.7,20 7,12.6 1,8.2 8.4,8.2' fill='%23E2B23A' stroke='%232A2420' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 11 11, pointer !important}
+</style>
+</helmet>
+<div style="--paper: {{ v.paper }}; --news: {{ v.news }}; --ink: {{ v.ink }}; --muted: {{ v.muted }}; min-height:100vh; background:var(--paper,#F1E8D6); color:var(--ink,#2A2420); font-family:'Courier Prime',monospace; overflow-x:hidden">
+
+  <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 32px;border-bottom:2px solid var(--ink,#2A2420)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:40px;height:40px;border-radius:9px;background:#B81D24;position:relative;overflow:hidden;flex:none">
+        <div style="position:absolute;left:5.2px;top:3.2px;font:700 22.4px/0.9 'Stardos Stencil',serif;color:#F1E8D6">F</div>
+        <div style="position:absolute;left:8px;top:20px;width:38px;height:14.4px;background:#2A2420;transform:skewY(-8deg);transform-origin:0 100%"></div>
+        <div style="position:absolute;left:16px;top:18.8px;font:700 17.6px/1 'Stardos Stencil',serif;color:#B81D24;transform:skewY(-8deg);transform-origin:0 100%">C</div>
+      </div>
+      <div style="font:700 20px/1 'Stardos Stencil',serif;letter-spacing:.06em">FIFTH COPY</div>
+    </div>
+    <nav style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;font:600 12px 'Oswald',sans-serif;letter-spacing:.16em">
+      <a href="#how" style="color:var(--ink,#2A2420)"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">HOW TO TYPE É Ç « »</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">TAPER É Ç « »</sc-if></a>
+      <div style="display:flex;border:2px solid var(--ink,#2A2420)">
+        <button onClick="{{ setEn }}" style="font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;padding:5px 10px;border:0;cursor:pointer;background:{{ enBg }};color:{{ enFg }}">EN</button>
+        <button onClick="{{ setFr }}" style="font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;padding:5px 10px;border:0;cursor:pointer;background:{{ frBg }};color:{{ frFg }}">FR</button>
+      </div>
+      <button onClick="{{ toggleNight }}" style="font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;padding:7px 12px;border:2px solid var(--ink,#2A2420);background:transparent;color:var(--ink,#2A2420);cursor:pointer;display:flex;align-items:center;gap:8px">
+        <span style="width:10px;height:10px;border-radius:50%;background:{{ nightDot }};box-shadow:0 0 0 2px var(--ink,#2A2420)"></span>
+        <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">NIGHT SHIFT</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">QUART DE NUIT</sc-if>
+      </button>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--news,#E4D6B8);border:2px solid var(--ink,#2A2420);padding:5px 10px;font:12px 'IBM Plex Mono',monospace;letter-spacing:0">
+        <span>{{ guestName }}</span>
+        <span style="font:600 10px 'Oswald',sans-serif;letter-spacing:.16em;background:var(--ink,#2A2420);color:var(--paper,#F1E8D6);padding:1px 6px"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">GUEST</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">INVITÉ</sc-if></span>
+      </div>
+      <a href="#" style="color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">SIGN IN</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CONNEXION</sc-if></a>
+    </nav>
+  </header>
+
+  <section data-screen-label="Landing hero" style="position:relative;overflow:hidden;background-image:radial-gradient(rgba(42,36,32,.13) 1.3px, transparent 1.7px), linear-gradient(172deg, transparent 0 62%, rgba(184,29,36,.07) 62% 70%, transparent 70%);background-size:10px 10px, 100% 100%;">
+    <div aria-hidden="true" style="width:64px;height:64px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 50s linear infinite;pointer-events:none;position:absolute;left:2%;bottom:120px;opacity:.9"></div><div aria-hidden="true" style="width:30px;height:30px;background:#2A2420;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 30s linear infinite;pointer-events:none;position:absolute;left:44%;top:30px"></div><div aria-hidden="true" style="width:22px;height:22px;background:#E2B23A;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 24s linear infinite;pointer-events:none;position:absolute;left:38%;top:78px"></div><div aria-hidden="true" style="width:46px;height:46px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 60s linear infinite;pointer-events:none;position:absolute;right:2%;bottom:70px"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:48px;padding:56px 48px 110px;align-items:flex-start;position:relative;z-index:1">
+
+      <div style="flex:1 1 560px;min-width:0;display:flex;flex-direction:column;gap:22px">
+        <div style="font:600 13px 'Oswald',sans-serif;letter-spacing:.24em;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">MINISTRY OF TYPING · DESK 05 · 1978</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">MINISTÈRE DE LA DACTYLO · BUREAU 05 · 1978</sc-if></div>
+
+        <div style="font-size:clamp(64px,8.6vw,138px);position:relative;width:4.375em;height:1.8333em;flex:none;max-width:100%">
+          <div style="position:absolute;left:0;top:0;font:700 1em/0.9 'Stardos Stencil',serif;letter-spacing:.02em;color:var(--ink,#2A2420)">FIFTH</div>
+          <div style="position:absolute;left:1em;top:0.979em;width:3.4375em;height:0.7917em;background:#B81D24;transform:skewY(-8deg);transform-origin:0 100%"></div>
+          <div style="position:absolute;left:1.6389em;top:1.3333em;font:700 0.75em/1 'Stardos Stencil',serif;letter-spacing:.12em;color:#F1E8D6;transform:skewY(-8deg);transform-origin:0 100%">COPY</div>
+        </div>
+        <div style="font:600 14px 'Oswald',sans-serif;letter-spacing:.36em;margin-top:-4px">TYPE FAST · TYPE FIRST</div>
+
+        <p style="margin:0;font:400 21px/1.5 'Courier Prime',monospace;max-width:560px;text-wrap:pretty">
+          <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Thirty desks. One message. Everyone types the same copy, and the fastest clean copy gets the medal.</sc-if>
+          <sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Trente bureaux. Un seul message. Tout le monde tape la même copie, et la plus rapide et la plus propre remporte la médaille.</sc-if>
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:6px;max-width:620px">
+          <div style="display:flex;justify-content:space-between;gap:12px;font:600 11px 'Oswald',sans-serif;letter-spacing:.2em;color:var(--muted,#6F736C)">
+            <span><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">TRY THE KEYS · CLICK AND START TYPING</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ESSAIE LES TOUCHES · CLIQUE ET TAPE</sc-if></span>
+            <button onClick="{{ resetTape }}" style="font:600 11px 'Oswald',sans-serif;letter-spacing:.2em;background:none;border:0;padding:0;color:#B81D24;cursor:pointer"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">↺ AGAIN</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">↺ ENCORE</sc-if></button>
+          </div>
+          <label style="position:relative;display:block;background:#E8DCC0;border:2px solid #2A2420;padding:16px 18px;cursor:text;box-shadow:inset 0 0 22px rgba(156,122,69,.45)">
+            <div style="display:flex;flex-wrap:wrap;font:400 clamp(20px,2.2vw,30px)/1.3 'IBM Plex Mono',monospace;color:#2A2420">
+              <sc-for list="{{ chars }}" as="c" hint-placeholder-count="22"><span style="white-space:pre;display:inline-block;color:{{ c.color }};background:{{ c.bg }};opacity:{{ c.op }};animation:{{ c.anim }}">{{ c.ch }}</span></sc-for>
+            </div>
+            <input value="{{ typed }}" onChange="{{ onType }}" maxLength="{{ maxLen }}" autoComplete="off" spellCheck="false" aria-label="Typing practice" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:text;border:0">
+            <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;right:14px;top:50%;transform:translateY(-50%) rotate(-6deg);border:4px double #B81D24;color:#B81D24;background:rgba(232,220,192,.92);font:700 22px/1 'Stardos Stencil',serif;letter-spacing:.08em;padding:6px 12px;pointer-events:none;white-space:nowrap;animation:fcPop .35s ease-out">{{ stampText }}</div>
+            </sc-if>
+          </label>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;margin-top:6px">
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+            <button onClick="{{ quickRace }}" style="font:700 clamp(30px,3.4vw,44px)/1 'Stardos Stencil',serif;letter-spacing:.08em;background:#B81D24;color:#F1E8D6;border:3px solid #2A2420;padding:20px 36px;cursor:pointer;box-shadow:6px 6px 0 #2A2420" style-hover="background:#7E1015" style-active="transform:translate(4px,4px);box-shadow:2px 2px 0 #2A2420">{{ quickLabel }}</button>
+            <div style="font:15px/1.45 'Courier Prime',monospace;max-width:250px;color:var(--ink,#2A2420)">
+              <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Real typists first. Bots take the empty seats, so the room is never empty.</sc-if>
+              <sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">D'abord de vrais joueurs. Les bots prennent les places vides : la salle n'est jamais vide.</sc-if>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch">
+            <button style="font:600 13px 'Oswald',sans-serif;letter-spacing:.16em;background:transparent;color:var(--ink,#2A2420);border:2px solid var(--ink,#2A2420);padding:12px 18px;cursor:pointer" style-hover="background:var(--news,#E4D6B8)"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">CREATE PRIVATE RACE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CRÉER UNE COURSE PRIVÉE</sc-if></button>
+            <div style="display:flex;border:2px solid var(--ink,#2A2420);background:var(--news,#E4D6B8)">
+              <span style="display:flex;align-items:center;padding:0 12px;font:600 11px 'Oswald',sans-serif;letter-spacing:.16em;border-right:2px solid var(--ink,#2A2420)"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">JOIN WITH CODE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CODE</sc-if></span>
+              <input value="{{ code }}" onChange="{{ onCode }}" placeholder="KGB-4821" maxLength="8" style="width:130px;border:0;background:transparent;padding:10px 12px;font:500 18px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#2A2420;outline:none">
+              <button style="font:600 13px 'Oswald',sans-serif;letter-spacing:.16em;background:#2A2420;color:#F1E8D6;border:0;padding:0 16px;cursor:pointer"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">JOIN →</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ENTRER →</sc-if></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1 1 440px;min-width:0;display:flex;flex-direction:column;gap:10px;align-self:stretch">
+        <div style="position:relative;flex:1;min-height:420px;clip-path:polygon(12% 0,100% 0,100% 100%,0 100%);background:#2A2420">
+          <iframe ref="{{ lobbyRef }}" src="Fifth%20Copy%20Full%20Lobby.html?embed=1" title="Live render of the ring room" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none;background:#3A3C38"></iframe>
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(42,36,32,.12) 0 1px,transparent 1px 3px);mix-blend-mode:multiply;pointer-events:none"></div>
+          <div style="position:absolute;left:16%;top:16px;display:flex;align-items:center;gap:10px;pointer-events:none">
+            <div style="display:flex;align-items:center;gap:7px;background:#B81D24;color:#F1E8D6;padding:5px 10px;font:600 12px 'Oswald',sans-serif;letter-spacing:.18em">
+              <span style="width:9px;height:9px;border-radius:50%;background:#F1E8D6;animation:fcBlink 1.2s steps(2) infinite"></span>
+              <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">LIVE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">EN DIRECT</sc-if>
+            </div>
+            <div style="background:rgba(42,36,32,.82);color:#F1E8D6;padding:5px 10px;font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.06em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">ROOM</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">SALLE</sc-if> {{ roomNo }} · {{ timecode }}</div>
+          </div>
+          <div style="position:absolute;right:14px;bottom:12px;font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:rgba(241,232,214,.85);pointer-events:none">CAM 02 · 30/30</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font:12px 'IBM Plex Mono',monospace;color:var(--muted,#6F736C)">
+          <span><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">STREAMING · Room {{ roomNo }}, one of the ring rooms. Right now.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">EN CONTINU · Salle {{ roomNo }}, une des salles en anneau. En ce moment.</sc-if></span>
+          <div style="display:flex;border:2px solid var(--ink,#2A2420);flex:none">
+            <button onClick="{{ viewFree }}" style="font:600 11px 'Oswald',sans-serif;letter-spacing:.14em;padding:5px 9px;border:0;cursor:pointer;background:{{ freeBg }};color:{{ freeFg }}"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">FREE VIEW</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">VUE LIBRE</sc-if></button>
+            <button onClick="{{ viewFp }}" style="font:600 11px 'Oswald',sans-serif;letter-spacing:.14em;padding:5px 9px;border:0;cursor:pointer;background:{{ fpBg }};color:{{ fpFg }}"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">FIRST PERSON</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">VUE SUBJECTIVE</sc-if></button>
+            <button onClick="{{ viewAuto }}" style="font:600 11px 'Oswald',sans-serif;letter-spacing:.14em;padding:5px 9px;border:0;cursor:pointer;background:{{ autoBg }};color:{{ autoFg }}">AUTO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="position:absolute;right:6%;top:46%;z-index:2;transform:rotate(7deg);animation:fcBob 4s ease-in-out infinite;border:4px double #B81D24;color:#B81D24;background:rgba(241,232,214,.9);padding:8px 14px;font:700 20px/1.1 'Stardos Stencil',serif;letter-spacing:.08em;text-align:center;pointer-events:none">
+      <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">ROOM {{ roomNo }}<br>30 SEATS</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">SALLE {{ roomNo }}<br>30 PLACES</sc-if>
+    </div>
+  </section>
+
+  <section aria-hidden="true" style="background:#2A2420;transform:skewY(-4deg);margin:-56px 0 -40px;padding:22px 0;position:relative;z-index:2;overflow:hidden;border-top:14px solid #B81D24">
+    <div style="display:flex;width:max-content;white-space:nowrap;font:700 clamp(28px,3.4vw,46px)/1 'Stardos Stencil',serif;letter-spacing:.08em;color:#F1E8D6;animation:fcMarquee 36s linear infinite">
+      <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:30px;padding-right:30px"><span>TYPE FAST</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>TYPE FIRST</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>NO TYPOS</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>THIRTY DESKS</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>ONE MESSAGE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div></div><div style="display:flex;align-items:center;gap:30px;padding-right:30px"><span>TYPE FAST</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>TYPE FIRST</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>NO TYPOS</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>THIRTY DESKS</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>ONE MESSAGE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div></div></sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:30px;padding-right:30px"><span>ÉCRIS VITE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>ÉCRIS LE PREMIER</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>SANS FAUTE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>TRENTE BUREAUX</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>UN SEUL MESSAGE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div></div><div style="display:flex;align-items:center;gap:30px;padding-right:30px"><span>ÉCRIS VITE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>ÉCRIS LE PREMIER</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>SANS FAUTE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>TRENTE BUREAUX</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div><span>UN SEUL MESSAGE</span><div aria-hidden="true" style="width:38px;height:38px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 14s linear infinite;pointer-events:none;flex:none"></div></div></sc-if>
+    </div>
+  </section>
+
+  <section data-screen-label="The story" style="padding:130px 48px 90px;display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;position:relative;overflow:hidden">
+    <div aria-hidden="true" style="width:180px;height:180px;background:rgba(184,29,36,.08);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 90s linear infinite;pointer-events:none;position:absolute;right:-40px;top:40px"></div><div aria-hidden="true" style="width:28px;height:28px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 26s linear infinite;pointer-events:none;position:absolute;left:46%;top:96px"></div><div aria-hidden="true" style="width:18px;height:18px;background:#2A2420;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 20s linear infinite;pointer-events:none;position:absolute;left:49%;top:140px"></div>
+    <div style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:12px">
+      <div style="font:600 13px 'Oswald',sans-serif;letter-spacing:.24em;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">CASE FILE · THE STORY</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">DOSSIER · LE RÉCIT</sc-if></div>
+      <h2 style="margin:0;font:700 clamp(40px,5vw,72px)/0.98 'Stardos Stencil',serif;letter-spacing:.02em;text-wrap:balance"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">THE RING ROOMS NEVER STOP TYPING.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">LES SALLES EN ANNEAU NE S'ARRÊTENT JAMAIS DE TAPER.</sc-if></h2>
+      <div style="align-self:flex-start;margin-top:22px;transform:rotate(-4deg);border:4px double #B81D24;color:#B81D24;padding:10px 16px;font:700 clamp(18px,1.8vw,24px)/1.2 'Stardos Stencil',serif;letter-spacing:.06em;max-width:420px">
+        <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">SPEED IS GOOD. ACCURACY IS BETTER. BOTH EARN A MEDAL.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">LA VITESSE, C'EST BIEN. LA PRÉCISION, C'EST MIEUX. LES DEUX, C'EST UNE MÉDAILLE.</sc-if>
+      </div>
+    </div>
+    <div style="flex:1 1 460px;min-width:0;display:flex;flex-direction:column;gap:20px;font:19px/1.6 'Courier Prime',monospace;max-width:640px">
+      <p style="margin:0;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}"><b>Moscow, 1978.</b> Deep inside a ministry nobody can name, there are ring rooms. Nobody has ever counted them. Each one holds thirty desks in a perfect ring, a typewriter on every desk, and a Major in the middle.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}"><b>Moscou, 1978.</b> Au fond d'un ministère dont personne ne connaît le nom, il y a des salles en anneau. Personne ne les a jamais comptées. Chacune aligne trente bureaux en cercle parfait, une machine à écrire sur chaque bureau, et un Major au centre.</sc-if></p>
+      <p style="margin:0;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Every morning the Major steps onto his platform with a single message. Thirty clerks copy it at the same time. The fastest clean copy is filed. The rest go back on the pile.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Chaque matin, le Major monte sur sa plateforme avec un seul message. Trente commis le recopient en même temps. La copie la plus rapide et sans faute est classée. Les autres retournent sur la pile.</sc-if></p>
+      <p style="margin:0;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Nobody knows what the messages mean, or how many rooms there are. The Major smokes, the bulb flickers, the platform turns. Somewhere, right now, a room is typing.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Personne ne sait ce que veulent dire les messages, ni combien il y a de salles. Le Major fume, l'ampoule clignote, la plateforme tourne. Quelque part, en ce moment, une salle est en train de taper.</sc-if></p>
+    </div>
+  </section>
+
+  <section data-screen-label="Your clerk" style="background:var(--news,#E4D6B8);border-top:2px solid var(--ink,#2A2420);border-bottom:2px solid var(--ink,#2A2420);display:flex;flex-wrap:wrap">
+    <div style="flex:1 1 440px;min-width:0;position:relative;min-height:540px;background-image:repeating-conic-gradient(from 0deg at 50% 92%, rgba(184,29,36,.09) 0deg 6deg, transparent 6deg 12deg);border-right:2px solid var(--ink,#2A2420)">
+      <div aria-hidden="true" style="width:40px;height:40px;background:#B81D24;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 30s linear infinite;pointer-events:none;position:absolute;right:28px;top:56px;z-index:1"></div><div aria-hidden="true" style="width:24px;height:24px;background:#E2B23A;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 22s linear infinite;pointer-events:none;position:absolute;right:76px;top:104px;z-index:1"></div><div aria-hidden="true" style="width:54px;height:54px;background:rgba(42,36,32,.14);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 70s linear infinite;pointer-events:none;position:absolute;left:24px;bottom:28px;z-index:0"></div>
+      <iframe ref="{{ clerkRef }}" src="Fifth%20Copy%20Your%20Clerk.html" title="Your clerk, a randomly issued 3D character" style="position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;cursor:pointer"></iframe>
+      <div style="position:absolute;left:20px;top:18px;font:600 11px 'Oswald',sans-serif;letter-spacing:.2em;color:var(--muted,#6F736C);pointer-events:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">HE'S WATCHING YOUR CURSOR · CLICK FOR A NEW UNIFORM</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">IL SUIT TON CURSEUR · CLIQUE POUR UN NOUVEL UNIFORME</sc-if></div>
+    </div>
+    <div style="flex:1 1 420px;min-width:0;padding:56px 48px;display:flex;flex-direction:column;gap:18px">
+      <div style="font:600 13px 'Oswald',sans-serif;letter-spacing:.24em;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">PERSONNEL FILE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">DOSSIER DU PERSONNEL</sc-if></div>
+      <h2 style="margin:0;font:700 clamp(36px,4.2vw,58px)/1 'Stardos Stencil',serif;letter-spacing:.03em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">THIS IS YOUR CLERK.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">VOICI TON COMMIS.</sc-if></h2>
+      <div style="background:var(--paper,#F1E8D6);border:2px solid var(--ink,#2A2420);display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:14px 18px;border-bottom:2px solid var(--ink,#2A2420);flex-wrap:wrap">
+          <span style="font:500 22px 'IBM Plex Mono',monospace">{{ guestName }}</span>
+          <span style="font:600 11px 'Oswald',sans-serif;letter-spacing:.16em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">DESK 05 · RANK: RECRUIT</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">BUREAU 05 · GRADE : RECRUE</sc-if></span>
+        </div>
+        <sc-for list="{{ uniform }}" as="row" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:9px 18px;border-bottom:1px dashed rgba(42,36,32,.3);font:15px 'Courier Prime',monospace">
+            <span style="font:600 11px 'Oswald',sans-serif;letter-spacing:.18em;color:var(--muted,#6F736C);align-self:center">{{ row.k }}</span>
+            <span>{{ row.v }}</span>
+          </div>
+        </sc-for>
+        <div style="display:flex;gap:10px;padding:14px 18px;flex-wrap:wrap">
+          <button onClick="{{ reissue }}" style="font:600 13px 'Oswald',sans-serif;letter-spacing:.16em;background:#2A2420;color:#F1E8D6;border:0;padding:11px 16px;cursor:pointer" style-hover="background:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">REISSUE UNIFORM</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">NOUVEL UNIFORME</sc-if></button>
+          <button style="font:600 13px 'Oswald',sans-serif;letter-spacing:.16em;background:transparent;color:var(--ink,#2A2420);border:2px solid var(--ink,#2A2420);padding:9px 14px;cursor:pointer"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">OPEN THE LOCKER →</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">OUVRIR LE VESTIAIRE →</sc-if></button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font:600 11px 'Oswald',sans-serif;letter-spacing:.2em;color:var(--muted,#6F736C)"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">PROMOTION LADDER · BY AVERAGE WPM</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ÉCHELLE DES GRADES · SELON TA MOYENNE</sc-if></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;font:600 12px 'Oswald',sans-serif;letter-spacing:.12em">
+          <span style="background:#B81D24;color:#F1E8D6;padding:4px 9px"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">RECRUIT</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">RECRUE</sc-if></span>
+          <span style="border:2px solid var(--ink,#2A2420);padding:2px 8px"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">CLERK</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">COMMIS</sc-if></span>
+          <span style="border:2px solid var(--ink,#2A2420);padding:2px 8px"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">OFFICER</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">OFFICIER</sc-if></span>
+          <span style="border:2px solid var(--ink,#2A2420);padding:2px 8px"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">COMMISSAR</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">COMMISSAIRE</sc-if></span>
+          <span style="border:2px solid #E2B23A;color:var(--ink,#2A2420);padding:2px 8px"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">HERO OF PAPERWORK</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">HÉROS DE LA PAPERASSE</sc-if></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="A little history" style="padding:100px 48px 90px;display:flex;flex-direction:column;gap:40px">
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:24px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font:600 13px 'Oswald',sans-serif;letter-spacing:.24em;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">ARCHIVE · DECLASSIFIED</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ARCHIVES · DÉCLASSIFIÉ</sc-if></div>
+        <h2 style="margin:0;font:700 clamp(36px,4.4vw,60px)/1 'Stardos Stencil',serif;letter-spacing:.03em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">A LITTLE HISTORY</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">UN PEU D'HISTOIRE</sc-if></h2>
+      </div>
+      <p style="margin:0;max-width:440px;font:16px/1.55 'Courier Prime',monospace;color:var(--muted,#6F736C);text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">The game is a cartoon, but the typewriter really did run the Soviet office.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Le jeu est un dessin animé, mais la machine à écrire faisait vraiment tourner le bureau soviétique.</sc-if></p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:2px;background:var(--ink,#2A2420);border:2px solid var(--ink,#2A2420)">
+      <div style="padding:22px;display:flex;flex-direction:column;gap:10px;background:var(--paper,#F1E8D6)">
+        <div style="font:700 26px/1 'Stardos Stencil',serif;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">THE TYPING POOL</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">LE POOL DE DACTYLOS</sc-if></div>
+        <div style="font:15px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Offices had whole rooms of typists, copying orders, reports and forms all day.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Les bureaux avaient des salles entières de dactylos qui recopiaient ordres, rapports et formulaires toute la journée.</sc-if></div>
+      </div>
+      <div style="padding:22px;display:flex;flex-direction:column;gap:10px;background:var(--paper,#F1E8D6)">
+        <div style="font:700 26px/1 'Stardos Stencil',serif;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">MACHINES ON FILE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">MACHINES FICHÉES</sc-if></div>
+        <div style="font:15px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Typewriters were closely watched. Samples of a machine's letters could be kept on file, so a page could be traced back to the machine that typed it.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Les machines à écrire étaient surveillées. Un échantillon de leurs lettres pouvait être archivé, pour retrouver la machine qui avait tapé une page.</sc-if></div>
+      </div>
+      <div style="padding:22px;display:flex;flex-direction:column;gap:10px;background:var(--paper,#F1E8D6)">
+        <div style="font:700 26px/1 'Stardos Stencil',serif;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">CARBON COPIES</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">PAPIER CARBONE</sc-if></div>
+        <div style="font:15px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">With carbon paper, one typist made several copies at once. Each sheet lower in the stack came out fainter. By the fifth copy, you had to squint.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Avec du papier carbone, on faisait plusieurs copies d'un coup. Chaque feuille plus bas sortait plus pâle. À la cinquième copie, il fallait plisser les yeux.</sc-if></div>
+      </div>
+      <div style="padding:22px;display:flex;flex-direction:column;gap:10px;background:var(--paper,#F1E8D6)">
+        <div style="font:700 26px/1 'Stardos Stencil',serif;color:#B81D24">SAMIZDAT</div>
+        <div style="font:15px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Books that couldn't be printed were retyped by hand and passed from reader to reader. Every copy came from someone's fingers.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Les livres qu'on ne pouvait pas imprimer étaient retapés à la main et passaient de lecteur en lecteur. Chaque copie sortait des doigts de quelqu'un.</sc-if></div>
+      </div>
+    </div>
+    <p style="margin:0;font:700 clamp(20px,2vw,26px)/1.35 'Courier Prime',monospace;max-width:820px;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Today the stakes are lower. The skill is the same: fast, clean typing in English and French, accents included.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Aujourd'hui, l'enjeu est moindre. Le talent reste le même : taper vite et proprement, en français et en anglais, accents compris.</sc-if></p>
+  </section>
+
+  <section id="how" data-screen-label="How a race runs" style="background:var(--news,#E4D6B8);padding:120px 48px 80px;display:flex;flex-direction:column;gap:36px">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font:600 13px 'Oswald',sans-serif;letter-spacing:.24em;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">STANDING ORDERS</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ORDRES PERMANENTS</sc-if></div>
+      <h2 style="margin:0;font:700 clamp(36px,4.4vw,60px)/1 'Stardos Stencil',serif;letter-spacing:.03em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">HOW A RACE RUNS</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">DÉROULEMENT D'UNE COURSE</sc-if></h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:32px">
+      <div style="display:flex;flex-direction:column;gap:10px;border-top:6px solid #B81D24;padding-top:14px">
+        <div style="font:700 64px/1 'Stardos Stencil',serif;color:#B81D24">01</div>
+        <div style="font:600 18px 'Oswald',sans-serif;letter-spacing:.1em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">THE HOST OPENS A ROOM</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">L'HÔTE OUVRE UNE SALLE</sc-if></div>
+        <div style="font:16px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Your teacher picks the text, the language and the rules, then shares a room code.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Ton enseignant choisit le texte, la langue et les règles, puis partage un code de salle.</sc-if></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;border-top:6px solid #2A2420;padding-top:14px">
+        <div style="font:700 64px/1 'Stardos Stencil',serif;color:#B81D24">02</div>
+        <div style="font:600 18px 'Oswald',sans-serif;letter-spacing:.1em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">EVERYONE TYPES THE SAME COPY</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">TOUT LE MONDE TAPE LA MÊME COPIE</sc-if></div>
+        <div style="font:16px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Positions update live as you type. Every overtake gets stamped.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Les positions bougent en direct pendant que tu tapes. Chaque dépassement est tamponné.</sc-if></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;border-top:6px solid #3E3A78;padding-top:14px">
+        <div style="font:700 64px/1 'Stardos Stencil',serif;color:#B81D24">03</div>
+        <div style="font:600 18px 'Oswald',sans-serif;letter-spacing:.1em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">THE MAJOR PINS THE MEDALS</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">LE MAJOR ÉPINGLE LES MÉDAILLES</sc-if></div>
+        <div style="font:16px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">The top three take the podium. Everyone gets a report on what to practise next.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Le top 3 monte sur le podium. Chacun reçoit un rapport sur quoi pratiquer ensuite.</sc-if></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Final call" style="background:#B81D24;color:#F1E8D6;padding:80px 48px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:32px;background-image:radial-gradient(rgba(126,16,21,.75) 1.6px, transparent 2.1px);background-size:11px 11px;position:relative;overflow:hidden">
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div aria-hidden="true" style="width:150px;height:150px;background:rgba(241,232,214,.12);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 80s linear infinite;pointer-events:none;position:absolute;right:30%;top:-30px"></div><div aria-hidden="true" style="width:34px;height:34px;background:#F1E8D6;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 26s linear infinite;pointer-events:none;position:absolute;right:26%;bottom:26px"></div><div aria-hidden="true" style="width:20px;height:20px;background:#E2B23A;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:fcSpin 18s linear infinite;pointer-events:none;position:absolute;right:31%;bottom:70px"></div>
+      <div style="font:600 13px 'Oswald',sans-serif;letter-spacing:.24em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">THE MAJOR IS WAITING</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">LE MAJOR T'ATTEND</sc-if></div>
+      <h2 style="margin:0;font:700 clamp(40px,6vw,88px)/0.95 'Stardos Stencil',serif;letter-spacing:.03em;text-wrap:balance"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">REPORT TO YOUR DESK.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">PRÉSENTE-TOI À TON BUREAU.</sc-if></h2>
+    </div>
+    <button onClick="{{ quickRace }}" style="font:700 clamp(28px,3vw,40px)/1 'Stardos Stencil',serif;letter-spacing:.08em;background:#F1E8D6;color:#B81D24;border:3px solid #2A2420;padding:20px 34px;cursor:pointer;box-shadow:6px 6px 0 #2A2420" style-active="transform:translate(4px,4px);box-shadow:2px 2px 0 #2A2420">{{ quickLabel }}</button>
+  </section>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:32px;padding:40px 48px 8px">
+    <iframe src="Fifth%20Copy%20Medal.html" title="3D medal you can earn — drag to spin" style="width:240px;height:300px;border:0;background:transparent;flex:none"></iframe>
+    <div style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:10px;max-width:520px">
+      <div style="font:600 13px 'Oswald',sans-serif;letter-spacing:.24em;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">DECORATION · DRAG TO SPIN</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">DÉCORATION · FAIS-LA TOURNER</sc-if></div>
+      <div style="font:700 clamp(30px,3.4vw,46px)/1 'Stardos Stencil',serif;letter-spacing:.03em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">HERO OF PAPERWORK</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">HÉROS DE LA PAPERASSE</sc-if></div>
+      <div style="font:16px/1.55 'Courier Prime',monospace;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">The Major pins this one on the fastest clean copy in the room. Collect them in your personnel file.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Le Major l'épingle sur la copie la plus rapide et sans faute de la salle. Collectionne-les dans ton dossier.</sc-if></div>
+    </div>
+  </div>
+  <footer style="background:#2A2420;color:#F1E8D6;border-top:14px solid #B81D24">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:40px;padding:56px 48px 40px">
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0;grid-column:span 2;max-width:440px">
+        <div style="font-size:54px;position:relative;width:4.375em;height:1.8333em;flex:none">
+          <div style="position:absolute;left:0;top:0;font:700 1em/0.9 'Stardos Stencil',serif;letter-spacing:.02em;color:#F1E8D6">FIFTH</div>
+          <div style="position:absolute;left:1em;top:0.979em;width:3.4375em;height:0.7917em;background:#B81D24;transform:skewY(-8deg);transform-origin:0 100%"></div>
+          <div style="position:absolute;left:1.6389em;top:1.3333em;font:700 0.75em/1 'Stardos Stencil',serif;letter-spacing:.12em;color:#F1E8D6;transform:skewY(-8deg);transform-origin:0 100%">COPY</div>
+        </div>
+        <div style="font:600 12px 'Oswald',sans-serif;letter-spacing:.32em">TYPE FAST · TYPE FIRST</div>
+        <p style="margin:0;font:15px/1.55 'Courier Prime',monospace;color:#CFC6B3;text-wrap:pretty"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">A classroom typing race in English and French. Built for students aged 12 to 17 and the teachers who host them.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Une course de dactylo en classe, en français et en anglais. Pour les élèves de 12 à 17 ans et les enseignants qui les animent.</sc-if></p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div style="font:600 12px 'Oswald',sans-serif;letter-spacing:.2em;color:#E2B23A"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">PLAY</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">JOUER</sc-if></div>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Quick race</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Course rapide</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Create private race</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Créer une course privée</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Join with code</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Rejoindre avec un code</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">The locker</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Le vestiaire</sc-if></a>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div style="font:600 12px 'Oswald',sans-serif;letter-spacing:.2em;color:#E2B23A"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">LEARN</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">APPRENDRE</sc-if></div>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">How to type é ç « »</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Taper é ç « »</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">For teachers</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Pour les enseignants</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Personnel file &amp; stats</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Dossier et statistiques</sc-if></a>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div style="font:600 12px 'Oswald',sans-serif;letter-spacing:.2em;color:#E2B23A">AEGIS CORP.</div>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">About us</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">À propos</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Privacy · Law 25</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Confidentialité · Loi 25</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Terms of use</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Conditions d'utilisation</sc-if></a>
+        <a href="#" style="color:#F1E8D6;font:15px/1.4 'Courier Prime',monospace;letter-spacing:0" style-hover="color:#E2B23A;text-decoration:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Contact</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Nous joindre</sc-if></a>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:20px;padding:0 48px 36px">
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <a href="https://github.com" target="_blank" rel="noopener" aria-label="GITHUB" style="display:flex;align-items:center;gap:10px;color:#F1E8D6;border:2px solid rgba(241,232,214,.35);padding:8px 12px;font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;text-decoration:none" style-hover="border-color:#E2B23A;color:#E2B23A;text-decoration:none"><span style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:#B81D24;color:#F1E8D6;font:700 12px 'Stardos Stencil',serif;letter-spacing:.02em">GH</span>GITHUB</a>
+        <a href="https://linkedin.com" target="_blank" rel="noopener" aria-label="LINKEDIN" style="display:flex;align-items:center;gap:10px;color:#F1E8D6;border:2px solid rgba(241,232,214,.35);padding:8px 12px;font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;text-decoration:none" style-hover="border-color:#E2B23A;color:#E2B23A;text-decoration:none"><span style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:#B81D24;color:#F1E8D6;font:700 12px 'Stardos Stencil',serif;letter-spacing:.02em">IN</span>LINKEDIN</a>
+        <a href="https://discord.com" target="_blank" rel="noopener" aria-label="DISCORD" style="display:flex;align-items:center;gap:10px;color:#F1E8D6;border:2px solid rgba(241,232,214,.35);padding:8px 12px;font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;text-decoration:none" style-hover="border-color:#E2B23A;color:#E2B23A;text-decoration:none"><span style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:#B81D24;color:#F1E8D6;font:700 12px 'Stardos Stencil',serif;letter-spacing:.02em">DC</span>DISCORD</a>
+        <a href="https://youtube.com" target="_blank" rel="noopener" aria-label="YOUTUBE" style="display:flex;align-items:center;gap:10px;color:#F1E8D6;border:2px solid rgba(241,232,214,.35);padding:8px 12px;font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;text-decoration:none" style-hover="border-color:#E2B23A;color:#E2B23A;text-decoration:none"><span style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:#B81D24;color:#F1E8D6;font:700 12px 'Stardos Stencil',serif;letter-spacing:.02em">YT</span>YOUTUBE</a>
+      </div>
+      <div style="transform:rotate(-4deg);border:3px double #E2B23A;color:#E2B23A;padding:6px 12px;font:700 15px/1.1 'Stardos Stencil',serif;letter-spacing:.08em;text-align:center"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">BUILT BY<br>AEGIS CORP.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CONÇU PAR<br>AEGIS CORP.</sc-if></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;padding:16px 48px;border-top:1px solid rgba(241,232,214,.18);font:12px 'IBM Plex Mono',monospace;color:#A9A495">
+      <span><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">© 2026 Fifth Copy · Conçu par Aegis Corp. · Fait au Québec</sc-if></span>
+      <span><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">No email. No chat. Your typing stays yours.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Pas de courriel. Pas de clavardage. Ta frappe t’appartient.</sc-if></span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultLang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;en&quot;,&quot;fr&quot;],&quot;default&quot;:&quot;en&quot;,&quot;tsType&quot;:&quot;'en' | 'fr'&quot;},&quot;defaultNight&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { lang: null, night: null, typed: '', start: 0, end: 0, code: '', searching: false, view: 'auto', viewNow: 'over', cfg: null,
+    nameIdx: Math.floor(Math.random() * 8), nameNo: 100 + Math.floor(Math.random() * 900),
+    roomNo: 100 + Math.floor(Math.random() * 900), feedStart: Date.now() - Math.floor(Math.random() * 3600e3), now: Date.now() };
+  lobbyRef = React.createRef(); clerkRef = React.createRef();
+  componentDidMount() {
+    this._msg = e => { const d = e.data || {}; if (d.type === 'fc-clerk') this.setState({ cfg: d.cfg }); if (d.type === 'fc-view') this.setState({ viewNow: d.view }); };
+    this._move = e => {
+      if (this._raf) return;
+      this._raf = requestAnimationFrame(() => {
+        this._raf = 0; const f = this.clerkRef.current; if (!f || !f.contentWindow) return;
+        const r = f.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height * 0.32;
+        const x = Math.max(-1, Math.min(1, (e.clientX - cx) / (innerWidth / 2))), y = Math.max(-1, Math.min(1, (e.clientY - cy) / (innerHeight / 2)));
+        f.contentWindow.postMessage({ type: 'fc-look', x, y }, '*');
+      });
+    };
+    addEventListener('message', this._msg); addEventListener('mousemove', this._move);
+    this._clock = setInterval(() => this.setState({ now: Date.now() }), 1000);
+  }
+  componentWillUnmount() { clearInterval(this._clock); removeEventListener('message', this._msg); removeEventListener('mousemove', this._move); cancelAnimationFrame(this._raf); }
+  postLobby(view) { const f = this.lobbyRef.current; if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'fc-setview', view }, '*'); }
+  lang() { return this.state.lang ?? this.props.defaultLang ?? 'en'; }
+  night() { return this.state.night ?? this.props.defaultNight ?? false; }
+  target() { return this.lang() === 'fr' ? 'Écris vite. Écris le premier.' : 'Type fast. Type first.'; }
+  renderVals() {
+    const en = this.lang() === 'en', night = this.night(), T = this.target(), typed = this.state.typed;
+    const v = night
+      ? { paper: '#3E3934', news: '#4B453E', ink: '#F4ECDC', muted: '#CFC6B3' }
+      : { paper: '#F1E8D6', news: '#E4D6B8', ink: '#2A2420', muted: '#6F736C' };
+    const chars = [...T].map((ch, i) => {
+      if (i < typed.length) return typed[i] === ch ? { ch, color: '#2A2420', bg: 'transparent', op: 1, anim: i === typed.length - 1 ? 'fcPop .18s ease-out' : 'none' } : { ch, color: '#B81D24', bg: 'rgba(184,29,36,.12)', op: 1, anim: i === typed.length - 1 ? 'fcPop .18s ease-out' : 'none' };
+      if (i === typed.length) return { ch, color: '#F1E8D6', bg: '#B81D24', op: 1, anim: 'fcCaret 1.05s steps(1) infinite' };
+      return { ch, color: '#3E3A78', bg: 'transparent', op: 0.55, anim: 'none' };
+    });
+    const done = typed.length >= T.length;
+    let stampText = '';
+    if (done) {
+      const errs = [...T].filter((c, i) => typed[i] !== c).length;
+      const min = Math.max(0.01, ((this.state.end || Date.now()) - this.state.start) / 60000);
+      const wpm = Math.round((T.length / 5) / min);
+      stampText = errs === 0 ? (en ? 'ACCEPTED · ' : 'ACCEPTÉ · ') + wpm + (en ? ' WPM' : ' MPM') : (en ? 'RETURNED · ' : 'RETOURNÉ · ') + errs + (en ? ' ERRORS' : ' FAUTES');
+    }
+    const set = p => this.setState(p);
+    const ANIMALS = [['Sparrow', 'Moineau'], ['Badger', 'Blaireau'], ['Heron', 'Héron'], ['Marmot', 'Marmotte'], ['Lynx', 'Lynx'], ['Otter', 'Loutre'], ['Crow', 'Corbeau'], ['Hedgehog', 'Hérisson']];
+    const guestName = (en ? 'Comrade ' : 'Camarade ') + ANIMALS[this.state.nameIdx][en ? 0 : 1] + '-' + this.state.nameNo;
+    const N = { hair: { side: ['Side part', 'Raie de côté'], buzz: ['Buzz cut', 'Coupe rase'], quiff: ['Quiff', 'Banane'], bowl: ['Bowl cut', 'Coupe au bol'], bald: ['Bald', 'Chauve'] },
+      glasses: { round: ['Round wire', 'Rondes en laiton'], dark: ['Dark lenses', 'Verres fumés'], square: ['Square frames', 'Monture carrée'], monocle: ['Monocle', 'Monocle'], none: ['None', 'Aucunes'] },
+      hat: { none: ['None', 'Aucun'], ushanka: ['Ushanka', 'Chapka'], kepka: ['Flat cap', 'Casquette plate'], eyeshade: ['Eyeshade', 'Visière'], beret: ['Beret', 'Béret'] },
+      clothes: { vest: ['Knit vest', 'Gilet tricoté'], cardigan: ['Cardigan', 'Cardigan'], jacket: ['Work jacket', 'Veste de travail'], sweater: ['Sweater', 'Chandail'], braces: ['Shirt & braces', 'Chemise et bretelles'] },
+      face: { stache: ['Moustache', 'Moustache'], clean: ['Clean shave', 'Rasé de près'], beard: ['Full beard', 'Barbe pleine'] } };
+    const K = { hair: ['HAIR', 'CHEVEUX'], glasses: ['GLASSES', 'LUNETTES'], hat: ['HAT', 'CHAPEAU'], clothes: ['CLOTHES', 'VÊTEMENTS'], face: ['FACE', 'VISAGE'] };
+    const cfg = this.state.cfg;
+    const uniform = Object.keys(K).map(k => ({ k: K[k][en ? 0 : 1], v: cfg && N[k][cfg[k]] ? N[k][cfg[k]][en ? 0 : 1] : '…' }));
+    const vw = this.state.view, on = (a) => vw === a;
+    const vb = a => ({ bg: on(a) ? v.ink : 'transparent', fg: on(a) ? v.paper : v.ink });
+    const pick = view => () => { set({ view }); this.postLobby(view === 'free' ? 'over' : view === 'fp' ? 'pov' : 'auto'); };
+    const el = Math.floor((this.state.now - this.state.feedStart) / 1000), p2 = n => String(n).padStart(2, '0');
+    const timecode = p2(Math.floor(el / 3600)) + ':' + p2(Math.floor(el / 60) % 60) + ':' + p2(el % 60);
+    return {
+      guestName, uniform, roomNo: this.state.roomNo, timecode,
+      freeBg: vb('free').bg, freeFg: vb('free').fg, fpBg: vb('fp').bg, fpFg: vb('fp').fg, autoBg: vb('auto').bg, autoFg: vb('auto').fg,
+      viewFree: pick('free'), viewFp: pick('fp'), viewAuto: pick('auto'),
+      lobbyRef: this.lobbyRef, clerkRef: this.clerkRef,
+      reissue: () => { const f = this.clerkRef.current; if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'fc-reissue' }, '*'); },
+      v, en, fr: !en, chars, typed, done, stampText, maxLen: T.length, code: this.state.code,
+      enBg: en ? v.ink : 'transparent', enFg: en ? v.paper : v.ink, frBg: en ? 'transparent' : v.ink, frFg: en ? v.ink : v.paper,
+      nightDot: night ? '#E2B23A' : 'transparent',
+      quickLabel: this.state.searching ? (en ? 'FINDING A ROOM…' : 'RECHERCHE…') : (en ? 'QUICK RACE' : 'COURSE RAPIDE'),
+      setEn: () => set({ lang: 'en', typed: '', start: 0, end: 0 }),
+      setFr: () => set({ lang: 'fr', typed: '', start: 0, end: 0 }),
+      toggleNight: () => set({ night: !night }),
+      resetTape: e => { e && e.preventDefault(); set({ typed: '', start: 0, end: 0 }); },
+      onType: e => {
+        const val = e.target.value.slice(0, T.length);
+        const start = this.state.start || Date.now();
+        set({ typed: val, start, end: val.length >= T.length ? Date.now() : 0 });
+      },
+      onCode: e => set({ code: e.target.value.toUpperCase() }),
+      quickRace: () => { set({ searching: true }); clearTimeout(this._q); this._q = setTimeout(() => this.setState({ searching: false }), 2400); },
+    };
+  }
+}
+</script>
+</body>
+</html>

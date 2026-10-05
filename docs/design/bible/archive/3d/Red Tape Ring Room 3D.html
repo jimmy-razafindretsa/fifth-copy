@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RED TAPE — Ring Room 3D (2b)</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Stardos+Stencil:wght@700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#0b0c0d;overflow:hidden}
+three-d-stage:not(:defined){visibility:hidden}
+.hud{position:fixed;left:20px;top:18px;display:flex;flex-direction:column;gap:10px;font:13px 'Share Tech Mono',monospace;color:#D4BF8A;z-index:5;pointer-events:none}
+.hud h1{margin:0;white-space:nowrap;font:700 24px 'Stardos Stencil',serif;letter-spacing:.06em;color:#E8DCC0}
+.hud .row{display:flex;gap:8px;pointer-events:auto}
+.hud button{white-space:nowrap;font:13px 'Share Tech Mono',monospace;background:#15171A;color:#D4BF8A;border:1px solid #4A4A46;padding:7px 12px;cursor:pointer}
+.hud button:hover{color:#E8DCC0;border-color:#9C7A45}
+.hud button.on{background:#9E0F14;color:#F4E6D0;border-color:#C21A1F}
+.hud .note{color:#9C9A90;max-width:340px;line-height:1.45}
+</style>
+</head>
+<body>
+<three-d-stage name="red-tape-ring-room" background="#0b0c0d"></three-d-stage>
+<div class="hud">
+  <h1>RED TAPE · RING ROOM</h1>
+  <div>2b blockout · 30 typists · 1 officer</div>
+  <div class="row"><button id="pov" class="on">Your seat</button><button id="over">Overview</button><button id="pause">Pause</button></div>
+  <div class="note">Your sheet and typewriter text would be an HTML layer on top of this; the 3D handles the room only.</div>
+</div>
+<script src="three-d-stage.js"></script>
+<script type="module">
+const stage = document.querySelector('three-d-stage');
+const { THREE } = await stage.ready;
+const scene = stage._scene, cam = stage._camera, ctr = stage._controls, ren = stage._renderer;
+
+// Mood lighting: overhead incandescent, deep falloff
+scene.children.forEach(o => {
+  if (o.isHemisphereLight) { o.color.set(0x8a8068); o.groundColor.set(0x0b0c0d); o.intensity = 0.7; }
+  else if (o.isDirectionalLight && o !== stage._key) o.intensity = 0.08;
+});
+stage._key.color.set(0xffc58a); stage._key.intensity = 0.9; stage._key.position.set(0.5, 12, 0.8);
+scene.fog = new THREE.Fog(0x0b0c0d, 10, 30);
+ren.toneMapping = THREE.ACESFilmicToneMapping; ren.toneMappingExposure = 1.15;
+
+const M = (name, color, o = {}) => { const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...o }); m.name = name; return m; };
+const mat = {
+  concrete: M('concrete', 0x3a3b38, { roughness: 0.95 }),
+  wall: M('drab_wall', 0x3E4436, { roughness: 0.95, side: THREE.BackSide }),
+  wainscot: M('wainscot', 0x2B332E, { roughness: 0.9, side: THREE.BackSide }),
+  steel: M('desk_steel', 0x4f5649, { roughness: 0.6, metalness: 0.3 }),
+  bakelite: M('bakelite', 0x1d1714, { roughness: 0.45 }),
+  platen: M('platen_iron', 0x0e0f10, { roughness: 0.5, metalness: 0.3 }),
+  paper: M('paper', 0xE8DCC0, { roughness: 0.95, side: THREE.DoubleSide }),
+  suit: M('typist_suit', 0x4a443c),
+  shirt: M('typist_shirt', 0x9a9484),
+  skin: M('skin', 0xc89f82, { roughness: 0.7 }),
+  hair: M('hair', 0x2a221c),
+  olive: M('officer_uniform', 0x6f8540, { roughness: 0.8 }),
+  leather: M('leather_boots', 0x15110e, { roughness: 0.4 }),
+  belt: M('belt', 0x3a2618, { roughness: 0.5 }),
+  brass: M('brass', 0xb59a5a, { roughness: 0.35, metalness: 0.4 }),
+  red: M('red_band', 0x9E0F14, { roughness: 0.7 }),
+  glow: M('lamp_glow', 0xffcf8a, { emissive: 0xffb860, emissiveIntensity: 2.2 }),
+  shade: M('lamp_shade', 0x2B332E, { roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide }),
+  crt: M('crt_phosphor', 0x0b1a10, { emissive: 0x5CFF8A, emissiveIntensity: 0.9 }),
+};
+const mesh = (name, geo, m, x = 0, y = 0, z = 0, parent) => { const o = new THREE.Mesh(geo, m); o.name = name; o.position.set(x, y, z); parent && parent.add(o); return o; };
+const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+
+const room = new THREE.Group(); room.name = 'ring_room';
+const R_ROOM = 7.5, R_DESK = 4.8, N = 30, PLAYER = 0;
+const floor = mesh('floor', new THREE.CircleGeometry(R_ROOM, 64), mat.concrete, 0, 0, 0, room); floor.rotation.x = -Math.PI / 2;
+mesh('wall', new THREE.CylinderGeometry(R_ROOM, R_ROOM, 3.8, 64, 1, true), mat.wall, 0, 1.9, 0, room);
+mesh('wainscot', new THREE.CylinderGeometry(R_ROOM - 0.01, R_ROOM - 0.01, 1.1, 64, 1, true), mat.wainscot, 0, 0.55, 0, room);
+
+// Filing cabinets + wall clock around the perimeter
+for (let i = 0; i < 8; i++) {
+  const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+  const g = new THREE.Group(); g.name = `cabinet_${i}`;
+  g.position.set(Math.cos(a) * (R_ROOM - 0.35), 0, Math.sin(a) * (R_ROOM - 0.35)); g.lookAt(0, 0, 0);
+  mesh(`cabinet_${i}_body`, box(0.5, 1.35, 0.6), mat.steel, 0, 0.675, 0, g);
+  for (let k = 0; k < 4; k++) mesh(`cabinet_${i}_handle_${k}`, box(0.14, 0.02, 0.02), mat.brass, 0, 0.2 + k * 0.32, 0.31, g);
+  room.add(g);
+}
+const clock = mesh('wall_clock', new THREE.CylinderGeometry(0.28, 0.28, 0.05, 40), mat.paper, 0, 2.6, R_ROOM - 0.04, room);
+clock.rotation.x = Math.PI / 2;
+mesh('wall_clock_rim', new THREE.TorusGeometry(0.28, 0.025, 8, 40), mat.brass, 0, 2.6, R_ROOM - 0.07, room);
+
+// Hanging lamp over the officer
+mesh('lamp_cord', new THREE.CylinderGeometry(0.008, 0.008, 1.2, 6), mat.bakelite, 0, 3.7, 0, room);
+mesh('lamp_shade', new THREE.ConeGeometry(0.55, 0.35, 40, 1, true), mat.shade, 0, 3.0, 0, room);
+mesh('lamp_bulb', new THREE.SphereGeometry(0.09, 20, 12), mat.glow, 0, 2.88, 0, room);
+const lampLight = new THREE.PointLight(0xffb46b, 40, 16, 1.6); lampLight.position.set(0, 2.75, 0); room.add(lampLight);
+
+// Officer platform + CRT console
+mesh('officer_platform', new THREE.CylinderGeometry(1.0, 1.08, 0.22, 48), mat.steel, 0, 0.11, 0, room);
+for (let i = 0; i < 3; i++) {
+  const a = (i / 3) * Math.PI * 2 + Math.PI / 3;
+  const g = new THREE.Group(); g.name = `crt_${i}`; g.position.set(Math.cos(a) * 0.78, 0.22, Math.sin(a) * 0.78);
+  g.lookAt(Math.cos(a) * 5, 0.22, Math.sin(a) * 5);
+  mesh(`crt_${i}_case`, box(0.42, 0.36, 0.4), mat.bakelite, 0, 0.18, 0, g);
+  mesh(`crt_${i}_screen`, box(0.32, 0.24, 0.01), mat.crt, 0, 0.2, 0.201, g);
+  room.add(g);
+}
+const crtLight = new THREE.PointLight(0x5CFF8A, 1.2, 3, 2); crtLight.position.set(0, 0.6, 0); room.add(crtLight);
+const ringFill = new THREE.PointLight(0xffc58a, 6, 9, 1.5); ringFill.position.set(0, 2.2, 2.6); room.add(ringFill);
+
+// Officer
+const officer = new THREE.Group(); officer.name = 'officer'; officer.position.y = 0.22;
+['L', 'R'].forEach((s, i) => {
+  const x = i ? 0.1 : -0.1;
+  mesh(`officer_boot_${s}`, new THREE.CylinderGeometry(0.065, 0.07, 0.42, 16), mat.leather, x, 0.21, 0, officer);
+  mesh(`officer_leg_${s}`, new THREE.CylinderGeometry(0.075, 0.065, 0.5, 16), mat.olive, x, 0.66, 0, officer);
+});
+mesh('officer_torso', new THREE.CapsuleGeometry(0.2, 0.42, 8, 24), mat.olive, 0, 1.2, 0, officer).scale.set(1, 1, 0.68);
+mesh('officer_belt', new THREE.CylinderGeometry(0.205, 0.205, 0.06, 32), mat.belt, 0, 1.0, 0, officer).scale.set(1, 1, 0.7);
+mesh('officer_buckle', box(0.07, 0.05, 0.02), mat.brass, 0, 1.0, 0.145, officer);
+['L', 'R'].forEach((s, i) => {
+  const x = i ? 0.25 : -0.25;
+  mesh(`officer_epaulette_${s}`, box(0.12, 0.02, 0.08), mat.brass, x * 0.8, 1.5, 0, officer);
+  const arm = mesh(`officer_arm_${s}`, new THREE.CapsuleGeometry(0.055, 0.42, 6, 12), mat.olive, x, 1.2, -0.06, officer);
+  arm.rotation.x = 0.35; arm.rotation.z = i ? -0.12 : 0.12;
+});
+mesh('officer_neck', new THREE.CylinderGeometry(0.05, 0.06, 0.1, 12), mat.skin, 0, 1.6, 0, officer);
+const oHead = new THREE.Group(); oHead.name = 'officer_head'; oHead.position.y = 1.72; officer.add(oHead);
+mesh('officer_face', new THREE.SphereGeometry(0.105, 24, 16), mat.skin, 0, 0, 0, oHead).scale.set(1, 1.15, 1);
+mesh('officer_cap_crown', new THREE.CylinderGeometry(0.14, 0.11, 0.08, 32), mat.olive, 0, 0.12, -0.01, oHead);
+mesh('officer_cap_band', new THREE.CylinderGeometry(0.112, 0.112, 0.035, 32), mat.red, 0, 0.08, 0, oHead);
+const brim = mesh('officer_cap_brim', new THREE.CylinderGeometry(0.1, 0.1, 0.012, 24, 1, false, -Math.PI / 2, Math.PI), mat.leather, 0, 0.065, 0.06, oHead);
+brim.rotation.x = 0.25;
+mesh('officer_cap_badge', box(0.03, 0.03, 0.01), mat.brass, 0, 0.12, 0.13, oHead);
+room.add(officer);
+
+// 30 typists in a ring
+const typists = [];
+function buildStation(i) {
+  const a = (i / N) * Math.PI * 2 + Math.PI / 2;
+  const g = new THREE.Group(); g.name = `station_${String(i + 1).padStart(2, '0')}`;
+  g.position.set(Math.cos(a) * R_DESK, 0, Math.sin(a) * R_DESK); g.lookAt(0, 0, 0);
+  const n = g.name;
+  // steel desk (+z faces centre)
+  mesh(`${n}_desk_top`, box(1.1, 0.04, 0.65), mat.steel, 0, 0.74, 0, g);
+  mesh(`${n}_desk_side_L`, box(0.04, 0.72, 0.6), mat.steel, -0.53, 0.36, 0, g);
+  mesh(`${n}_desk_side_R`, box(0.04, 0.72, 0.6), mat.steel, 0.53, 0.36, 0, g);
+  mesh(`${n}_desk_modesty`, box(1.02, 0.42, 0.02), mat.steel, 0, 0.5, 0.29, g);
+  // typewriter
+  const tw = new THREE.Group(); tw.position.set(0, 0.76, -0.06); g.add(tw);
+  mesh(`${n}_tw_base`, box(0.42, 0.09, 0.3), mat.bakelite, 0, 0.045, 0, tw);
+  const kb = mesh(`${n}_tw_keys`, box(0.38, 0.03, 0.14), mat.platen, 0, 0.09, -0.08, tw); kb.rotation.x = 0.25;
+  const pl = mesh(`${n}_tw_platen`, new THREE.CylinderGeometry(0.035, 0.035, 0.5, 20), mat.platen, 0, 0.135, 0.07, tw); pl.rotation.z = Math.PI / 2;
+  mesh(`${n}_tw_knob_L`, new THREE.CylinderGeometry(0.03, 0.03, 0.03, 16), mat.bakelite, -0.27, 0.135, 0.07, tw).rotation.z = Math.PI / 2;
+  mesh(`${n}_tw_lever`, box(0.12, 0.012, 0.012), mat.brass, -0.3, 0.17, 0.05, tw);
+  const paper = mesh(`${n}_paper`, new THREE.PlaneGeometry(0.22, 0.3), mat.paper, 0, 0.27, 0.085, tw);
+  paper.rotation.x = -0.12; paper.geometry.translate(0, 0.0, 0);
+  // desk lamp
+  mesh(`${n}_lamp_base`, new THREE.CylinderGeometry(0.06, 0.07, 0.02, 20), mat.bakelite, 0.42, 0.77, 0.15, g);
+  mesh(`${n}_lamp_arm`, new THREE.CylinderGeometry(0.008, 0.008, 0.36, 6), mat.brass, 0.42, 0.95, 0.15, g);
+  const sh = mesh(`${n}_lamp_shade`, new THREE.ConeGeometry(0.07, 0.09, 20, 1, true), mat.shade, 0.38, 1.12, 0.1, g); sh.rotation.x = 0.5; sh.rotation.z = 0.5;
+  mesh(`${n}_lamp_bulb`, new THREE.SphereGeometry(0.025, 10, 8), mat.glow, 0.38, 1.09, 0.1, g);
+  // chair
+  mesh(`${n}_chair_seat`, box(0.44, 0.05, 0.42), mat.bakelite, 0, 0.45, -0.5, g);
+  mesh(`${n}_chair_back`, box(0.42, 0.36, 0.04), mat.bakelite, 0, 0.78, -0.72, g);
+  mesh(`${n}_chair_post`, new THREE.CylinderGeometry(0.025, 0.025, 0.43, 8), mat.steel, 0, 0.22, -0.5, g);
+  mesh(`${n}_chair_foot`, new THREE.CylinderGeometry(0.2, 0.22, 0.02, 20), mat.steel, 0, 0.01, -0.5, g);
+  // typist (faces +z)
+  const p = new THREE.Group(); p.name = `${n}_typist`; g.add(p);
+  ['L', 'R'].forEach((s, k) => {
+    const x = k ? 0.1 : -0.1;
+    const th = mesh(`${n}_thigh_${s}`, new THREE.CapsuleGeometry(0.07, 0.32, 4, 10), mat.suit, x, 0.53, -0.32, p); th.rotation.x = Math.PI / 2;
+    mesh(`${n}_shin_${s}`, new THREE.CapsuleGeometry(0.06, 0.36, 4, 10), mat.suit, x, 0.27, -0.12, p);
+  });
+  const torso = mesh(`${n}_torso`, new THREE.CapsuleGeometry(0.17, 0.3, 6, 16), mat.suit, 0, 0.86, -0.52, p);
+  torso.scale.set(1, 1, 0.7); torso.rotation.x = 0.12;
+  mesh(`${n}_collar`, box(0.1, 0.06, 0.02), mat.shirt, 0, 1.08, -0.42, p);
+  const head = new THREE.Group(); head.position.set(0, 1.2, -0.46); p.add(head);
+  mesh(`${n}_head`, new THREE.SphereGeometry(0.1, 20, 14), mat.skin, 0, 0, 0, head).scale.set(1, 1.15, 1);
+  mesh(`${n}_hair`, new THREE.SphereGeometry(0.104, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), mat.hair, 0, 0.015, -0.01, head);
+  const arms = [];
+  ['L', 'R'].forEach((s, k) => {
+    const pv = new THREE.Group(); pv.position.set(k ? 0.19 : -0.19, 1.02, -0.5); p.add(pv);
+    const up = mesh(`${n}_arm_${s}`, new THREE.CapsuleGeometry(0.045, 0.3, 4, 10), mat.suit, 0, 0, 0.19, pv); up.rotation.x = Math.PI / 2;
+    mesh(`${n}_hand_${s}`, new THREE.SphereGeometry(0.04, 12, 8), mat.skin, k ? -0.04 : 0.04, 0, 0.4, pv);
+    pv.rotation.x = 0.62; pv.rotation.y = k ? 0.22 : -0.22;
+    arms.push(pv);
+  });
+  if (i === PLAYER) mesh(`${n}_armband`, new THREE.CylinderGeometry(0.05, 0.05, 0.06, 16), mat.red, 0, 0, 0.12, arms[0]).rotation.x = Math.PI / 2;
+  const own = [paper, sh, g.getObjectByName(`${n}_lamp_arm`), g.getObjectByName(`${n}_lamp_bulb`)];
+  typists.push({ g, own, head, torso, arms, paper, speed: 6 + Math.random() * 8, phase: Math.random() * 10, prog: Math.random() * 0.3 });
+  room.add(g);
+}
+for (let i = 0; i < N; i++) buildStation(i);
+
+stage.setObject(room);
+const overview = { pos: new THREE.Vector3(0, 8.5, 10.5), tgt: new THREE.Vector3(0, 0.6, 0) };
+cam.far = 200;
+
+// Camera presets
+const me = typists[PLAYER];
+function setPOV(on) {
+  document.getElementById('pov').classList.toggle('on', on);
+  document.getElementById('over').classList.toggle('on', !on);
+  me.head.visible = !on; me.torso.visible = !on; me.own.forEach(o => o.visible = !on);
+  if (on) {
+    const eye = new THREE.Vector3(0, 1.38, -0.62); me.g.localToWorld(eye);
+    const look = new THREE.Vector3(0, 0.35, 0);
+    cam.fov = 58; cam.near = 0.02; cam.position.copy(eye); ctr.target.copy(eye.clone().lerp(look, 0.08));
+    ctr.target.copy(look);
+  } else {
+    cam.fov = 45; cam.position.copy(overview.pos); ctr.target.copy(overview.tgt);
+  }
+  cam.updateProjectionMatrix(); ctr.update();
+}
+document.getElementById('pov').onclick = () => setPOV(true);
+document.getElementById('over').onclick = () => setPOV(false);
+let paused = false;
+document.getElementById('pause').onclick = (e) => { paused = !paused; e.target.textContent = paused ? 'Play' : 'Pause'; };
+setPOV(true);
+
+// Animation: typing arms, paper feed, officer's slow sweep
+const clockT = new THREE.Clock(); let t = 0, oYaw = 0;
+const tmp = new THREE.Vector3();
+const tick = () => {
+  const dt = Math.min(clockT.getDelta(), 0.05);
+  if (!paused) {
+    t += dt;
+    for (const ty of typists) {
+      const s = ty.speed;
+      ty.arms[0].rotation.x = 0.62 + Math.max(0, Math.sin(t * s + ty.phase)) * 0.07;
+      ty.arms[1].rotation.x = 0.62 + Math.max(0, Math.sin(t * s * 1.13 + ty.phase + 1.7)) * 0.07;
+      ty.head.rotation.x = 0.25 + Math.sin(t * 0.6 + ty.phase) * 0.03;
+      ty.prog = (ty.prog + dt * s * 0.0025) % 1;
+      ty.paper.scale.y = 0.6 + ty.prog * 0.9; ty.paper.position.y = 0.27 * ty.paper.scale.y;
+    }
+    // officer sweeps, lingering every so often
+    const linger = Math.pow(0.5 + 0.5 * Math.sin(t * 0.45), 3);
+    oYaw += dt * 0.35 * linger;
+    officer.rotation.y = oYaw;
+    oHead.rotation.y = Math.sin(t * 0.8) * 0.25;
+    lampLight.intensity = 40 + Math.sin(t * 37) * 0.6 + (Math.random() < 0.01 ? -6 : 0);
+  }
+};
+const base = stage._loop;
+stage._loop = () => { tick(); base(); };
+ren.setAnimationLoop(stage._loop);
+</script>
+</body>
+</html>

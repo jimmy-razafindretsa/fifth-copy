@@ -18,7 +18,7 @@ export default function Home() {
             Protocol: <code className="font-mono text-sm">agents/PROTOCOL.md</code>
           </li>
           <li>
-            <Link className="text-primary underline underline-offset-4" href="/design">
+            <Link className="text-link underline underline-offset-4" href="/design">
               Design system primitives
             </Link>
           </li>

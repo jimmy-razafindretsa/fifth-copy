@@ -96,15 +96,20 @@ test.describe("lobby waiting room (#107)", () => {
   test("C4 the race token stays out of the URL, the HTML and cookies", async ({ page }) => {
     const sent: string[] = [];
     page.on("websocket", (ws) => ws.on("framesent", (f) => sent.push(String(f.payload))));
-    // dev StrictMode mounts the leaf twice, so collect every minted token (the first is discarded)
-    const bodies: Promise<string>[] = [];
-    page.on("response", (r) => {
-      if (isLobbyAction(r.request().method(), r.url(), r.request().headers()))
-        bodies.push(r.text());
+    // dev StrictMode mounts the leaf twice, so collect every minted token (the first is discarded).
+    // The mint POST is read through the route, not `response.text()`: Chromium may cancel it in
+    // the renderer after the body arrived (fixtures.ts), and then the body is gone.
+    const tokens: string[] = [];
+    await page.route("**/lobby/**", async (route) => {
+      const r = route.request();
+      if (!isLobbyAction(r.method(), r.url(), r.headers())) return route.continue();
+      const response = await route.fetch();
+      const body = await response.text();
+      tokens.push(...(JWT.exec(body) ?? []));
+      await route.fulfill({ response, body });
     });
     await createLobby(page);
     await expect(rows(page)).toHaveCount(1);
-    const tokens = (await Promise.all(bodies)).flatMap((b) => JWT.exec(b)?.[0] ?? []);
     expect(tokens.length, "the action response carries the token").toBeGreaterThan(0);
 
     expect(

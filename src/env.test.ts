@@ -5,6 +5,7 @@ const secret = "a".repeat(32);
 beforeEach(() => {
   process.env.DATABASE_URL = "postgresql://u:p@localhost:5432/db";
   process.env.RACE_TOKEN_SECRET = secret;
+  process.env.AUTH_SECRET = secret;
 });
 afterEach(() => {
   process.env = { ...original };
@@ -29,6 +30,14 @@ describe("env", () => {
     process.env.DATABASE_URL = "not a url secret-value";
     await expect(import("./env")).rejects.toThrow(/DATABASE_URL/);
     await expect(import("./env")).rejects.not.toThrow(/secret-value/);
+  });
+
+  it("requires AUTH_SECRET of at least 32 characters, without printing it", async () => {
+    process.env.AUTH_SECRET = "short-secret-value";
+    await expect(import("./env")).rejects.toThrow(/AUTH_SECRET/);
+    await expect(import("./env")).rejects.not.toThrow(/short-secret-value/);
+    delete process.env.AUTH_SECRET;
+    await expect(import("./env")).rejects.toThrow(/AUTH_SECRET/);
   });
 
   it("requires RACE_TOKEN_SECRET", async () => {

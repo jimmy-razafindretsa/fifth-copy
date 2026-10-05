@@ -116,6 +116,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
       # Throwaway CI value (like the service DB password); src/env.ts requires >= 32 chars.
       RACE_TOKEN_SECRET: ci-only-race-token-secret-0123456789abcdef0123456789abcdef
+      AUTH_SECRET: ci-only-auth-secret-0123456789abcdef0123456789abcdef
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -156,6 +157,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
       DB_GUARD_ALLOWED_HOSTS: postgres
       RACE_TOKEN_SECRET: ci-only-race-token-secret-0123456789abcdef0123456789abcdef
+      AUTH_SECRET: ci-only-auth-secret-0123456789abcdef0123456789abcdef
       PW_VISUAL: "1"
       HOME: /root
     steps:

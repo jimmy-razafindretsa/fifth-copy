@@ -40,6 +40,7 @@ RACE_SERVER_INTERNAL_URL="http://localhost:$(( 7000 + slot ))"
 WEB_ORIGIN="http://localhost:$(( 5000 + slot ))"
 REDIS_URL="redis://localhost:6379/$(( 1 + n % 15 ))"
 RACE_TOKEN_SECRET="local-card-$n-$(printf '%s' "$ROOT" | shasum | cut -c1-24)"
+AUTH_SECRET="local-card-auth-$n-$(printf 'auth:%s' "$ROOT" | shasum | cut -c1-32)"
 DB_GUARD_ALLOWED_HOSTS=""
 EOF
 }

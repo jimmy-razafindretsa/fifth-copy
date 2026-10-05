@@ -27,11 +27,21 @@ describe("internal API", () => {
   it.each([
     ["open request example", openRoomRequestSchema, request, true],
     ["open request v: 1", openRoomRequestSchema, { ...request, v: 1 }, false],
-    ["open request missing host", openRoomRequestSchema, { ...request, hostUserId: undefined }, false],
+    [
+      "open request missing host",
+      openRoomRequestSchema,
+      { ...request, hostUserId: undefined },
+      false,
+    ],
     ["open request bad code", openRoomRequestSchema, { ...request, code: "KGB4821" }, false],
     ["open response example", openRoomResponseSchema, response, true],
     ["open response v: 1", openRoomResponseSchema, { ...response, v: 1 }, false],
-    ["open response missing created", openRoomResponseSchema, { ...response, created: undefined }, false],
+    [
+      "open response missing created",
+      openRoomResponseSchema,
+      { ...response, created: undefined },
+      false,
+    ],
     ["open response wrong phase", openRoomResponseSchema, { ...response, phase: "racing" }, false],
     ["error example", internalErrorSchema, { v: 2, error: "bad-signature" }, true],
     ["error v: 1", internalErrorSchema, { v: 1, error: "bad-signature" }, false],

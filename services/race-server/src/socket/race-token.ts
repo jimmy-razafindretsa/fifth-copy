@@ -2,8 +2,7 @@ import { jwtVerify } from "jose";
 import { raceTokenClaimsSchema, type RaceTokenClaims } from "@fifth-copy/protocol";
 
 export type VerifyRaceTokenResult =
-  | { ok: true; claims: RaceTokenClaims }
-  | { ok: false; reason: "bad-token" };
+  { ok: true; claims: RaceTokenClaims } | { ok: false; reason: "bad-token" };
 
 // Verifies the web-minted race token (ADR 0006, 0009). HS256 only; every failure (signature,
 // expiry, algorithm, claim shape or version) is the same `bad-token` so callers leak nothing.

@@ -18,7 +18,9 @@ function sign(payload: Record<string, unknown>, key = secret, iat = now) {
 
 function tamper(token: string) {
   const [header, , signature] = token.split(".");
-  const forged = base64url.encode(JSON.stringify({ ...claims, role: "host", iat: now, exp: now + 300 }));
+  const forged = base64url.encode(
+    JSON.stringify({ ...claims, role: "host", iat: now, exp: now + 300 }),
+  );
   return `${header}.${forged}.${signature}`;
 }
 

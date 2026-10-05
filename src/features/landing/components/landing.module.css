@@ -1,0 +1,230 @@
+/*
+ * Landing shell, ported 1:1 from docs/design/bible/Fifth Copy Landing.dc.html (header and hero; the
+ * action controls live in the lobby feature, #99). Colours are roles from docs/design/tokens.css only, fonts the next/font
+ * variables (#21); hard print offsets, no radius, no blur (bible 6).
+ */
+
+@keyframes fcSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* header (bible 14.1 item 1) */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 32px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.monogram {
+  display: block;
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.brandName {
+  font:
+    700 20px/1 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.06em;
+}
+
+/* hero (bible 14.1 item 2): halftone + 8° band */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--color-fg) 13%, transparent) 1.3px, transparent 1.7px),
+    linear-gradient(
+      172deg,
+      transparent 0 62%,
+      color-mix(in srgb, var(--color-primary) 7%, transparent) 62% 70%,
+      transparent 70%
+    );
+  background-size:
+    10px 10px,
+    100% 100%;
+}
+
+.star {
+  position: absolute;
+  clip-path: polygon(
+    50% 0%,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
+  animation: fcSpin 50s linear infinite;
+  pointer-events: none;
+}
+
+.star1 {
+  width: 64px;
+  height: 64px;
+  background: var(--color-primary);
+  left: 2%;
+  /* reference 120px; until the live feed (card 497) makes the hero taller, that sits on the actions row */
+  bottom: 24px;
+  opacity: 0.9;
+}
+
+.star2 {
+  width: 30px;
+  height: 30px;
+  background: var(--color-fg);
+  animation-duration: 30s;
+  left: 44%;
+  top: 30px;
+}
+
+.star3 {
+  width: 22px;
+  height: 22px;
+  background: var(--color-reward);
+  animation-duration: 24s;
+  left: 38%;
+  top: 78px;
+}
+
+.star4 {
+  width: 46px;
+  height: 46px;
+  background: var(--color-primary);
+  animation-duration: 60s;
+  right: 2%;
+  bottom: 70px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star {
+    animation: none;
+  }
+}
+
+.heroInner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  padding: 56px 48px 110px;
+  align-items: flex-start;
+  position: relative;
+  z-index: 1;
+}
+
+.heroMain {
+  flex: 1 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.aside {
+  flex: 1 1 440px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: stretch;
+}
+
+/* red kicker; the link role keeps it red on paper and night-ink on Night shift (bible 3.3) */
+.kicker {
+  font:
+    600 13px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+/* wordmark box (bible 5.1); the final vectors replace the CSS-drawn letters (bible 5) */
+.wordmark {
+  font-size: clamp(64px, 8.6vw, 138px);
+  position: relative;
+  width: 4.375em;
+  height: 1.8333em;
+  flex: none;
+  max-width: 100%;
+  margin: 0;
+}
+
+.wordmarkImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left top;
+}
+
+.onInk {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .onPaper {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .onInk {
+    display: block;
+  }
+}
+
+:root[data-theme="dark"] .onPaper {
+  display: none;
+}
+
+:root[data-theme="dark"] .onInk {
+  display: block;
+}
+
+.tagline {
+  font:
+    600 14px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.36em;
+  margin-top: -4px;
+}
+
+.pitch {
+  margin: 0;
+  font:
+    400 21px/1.5 var(--font-courier-prime),
+    ui-monospace,
+    monospace;
+  max-width: 560px;
+  text-wrap: pretty;
+}
+
+/* actions row under the pitch, filled by the lobby entries (#99) */
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin-top: 6px;
+}
+
+.actions:empty {
+  display: none;
+}

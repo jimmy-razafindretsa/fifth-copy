@@ -104,6 +104,8 @@ Reds and gold never change between themes. The tape strip stays `tape-paper` in 
 
 ### 3.3 Contrast
 Text is 4.5:1 minimum. Never put muted text on red. On red grounds use paper or ink at full opacity.
+Red kicker and label text on Night shift uses night-ink (the link role): agit-red on the night ground is 1.76:1 (extension, #494).
+Red error text (the inline error line, 7.4) follows the same link role: agit-red on newsprint in light (5.0:1), night-ink on night newsprint on Night shift (extension, #99).
 
 ---
 
@@ -181,6 +183,8 @@ Rules: no recolouring the bar violet or gold, never straighten it, and keep clea
 
 ### 7.2 Inputs
 - Room code: inside an ink-bordered newsprint group: `[ JOIN WITH CODE | KGB-4821 | JOIN → ]`. Input IBM Plex Mono 500 18px `.08em`, auto-uppercase, maxLength 8.
+  - Extension (#99): the placeholder is muted ink (`--color-fg-muted`), not ink at 40% (which fails 4.5:1). Focus shows a 2px ink outline around the whole group, not the bare input. Labels and the `JOIN →` button never wrap; at widths <= 480px the label becomes the group's header row (2px ink rule under it, as the 7.4 docket header) and the input flexes from 130px. On touch widths (<= 768px) the create button, the input and `JOIN →` are at least 44px tall (18).
+  - Pending (#99): the submitting button reads `CREATING…` / `JOINING…`, is disabled and `aria-busy`; no spinner (printed, not glowing).
 
 ### 7.3 Stamps
 - Border `4px double red` (or 3px double gold on dark), Stardos 700, rotated **−8° to +7°** (always a little crooked), paper-ish bg `rgba(241,232,214,.9)`.
@@ -189,6 +193,7 @@ Rules: no recolouring the bar violet or gold, never straighten it, and keep clea
 
 ### 7.4 Dockets / file cards
 - Paper or newsprint, `2px solid ink`, no radius. Header row with mono name plus Oswald tag. Rows are a grid `120px | 1fr` with dashed separators `1px dashed rgba(42,36,32,.3)`.
+- **Inline error line** (extension, #99): one docket row under the control it belongs to, `2px solid ink`, newsprint, `padding:8px 12px`, Courier Prime 15px in the red text role (3.3), led by an Oswald 600 11px `.16em` prefix `RETURNED ·` (the rejection word of 7.7). `role="alert"`, linked to its field with `aria-describedby`; it never echoes what the player typed.
 - Multi-cell grids use `gap:2px; background:ink` on the grid with paper cells. **Never** per-cell borders (they double up when the grid wraps).
 
 ### 7.5 Tabs
@@ -395,6 +400,8 @@ Order:
 8. **Final call:** red halftone band, `REPORT TO YOUR DESK.` + inverted primary button.
 9. **Medal showcase:** spinning medal + `DECORATION · DRAG TO SPIN` / `HERO OF PAPERWORK` + one line.
 10. **Footer (ink):** 14px red top border. Columns: brand (wordmark, tagline, who it's for) · PLAY · LEARN · AEGIS CORP. Then social buttons (GitHub, LinkedIn, Discord, YouTube), the gold `BUILT BY AEGIS CORP.` stamp, and a bottom bar `© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec` + `No email. No chat. Your typing stays yours.`
+
+Hero stars (#99): while the hero has no live feed (#497) the big red star sits at `bottom:24px` instead of the reference's `120px`, which otherwise lands on the actions row (stars never go over text, 6). Restore `120px` when the feed column makes the hero taller.
 
 ### 14.2 Locker (`Fifth Copy Locker.dc.html`)
 - **Left:** a steel locker door (`#6F736C` with inner frame `#7E8579`, 8px ink print shadow), vents, a crooked cream name tag `LOCKER № 0457`, an interior with sun rays and a hanger rail, the 3D clerk, and a brass dial. Buttons: `RANDOM ISSUE` (owned items only, dice spins), `UNDO CHANGES`, `SIGN & FILE` (red when dirty → stamp `FILED`; grey `ON FILE` when clean).

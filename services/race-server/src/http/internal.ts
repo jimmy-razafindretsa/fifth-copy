@@ -116,7 +116,8 @@ export function createInternalHandler(deps: Deps, routes = internalRoutes(deps))
     } catch {
       return (reply(error(400, "bad-body")), true);
     }
-    if (typeof body !== "object" || body === null) return (reply(error(400, "bad-body")), true);
+    if (typeof body !== "object" || body === null || Array.isArray(body))
+      return (reply(error(400, "bad-body")), true);
     if ((body as { v?: unknown }).v !== PROTOCOL_VERSION)
       return (reply(error(426, "version")), true);
     reply(await route.handle(body));

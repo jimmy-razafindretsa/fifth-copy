@@ -104,6 +104,7 @@ describe("POST /internal/rooms (C3)", () => {
     for (const body of [
       "{not json",
       "null",
+      "[]",
       JSON.stringify({ v: PROTOCOL_VERSION, lobbyId: "x" }),
     ]) {
       await expectError(await post(base, { body, signature: sign(body) }), 400, "bad-body");

@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FIFTH COPY — At the desk</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Stardos+Stencil:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#2B2C2A;overflow:hidden}
+a{color:#E8DCC0}a:hover{color:#fff}
+three-d-stage{position:fixed;inset:0}
+three-d-stage:not(:defined){visibility:hidden}
+.plate{position:fixed;left:20px;top:16px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.plate h1{margin:0;font:700 22px 'Stardos Stencil',serif;letter-spacing:.08em;color:#E8DCC0;white-space:nowrap}
+.plate p{margin:0;font:12px 'Share Tech Mono',monospace;letter-spacing:.12em;color:#9C9A8E;white-space:nowrap}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.row button{font:12px 'Share Tech Mono',monospace;background:#2B2C2A;color:#C9C6B8;border:1px solid #55574f;padding:6px 10px;cursor:pointer;white-space:nowrap}
+.row button.on{background:#E8DCC0;color:#23201D;border-color:#E8DCC0}
+</style>
+</head>
+<body>
+<three-d-stage name="fifth-copy-clerk-typing" background="#2B2C2A"></three-d-stage>
+<div class="plate">
+  <h1>AT THE DESK</h1>
+  <p>TYPING CYCLE · BODY / HEAD / 2 ARMS</p>
+  <div class="row"><button id="calm" class="on">CALM</button><button id="race">RACE</button><button id="rand">RANDOM OUTFIT</button></div>
+</div>
+<script src="three-d-stage.js"></script>
+<script type="module">
+import * as THREE from 'three';
+const stage = document.querySelector('three-d-stage');
+const ARM_L = 0.33, SEAT = 0.26, ROOT_Y = 0.10, DESK_Y = 0.44;
+const CATS = {
+  hair:    { label: 'HAIR', opts: [['side', 'Side part', 'CLERK STANDARD'], ['buzz', 'Buzz cut', 'BARRACKS'], ['quiff', 'Quiff', 'DANCE HALL'], ['bowl', 'Bowl cut', 'HOME-MADE'], ['bald', 'Bald', 'POLISHED']] },
+  glasses: { label: 'GLASSES', opts: [['round', 'Round wire', 'BRASS FRAME'], ['dark', 'Dark lenses', 'SECRET POLICE'], ['square', 'Square frames', 'ACCOUNTANT'], ['monocle', 'Monocle', 'OLD MONEY'], ['none', 'None', '20/20 VISION']] },
+  hat:     { label: 'HAT', opts: [['none', 'None', 'INDOORS'], ['ushanka', 'Ushanka', 'WINTER ISSUE'], ['kepka', 'Flat cap', 'FACTORY FLOOR'], ['eyeshade', 'Eyeshade', 'NIGHT SHIFT'], ['beret', 'Beret', 'ARTIST UNION']] },
+  clothes: { label: 'CLOTHES', opts: [['vest', 'Knit vest', 'OLIVE WOOL'], ['cardigan', 'Cardigan', 'GRANDMA KNIT'], ['jacket', 'Work jacket', 'NAVY CANVAS'], ['sweater', 'Sweater', 'GREY RIB'], ['braces', 'Shirt & braces', 'SUMMER']] },
+  face:    { label: 'FACE', opts: [['stache', 'Moustache', 'REGULATION'], ['clean', 'Clean shave', 'FRESH RAZOR'], ['beard', 'Full beard', 'PHILOSOPHER']] },
+};
+const HAIRCOL = ['#4A3526', '#1E1A17', '#A4552A', '#C9A465', '#8C8A84'];
+const cfg = { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: HAIRCOL[0] };
+let tab = 'hair';
+
+const COL = { skin: 0xF0C6A2, white: 0xF6F1E6, black: 0x161616, shirt: 0xE6DCC6, trousers: 0x55544E, shoe: 0x241914, brass: 0xB8933F, scarf: 0x2E8C8A };
+const CLOTH = {
+  vest: { body: 0x5E6140, sleeve: COL.shirt, gap: 1.0 }, cardigan: { body: 0x7A5638, sleeve: 0x7A5638, gap: 0.55 },
+  jacket: { body: 0x34405A, sleeve: 0x34405A, gap: 0 }, sweater: { body: 0x8A8C85, sleeve: 0x8A8C85, gap: 0 }, braces: { body: null, sleeve: COL.shirt },
+};
+const S = (r, w = 8, h = 6) => new THREE.SphereGeometry(r, w, h);
+const HS = (r, w, h, p0, pl, t0, tl) => new THREE.SphereGeometry(r, w, h, p0, pl, t0, tl);
+const C = (rt, rb, h, s = 8, open = false, a0 = 0, a = Math.PI * 2) => new THREE.CylinderGeometry(rt, rb, h, s, 1, open, a0, a);
+const B = (x, y, z) => new THREE.BoxGeometry(x, y, z);
+const CAP = (r, l) => new THREE.CapsuleGeometry(r, l, 2, 8);
+const TOR = (r, t, rs, ts, arc) => new THREE.TorusGeometry(r, t, rs, ts, arc);
+const V2 = pts => pts.map(p => new THREE.Vector2(p[0], p[1]));
+const PEAR = [[0,0],[0.17,0.01],[0.25,0.07],[0.285,0.17],[0.275,0.27],[0.24,0.36],[0.17,0.43],[0.08,0.47],[0,0.48]];
+
+function build(c) {
+  const root = new THREE.Group();
+  const part = (geo, col, x, y, z, parent = root) => { const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); parent.add(m); return m; };
+  const hair = new THREE.Color(c.hairCol).getHex();
+  const cl = CLOTH[c.clothes];
+  // legs + feet
+  [-1, 1].forEach(s => { const th = part(CAP(0.08, 0.12), COL.trousers, s * 0.1, 0.2, 0.1); th.rotation.x = Math.PI / 2; part(CAP(0.075, 0.1), COL.trousers, s * 0.1, 0.07, 0.24); part(S(0.075, 8, 6), COL.shoe, s * 0.11, -0.055, 0.29).scale.set(1, 0.6, 1.35); });
+  // body
+  part(new THREE.LatheGeometry(V2(PEAR), 12), COL.shirt, 0, 0.16, 0).scale.set(1, 1, 0.88);
+  if (cl.body) {
+    const sc = c.clothes === 'jacket' ? 1.08 : 1.06, top = c.clothes === 'vest' ? 8 : 9;
+    const prof = PEAR.slice(1, top).map(([x, y]) => [x * sc + 0.004, y - (c.clothes === 'jacket' ? 0.02 : 0)]);
+    const g = cl.gap ? new THREE.LatheGeometry(V2(prof), 12, cl.gap / 2, Math.PI * 2 - cl.gap) : new THREE.LatheGeometry(V2(prof), 12);
+    part(g, cl.body, 0, 0.16, 0).scale.set(1, 1, 0.88);
+    if (c.clothes === 'cardigan') [0.42, 0.34, 0.26].forEach(y => part(S(0.014, 4, 3), COL.brass, 0.07, y, 0.235));
+    if (c.clothes === 'vest') [0.4, 0.32].forEach(y => part(S(0.012, 4, 3), COL.brass, 0, y, 0.25));
+    if (c.clothes === 'jacket') {
+      [-1, 1].forEach(s => { const k = part(B(0.09, 0.05, 0.02), cl.body, s * 0.07, 0.6, 0.15); k.rotation.z = s * -0.5; k.rotation.x = -0.5; part(B(0.07, 0.06, 0.012), 0x2A3348, s * 0.11, 0.3, 0.23).rotation.y = s * 0.4; });
+      part(B(0.012, 0.32, 0.012), 0x2A3348, 0, 0.36, 0.25);
+    }
+    if (c.clothes === 'sweater') part(C(0.2, 0.18, 0.04, 12), 0x75776F, 0, 0.17, 0).scale.set(1, 1, 0.88);
+  } else {
+    [-1, 1].forEach(s => { part(B(0.025, 0.36, 0.012), COL.black, s * 0.1, 0.42, 0.225).rotation.x = -0.12; part(B(0.025, 0.36, 0.012), COL.black, s * 0.1, 0.42, -0.215).rotation.x = 0.12; });
+  }
+  part(TOR(0.12, 0.045, 5, 12), COL.scarf, 0, 0.62, 0.01).rotation.x = Math.PI / 2 - 0.15;
+  // arms
+  [-1, 1].forEach(s => {
+    const arm = new THREE.Group(); arm.name = s < 0 ? 'armL' : 'armR'; arm.position.set(s * 0.26, 0.5, 0.05); root.add(arm);
+    part(CAP(0.062, ARM_L - 0.17), cl.sleeve, 0, -(ARM_L - 0.06) / 2, 0, arm);
+    if (c.clothes === 'vest' || c.clothes === 'braces') part(C(0.066, 0.066, 0.03, 8), COL.black, 0, -0.05, 0, arm);
+    part(S(0.058, 8, 6), COL.skin, 0, -ARM_L, 0, arm);
+  });
+  // head
+  const R = 0.22, h = new THREE.Group(); h.name = 'head'; h.position.set(0, 0.8, 0.02); root.add(h);
+  part(S(R, 14, 10), COL.skin, 0, 0, 0, h).scale.set(1.06, 0.96, 1);
+  part(S(R * 0.19, 8, 6), COL.skin, 0, -R * 0.1, R * 0.98, h);
+  if (c.hat !== 'ushanka') [-1, 1].forEach(s => part(S(R * 0.16, 6, 4), COL.skin, s * R * 1.02, -R * 0.02, 0, h).scale.set(0.5, 1, 0.8));
+  const ey = R * 0.14, ez = R * 0.86;
+  const eyes = new THREE.Group(); eyes.name = 'eyes'; h.add(eyes); const lids = new THREE.Group(); lids.name = 'lids'; h.add(lids);
+  [-1, 1].forEach(s => {
+    const ex = s * R * 0.35;
+    part(S(R * 0.15, 8, 6), COL.white, ex, ey, ez, h).scale.set(1, 1.15, 0.55);
+    part(S(R * 0.075, 6, 4), COL.black, ex - s * R * 0.02, ey - R * 0.01, ez + R * 0.07, eyes).scale.set(1, 1.15, 0.5);
+    part(S(R * 0.022, 4, 3), COL.white, ex - s * R * 0.02 + R * 0.03, ey + R * 0.04, ez + R * 0.1, eyes);
+    part(S(R * 0.17, 8, 6), COL.skin, ex, ey, ez + R * 0.01, lids).scale.set(1, 1.2, 0.72);
+    if (c.hair !== 'bowl') part(CAP(R * 0.04, R * 0.18), hair, ex, ey + R * 0.3, ez + R * 0.02, h).rotation.z = Math.PI / 2 + s * 0.15;
+  });
+  // glasses
+  const gz = ez + R * 0.1;
+  if (c.glasses === 'round') {
+    [-1, 1].forEach(s => part(TOR(R * 0.2, R * 0.022, 4, 12), COL.brass, s * R * 0.35, ey, gz, h));
+    part(C(R * 0.015, R * 0.015, R * 0.25, 4), COL.brass, 0, ey + R * 0.02, gz, h).rotation.z = Math.PI / 2;
+  } else if (c.glasses === 'dark') {
+    [-1, 1].forEach(s => part(C(R * 0.21, R * 0.21, R * 0.04, 12), COL.black, s * R * 0.35, ey, gz, h).rotation.x = Math.PI / 2);
+    part(B(R * 0.25, R * 0.04, R * 0.04), COL.black, 0, ey + R * 0.04, gz, h);
+  } else if (c.glasses === 'square') {
+    [-1, 1].forEach(s => {
+      const x = s * R * 0.36, w = R * 0.44, t = R * 0.06;
+      part(B(w, t, t), COL.black, x, ey + R * 0.17, gz, h); part(B(w, t, t), COL.black, x, ey - R * 0.17, gz, h);
+      part(B(t, R * 0.4, t), COL.black, x - w / 2, ey, gz, h); part(B(t, R * 0.4, t), COL.black, x + w / 2, ey, gz, h);
+    });
+    part(B(R * 0.2, t0(), R * 0.04), COL.black, 0, ey + R * 0.1, gz, h);
+  } else if (c.glasses === 'monocle') {
+    part(TOR(R * 0.21, R * 0.03, 4, 12), COL.brass, R * 0.35, ey, gz, h);
+    part(B(R * 0.02, R * 0.7, R * 0.02), COL.brass, R * 0.55, ey - R * 0.45, gz - R * 0.05, h);
+  }
+  function t0() { return R * 0.04; }
+  // face
+  if (c.face === 'beard') part(S(R * 0.78, 10, 6), hair, 0, -R * 0.42, R * 0.28, h).scale.set(1.2, 0.85, 0.95);
+  if (c.face !== 'clean') [-1, 1].forEach(s => { const m = part(CAP(R * 0.07, R * 0.16), hair, s * R * 0.13, -R * 0.3, R * 0.95, h); m.rotation.z = Math.PI / 2 + s * 0.25; });
+  if (c.face !== 'beard') part(TOR(R * 0.12, R * 0.025, 4, 8, Math.PI), COL.black, 0, -R * 0.4, R * 0.9, h).rotation.z = Math.PI;
+  // hair
+  if (c.hair === 'side') {
+    part(HS(R * 1.04, 14, 4, 0, Math.PI * 2, 0, Math.PI * 0.34), hair, 0, R * 0.06, -R * 0.02, h).scale.set(1.06, 1, 1);
+    const f = part(HS(R * 1.09, 10, 2, Math.PI / 2 - 1.0, 2.0, Math.PI * 0.16, Math.PI * 0.2), hair, 0, R * 0.04, 0, h); f.scale.set(1.06, 1, 1); f.rotation.z = -0.22; f.rotation.y = 0.12;
+    part(HS(R * 1.05, 10, 3, Math.PI * 1.5 - 1.5, 3.0, Math.PI * 0.28, Math.PI * 0.32), hair, 0, R * 0.02, -R * 0.02, h).scale.set(1.06, 1, 1);
+  } else if (c.hair === 'buzz') {
+    part(HS(R * 1.015, 14, 5, 0, Math.PI * 2, 0, Math.PI * 0.4), hair, 0, R * 0.03, -R * 0.03, h).scale.set(1.06, 0.97, 1);
+  } else if (c.hair === 'quiff') {
+    part(HS(R * 1.03, 14, 4, 0, Math.PI * 2, 0, Math.PI * 0.36), hair, 0, R * 0.05, -R * 0.04, h).scale.set(1.06, 1, 1);
+    const q = part(S(R * 0.45, 10, 6), hair, 0, R * 1.0, R * 0.42, h); q.scale.set(1.35, 0.75, 1.1); q.rotation.x = -0.35;
+    part(HS(R * 1.05, 10, 3, Math.PI * 1.5 - 1.5, 3.0, Math.PI * 0.28, Math.PI * 0.32), hair, 0, R * 0.02, -R * 0.02, h).scale.set(1.06, 1, 1);
+  } else if (c.hair === 'bowl') {
+    part(HS(R * 1.07, 14, 5, 0, Math.PI * 2, 0, Math.PI * 0.42), hair, 0, R * 0.07, 0, h).scale.set(1.07, 1, 1.03);
+  }
+  // hats
+  if (c.hat === 'ushanka') {
+    const fur = 0x6B4E36, top = 0x4E3A2A;
+    part(C(R * 1.12, R * 1.14, R * 0.55, 14), top, 0, R * 0.78, -R * 0.02, h);
+    part(C(R * 1.16, R * 1.16, R * 0.22, 14), fur, 0, R * 0.55, -R * 0.02, h);
+    part(B(R * 0.9, R * 0.3, R * 0.22), fur, 0, R * 0.78, R * 1.0, h).rotation.x = -0.25;
+    [-1, 1].forEach(s => part(S(R * 0.4, 8, 6), fur, s * R * 1.0, R * 0.05, -R * 0.05, h).scale.set(0.4, 1.1, 0.9));
+  } else if (c.hat === 'kepka') {
+    const tw = 0x6E6A5E;
+    part(S(R * 1.1, 14, 6), tw, 0, R * 0.66, -R * 0.05, h).scale.set(1.06, 0.42, 1.12);
+    part(C(R * 0.7, R * 0.7, R * 0.04, 10, false, -Math.PI / 2, Math.PI), 0x5A574D, 0, R * 0.56, R * 0.78, h).scale.set(1, 1, 0.65);
+    part(S(R * 0.06, 4, 3), tw, 0, R * 1.08, R * 0.1, h);
+  } else if (c.hat === 'eyeshade') {
+    part(C(R * 1.09, R * 1.11, R * 0.16, 14), 0x1C3D2B, 0, R * 0.6, 0, h).scale.set(1.06, 1, 1);
+    const sh = new THREE.Shape(); sh.absarc(0, 0, R * 1.6, Math.PI * 0.12, Math.PI * 0.88, false); sh.absarc(0, 0, R * 1.05, Math.PI * 0.88, Math.PI * 0.12, true);
+    const br = part(new THREE.ExtrudeGeometry(sh, { depth: R * 0.03, bevelEnabled: false, curveSegments: 6 }), 0x2F7A52, 0, R * 0.58, 0, h);
+    br.rotation.x = Math.PI / 2 + 0.08;
+  } else if (c.hat === 'beret') {
+    const b = part(S(R * 1.02, 14, 6), 0x2A3140, R * 0.1, R * 0.82, -R * 0.02, h); b.scale.set(1.18, 0.34, 1.12); b.rotation.z = -0.22;
+    part(C(R * 0.03, R * 0.03, R * 0.1, 4), 0x2A3140, R * 0.06, R * 1.18, 0, h);
+  }
+  
+  return root;
+}
+
+// Merge into one indexed vertex-coloured geometry (same pipeline as the in-game clerk)
+function faceOut(g) {
+  const p = g.attributes.position, n = g.attributes.normal, i = Math.floor(p.count / 2);
+  if (p.getX(i) * n.getX(i) + p.getZ(i) * n.getZ(i) >= 0) return;
+  const idx = g.index.array; for (let k = 0; k < idx.length; k += 3) { const t = idx[k]; idx[k] = idx[k + 2]; idx[k + 2] = t; }
+  for (let k = 0; k < n.array.length; k++) n.array[k] *= -1;
+}
+function merge(root) {
+  root.updateMatrixWorld(true);
+  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color();
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const g = o.geometry.clone();
+    if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
+    if (g.type === 'LatheGeometry') faceOut(g);
+    g.applyMatrix4(o.matrixWorld);
+    c.setHex(o.userData.col).convertSRGBToLinear();
+    const base = pos.length / 3, p = g.attributes.position.array, n = g.attributes.normal.array;
+    for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
+    for (let i = 0; i < p.length / 3; i++) col.push(c.r, c.g, c.b);
+    for (const i of g.index.array) idx.push(base + i);
+    g.dispose(); o.geometry.dispose();
+  });
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  out.setIndex(idx); out.computeBoundingSphere();
+  return out;
+}
+
+
+const mat = new THREE.MeshLambertMaterial({ vertexColors: true }); mat.name = 'clerk_vertex_colour';
+const M = (g, n) => { const m = new THREE.Mesh(merge(g), mat); m.name = n; m.castShadow = m.receiveShadow = true; return m; };
+
+// ---- Desk, chair, typewriter (static, merged) ----
+const WOOD = 0x6B4A32, WOOD_D = 0x4E3424, TW = 0x2F3A2E, KEY = 0xE8DCC0, METAL = 0x9A9D95;
+const keyPos = (c, r) => new THREE.Vector3(-0.15 + c * 0.033 + r * 0.008, DESK_Y + 0.062 + r * 0.014, 0.34 + r * 0.03);
+function props() {
+  const g = new THREE.Group();
+  const P = (geo, col, x, y, z) => { const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); g.add(m); return m; };
+  P(B(1.3, 0.05, 0.62), WOOD, 0, DESK_Y - 0.025, 0.6);
+  P(B(0.36, DESK_Y - 0.05, 0.56), WOOD_D, 0.44, (DESK_Y - 0.05) / 2, 0.6);
+  [0.33, 0.2, 0.07].forEach(y => { P(B(0.31, 0.11, 0.012), WOOD, 0.44, y, 0.318); P(S(0.012, 6, 4), COL.brass, 0.44, y, 0.328); });
+  [0.33, 0.87].forEach(z => P(B(0.05, DESK_Y - 0.05, 0.05), WOOD_D, -0.6, (DESK_Y - 0.05) / 2, z));
+  P(B(1.2, 0.22, 0.02), WOOD_D, 0, DESK_Y - 0.16, 0.89);
+  // chair
+  P(B(0.46, 0.05, 0.42), WOOD, 0, SEAT - 0.025, -0.06);
+  [[-0.2, 0.12], [0.2, 0.12], [-0.2, -0.24], [0.2, -0.24]].forEach(([x, z]) => P(C(0.02, 0.02, SEAT - 0.05, 6), WOOD_D, x, (SEAT - 0.05) / 2, z));
+  [-0.2, 0.2].forEach(x => P(C(0.02, 0.02, 0.5, 6), WOOD_D, x, SEAT + 0.22, -0.3));
+  P(B(0.46, 0.14, 0.03), WOOD, 0, SEAT + 0.36, -0.3);
+  // typewriter
+  P(B(0.46, 0.035, 0.3), TW, 0, DESK_Y + 0.0175, 0.47);
+  P(B(0.4, 0.03, 0.15), TW, 0, DESK_Y + 0.05, 0.38).rotation.x = 0.25;
+  P(B(0.44, 0.11, 0.16), TW, 0, DESK_Y + 0.09, 0.55);
+  P(C(0.1, 0.1, 0.02, 10, false, -Math.PI / 2, Math.PI), 0x1A1F19, 0, DESK_Y + 0.15, 0.48).rotation.x = Math.PI / 2;
+  [-1, 1].forEach(s => P(B(0.03, 0.06, 0.1), TW, s * 0.23, DESK_Y + 0.16, 0.56));
+  P(B(0.3, 0.012, 0.02), METAL, 0, DESK_Y + 0.035, 0.325);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 10; c++) { const k = keyPos(c, r); P(C(0.012, 0.012, 0.014, 6), KEY, k.x, k.y, k.z); }
+  return M(g, 'desk_chair_typewriter');
+}
+function carriage() {
+  const g = new THREE.Group(), P = (geo, col, x, y, z) => { const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); g.add(m); return m; };
+  P(C(0.035, 0.035, 0.5, 10), 0x141414, 0, 0, 0).rotation.z = Math.PI / 2;
+  [-1, 1].forEach(s => P(C(0.045, 0.045, 0.03, 10), METAL, s * 0.265, 0, 0).rotation.z = Math.PI / 2);
+  P(B(0.012, 0.012, 0.15), COL.brass, -0.29, 0.03, -0.08);
+  P(S(0.016, 6, 4), 0x141414, -0.29, 0.03, -0.155);
+  return M(g, 'carriage');
+}
+
+const scene = new THREE.Group(); scene.name = 'clerk_at_desk';
+scene.add(props());
+const carr = new THREE.Group(); carr.position.set(0, DESK_Y + 0.19, 0.56); scene.add(carr);
+carr.add(carriage());
+const paperMat = new THREE.MeshLambertMaterial({ color: 0xE8DCC0 }); paperMat.name = 'paper';
+const inkMat = new THREE.MeshLambertMaterial({ color: 0x23201D }); inkMat.name = 'ink';
+const paper = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.003), paperMat); paper.name = 'paper'; carr.add(paper);
+const inkGeo = new THREE.BoxGeometry(0.2, 0.006, 0.002).translate(0.1, 0, 0);
+const ink = [...Array(7)].map((_, i) => { const m = new THREE.Mesh(inkGeo, inkMat); m.position.set(-0.1, 0.09 - i * 0.022, 0.003); m.scale.x = 0.001; paper.add(m); return m; });
+
+let C0 = null;
+function makeChar(c) {
+  const root = build(c);
+  const parts = ['head', 'armL', 'armR'].map(n => root.getObjectByName(n));
+  const piv = {};
+  parts.forEach(g => { piv[g.name] = g.position.clone(); root.remove(g); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); });
+  const ch = new THREE.Group(); ch.name = 'clerk'; ch.position.set(0, ROOT_Y, 0);
+  const body = M(root, 'clerk_body'); ch.add(body);
+  const out = { ch, body, piv };
+  const hg = parts[0], eg = hg.getObjectByName('eyes'), lg = hg.getObjectByName('lids'); hg.remove(eg); hg.remove(lg);
+  parts.forEach(g => { const m = M(g, 'clerk_' + g.name); m.position.copy(piv[g.name]); ch.add(m); out[g.name] = m; });
+  out.eyes = M(eg, 'clerk_pupils'); out.lids = M(lg, 'clerk_lids'); out.lids.scale.y = 0.001; out.lids.visible = false;
+  out.head.add(out.eyes, out.lids);
+  return out;
+}
+function setChar() {
+  if (C0) { scene.remove(C0.ch); C0.ch.traverse(o => o.geometry && o.geometry.dispose()); }
+  C0 = makeChar(cfg); scene.add(C0.ch);
+}
+setChar();
+
+// ---- Typing animation ----
+const LINE = 28, STEP = 0.009, X0 = 0.12;
+const hash = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const keyOf = g => { const c = Math.floor(hash(g) * 10), r = Math.floor(hash(g + 0.5) * 4); return { p: keyPos(c, r), side: c < 5 ? -1 : 1 }; };
+const HOME = { '-1': keyPos(3, 1), '1': keyPos(6, 1) };
+function prevFor(g, side, lineStart) { for (let j = g - 1; j >= lineStart; j--) { const k = keyOf(j); if (k.side === side) return k.p; } return HOME[side]; }
+const ss = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+const DOWN = new THREE.Vector3(0, -1, 0), v = new THREE.Vector3(), tL = new THREE.Vector3(), tR = new THREE.Vector3();
+function aim(arm, side, target) {
+  const sh = C0.piv[side < 0 ? 'armL' : 'armR'];
+  v.set(target.x - sh.x, target.y - ROOT_Y - sh.y, target.z - sh.z);
+  const len = v.length(); arm.quaternion.setFromUnitVectors(DOWN, v.normalize());
+  arm.scale.y = Math.min(1.35, Math.max(0.8, len / ARM_L));
+}
+let speed = 1, t = 0, last = performance.now();
+// Head: holds still, glances occasionally (keys / paper / around the room)
+const GLANCES = [[0.42, 0], [0.42, 0], [0.12, 0], [0.2, 0.5], [0.2, -0.45], [0.05, 0.25]];
+const head = { x: 0.28, y: 0, tx: 0.28, ty: 0, next: 2 };
+const eye = { x: 0, y: 0, tx: 0, ty: 0, sacc: 0.5, blink: 1.5, bt: -1 };
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  const RATE = 5 * speed, RET = 1.1 / speed, TYPE = LINE / RATE, cycle = TYPE + RET;
+  const line = Math.floor(t / cycle), tc = t - line * cycle, start = line * LINE;
+  let cx, press = 0, look = 0;
+  if (tc < TYPE) {
+    const kf = tc * RATE, k = Math.floor(kf), p = kf - k, g = start + k, key = keyOf(g);
+    cx = X0 - (k + ss((p - 0.55) / 0.2)) * STEP;
+    const from = prevFor(g, key.side, start), tr = ss(p / 0.4);
+    press = p > 0.4 && p < 0.75 ? Math.sin((p - 0.4) / 0.35 * Math.PI) : 0;
+    const act = key.side < 0 ? tL : tR, idle = key.side < 0 ? tR : tL;
+    act.lerpVectors(from, key.p, tr); act.y += 0.075 + Math.sin(tr * Math.PI) * 0.025 - press * 0.03;
+    idle.copy(prevFor(g + 1, -key.side, start)); idle.y += 0.08 + Math.sin(t * 3 + key.side) * 0.006;
+    ink[line % 7].scale.x = Math.max(0.001, (k + (p > 0.6 ? 1 : 0)) / LINE);
+  } else {
+    const q = (tc - TYPE) / RET, xEnd = X0 - LINE * STEP;
+    cx = xEnd + (X0 - xEnd) * ss((q - 0.35) / 0.45);
+    const lever = new THREE.Vector3(cx - 0.29, DESK_Y + 0.25, 0.4);
+    const lastL = prevFor(start + LINE, -1, start);
+    if (q < 0.35) tL.lerpVectors(lastL, lever, ss(q / 0.35)); else if (q < 0.8) tL.copy(lever); else tL.lerpVectors(lever, HOME['-1'], ss((q - 0.8) / 0.2));
+    if (q < 0.8) tL.y += 0.02 + (q < 0.35 ? Math.sin(q / 0.35 * Math.PI) * 0.04 : 0); else tL.y += 0.075;
+    tR.copy(HOME['1']); tR.y += 0.08;
+    if (q < 0.8) { head.tx = 0.3; head.ty = 0.3; head.next = Math.max(head.next, t + 0.6); }
+    if (q > 0.85 && (line + 1) % 7 === 0) ink.forEach(m => m.scale.x = 0.001);
+  }
+  const cur = tc < TYPE ? line % 7 : (line + 1) % 7;
+  carr.position.x = cx; paper.position.set(0.0, -0.05 + cur * 0.022, -0.02); paper.rotation.x = -0.15;
+  aim(C0.armL, -1, tL); aim(C0.armR, 1, tR);
+  const bob = press * 0.004 + Math.sin(t * 1.6) * 0.003;
+  C0.body.position.y = bob; C0.body.scale.set(1 + Math.sin(t * 1.6) * 0.006, 1, 1);
+  C0.head.position.set(C0.piv.head.x, C0.piv.head.y + bob, C0.piv.head.z);
+  if (t > head.next) {
+    const g = GLANCES[Math.floor(Math.random() * GLANCES.length)];
+    head.tx = g[0]; head.ty = g[1];
+    head.next = t + 2 + Math.random();
+    head.back = t + 1;
+    if (Math.random() < 0.6) eye.blink = t + 0.05;
+  }
+  if (head.back && t > head.back) { head.tx = 0.28; head.ty = 0; head.back = 0; }
+  const ease = 1 - Math.exp(-dt * 4);
+  head.x += (head.tx - head.x) * ease; head.y += (head.ty - head.y) * ease;
+  C0.head.rotation.set(head.x, head.y, 0);
+  // Eyes lead the head: snap toward the glance target, then settle back as the head catches up
+  if (t > eye.sacc) { eye.sacc = t + 0.4 + Math.random() * 0.8; eye.jx = (Math.random() - 0.5) * 0.004; eye.jy = (Math.random() - 0.5) * 0.003; }
+  eye.tx = (head.ty - head.y) * 0.05 + (eye.jx || 0); eye.ty = -(head.tx - head.x) * 0.05 + (eye.jy || 0);
+  const ee = 1 - Math.exp(-dt * 18);
+  eye.x += (eye.tx - eye.x) * ee; eye.y += (eye.ty - eye.y) * ee;
+  C0.eyes.position.set(Math.max(-0.012, Math.min(0.012, eye.x)), Math.max(-0.008, Math.min(0.008, eye.y)), 0);
+  // Blink every 2–5 s (≈150 ms), plus one on most glances
+  if (t > eye.blink) { eye.bt = t; eye.blink = t + 2 + Math.random() * 3; }
+  const bp = (t - eye.bt) / 0.15, lid = bp >= 0 && bp <= 1 ? Math.sin(bp * Math.PI) : 0;
+  C0.lids.visible = lid > 0.01; C0.lids.scale.y = Math.max(0.001, lid); C0.eyes.scale.y = 1 - lid * 0.9;
+  requestAnimationFrame(frame);
+}
+
+const btn = id => document.getElementById(id);
+btn('calm').onclick = () => { speed = 1; btn('calm').classList.add('on'); btn('race').classList.remove('on'); };
+btn('race').onclick = () => { speed = 2.4; btn('race').classList.add('on'); btn('calm').classList.remove('on'); };
+btn('rand').onclick = () => { Object.entries(CATS).forEach(([k, o]) => cfg[k] = o.opts[Math.floor(Math.random() * o.opts.length)][0]); cfg.hairCol = HAIRCOL[Math.floor(Math.random() * HAIRCOL.length)]; setChar(); };
+await stage.ready;
+stage.setObject(scene);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

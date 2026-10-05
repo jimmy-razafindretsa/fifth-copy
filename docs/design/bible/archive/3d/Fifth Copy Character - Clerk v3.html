@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FIFTH COPY — Character: The Clerk (round)</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Stardos+Stencil:wght@700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#2B2C2A;overflow:hidden}
+three-d-stage{position:fixed;inset:0}
+three-d-stage:not(:defined){visibility:hidden}
+.plate{position:fixed;left:20px;top:16px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.plate h1{margin:0;font:700 22px 'Stardos Stencil',serif;letter-spacing:.08em;color:#E8DCC0;white-space:nowrap}
+.plate p{margin:0;font:12px 'Share Tech Mono',monospace;letter-spacing:.12em;color:#9C9A8E;white-space:pre}
+.row{display:flex;gap:6px}
+.row button{font:12px 'Share Tech Mono',monospace;background:#2B2C2A;color:#C9C6B8;border:1px solid #55574f;padding:6px 10px;cursor:pointer;white-space:nowrap}
+.row button.on{background:#E8DCC0;color:#23201D;border-color:#E8DCC0}
+</style>
+</head>
+<body>
+<three-d-stage name="fifth-copy-clerk-round" background="#2B2C2A" autorotate></three-d-stage>
+<div class="plate">
+  <h1>THE CLERK · ROUND</h1>
+  <p id="stats">…</p>
+  <div class="row"><button id="b1" class="on">×1</button><button id="b30">×30</button></div>
+</div>
+<script src="three-d-stage.js"></script>
+<script type="module">
+import * as THREE from 'three';
+const stage = document.querySelector('three-d-stage');
+
+const COL = {
+  skin: 0xF0C6A2, white: 0xF6F1E6, hair: 0x4A3526, black: 0x161616, shirt: 0xE6DCC6, vest: 0x5E6140,
+  trousers: 0x55544E, shoe: 0x241914, brass: 0xB8933F, visor: 0x2F7A52, band: 0x1C3D2B, scarf: 0x2E8C8A, garter: 0x1E1E1E,
+};
+// Low segment primitives only
+const S = (r, w = 8, h = 6) => new THREE.SphereGeometry(r, w, h);
+const C = (rt, rb, h, s = 8, open = false, a0 = 0, a = Math.PI * 2) => new THREE.CylinderGeometry(rt, rb, h, s, 1, open, a0, a);
+const B = (x, y, z) => new THREE.BoxGeometry(x, y, z);
+
+const tmp = new THREE.Group();
+function part(geo, col, x, y, z, parent = tmp) {
+  const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); parent.add(m); return m;
+}
+
+const CAP = (r, l) => new THREE.CapsuleGeometry(r, l, 2, 8);
+const LATHE = (pts, s = 12) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), s);
+// Stubby legs + round feet
+[-1, 1].forEach(s => {
+  part(CAP(0.08, 0.08), COL.trousers, s * 0.1, 0.17, 0);
+  part(S(0.075, 8, 6), COL.shoe, s * 0.11, 0.045, 0.04).scale.set(1, 0.6, 1.35);
+});
+// Pear body (shirt) — one smooth lathe
+const pear = [[0,0],[0.17,0.01],[0.25,0.07],[0.285,0.17],[0.275,0.27],[0.24,0.36],[0.17,0.43],[0.08,0.47],[0,0.48]];
+part(LATHE(pear), COL.shirt, 0, 0.16, 0).scale.set(1, 1, 0.88);
+// Knit vest: same shape, slightly bigger, open at the front
+const vest = pear.slice(1, 8).map(([x, y]) => [x * 1.06 + 0.004, y]);
+const v = new THREE.LatheGeometry(vest.map(p => new THREE.Vector2(p[0], p[1])), 12, 0.5, Math.PI * 2 - 1.0);
+part(v, COL.vest, 0, 0.16, 0).scale.set(1, 1, 0.88);
+// Belly buttons
+[0.4, 0.32].forEach(y => part(S(0.012, 4, 3), COL.brass, 0, y, 0.25));
+// Scarf ring (identity colour)
+part(new THREE.TorusGeometry(0.12, 0.045, 5, 12), COL.scarf, 0, 0.62, 0.01).rotation.x = Math.PI / 2 - 0.15;
+// Stubby arms with mitten hands
+[-1, 1].forEach(s => {
+  const arm = new THREE.Group(); arm.position.set(s * 0.25, 0.5, 0); arm.rotation.z = s * 0.35; tmp.add(arm);
+  part(CAP(0.062, 0.14), COL.shirt, 0, -0.08, 0, arm);
+  part(C(0.066, 0.066, 0.03, 8), COL.garter, 0, -0.05, 0, arm);
+  part(S(0.058, 8, 6), COL.skin, 0, -0.2, 0.01, arm);
+});
+// Big round head, sunk into the shoulders
+const R = 0.22;
+const h = new THREE.Group(); h.position.set(0, 0.8, 0.02); tmp.add(h);
+part(S(R, 14, 10), COL.skin, 0, 0, 0, h).scale.set(1.06, 0.96, 1);
+part(S(R * 0.19, 8, 6), COL.skin, 0, -R * 0.1, R * 0.98, h); // nose
+[-1, 1].forEach(s => part(S(R * 0.16, 6, 4), COL.skin, s * R * 1.02, -R * 0.02, 0, h).scale.set(0.5, 1, 0.8)); // ears
+// Eyes: white, pupil, glint + thin round wire glasses
+[-1, 1].forEach(s => {
+  const ex = s * R * 0.35, ey = R * 0.14, ez = R * 0.86;
+  part(S(R * 0.15, 8, 6), COL.white, ex, ey, ez, h).scale.set(1, 1.15, 0.55);
+  part(S(R * 0.075, 6, 4), COL.black, ex - s * R * 0.02, ey - R * 0.01, ez + R * 0.07, h).scale.set(1, 1.15, 0.5);
+  part(S(R * 0.022, 4, 3), COL.white, ex - s * R * 0.02 + R * 0.03, ey + R * 0.04, ez + R * 0.1, h);
+  part(new THREE.TorusGeometry(R * 0.2, R * 0.022, 4, 12), COL.brass, ex, ey, ez + R * 0.1, h);
+  const brow = part(CAP(R * 0.04, R * 0.18), COL.hair, ex, ey + R * 0.3, ez + R * 0.02, h); brow.rotation.z = Math.PI / 2 + s * 0.15;
+});
+part(C(R * 0.015, R * 0.015, R * 0.25, 4), COL.brass, 0, R * 0.16, R * 1.0, h).rotation.z = Math.PI / 2;
+// Moustache + smile
+[-1, 1].forEach(s => { const m = part(CAP(R * 0.07, R * 0.16), COL.hair, s * R * 0.13, -R * 0.3, R * 0.93, h); m.rotation.z = Math.PI / 2 + s * 0.25; });
+const mouth = part(new THREE.TorusGeometry(R * 0.12, R * 0.025, 4, 8, Math.PI), COL.black, 0, -R * 0.4, R * 0.9, h); mouth.rotation.z = Math.PI;
+// Haircut: crown, side-swept fringe, tapered back
+const HS = (r, w, ht, p0, pl, t0, tl) => new THREE.SphereGeometry(r, w, ht, p0, pl, t0, tl);
+part(HS(R * 1.04, 14, 4, 0, Math.PI * 2, 0, Math.PI * 0.34), COL.hair, 0, R * 0.06, -R * 0.02, h).scale.set(1.06, 1, 1);
+const fringe = part(HS(R * 1.09, 10, 2, Math.PI / 2 - 1.0, 2.0, Math.PI * 0.16, Math.PI * 0.2), COL.hair, 0, R * 0.04, 0, h);
+fringe.scale.set(1.06, 1, 1); fringe.rotation.z = -0.22; fringe.rotation.y = 0.12;
+part(HS(R * 1.05, 10, 3, Math.PI * 1.5 - 1.5, 3.0, Math.PI * 0.28, Math.PI * 0.32), COL.hair, 0, R * 0.02, -R * 0.02, h).scale.set(1.06, 1, 1);
+h.rotation.y = -0.1; h.rotation.z = 0.04;
+
+// Merge everything into ONE geometry with vertex colours → 1 draw call
+function merge(root) {
+  root.updateMatrixWorld(true);
+  const pos = [], nor = [], col = [], c = new THREE.Color(), nm = new THREE.Matrix3();
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(o.matrixWorld);
+    c.setHex(o.userData.col).convertSRGBToLinear();
+    const p = g.attributes.position.array, n = g.attributes.normal.array;
+    for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
+    for (let i = 0; i < p.length / 3; i++) col.push(c.r, c.g, c.b);
+  });
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return out;
+}
+const geo = merge(tmp);
+const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }); mat.name = 'clerk_vertex_colour';
+const tris = geo.attributes.position.count / 3;
+
+function single() {
+  const g = new THREE.Group(); g.name = 'clerk';
+  const m = new THREE.Mesh(geo, mat); m.name = 'clerk_body'; m.castShadow = m.receiveShadow = true; g.add(m);
+  return g;
+}
+function crowd() {
+  const g = new THREE.Group(); g.name = 'clerk_x30';
+  const im = new THREE.InstancedMesh(geo, mat, 30); im.name = 'clerks'; im.castShadow = true;
+  const d = new THREE.Object3D();
+  for (let i = 0; i < 30; i++) {
+    d.position.set((i % 6 - 2.5) * 0.6, 0, (Math.floor(i / 6) - 2) * 0.6);
+    d.rotation.y = (Math.random() - 0.5) * 0.6; d.updateMatrix(); im.setMatrixAt(i, d.matrix);
+  }
+  g.add(im); return g;
+}
+
+const statsEl = document.getElementById('stats');
+function show(n) {
+  stage.setObject(n === 1 ? single() : crowd());
+  statsEl.textContent = `${tris} TRIS / CLERK · 1 MATERIAL\n×${n} = ${(tris * n).toLocaleString('en')} TRIS · 1 DRAW CALL`;
+  document.getElementById('b1').classList.toggle('on', n === 1);
+  document.getElementById('b30').classList.toggle('on', n === 30);
+}
+document.getElementById('b1').onclick = () => show(1);
+document.getElementById('b30').onclick = () => show(30);
+await stage.ready;
+show(1);
+</script>
+</body>
+</html>

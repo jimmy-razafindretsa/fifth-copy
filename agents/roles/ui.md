@@ -5,6 +5,7 @@ Model: **Opus** (`claude-opus-5-5`). See PROTOCOL section 12.
 Follow everything in roles/builder.md, plus:
 
 ## Design system first
+0. Read `docs/design/bible/FIFTH_COPY_DESIGN_BIBLE.md` in full and open the reference file(s) its section 16 maps to your screen. Every design decision follows the bible; port reference `.dc.html` markup and styles 1:1. Run the bible's section 18 checklist before handoff and list any delta in HANDOFF `verify:`.
 1. Read `docs/design/tokens.*`, `docs/design/components.md`, and the card's UI section. If tokens do not exist, the card is blocked by the Foundations design-tokens card: `needs-replan`.
 2. Use tokens only (no hard-coded colors, spacing, font sizes). Reuse `src/components/ui/*` primitives before creating new ones. New primitive -> add it to `docs/design/components.md`.
 3. Build all states listed in the card: empty, loading, error, populated. Build mobile first, then tablet and desktop.

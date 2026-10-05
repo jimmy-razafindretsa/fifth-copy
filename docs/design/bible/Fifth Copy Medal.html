@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FIFTH COPY — The medal</title>
+<script type="importmap">
+{
+  "imports": { "three": "https://unpkg.com/three@0.184.0/build/three.module.js" },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT"
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@700&family=Oswald:wght@600&display=swap" rel="stylesheet">
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden;cursor:grab;touch-action:pan-y}body.drag{cursor:grabbing}canvas{display:block;width:100%;height:100%}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import * as THREE from 'three';
+await document.fonts.load("700 40px 'Stardos Stencil'"); await document.fonts.load("600 20px 'Oswald'");
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearColor(0, 0); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+document.getElementById('root').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+
+// studio reflections for the metal, built locally (no extra imports)
+{
+  const env = new THREE.Scene();
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ color: 0x5A5048, side: THREE.BackSide })); env.add(sky);
+  const panel = (c, x, y, z, w, h) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); env.add(m); };
+  panel(0xFFF2D8, 4, 5, 5, 6, 3); panel(0xFFE0B0, -6, 1, 3, 3, 6); panel(0xF1E8D6, 0, -6, 2, 8, 2); panel(0xB81D24, 5, -1, -5, 4, 4);
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(env, 0.02).texture;
+}
+{ const key = new THREE.DirectionalLight(0xFFF4E0, 1.4); key.position.set(2, 3, 4); scene.add(key); }
+
+const gold = new THREE.MeshStandardMaterial({ color: 0xE2B23A, metalness: 0.95, roughness: 0.32 });
+const goldDark = new THREE.MeshStandardMaterial({ color: 0xB8862A, metalness: 0.95, roughness: 0.42 });
+const enamel = new THREE.MeshStandardMaterial({ color: 0xB81D24, metalness: 0.1, roughness: 0.22 });
+
+function faceTex(draw) {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  g.fillStyle = '#E2B23A'; g.fillRect(0, 0, 512, 512); draw(g);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+function ringText(g, text, r, size) {
+  g.save(); g.translate(256, 256); g.font = `700 ${size}px 'Stardos Stencil'`; g.fillStyle = '#7A5A16'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const chars = [...text], step = (Math.PI * 1.7) / chars.length; let a = -Math.PI / 2 - (chars.length - 1) * step / 2;
+  chars.forEach(ch => { g.save(); g.rotate(a + Math.PI / 2); g.translate(0, -r); g.fillText(ch, 0, 0); g.restore(); a += step; });
+  g.restore();
+}
+const rings = g => { g.strokeStyle = 'rgba(122,90,22,.55)'; [238, 226, 168].forEach((r, i) => { g.lineWidth = i === 1 ? 3 : 6; g.beginPath(); g.arc(256, 256, r, 0, 7); g.stroke(); }); };
+const frontTex = faceTex(g => { rings(g); ringText(g, 'HERO OF PAPERWORK', 198, 34); });
+const backTex = faceTex(g => {
+  rings(g); ringText(g, 'TYPE FAST · TYPE FIRST', 198, 32);
+  g.fillStyle = '#7A5A16'; g.textAlign = 'center'; g.font = "700 64px 'Stardos Stencil'"; g.fillText('FIFTH', 256, 238);
+  g.font = "700 50px 'Stardos Stencil'"; g.fillText('COPY', 256, 296); g.font = "600 22px 'Oswald'"; g.fillText('№ 0457 · 1978', 256, 340);
+});
+frontTex.center.set(0.5, 0.5); backTex.center.set(0.5, 0.5); backTex.repeat.x = -1;
+const faceF = new THREE.MeshStandardMaterial({ map: frontTex, metalness: 0.9, roughness: 0.34 });
+const faceB = new THREE.MeshStandardMaterial({ map: backTex, metalness: 0.9, roughness: 0.34 });
+
+const medal = new THREE.Group(); scene.add(medal);
+// disc (side gold, top = front face, bottom = back face)
+const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 64), [goldDark, faceF, faceB]);
+disc.rotation.x = Math.PI / 2; medal.add(disc);
+const rim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.026, 12, 72), gold); medal.add(rim);
+// raised star on the front: gold border star + red enamel star
+function star(R, r) { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R; i ? s.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : s.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } return s; }
+const ext = (shape, d, b) => new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 2 });
+const s1 = new THREE.Mesh(ext(star(0.31, 0.13), 0.02, 0.012), gold); s1.position.z = 0.03; medal.add(s1);
+const s2 = new THREE.Mesh(ext(star(0.26, 0.105), 0.025, 0.006), enamel); s2.position.z = 0.045; medal.add(s2);
+const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.03, 32), gold); boss.rotation.x = Math.PI / 2; boss.position.z = 0.08; medal.add(boss);
+// suspension ring + pentagonal ribbon block
+const loop = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.016, 10, 24), gold); loop.position.y = 0.56; medal.add(loop);
+const ribTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+  [['#7E1015', 0, 256]].forEach(([col, x, w]) => { g.fillStyle = col; g.fillRect(x, 0, w, 64); });
+  [['#B81D24', 18, 220], ['#E2B23A', 96, 64], ['#3E3A78', 112, 32]].forEach(([col, x, w]) => { g.fillStyle = col; g.fillRect(x, 0, w, 64); });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const pent = new THREE.Shape(); pent.moveTo(-0.3, 0.52); pent.lineTo(0.3, 0.52); pent.lineTo(0.3, 0.05); pent.lineTo(0, -0.1); pent.lineTo(-0.3, 0.05); pent.closePath();
+const pg = new THREE.ExtrudeGeometry(pent, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1 });
+{ const p = pg.attributes.position, uv = pg.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + 0.3) / 0.6, (p.getY(i) + 0.1) / 0.62); }
+const ribbon = new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ map: ribTex, roughness: 0.85, metalness: 0 }));
+ribbon.position.set(0, 0.62, -0.015); medal.add(ribbon);
+const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.045, 0.05), gold); clasp.position.set(0, 1.15, 0); medal.add(clasp);
+medal.position.y = -0.3;
+
+function size() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.position.set(0, 0.05, 4.4 * Math.max(1, 0.75 / camera.aspect)); camera.lookAt(0, 0.12, 0); camera.updateProjectionMatrix(); }
+addEventListener('resize', size); size();
+
+// horizontal spin only: drag sets velocity, inertia decays, idles into a slow turn
+let rot = 0.5, vel = 0, dragging = false, lastX = 0, idle = 0, last = performance.now();
+addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; vel = 0; document.body.classList.add('drag'); try { e.target.setPointerCapture(e.pointerId); } catch (_) {} });
+addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; rot += dx * 0.012; vel = dx * 0.012 / 0.016; idle = 0; });
+const up = () => { dragging = false; document.body.classList.remove('drag'); };
+addEventListener('pointerup', up); addEventListener('pointercancel', up);
+function loopFn(now) {
+  requestAnimationFrame(loopFn);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!dragging) { rot += vel * dt; vel *= Math.exp(-dt * 1.6); idle += dt; if (idle > 1.5 && Math.abs(vel) < 0.6) vel += (0.6 - vel) * dt * 0.8; }
+  medal.rotation.y = rot;
+  medal.position.y = -0.3 + Math.sin(now / 900) * 0.015;
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(loopFn);
+</script>
+</body>
+</html>

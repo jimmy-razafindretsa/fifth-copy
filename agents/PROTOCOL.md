@@ -20,7 +20,7 @@
 | In-flight notes | issue comments (BRIEF, HANDOFF) | explorer, builder, deliver | start of every session |
 | Executable contract | tests in repo | builder | verification |
 | Milestones | `work/log/<n>.md` | deliver (in the card's PR) | when exploring history |
-| Design | `docs/design/` | ui | UI cards |
+| Design | `docs/design/bible/` (bible = design source of truth), `docs/design/` | ui, analyst, explorer, deliver | any card with a visual, motion, 3D, copy or UX choice |
 
 Context budget: BRIEF <= ~1500 tokens. HANDOFF <= ~300 tokens. `work/log` entry <= ~200 words. Prefer links to paths over pasted content.
 
@@ -105,7 +105,7 @@ The human reviews **major design choices only**. Everything else runs `afk` end 
 2. makes a breaking data change (expand/migrate/contract), or deletes user data;
 3. adds a runtime dependency (`dependencies` in package.json; dev dependencies stay afk with a PR note);
 4. changes the security model: auth, sessions, token formats, the internal HMAC API contract, privacy flows (a `pentest` alone is not a stop: PENTEST blockers are fixed in the card);
-5. sets the visual direction of a screen family for the first time where `docs/spec/art-direction.md` and `docs/design/` leave a real choice open. Later screens of that family, and screens fully specified by the art direction, are afk with see.ts evidence and baselines.
+5. sets the visual direction of a screen family for the first time where the design bible (`docs/design/bible/`), `docs/spec/art-direction.md` and `docs/design/` leave a real choice open. Later screens of that family, and screens fully specified by the art direction, are afk with see.ts evidence and baselines.
 Not reasons to stop: an unverifiable wording (rewrite it as an observable criterion), naming, copy, refactors, test strategy, CI and tooling, `discovered` follow-ups.
 Epic plans: the Analyst may add `plan-approved` itself (`board.ts label <epic> +plan-approved --analyst`) when every card of the epic is detailed, none carries `needs-*`, and the PLAN comment lists no item from 1-5. Otherwise it stops for the human with the exact questions.
 

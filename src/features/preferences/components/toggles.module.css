@@ -1,0 +1,64 @@
+/*
+ * Header toggles, ported 1:1 from docs/design/bible/Fifth Copy Landing.dc.html (bible 7.1 segmented
+ * toggle, 14.1 item 1). Colours are roles from docs/design/tokens.css only, fonts the next/font variables.
+ */
+
+.segmented {
+  display: flex;
+  border: 2px solid var(--color-fg);
+}
+
+.segment {
+  font:
+    600 12px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.14em;
+  padding: 5px 10px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-fg);
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.night {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font:
+    600 12px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.14em;
+  padding: 7px 12px;
+  border: 2px solid var(--color-fg);
+  background: transparent;
+  color: var(--color-fg);
+  cursor: pointer;
+}
+
+/* the gold dot lights when Night shift is on (bible 14.1) */
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--color-fg);
+}
+
+.night[aria-pressed="true"] .dot {
+  background: var(--color-reward);
+}
+
+/* bible 18: hit targets >= 44px on touch (the reference measures 26px and 30px) */
+@media (max-width: 768px) {
+  .segment,
+  .night {
+    min-height: 44px;
+  }
+}

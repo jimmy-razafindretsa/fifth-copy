@@ -1,7 +1,8 @@
 /*
- * Landing shell, ported 1:1 from docs/design/bible/Fifth Copy Landing.dc.html (header and hero; the
- * action controls live in the lobby feature, #99). Colours are roles from docs/design/tokens.css only, fonts the next/font
- * variables (#21); hard print offsets, no radius, no blur (bible 6).
+ * Landing page, ported 1:1 from docs/design/bible/Fifth Copy Landing.dc.html (bible 14.1). This module
+ * holds what every section shares: the page root with the star cursor (7.9), gutters (7.10), kickers and
+ * section headings (4), spinning stars (6), stamps (7.3) and the ink/secondary buttons (7.1). Colours are
+ * roles from docs/design/tokens.css only, fonts the next/font variables; hard print offsets, no radius.
  */
 
 @keyframes fcSpin {
@@ -10,55 +11,60 @@
   }
 }
 
-/* header (bible 14.1 item 1) */
-.header {
+/* page root: desktop gutters 48px (header 32px), fluid down to 16px on phones (bible 7.10, 14.3) */
+.page {
+  --gutter: clamp(16px, 4vw, 48px);
+  --header-gutter: clamp(16px, 3vw, 32px);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 14px 32px;
-  border-bottom: 2px solid var(--color-fg);
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  /* bible 7.9: a 22px red star with an ink outline, hotspot 11 11; the hex values are the bible's palette */
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpolygon points='11,1 13.6,8.2 21,8.2 15,12.6 17.3,20 11,15.4 4.7,20 7,12.6 1,8.2 8.4,8.2' fill='%23B81D24' stroke='%232A2420' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E")
+      11 11,
+    auto;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* over buttons and links the same star in gold; inside text inputs the native caret */
+.page :is(a, button, label) {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpolygon points='11,1 13.6,8.2 21,8.2 15,12.6 17.3,20 11,15.4 4.7,20 7,12.6 1,8.2 8.4,8.2' fill='%23E2B23A' stroke='%232A2420' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E")
+      11 11,
+    pointer;
 }
 
-.monogram {
-  display: block;
-  width: 40px;
-  height: 40px;
-  flex: none;
+.page :is(input, textarea) {
+  cursor: text;
 }
 
-.brandName {
+/* red kicker above every H2; the link role keeps it red on paper and night-ink on Night shift (bible 3.3, 4) */
+.kicker {
   font:
-    700 20px/1 var(--font-stardos),
+    600 13px var(--font-oswald),
     Impact,
     sans-serif;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
 }
 
-/* hero (bible 14.1 item 2): halftone + 8° band */
-.hero {
-  position: relative;
-  overflow: hidden;
-  background-image:
-    radial-gradient(color-mix(in srgb, var(--color-fg) 13%, transparent) 1.3px, transparent 1.7px),
-    linear-gradient(
-      172deg,
-      transparent 0 62%,
-      color-mix(in srgb, var(--color-primary) 7%, transparent) 62% 70%,
-      transparent 70%
-    );
-  background-size:
-    10px 10px,
-    100% 100%;
+/* section H2 scale (bible 4) */
+.h2 {
+  margin: 0;
+  font:
+    700 clamp(36px, 4.4vw, 60px) / 1 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.03em;
 }
 
+.headStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* stars (bible 6): slowly spinning, never over text; tone classes below, duration per instance */
 .star {
   position: absolute;
   clip-path: polygon(
@@ -77,41 +83,126 @@
   pointer-events: none;
 }
 
-.star1 {
-  width: 64px;
-  height: 64px;
+.starRed {
   background: var(--color-primary);
-  left: 2%;
-  /* reference 120px; until the live feed (card 497) makes the hero taller, that sits on the actions row */
-  bottom: 24px;
-  opacity: 0.9;
 }
 
-.star2 {
-  width: 30px;
-  height: 30px;
+.starInk {
   background: var(--color-fg);
-  animation-duration: 30s;
-  left: 44%;
-  top: 30px;
 }
 
-.star3 {
-  width: 22px;
-  height: 22px;
+.starGold {
   background: var(--color-reward);
-  animation-duration: 24s;
-  left: 38%;
-  top: 78px;
 }
 
-.star4 {
-  width: 46px;
-  height: 46px;
+.starPaper {
+  background: var(--color-band-fg);
+}
+
+.starFaintRed {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.starFaintInk {
+  background: color-mix(in srgb, var(--color-fg) 14%, transparent);
+}
+
+.starFaintPaper {
+  background: color-mix(in srgb, var(--color-band-fg) 12%, transparent);
+}
+
+/* stamps (bible 7.3): double red rule, always a little crooked; text in the link role on UI screens */
+.stamp {
+  border: 4px double var(--color-primary);
+  color: var(--color-link);
+  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+  font:
+    700 20px/1.1 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.08em;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* bible 7.1 ink button */
+.inkButton {
+  font:
+    600 13px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 0;
+  padding: 11px 16px;
+  cursor: pointer;
+}
+
+.inkButton:hover {
   background: var(--color-primary);
-  animation-duration: 60s;
-  right: 2%;
-  bottom: 70px;
+  color: var(--color-primary-fg);
+}
+
+/* bible 7.1 secondary button, also as a link */
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  font:
+    600 13px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  background: transparent;
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  padding: 9px 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.secondary:hover {
+  background: var(--color-surface);
+}
+
+/* bible 7.1 segmented toggle (views) */
+.segmented {
+  display: flex;
+  border: 2px solid var(--color-fg);
+  flex: none;
+}
+
+.segment {
+  font:
+    600 11px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.14em;
+  padding: 5px 9px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-fg);
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/*
+ * A lazily mounted embed fills its frame; the reference pages size themselves to the iframe. The light
+ * colour scheme matches the embeds' own, so Chrome keeps the frame transparent on Night shift (a frame
+ * whose scheme differs from its page is painted on an opaque backdrop).
+ */
+.embed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color-scheme: light;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -120,111 +211,11 @@
   }
 }
 
-.heroInner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 48px;
-  padding: 56px 48px 110px;
-  align-items: flex-start;
-  position: relative;
-  z-index: 1;
-}
-
-.heroMain {
-  flex: 1 1 560px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.aside {
-  flex: 1 1 440px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-self: stretch;
-}
-
-/* red kicker; the link role keeps it red on paper and night-ink on Night shift (bible 3.3) */
-.kicker {
-  font:
-    600 13px var(--font-oswald),
-    Impact,
-    sans-serif;
-  letter-spacing: 0.24em;
-  color: var(--color-link);
-}
-
-/* wordmark box (bible 5.1); the final vectors replace the CSS-drawn letters (bible 5) */
-.wordmark {
-  font-size: clamp(64px, 8.6vw, 138px);
-  position: relative;
-  width: 4.375em;
-  height: 1.8333em;
-  flex: none;
-  max-width: 100%;
-  margin: 0;
-}
-
-.wordmarkImg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: left top;
-}
-
-.onInk {
-  display: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .onPaper {
-    display: none;
+/* bible 18: hit targets >= 44px on touch */
+@media (max-width: 768px) {
+  .inkButton,
+  .secondary,
+  .segment {
+    min-height: 44px;
   }
-  :root:not([data-theme="light"]) .onInk {
-    display: block;
-  }
-}
-
-:root[data-theme="dark"] .onPaper {
-  display: none;
-}
-
-:root[data-theme="dark"] .onInk {
-  display: block;
-}
-
-.tagline {
-  font:
-    600 14px var(--font-oswald),
-    Impact,
-    sans-serif;
-  letter-spacing: 0.36em;
-  margin-top: -4px;
-}
-
-.pitch {
-  margin: 0;
-  font:
-    400 21px/1.5 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
-  max-width: 560px;
-  text-wrap: pretty;
-}
-
-/* actions row under the pitch, filled by the lobby entries (#99) */
-.actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: stretch;
-  margin-top: 6px;
-}
-
-.actions:empty {
-  display: none;
 }

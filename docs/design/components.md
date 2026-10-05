@@ -48,6 +48,7 @@ Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` 
 | `typing-done` / `typing-next` on `typing-next-bg` / `typing-remaining` / `typing-error` | `press-ink` / `paper` on `agit-red` / `color-mix(in srgb, #3E3A78 85%, #E8DCC0)` / `agit-red` | same (always on `tape`) | typing strip character states (bible 7.7) |
 | `device-phosphor` / `device-nixie` / `device-bezel` | `phosphor` / `nixie` / `press-ink` | same | device numerals and bezel |
 | `room` | `backroom-grey` | same | room, steel |
+| `band` / `band-fg` / `band-muted` | `press-ink` / `paper` / `night-muted` | same | ink bands (ticker, footer, live-feed frame) and their text (bible 7.10, 14.1) |
 
 ## Colour roles
 Roles the palette does not name follow mapping (a) (human, 2026-10-04) on the Night shift values. Values as declared in `docs/design/tokens.css` (`--t-*`).

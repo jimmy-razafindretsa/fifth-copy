@@ -56,6 +56,11 @@
   --color-reward: var(--brand-medal-gold);
   --color-room: var(--brand-backroom-grey);
 
+  /* ink bands (ticker, footer, feed frame): press-ink under paper text in both themes (bible 7.10, 14.1) */
+  --color-band: var(--brand-press-ink);
+  --color-band-fg: var(--brand-paper);
+  --color-band-muted: var(--brand-night-muted);
+
   /* typing strip character states, always on tape (bible 7.7; remaining = bible extension 85%) */
   --color-tape: var(--brand-tape-paper);
   --color-typing-done: var(--brand-press-ink);
@@ -102,6 +107,8 @@
   --radius-full: 9999px;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.06);
   --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.12);
+  /* the typing strip's inner sepia (bible 3.1 tape-paper), the one soft shadow the bible allows */
+  --shadow-tape: inset 0 0 22px rgb(156 122 69 / 0.45);
 
   /* breakpoints (mobile first): md = tablet 768px, xl = desktop 1280px */
   --breakpoint-md: 48rem;

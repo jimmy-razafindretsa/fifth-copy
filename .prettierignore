@@ -17,3 +17,6 @@ docs/
 packages/*/dist
 services/*/dist
 .claude
+# generated copies of the bible reference pages (scripts/embeds.ts); byte-compared in tests
+/public/3d/*.html
+/public/3d/vendor/

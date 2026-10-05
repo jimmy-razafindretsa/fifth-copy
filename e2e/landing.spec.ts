@@ -1,14 +1,18 @@
 import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
 
-// Contract of #494: the landing shell (bible 14.1 items 1-2) ported from
-// docs/design/bible/Fifth Copy Landing.dc.html. next/font renames families, so they are matched
-// by regex; colour roles are resolved to rgb through a probe element.
+// Contract of #497 (with #489, #373): the whole landing of bible 14.1, ported from
+// docs/design/bible/Fifth Copy Landing.dc.html. next/font renames families, so they are matched by
+// regex; colour roles are resolved to rgb through a probe element.
 
 const KICKER = "MINISTRY OF TYPING · DESK 05 · 1978";
 const TAGLINE = "TYPE FAST · TYPE FIRST";
 const PITCH =
   "Thirty desks. One message. Everyone types the same copy, and the fastest clean copy gets the medal.";
+const SENTENCE = "Type fast. Type first.";
+const STORY = "THE RING ROOMS NEVER STOP TYPING.";
+const STORY_FR = "LES SALLES EN ANNEAU NE S'ARRÊTENT JAMAIS DE TAPER.";
+const QUICK = "QUICK RACE";
 
 /** Computed rgb of a colour role, e.g. `role(page, "--color-fg")`; fails on an unemitted variable. */
 async function role(page: Page, variable: string): Promise<string> {
@@ -24,151 +28,368 @@ async function role(page: Page, variable: string): Promise<string> {
   return value;
 }
 
-const hero = (page: Page) => page.locator("section").first();
+const hero = (page: Page) => page.locator("section#play");
+const tapeInput = (page: Page) => page.getByLabel("Typing practice");
+const tapeStamp = (page: Page) => page.locator("[data-tape] output");
+const overflow = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
-test.describe("landing shell (#494)", () => {
-  test("C1 renders the header, then the hero, with only the lobby entries as controls", async ({
+/** Server-action re-renders on a loaded dev server take a few seconds. */
+const AFTER_ACTION = { timeout: 20_000 };
+
+/**
+ * Loads the landing and waits for hydration: the live-feed frame mounts its embed from an effect, so
+ * `data-embed="mounted"` means the client tree is interactive (controlled inputs keep what is typed).
+ */
+async function ready(page: Page) {
+  await page.goto("/");
+  await expect(page.locator("iframe").first()).toHaveAttribute("data-embed", "mounted", {
+    timeout: 30_000,
+  });
+}
+
+test.describe("landing page (#497)", () => {
+  // three WebGL embeds per page: give parallel workers room (CI runs `next start`, dev is slower)
+  test.beforeEach(() => test.slow());
+
+  test("C1 the bible's sections in order, one h1 and the section headings", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveTitle("FIFTH COPY · TYPE FAST · TYPE FIRST");
+    const order = await page.evaluate(() =>
+      [...document.querySelectorAll("header, main > section, footer")].map(
+        (el) =>
+          el.tagName.toLowerCase() +
+          (el.id ? `#${el.id}` : "") +
+          (el.getAttribute("aria-labelledby") ? `[${el.getAttribute("aria-labelledby")}]` : "") +
+          (el.getAttribute("aria-hidden") === "true" ? "(hidden)" : ""),
+      ),
+    );
+    expect(order).toEqual([
+      "header",
+      "section#play[hero-title]",
+      "section(hidden)",
+      "section[story-title]",
+      "section[clerk-title]",
+      "section[history-title]",
+      "section#how[how-title]",
+      "section[final-title]",
+      "section[medal-title]",
+      "footer",
+    ]);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    const h2s = await page.getByRole("heading", { level: 2 }).allTextContents();
+    expect(h2s).toEqual([
+      STORY,
+      "THIS IS YOUR CLERK.",
+      "A LITTLE HISTORY",
+      "HOW A RACE RUNS",
+      "REPORT TO YOUR DESK.",
+      "HERO OF PAPERWORK",
+    ]);
+    await expect(hero(page).getByText(KICKER, { exact: true })).toBeVisible();
+    await expect(hero(page).getByText(TAGLINE, { exact: true })).toBeVisible();
+    await expect(hero(page).getByText(PITCH, { exact: true })).toBeVisible();
+  });
+
+  test("C2 header: brand link, guide link, EN/FR, NIGHT SHIFT, SIGN IN; no docket before a guest exists", async ({
     page,
   }) => {
     await page.goto("/");
     const header = page.locator("header");
-    await expect(header).toHaveCount(1);
-    const monogram = header.locator('img[src="/brand/monogram-red.svg"]');
-    await expect(monogram).toHaveAttribute("width", "40");
-    await expect(monogram).toHaveAttribute("height", "40");
-    expect(await monogram.boundingBox()).toMatchObject({ width: 40, height: 40 });
-    await expect(header).toHaveText("FIFTH COPY");
-    expect(await header.locator("> *").count()).toBe(1);
-
-    const section = hero(page);
-    const headerFirst = await page.evaluate(() => {
-      const h = document.querySelector("header");
-      const s = document.querySelector("section");
-      return !!h && !!s && !!(h.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING);
-    });
-    expect(headerFirst).toBe(true);
-    await expect(section.getByText(KICKER, { exact: true })).toBeVisible();
-    await expect(section.getByRole("heading", { level: 1, name: "Fifth Copy" })).toBeVisible();
-    await expect(section.getByText(TAGLINE, { exact: true })).toBeVisible();
-    await expect(section.getByText(PITCH, { exact: true })).toBeVisible();
-
-    await expect(page.getByText("Start here")).toHaveCount(0);
-    // scoped to the page shell: the Next.js dev overlay (shadow DOM) has its own buttons
-    const shell = page.locator("header, main");
-    await expect(shell.locator("ul")).toHaveCount(0);
-    await expect(shell.locator("a, select, textarea")).toHaveCount(0);
-    // #99 fills the actions slot: two forms, one field, two buttons
-    await expect(shell.locator("form")).toHaveCount(2);
-    await expect(shell.locator("input")).toHaveCount(1);
-    await expect(shell.locator("button")).toHaveCount(2);
-  });
-
-  test("C2 styles come from the reference through tokens", async ({ page }) => {
-    await page.goto("/");
-    const primary = await role(page, "--color-primary");
-    const fg = await role(page, "--color-fg");
-
+    await expect(header.getByRole("link", { name: "FIFTH COPY" })).toHaveAttribute("href", "/");
+    const nav = header.getByRole("navigation", { name: "Site" });
+    await expect(nav.getByRole("link", { name: "HOW TO TYPE É Ç « »" })).toHaveAttribute(
+      "href",
+      "#how",
+    );
+    const language = nav.getByRole("group", { name: "Language" });
+    await expect(language.getByRole("button", { name: "EN", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(language.getByRole("button", { name: "FR", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await expect(nav.getByRole("button", { name: "NIGHT SHIFT" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "SIGN IN" })).toHaveAttribute("href", "/sign-in");
+    await expect(nav.getByText("GUEST", { exact: true })).toHaveCount(0);
     const kicker = await hero(page)
       .getByText(KICKER, { exact: true })
       .evaluate((el) => {
         const s = getComputedStyle(el);
-        return { family: s.fontFamily, spacing: s.letterSpacing, color: s.color };
+        return { family: s.fontFamily, spacing: s.letterSpacing };
       });
     expect(kicker.family).toMatch(/Oswald/i);
     expect(kicker.spacing).toBe("3.12px");
-    expect(kicker.color).toBe(primary);
-
-    const title = await page
-      .locator("header")
-      .getByText("FIFTH COPY", { exact: true })
-      .evaluate((el) => {
-        const s = getComputedStyle(el);
-        return { family: s.fontFamily, size: s.fontSize };
-      });
-    expect(title.family).toMatch(/Stardos.?Stencil/i);
-    expect(title.size).toBe("20px");
-
-    const pitch = await hero(page)
-      .getByText(PITCH, { exact: true })
-      .evaluate((el) => {
-        const s = getComputedStyle(el);
-        return { family: s.fontFamily, size: s.fontSize, maxWidth: s.maxWidth };
-      });
-    expect(pitch.family).toMatch(/Courier.?Prime/i);
-    expect(pitch).toMatchObject({ size: "21px", maxWidth: "560px" });
-
-    const border = await page.locator("header").evaluate((el) => {
-      const s = getComputedStyle(el);
-      return { width: s.borderBottomWidth, style: s.borderBottomStyle, color: s.borderBottomColor };
-    });
-    expect(border).toEqual({ width: "2px", style: "solid", color: fg });
-
-    const ground = await hero(page).evaluate((el) => getComputedStyle(el).backgroundImage);
-    expect(ground).toContain("radial-gradient");
-    expect(ground).toContain("linear-gradient(172deg");
   });
 
-  test("C3 four spinning aria-hidden stars", async ({ page }) => {
-    await page.goto("/");
-    const stars = await hero(page)
-      .locator('[aria-hidden="true"]')
-      .evaluateAll((els) =>
-        els
-          .map((el) => getComputedStyle(el))
-          .map((s) => ({ clip: s.clipPath, name: s.animationName, duration: s.animationDuration })),
-      );
-    expect(stars).toHaveLength(4);
-    for (const star of stars) {
-      expect(star.clip.replace(/\s+/g, " ")).toMatch(/^polygon\(50% 0%, 61% 35%/);
-      // CSS modules scope the keyframes name (`<hash>__fcSpin`)
-      expect(star.name).toMatch(/fcSpin$/);
+  test("C3 EN/FR switches the whole page and is remembered (ADR 0010)", async ({ page }) => {
+    await ready(page);
+    await page.getByRole("button", { name: "FR", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 2, name: STORY_FR })).toBeVisible(AFTER_ACTION);
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+    await expect(page.getByRole("button", { name: "FR", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByRole("button", { name: "COURSE RAPIDE" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "QUART DE NUIT" })).toBeVisible();
+    // one language at a time (bible 2): no English section heading is left
+    await expect(page.getByRole("heading", { level: 2, name: STORY })).toHaveCount(0);
+    await expect(page.locator("[data-tape]")).toContainText("Écris vite. Écris le premier.");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+    await expect(page.getByRole("heading", { level: 2, name: STORY_FR })).toBeVisible(AFTER_ACTION);
+    await page.getByRole("button", { name: "EN", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 2, name: STORY })).toBeVisible(AFTER_ACTION);
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  });
+
+  test("C4 NIGHT SHIFT switches the theme at once, lights the gold dot and is remembered", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await ready(page);
+    const toggle = page.getByRole("button", { name: "NIGHT SHIFT" });
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    const paper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    await toggle.click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark", AFTER_ACTION);
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    const gold = await role(page, "--color-reward");
+    await expect(toggle.locator("span").first()).toHaveCSS("background-color", gold);
+    const night = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    expect(night).not.toBe(paper);
+    expect(night).toBe(await role(page, "--color-bg"));
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByRole("button", { name: "NIGHT SHIFT" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await page.getByRole("button", { name: "NIGHT SHIFT" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light", AFTER_ACTION);
+  });
+
+  test("C5 the typing strip stamps ACCEPTED with WPM, RETURNED with errors, and resets", async ({
+    page,
+  }) => {
+    await ready(page);
+    const input = tapeInput(page);
+    await expect(tapeStamp(page)).toHaveText("");
+    const chars = page.locator("[data-tape] [data-state]");
+    await expect(chars).toHaveCount(SENTENCE.length);
+    await expect(chars.first()).toHaveAttribute("data-state", "next");
+    await input.pressSequentially(SENTENCE);
+    await expect(tapeStamp(page)).toHaveText(/^ACCEPTED · \d+ WPM$/);
+    await expect(chars.last()).toHaveAttribute("data-state", "done");
+    await page.getByRole("button", { name: "↺ AGAIN" }).click();
+    await expect(tapeStamp(page)).toHaveText("");
+    await expect(input).toHaveValue("");
+    await input.pressSequentially("Tyxe fast. Type first.");
+    await expect(tapeStamp(page)).toHaveText("RETURNED · 1 ERRORS");
+    await expect(chars.nth(2)).toHaveAttribute("data-state", "wrong");
+    const font = await chars.first().evaluate((el) => getComputedStyle(el).fontFamily);
+    expect(font).toMatch(/IBM.?Plex.?Mono/i);
+  });
+
+  test("C6 the live feed frame: LIVE badge, ticking room chip, CAM, caption, view toggle, bobbing stamp", async ({
+    page,
+  }) => {
+    await ready(page);
+    const aside = hero(page)
+      .locator("iframe[aria-hidden='true']")
+      .locator("xpath=ancestor::div[2]");
+    await expect(aside.getByText("LIVE", { exact: true })).toBeVisible();
+    const chip = aside.getByText(/^ROOM \d{3} · \d\d:\d\d:\d\d$/);
+    await expect(chip).toBeVisible();
+    const before = await chip.textContent();
+    await page.waitForTimeout(1200);
+    expect(await chip.textContent()).not.toBe(before);
+    const room = /ROOM (\d{3})/.exec(before ?? "")?.[1];
+    await expect(
+      aside.getByText(`STREAMING · Room ${room}, one of the ring rooms. Right now.`),
+    ).toBeVisible();
+    await expect(aside.getByText("CAM 02 · 30/30")).toBeVisible();
+    const views = aside.getByRole("group", { name: "Camera" });
+    await expect(views.getByRole("button", { name: "AUTO" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await views.getByRole("button", { name: "FIRST PERSON" }).click();
+    await expect(views.getByRole("button", { name: "FIRST PERSON" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(views.getByRole("button", { name: "AUTO" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    const stamp = aside.locator("[aria-hidden='true']").filter({ hasText: `ROOM ${room}` });
+    await expect(stamp).toContainText("30 SEATS");
+    expect(await stamp.evaluate((el) => getComputedStyle(el).animationName)).toMatch(/fcBob$/);
+    const frame = hero(page).locator("iframe");
+    await expect(frame).toHaveAttribute("title", "Live render of the ring room");
+    await expect(frame).toHaveAttribute("src", "/3d/lobby.html?embed=1");
+  });
+
+  test("C7 the three embeds are the bible's reference pages, served locally and mounted lazily", async ({
+    page,
+    request,
+  }) => {
+    await ready(page);
+    const frames = page.locator("iframe");
+    await expect(frames).toHaveCount(3);
+    const titles = await frames.evaluateAll((els) => els.map((el) => el.getAttribute("title")));
+    expect(titles).toEqual([
+      "Live render of the ring room",
+      "Your clerk, a randomly issued 3D character",
+      "3D medal you can earn, drag to spin",
+    ]);
+    // below the fold: not mounted until scrolled near
+    await expect(frames.nth(2)).toHaveAttribute("data-embed", "idle");
+    await frames.nth(2).scrollIntoViewIfNeeded();
+    await expect(frames.nth(2)).toHaveAttribute("data-embed", "mounted", AFTER_ACTION);
+    await expect(frames.nth(2)).toHaveAttribute("src", "/3d/medal.html");
+    for (const path of ["/3d/lobby.html", "/3d/clerk.html", "/3d/medal.html"]) {
+      const res = await request.get(path);
+      expect(res.status(), path).toBe(200);
+      const html = await res.text();
+      expect(html).toContain("/3d/vendor/three.module.min.js");
+      expect(html).not.toMatch(/unpkg|googleapis/);
     }
-    expect(stars.map((s) => s.duration)).toEqual(["50s", "30s", "24s", "60s"]);
+    for (const path of ["/3d/vendor/three.module.min.js", "/3d/fonts/embed-fonts.css"]) {
+      expect((await request.get(path)).status(), path).toBe(200);
+    }
   });
 
-  test("C3 stars stop under reduced motion", async ({ page }) => {
+  test("C8 the clerk embed fills the personnel file through fc-clerk (bible 15)", async ({
+    page,
+  }) => {
+    await ready(page);
+    const webgl = await page.evaluate(
+      () => !!document.createElement("canvas").getContext("webgl2"),
+    );
+    test.skip(!webgl, "no WebGL in this browser");
+    test.setTimeout(120_000);
+    const rows = page.locator("[aria-labelledby='clerk-title'] dd");
+    await expect(rows).toHaveCount(5);
+    await expect(rows.first()).toHaveText("…");
+    await expect(page.locator("[aria-labelledby='clerk-title'] dl")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await rows.first().scrollIntoViewIfNeeded();
+    await expect(rows.first()).not.toHaveText("…", { timeout: 20_000 });
+    const values = await rows.allTextContents();
+    expect(values.every((v) => v.length > 1 && v !== "…")).toBe(true);
+    await expect(page.getByText("UNASSIGNED", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "REISSUE UNIFORM" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveAttribute(
+      "href",
+      "/locker",
+    );
+    await expect(page.locator("[aria-labelledby='clerk-title'] ol li")).toHaveText([
+      "RECRUIT",
+      "CLERK",
+      "OFFICER",
+      "COMMISSAR",
+      "HERO OF PAPERWORK",
+    ]);
+  });
+
+  test("C9 ticker, history, how, final call and footer carry the bible's copy and recipes", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const primary = await role(page, "--color-primary");
+    const ticker = page.locator("main > section[aria-hidden='true']");
+    const words = await ticker.locator("span > span").allTextContents();
+    expect(words).toEqual([
+      ...["TYPE FAST", "TYPE FIRST", "NO TYPOS", "THIRTY DESKS", "ONE MESSAGE"],
+      ...["TYPE FAST", "TYPE FIRST", "NO TYPOS", "THIRTY DESKS", "ONE MESSAGE"],
+    ]);
+    expect(
+      await ticker.locator("> div").evaluate((el) => getComputedStyle(el).animationName),
+    ).toMatch(/fcMarquee$/);
+
+    await expect(page.locator("[aria-labelledby='history-title'] h3")).toHaveText([
+      "THE TYPING POOL",
+      "MACHINES ON FILE",
+      "CARBON COPIES",
+      "SAMIZDAT",
+    ]);
+    const steps = page.locator("#how li");
+    await expect(steps).toHaveCount(3);
+    const rules = await steps.evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).borderTopColor),
+    );
+    expect(rules[0]).toBe(primary);
+    expect(rules[1]).toBe(await role(page, "--color-fg"));
+    expect(rules[2]).toBe(await role(page, "--color-rival"));
+
+    const final = page.locator("[aria-labelledby='final-title']");
+    expect(await final.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(primary);
+    await expect(final.getByRole("button", { name: QUICK })).toBeVisible();
+    await expect(page.getByRole("button", { name: QUICK })).toHaveCount(2);
+
+    const footer = page.locator("footer");
+    for (const name of ["PLAY", "LEARN", "AEGIS CORP."]) {
+      await expect(footer.getByRole("navigation", { name })).toBeVisible();
+    }
+    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(11);
+    const social = footer.getByRole("list").getByRole("link");
+    await expect(social).toHaveCount(4);
+    for (const link of await social.all()) {
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveAttribute("rel", /noopener/);
+    }
+    await expect(footer.getByText("BUILT BYAEGIS CORP.")).toBeVisible();
+    await expect(
+      footer.getByText("© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec"),
+    ).toBeVisible();
+    await expect(footer.getByText("No email. No chat. Your typing stays yours.")).toBeVisible();
+    expect(await footer.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("14px");
+  });
+
+  test("C10 QUICK RACE opens a room and the header then files the guest", async ({ page }) => {
+    await ready(page);
+    await hero(page).getByRole("button", { name: QUICK }).click();
+    await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
+    const docket = page.locator("header").getByText("GUEST", { exact: true });
+    await expect(docket).toBeVisible();
+    await expect(docket.locator("xpath=..")).toContainText(/^Comrade [A-Za-zÀ-ÿ]+-\d{3,4}GUEST$/);
+  });
+
+  test("C11 reduced motion stops marquee, stars, bob and the caret blink", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
-    const stars = await hero(page)
-      .locator('[aria-hidden="true"]')
-      .evaluateAll((els) =>
-        els
-          .map((el) => getComputedStyle(el))
-          .map((s) => ({ name: s.animationName, duration: s.animationDuration })),
-      );
-    expect(stars).toHaveLength(4);
-    for (const star of stars) {
-      expect(star.name === "none" || star.duration === "0.01ms", JSON.stringify(star)).toBe(true);
-    }
+    const animated = await page.evaluate(() =>
+      [...document.querySelectorAll("main *")]
+        .map((el) => getComputedStyle(el))
+        // globals.css clamps every duration to 0.01ms (Chrome reports it as "1e-05s")
+        .filter((s) => s.animationName !== "none" && parseFloat(s.animationDuration) > 0.001)
+        .map((s) => s.animationName),
+    );
+    expect(animated).toEqual([]);
+    const next = page.locator("[data-tape] [data-state='next']");
+    await expect(next).toHaveCSS("background-color", await role(page, "--color-typing-next-bg"));
   });
 
   for (const scheme of ["light", "dark"] as const) {
-    const [visible, hidden] =
-      scheme === "light"
-        ? ["/brand/wordmark-red-on-paper.svg", "/brand/wordmark-red-on-ink.svg"]
-        : ["/brand/wordmark-red-on-ink.svg", "/brand/wordmark-red-on-paper.svg"];
-
-    test(`C4 ${scheme}: wordmark variant and page ground`, async ({ page }) => {
+    test(`C12 ${scheme}: accessible, no horizontal scroll, in both languages`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });
-      await page.goto("/");
-      const h1 = page.getByRole("heading", { level: 1 });
-      await expect(h1.locator(`img[src="${visible}"]`)).toBeVisible();
-      await expect(h1.locator(`img[src="${hidden}"]`)).toHaveCSS("display", "none");
-      await expect(h1).toHaveAccessibleName("Fifth Copy");
-      const bg = await role(page, "--color-bg");
-      const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(body).toBe(bg);
-    });
-
-    test(`C7 ${scheme}: accessible, no horizontal scroll`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme: scheme });
-      await page.goto("/");
+      await ready(page);
       await expect(page.getByRole("heading", { level: 1, name: "Fifth Copy" })).toBeVisible();
       await expectNoA11yViolations(page);
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - window.innerWidth,
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+      await page.getByRole("button", { name: "FR", exact: true }).click();
+      await expect(page.getByRole("heading", { level: 2, name: STORY_FR })).toBeVisible(
+        AFTER_ACTION,
       );
-      expect(overflow).toBeLessThanOrEqual(0);
+      await expectNoA11yViolations(page);
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
   }
 });

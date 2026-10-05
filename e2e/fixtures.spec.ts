@@ -1,10 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { isBenignFlightAbort, watchPage, type FailedRequest } from "./fixtures";
+import { isBenignEmbedAbort, isBenignFlightAbort, watchPage, type FailedRequest } from "./fixtures";
 
 // #519, #107: the failed-request guard exempts only an aborted Flight fetch (server-action POST or
 // RSC GET) answered 2xx text/x-component.
 const actionAbort: FailedRequest = {
   errorText: "net::ERR_ABORTED",
+  path: "/",
   method: "POST",
   nextAction: "4096ae99485ce7f4e760a82b8c9080096cf1f3dc63",
   rsc: null,
@@ -37,6 +38,30 @@ test.describe("failed-request guard (#519)", () => {
   test("exempts an aborted RSC GET answered 2xx text/x-component", () => {
     expect(isBenignFlightAbort(rscAbort)).toBe(true);
   });
+
+  // #497: an embed asset fetch cut short by leaving the landing is benign; anything else is not
+  const embedAbort: FailedRequest = {
+    errorText: "net::ERR_ABORTED",
+    path: "/3d/vendor/three.core.min.js",
+    method: "GET",
+    nextAction: null,
+    rsc: null,
+    status: null,
+    contentType: null,
+  };
+  test("exempts an aborted GET of a /3d/ embed asset", () => {
+    expect(isBenignEmbedAbort(embedAbort)).toBe(true);
+    expect(isBenignFlightAbort(embedAbort)).toBe(false);
+  });
+  for (const [name, change] of [
+    ["another path", { path: "/brand/monogram-red.svg" }],
+    ["another network error", { errorText: "net::ERR_CONNECTION_REFUSED" }],
+    ["a POST", { method: "POST" }],
+  ] as const) {
+    test(`flags ${name} as an embed abort`, () => {
+      expect(isBenignEmbedAbort({ ...embedAbort, ...change })).toBe(false);
+    });
+  }
 
   for (const [name, change] of [
     ["a GET rsc with another network error", { errorText: "net::ERR_FAILED" }],

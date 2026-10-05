@@ -1,16 +1,25 @@
 import Image from "next/image";
-import { getT } from "@/i18n";
-import styles from "./landing.module.css";
+import { getViewer } from "@/features/identity";
+import { getTheme, LocaleToggle, ThemeToggle } from "@/features/preferences";
+import { fill, getLocale, getT } from "@/i18n";
+import { LINKS } from "../links";
+import styles from "./header.module.css";
 
 /**
- * Landing header (bible 14.1 item 1, reference `Fifth Copy Landing.dc.html` header). MVP: brand group
- * only; `end` takes the nav, toggles, guest docket and sign-in of later cards.
+ * Landing header (bible 14.1 item 1, reference `Fifth Copy Landing.dc.html`): FC icon + FIFTH COPY,
+ * the guide link, EN/FR, NIGHT SHIFT, the guest docket and SIGN IN. The docket only shows a viewer
+ * that exists: reads never create guests (ADR 0009), so a first visit has nothing to file yet.
  */
-export async function LandingHeader({ end }: { end?: React.ReactNode }) {
-  const t = await getT();
+export async function LandingHeader() {
+  const [t, locale, theme, viewer] = await Promise.all([
+    getT(),
+    getLocale(),
+    getTheme(),
+    getViewer(),
+  ]);
   return (
     <header className={styles.header}>
-      <div className={styles.brand}>
+      <a href={LINKS.home} className={styles.brand}>
         <Image
           className={styles.monogram}
           src="/brand/monogram-red.svg"
@@ -19,9 +28,24 @@ export async function LandingHeader({ end }: { end?: React.ReactNode }) {
           alt=""
           loading="eager"
         />
-        <div className={styles.brandName}>{t.brand.name}</div>
-      </div>
-      {end}
+        <span className={styles.brandName}>{t.brand.name}</span>
+      </a>
+      <nav aria-label={t.header.navLabel} className={styles.nav}>
+        <a href={LINKS.guide} className={styles.navLink}>
+          {t.header.guide}
+        </a>
+        <LocaleToggle locale={locale} label={t.header.languageLabel} />
+        <ThemeToggle theme={theme} label={t.header.nightShift} />
+        {viewer ? (
+          <div className={styles.docket}>
+            <span>{fill(t.header.honorific, { name: viewer.name })}</span>
+            {viewer.isGuest ? <span className={styles.tag}>{t.header.guestTag}</span> : null}
+          </div>
+        ) : null}
+        <a href={LINKS.signIn} className={styles.signIn}>
+          {t.header.signIn}
+        </a>
+      </nav>
     </header>
   );
 }

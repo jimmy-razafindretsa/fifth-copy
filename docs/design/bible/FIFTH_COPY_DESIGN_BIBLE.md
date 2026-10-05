@@ -44,6 +44,7 @@ A Kahoot-style **multiplayer typing race** for secondary-school students (12–1
 - Body: sentence case, Courier Prime, 1–3 sentences per paragraph, `text-wrap: pretty`.
 - Numbers as paperwork: `№ 0457`, `DESK 05`, `FORM 5-C`, `ROOM 457`, `CAM 02 · 30/30`.
 - Guest names: `Comrade <Animal>-<3 digits>` / `Camarade <Animal>-<3 digits>`. Animals (EN/FR): Sparrow/Moineau, Badger/Blaireau, Heron/Héron, Marmot/Marmotte, Lynx/Lynx, Otter/Loutre, Crow/Corbeau, Hedgehog/Hérisson.
+  - Extension (#32): the full guest word lists (>= 60 EN and >= 60 FR common nouns and animals, starting with these 8, no proper names) live in `src/features/identity/guest/words.ts`. Stored names are bare (`Sparrow-482`, digits 100-999, 4 digits on collision); the honorific is UI copy.
 - Period details (papirosa smoke, ashtrays, vodka on the Major's side table) are **set dressing only**. They never appear in copy as jokes, rewards or instructions to students.
 - The French is Québec-friendly: `courriel`, `clavardage`, `chandail`, "tu" form for the player.
 

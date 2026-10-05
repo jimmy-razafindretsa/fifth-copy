@@ -1,0 +1,33 @@
+// Curated guest-name words (design bible section 2): common nouns and animals,
+// no proper names, one word each (no space, no hyphen). Each list starts with
+// the 8 bible animals. Reviewed by hand in #32; the automated profanity check
+// follows #42. Avoid words that read as slang or insults in either language.
+export const EN_WORDS = [
+  // bible animals
+  "Sparrow", "Badger", "Heron", "Marmot", "Lynx", "Otter", "Crow", "Hedgehog",
+  // animals
+  "Beaver", "Bison", "Bittern", "Caribou", "Crane", "Elk", "Falcon", "Ferret",
+  "Finch", "Fox", "Gull", "Hare", "Hawk", "Ibis", "Jay", "Kestrel",
+  "Lark", "Magpie", "Marten", "Mink", "Moose", "Owl", "Pelican", "Pigeon",
+  "Plover", "Puffin", "Rabbit", "Raven", "Robin", "Starling", "Stoat", "Stork",
+  "Swan", "Tern", "Walrus", "Weasel", "Wolf", "Wren", "Yak", "Ermine",
+  // paperwork and household nouns
+  "Anvil", "Birch", "Button", "Compass", "Desk", "Docket", "Ferry", "Kettle",
+  "Lantern", "Ledger", "Pencil", "Ribbon", "Samovar", "Stamp", "Teapot", "Thimble",
+  "Tractor", "Tram", "Typewriter", "Walnut",
+] as const;
+
+export const FR_WORDS = [
+  // animaux de la bible
+  "Moineau", "Blaireau", "Héron", "Marmotte", "Lynx", "Loutre", "Corbeau", "Hérisson",
+  // animaux
+  "Castor", "Bison", "Butor", "Caribou", "Cigogne", "Wapiti", "Faucon", "Furet",
+  "Pinson", "Renard", "Mouette", "Lièvre", "Épervier", "Ibis", "Geai", "Crécerelle",
+  "Alouette", "Pie", "Martre", "Vison", "Orignal", "Hibou", "Pélican", "Pigeon",
+  "Pluvier", "Macareux", "Lapin", "Chouette", "Merle", "Étourneau", "Hermine", "Hirondelle",
+  "Cygne", "Sterne", "Morse", "Belette", "Loup", "Roitelet", "Yack", "Mésange",
+  // paperasse et objets du quotidien
+  "Enclume", "Bouleau", "Bouton", "Boussole", "Pupitre", "Dossier", "Traversier", "Bouilloire",
+  "Lanterne", "Registre", "Crayon", "Ruban", "Samovar", "Cachet", "Théière", "Tracteur",
+  "Tramway", "Noyer", "Formulaire", "Tiroir",
+] as const;

@@ -5,7 +5,9 @@
   body {
     background: var(--color-bg);
     color: var(--color-fg);
-    font-family: var(--font-sans);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.55;
   }
   :focus-visible {
     outline: 2px solid var(--color-focus);

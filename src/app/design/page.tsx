@@ -41,7 +41,7 @@ function Swatch({ role, chip }: { role: string; chip: string }) {
   return (
     <li className="flex items-center gap-2">
       <span aria-hidden className={`h-8 w-8 shrink-0 rounded-sm border border-border ${chip}`} />
-      <code data-role={role} className="font-mono text-sm text-fg">
+      <code data-role={role} className="font-typing text-sm text-fg">
         {role}
       </code>
     </li>
@@ -67,7 +67,7 @@ export default function DesignPage() {
           <figure className="flex flex-col gap-2">
             <p
               data-sample="typing"
-              className="rounded-md border border-border bg-tape px-4 py-3 font-mono text-xl"
+              className="rounded-md border border-border bg-tape px-4 py-3 font-typing text-xl"
             >
               <span className="text-typing-done">Type fast. T</span>
               <span className="text-typing-error">u</span>
@@ -81,7 +81,7 @@ export default function DesignPage() {
           <figure className="flex flex-col gap-2">
             <p
               data-sample="device"
-              className="flex gap-6 rounded-md bg-device-bezel px-4 py-3 font-mono text-2xl"
+              className="flex gap-6 rounded-md bg-device-bezel px-4 py-3 font-device text-2xl"
             >
               <span className="text-device-phosphor">0412</span>
               <span className="text-device-nixie">88:21</span>

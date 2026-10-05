@@ -17,6 +17,7 @@ echo "visual: $IMAGE on network $NETWORK (${MODE:-check only})"
 docker run --rm --network "$NETWORK" \
   -e CI=1 -e PW_VISUAL=1 -e NEXT_TELEMETRY_DISABLED=1 \
   -e DATABASE_URL="postgresql://app:app@postgres:5432/app?schema=public" \
+  -e RACE_TOKEN_SECRET=ci-only-race-token-secret-0123456789abcdef0123456789abcdef \
   -v "$ARCHIVE:/src.tar:ro" -v "$PWD/e2e/__screenshots__:/out" \
   "$IMAGE" bash -c "
     set -e; mkdir /app && cd /app && tar -xf /src.tar

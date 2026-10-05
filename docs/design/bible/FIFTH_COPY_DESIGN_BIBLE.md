@@ -119,6 +119,8 @@ Text is 4.5:1 minimum. Never put muted text on red. On red grounds use paper or 
 Google Fonts URL:
 `https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Oswald:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=Courier+Prime:wght@400;700&display=swap`
 
+**Flavour and device faces (extension, #21, from `docs/spec/art-direction.md` 7):** **Special Elite 400** for story cards, intercepted-cable headers and quotes (never text to type), and **VT323 400** for numerals inside nixie tubes and CRTs only. With them the app ships six faces; the loaded weights are Stardos Stencil 700, Oswald 600/700, IBM Plex Mono 400/700, Courier Prime 400/700, all self-hosted through `next/font` (no Google Fonts URL at runtime). Inventory: `docs/design/components.md` "Fonts".
+
 **Scale (desktop):** hero wordmark `clamp(64px,8.6vw,138px)` · section H2 `clamp(36px,4.4vw,60px)` · final CTA `clamp(40px,6vw,88px)` · kicker 13px Oswald · body 16–21px.
 
 **Kicker pattern:** red Oswald 13px `.24em` above every H2 (e.g. `CASE FILE · THE STORY`, `ARCHIVE · DECLASSIFIED`, `PERSONNEL FILE`).
@@ -460,7 +462,7 @@ URL flags: lobby `?embed=1` (pixelRatio 1), clerk `?locker=1` (starts in the def
 ---
 
 ## 18. Checklist before shipping any new screen or asset
-- [ ] Uses only palette tokens (section 3) and the four fonts (section 4).
+- [ ] Uses only palette tokens (section 3) and the fonts of section 4 (four faces plus the flavour and device extension).
 - [ ] EN and FR complete, one language visible at a time, Québec French.
 - [ ] Night shift checked (CSS vars with light fallbacks).
 - [ ] Buttons and stamps follow section 7. Motion follows section 8 and respects reduced motion.

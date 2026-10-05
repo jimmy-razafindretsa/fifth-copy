@@ -12,7 +12,7 @@ import {
 import { db } from "@/server/db";
 import { withUniqueTypistName } from "../guest/names";
 
-// Server-only function, deliberately NOT a "use server" Server Action: guest
+// Server-only function, deliberately NOT a Server Action (no use-server directive): guest
 // creation must not be a public endpoint. Call it only from inside a Server
 // Function or Route Handler that performs a write needing an identity (e.g.
 // createLobby, mintRaceToken): Next only allows cookies().set there.

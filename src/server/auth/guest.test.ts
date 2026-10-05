@@ -3,7 +3,12 @@ import { createGuestResolver, type GuestCookieJar, type GuestRow } from "./guest
 import { GUEST_COOKIE, signGuestCookie } from "./guest-cookie";
 
 const secret = "k".repeat(32);
-const sparrow: GuestRow = { id: "u1", typistName: "Sparrow-482", isGuest: true, avatarStatus: "NONE" };
+const sparrow: GuestRow = {
+  id: "u1",
+  typistName: "Sparrow-482",
+  isGuest: true,
+  avatarStatus: "NONE",
+};
 
 function jar(value?: string, { readOnly = false } = {}) {
   const store = new Map<string, string>(value === undefined ? [] : [[GUEST_COOKIE, value]]);
@@ -11,7 +16,8 @@ function jar(value?: string, { readOnly = false } = {}) {
     get: (name: string) => (store.has(name) ? { name, value: store.get(name)! } : undefined),
     set: vi.fn((name: string, v: string) => void store.set(name, v)),
     delete: vi.fn((name: string) => {
-      if (readOnly) throw new Error("Cookies can only be modified in a Server Action or Route Handler");
+      if (readOnly)
+        throw new Error("Cookies can only be modified in a Server Action or Route Handler");
       store.delete(name);
     }),
     has: (name: string) => store.has(name),

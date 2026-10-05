@@ -14,18 +14,30 @@ function seeded(seed: number) {
 }
 
 const BIBLE_EN = ["Sparrow", "Badger", "Heron", "Marmot", "Lynx", "Otter", "Crow", "Hedgehog"];
-const BIBLE_FR = ["Moineau", "Blaireau", "Héron", "Marmotte", "Lynx", "Loutre", "Corbeau", "Hérisson"];
+const BIBLE_FR = [
+  "Moineau",
+  "Blaireau",
+  "Héron",
+  "Marmotte",
+  "Lynx",
+  "Loutre",
+  "Corbeau",
+  "Hérisson",
+];
 
 describe("word lists (C1)", () => {
   it.each([
     ["EN", EN_WORDS, BIBLE_EN],
     ["FR", FR_WORDS, BIBLE_FR],
-  ] as const)("%s has >= 60 unique single words including the 8 bible animals", (_l, words, bible) => {
-    expect(words.length).toBeGreaterThanOrEqual(60);
-    expect(new Set(words).size).toBe(words.length);
-    for (const w of words) expect(w).toMatch(/^\p{Lu}\p{Ll}+$/u);
-    for (const a of bible) expect(words).toContain(a);
-  });
+  ] as const)(
+    "%s has >= 60 unique single words including the 8 bible animals",
+    (_l, words, bible) => {
+      expect(words.length).toBeGreaterThanOrEqual(60);
+      expect(new Set(words).size).toBe(words.length);
+      for (const w of words) expect(w).toMatch(/^\p{Lu}\p{Ll}+$/u);
+      for (const a of bible) expect(words).toContain(a);
+    },
+  );
 
   it("draws from the deduplicated union of both lists", () => {
     expect(new Set(TYPIST_WORDS).size).toBe(TYPIST_WORDS.length);

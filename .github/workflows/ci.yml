@@ -31,6 +31,15 @@ jobs:
     name: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      # Race-server integration tests run against a real Redis (ADR 0008, ARCHITECTURE 10).
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

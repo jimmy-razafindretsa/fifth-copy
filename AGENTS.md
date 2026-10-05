@@ -19,6 +19,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - install: `npm install` (npm workspaces: root = web app, `packages/*`, `services/*`)
 - dev: `npm run dev` (web) · `npm run dev:race` (race server, `/health` on :4000) · build race server: `npm run build:race`
 - check (lint, types, boundaries, unit; prints <=20 lines): `scripts/check.sh`
+  (unit step needs Redis: `npm run db:up` and `REDIS_URL` loaded from `.env`; race-server room tests fail without it)
 - e2e: `npx playwright test [path]`
 - prisma validate: `npx prisma validate`
 - prisma migrate (DEV DB only): `npx prisma migrate dev --name <slug>`

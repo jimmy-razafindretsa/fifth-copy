@@ -54,7 +54,10 @@ test.describe("fonts (#21)", () => {
         const font = `${weight} 16px ${family}`;
         const result = await loadFace(page, font, "Fifth Copy 0412");
         expect(result.count, font).toBeGreaterThanOrEqual(1);
-        expect(result.statuses.every((s) => s === "loaded"), font).toBe(true);
+        expect(
+          result.statuses.every((s) => s === "loaded"),
+          font,
+        ).toBe(true);
         expect(result.check, font).toBe(true);
       }
     }

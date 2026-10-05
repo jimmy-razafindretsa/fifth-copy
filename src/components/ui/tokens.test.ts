@@ -313,7 +313,11 @@ describe("#21 C2 font roles", () => {
       expect(theme.get(`--font-${name}`), name).toBe(norm(value));
     }
     const fonts = [...theme.keys()].filter((k) => k.startsWith("--font-"));
-    expect(fonts.sort()).toEqual(Object.keys(FONTS).map((n) => `--font-${n}`).sort());
+    expect(fonts.sort()).toEqual(
+      Object.keys(FONTS)
+        .map((n) => `--font-${n}`)
+        .sort(),
+    );
     expect(theme.has("--font-sans")).toBe(false);
     expect(theme.has("--font-mono")).toBe(false);
   });

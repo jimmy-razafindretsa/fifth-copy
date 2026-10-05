@@ -118,7 +118,7 @@ Candidates = cards in Ready whose blockers are all Done, in epics labeled `plan-
 3. priority (urgent first; none last)
 4. estimate ascending
 5. issue number ascending (deterministic tie-break)
-Then drop candidates that violate a lock (section 7).
+Then drop candidates that violate a lock (section 7). With `BOARD_FOCUS_LABEL` set (e.g. `mvp`), only cards carrying that label are candidates: the human uses it to aim the whole loop at one slice.
 
 ## 7. Locks, WIP and isolation
 - WIP limit: `BOARD_WIP_LIMIT` (default 1; `scripts/loop.sh --parallel N` sets N) cards in In Progress/In Review/QA combined. Cards parked on `needs-human` do not count against WIP but keep their locks.

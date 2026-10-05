@@ -16,7 +16,7 @@
 #
 # Env: MODEL_ANALYSIS (default claude-fable-5-1, probed once; fallback MODEL_ANALYSIS_FALLBACK, default
 # claude-opus-5-5), MODEL_BUILD (default claude-opus-5-5), MODEL_FLAG (default --model), BOARD_WIP_LIMIT
-# (default = --parallel), SWEEP_EVERY (drift sweep after every N delivered cards, default 10, 0 = off),
+# (default = --parallel), BOARD_FOCUS_LABEL (only pick cards with this label, e.g. mvp), SWEEP_EVERY (drift sweep after every N delivered cards, default 10, 0 = off),
 # HARDENING_EPIC (epic for sweep findings), NOTIFY_CMD (called with one message argument; default: macOS
 # notification), LOCK_WAIT_MIN (max minutes a card waits for a hotspot lock, default 180).
 # Stop: no startable card and nothing running; --max-cards reached; 3 consecutive blocked cards; main red;

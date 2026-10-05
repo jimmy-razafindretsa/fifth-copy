@@ -13,7 +13,7 @@ enum LobbyStatus {
 
 model Lobby {
   id         String      @id @default(cuid())
-  /// Room code `AAA-0000` (e.g. `KGB-4821`); the format is validated in the protocol (#103).
+  /// Room code like `KGB-4821`, matching ROOM_CODE_RE from @fifth-copy/protocol (validated at the edge).
   code       String      @unique
   type       LobbyType   @default(PRIVATE)
   status     LobbyStatus @default(WAITING)

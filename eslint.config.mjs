@@ -67,6 +67,8 @@ const eslintConfig = defineConfig([
     "services/*/dist/**",
     ".worktrees/**",
     ".claude/**",
+    // Design bible reference implementations: ported 1:1, never linted as app code.
+    "docs/design/bible/**",
     "playwright-report/**",
     "test-results/**",
   ]),

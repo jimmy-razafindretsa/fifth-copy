@@ -15,7 +15,7 @@
 # full = Explorer on MODEL_ANALYSIS.
 #
 # Env: MODEL_ANALYSIS (default claude-fable-5-1, probed once; fallback MODEL_ANALYSIS_FALLBACK, default
-# claude-opus-5-5), MODEL_BUILD (default claude-opus-5-5), MODEL_FLAG (default --model), BOARD_WIP_LIMIT
+# claude-opus-5-5), MODEL_BUILD (default claude-opus-5-5), MODEL_DELIVER (default MODEL_BUILD; e.g. Fable builds and Opus reviews), MODEL_FLAG (default --model), BOARD_WIP_LIMIT
 # (default = --parallel), BOARD_FOCUS_LABEL (only pick cards with this label, e.g. mvp), SWEEP_EVERY (drift sweep after every N delivered cards, default 10, 0 = off),
 # HARDENING_EPIC (epic for sweep findings), NOTIFY_CMD (called with one message argument; default: macOS
 # notification), LOCK_WAIT_MIN (max minutes a card waits for a hotspot lock, default 180).
@@ -45,6 +45,7 @@ MODEL_FLAG="${MODEL_FLAG:---model}"
 MODEL_ANALYSIS="${MODEL_ANALYSIS:-claude-fable-5-1}"
 MODEL_ANALYSIS_FALLBACK="${MODEL_ANALYSIS_FALLBACK:-claude-opus-5-5}"
 MODEL_BUILD="${MODEL_BUILD:-claude-opus-5-5}"
+MODEL_DELIVER="${MODEL_DELIVER:-$MODEL_BUILD}"
 SWEEP_EVERY="${SWEEP_EVERY:-10}"
 HARDENING_EPIC="${HARDENING_EPIC:-475}"
 LOCK_WAIT_MIN="${LOCK_WAIT_MIN:-180}"
@@ -85,6 +86,7 @@ model_for() { # role tier -> model id
   case "$1" in
     analyst|pentester|sweep) echo "$MODEL_ANALYSIS" ;;
     explorer) [[ "$2" == full ]] && echo "$MODEL_ANALYSIS" || echo "$MODEL_BUILD" ;;
+    deliver) echo "$MODEL_DELIVER" ;;
     *) echo "$MODEL_BUILD" ;;
   esac
 }
@@ -191,7 +193,7 @@ mkdir "$COORD" 2>/dev/null || { echo "STOP: another loop.sh is running ($COORD)"
 trap 'rm -rf "$COORD"' EXIT
 rm -f "$LOG_DIR/STOP"
 touch "$LOG_DIR/parked"
-say "loop: parallel=$PARALLEL wip=$BOARD_WIP_LIMIT max-cards=$MAX_CARDS models: analysis=$MODEL_ANALYSIS build=$MODEL_BUILD"
+say "loop: parallel=$PARALLEL wip=$BOARD_WIP_LIMIT max-cards=$MAX_CARDS models: analysis=$MODEL_ANALYSIS build=$MODEL_BUILD deliver=$MODEL_DELIVER"
 
 running=""          # "pid:n pid:n ..."
 started=0 delivered=0 swept=0 blocked_streak=0 exhausted=0

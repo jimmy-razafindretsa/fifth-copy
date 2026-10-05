@@ -1,10 +1,10 @@
 # Component inventory (`src/components/ui`)
 
-Status: starter primitives (#7) wearing the Fifth Copy palette and colour roles (#16, design bible section 3). Still to come: printed geometry #15, theme switching #19, typography roles and font loading #20.
+Status: starter primitives (#7) wearing the Fifth Copy palette and colour roles (#16, design bible section 3) and the six brand fonts (#21, body copy in Courier Prime). Still to come: printed geometry #15, theme switching #19, type role utilities #22, display and label faces on the primitives #20.
 Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` (visual baselines tagged `@visual`).
 
 ## Rules
-- Tokens only: `docs/design/tokens.css` is the single source. Tailwind's default palette is removed, so `bg-zinc-50` does not exist; use semantic utilities (`bg-surface`, `text-fg`, `text-fg-muted`, `border-border`, `bg-primary`, `text-danger`, ...). Spacing uses the Tailwind scale (`p-4`), radius `rounded-{sm,md,lg,full}`, type `text-{xs..3xl}`.
+- Tokens only: `docs/design/tokens.css` is the single source. Tailwind's default palette is removed, so `bg-zinc-50` does not exist; use semantic utilities (`bg-surface`, `text-fg`, `text-fg-muted`, `border-border`, `bg-primary`, `text-danger`, ...). Spacing uses the Tailwind scale (`p-4`), radius `rounded-{sm,md,lg,full}`, type `text-{xs..3xl}`, faces `font-{display,label,typing,flavour,body,device}` (`font-sans`/`font-mono` do not exist).
 - Colours: brand values (`--brand-*`) are never used directly and are not utilities; use a role from the tables below (`bg-you`, `text-rival`, `bg-tape`, ...). Write class names as complete literals (`"bg-you"`, never `` `bg-${role}` ``): Tailwind only emits classes it finds as whole strings.
 - Links: `text-link underline` in both themes.
 - Themes: light by default, dark via `prefers-color-scheme` or `<html data-theme="dark">`. Never use `dark:` color overrides; the tokens switch.
@@ -70,6 +70,17 @@ Where the bible's value fails WCAG 3.3 (4.5:1), the nearest bible-palette value 
 - `link` dark: night-ink instead of agit-red (1.76:1): 9.72:1 on `bg`.
 - `danger` dark: night-ink instead of agit-red: 9.72:1 on `bg`, 8.08:1 on the dark `danger-surface`.
 - Danger button fill: `pressed` (banner) under `primary-fg` (paper), 8.75:1 in both themes; `danger` is a text and border role.
+
+## Fonts
+Loaded in `src/app/layout.tsx` with `next/font/google` (fetched at build, served from `/_next/static/media`, no runtime request to Google), all `display: "swap"` with next/font's size-adjusted fallbacks. Use the role token, never the family variable. Roles: art-direction 7 and design bible 4 (flavour and device: bible 4 extension).
+| Family | Weights | Subsets | Variable | Role token (utility) | Generic fallback | Use |
+|---|---|---|---|---|---|---|
+| Stardos Stencil | 700 | latin (only subset offered; cyrillic fallback #23) | `--font-stardos` | `--font-display` (`font-display`) | `Impact, sans-serif` | titles, stamps, medals |
+| Oswald | 600, 700 | latin, latin-ext, cyrillic | `--font-oswald` | `--font-label` (`font-label`) | `Impact, sans-serif` | labels, tabs, dockets, buttons |
+| IBM Plex Mono | 400, 700 | latin, latin-ext, cyrillic | `--font-plex-mono` | `--font-typing` (`font-typing`) | `ui-monospace, monospace` | text to type, data, codes |
+| Special Elite | 400 | latin, latin-ext | `--font-special-elite` | `--font-flavour` (`font-flavour`) | `ui-monospace, monospace` | story cards, cables, quotes; never text to type |
+| Courier Prime | 400, 700 | latin, latin-ext | `--font-courier-prime` | `--font-body` (`font-body`) | `ui-monospace, monospace` | body copy; `body` default 16px / 1.55 |
+| VT323 | 400 | latin, latin-ext | `--font-vt323` | `--font-device` (`font-device`) | `ui-monospace, monospace` | numerals in nixie tubes and CRTs only |
 
 ## Primitives
 | Component | File | Props / variants | States | A11y notes |

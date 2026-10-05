@@ -4,7 +4,7 @@
  * so only these semantic roles exist as utilities: bg-surface, text-fg, bg-you, text-untyped, ...
  * Palette: design bible section 3 (docs/design/bible/FIFTH_COPY_DESIGN_BIBLE.md), #16. Brand values are
  * --brand-* on :root, outside @theme, so they are never utilities: use a role. Geometry: #15, theme
- * switching: #19, typography: #20.
+ * switching: #19, fonts: #21 (families loaded in src/app/layout.tsx), type roles: #22.
  */
 
 /* Brand palette (bible 3.1, 3.2). Night shift grounds are warm grey-brown, never black. */
@@ -69,9 +69,14 @@
   --color-device-nixie: var(--brand-nixie);
   --color-device-bezel: var(--brand-press-ink);
 
-  /* typography */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* typography: six faces by role (art-direction 7); Tailwind's default families are removed */
+  --font-*: initial;
+  --font-display: var(--font-stardos), Impact, sans-serif;
+  --font-label: var(--font-oswald), Impact, sans-serif;
+  --font-typing: var(--font-plex-mono), ui-monospace, monospace;
+  --font-flavour: var(--font-special-elite), ui-monospace, monospace;
+  --font-body: var(--font-courier-prime), ui-monospace, monospace;
+  --font-device: var(--font-vt323), ui-monospace, monospace;
   --text-xs: 0.75rem;
   --text-xs--line-height: 1rem;
   --text-sm: 0.875rem;

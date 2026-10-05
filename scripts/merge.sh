@@ -40,15 +40,19 @@ for attempt in 1 2 3; do
     sleep 15
     continue
   fi
-  # Wait for checks on this exact head. After a push they can sit queued for a runner (parallel cards
-  # compete for CI), and `gh pr checks` reports "no checks" until a run starts: wait up to 20 min.
+  # Wait for the CI run of this exact head commit. `gh pr checks` is unreliable right after a branch
+  # update (it can show the previous head's checks, then "no checks" while the new run is queued),
+  # so follow the run bound to head_sha. Runs can queue for a while when parallel cards share runners.
+  run=""
   for ((w = 0; w < 120; w++)); do
-    gh pr checks "$pr" --repo "$REPO" 2>&1 | grep -q "no checks reported" || break
+    run="$(gh run list --repo "$REPO" --commit "$head_sha" --event pull_request --json databaseId -q '.[0].databaseId' 2>/dev/null)"
+    [[ -n "$run" ]] && break
     sleep 10
   done
-  if ! gh pr checks "$pr" --repo "$REPO" --watch --fail-fast --interval 20 >/dev/null 2>&1; then
-    echo "merge: checks failed on PR #$pr:"
-    gh pr checks "$pr" --repo "$REPO" 2>&1 | grep -Ev "pass|skipping" | head -5 | sed 's/^/  /'
+  [[ -n "$run" ]] || { echo "merge: no CI run for ${head_sha:0:7} after 20 min"; exit 1; }
+  if ! gh run watch "$run" --repo "$REPO" --exit-status --interval 20 >/dev/null 2>&1; then
+    echo "merge: CI run $run failed on PR #$pr (head ${head_sha:0:7}):"
+    gh run view "$run" --repo "$REPO" 2>&1 | grep -E "^X |failed|✗" | head -5 | sed 's/^/  /'
     exit 1
   fi
   if [[ "$(gh api "repos/$REPO/commits/main" -q .sha)" != "$main_sha" ]]; then

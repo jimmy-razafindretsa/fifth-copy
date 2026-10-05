@@ -2,7 +2,7 @@ import "dotenv/config";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { jwtVerify } from "jose";
 import { raceTokenClaimsSchema } from "@fifth-copy/protocol";
-import { fakeLobbyDb } from "./fake-db";
+import { fakeLobbyDb } from "../testing/fake-db";
 
 const RACE_TOKEN_SECRET = "r".repeat(32);
 const RACE_URL = "http://race.test:4000";

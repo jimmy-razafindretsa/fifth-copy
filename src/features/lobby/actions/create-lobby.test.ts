@@ -8,7 +8,7 @@ import {
   type RaceServerStub,
 } from "@/server/internal-api/stub-server";
 import { Prisma } from "@/generated/prisma/client";
-import { fakeLobbyDb } from "./fake-db";
+import { fakeLobbyDb } from "../testing/fake-db";
 
 // ADR 0003: DB-backed tests target the test database, not the app env.
 // eslint-disable-next-line no-restricted-properties

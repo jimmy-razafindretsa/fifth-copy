@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPrismaClient } from "@/server/db-client";
-import { fakeLobbyDb } from "./fake-db";
+import { fakeLobbyDb } from "../testing/fake-db";
 
 // ADR 0003: DB-backed tests target the test database, not the app env.
 // eslint-disable-next-line no-restricted-properties

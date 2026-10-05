@@ -1,16 +1,11 @@
 import { vi } from "vitest";
-import { Prisma } from "@/generated/prisma/client";
 
 // Test-only in-memory User and Lobby tables with the real unique indexes (typistName, code).
-// Lives in actions/ because it builds Prisma errors (prisma-only-in-server). Not imported by app code.
+// Not imported by app code. Duplicates throw a plain Error: tests that need Prisma's P2002 inject it.
 type UserRow = { id: string; typistName: string; isGuest: boolean; avatarStatus: "NONE" };
 type LobbyRow = { id: string; code: string; status: "WAITING" | "CLOSED"; hostUserId: string };
 
-const uniqueViolation = () =>
-  new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-    code: "P2002",
-    clientVersion: "test",
-  });
+const uniqueViolation = () => new Error("Unique constraint failed (fake db)");
 
 export function fakeLobbyDb() {
   const users: UserRow[] = [];

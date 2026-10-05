@@ -3,25 +3,27 @@ export type Rgb = readonly [number, number, number];
 
 /** `#rgb` or `#rrggbb` (any case) to integer channels. */
 export function parseHex(hex: string): Rgb {
-  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) throw new Error(`Not a hex colour: ${hex}`);
-  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1];
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as unknown as Rgb;
+  const digits = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())?.[1];
+  if (!digits) throw new Error(`Not a hex colour: ${hex}`);
+  const h = digits.length === 3 ? [...digits].map((c) => c + c).join("") : digits;
+  const channel = (i: number) => parseInt(h.slice(i, i + 2), 16);
+  return [channel(0), channel(2), channel(4)];
 }
 
 /** `color-mix(in srgb, a shareA, b)`: channels rounded to integers, as Chromium resolves them. */
 export function mixSrgb(a: string | Rgb, b: string | Rgb, shareA: number): Rgb {
   const ca = typeof a === "string" ? parseHex(a) : a;
   const cb = typeof b === "string" ? parseHex(b) : b;
-  return ca.map((v, i) => Math.round(v * shareA + cb[i] * (1 - shareA))) as unknown as Rgb;
+  const channel = (i: 0 | 1 | 2) => Math.round(ca[i] * shareA + cb[i] * (1 - shareA));
+  return [channel(0), channel(1), channel(2)];
 }
 
 function luminance(c: Rgb): number {
-  const [r, g, b] = c.map((v) => {
+  const linear = (v: number) => {
     const s = v / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  return 0.2126 * linear(c[0]) + 0.7152 * linear(c[1]) + 0.0722 * linear(c[2]);
 }
 
 /** WCAG 2.1 contrast ratio, 1 to 21. */

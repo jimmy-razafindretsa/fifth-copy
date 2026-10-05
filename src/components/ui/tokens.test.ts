@@ -17,7 +17,10 @@ function blocks(src: string): Block[] {
   while (i < text.length) {
     const open = text.indexOf("{", i);
     if (open < 0) break;
-    const selector = text.slice(i, open).replace(/^[\s;]+/, "").trim();
+    const selector = text
+      .slice(i, open)
+      .replace(/^[\s;]+/, "")
+      .trim();
     let depth = 1;
     let j = open + 1;
     while (depth > 0 && j < text.length) {
@@ -45,14 +48,24 @@ function decls(body: string): Map<string, string> {
   const map = new Map<string, string>();
   for (const part of body.split(";")) {
     const m = /^\s*(--[\w-]+|color-scheme)\s*:\s*([\s\S]+?)\s*$/.exec(part);
-    if (m) map.set(m[1], norm(m[2]));
+    if (m?.[1] && m[2]) map.set(m[1], norm(m[2]));
   }
   return map;
 }
 
 const top = blocks(css);
-const theme = decls(top.filter((b) => b.selector === "@theme").map((b) => b.body).join(";"));
-const root = decls(top.filter((b) => b.selector === ":root").map((b) => b.body).join(";"));
+const theme = decls(
+  top
+    .filter((b) => b.selector === "@theme")
+    .map((b) => b.body)
+    .join(";"),
+);
+const root = decls(
+  top
+    .filter((b) => b.selector === ":root")
+    .map((b) => b.body)
+    .join(";"),
+);
 const media = top.find((b) => /^@media\s*\(prefers-color-scheme:\s*dark\)$/.test(b.selector));
 const mediaDark = decls(
   media?.children.find((c) => c.selector === ':root:not([data-theme="light"])')?.body ?? "",
@@ -101,7 +114,7 @@ const role = (name: string, t: ThemeName) => {
 /** Evaluates a resolved hex or `color-mix(in srgb, A p%, B [q%])` to sRGB channels. */
 function toRgb(v: string): Rgb {
   const mix = /^color-mix\(in srgb, (#[0-9a-f]+) (\d+)%, (#[0-9a-f]+)(?: \d+%)?\)$/.exec(v);
-  if (mix) return mixSrgb(mix[1], mix[3], Number(mix[2]) / 100);
+  if (mix?.[1] && mix[3]) return mixSrgb(mix[1], mix[3], Number(mix[2]) / 100);
   return parseHex(v);
 }
 
@@ -227,12 +240,15 @@ describe("C5 mapping (a)", () => {
 
     const items = docs
       .slice(ext)
-      .split(/\n(?=## )/)[0]
+      .split(/\n(?=## )/)[0]!
       .split("\n")
       .filter((l) => l.startsWith("- "));
     expect(items).toHaveLength(5);
     const expectItem = (re: RegExp, ratio: string) =>
-      expect(items.some((l) => re.test(l) && l.includes(ratio)), `${re} ${ratio}`).toBe(true);
+      expect(
+        items.some((l) => re.test(l) && l.includes(ratio)),
+        `${re} ${ratio}`,
+      ).toBe(true);
     expectItem(/`fg-muted`.*80%/, "7.05:1");
     expectItem(/`typing-remaining`.*`untyped`.*85%/, "5.23:1");
     expectItem(/`link`.*dark/, "9.72:1");
@@ -242,8 +258,9 @@ describe("C5 mapping (a)", () => {
 });
 
 describe("C7 contrast (computed from the token values)", () => {
-  const ratio = (a: string, b: string, t: ThemeName) => contrastRatio(toRgb(role(a, t)), toRgb(role(b, t)));
-  const pairs = (t: ThemeName) => [
+  const ratio = (a: string, b: string, t: ThemeName) =>
+    contrastRatio(toRgb(role(a, t)), toRgb(role(b, t)));
+  const pairs = (t: ThemeName): [string, string][] => [
     ["fg", "bg"],
     ["fg-muted", "bg"],
     ["primary-fg", "primary"],
@@ -255,11 +272,11 @@ describe("C7 contrast (computed from the token values)", () => {
     ["typing-error", "tape"],
     ["typing-next", "typing-next-bg"],
     ...(t === "light"
-      ? [
+      ? ([
           ["fg-muted", "surface"],
           ["fg-muted", "surface-muted"],
           ["fg-muted", "danger-surface"],
-        ]
+        ] satisfies [string, string][])
       : []),
   ];
 

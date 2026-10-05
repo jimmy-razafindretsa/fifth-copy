@@ -11,7 +11,7 @@ npm run build:race   # esbuild -> services/race-server/dist/main.js
 
 ## Rules
 - Never import from `src/` (the Next.js app) or `@/`. Only `@fifth-copy/engine`, `@fifth-copy/protocol` and this package.
-- `process.env` only in `src/env.ts` (zod-validated). Secrets are never logged.
+- `process.env` only in `src/env.ts` (zod-validated). Secrets are never logged. Variables: `RACE_SERVER_PORT`, `REDIS_URL`, `RACE_TOKEN_SECRET` (>= 32 chars, shared with the web app), `WEB_ORIGIN` (allowed Socket.IO CORS origin, the web app's public URL; default `http://localhost:3000`).
 - Every inbound socket event and HTTP body is parsed with a `@fifth-copy/protocol` schema before use.
 - Redis holds ephemeral state only (rooms, presence, resume keys, invite tokens, rate limits), always with a TTL. Anything that must survive a restart goes to Postgres through the internal API.
 - Time comes from one injectable clock (`src/clock.ts` when it lands) so tests and the fast-clock e2e mode can control it.

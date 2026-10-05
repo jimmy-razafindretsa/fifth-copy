@@ -98,7 +98,7 @@ Typed-text colour states: **done = ink**, **next character = red cell**, **remai
 - **Icon:** **FC monogram**: stencil "F" above, "C" knocked out of the same 8° bar. It works down to 16px (favicon).
 - **Rules:** tagline only when there is room; never recolour the bar violet or gold; never straighten it; clear space = one bar height.
 
-> ⚠️ **Brief compliance:** the brief says *"pas d'IA pour le nom et logo"* (no AI for the name and logo). The name **FIFTH COPY** was chosen by the team. The logo files in this project are **AI-assisted drafts**. Before submission, the team must **redraw the final logo by hand / in their own vector tool**, using these drafts only as a sketch, or replace them.
+> ⚠️ **Brief compliance:** the brief says *"pas d'IA pour le nom et logo"* (no AI for the name and logo). The name **FIFTH COPY** was chosen by the team. The logo is the team's own design (confirmed 2026-10-04, not AI-generated): page 8 of `art-direction.pdf`, extracted as vectors into `public/brand/` (see its README).
 
 ### 3.5 Themes & devices
 - **Light theme** (default, paper ground) and **dark theme "Night shift"** (night ground, same reds and gold).
@@ -481,7 +481,7 @@ Raw keystrokes are **rolled up** into daily per-character tables so stats stay f
 | Minors' data / OAuth age limits | Law 25 compliance, guest and username paths (§12.3) |
 | Copyright on book/film texts | Public-domain + teacher texts (§8) |
 | Wi-Fi drop vs idle confusion | Socket state decides: disconnected = grace period, connected + silent = idle kick (§4.5, §7.4) |
-| Logo made with AI vs brief | Team redraws the final logo (§3.4) |
+| Logo made with AI vs brief | Resolved 2026-10-04: the logo is the team's own design (§3.4, `public/brand/README.md`) |
 | Keyboard layout mismatch | Layout picker + per-character stats (§13.3) |
 
 **Open questions for the teacher**

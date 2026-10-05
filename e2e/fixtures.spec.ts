@@ -76,6 +76,32 @@ test.describe("failed-request guard (#519)", () => {
     });
   }
 
+  // #397: the not-found page's own 404 is expected; a 404 asset on a page is not
+  test("tolerates the 404 of the document under test, not of its assets", async ({ page }) => {
+    const origin = "http://guard.test";
+    await page.route(`${origin}/missing`, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: "text/html",
+        body: "<!doctype html><title>404</title>",
+      }),
+    );
+    await page.route(`${origin}/`, (route) =>
+      route.fulfill({ contentType: "text/html", body: "<!doctype html><title>ok</title>" }),
+    );
+    await page.route(`${origin}/gone.png`, (route) => route.fulfill({ status: 404, body: "" }));
+    const { settle } = watchPage(page);
+    await page.goto(`${origin}/missing`);
+    await expect.poll(settle).toEqual([]);
+    await page.goto(`${origin}/`);
+    await page.evaluate(() => fetch("/gone.png").catch(() => {}));
+    await expect
+      .poll(settle)
+      .toContain(
+        "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      );
+  });
+
   test("an aborted request with no response in the browser is still flagged", async ({ page }) => {
     const origin = "http://guard.test";
     await page.route(`${origin}/`, (route) =>

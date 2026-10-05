@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type Ref } from "react";
 import { cn } from "@/lib/cn";
-import styles from "./landing.module.css";
+import styles from "./embed-frame.module.css";
 
 type Props = {
   src: string;
@@ -16,8 +16,9 @@ type Props = {
 const NEAR_VIEWPORT = "320px";
 
 /**
- * A reference 3D page in an iframe (bible 9, 16), mounted only once it comes near the viewport so the
- * landing's first paint never waits for three.js; `loading="lazy"` covers browsers that skip the observer.
+ * A reference 3D page in an iframe (design bible 9, 16), mounted only once it comes near the viewport so
+ * the page's first paint never waits for three.js; `loading="lazy"` covers browsers that skip the
+ * observer. Pair it with `useEmbedBridge` for the postMessage protocol (bible 15).
  */
 export function EmbedFrame({ src, title, className, decorative = false, ref }: Props) {
   const [near, setNear] = useState(false);

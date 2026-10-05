@@ -1,0 +1,58 @@
+/* Spinning stars (design bible 6, 8 fcSpin): scattered, never over text; tone per role, period per instance. */
+@keyframes fcSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.star {
+  position: absolute;
+  clip-path: polygon(
+    50% 0%,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
+  animation: fcSpin 50s linear infinite;
+  pointer-events: none;
+}
+
+.red {
+  background: var(--color-primary);
+}
+
+.ink {
+  background: var(--color-fg);
+}
+
+.gold {
+  background: var(--color-reward);
+}
+
+.paper {
+  background: var(--color-band-fg);
+}
+
+.faintRed {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.faintInk {
+  background: color-mix(in srgb, var(--color-fg) 14%, transparent);
+}
+
+.faintPaper {
+  background: color-mix(in srgb, var(--color-band-fg) 12%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star {
+    animation: none;
+  }
+}

@@ -1,9 +1,9 @@
 import Image from "next/image";
+import { Star } from "@/components/ui";
 import { getT } from "@/i18n";
 import { drawFeedFacts } from "../feed";
 import styles from "./hero.module.css";
 import { LiveFeed } from "./live-feed";
-import { Star } from "./star";
 import { TypingStrip } from "./typing-strip";
 
 /**

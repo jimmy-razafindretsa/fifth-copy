@@ -93,6 +93,9 @@ Loaded in `src/app/layout.tsx` with `next/font/google` (fetched at build, served
 | `Spinner` | `spinner.tsx` | `size` sm, md, lg; `label` (default "Loading", `""` = decorative) | n/a | `role="status"` when labelled |
 | `Skeleton` | `skeleton.tsx` | `className` for size | n/a | `aria-hidden`; wrap groups in `aria-busy` container with a label |
 | `EmptyState` | `empty-state.tsx` | `title`, `description`, `action` | n/a | give it a clear next step via `action` |
+| `Star` | `star.tsx` | `size`, `tone` red, ink, gold, paper, faintRed, faintInk, faintPaper; `spin` seconds; `at` absolute position | n/a | `aria-hidden`; bible 6: scattered, never over text; still under reduced motion |
+| `EmbedFrame` | `embed-frame.tsx` | `src`, `title`, `decorative`, `ref`; mounts the iframe near the viewport (`data-embed` idle/mounted) | idle, mounted | a `title` always; `decorative` hides it from AT and the tab order |
+| `useEmbedBridge` | `use-embed-bridge.ts` | `(schema?, onMessage?)` -> `{ ref, post }`: same-origin postMessage to and from that iframe (bible 15) | n/a | parses every incoming message with the zod schema |
 
 ## Screen states checklist (every `ui` card)
 empty (`EmptyState`), loading (`Skeleton`/`Spinner` inside an `aria-busy` region), error (`Alert tone="error"`), populated. Mobile, tablet, desktop. Light and dark.

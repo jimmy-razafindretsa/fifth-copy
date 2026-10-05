@@ -1,8 +1,8 @@
 import { getT } from "@/i18n";
 import { cn } from "@/lib/cn";
+import { Star } from "@/components/ui";
 import shared from "./landing.module.css";
 import styles from "./sections.module.css";
-import { Star } from "./star";
 
 /** Final call (bible 14.1 item 8): red halftone band, REPORT TO YOUR DESK., the inverted primary. */
 export async function FinalCall({ action }: { action: React.ReactNode }) {

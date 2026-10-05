@@ -109,6 +109,17 @@ describe("createLobby", () => {
       expect(fake.lobbies).toHaveLength(0);
     });
 
+    it("draws room codes from a CSPRNG, never Math.random", async () => {
+      await createLobby(); // the first call creates the guest (its name draw may use Math.random)
+      const random = vi.spyOn(Math, "random");
+      try {
+        await expect(createLobby()).resolves.toMatchObject({ ok: true });
+        expect(random).not.toHaveBeenCalled();
+      } finally {
+        random.mockRestore();
+      }
+    });
+
     it("propagates non-collision DB errors", async () => {
       fake.db.lobby.create.mockRejectedValueOnce(new Error("connection lost"));
       await expect(createLobby()).rejects.toThrow("connection lost");

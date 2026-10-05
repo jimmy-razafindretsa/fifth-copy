@@ -1,5 +1,6 @@
 "use server";
 
+import { randomInt } from "node:crypto";
 import type { RoomCode } from "@fifth-copy/protocol";
 import { ensureGuest } from "@/features/identity";
 import { Prisma } from "@/generated/prisma/client";
@@ -8,11 +9,14 @@ import { withUniqueRoomCode } from "../code";
 import { openRoom } from "../internal/open-room";
 import type { CreateLobbyResult } from "../types";
 
+// The code is the MVP's only secret, so draws come from a CSPRNG, not V8's predictable Math.random.
+const secureRng = () => randomInt(2 ** 32) / 2 ** 32;
+
 // Makes the caller (a guest created on the spot if needed) host of a new private lobby with a
 // fresh room code, then opens its room on the race server. No room, no lobby: the row is deleted.
 export async function createLobby(): Promise<CreateLobbyResult> {
   const host = await ensureGuest();
-  const lobby = await withUniqueRoomCode(Math.random, (code) => insertLobby(code, host.id));
+  const lobby = await withUniqueRoomCode(secureRng, (code) => insertLobby(code, host.id));
 
   const room = await openRoom({ lobbyId: lobby.id, code: lobby.code, hostUserId: host.id });
   if (room.ok) return { ok: true, code: lobby.code };

@@ -25,7 +25,8 @@
     "adr:governing": "tsx scripts/adr-governing.ts",
     "board": "tsx scripts/board.ts",
     "see": "tsx scripts/see.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && tsx scripts/embeds.ts vendor",
+    "embeds": "tsx scripts/embeds.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -56,6 +57,7 @@
     "prettier": "^3.9.9",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
+    "three": "0.184.0",
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.3",

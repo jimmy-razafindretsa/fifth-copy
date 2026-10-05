@@ -54,3 +54,6 @@ next-env.d.ts
 # workspaces
 /packages/*/dist/
 /services/*/dist/
+
+# landing 3D embeds: vendor copies of three.js (scripts/embeds.ts vendor, postinstall)
+/public/3d/vendor/

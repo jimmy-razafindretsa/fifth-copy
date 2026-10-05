@@ -7,6 +7,8 @@ import {
   Stardos_Stencil,
   VT323,
 } from "next/font/google";
+import { getTheme } from "@/features/preferences";
+import { getLocale, getT } from "@/i18n";
 import "./globals.css";
 
 // The six brand families (art-direction 7, components.md "Fonts"), self-hosted at build.
@@ -57,14 +59,23 @@ const fontVariables = [stardos, oswald, plexMono, specialElite, courierPrime, vt
   .map((f) => f.variable)
   .join(" ");
 
-export const metadata: Metadata = {
-  title: "App",
-  description: "Built with the agent kit",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t.meta.title, description: t.meta.description };
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * `<html lang>` follows the locale cookie (ADR 0010) and `data-theme` the theme cookie (ARCHITECTURE 8.4);
+ * with no theme cookie the attribute is absent and tokens.css follows `prefers-color-scheme`.
+ */
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const [locale, theme] = await Promise.all([getLocale(), getTheme()]);
   return (
-    <html lang="en" className={`${fontVariables} h-full antialiased`}>
+    <html
+      lang={locale}
+      data-theme={theme ?? undefined}
+      className={`${fontVariables} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col bg-bg text-fg">{children}</body>
     </html>
   );

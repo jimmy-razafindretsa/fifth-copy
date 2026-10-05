@@ -3,6 +3,8 @@ import { test as base, expect, type Page, type Request } from "@playwright/test"
 
 export type FailedRequest = {
   errorText: string | undefined;
+  /** Request path (no origin), e.g. `/3d/vendor/three.core.min.js`. */
+  path: string;
   method: string;
   nextAction: string | null;
   rsc: string | null;
@@ -29,10 +31,19 @@ export function isBenignFlightAbort(f: FailedRequest): boolean {
   );
 }
 
+/**
+ * The landing's 3D embeds (#497) load three.js from `/3d/`; leaving the page mid-load (a lobby
+ * navigation) aborts those fetches, which Chromium reports as failures. Nothing else is tolerated.
+ */
+export function isBenignEmbedAbort(f: FailedRequest): boolean {
+  return f.errorText === "net::ERR_ABORTED" && f.method === "GET" && f.path.startsWith("/3d/");
+}
+
 async function describeFailure(r: Request): Promise<FailedRequest> {
   const response = await r.response().catch(() => null);
   return {
     errorText: r.failure()?.errorText,
+    path: new URL(r.url()).pathname,
     method: r.method(),
     nextAction: await r.headerValue("next-action"),
     rsc: await r.headerValue("rsc"),
@@ -53,7 +64,7 @@ export function watchPage(page: Page): { errors: string[]; settle: () => Promise
   page.on("requestfailed", (r) =>
     pending.push(
       describeFailure(r).then((f) => {
-        if (!isBenignFlightAbort(f)) {
+        if (!isBenignFlightAbort(f) && !isBenignEmbedAbort(f)) {
           errors.push(`requestfailed: ${r.method()} ${r.url()} ${f.errorText ?? ""}`.trimEnd());
         }
       }),
@@ -85,10 +96,15 @@ export const test = base.extend<{ pageErrors: string[] }>({
 
 export { expect };
 
-/** Fails on serious or critical axe violations (WCAG 2.x A/AA). */
+/**
+ * Fails on serious or critical axe violations (WCAG 2.x A/AA). The landing's 3D embeds (`iframe`, a
+ * WebGL canvas each) are skipped: axe has nothing to read inside them and crawling busy frames times
+ * out under parallel load; their titles are asserted by `e2e/landing.spec.ts`.
+ */
 export async function expectNoA11yViolations(page: Page) {
   const { violations } = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .exclude("iframe")
     .analyze();
   const bad = violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")

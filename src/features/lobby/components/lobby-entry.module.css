@@ -154,3 +154,67 @@
     min-width: 0;
   }
 }
+
+/* bible 7.1 primary stamp button (reference: QUICK RACE); hover banner, active = pressed into the paper */
+.stamp {
+  font:
+    700 clamp(30px, 3.4vw, 44px) / 1 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.08em;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 3px solid var(--color-fg);
+  padding: 20px 36px;
+  cursor: pointer;
+  box-shadow: 6px 6px 0 var(--color-fg);
+  text-wrap: nowrap;
+}
+
+.stamp:hover {
+  background: var(--color-primary-hover);
+}
+
+.stamp:active {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0 var(--color-fg);
+}
+
+.stamp:disabled {
+  cursor: progress;
+  transform: none;
+  box-shadow: 6px 6px 0 var(--color-fg);
+}
+
+/* bible 7.1 inverted primary, on the red final-call band: paper ground, red text, ink border and offset */
+.stampInverted {
+  font-size: clamp(28px, 3vw, 40px);
+  padding: 20px 34px;
+  background: var(--color-primary-fg);
+  color: var(--color-primary);
+  border-color: var(--color-device-bezel);
+  box-shadow: 6px 6px 0 var(--color-device-bezel);
+}
+
+.stampInverted:hover {
+  background: var(--color-primary-fg);
+  color: var(--color-primary-hover);
+}
+
+.stampInverted:active,
+.stampInverted:disabled {
+  box-shadow: 2px 2px 0 var(--color-device-bezel);
+}
+
+.stampInverted:disabled {
+  box-shadow: 6px 6px 0 var(--color-device-bezel);
+}
+
+/* phones: the stamp button fills the column instead of forcing a horizontal scroll */
+@media (max-width: 480px) {
+  .stamp {
+    width: 100%;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}

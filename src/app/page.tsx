@@ -1,13 +1,15 @@
-import { LandingHeader, LandingHero } from "@/features/landing";
-import { LobbyEntries } from "@/features/lobby";
+import { LandingPage } from "@/features/landing";
+import { LobbyEntries, QuickRaceButton } from "@/features/lobby";
+import { getT } from "@/i18n";
 
-export default function Home() {
+export default async function Home() {
+  const t = await getT();
+  const errors = t.landing.errors;
   return (
-    <>
-      <LandingHeader />
-      <main className="flex flex-1 flex-col">
-        <LandingHero actions={<LobbyEntries />} />
-      </main>
-    </>
+    <LandingPage
+      primary={<QuickRaceButton labels={t.landing.quick} errors={errors} />}
+      entries={<LobbyEntries />}
+      finalAction={<QuickRaceButton variant="inverted" labels={t.landing.quick} errors={errors} />}
+    />
   );
 }

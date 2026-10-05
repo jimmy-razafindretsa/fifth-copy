@@ -1,2 +1,2 @@
 export { LandingHeader } from "./components/landing-header";
-export { LandingHero } from "./components/landing-hero";
+export { LandingPage } from "./components/landing-page";

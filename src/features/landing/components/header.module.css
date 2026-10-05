@@ -1,0 +1,96 @@
+/* Landing header (bible 14.1 item 1), ported 1:1 from the reference. */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px var(--header-gutter, 32px);
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.monogram {
+  display: block;
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.brandName {
+  font:
+    700 20px/1 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.06em;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font:
+    600 12px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+}
+
+.navLink {
+  color: var(--color-fg);
+  text-decoration: none;
+}
+
+.navLink:hover,
+.signIn:hover {
+  text-decoration: underline;
+}
+
+/* guest docket: mono name plus the ink GUEST tag (bible 7.4) */
+.docket {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-surface);
+  border: 2px solid var(--color-fg);
+  padding: 5px 10px;
+  font:
+    400 12px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+}
+
+.tag {
+  font:
+    600 10px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+}
+
+.signIn {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+/* bible 18: hit targets >= 44px on touch */
+@media (max-width: 768px) {
+  .navLink,
+  .signIn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

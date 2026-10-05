@@ -1,0 +1,464 @@
+/*
+ * Hero (bible 14.1 item 2), ported 1:1 from the reference: halftone + 8° band, four stars, wordmark,
+ * typing strip (7.7), QUICK RACE row, entries (card 99) and the live feed (7.8) with its bobbing stamp.
+ */
+
+@keyframes fcCaret {
+  0%,
+  49% {
+    background: var(--color-typing-next-bg);
+    color: var(--color-typing-next);
+  }
+  50%,
+  100% {
+    background: transparent;
+    color: var(--color-typing-remaining);
+    box-shadow: inset 0 -4px 0 var(--color-typing-next-bg);
+  }
+}
+
+@keyframes fcPop {
+  0% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.92);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fcPopStamp {
+  0% {
+    transform: translateY(-50%) rotate(-6deg) scale(1.6);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-50%) rotate(-6deg) scale(0.92);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-50%) rotate(-6deg) scale(1);
+  }
+}
+
+@keyframes fcBlink {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes fcBob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(7deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(4deg);
+  }
+}
+
+/* ground: halftone dots under an 8° red band (bible 6) */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--color-fg) 13%, transparent) 1.3px, transparent 1.7px),
+    linear-gradient(
+      172deg,
+      transparent 0 62%,
+      color-mix(in srgb, var(--color-primary) 7%, transparent) 62% 70%,
+      transparent 70%
+    );
+  background-size:
+    10px 10px,
+    100% 100%;
+}
+
+.heroInner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  padding: 56px var(--gutter, 48px) 110px;
+  align-items: flex-start;
+  position: relative;
+  z-index: 1;
+}
+
+.heroMain {
+  flex: 1 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* wordmark box (bible 5.1); the final vectors replace the CSS-drawn letters (bible 5) */
+.wordmark {
+  font-size: clamp(64px, 8.6vw, 138px);
+  position: relative;
+  width: 4.375em;
+  height: 1.8333em;
+  flex: none;
+  max-width: 100%;
+  margin: 0;
+}
+
+.wordmarkImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left top;
+}
+
+.onInk {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .onPaper {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .onInk {
+    display: block;
+  }
+}
+
+:root[data-theme="dark"] .onPaper {
+  display: none;
+}
+
+:root[data-theme="dark"] .onInk {
+  display: block;
+}
+
+.kicker {
+  font:
+    600 13px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+.tagline {
+  font:
+    600 14px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.36em;
+  margin-top: -4px;
+}
+
+.pitch {
+  margin: 0;
+  font:
+    400 21px/1.5 var(--font-courier-prime),
+    ui-monospace,
+    monospace;
+  max-width: 560px;
+  text-wrap: pretty;
+}
+
+/* typing strip, "try the keys" (bible 7.7) */
+.tape {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 620px;
+}
+
+.tapeHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font:
+    600 11px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.again {
+  font: inherit;
+  letter-spacing: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--color-link);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.strip {
+  position: relative;
+  display: block;
+  background: var(--color-tape);
+  border: 2px solid var(--color-band);
+  padding: 16px 18px;
+  cursor: text;
+  box-shadow: var(--shadow-tape);
+}
+
+.chars {
+  display: flex;
+  flex-wrap: wrap;
+  font:
+    400 clamp(20px, 2.2vw, 30px) / 1.3 var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  color: var(--color-typing-done);
+}
+
+.char {
+  white-space: pre;
+  display: inline-block;
+}
+
+.char[data-state="wrong"] {
+  color: var(--color-typing-error);
+  background: color-mix(in srgb, var(--color-typing-error) 12%, transparent);
+}
+
+.char[data-state="next"] {
+  color: var(--color-typing-next);
+  background: var(--color-typing-next-bg);
+  animation: fcCaret 1.05s steps(1) infinite;
+}
+
+.char[data-state="remaining"] {
+  color: var(--color-typing-remaining);
+}
+
+/* each newly typed character pops in (bible 8) */
+.char[data-last="true"] {
+  animation: fcPop 0.18s ease-out;
+}
+
+.tapeInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: transparent;
+  cursor: text;
+}
+
+/* the verdict stamp slams onto the tape (bible 7.3, 7.7); red on tape stays 5:1 in both themes */
+.tapeStamp {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-6deg);
+  border: 4px double var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-tape) 92%, transparent);
+  font:
+    700 22px/1 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.08em;
+  padding: 6px 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: fcPopStamp 0.35s ease-out;
+}
+
+.tapeStamp:empty {
+  display: none;
+}
+
+/* QUICK RACE row, then the private entries (card 99) */
+.cta {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.ctaRow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.note {
+  margin: 0;
+  font:
+    400 15px/1.45 var(--font-courier-prime),
+    ui-monospace,
+    monospace;
+  max-width: 250px;
+  color: var(--color-fg);
+}
+
+.entries {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+/* live feed column (bible 7.8) */
+.aside {
+  flex: 1 1 440px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: stretch;
+  position: relative;
+}
+
+.frame {
+  position: relative;
+  flex: 1;
+  min-height: 420px;
+  clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%);
+  background: var(--color-band);
+}
+
+.feedEmbed {
+  pointer-events: none;
+  background: var(--color-band);
+}
+
+.scanlines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--color-band) 12%, transparent) 0 1px,
+    transparent 1px 3px
+  );
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.chips {
+  position: absolute;
+  left: 16%;
+  top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.live {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  padding: 5px 10px;
+  font:
+    600 12px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.18em;
+}
+
+.liveDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-primary-fg);
+  animation: fcBlink 1.2s steps(2) infinite;
+}
+
+.roomChip {
+  background: color-mix(in srgb, var(--color-band) 82%, transparent);
+  color: var(--color-band-fg);
+  padding: 5px 10px;
+  font:
+    500 12px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cam {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  font:
+    500 11px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--color-band-fg) 85%, transparent);
+  pointer-events: none;
+}
+
+.captionRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font:
+    400 12px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  color: var(--color-fg-muted);
+}
+
+/* the ROOM n / 30 SEATS stamp bobs over the feed (bible 7.3 fcBob), rotated +7° */
+.roomStamp {
+  position: absolute;
+  right: 6%;
+  top: 46%;
+  z-index: 2;
+  padding: 8px 14px;
+  transform: rotate(7deg);
+  animation: fcBob 4s ease-in-out infinite;
+}
+
+/* phones: the chips stack and the stamp stays inside the frame */
+@media (max-width: 480px) {
+  .chips {
+    flex-wrap: wrap;
+    left: 14%;
+    right: 12px;
+  }
+
+  .roomStamp {
+    right: 4%;
+    top: 56%;
+  }
+
+  .heroInner {
+    padding-bottom: 72px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roomStamp,
+  .liveDot,
+  .char,
+  .tapeStamp {
+    animation: none;
+  }
+
+  /* a solid red cell instead of the blinking caret (bible 8) */
+  .char[data-state="next"] {
+    animation: none;
+    background: var(--color-typing-next-bg);
+    color: var(--color-typing-next);
+  }
+}

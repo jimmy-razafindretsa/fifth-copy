@@ -1,0 +1,195 @@
+/* 10. footer (bible 14.1 item 10): ink ground, 14px red top rule, brand column, link columns, social, stamp. */
+
+.footer {
+  background: var(--color-band);
+  color: var(--color-band-fg);
+  border-top: 14px solid var(--color-primary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 40px;
+  padding: 56px var(--gutter, 48px) 40px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  grid-column: 1 / -1;
+  max-width: 440px;
+}
+
+/* wordmark box at 54px (bible 5.1), the red-on-ink vector */
+.wordmark {
+  font-size: 54px;
+  position: relative;
+  width: 4.375em;
+  height: 1.8333em;
+  flex: none;
+  max-width: 100%;
+}
+
+.wordmarkImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left top;
+}
+
+.tagline {
+  font:
+    600 12px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.32em;
+}
+
+.about {
+  margin: 0;
+  font:
+    400 15px/1.55 var(--font-courier-prime),
+    ui-monospace,
+    monospace;
+  color: var(--color-band-muted);
+  text-wrap: pretty;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.colTitle {
+  margin: 0;
+  font:
+    600 12px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.2em;
+  color: var(--color-reward);
+}
+
+.colLink {
+  color: var(--color-band-fg);
+  font:
+    400 15px/1.4 var(--font-courier-prime),
+    ui-monospace,
+    monospace;
+  text-decoration: none;
+}
+
+.colLink:hover {
+  color: var(--color-reward);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 var(--gutter, 48px) 36px;
+}
+
+.social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* bible 7.1 social button: 26px red tag with a stencil abbreviation, gold on hover */
+.socialLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-band-fg);
+  border: 2px solid color-mix(in srgb, var(--color-band-fg) 35%, transparent);
+  padding: 8px 12px;
+  font:
+    600 12px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+}
+
+.socialLink:hover {
+  border-color: var(--color-reward);
+  color: var(--color-reward);
+}
+
+.socialTag {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  font:
+    700 12px var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.02em;
+}
+
+/* the gold BUILT BY stamp (bible 7.3: 3px double gold on dark), rotated -4° */
+.aegis {
+  transform: rotate(-4deg);
+  border: 3px double var(--color-reward);
+  color: var(--color-reward);
+  padding: 6px 12px;
+  font:
+    700 15px/1.1 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px var(--gutter, 48px);
+  border-top: 1px solid color-mix(in srgb, var(--color-band-fg) 18%, transparent);
+  font:
+    400 12px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  color: var(--color-band-muted);
+}
+
+.bar span {
+  margin: 0;
+}
+
+/* three columns or more: the brand column spans two of them, as in the reference */
+@media (min-width: 768px) {
+  .brand {
+    grid-column: span 2;
+  }
+}
+
+/* bible 18: hit targets >= 44px on touch */
+@media (max-width: 768px) {
+  .colLink {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .socialLink {
+    min-height: 44px;
+  }
+}

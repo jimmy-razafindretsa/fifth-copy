@@ -96,6 +96,7 @@ describe("room registry: join (C2, C3)", () => {
         { desk: 1, name: "Ada", isHost: false },
         { desk: 2, name: "Bob", isHost: false },
       ],
+      room: { roomId: lobbyId, code: "ABCD", phase: "waiting" },
     });
   });
 

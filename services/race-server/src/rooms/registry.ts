@@ -9,7 +9,7 @@ export type Phase = "waiting";
 export type Room = { roomId: string; code: string; phase: Phase };
 
 export type JoinResult =
-  { ok: true; desk: number; members: Member[] } | { ok: false; reason: "no-room" };
+  { ok: true; desk: number; members: Member[]; room: Room } | { ok: false; reason: "no-room" };
 /** `closed` is true only when this call removed the last member and deleted the room's keys. */
 export type LeaveResult = { members: Member[]; closed: boolean };
 
@@ -102,7 +102,12 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         seats.set(userId, { desk, name });
         await redis.hset(membersKey(lobbyId), userId, JSON.stringify({ desk, name }));
         await touch(lobbyId);
-        return { ok: true, desk, members: toMembers(seats, room.hostUserId) };
+        return {
+          ok: true,
+          desk,
+          members: toMembers(seats, room.hostUserId),
+          room: { roomId: lobbyId, code: room.code, phase: "waiting" },
+        };
       }),
 
     leave: (lobbyId, userId) =>

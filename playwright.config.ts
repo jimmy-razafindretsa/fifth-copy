@@ -11,6 +11,7 @@ loadEnv({ path: [".env.local", ".env"], quiet: true });
  */
 const PORT = Number(process.env.PW_PORT ?? 3100);
 const baseURL = process.env.PW_BASE_URL ?? `http://localhost:${PORT}`;
+const RACE_PORT = Number(process.env.RACE_SERVER_PORT ?? 4000);
 
 export const VIEWPORTS = {
   mobile: { width: 375, height: 812 },
@@ -41,10 +42,21 @@ export default defineConfig({
   })),
   webServer: process.env.PW_BASE_URL
     ? undefined
-    : {
-        command: process.env.CI ? `npm run start -- -p ${PORT}` : `npm run dev -- -p ${PORT}`,
-        url: `${baseURL}/api/health`,
-        reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
-      },
+    : [
+        {
+          // Race server (#165): Socket.IO must accept the Playwright origin, not the dev one. A reused
+          // local `npm run dev:race` keeps its own WEB_ORIGIN, so stop it if browser sockets are refused.
+          command: process.env.CI ? "node services/race-server/dist/main.js" : "npm run dev:race",
+          url: `http://localhost:${RACE_PORT}/health`,
+          env: { RACE_SERVER_PORT: String(RACE_PORT), WEB_ORIGIN: baseURL },
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+        {
+          command: process.env.CI ? `npm run start -- -p ${PORT}` : `npm run dev -- -p ${PORT}`,
+          url: `${baseURL}/api/health`,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      ],
 });

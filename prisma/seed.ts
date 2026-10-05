@@ -5,6 +5,7 @@
 import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import { createPrismaClient } from "../src/server/db-client";
+import { seedIdentity } from "./seed-identity";
 
 execFileSync("scripts/db-guard.sh", { stdio: "inherit" });
 
@@ -12,7 +13,7 @@ async function main() {
   const db = createPrismaClient(process.env.DATABASE_URL!);
   try {
     // Add upserts here as models appear. Keep it idempotent.
-    await db.$queryRaw`SELECT 1`;
+    await seedIdentity(db);
     console.log("seed: ok");
   } finally {
     await db.$disconnect();

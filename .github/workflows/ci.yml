@@ -105,6 +105,8 @@ jobs:
       # The throwaway service DB is both the app DB and the test DB (docs/adr/0003).
       DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
       TEST_DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+      # Dummy signing key for the throwaway CI app (>= 32 chars, src/env.ts); not a secret.
+      AUTH_SECRET: ci-only-auth-secret-not-for-production-use
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -143,6 +145,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
       TEST_DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
+      AUTH_SECRET: ci-only-auth-secret-not-for-production-use
       DB_GUARD_ALLOWED_HOSTS: postgres
       PW_VISUAL: "1"
       HOME: /root

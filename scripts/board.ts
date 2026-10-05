@@ -40,7 +40,8 @@
  *
  * Writes are re-read and verified. --dry-run prints the mutation instead of sending it.
  * Env (.env.local / .env, all optional): BOARD_REPO (default jimmy-razafindretsa/fifth-copy), BOARD_PROJECT_OWNER
- * (default the repo owner), BOARD_PROJECT_NUMBER (default 2), BOARD_WIP_LIMIT (default 1).
+ * (default the repo owner), BOARD_PROJECT_NUMBER (default 2), BOARD_WIP_LIMIT (default 1),
+ * BOARD_FOCUS_LABEL (optional: `next` only picks cards carrying this label, e.g. `mvp`).
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -90,6 +91,7 @@ const [OWNER = "", NAME = ""] = REPO.split("/");
 const PROJECT_OWNER = process.env.BOARD_PROJECT_OWNER || OWNER;
 const PROJECT_NUMBER = Number(process.env.BOARD_PROJECT_NUMBER || 2);
 const WIP_LIMIT = Number(process.env.BOARD_WIP_LIMIT || 1);
+const FOCUS_LABEL = process.env.BOARD_FOCUS_LABEL?.trim() || null;
 const argv = process.argv.slice(2);
 const DRY = argv.includes("--dry-run");
 
@@ -853,8 +855,11 @@ async function opNext() {
 
   const reasons: string[] = [];
   const epicOfCard = new Map<number, number>();
+  if (FOCUS_LABEL) console.log(`focus: only cards labeled ${FOCUS_LABEL}`);
   const eligible = ready.filter((c) => {
     const id = cardId(c.number);
+    if (FOCUS_LABEL && !c.labels.includes(FOCUS_LABEL))
+      return (reasons.push(`${id}: not ${FOCUS_LABEL}`), false);
     const epic = epicOf(c, index);
     if (epic === null) return (reasons.push(`${id}: no epic`), false);
     epicOfCard.set(c.number, epic);

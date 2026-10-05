@@ -161,48 +161,60 @@ describe("ensureGuest (unit, fake DB)", () => {
   });
 });
 
-describe.skipIf(!testDatabaseUrl)("ensureGuest (integration, needs TEST_DATABASE_URL)", () => {
-  let db: ReturnType<typeof createPrismaClient>;
-  const created: string[] = [];
+describe.skipIf(!testDatabaseUrl)(
+  "ensureGuest (integration, needs TEST_DATABASE_URL)",
+  { timeout: 15_000 },
+  () => {
+    let db: ReturnType<typeof createPrismaClient>;
+    const created: string[] = [];
 
-  beforeAll(() => {
-    db = createPrismaClient(testDatabaseUrl!);
-  });
-  beforeEach(() => {
-    state.jar.clear();
-    state.nodeEnv = "test";
-    state.db = db;
-  });
-  afterAll(async () => {
-    await db.user.deleteMany({ where: { id: { in: created } } });
-    await db.$disconnect();
-  });
+    // Connect up front: the first query pays for the pool and adapter setup, which
+    // can exceed the default 5s test timeout when check.sh runs steps in parallel.
+    beforeAll(async () => {
+      db = createPrismaClient(testDatabaseUrl!);
+      await db.$connect();
+    }, 30_000);
+    beforeEach(() => {
+      state.jar.clear();
+      state.nodeEnv = "test";
+      state.db = db;
+    });
+    afterAll(async () => {
+      await db.user.deleteMany({ where: { id: { in: created } } });
+      await db.$disconnect();
+    });
 
-  it("C6: ensureGuest, then getViewer in a second request carrying the cookie, returns the same guest", async () => {
-    const guest = await ensureGuest();
-    created.push(guest.id);
-    const row = await db.user.findUniqueOrThrow({ where: { id: guest.id } });
-    expect(row).toMatchObject({ isGuest: true, typistName: guest.name });
+    it("C6: ensureGuest, then getViewer in a second request carrying the cookie, returns the same guest", async () => {
+      const guest = await ensureGuest();
+      created.push(guest.id);
+      const row = await db.user.findUniqueOrThrow({ where: { id: guest.id } });
+      expect(row).toMatchObject({ isGuest: true, typistName: guest.name });
 
-    const viewer = await getViewer(); // same jar = second request from the same browser
-    expect(viewer).toEqual({ id: guest.id, name: row.typistName, isGuest: true, hasAvatar: false });
-    await expect(ensureGuest()).resolves.toEqual(viewer);
-  });
+      const viewer = await getViewer(); // same jar = second request from the same browser
+      expect(viewer).toEqual({
+        id: guest.id,
+        name: row.typistName,
+        isGuest: true,
+        hasAvatar: false,
+      });
+      await expect(ensureGuest()).resolves.toEqual(viewer);
+    });
 
-  it("C3: getViewer never inserts a row, with or without a (bad) cookie", async () => {
-    const before = await db.user.count();
-    await getViewer();
-    state.jar.set(GUEST_COOKIE, { value: signGuestCookie("no-such-user", SECRET) });
-    await getViewer();
-    state.jar.set(GUEST_COOKIE, { value: "tampered.cookie" });
-    await getViewer();
-    expect(await db.user.count()).toBe(before);
-  });
+    it("C3: getViewer never inserts a row, with or without a (bad) cookie", async () => {
+      const before = await db.user.count();
+      await getViewer();
+      state.jar.set(GUEST_COOKIE, { value: signGuestCookie("no-such-user", SECRET) });
+      await getViewer();
+      state.jar.set(GUEST_COOKIE, { value: "tampered.cookie" });
+      await getViewer();
+      expect(await db.user.count()).toBe(before);
+    });
 
-  it("C9: an unknown-id cookie is replaced by a freshly signed cookie for a new guest", async () => {
-    state.jar.set(GUEST_COOKIE, { value: signGuestCookie("no-such-user", SECRET) });
-    const guest = await ensureGuest();
-    created.push(guest.id);
-    expect(cookie()?.value).toBe(signGuestCookie(guest.id, SECRET));
-  });
-});
+    it("C9: an unknown-id cookie is replaced by a freshly signed cookie for a new guest", async () => {
+      state.jar.set(GUEST_COOKIE, { value: signGuestCookie("no-such-user", SECRET) });
+      const guest = await ensureGuest();
+      created.push(guest.id);
+      expect(cookie()?.value).toBe(signGuestCookie(guest.id, SECRET));
+    });
+  },
+);

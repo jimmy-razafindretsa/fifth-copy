@@ -8,7 +8,8 @@ import { internalHeaders } from "./sign";
 
 export const INTERNAL_TIMEOUT_MS = 2_000;
 
-export type InternalCallResult<T> = { ok: true; data: T } | { ok: false; error: "race-server-unavailable" };
+export type InternalCallResult<T> =
+  { ok: true; data: T } | { ok: false; error: "race-server-unavailable" };
 
 export type InternalApiClient = {
   openRoom(request: OpenRoomRequest): Promise<InternalCallResult<OpenRoomResponse>>;

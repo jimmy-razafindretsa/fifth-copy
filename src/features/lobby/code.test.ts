@@ -31,7 +31,9 @@ describe("generateRoomCode", () => {
 
 describe("withUniqueRoomCode", () => {
   it("C1: retries when the code is taken and returns the first accepted draw", async () => {
-    const tryCreate = vi.fn(async (code: string) => (tryCreate.mock.calls.length === 1 ? null : code));
+    const tryCreate = vi.fn(async (code: string) =>
+      tryCreate.mock.calls.length === 1 ? null : code,
+    );
     const result = await withUniqueRoomCode(seeded(1), tryCreate);
     expect(tryCreate).toHaveBeenCalledTimes(2);
     expect(result).toBe(tryCreate.mock.calls[1]![0]);

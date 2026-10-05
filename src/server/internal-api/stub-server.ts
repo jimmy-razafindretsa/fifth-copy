@@ -2,7 +2,12 @@ import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 // In-process HTTP stub standing in for the race server in tests (#103). Not imported by app code.
-export type StubRequest = { method?: string; url?: string; headers: IncomingHttpHeaders; body: string };
+export type StubRequest = {
+  method?: string;
+  url?: string;
+  headers: IncomingHttpHeaders;
+  body: string;
+};
 export type StubReply = { status: number; body?: unknown } | "hang";
 
 export type RaceServerStub = {

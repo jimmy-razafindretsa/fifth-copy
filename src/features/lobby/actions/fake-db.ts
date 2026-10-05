@@ -19,7 +19,12 @@ export function fakeLobbyDb() {
   const user = {
     create: vi.fn(async ({ data }: { data: { typistName: string } }) => {
       if (users.some((u) => u.typistName === data.typistName)) throw uniqueViolation();
-      const row: UserRow = { id: `usr${next++}`, typistName: data.typistName, isGuest: true, avatarStatus: "NONE" };
+      const row: UserRow = {
+        id: `usr${next++}`,
+        typistName: data.typistName,
+        isGuest: true,
+        avatarStatus: "NONE",
+      };
       users.push(row);
       return { id: row.id, typistName: row.typistName };
     }),
@@ -35,7 +40,8 @@ export function fakeLobbyDb() {
       return { id: row.id, code: row.code };
     }),
     findUnique: vi.fn(
-      async ({ where }: { where: { code: string } }) => lobbies.find((l) => l.code === where.code) ?? null,
+      async ({ where }: { where: { code: string } }) =>
+        lobbies.find((l) => l.code === where.code) ?? null,
     ),
     delete: vi.fn(async ({ where }: { where: { id: string } }) => {
       const index = lobbies.findIndex((l) => l.id === where.id);

@@ -18,7 +18,11 @@ describe("internal API signing", () => {
   it("changes with the body, the timestamp and the secret", () => {
     const { secret, timestamp, body, signature } = INTERNAL_HMAC_TEST_VECTOR;
     expect(signInternalBody({ timestamp, rawBody: `${body} `, secret })).not.toBe(signature);
-    expect(signInternalBody({ timestamp: "1767225601", rawBody: body, secret })).not.toBe(signature);
-    expect(signInternalBody({ timestamp, rawBody: body, secret: `${secret}x` })).not.toBe(signature);
+    expect(signInternalBody({ timestamp: "1767225601", rawBody: body, secret })).not.toBe(
+      signature,
+    );
+    expect(signInternalBody({ timestamp, rawBody: body, secret: `${secret}x` })).not.toBe(
+      signature,
+    );
   });
 });

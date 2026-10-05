@@ -4,3 +4,4 @@ export { mintRaceToken } from "./actions/mint-race-token";
 export { InlineError } from "./components/inline-error";
 export { LobbyEntries } from "./components/lobby-entries";
 export type { CreateLobbyResult, JoinByCodeResult, RaceTokenResult } from "./types";
+export { LobbyScreen } from "./components/lobby-screen";

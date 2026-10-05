@@ -51,6 +51,7 @@
     Impact,
     sans-serif;
   letter-spacing: 0.16em;
+  white-space: nowrap;
   border-right: 2px solid var(--color-fg);
 }
 
@@ -94,6 +95,7 @@
   color: var(--color-bg);
   border: 0;
   padding: 0 16px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -131,5 +133,24 @@
   .codeInput,
   .inkButton {
     min-height: 44px;
+  }
+}
+
+/* phones: the group is wider than the column, so the label becomes its header row (bible 7.4) */
+@media (max-width: 480px) {
+  .codeGroup {
+    flex-wrap: wrap;
+  }
+
+  .codeLabel {
+    flex: 1 0 100%;
+    padding: 6px 12px;
+    border-right: 0;
+    border-bottom: 2px solid var(--color-fg);
+  }
+
+  .codeInput {
+    flex: 1 1 130px;
+    min-width: 0;
   }
 }

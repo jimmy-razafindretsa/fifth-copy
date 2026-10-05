@@ -82,7 +82,8 @@
   height: 64px;
   background: var(--color-primary);
   left: 2%;
-  bottom: 120px;
+  /* reference 120px; until the live feed (card 497) makes the hero taller, that sits on the actions row */
+  bottom: 24px;
   opacity: 0.9;
 }
 

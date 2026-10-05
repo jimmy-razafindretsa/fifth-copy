@@ -49,7 +49,7 @@ export function CreateLobbyButtonView({ pending, error, labels, errors, action }
   );
 }
 
-/** bible 7.1 secondary button `CREATE PRIVATE RACE` (reference `Fifth Copy Landing.dc.html`). */
+/** bible 7.1 secondary button (reference `Fifth Copy Landing.dc.html`): creates a private lobby. */
 export function CreateLobbyButton({
   labels,
   errors,

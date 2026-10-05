@@ -6,7 +6,7 @@ const STARS = [styles.star1, styles.star2, styles.star3, styles.star4];
 
 /**
  * Landing hero (bible 14.1 item 2, reference `Fifth Copy Landing.dc.html` hero). `actions` fills the
- * row under the pitch (#99); `aside` is the right column (live feed, #497).
+ * row under the pitch (#99); `aside` is the right column (live feed, card 497).
  */
 export async function LandingHero({
   actions,

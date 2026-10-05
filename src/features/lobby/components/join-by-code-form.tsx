@@ -90,7 +90,7 @@ export function JoinByCodeFormView({
   );
 }
 
-/** bible 7.2 code join group `[ JOIN WITH CODE | KGB-4821 | JOIN → ]`, masked as the player types. */
+/** bible 7.2 room code group (label, masked code field, ink submit), masked as the player types. */
 export function JoinByCodeForm({ labels, errors }: { labels: EntryLabels; errors: EntryErrors }) {
   const router = useRouter();
   const id = useId();

@@ -1,6 +1,6 @@
 import type { Messages } from "@/i18n";
 
-/** Strings the client leaves receive from the server page (ADR 0010: no `useT` until #372). */
+/** Strings the client leaves receive from the server page (ADR 0010: no `useT` until card 372). */
 export type EntryLabels = Messages["landing"]["actions"];
 export type EntryErrors = Messages["landing"]["errors"];
 

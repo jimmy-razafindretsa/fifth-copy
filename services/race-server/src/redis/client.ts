@@ -12,7 +12,9 @@ export function createRedis(url: string): Redis {
   });
   // ioredis emits `error` on every failed (re)connect; without a listener the process crashes.
   redis.on("error", (err: NodeJS.ErrnoException) => {
-    console.error(JSON.stringify({ level: "error", msg: "redis error", code: err.code ?? "unknown" }));
+    console.error(
+      JSON.stringify({ level: "error", msg: "redis error", code: err.code ?? "unknown" }),
+    );
   });
   return redis;
 }

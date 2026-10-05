@@ -56,7 +56,10 @@ describe("room registry: open (C1)", () => {
     const { registry } = setup();
     const lobbyId = lobby();
     const first = await registry.open({ lobbyId, code: "ABCD", hostUserId: "host" });
-    expect(first).toEqual({ created: true, room: { roomId: lobbyId, code: "ABCD", phase: "waiting" } });
+    expect(first).toEqual({
+      created: true,
+      room: { roomId: lobbyId, code: "ABCD", phase: "waiting" },
+    });
     const second = await registry.open({ lobbyId, code: "WXYZ", hostUserId: "other" });
     expect(second).toEqual({ created: false, room: first.room });
   });
@@ -108,7 +111,9 @@ describe("room registry: join (C2, C3)", () => {
     const { registry } = setup();
     const lobbyId = await openRoom(registry);
     const results = await Promise.all(
-      Array.from({ length: 10 }, (_, i) => registry.join(lobbyId, { userId: `u${i}`, name: `U${i}` })),
+      Array.from({ length: 10 }, (_, i) =>
+        registry.join(lobbyId, { userId: `u${i}`, name: `U${i}` }),
+      ),
     );
     const desks = results.map((r) => (r.ok ? r.desk : 0)).sort((x, y) => x - y);
     expect(desks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
@@ -117,7 +122,8 @@ describe("room registry: join (C2, C3)", () => {
   it("marks only the host as isHost and sorts members by desk", async () => {
     const { registry } = setup();
     const lobbyId = await openRoom(registry, lobby(), "h");
-    for (const userId of ["a", "h", "b", "c"]) await registry.join(lobbyId, { userId, name: userId });
+    for (const userId of ["a", "h", "b", "c"])
+      await registry.join(lobbyId, { userId, name: userId });
     await registry.leave(lobbyId, "a");
     await registry.join(lobbyId, { userId: "z", name: "z" });
     expect(await registry.members(lobbyId)).toEqual([

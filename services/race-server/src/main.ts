@@ -1,25 +1,23 @@
 /**
- * Race server entry point. Today: an HTTP server with /health and graceful shutdown, so the
- * process, build, env and gates exist before the first feature card. Socket.IO, Redis and rooms
- * land through the cards of epic #148 (see docs/architecture/ARCHITECTURE.md section 11).
+ * Race server entry point: boot and graceful shutdown. Wires env, Redis, the room registry and
+ * GET /health. Socket.IO and the internal route land through the cards of epic #148 (see
+ * docs/architecture/ARCHITECTURE.md section 11).
  */
 import { createServer } from "node:http";
+import { systemClock } from "./clock";
 import { parseEnv } from "./env";
-import { healthBody } from "./health";
+import { createHealthHandler } from "./health";
+import { createRedis } from "./redis/client";
+import { createRoomRegistry } from "./rooms/registry";
 
 const env = parseEnv();
-const state = { rooms: 0, draining: false };
+const redis = createRedis(env.REDIS_URL);
+const registry = createRoomRegistry({ redis, clock: systemClock });
+let draining = false;
 
-const server = createServer((req, res) => {
-  if (req.method === "GET" && req.url === "/health") {
-    const body = healthBody(state);
-    res.writeHead(body.ok ? 200 : 503, { "content-type": "application/json" });
-    res.end(JSON.stringify(body));
-    return;
-  }
-  res.writeHead(404, { "content-type": "application/json" });
-  res.end(JSON.stringify({ error: "not found" }));
-});
+const server = createServer(
+  createHealthHandler({ rooms: () => registry.count(), draining: () => draining }),
+);
 
 server.listen(env.RACE_SERVER_PORT, () => {
   console.log(
@@ -29,11 +27,13 @@ server.listen(env.RACE_SERVER_PORT, () => {
 
 /** Drain: stop accepting work, let live rooms finish, then exit (ADR 0012 deploy rule). */
 function shutdown(signal: string) {
-  state.draining = true;
+  draining = true;
   console.log(
-    JSON.stringify({ level: "info", msg: "race-server draining", signal, rooms: state.rooms }),
+    JSON.stringify({ level: "info", msg: "race-server draining", signal, rooms: registry.count() }),
   );
-  server.close(() => process.exit(0));
+  server.close(() => {
+    void redis.quit().finally(() => process.exit(0));
+  });
   setTimeout(() => process.exit(0), 5_000).unref();
 }
 process.on("SIGTERM", () => shutdown("SIGTERM"));

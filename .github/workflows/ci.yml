@@ -110,6 +110,12 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+      # Race server for the browser tests (#165), real Redis like the check job (ADR 0008).
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       # The throwaway service DB is both the app DB and the test DB (docs/adr/0003).
       DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
@@ -117,6 +123,12 @@ jobs:
       # Throwaway CI value (like the service DB password); src/env.ts requires >= 32 chars.
       RACE_TOKEN_SECRET: ci-only-race-token-secret-0123456789abcdef0123456789abcdef
       AUTH_SECRET: ci-only-auth-secret-0123456789abcdef0123456789abcdef
+      # Race server under Playwright (playwright.config.ts webServer); NEXT_PUBLIC_* is inlined at build.
+      REDIS_URL: redis://localhost:6379/0
+      RACE_SERVER_PORT: "4000"
+      NEXT_PUBLIC_RACE_SERVER_URL: http://localhost:4000
+      RACE_SERVER_INTERNAL_URL: http://localhost:4000
+      WEB_ORIGIN: http://localhost:3100
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -127,6 +139,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: scripts/test-db.sh
       - run: npm run build
+      - run: npm run build:race
       - run: npx playwright test
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -152,12 +165,23 @@ jobs:
           POSTGRES_DB: app
         options: >-
           --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+      # Race server for the browser tests (#165), real Redis like the check job (ADR 0008).
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
       TEST_DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
       DB_GUARD_ALLOWED_HOSTS: postgres
       RACE_TOKEN_SECRET: ci-only-race-token-secret-0123456789abcdef0123456789abcdef
       AUTH_SECRET: ci-only-auth-secret-0123456789abcdef0123456789abcdef
+      # Race server under Playwright (playwright.config.ts webServer); NEXT_PUBLIC_* is inlined at build.
+      REDIS_URL: redis://redis:6379/0
+      RACE_SERVER_PORT: "4000"
+      NEXT_PUBLIC_RACE_SERVER_URL: http://localhost:4000
+      RACE_SERVER_INTERNAL_URL: http://localhost:4000
+      WEB_ORIGIN: http://localhost:3100
       PW_VISUAL: "1"
       HOME: /root
     steps:
@@ -169,6 +193,7 @@ jobs:
       - run: npm ci
       - run: scripts/test-db.sh
       - run: npm run build
+      - run: npm run build:race
       - name: Visual tests
         if: ${{ !inputs.update-baselines }}
         run: npx playwright test --grep @visual

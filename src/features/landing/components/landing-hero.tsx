@@ -31,7 +31,7 @@ export async function LandingHero({
               width={217}
               height={87}
               alt={t.brand.wordmarkAlt}
-              priority
+              loading="eager"
             />
             <Image
               className={`${styles.wordmarkImg} ${styles.onInk}`}
@@ -39,7 +39,7 @@ export async function LandingHero({
               width={217}
               height={87}
               alt={t.brand.wordmarkAlt}
-              priority
+              loading="eager"
             />
           </h1>
           <div className={styles.tagline}>{t.landing.tagline}</div>

@@ -17,7 +17,7 @@ export async function LandingHeader({ end }: { end?: React.ReactNode }) {
           width={40}
           height={40}
           alt=""
-          priority
+          loading="eager"
         />
         <div className={styles.brandName}>{t.brand.name}</div>
       </div>

@@ -104,6 +104,7 @@ Reds and gold never change between themes. The tape strip stays `tape-paper` in 
 
 ### 3.3 Contrast
 Text is 4.5:1 minimum. Never put muted text on red. On red grounds use paper or ink at full opacity.
+Red kicker and label text on Night shift uses night-ink (the link role): agit-red on the night ground is 1.76:1 (extension, #494).
 
 ---
 

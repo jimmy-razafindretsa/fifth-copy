@@ -1,39 +1,30 @@
 /**
- * Race server entry point: boot and graceful shutdown. Wires env, Redis, the room registry and
- * GET /health. Socket.IO and the internal route land through the cards of epic #148 (see
- * docs/architecture/ARCHITECTURE.md section 11).
+ * Race server entry point: env, Redis, then the composition root (`app.ts`: GET /health,
+ * POST /internal/rooms, Socket.IO waiting room). SIGTERM/SIGINT disconnect every socket and exit
+ * (ADR 0012; docs/architecture/ARCHITECTURE.md section 11).
  */
-import { createServer } from "node:http";
+import { createRaceServer } from "./app";
 import { systemClock } from "./clock";
 import { parseEnv } from "./env";
-import { createHealthHandler } from "./health";
 import { createRedis } from "./redis/client";
-import { createRoomRegistry } from "./rooms/registry";
 
 const env = parseEnv();
-const redis = createRedis(env.REDIS_URL);
-const registry = createRoomRegistry({ redis, clock: systemClock });
-let draining = false;
+const server = createRaceServer({ env, redis: createRedis(env.REDIS_URL), clock: systemClock });
 
-const server = createServer(
-  createHealthHandler({ rooms: () => registry.count(), draining: () => draining }),
-);
-
-server.listen(env.RACE_SERVER_PORT, () => {
-  console.log(
-    JSON.stringify({ level: "info", msg: "race-server listening", port: env.RACE_SERVER_PORT }),
-  );
+void server.listen(env.RACE_SERVER_PORT).then((port) => {
+  console.log(JSON.stringify({ level: "info", msg: "race-server listening", port }));
 });
 
-/** Drain: stop accepting work, let live rooms finish, then exit (ADR 0012 deploy rule). */
 function shutdown(signal: string) {
-  draining = true;
   console.log(
-    JSON.stringify({ level: "info", msg: "race-server draining", signal, rooms: registry.count() }),
+    JSON.stringify({
+      level: "info",
+      msg: "race-server draining",
+      signal,
+      rooms: server.registry.count(),
+    }),
   );
-  server.close(() => {
-    void redis.quit().finally(() => process.exit(0));
-  });
+  void server.close().finally(() => process.exit(0));
   setTimeout(() => process.exit(0), 5_000).unref();
 }
 process.on("SIGTERM", () => shutdown("SIGTERM"));

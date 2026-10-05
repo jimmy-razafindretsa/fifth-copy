@@ -288,3 +288,33 @@ describe("C7 contrast (computed from the token values)", () => {
     });
   }
 });
+
+// Contract of #21: the six font roles in @theme, Tailwind's default families removed.
+describe("#21 C2 font roles", () => {
+  const themeBody = top
+    .filter((b) => b.selector === "@theme")
+    .map((b) => b.body)
+    .join(";");
+  const FONTS: Record<string, string> = {
+    display: "var(--font-stardos), Impact, sans-serif",
+    label: "var(--font-oswald), Impact, sans-serif",
+    typing: "var(--font-plex-mono), ui-monospace, monospace",
+    flavour: "var(--font-special-elite), ui-monospace, monospace",
+    body: "var(--font-courier-prime), ui-monospace, monospace",
+    device: "var(--font-vt323), ui-monospace, monospace",
+  };
+
+  it("resets Tailwind's default families", () => {
+    expect(themeBody).toMatch(/--font-\*\s*:\s*initial\s*;/);
+  });
+
+  it("declares the six roles as the family variable plus a generic fallback", () => {
+    for (const [name, value] of Object.entries(FONTS)) {
+      expect(theme.get(`--font-${name}`), name).toBe(norm(value));
+    }
+    const fonts = [...theme.keys()].filter((k) => k.startsWith("--font-"));
+    expect(fonts.sort()).toEqual(Object.keys(FONTS).map((n) => `--font-${n}`).sort());
+    expect(theme.has("--font-sans")).toBe(false);
+    expect(theme.has("--font-mono")).toBe(false);
+  });
+});

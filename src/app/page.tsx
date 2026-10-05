@@ -12,10 +12,10 @@ export default function Home() {
         <h2 className="text-lg font-medium text-fg">Start here</h2>
         <ul className="list-disc space-y-1 pl-5 text-fg-muted">
           <li>
-            Rules: <code className="font-mono text-sm">AGENTS.md</code>
+            Rules: <code className="font-typing text-sm">AGENTS.md</code>
           </li>
           <li>
-            Protocol: <code className="font-mono text-sm">agents/PROTOCOL.md</code>
+            Protocol: <code className="font-typing text-sm">agents/PROTOCOL.md</code>
           </li>
           <li>
             <Link className="text-link underline underline-offset-4" href="/design">

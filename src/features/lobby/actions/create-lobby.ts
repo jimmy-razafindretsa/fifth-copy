@@ -21,7 +21,7 @@ export async function createLobby(): Promise<CreateLobbyResult> {
   const room = await openRoom({ lobbyId: lobby.id, code: lobby.code, hostUserId: host.id });
   if (room.ok) return { ok: true, code: lobby.code };
 
-  // A failed delete leaves a WAITING row; cleanup of stale lobbies is #145.
+  // A failed delete leaves a WAITING row; cleanup of stale lobbies is card 145.
   await db.lobby.delete({ where: { id: lobby.id } }).catch(() => undefined);
   return { ok: false, error: "race-server-unavailable" };
 }

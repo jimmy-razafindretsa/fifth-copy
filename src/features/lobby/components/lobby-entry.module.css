@@ -1,0 +1,156 @@
+/*
+ * Landing entries into a lobby (#99), ported 1:1 from docs/design/bible/Fifth Copy Landing.dc.html
+ * (the CREATE PRIVATE RACE button and the code-join group). Colours are roles from
+ * docs/design/tokens.css only, fonts the next/font variables (#21).
+ */
+
+/* one entry = its control, then its error line */
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+/* bible 7.1 secondary button */
+.secondary {
+  font:
+    600 13px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  background: transparent;
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  padding: 12px 18px;
+  cursor: pointer;
+}
+
+.secondary:disabled,
+.inkButton:disabled {
+  cursor: progress;
+}
+
+.secondary:hover {
+  background: var(--color-surface);
+}
+
+/* bible 7.2 code join group: [ JOIN WITH CODE | KGB-4821 | JOIN → ] */
+.codeGroup {
+  display: flex;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+}
+
+.codeLabel {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font:
+    600 11px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  border-right: 2px solid var(--color-fg);
+}
+
+.codeInput {
+  width: 130px;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  font:
+    500 18px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  color: var(--color-fg);
+  text-transform: uppercase;
+}
+
+/* reference: ink at 40%; muted ink keeps the placeholder at 4.5:1 (bible 7.2 extension, #99) */
+.codeInput::placeholder {
+  color: var(--color-fg-muted);
+  opacity: 1;
+}
+
+.codeInput:focus {
+  outline: none;
+}
+
+.codeGroup:focus-within {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* bible 7.1 ink button */
+.inkButton {
+  font:
+    600 13px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 0;
+  padding: 0 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inkButton:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+/* inline error: a docket line (bible 7.4) with the rejection word (bible 7.7); extension, #99 */
+.errorLine {
+  margin: 0;
+  max-width: 100%;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  font:
+    400 15px/1.45 var(--font-courier-prime),
+    ui-monospace,
+    monospace;
+  color: var(--color-link);
+  text-wrap: pretty;
+}
+
+.errorPrefix {
+  font:
+    600 11px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+}
+
+/* bible 18: hit targets >= 44px on touch (the reference measures 41px) */
+@media (max-width: 768px) {
+  .secondary,
+  .codeInput,
+  .inkButton {
+    min-height: 44px;
+  }
+}
+
+/* phones: the group is wider than the column, so the label becomes its header row (bible 7.4) */
+@media (max-width: 480px) {
+  .codeGroup {
+    flex-wrap: wrap;
+  }
+
+  .codeLabel {
+    flex: 1 0 100%;
+    padding: 6px 12px;
+    border-right: 0;
+    border-bottom: 2px solid var(--color-fg);
+  }
+
+  .codeInput {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+}

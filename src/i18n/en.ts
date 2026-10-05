@@ -12,5 +12,22 @@ export const en = {
     tagline: "TYPE FAST · TYPE FIRST",
     pitch:
       "Thirty desks. One message. Everyone types the same copy, and the fastest clean copy gets the medal.",
+    actions: {
+      createPrivateRace: "CREATE PRIVATE RACE",
+      creating: "CREATING…",
+      joinFormName: "Join with code",
+      joinWithCode: "JOIN WITH CODE",
+      codePlaceholder: "KGB-4821",
+      join: "JOIN →",
+      joining: "JOINING…",
+    },
+    errors: {
+      prefix: "RETURNED ·",
+      invalidFormat: "Enter a code like KGB-4821",
+      notFound: "No race with that code",
+      closed: "That race has already started or closed",
+      unavailable: "The ring rooms are not answering. Try again in a minute.",
+      generic: "Something jammed. Try again.",
+    },
   },
 } as const;

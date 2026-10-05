@@ -40,8 +40,9 @@ for attempt in 1 2 3; do
     sleep 15
     continue
   fi
-  # Wait for checks on this exact head (they may take a few seconds to register after a push).
-  for ((w = 0; w < 12; w++)); do
+  # Wait for checks on this exact head. After a push they can sit queued for a runner (parallel cards
+  # compete for CI), and `gh pr checks` reports "no checks" until a run starts: wait up to 20 min.
+  for ((w = 0; w < 120; w++)); do
     gh pr checks "$pr" --repo "$REPO" 2>&1 | grep -q "no checks reported" || break
     sleep 10
   done

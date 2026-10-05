@@ -3,7 +3,7 @@ import type { Member } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
 import { bindRoomSocket, initialLobbyState, reduceLobby, type LobbyEvent } from "./lobby-store";
 
-// Contract of #107, C5: the lobby store reduces `welcome` and `roster` into a desk-sorted list.
+// Contract of card 107, C5: the lobby store reduces `welcome` and `roster` into a desk-sorted list.
 const ada: Member = { desk: 1, name: "Ada", isHost: true };
 const bob: Member = { desk: 2, name: "Bob", isHost: false };
 const cyd: Member = { desk: 5, name: "Cyd", isHost: false };

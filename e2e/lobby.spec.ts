@@ -35,7 +35,7 @@ async function createLobby(page: Page): Promise<string> {
   await page.goto("/");
   await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
   await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
-  return LOBBY_PATH.exec(new URL(page.url()).pathname)![1];
+  return LOBBY_PATH.exec(new URL(page.url()).pathname)![1]!;
 }
 
 /** A different guest (fresh context) joins with the code from the landing. */
@@ -99,7 +99,8 @@ test.describe("lobby waiting room (#107)", () => {
     // dev StrictMode mounts the leaf twice, so collect every minted token (the first is discarded)
     const bodies: Promise<string>[] = [];
     page.on("response", (r) => {
-      if (isLobbyAction(r.request().method(), r.url(), r.request().headers())) bodies.push(r.text());
+      if (isLobbyAction(r.request().method(), r.url(), r.request().headers()))
+        bodies.push(r.text());
     });
     await createLobby(page);
     await expect(rows(page)).toHaveCount(1);
@@ -172,7 +173,7 @@ test.describe("lobby waiting room (#107)", () => {
     });
     await createLobby(page);
     await expect(rows(page)).toHaveCount(1);
-    await sockets[0].close();
+    await sockets[0]!.close();
     const notice = page.getByRole("status").filter({ hasText: "CONNECTION LOST, RETRYING" });
     await expect(notice).toBeVisible({ timeout: 10_000 });
     await expect(rows(page)).toHaveCount(1);
@@ -273,7 +274,11 @@ test.describe("lobby waiting room (#107)", () => {
       await expect(rows(page).first().getByText("HOST", { exact: true })).toBeVisible();
       await expect(rows(page).first().getByText("YOU", { exact: true })).toBeVisible();
       expect(await roll(page).evaluate((el) => el.tagName)).toBe("UL");
-      expect(await rows(page).first().evaluate((el) => el.tagName)).toBe("LI");
+      expect(
+        await rows(page)
+          .first()
+          .evaluate((el) => el.tagName),
+      ).toBe("LI");
       await expectNoA11yViolations(page);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,

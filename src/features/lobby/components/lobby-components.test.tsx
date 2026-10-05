@@ -7,7 +7,7 @@ import { LobbyLiveView } from "./lobby-live";
 import { initialLobbyState, type LobbyState } from "./lobby-store";
 import { PlayerList } from "./player-list";
 
-// Contract of #107, C6: every state renders, every string from the catalog (C6 greps `src`).
+// Contract of card 107, C6: every state renders, every string from the catalog (C6 greps `src`).
 vi.mock("../actions/mint-race-token", () => ({ mintRaceToken: vi.fn() }));
 
 const labels = en.lobby;

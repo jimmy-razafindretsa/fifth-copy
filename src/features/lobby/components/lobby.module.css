@@ -1,7 +1,7 @@
 /*
- * The waiting room (#107). Bible 14.3 lists Lobby as a "next screen" with no reference file, so it is
+ * The waiting room (card 107). Bible 14.3 lists Lobby as a "next screen" with no reference file, so it is
  * composed only from bible components: type roles (4), stamp (7.3), docket (7.4), layout (7.10) and
- * motion (8). Colours are roles from docs/design/tokens.css only, fonts the next/font variables (#21).
+ * motion (8). Colours are roles from docs/design/tokens.css only, fonts the next/font variables (card 21).
  */
 
 @keyframes fcSlam {
@@ -174,7 +174,7 @@
   overflow-wrap: anywhere;
 }
 
-/* bible 7.3 stamp, local until the Stamp primitive (#26): crooked red double border, slams in.
+/* bible 7.3 stamp, local until the Stamp primitive (card 26): crooked red double border, slams in.
    Text uses the link role: agit-red on paper, night-ink on Night shift (bible 3.3). */
 .stamp {
   display: inline-block;

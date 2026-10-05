@@ -190,11 +190,15 @@ Rules: no recolouring the bar violet or gold, never straighten it, and keep clea
 - Border `4px double red` (or 3px double gold on dark), Stardos 700, rotated **−8° to +7°** (always a little crooked), paper-ish bg `rgba(241,232,214,.9)`.
 - Entry animation: **slam** (scale 2.2 → 0.9 → 1, rotation settles), 0.3–0.45s.
 - Examples: `ACCEPTED · 48 WPM`, `FILED`, `ISSUED`, `ROOM 457 / 30 SEATS` (bobbing), `BUILT BY / AEGIS CORP.`
+- Extension (#107): on UI screens the stamp text uses the link role (red on paper, night-ink on Night shift: agit-red on the night ground is 1.76:1, 3.3); the `4px double` border stays red in both themes. Ground `color-mix(in srgb, var(--color-bg) 90%, transparent)`. The `HOST` stamp is Stardos 700 14px `.08em`, `padding:2px 8px`, a fixed −6°, slamming in with `fcSlam` 0.35s from −14°; none under reduced motion. The lobby keeps a local `.stamp` class until the `Stamp` primitive (#26).
 
 ### 7.4 Dockets / file cards
 - Paper or newsprint, `2px solid ink`, no radius. Header row with mono name plus Oswald tag. Rows are a grid `120px | 1fr` with dashed separators `1px dashed rgba(42,36,32,.3)`.
 - **Inline error line** (extension, #99): one docket row under the control it belongs to, `2px solid ink`, newsprint, `padding:8px 12px`, Courier Prime 15px in the red text role (3.3), led by an Oswald 600 11px `.16em` prefix `RETURNED ·` (the rejection word of 7.7). `role="alert"`, linked to its field with `aria-describedby`; it never echoes what the player typed.
 - Multi-cell grids use `gap:2px; background:ink` on the grid with paper cells. **Never** per-cell borders (they double up when the grid wraps).
+- **Roll rows** (extension, #107): a list of people is a `ul` inside a docket, one `li` per person as a `120px | 1fr` row: `DESK 05` (Oswald 600 11px `.2em`, muted) | name (IBM Plex Mono 400 18px) then its badges (a 7.3 stamp such as `HOST`, the ink `YOU` tag: Oswald 600 10px `.16em`, ink bg, paper text, `padding:1px 6px`). Badges wrap under the name on phones. The roll docket sits on paper (the room docket beside it on newsprint); it scrolls inside itself (`max-height:60vh`), focusable and named.
+- **Skeleton rows** (extension, #107): the same row grid with flat newsprint blocks, no shimmer and no gradient (6), the list `aria-busy="true"`.
+- **Notice row** (extension, #107): a live-state label row at the top of a docket (e.g. `CONNECTION LOST, RETRYING`), Oswald 600 11px `.16em`, dashed separator under it, pulsing with `lkPulse` (8); still under reduced motion.
 
 ### 7.5 Tabs
 Stardos 700 13px `.12em`. Active tab = ink bg, paper text. A 7px red dot marks tabs that contain NEW items. ←/→ keyboard switches tabs.
@@ -410,6 +414,8 @@ Hero stars (#99): while the hero has no live feed (#497) the big red star sits a
 
 ### 14.3 Next screens (to design using this bible)
 Sign-in / sign-up (guest, username + password + one-time recovery code, GitHub, Discord) · Lobby (seat ring diagram, host settings as a form, invite code/link docket, START) · Race seat view (3D POV + telex strip + nixie counters + race card + overtake stamps `ОБГОН! · OVERTAKE +1` / `ОБОГНАЛИ · PASSED −1`) · Projector view (overview + top-10 sidebar + rank plaques) · Results "Dawn report" (podium with medals pinned, full ranking, personal stats card, keyboard heatmap paper → gold → red) · Personnel file (profile/stats, enamel pins) · Settings · How to type special characters. **Reuse the components above. No new colours or fonts.**
+
+Lobby, MVP (#107): kicker `WAITING ROOM · PRIVATE RACE`, H1 `REPORT TO YOUR DESK` (Stardos 700, section H2 scale), then the room docket (7.4: header `KGB-4821` mono 500 18px `.08em` + `ROOM CODE` tag, rows `TYPISTS | n / 30`, `STATUS | WAITING`) beside the roll (7.4 roll rows), wrapping under each other (`flex-wrap`, docket max 420px). Paper ground, gutters `clamp(16px,4vw,48px)`. The seat ring, host settings, invite docket and START come with #498 and #108.
 
 ---
 

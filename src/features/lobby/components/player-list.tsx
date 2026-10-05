@@ -7,8 +7,8 @@ type Slot = (member: Member) => ReactNode;
 
 /**
  * The roll of the waiting room: one bible 7.4 docket row per member (`DESK 05 | name`), with the
- * crooked `HOST` stamp (7.3) and the ink `YOU` tag. Slots: `leading` (avatar, #490) before the name,
- * `tags` (BOT docket #490, stamps #139) after the badges. Scrolls inside its docket, so it is a
+ * crooked `HOST` stamp (7.3) and the ink `YOU` tag. Slots: `leading` (avatar, card 490) before the name,
+ * `tags` (BOT docket card 490, stamps card 139) after the badges. Scrolls inside its docket, so it is a
  * focusable, named region for keyboard users.
  */
 export function PlayerList({

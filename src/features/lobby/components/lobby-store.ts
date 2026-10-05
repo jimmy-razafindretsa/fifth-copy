@@ -17,7 +17,7 @@ export type LobbyState = {
 };
 
 /**
- * Everything the waiting room reacts to. Extension point (#108, #169, race HUD): one event here,
+ * Everything the waiting room reacts to. Extension point (card 108, card 169, race HUD): one event here,
  * one case in `reduceLobby`, one binding in `bindRoomSocket`.
  */
 export type LobbyEvent =

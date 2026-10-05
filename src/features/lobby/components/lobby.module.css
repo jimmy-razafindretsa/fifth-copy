@@ -1,0 +1,240 @@
+/*
+ * The waiting room (#107). Bible 14.3 lists Lobby as a "next screen" with no reference file, so it is
+ * composed only from bible components: type roles (4), stamp (7.3), docket (7.4), layout (7.10) and
+ * motion (8). Colours are roles from docs/design/tokens.css only, fonts the next/font variables (#21).
+ */
+
+@keyframes fcSlam {
+  0% {
+    transform: scale(2.2) rotate(-14deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.9) rotate(-5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-6deg);
+  }
+}
+
+@keyframes lkPulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* page: paper ground, fluid gutters 16px (375) to 48px (desktop) (bible 7.10) */
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: clamp(32px, 6vw, 80px) clamp(16px, 4vw, 48px);
+}
+
+/* red kicker; the link role keeps it red on paper and night-ink on Night shift (bible 3.3, 4) */
+.kicker {
+  font:
+    600 13px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+/* section H2 scale on the page's only heading (bible 4) */
+.heading {
+  margin: 0 0 16px;
+  font:
+    700 clamp(36px, 4.4vw, 60px) / 0.95 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* room-code docket beside the roll; both wrap under each other on narrow screens */
+.room {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+/* bible 7.4 docket: 2px ink, no radius, newsprint */
+.docket {
+  flex: 1 1 280px;
+  max-width: 420px;
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-surface);
+}
+
+/* the roll: the same docket on paper, so skeleton blocks can be newsprint */
+.roll {
+  flex: 2 1 320px;
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+}
+
+/* header row: mono name plus Oswald tag, 2px ink rule under it (bible 7.4, 7.2 extension) */
+.docketHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.code {
+  font:
+    500 18px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+}
+
+/* Oswald tag on ink (landing reference line 48): ROOM CODE and YOU */
+.tag {
+  display: inline-block;
+  font:
+    600 10px/1.4 var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.facts {
+  margin: 0;
+}
+
+/* docket rows: grid 120px | 1fr, dashed separators (bible 7.4) */
+.row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 0 12px;
+  padding: 8px 12px;
+  margin: 0;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.label {
+  font:
+    600 11px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.value {
+  margin: 0;
+  font:
+    400 16px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+}
+
+/* the player list scrolls inside the docket so 30 rows never overflow the viewport */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.name {
+  font:
+    400 18px var(--font-plex-mono),
+    ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+/* bible 7.3 stamp, local until the Stamp primitive (#26): crooked red double border, slams in.
+   Text uses the link role: agit-red on paper, night-ink on Night shift (bible 3.3). */
+.stamp {
+  display: inline-block;
+  font:
+    700 14px/1.2 var(--font-stardos),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.08em;
+  color: var(--color-link);
+  border: 4px double var(--color-primary);
+  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+  padding: 2px 8px;
+  transform: rotate(-6deg);
+  animation: fcSlam 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* skeleton rows: newsprint blocks in the row grid, no shimmer (bible 6: no generic gradients) */
+.block {
+  display: block;
+  height: 14px;
+  background: var(--color-surface);
+}
+
+.blockName {
+  width: min(160px, 100%);
+  height: 18px;
+}
+
+/* reconnecting notice: an Oswald label row with the lkPulse opacity pulse (bible 8) */
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  font:
+    600 11px var(--font-oswald),
+    Impact,
+    sans-serif;
+  letter-spacing: 0.16em;
+  animation: lkPulse 1.3s ease-in-out infinite;
+}
+
+.error {
+  padding: 12px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp,
+  .notice {
+    animation: none;
+  }
+}

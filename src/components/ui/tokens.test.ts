@@ -296,10 +296,10 @@ describe("#21 C2 font roles", () => {
     .map((b) => b.body)
     .join(";");
   const FONTS: Record<string, string> = {
-    display: "var(--font-stardos), var(--font-oswald), Impact, sans-serif",
+    display: "var(--face-stardos), var(--font-oswald), Impact, sans-serif",
     label: "var(--font-oswald), Impact, sans-serif",
     typing: "var(--font-plex-mono), ui-monospace, monospace",
-    flavour: "var(--font-special-elite), var(--font-oswald), ui-monospace, monospace",
+    flavour: "var(--face-special-elite), var(--font-oswald), ui-monospace, monospace",
     body: "var(--font-courier-prime), ui-monospace, monospace",
     device: "var(--font-vt323), ui-monospace, monospace",
   };

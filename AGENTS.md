@@ -85,6 +85,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Schema changes only in cards labeled `touches:prisma`. At most one such card is in flight at a time.
 - Breaking data changes use expand, migrate data, contract, across separate cards. They need an accepted ADR and `autonomy:hitl`.
 - After any schema change: generate, validate, status check, commit the migration SQL.
+- A new Prisma model needs a row in `docs/privacy/inventory.md` (or its "Non-personal models" list) in the same PR; `scripts/check.sh privacy` fails otherwise.
 - Check the installed Prisma version in `package.json` and follow its config conventions. Do not assume.
 - Card worktrees: create them with `scripts/worktree.sh <n>` (writes `.env` with the card's own ports and databases, installs deps); load it first in every session there: `set -a; . ./.env; set +a`. Never run e2e, see.ts or `prisma migrate` in a worktree without it: ports and DBs would collide with parallel cards. `check.sh` refuses to run without local `node_modules`.
 

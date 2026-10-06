@@ -775,6 +775,8 @@ function dustUpdate(t) {
 let FORCE = null;
 addEventListener('message', e => { const d = e.data || {}; if (d.type === 'fc-setview') FORCE = d.view === 'auto' ? null : d.view; });
 let VIEW = 'over', TURN = true, STUTTER = true, t = 0, last = performance.now(), nextStutter = 4, stutterT = -1, orbitA = 0.6;
+// ?orbit=<seconds>: one full overview orbit in that many seconds (the landing's recorded loop, scripts/record-live-feed.ts); default 0.05 rad/s
+const ORBIT = +new URLSearchParams(location.search).get('orbit') > 0 ? 2 * Math.PI / +new URLSearchParams(location.search).get('orbit') : 0.05;
 const STUTTER_PATTERN = [[0, 0.06, 0], [0.06, 0.14, 1], [0.14, 0.2, 0], [0.2, 0.42, 0.6], [0.42, 0.5, 0], [0.5, 9, 1]];
 function setView(v) {
   VIEW = v; controls.enabled = v === 'free';
@@ -813,7 +815,7 @@ function loop(now) {
   bulb.intensity = 70 * k; bulbMesh.material.color.copy(bulbOff).lerp(bulbOn, Math.min(1, k));
   { const want = FORCE || ((t % 32) < 22 ? 'over' : 'pov'); if (want !== VIEW) { setView(want); parent.postMessage({ type: 'fc-view', view: want }, '*'); } }
   Clerks.update(dt, VIEW === 'pov'); dustUpdate(t);
-  if (VIEW === 'over') { orbitA += dt * 0.05; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
+  if (VIEW === 'over') { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   else if (VIEW === 'free') controls.update();
   renderer.render(scene, camera);
   fr++; ft += dt;

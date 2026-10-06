@@ -2,8 +2,10 @@
 # Prepares the test database (docs/adr/0003): guard, then apply migrations with migrate deploy.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-if [[ -z "${TEST_DATABASE_URL:-}" && -f .env ]]; then
-  TEST_DATABASE_URL="$(grep -E '^TEST_DATABASE_URL=' .env | head -1 | cut -d= -f2- | tr -d '"' || true)"
+# shellcheck source=lib/dotenv-get.sh
+. scripts/lib/dotenv-get.sh
+if [[ -z "${TEST_DATABASE_URL:-}" ]]; then
+  TEST_DATABASE_URL="$(dotenv_get TEST_DATABASE_URL)"
 fi
 : "${TEST_DATABASE_URL:?TEST_DATABASE_URL is not set (see .env.example)}"
 scripts/db-guard.sh "$TEST_DATABASE_URL"

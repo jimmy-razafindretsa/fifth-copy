@@ -2,9 +2,11 @@
 # Exits non-zero unless DATABASE_URL (or the URL given as $1) points at a local or designated test host.
 # Run before any DB command (AGENTS.md, Prisma hazards). Never prints the URL itself.
 set -euo pipefail
+# shellcheck source=lib/dotenv-get.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/dotenv-get.sh"
 
-if [[ -z "${DATABASE_URL:-}" && -f .env ]]; then
-  DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- | tr -d '"' || true)"
+if [[ -z "${DATABASE_URL:-}" ]]; then
+  DATABASE_URL="$(dotenv_get DATABASE_URL)"
 fi
 url="${1:-${DATABASE_URL:-}}"
 if [[ -z "$url" ]]; then

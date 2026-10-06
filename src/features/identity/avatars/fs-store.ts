@@ -6,6 +6,7 @@ import {
   InvalidAvatarKeyError,
   assertUserId,
   avatarFileName,
+  type AvatarDeleteOptions,
   type AvatarFiles,
   type AvatarSize,
   type AvatarStore,
@@ -57,8 +58,13 @@ export class FsAvatarStore implements AvatarStore {
     }
   }
 
-  async delete(userId: string, options: { keep?: number } = {}): Promise<void> {
+  async delete(userId: string, options: AvatarDeleteOptions = {}): Promise<void> {
     const dir = this.userDir(userId);
+    if (options.version !== undefined) {
+      const names = AVATAR_SIZES.map((size) => avatarFileName(options.version!, size));
+      await Promise.all(names.map((name) => rm(this.inside(dir, name), { force: true })));
+      return;
+    }
     if (options.keep === undefined) {
       await rm(dir, { recursive: true, force: true });
       return;

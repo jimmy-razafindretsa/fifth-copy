@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { sniffImageType } from "./sniff";
 
 const bytes = (...parts: (string | number[])[]) =>
-  Buffer.concat(parts.map((p) => (typeof p === "string" ? Buffer.from(p, "latin1") : Buffer.from(p))));
+  Buffer.concat(
+    parts.map((p) => (typeof p === "string" ? Buffer.from(p, "latin1") : Buffer.from(p))),
+  );
 
 describe("sniffImageType (magic bytes only)", () => {
   it.each([

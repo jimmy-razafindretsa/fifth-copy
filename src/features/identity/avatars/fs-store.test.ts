@@ -58,6 +58,13 @@ describe("FsAvatarStore (temp dir)", () => {
     expect(await store.get("user2", 1, 64)).toEqual(Buffer.from("other-64"));
   });
 
+  it("C4: delete with version removes only that version", async () => {
+    await store.put("user1", 1, files("old"));
+    await store.put("user1", 2, files("new"));
+    await store.delete("user1", { version: 2 });
+    expect((await readdir(path.join(root, "user1"))).sort()).toEqual(["1-256.webp", "1-64.webp"]);
+  });
+
   it("C6: delete without keep removes the whole user directory; deleting nothing is fine", async () => {
     await store.put("user1", 1, files("a"));
     await store.delete("user1");

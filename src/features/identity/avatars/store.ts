@@ -4,13 +4,15 @@ export const AVATAR_SIZES = [256, 64] as const;
 export type AvatarSize = (typeof AVATAR_SIZES)[number];
 export type AvatarFiles = Record<AvatarSize, Buffer>;
 
+export type AvatarDeleteOptions = { keep?: number; version?: number };
+
 export interface AvatarStore {
   /** Writes both sizes of one version (atomic per file). */
   put(userId: string, version: number, files: AvatarFiles): Promise<void>;
   /** The bytes of one size of one version, or null when absent. */
   get(userId: string, version: number, size: AvatarSize): Promise<Buffer | null>;
-  /** Removes every file of the user, or every version but `keep`. */
-  delete(userId: string, options?: { keep?: number }): Promise<void>;
+  /** Removes every file of the user; with `keep`, every version but that one; with `version`, only that one. */
+  delete(userId: string, options?: AvatarDeleteOptions): Promise<void>;
 }
 
 // cuid()s and test ids: letters, digits, `_` and `-`; no dots, slashes or NUL, so no traversal.

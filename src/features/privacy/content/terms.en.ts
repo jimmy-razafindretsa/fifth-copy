@@ -98,7 +98,7 @@ export const termsEn: readonly PrivacySection[] = [
     id: "changes",
     heading: "Changes to these rules",
     paragraphs: [
-      "These rules can change. The date of the last change is shown on this page, and important changes are announced in the game.",
+      "These rules can change. The date of the last change is shown on this page.",
       "How your personal information is handled is explained in the other sections of this page.",
     ],
   },

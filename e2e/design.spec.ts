@@ -297,7 +297,7 @@ test.describe("design system page", () => {
     const h1 = await typeOf(page.getByRole("heading", { level: 1 }));
     expect(h1.family).toMatch(FACE.display);
     expect(h1.size).toBe(56);
-    for (const name of ["Colour roles", "Type roles", "Buttons", "Fields", "States"]) {
+    for (const name of ["Colour roles", "Type roles", "Buttons", "Fields", "States", "Motion"]) {
       const t = await typeOf(page.getByRole("heading", { level: 2, name }));
       expect(t.family, name).toMatch(FACE.display);
       expect(t.size, name).toBe(36);

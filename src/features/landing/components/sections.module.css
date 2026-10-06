@@ -526,3 +526,8 @@
     animation: none;
   }
 }
+
+/* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
+:root[data-motion="reduce"] .tickerTrack {
+  animation: none;
+}

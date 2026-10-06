@@ -412,3 +412,53 @@ describe("#20 type roles", () => {
     expect(primitives).toMatch(/`EmptyState`[^\n]*type-display-sm/);
   });
 });
+
+describe("#28 motion tokens", () => {
+  const DURATIONS = {
+    "--motion-duration-fast": "120ms",
+    "--motion-duration-base": "200ms",
+    "--motion-duration-slam": "180ms",
+    "--motion-duration-slow": "600ms",
+  } as const;
+  const reduceMedia = decls(
+    top
+      .find((b) => /^@media\s*\(prefers-reduced-motion:\s*reduce\)$/.test(b.selector))
+      ?.children.find((c) => c.selector === ":root")?.body ?? "",
+  );
+  const reduceAttr = decls(
+    top.find((b) => b.selector === ':root[data-motion="reduce"]')?.body ?? "",
+  );
+
+  it("C1 declares the four durations and two easings on :root, outside @theme", () => {
+    for (const [name, value] of Object.entries(DURATIONS)) {
+      expect(root.get(name), name).toBe(value);
+      expect(theme.has(name), name).toBe(false);
+    }
+    expect(root.get("--motion-ease-out")).toBeTruthy();
+    expect(root.get("--motion-ease-slam")).toBeTruthy();
+  });
+
+  for (const [label, block] of [
+    ["@media (prefers-reduced-motion: reduce)", reduceMedia],
+    [':root[data-motion="reduce"]', reduceAttr],
+  ] as const) {
+    it(`C1 zeroes the four durations under ${label}`, () => {
+      for (const name of Object.keys(DURATIONS)) {
+        expect(block.get(name), name).toBe("0ms");
+      }
+    });
+  }
+
+  it("C1 routes Tailwind's default transition duration through the fast token", () => {
+    expect(theme.get("--default-transition-duration")).toBe("var(--motion-duration-fast)");
+  });
+
+  it("C2 globals.css keeps no !important and only scroll-behavior under reduce", () => {
+    const globals = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
+    const code = globals.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(code).not.toContain("!important");
+    expect(code).not.toMatch(/animation-duration|transition-duration/);
+    expect(code).toMatch(/scroll-behavior:\s*auto/);
+    expect(code).toContain(':root[data-motion="reduce"]');
+  });
+});

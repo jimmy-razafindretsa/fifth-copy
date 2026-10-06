@@ -30,12 +30,14 @@
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
   }
+  /* Reduced motion (#28): durations come from the --motion-* tokens (zeroed in tokens.css) and every
+     keyframe stops in its own reduce block, under both selectors; only scrolling is set here. */
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      transition-duration: 0.01ms !important;
+    html {
+      scroll-behavior: auto;
     }
+  }
+  :root[data-motion="reduce"] {
+    scroll-behavior: auto;
   }
 }

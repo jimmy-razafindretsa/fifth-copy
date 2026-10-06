@@ -57,3 +57,6 @@ next-env.d.ts
 
 # landing 3D embeds: vendor copies of three.js (scripts/embeds.ts vendor, postinstall)
 /public/3d/vendor/
+
+# avatar files (ADR 0014, AVATAR_DIR default)
+/.data/

@@ -2,4 +2,9 @@
 // components may only `import type { Viewer }` from here.
 export { getViewer, requireViewer, UnauthenticatedError, type Viewer } from "@/server/auth";
 export { ensureGuest } from "./actions/ensure-guest";
-export { normalizeUsername } from "./schema";
+export { uploadAvatar, type UploadAvatarResult } from "./actions/upload-avatar";
+export { readAvatarFile } from "./queries/avatar-file";
+export { avatarStore } from "./avatars/default-store";
+export type { AvatarStore, AvatarSize } from "./avatars/store";
+export type { AvatarErrorCode } from "./avatars/errors";
+export { avatarQuery, normalizeUsername } from "./schema";

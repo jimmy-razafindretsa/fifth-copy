@@ -224,6 +224,27 @@ describe("gate signatures inside a trusted body (quoted forged text)", () => {
     expect(
       evaluateGate(facts({ labels: ["pentest"], comments: [pickup, at("HANDOFF ui x"), odd] })),
     ).toContain("PENTEST reports blockers");
+    // Fields come only from the header block (signature line up to the first blank or ``` line).
+    const fencedVerdict = at("HANDOFF deliver x\nstate: partial\n```\nverdict: pass\n```");
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, fencedVerdict] }))).toContain(
+      "no Deliver HANDOFF with verdict: pass after PICKUP",
+    );
+    const afterBlank = at("HANDOFF deliver x\nstate: partial\n\nverdict: pass");
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, afterBlank] }))).toContain(
+      "no Deliver HANDOFF with verdict: pass after PICKUP",
+    );
+    const pt = { labels: ["pentest"] };
+    const fencedBlockers = at(
+      "PENTEST #12 t\nverdict: clean\nblockers: 0  majors: 0\n```\nblockers: 3\n```",
+    );
+    expect(
+      evaluateGate(facts({ ...pt, comments: [pickup, at("HANDOFF ui x"), fencedBlockers] })),
+    ).toEqual([]);
+    // No blockers line in the header (only a fenced one): the PENTEST counts as blocking (fail closed).
+    const headerless = at("PENTEST #12 t\nverdict: findings\n```\nblockers: 0\n```");
+    expect(
+      evaluateGate(facts({ ...pt, comments: [pickup, at("HANDOFF ui x"), headerless] })),
+    ).toContain("PENTEST reports blockers");
     const inline = at("HANDOFF deliver x\nstate: done verdict: pass");
     expect(evaluateGate(facts({ ...qa, comments: [pickup, inline] }))).toContain(
       "no Deliver HANDOFF with verdict: pass after PICKUP",

@@ -164,6 +164,7 @@ advisory: <GHSA id | none | pending>
 tested: <attack classes tried; clean verdict only>
 blockers: n  majors: n
 ```
+Gates read a signature (`PICKUP`, `HANDOFF <role>`, `PENTEST`) only on a comment's first line, and its fields (`verdict:`, `blockers:`) only in the first block: no blank line or code fence before them.
 PICKUP comment (Picker): `PICKUP #n contract_hash=<12 chars> branch=<n>-<slug> worktree=.worktrees/<n>`.
 
 PR body:

@@ -16,18 +16,31 @@ export const pickupComment = (n: number, hash: string, branch: string) =>
 /**
  * Gate signatures (PICKUP, HANDOFF, PENTEST) count only at the very start of a comment body (after leading
  * whitespace): a trusted comment that quotes a forged line further down, even at column 0 inside a code fence,
- * does not carry that line's meaning. Fields (`verdict:`, `blockers:`) are read from the first line that starts
- * with the field name.
+ * does not carry that line's meaning. Fields (`verdict:`, `blockers:`) are read only from the header block
+ * (signature line up to the first blank line or ``` fence), from the first line that starts with the field name.
  */
 const head = (body: string) => body.trimStart();
 const startsWith = (body: string, sig: RegExp) => sig.test(head(body));
+/** Header block: the signature line up to the first blank line or code fence (quoted text never counts). */
+function headerOf(body: string): string[] {
+  const out: string[] = [];
+  for (const line of head(body).split(/\r?\n/)) {
+    if (!line.trim() || line.trimStart().startsWith("```")) break;
+    out.push(line);
+  }
+  return out;
+}
 function fieldOf(body: string, name: string): string | null {
-  const m = new RegExp(`^${name}:[ \\t]*(\\S+)`, "m").exec(body);
-  return m ? m[1]! : null;
+  const re = new RegExp(`^${name}:[ \\t]*(\\S+)`);
+  for (const line of headerOf(body)) {
+    const m = re.exec(line);
+    if (m) return m[1]!;
+  }
+  return null;
 }
 
-/** A PENTEST blocks unless its `blockers:` field is absent or zero (anything unparsable blocks: fail closed). */
-const blocking = (body: string) => !/^0+$/.test(fieldOf(body, "blockers") ?? "0");
+/** A PENTEST blocks unless its header has `blockers: 0` (missing or unparsable blocks: fail closed). */
+const blocking = (body: string) => !/^0+$/.test(fieldOf(body, "blockers") ?? "");
 
 /** The newest PICKUP comment for card n written by a trusted author (trust.ts), or null. */
 export function latestPickup(

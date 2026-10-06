@@ -28,3 +28,13 @@ export const uploadAvatarInput = z.object({
     })
     .pipe(cropSchema),
 });
+
+/** `GET /api/avatars/[userId]` query: `size` is 64 or 256, `v` the version from `avatarKey`. */
+export const avatarQuery = z.object({
+  size: z.enum(["64", "256"]).transform((s) => Number(s) as 64 | 256),
+  v: z
+    .string()
+    .regex(/^[1-9][0-9]{0,15}$/)
+    .transform(Number)
+    .refine(Number.isSafeInteger),
+});

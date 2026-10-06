@@ -12,6 +12,7 @@ Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` 
 - Primitives import nothing from features, server or env (boundary-enforced). Import from `@/components/ui`.
 - Every interactive primitive is a real element (`button`, `input`, `a`), keyboard reachable, with visible focus (global `:focus-visible` outline).
 - New primitive: add it here and on `/design` in the same PR.
+- Logo (wordmarks, monograms, clear space, tagline, forbidden treatments): [`logo.md`](logo.md) is the only place for these rules.
 
 ## Palette (`--brand-*`, design bible 3.1 and 3.2)
 | Brand value | Hex | Bible use |

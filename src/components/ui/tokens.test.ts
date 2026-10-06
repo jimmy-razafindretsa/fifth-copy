@@ -296,10 +296,10 @@ describe("#21 C2 font roles", () => {
     .map((b) => b.body)
     .join(";");
   const FONTS: Record<string, string> = {
-    display: "var(--font-stardos), Impact, sans-serif",
+    display: "var(--font-stardos), var(--font-oswald), Impact, sans-serif",
     label: "var(--font-oswald), Impact, sans-serif",
     typing: "var(--font-plex-mono), ui-monospace, monospace",
-    flavour: "var(--font-special-elite), ui-monospace, monospace",
+    flavour: "var(--font-special-elite), var(--font-oswald), ui-monospace, monospace",
     body: "var(--font-courier-prime), ui-monospace, monospace",
     device: "var(--font-vt323), ui-monospace, monospace",
   };
@@ -308,7 +308,7 @@ describe("#21 C2 font roles", () => {
     expect(themeBody).toMatch(/--font-\*\s*:\s*initial\s*;/);
   });
 
-  it("declares the six roles as the family variable plus a generic fallback", () => {
+  it("declares the six roles as the family variable plus a generic fallback (#20: Oswald covers Cyrillic)", () => {
     for (const [name, value] of Object.entries(FONTS)) {
       expect(theme.get(`--font-${name}`), name).toBe(norm(value));
     }
@@ -320,5 +320,86 @@ describe("#21 C2 font roles", () => {
     );
     expect(theme.has("--font-sans")).toBe(false);
     expect(theme.has("--font-mono")).toBe(false);
+  });
+});
+
+// Contract of #20: six type-role utilities, one font-family each, documented in components.md.
+describe("#20 type roles", () => {
+  const utilities = top.filter((b) => b.selector.startsWith("@utility "));
+  const byName = new Map(utilities.map((u) => [u.selector.slice("@utility ".length).trim(), u.body]));
+  const ROLES = [
+    "type-display-*",
+    "type-label",
+    "type-typing",
+    "type-flavour",
+    "type-body",
+    "type-device",
+  ];
+  const props = (body: string) => {
+    const map = new Map<string, string>();
+    for (const part of body.split(";")) {
+      const m = /^\s*([\w-]+)\s*:\s*([\s\S]+?)\s*$/.exec(part);
+      if (m?.[1] && m[2]) map.set(m[1], norm(m[2]));
+    }
+    return map;
+  };
+
+  it("C1-C4 declares the six role utilities with their face, case, tracking and size", () => {
+    expect([...byName.keys()].filter((k) => k.startsWith("type-")).sort()).toEqual(
+      [...ROLES].sort(),
+    );
+    const display = props(byName.get("type-display-*") ?? "");
+    expect(display.get("font-family")).toBe("var(--font-display)");
+    expect(display.get("font-weight")).toBe("700");
+    expect(display.get("text-transform")).toBe("uppercase");
+    expect(display.get("letter-spacing")).toBe("0.06em");
+    expect(display.get("font-size")).toBe("--value(--text-display-*)");
+    const label = props(byName.get("type-label") ?? "");
+    expect(label.get("font-family")).toBe("var(--font-label)");
+    expect(label.get("font-weight")).toBe("600");
+    expect(label.get("letter-spacing")).toBe("0.18em");
+    expect(label.get("font-size")).toBe("0.875rem");
+    const typing = props(byName.get("type-typing") ?? "");
+    expect(typing.get("font-family")).toBe("var(--font-typing)");
+    expect(typing.get("font-size")).toBe("clamp(1.75rem, 2.5vw, 2.25rem)");
+    expect(typing.get("font-variant-ligatures")).toBe("none");
+    expect(props(byName.get("type-flavour") ?? "").get("font-family")).toBe("var(--font-flavour)");
+    const body = props(byName.get("type-body") ?? "");
+    expect(body.get("font-family")).toBe("var(--font-body)");
+    expect(body.get("line-height")).toBe("1.55");
+    const device = props(byName.get("type-device") ?? "");
+    expect(device.get("font-family")).toBe("var(--font-device)");
+    expect(device.get("font-variant-numeric")).toBe("tabular-nums");
+  });
+
+  it("C1 scales display through --text-display-{sm,md,lg}", () => {
+    expect(theme.get("--text-display-sm")).toBe("1.5rem");
+    expect(theme.get("--text-display-md")).toBe("2.25rem");
+    expect(theme.get("--text-display-lg")).toBe("3.5rem");
+  });
+
+  it("C6 the six utilities are the only font-family declarations in tokens.css and src/ CSS", () => {
+    const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(stripped.match(/font-family\s*:/g) ?? []).toHaveLength(6);
+    for (const role of ROLES) {
+      expect(byName.get(role) ?? "", role).toMatch(/font-family\s*:/);
+    }
+    const globals = readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
+    expect(globals.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/font-family\s*:/);
+  });
+
+  it("C7 C12 C17 documents the roles, the Cyrillic rule and each primitive's role", () => {
+    const start = docs.indexOf("## Type roles");
+    expect(start).toBeGreaterThan(-1);
+    const section = docs.slice(start, docs.indexOf("\n## ", start + 1));
+    for (const role of ["type-display-sm", "type-label", "type-typing", "type-flavour", "type-body", "type-device"]) {
+      expect(section, role).toContain(role);
+    }
+    expect(section).toMatch(/Cyrillic/);
+    const primitives = docs.slice(docs.indexOf("## Primitives"));
+    expect(primitives).toMatch(/`Button`[^\n]*type-label/);
+    expect(primitives).toMatch(/`Field`[^\n]*type-label/);
+    expect(primitives).toMatch(/`Alert`[^\n]*type-display-sm/);
+    expect(primitives).toMatch(/`EmptyState`[^\n]*type-display-sm/);
   });
 });

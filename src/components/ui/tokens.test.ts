@@ -425,7 +425,9 @@ describe("#28 motion tokens", () => {
       .find((b) => /^@media\s*\(prefers-reduced-motion:\s*reduce\)$/.test(b.selector))
       ?.children.find((c) => c.selector === ":root")?.body ?? "",
   );
-  const reduceAttr = decls(top.find((b) => b.selector === ':root[data-motion="reduce"]')?.body ?? "");
+  const reduceAttr = decls(
+    top.find((b) => b.selector === ':root[data-motion="reduce"]')?.body ?? "",
+  );
 
   it("C1 declares the four durations and two easings on :root, outside @theme", () => {
     for (const [name, value] of Object.entries(DURATIONS)) {

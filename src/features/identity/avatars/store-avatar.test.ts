@@ -148,9 +148,7 @@ describe("storeAvatar", () => {
     });
 
     it("still rejects an image under 64 px", async () => {
-      await expect(store1(await encode("png", 63, 300), "center")).rejects.toBeInstanceOf(
-        TooSmall,
-      );
+      await expect(store1(await encode("png", 63, 300), "center")).rejects.toBeInstanceOf(TooSmall);
     });
   });
 

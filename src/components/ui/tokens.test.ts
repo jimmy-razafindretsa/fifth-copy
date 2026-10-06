@@ -326,7 +326,9 @@ describe("#21 C2 font roles", () => {
 // Contract of #20: six type-role utilities, one font-family each, documented in components.md.
 describe("#20 type roles", () => {
   const utilities = top.filter((b) => b.selector.startsWith("@utility "));
-  const byName = new Map(utilities.map((u) => [u.selector.slice("@utility ".length).trim(), u.body]));
+  const byName = new Map(
+    utilities.map((u) => [u.selector.slice("@utility ".length).trim(), u.body]),
+  );
   const ROLES = [
     "type-display-*",
     "type-label",
@@ -392,7 +394,14 @@ describe("#20 type roles", () => {
     const start = docs.indexOf("## Type roles");
     expect(start).toBeGreaterThan(-1);
     const section = docs.slice(start, docs.indexOf("\n## ", start + 1));
-    for (const role of ["type-display-sm", "type-label", "type-typing", "type-flavour", "type-body", "type-device"]) {
+    for (const role of [
+      "type-display-sm",
+      "type-label",
+      "type-typing",
+      "type-flavour",
+      "type-body",
+      "type-device",
+    ]) {
       expect(section, role).toContain(role);
     }
     expect(section).toMatch(/Cyrillic/);

@@ -72,8 +72,8 @@ export default function DesignPage() {
       <header className="flex flex-col gap-3">
         <h1 className="type-display-lg text-fg">Design system</h1>
         <p data-intro className="type-body max-w-prose text-fg">
-          The living inventory of the colour roles, the type roles and the primitives. Every screen is
-          built from these parts.
+          The living inventory of the colour roles, the type roles and the primitives. Every screen
+          is built from these parts.
         </p>
       </header>
 

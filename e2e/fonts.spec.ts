@@ -188,9 +188,7 @@ test.describe("Cyrillic and accented glyph coverage (#20)", () => {
     page,
   }) => {
     await page.goto("/design");
-    const items = ROLES.flatMap((cls) =>
-      [...STAMPS, SAMPLE_FR].map((text) => ({ cls, text })),
-    );
+    const items = ROLES.flatMap((cls) => [...STAMPS, SAMPLE_FR].map((text) => ({ cls, text })));
     const selectors = await probe(page, items);
     await expect
       .poll(async () => {

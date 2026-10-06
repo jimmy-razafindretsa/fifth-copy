@@ -39,16 +39,23 @@ export function isBenignEmbedAbort(f: FailedRequest): boolean {
   return f.errorText === "net::ERR_ABORTED" && f.method === "GET" && f.path.startsWith("/3d/");
 }
 
-async function describeFailure(r: Request): Promise<FailedRequest> {
-  const response = await r.response().catch(() => null);
+/**
+ * Never rejects (#545): a request can fail while its page, context or browser closes (teardown), and
+ * reading its headers then throws after the test ended. Every remote read falls back to `null`; the
+ * failure itself (`errorText`, url, method) is local, so a genuine failure is still reported.
+ */
+export async function describeFailure(r: Request): Promise<FailedRequest> {
+  const orNull = <T>(p: Promise<T | null> | undefined) =>
+    (p ?? Promise.resolve(null)).catch(() => null);
+  const response = await orNull(r.response());
   return {
     errorText: r.failure()?.errorText,
     path: new URL(r.url()).pathname,
     method: r.method(),
-    nextAction: await r.headerValue("next-action"),
-    rsc: await r.headerValue("rsc"),
+    nextAction: await orNull(r.headerValue("next-action")),
+    rsc: await orNull(r.headerValue("rsc")),
     status: response?.status() ?? null,
-    contentType: (await response?.headerValue("content-type")) ?? null,
+    contentType: await orNull(response?.headerValue("content-type")),
   };
 }
 

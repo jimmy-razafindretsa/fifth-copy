@@ -6,39 +6,51 @@
 
 type Step = (text: string) => string;
 
-const LIGATURES: Readonly<Record<string, string>> = {
-  œ: "oe",
-  æ: "ae",
-  ß: "ss",
-  ø: "o",
-  đ: "d",
-  ł: "l",
-  ı: "i",
-};
-
-const LEET: Readonly<Record<string, string>> = {
-  "0": "o",
-  "1": "i",
-  l: "i",
-  "3": "e",
-  "4": "a",
-  "5": "s",
-  "7": "t",
-  "@": "a",
-  $: "s",
-};
+// One table for the last step: ligatures, leetspeak, and plain letters. A
+// character absent from the table (separator, accent mark left by NFKD, digit
+// without a leet meaning, punctuation, zero-width or other invisible) is dropped.
+const CHAR_MAP: ReadonlyMap<string, string> = new Map([
+  // a-z kept as is, except `l`, which shares `i` with `1`
+  ..."abcdefghijkmnopqrstuvwxyz".split("").map((c): [string, string] => [c, c]),
+  ["l", "i"],
+  // ligatures and letters NFKD does not decompose
+  ["œ", "oe"],
+  ["æ", "ae"],
+  ["ß", "ss"],
+  ["ø", "o"],
+  ["đ", "d"],
+  ["ł", "i"],
+  ["ı", "i"],
+  // leetspeak
+  ["0", "o"],
+  ["1", "i"],
+  ["3", "e"],
+  ["4", "a"],
+  ["5", "s"],
+  ["7", "t"],
+  ["@", "a"],
+  ["$", "s"],
+]);
 
 const lowercase: Step = (s) => s.toLowerCase();
-// NFKD splits accents off their letter (é -> e + U+0301) and folds
-// compatibility forms (fullwidth letters, ﬁ) onto plain letters.
-const stripDiacritics: Step = (s) => s.normalize("NFKD").replace(/\p{M}+/gu, "");
-const ligatures: Step = (s) => s.replace(/[œæßøđłı]/g, (c) => LIGATURES[c] ?? c);
-const leet: Step = (s) => s.replace(/[01l3457@$]/g, (c) => LEET[c] ?? c);
-// Separators, digits without a leet meaning, punctuation and invisible
-// characters (zero-width, soft hyphen, BOM) all go.
-const lettersOnly: Step = (s) => s.replace(/[^a-z]+/g, "");
+// NFKD splits accents off their letter (é -> e + U+0301, dropped by the next
+// step) and folds compatibility forms (fullwidth letters, ﬁ) onto plain letters.
+const decompose: Step = (s) => s.normalize("NFKD");
+// ASCII fast path for the hot loop (C5); other characters go through the map.
+const ASCII: readonly string[] = Array.from(
+  { length: 128 },
+  (_, code) => CHAR_MAP.get(String.fromCharCode(code)) ?? "",
+);
+const mapChars: Step = (s) => {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    out += code < 128 ? ASCII[code]! : (CHAR_MAP.get(s[i]!) ?? "");
+  }
+  return out;
+};
 
-export const STEPS: readonly Step[] = [lowercase, stripDiacritics, ligatures, leet, lettersOnly];
+export const STEPS: readonly Step[] = [lowercase, decompose, mapChars];
 
 /** Canonical letters, repeated letters kept ("Otter" -> "otter"). */
 export function normalizeRuns(text: string): string {
@@ -49,7 +61,9 @@ export function normalizeRuns(text: string): string {
 
 /** Collapses each run of the same letter to one letter. */
 export function collapse(text: string): string {
-  return text.replace(/(.)\1+/g, "$1");
+  let out = "";
+  for (let i = 0; i < text.length; i++) if (text[i] !== text[i - 1]) out += text[i];
+  return out;
 }
 
 /** Fully canonical form: lowercase, no accents, leet mapped, separators removed, runs collapsed. */

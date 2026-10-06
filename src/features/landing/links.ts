@@ -26,9 +26,11 @@ export const SOCIAL_LINKS = [
   { key: "youtube", tag: "YT", href: "https://youtube.com" },
 ] as const;
 
-/** The embeds generated from the bible's reference pages by scripts/embeds.ts (bible 15, 16). */
+/**
+ * The embeds generated from the bible's reference pages by scripts/embeds.ts (bible 15, 16). The live
+ * feed is a recorded loop of the lobby scene since #552 (feed-media.ts), not an embed.
+ */
 export const EMBEDS = {
-  lobby: "/3d/lobby.html?embed=1",
   clerk: "/3d/clerk.html",
   medal: "/3d/medal.html",
 } as const;

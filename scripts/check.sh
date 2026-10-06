@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The cheap gate: format, lint, types (app + workspaces), boundaries, unit tests, ADR index freshness, prisma validate.
+# The cheap gate: format, lint, types (app + workspaces), boundaries, unit tests, ADR index freshness, prisma validate,
+# privacy inventory covers every Prisma model.
 # Prints <= 20 lines. Full logs go to .cache/check/<step>.log (gitignored).
 #   scripts/check.sh            run all steps
 #   scripts/check.sh lint unit  run only named steps
@@ -8,7 +9,7 @@ cd "$(dirname "$0")/.."
 LOG_DIR=.cache/check
 mkdir -p "$LOG_DIR"
 
-NAMES=(format lint types boundaries unit adr prisma)
+NAMES=(format lint types boundaries unit adr prisma privacy)
 cmd_for() {
   case "$1" in
     format) echo "npx prettier --check . --log-level warn" ;;
@@ -18,6 +19,7 @@ cmd_for() {
     unit) echo "npx vitest run --reporter=dot" ;;
     adr) echo "npx tsx scripts/adr-index.ts --check" ;;
     prisma) echo "npx prisma validate" ;;
+    privacy) echo "npx tsx scripts/privacy-inventory-check.ts" ;;
     *) echo "" ;;
   esac
 }

@@ -7,7 +7,7 @@ import { parse as parseYaml } from "yaml";
 // Card #453 / ADR 0003: CI prepares the test DB with scripts/test-db.sh, and only jobs with a
 // Postgres service see a DATABASE_URL. Rules are written over "jobs with services.postgres" so the
 // next database job inherits them; only `migrations` is named (it exercises the deploy path, ADR 0012).
-type Step = { name?: string; run?: string; uses?: string };
+type Step = { name?: string; run?: string; uses?: string; if?: string };
 type Job = { services?: Record<string, unknown>; env?: Record<string, string>; steps: Step[] };
 type Workflow = { env?: Record<string, string>; jobs: Record<string, Job> };
 
@@ -70,4 +70,33 @@ describe("CI workflow prepares the test database (ADR 0003)", () => {
     expect(r.status).toBe(1);
     expect(r.stdout + r.stderr).not.toContain("hunter2");
   }, 30_000);
+});
+
+// Card #501: the job running the unit step (scripts/check.sh) runs the DB-backed Vitest suites
+// (describe.skipIf(!TEST_DATABASE_URL)) against a real Postgres instead of skipping them. The job is
+// located by its step, not its name, so a rename keeps the rule.
+describe("CI unit step runs the DB-backed suites (card #501)", () => {
+  const unit = jobs.find(([, job]) => runs(job).includes("scripts/check.sh"));
+
+  it("C1 a job runs scripts/check.sh", () => {
+    expect(unit).toBeDefined();
+  });
+
+  it("C1 it has a Postgres service and sets TEST_DATABASE_URL", () => {
+    const job = unit?.[1];
+    expect(job?.services?.postgres).toBeDefined();
+    expect(job?.env?.TEST_DATABASE_URL).toBeTruthy();
+  });
+
+  it("C1 it prepares the test DB with scripts/test-db.sh before scripts/check.sh", () => {
+    const steps = runs(unit?.[1] ?? { steps: [] });
+    const prepare = steps.indexOf("scripts/test-db.sh");
+    expect(prepare).toBeGreaterThanOrEqual(0);
+    expect(prepare).toBeLessThan(steps.indexOf("scripts/check.sh"));
+  });
+
+  it("C2 it always prints the Vitest summary that check.sh keeps in its unit log", () => {
+    const summary = (unit?.[1].steps ?? []).find((s) => s.run?.includes(".cache/check/unit.log"));
+    expect(summary).toMatchObject({ if: "always()" });
+  });
 });

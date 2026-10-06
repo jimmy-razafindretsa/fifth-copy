@@ -17,7 +17,7 @@ export function Field({ label, hint, error, id, className, required, ...rest }: 
   const errorId = error ? `${inputId}-error` : undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={inputId} className="text-sm font-medium text-fg">
+      <label htmlFor={inputId} className="type-label text-xs text-fg">
         {label}
         {required && (
           <span aria-hidden="true" className="text-danger">
@@ -39,12 +39,12 @@ export function Field({ label, hint, error, id, className, required, ...rest }: 
         {...rest}
       />
       {hint && (
-        <p id={hintId} className="text-sm text-fg-muted">
+        <p id={hintId} className="type-body text-sm text-fg-muted">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="text-sm text-danger">
+        <p id={errorId} className="type-body text-sm text-danger">
           {error}
         </p>
       )}

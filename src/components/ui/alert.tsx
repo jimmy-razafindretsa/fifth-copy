@@ -21,8 +21,8 @@ export function Alert({ tone = "info", title, children, className }: AlertProps)
       role={tone === "error" ? "alert" : "status"}
       className={cn("rounded-md border p-4", tones[tone], className)}
     >
-      <p className="font-medium">{title}</p>
-      {children && <div className="mt-1 text-sm text-fg-muted">{children}</div>}
+      <p className="type-display-sm">{title}</p>
+      {children && <div className="type-body mt-1 text-sm text-fg-muted">{children}</div>}
     </div>
   );
 }

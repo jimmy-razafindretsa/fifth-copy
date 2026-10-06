@@ -9,8 +9,9 @@ const variants = {
   danger: "bg-pressed text-primary-fg hover:opacity-90",
 } as const;
 
+// Labels are the type-label role (bible 7.1 label buttons: Oswald 600, caps); size sets only the size.
 const sizes = {
-  sm: "h-8 px-3 text-sm gap-1.5",
+  sm: "h-8 px-3 text-xs gap-1.5",
   md: "h-10 px-4 text-sm gap-2",
   lg: "h-12 px-6 text-base gap-2",
 } as const;
@@ -38,7 +39,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center rounded-md font-medium transition-colors",
+        "type-label inline-flex items-center justify-center rounded-md transition-colors",
         "disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],

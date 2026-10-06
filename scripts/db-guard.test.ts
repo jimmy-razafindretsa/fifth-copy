@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const guard = (url: string, allowed = "") =>
@@ -6,6 +9,21 @@ const guard = (url: string, allowed = "") =>
     env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", DB_GUARD_ALLOWED_HOSTS: allowed },
     encoding: "utf8",
   });
+
+// The .env fallback: no URL argument, no DATABASE_URL in the env, .env read from the cwd.
+const guardWithDotenv = (dotenv: string) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "db-guard-"));
+  try {
+    fs.writeFileSync(path.join(dir, ".env"), dotenv);
+    return spawnSync(path.resolve(__dirname, "db-guard.sh"), [], {
+      cwd: dir,
+      env: { NODE_ENV: "test", PATH: process.env.PATH ?? "" },
+      encoding: "utf8",
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+};
 
 describe("db-guard", () => {
   it.each([
@@ -101,5 +119,58 @@ describe("db-guard", () => {
     const r = guard("postgresql://u:hunter2@db.prod.example.com/db", ", ");
     expect(r.status).toBe(1);
     expect(r.stdout + r.stderr).not.toContain("hunter2");
+  });
+
+  describe(".env fallback (dotenv semantics)", () => {
+    it.each([
+      'export DATABASE_URL="postgresql://u:p@localhost:5432/db"',
+      "DATABASE_URL=postgresql://u:p@localhost:5432/db",
+      "DATABASE_URL='postgresql://u:p@localhost:5432/db'",
+      'DATABASE_URL="postgresql://u:p@localhost:5432/db"',
+      "DATABASE_URL=`postgresql://u:p@localhost:5432/db`",
+      '  DATABASE_URL = "postgresql://u:p@localhost:5432/db"',
+      "DATABASE_URL=postgresql://u:p@localhost:5432/db\r",
+    ])("accepts %j", (line) => {
+      const r = guardWithDotenv(`${line}\n`);
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain("host=localhost");
+    });
+
+    it.each([
+      "DATABASE_URL=postgresql://u:hunter2@db.prod.example.com:5432/db",
+      "export DATABASE_URL='postgresql://u:hunter2@db.prod.example.com:5432/db'",
+    ])("refuses remote %j without printing credentials", (line) => {
+      const r = guardWithDotenv(`${line}\n`);
+      expect(r.status).toBe(1);
+      expect(r.stdout + r.stderr).not.toContain("hunter2");
+    });
+
+    it("ignores a commented-out line", () => {
+      const r = guardWithDotenv('# DATABASE_URL="postgresql://u:p@localhost:5432/db"\n');
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("not set");
+    });
+
+    // dotenv.parse keeps the LAST value of a repeated key (dotenv 18.0.5), and that is the URL
+    // Prisma connects to, so the guard must judge the last one.
+    it("judges the last definition of a repeated key, as dotenv does", () => {
+      const r = guardWithDotenv(
+        "DATABASE_URL=postgresql://u:p@localhost:5432/db\n" +
+          "DATABASE_URL=postgresql://u:hunter2@db.prod.example.com/db\n",
+      );
+      expect(r.status).toBe(1);
+      expect(r.stdout + r.stderr).not.toContain("hunter2");
+      expect(
+        guardWithDotenv(
+          "DATABASE_URL=postgresql://u:hunter2@db.prod.example.com/db\n" +
+            "DATABASE_URL=postgresql://u:p@localhost:5432/db\n",
+        ).status,
+      ).toBe(0);
+    });
+
+    it("does not match a key that only ends with DATABASE_URL", () => {
+      const r = guardWithDotenv("TEST_DATABASE_URL=postgresql://u:p@localhost:5432/db\n");
+      expect(r.status).toBe(2);
+    });
   });
 });

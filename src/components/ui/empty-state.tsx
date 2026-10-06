@@ -17,8 +17,8 @@ export function EmptyState({ title, description, action, className }: EmptyState
         className,
       )}
     >
-      <p className="text-lg font-medium text-fg">{title}</p>
-      {description && <p className="max-w-prose text-sm text-fg-muted">{description}</p>}
+      <p className="type-display-sm text-fg">{title}</p>
+      {description && <p className="type-body max-w-prose text-sm text-fg-muted">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   );

@@ -4,7 +4,8 @@
  * so only these semantic roles exist as utilities: bg-surface, text-fg, bg-you, text-untyped, ...
  * Palette: design bible section 3 (docs/design/bible/FIFTH_COPY_DESIGN_BIBLE.md), #16. Brand values are
  * --brand-* on :root, outside @theme, so they are never utilities: use a role. Geometry: #15, theme
- * switching: #19, fonts: #21 (families loaded in src/app/layout.tsx), type roles: #22.
+ * switching: #19, fonts: #21 (families loaded in src/app/layout.tsx), type roles: #20 (the @utility
+ * blocks at the end: the only font-family declarations of the app, one per role).
  */
 
 /* Brand palette (bible 3.1, 3.2). Night shift grounds are warm grey-brown, never black. */
@@ -74,12 +75,15 @@
   --color-device-nixie: var(--brand-nixie);
   --color-device-bezel: var(--brand-press-ink);
 
-  /* typography: six faces by role (art-direction 7); Tailwind's default families are removed */
+  /* typography: six faces by role (art-direction 7); Tailwind's default families are removed.
+     Stardos Stencil and Special Elite have no Cyrillic: their roles use the bare face (--face-*, set in
+     src/app/layout.tsx without next/font's Arial fallback) then Oswald (cyrillic subset), so Cyrillic
+     stamp text stays in a brand face (components.md "Type roles", Cyrillic). */
   --font-*: initial;
-  --font-display: var(--font-stardos), Impact, sans-serif;
+  --font-display: var(--face-stardos), var(--font-oswald), Impact, sans-serif;
   --font-label: var(--font-oswald), Impact, sans-serif;
   --font-typing: var(--font-plex-mono), ui-monospace, monospace;
-  --font-flavour: var(--font-special-elite), ui-monospace, monospace;
+  --font-flavour: var(--face-special-elite), var(--font-oswald), ui-monospace, monospace;
   --font-body: var(--font-courier-prime), ui-monospace, monospace;
   --font-device: var(--font-vt323), ui-monospace, monospace;
   --text-xs: 0.75rem;
@@ -96,6 +100,10 @@
   --text-2xl--line-height: 2rem;
   --text-3xl: 1.875rem;
   --text-3xl--line-height: 2.25rem;
+  /* display scale, only through type-display-{sm,md,lg} (never text-display-* alone) */
+  --text-display-sm: 1.5rem;
+  --text-display-md: 2.25rem;
+  --text-display-lg: 3.5rem;
 
   /* spacing: Tailwind multiplies this base (p-4 = 1rem) */
   --spacing: 0.25rem;
@@ -171,4 +179,56 @@
   --t-focus: var(--brand-night-ink);
   --t-link: var(--brand-night-ink);
   --t-untyped: var(--brand-night-muted);
+}
+
+/*
+ * Type roles (#20, art-direction 7, design bible 2 and 4): one utility per role bakes face, weight, case,
+ * tracking, size and line-height. Screens use these, never a face utility plus hand-picked styles.
+ * A core size utility after a role (`type-label text-xs`) overrides only its size.
+ */
+@utility type-display-* {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  font-size: --value(--text-display-*);
+}
+
+@utility type-label {
+  font-family: var(--font-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.875rem;
+}
+
+@utility type-typing {
+  font-family: var(--font-typing);
+  font-weight: 400;
+  text-transform: none;
+  font-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  line-height: 1.4;
+  font-variant-ligatures: none;
+}
+
+@utility type-flavour {
+  font-family: var(--font-flavour);
+  font-weight: 400;
+  text-transform: none;
+}
+
+@utility type-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+@utility type-device {
+  font-family: var(--font-device);
+  font-weight: 400;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
 }

@@ -180,6 +180,7 @@ Rules: no recolouring the bar violet or gold, never straighten it, and keep clea
 - **Ink button:** Oswald 600 13px, `background:ink; color:paper`, hover red.
 - **Segmented toggle** (EN/FR, views): `border:2px solid ink`, buttons Oswald 600 11–12px; active = ink bg + paper text.
 - **Social button** (footer): `2px solid rgba(paper,.35)`, 26px red square tag with stencil abbreviation (GH, IN, DC, YT), hover border/text gold.
+- Extension (#20): the `Button` primitive is this label-button family (secondary, ink, segmented): Oswald 600 caps `.18em` through the `type-label` role at 12 / 14 / 16px for sm / md / lg, in every variant. The Stardos stamp CTA (primary, inverted) is a separate pattern, never a `Button` size.
 
 ### 7.2 Inputs
 - Room code: inside an ink-bordered newsprint group: `[ JOIN WITH CODE | KGB-4821 | JOIN → ]`. Input IBM Plex Mono 500 18px `.08em`, auto-uppercase, maxLength 8.

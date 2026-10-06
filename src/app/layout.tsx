@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
 import {
   Courier_Prime,
   IBM_Plex_Mono,
@@ -13,10 +14,15 @@ import "./globals.css";
 
 // The six brand families (art-direction 7, components.md "Fonts"), self-hosted at build.
 // Role tokens in docs/design/tokens.css map --font-<role> to these variables.
+// Stardos Stencil and Special Elite have no Cyrillic, and next/font's size-adjusted fallback face is
+// local("Arial"), which would draw Cyrillic before the role stack reaches Oswald (bible 17: no Arial).
+// So their roles use the bare face (--face-*, below) followed by Oswald (#20). adjustFontFallback: false
+// drops that Arial face under webpack; Turbopack (Next 16.3) still emits it, hence the --face-* variables.
 const stardos = Stardos_Stencil({
   weight: ["700"],
   subsets: ["latin"],
   display: "swap",
+  adjustFontFallback: false,
   variable: "--font-stardos",
 });
 
@@ -38,6 +44,7 @@ const specialElite = Special_Elite({
   weight: ["400"],
   subsets: ["latin", "latin-ext"],
   display: "swap",
+  adjustFontFallback: false,
   variable: "--font-special-elite",
 });
 
@@ -59,6 +66,15 @@ const fontVariables = [stardos, oswald, plexMono, specialElite, courierPrime, vt
   .map((f) => f.variable)
   .join(" ");
 
+/** The first family of a next/font stack: the real face, without next/font's fallback face. */
+const face = (font: { style: { fontFamily: string } }) =>
+  font.style.fontFamily.split(",")[0]?.trim() ?? "";
+
+const faceVariables = {
+  "--face-stardos": face(stardos),
+  "--face-special-elite": face(specialElite),
+} as CSSProperties;
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
   return { title: t.meta.title, description: t.meta.description };
@@ -75,8 +91,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       lang={locale}
       data-theme={theme ?? undefined}
       className={`${fontVariables} h-full antialiased`}
+      style={faceVariables}
     >
-      <body className="flex min-h-full flex-col bg-bg text-fg">{children}</body>
+      <body className="type-body flex min-h-full flex-col bg-bg text-fg">{children}</body>
     </html>
   );
 }

@@ -2,7 +2,8 @@
 # Orchestration mode C (agents/PROTOCOL.md section 13): one fresh agent session per role per card,
 # up to N cards in parallel, each in its own isolated worktree (scripts/worktree.sh).
 # Agent-agnostic: AGENT_CMD is any runtime that takes a prompt as its last argument, e.g.
-#   AGENT_CMD="claude -p --permission-mode bypassPermissions"   or   AGENT_CMD="codex exec"
+#   AGENT_CMD="claude -p --permission-mode bypassPermissions"  (use the full path if claude is not on PATH,
+#   e.g. ~/.local/bin/claude; the CLI needs its own login: run it once and /login)   or   AGENT_CMD="codex exec"
 #
 #   scripts/loop.sh [--parallel N] [--max-cards N] [--dry-run]
 #   scripts/loop.sh --finish <n>     finish a parked card after the human removed needs-human (merge, Done)
@@ -15,7 +16,7 @@
 #
 # Env: MODEL_ANALYSIS (default claude-fable-5-1, probed once; fallback MODEL_ANALYSIS_FALLBACK, default
 # claude-opus-5-5), MODEL_BUILD (default claude-opus-5-5), MODEL_FLAG (default --model), BOARD_WIP_LIMIT
-# (default = --parallel), SWEEP_EVERY (drift sweep after every N delivered cards, default 10, 0 = off),
+# (default = --parallel), BOARD_FOCUS_LABEL (only pick cards with this label, e.g. mvp), SWEEP_EVERY (drift sweep after every N delivered cards, default 10, 0 = off),
 # HARDENING_EPIC (epic for sweep findings), NOTIFY_CMD (called with one message argument; default: macOS
 # notification), LOCK_WAIT_MIN (max minutes a card waits for a hotspot lock, default 180).
 # Stop: no startable card and nothing running; --max-cards reached; 3 consecutive blocked cards; main red;
@@ -64,6 +65,14 @@ notify() {
 
 if (( ! DRY )); then
   : "${AGENT_CMD:?set AGENT_CMD, e.g. AGENT_CMD=\"claude -p --permission-mode bypassPermissions\"}"
+  # The build model must answer, or nothing can run: stop before claiming any card
+  # (catches a runtime missing from PATH or not logged in).
+  # shellcheck disable=SC2086
+  if ! $AGENT_CMD $MODEL_FLAG "$MODEL_BUILD" "Reply with the single word OK." >"$LOG_DIR/agent-probe.log" 2>&1 \
+    || ! grep -q "OK" "$LOG_DIR/agent-probe.log"; then
+    echo "STOP: AGENT_CMD cannot run ($AGENT_CMD $MODEL_FLAG $MODEL_BUILD): $(tail -1 "$LOG_DIR/agent-probe.log")"
+    exit 1
+  fi
   # One availability probe for the analysis model (PROTOCOL section 12).
   # shellcheck disable=SC2086
   if ! $AGENT_CMD $MODEL_FLAG "$MODEL_ANALYSIS" "Reply with the single word OK." >"$LOG_DIR/model-probe.log" 2>&1; then

@@ -1,35 +1,87 @@
 /*
  * Design tokens: the single source of truth (docs/design/components.md explains usage).
  * Imported by src/app/globals.css. Tailwind's default palette is removed (--color-*: initial),
- * so only these semantic tokens exist as utilities: bg-surface, text-fg, border-border, ...
- * Status: STARTER SET, placeholder skin (mechanism reviewed in #7). Replaced by #15 (Fifth Copy palette and
- * semantic colour roles), #19 (Night shift dark theme) and #20 (typography roles and font loading).
+ * so only these semantic roles exist as utilities: bg-surface, text-fg, bg-you, text-untyped, ...
+ * Palette: design bible section 3 (docs/design/bible/FIFTH_COPY_DESIGN_BIBLE.md), #16. Brand values are
+ * --brand-* on :root, outside @theme, so they are never utilities: use a role. Geometry: #15, theme
+ * switching: #19, fonts: #21 (families loaded in src/app/layout.tsx), type roles: #22.
  */
+
+/* Brand palette (bible 3.1, 3.2). Night shift grounds are warm grey-brown, never black. */
+:root {
+  --brand-agit-red: #B81D24;
+  --brand-banner: #7E1015;
+  --brand-ribbon-violet: #3E3A78;
+  --brand-medal-gold: #E2B23A;
+  --brand-paper: #F1E8D6;
+  --brand-newsprint: #E4D6B8;
+  --brand-tape-paper: #E8DCC0;
+  --brand-backroom-grey: #6F736C;
+  --brand-press-ink: #2A2420;
+  --brand-night: #3E3934;
+  --brand-night-panel: #4B453E;
+  --brand-night-ink: #F4ECDC;
+  --brand-night-muted: #CFC6B3;
+  --brand-phosphor: #5CFF8A;
+  --brand-nixie: #FF9A3C;
+}
 
 @theme {
   --color-*: initial;
   --color-transparent: transparent;
   --color-current: currentColor;
 
-  /* semantic colors (values switch per theme below) */
+  /* themed roles (values switch per theme below) */
   --color-bg: var(--t-bg);
   --color-surface: var(--t-surface);
   --color-surface-muted: var(--t-surface-muted);
   --color-fg: var(--t-fg);
   --color-fg-muted: var(--t-fg-muted);
   --color-border: var(--t-border);
-  --color-primary: var(--t-primary);
-  --color-primary-hover: var(--t-primary-hover);
-  --color-primary-fg: var(--t-primary-fg);
   --color-danger: var(--t-danger);
   --color-danger-surface: var(--t-danger-surface);
   --color-success: var(--t-success);
   --color-success-surface: var(--t-success-surface);
   --color-focus: var(--t-focus);
+  --color-link: var(--t-link);
+  --color-untyped: var(--t-untyped);
 
-  /* typography */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* theme-invariant roles: reds and gold never change, the tape stays tape-paper (bible 3.2) */
+  --color-primary: var(--brand-agit-red);
+  --color-primary-hover: var(--brand-banner);
+  --color-primary-fg: var(--brand-paper);
+  --color-pressed: var(--brand-banner);
+  --color-you: var(--brand-agit-red);
+  --color-rival: var(--brand-ribbon-violet);
+  --color-reward: var(--brand-medal-gold);
+  --color-room: var(--brand-backroom-grey);
+
+  /* ink bands (ticker, footer, feed frame): press-ink under paper text in both themes (bible 7.10, 14.1) */
+  --color-band: var(--brand-press-ink);
+  --color-band-fg: var(--brand-paper);
+  --color-band-muted: var(--brand-night-muted);
+
+  /* typing strip character states, always on tape (bible 7.7; remaining = bible extension 85%) */
+  --color-tape: var(--brand-tape-paper);
+  --color-typing-done: var(--brand-press-ink);
+  --color-typing-next: var(--brand-paper);
+  --color-typing-next-bg: var(--brand-agit-red);
+  --color-typing-remaining: color-mix(in srgb, var(--brand-ribbon-violet) 85%, var(--brand-tape-paper));
+  --color-typing-error: var(--brand-agit-red);
+
+  /* devices: phosphor and nixie numerals on an ink bezel */
+  --color-device-phosphor: var(--brand-phosphor);
+  --color-device-nixie: var(--brand-nixie);
+  --color-device-bezel: var(--brand-press-ink);
+
+  /* typography: six faces by role (art-direction 7); Tailwind's default families are removed */
+  --font-*: initial;
+  --font-display: var(--font-stardos), Impact, sans-serif;
+  --font-label: var(--font-oswald), Impact, sans-serif;
+  --font-typing: var(--font-plex-mono), ui-monospace, monospace;
+  --font-flavour: var(--font-special-elite), ui-monospace, monospace;
+  --font-body: var(--font-courier-prime), ui-monospace, monospace;
+  --font-device: var(--font-vt323), ui-monospace, monospace;
   --text-xs: 0.75rem;
   --text-xs--line-height: 1rem;
   --text-sm: 0.875rem;
@@ -55,65 +107,68 @@
   --radius-full: 9999px;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.06);
   --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.12);
+  /* the typing strip's inner sepia (bible 3.1 tape-paper), the one soft shadow the bible allows */
+  --shadow-tape: inset 0 0 22px rgb(156 122 69 / 0.45);
 
   /* breakpoints (mobile first): md = tablet 768px, xl = desktop 1280px */
   --breakpoint-md: 48rem;
   --breakpoint-xl: 80rem;
 }
 
-/* Light (default). Contrast targets: fg/bg >= 7:1, fg-muted/bg >= 4.5:1, primary-fg/primary >= 4.5:1. */
+/*
+ * Light (default). Roles the palette does not name follow mapping (a) (components.md "Colour roles");
+ * fg-muted and untyped are bible extensions with their measured ratios (components.md).
+ */
 :root {
   color-scheme: light;
-  --t-bg: #ffffff;
-  --t-surface: #ffffff;
-  --t-surface-muted: #f4f4f5;
-  --t-fg: #18181b;
-  --t-fg-muted: #52525b;
-  --t-border: #d4d4d8;
-  --t-primary: #1d4ed8;
-  --t-primary-hover: #1e40af;
-  --t-primary-fg: #ffffff;
-  --t-danger: #b91c1c;
-  --t-danger-surface: #fef2f2;
-  --t-success: #15803d;
-  --t-success-surface: #f0fdf4;
-  --t-focus: #2563eb;
+  --t-bg: var(--brand-paper);
+  --t-surface: var(--brand-newsprint);
+  --t-surface-muted: color-mix(in srgb, var(--brand-newsprint) 94%, var(--brand-press-ink) 6%);
+  --t-fg: var(--brand-press-ink);
+  --t-fg-muted: color-mix(in srgb, var(--brand-press-ink) 80%, var(--brand-paper) 20%);
+  --t-border: color-mix(in srgb, var(--brand-press-ink) 25%, transparent);
+  --t-danger: var(--brand-banner);
+  --t-danger-surface: color-mix(in srgb, var(--brand-newsprint) 88%, var(--brand-agit-red) 12%);
+  --t-success: var(--brand-press-ink);
+  --t-success-surface: var(--brand-newsprint);
+  --t-focus: var(--brand-press-ink);
+  --t-link: var(--brand-agit-red);
+  --t-untyped: color-mix(in srgb, var(--brand-ribbon-violet) 85%, var(--brand-paper));
 }
 
+/* Night shift (bible 3.2): the two dark blocks stay identical (selectors fixed for #19). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --t-bg: #09090b;
-    --t-surface: #18181b;
-    --t-surface-muted: #27272a;
-    --t-fg: #fafafa;
-    --t-fg-muted: #a1a1aa;
-    --t-border: #3f3f46;
-    --t-primary: #60a5fa;
-    --t-primary-hover: #93c5fd;
-    --t-primary-fg: #09090b;
-    --t-danger: #f87171;
-    --t-danger-surface: #2a1215;
-    --t-success: #4ade80;
-    --t-success-surface: #0f2417;
-    --t-focus: #93c5fd;
+    --t-bg: var(--brand-night);
+    --t-surface: var(--brand-night-panel);
+    --t-surface-muted: color-mix(in srgb, var(--brand-night-panel) 94%, var(--brand-night-ink) 6%);
+    --t-fg: var(--brand-night-ink);
+    --t-fg-muted: var(--brand-night-muted);
+    --t-border: color-mix(in srgb, var(--brand-night-ink) 25%, transparent);
+    --t-danger: var(--brand-night-ink);
+    --t-danger-surface: color-mix(in srgb, var(--brand-night-panel) 88%, var(--brand-agit-red) 12%);
+    --t-success: var(--brand-night-ink);
+    --t-success-surface: var(--brand-night-panel);
+    --t-focus: var(--brand-night-ink);
+    --t-link: var(--brand-night-ink);
+    --t-untyped: var(--brand-night-muted);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --t-bg: #09090b;
-  --t-surface: #18181b;
-  --t-surface-muted: #27272a;
-  --t-fg: #fafafa;
-  --t-fg-muted: #a1a1aa;
-  --t-border: #3f3f46;
-  --t-primary: #60a5fa;
-  --t-primary-hover: #93c5fd;
-  --t-primary-fg: #09090b;
-  --t-danger: #f87171;
-  --t-danger-surface: #2a1215;
-  --t-success: #4ade80;
-  --t-success-surface: #0f2417;
-  --t-focus: #93c5fd;
+  --t-bg: var(--brand-night);
+  --t-surface: var(--brand-night-panel);
+  --t-surface-muted: color-mix(in srgb, var(--brand-night-panel) 94%, var(--brand-night-ink) 6%);
+  --t-fg: var(--brand-night-ink);
+  --t-fg-muted: var(--brand-night-muted);
+  --t-border: color-mix(in srgb, var(--brand-night-ink) 25%, transparent);
+  --t-danger: var(--brand-night-ink);
+  --t-danger-surface: color-mix(in srgb, var(--brand-night-panel) 88%, var(--brand-agit-red) 12%);
+  --t-success: var(--brand-night-ink);
+  --t-success-surface: var(--brand-night-panel);
+  --t-focus: var(--brand-night-ink);
+  --t-link: var(--brand-night-ink);
+  --t-untyped: var(--brand-night-muted);
 }

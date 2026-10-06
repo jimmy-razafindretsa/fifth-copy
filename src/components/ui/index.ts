@@ -1,7 +1,10 @@
 export { Alert, type AlertProps } from "./alert";
 export { Button, type ButtonProps } from "./button";
 export { Card } from "./card";
+export { EmbedFrame } from "./embed-frame";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { Field, type FieldProps } from "./field";
 export { Skeleton } from "./skeleton";
 export { Spinner, type SpinnerProps } from "./spinner";
+export { Star, type StarTone } from "./star";
+export { useEmbedBridge } from "./use-embed-bridge";

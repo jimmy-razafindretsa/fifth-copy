@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Oswald:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#F1E8D6}
+*{box-sizing:border-box}
+a{color:#B81D24;text-decoration:none}a:hover{color:#7E1015;text-decoration:underline}
+@keyframes lkSlam{0%{transform:scale(2.2) rotate(-14deg);opacity:0}55%{transform:scale(.9) rotate(-7deg);opacity:1}100%{transform:scale(1) rotate(-8deg)}}
+@keyframes lkShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+@keyframes lkSpin{to{transform:rotate(360deg)}}
+@keyframes lkPulse{0%,100%{opacity:1}50%{opacity:.45}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#F1E8D6;color:#2A2420;font-family:'Courier Prime',monospace;display:flex;flex-direction:column">
+
+  <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 32px;border-bottom:2px solid #2A2420">
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      <a href="Fifth%20Copy%20Landing.dc.html" style="display:flex;align-items:center;gap:12px;color:#2A2420;text-decoration:none">
+        <div style="width:40px;height:40px;border-radius:9px;background:#B81D24;position:relative;overflow:hidden;flex:none">
+          <div style="position:absolute;left:5.2px;top:3.2px;font:700 22.4px/0.9 'Stardos Stencil',serif;color:#F1E8D6">F</div>
+          <div style="position:absolute;left:8px;top:20px;width:38px;height:14.4px;background:#2A2420;transform:skewY(-8deg);transform-origin:0 100%"></div>
+          <div style="position:absolute;left:16px;top:18.8px;font:700 17.6px/1 'Stardos Stencil',serif;color:#B81D24;transform:skewY(-8deg);transform-origin:0 100%">C</div>
+        </div>
+        <span style="font:700 20px/1 'Stardos Stencil',serif;letter-spacing:.06em">FIFTH COPY</span>
+      </a>
+      <span style="font:600 12px 'Oswald',sans-serif;letter-spacing:.2em;color:#6F736C">/</span>
+      <span style="font:600 13px 'Oswald',sans-serif;letter-spacing:.2em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">THE LOCKER</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">LE VESTIAIRE</sc-if></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="display:flex;border:2px solid #2A2420">
+        <button onClick="{{ setEn }}" style="font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;padding:5px 10px;border:0;cursor:pointer;background:{{ enBg }};color:{{ enFg }}">EN</button>
+        <button onClick="{{ setFr }}" style="font:600 12px 'Oswald',sans-serif;letter-spacing:.14em;padding:5px 10px;border:0;cursor:pointer;background:{{ frBg }};color:{{ frFg }}">FR</button>
+      </div>
+      <a href="Fifth%20Copy%20Landing.dc.html" style="font:600 12px 'Oswald',sans-serif;letter-spacing:.16em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">← BACK TO YOUR DESK</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">← RETOUR AU BUREAU</sc-if></a>
+    </div>
+  </header>
+
+  <main data-screen-label="Locker" style="flex:1;display:flex;flex-wrap:wrap;gap:0;align-items:stretch">
+
+    <section style="flex:1 1 460px;min-width:0;padding:32px;display:flex;flex-direction:column;gap:16px;background-image:radial-gradient(rgba(42,36,32,.12) 1.3px, transparent 1.7px);background-size:10px 10px">
+      <div style="position:relative;flex:1;min-height:560px;background:#6F736C;border:3px solid #2A2420;box-shadow:inset 0 0 0 10px #7E8579,inset 0 0 0 12px #2A2420,8px 8px 0 #2A2420;display:flex;flex-direction:column;padding:22px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:6px 8px 0">
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <sc-for list="{{ vents }}" as="vv" hint-placeholder-count="5"><div style="width:120px;height:6px;border-radius:3px;background:#3C403A;box-shadow:inset 0 2px 2px rgba(0,0,0,.5),0 1px 0 rgba(255,255,255,.12)"></div></sc-for>
+          </div>
+          <div style="background:#F1E8D6;border:2px solid #2A2420;padding:6px 12px;transform:rotate(1.5deg);box-shadow:2px 2px 0 rgba(0,0,0,.35);display:flex;flex-direction:column;gap:2px;min-width:0">
+            <span style="font:600 9px 'Oswald',sans-serif;letter-spacing:.2em;color:#6F736C"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">LOCKER № 0457</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CASIER № 0457</sc-if></span>
+            <span style="font:500 15px 'IBM Plex Mono',monospace;white-space:nowrap">{{ guestName }}</span>
+          </div>
+        </div>
+        <div style="position:relative;flex:1;margin:14px 0;background:#E4D6B8;border:2px solid #2A2420;box-shadow:inset 0 0 40px rgba(42,36,32,.35);overflow:hidden;background-image:repeating-conic-gradient(from 0deg at 50% 92%, rgba(184,29,36,.09) 0deg 6deg, transparent 6deg 12deg)">
+          <iframe ref="{{ clerkRef }}" onLoad="{{ onClerkLoad }}" src="Fifth%20Copy%20Your%20Clerk.html?locker=1" title="Your clerk in the selected uniform" style="position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent"></iframe>
+          <div style="position:absolute;left:0;right:0;top:12px;height:8px;background:#9A9D95;box-shadow:0 2px 0 #2A2420"></div>
+          <div style="position:absolute;left:50%;top:12px;width:4px;height:26px;margin-left:-2px;background:#2A2420"></div>
+          <sc-if value="{{ previewing }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:18px;bottom:18px;background:#3E3A78;color:#F1E8D6;padding:6px 12px;font:600 12px 'Oswald',sans-serif;letter-spacing:.18em;animation:lkPulse 1.4s ease-in-out infinite"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">FITTING ROOM · PREVIEW ONLY</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CABINE D'ESSAYAGE · APERÇU</sc-if></div>
+          </sc-if>
+          <sc-if value="{{ saved }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;right:22px;top:46%;border:5px double #B81D24;color:#B81D24;background:rgba(241,232,214,.92);padding:8px 16px;font:700 34px/1 'Stardos Stencil',serif;letter-spacing:.1em;animation:lkSlam .45s ease-out forwards;pointer-events:none"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">FILED</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CLASSÉ</sc-if></div>
+          </sc-if>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:0 8px 4px">
+          <div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E8CF8A,#7A6634 70%);border:2px solid #2A2420;position:relative"><div style="position:absolute;left:50%;top:50%;width:4px;height:12px;margin:-6px 0 0 -2px;background:#2A2420;border-radius:2px"></div></div>
+          <div style="font:600 11px 'Oswald',sans-serif;letter-spacing:.2em;color:#F1E8D6"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">CLICK HIM TO WAVE · HE FOLLOWS YOUR CURSOR</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CLIQUE POUR QU'IL SALUE · IL SUIT TON CURSEUR</sc-if></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button onClick="{{ randomize }}" style="font:600 13px 'Oswald',sans-serif;letter-spacing:.16em;background:transparent;color:#2A2420;border:2px solid #2A2420;padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:8px" style-hover="background:#E4D6B8"><span style="display:inline-block;animation:{{ diceAnim }}">⚄</span><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">RANDOM ISSUE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">AU HASARD</sc-if></button>
+        <button onClick="{{ reset }}" style="font:600 13px 'Oswald',sans-serif;letter-spacing:.16em;background:transparent;color:#2A2420;border:2px solid #2A2420;padding:12px 16px;cursor:pointer" style-hover="background:#E4D6B8"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">UNDO CHANGES</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ANNULER</sc-if></button>
+        <button onClick="{{ save }}" style="flex:1;min-width:200px;font:700 20px/1 'Stardos Stencil',serif;letter-spacing:.1em;background:{{ saveBg }};color:#F1E8D6;border:3px solid #2A2420;padding:12px 18px;cursor:pointer;box-shadow:5px 5px 0 #2A2420" style-active="transform:translate(3px,3px);box-shadow:2px 2px 0 #2A2420">{{ saveLabel }}</button>
+      </div>
+    </section>
+
+    <section style="flex:1 1 520px;min-width:0;border-left:2px solid #2A2420;background:#E4D6B8;display:flex;flex-direction:column">
+      <div style="padding:26px 32px 18px;border-bottom:3px double #2A2420;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span style="font:600 12px 'Oswald',sans-serif;letter-spacing:.22em;color:#B81D24"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">FORM 5-C · UNIFORM ISSUE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">FORMULAIRE 5-C · UNIFORME</sc-if></span>
+          <h1 style="margin:0;font:700 clamp(34px,3.6vw,48px)/1 'Stardos Stencil',serif;letter-spacing:.03em"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">DRESS YOUR CLERK</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">HABILLE TON COMMIS</sc-if></h1>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:180px">
+          <span style="font:500 22px 'IBM Plex Mono',monospace">{{ ownedCount }} / {{ totalCount }}</span>
+          <div style="width:180px;height:8px;background:#F1E8D6;border:2px solid #2A2420"><div style="height:100%;width:{{ ownedPct }};background:#B81D24"></div></div>
+          <span style="font:600 10px 'Oswald',sans-serif;letter-spacing:.2em;color:#6F736C"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">ITEMS IN YOUR LOCKER</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">OBJETS DANS TON CASIER</sc-if></span>
+        </div>
+      </div>
+
+      <div style="display:flex;border-bottom:2px solid #2A2420;overflow-x:auto">
+        <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="5">
+          <button onClick="{{ tb.pick }}" style="flex:1;min-width:96px;font:700 13px 'Stardos Stencil',serif;letter-spacing:.12em;border:0;border-right:1px solid rgba(42,36,32,.3);padding:13px 6px;cursor:pointer;background:{{ tb.bg }};color:{{ tb.fg }};display:flex;align-items:center;justify-content:center;gap:6px">{{ tb.label }}<sc-if value="{{ tb.hasNew }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:50%;background:#B81D24"></span></sc-if></button>
+        </sc-for>
+      </div>
+
+      <div style="flex:1;padding:22px 32px;display:flex;flex-direction:column;gap:20px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          <sc-for list="{{ items }}" as="it" hint-placeholder-count="5">
+            <button onClick="{{ it.pick }}" onMouseEnter="{{ it.hover }}" onMouseLeave="{{ unhover }}" style="position:relative;text-align:left;min-height:118px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:6px;cursor:pointer;background:{{ it.bg }};border:{{ it.border }};color:#2A2420;animation:{{ it.anim }};transition:transform .12s, box-shadow .12s" style-hover="transform:translate(-2px,-2px);box-shadow:4px 4px 0 #2A2420">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                <span style="font:500 11px 'IBM Plex Mono',monospace;color:#6F736C">{{ it.code }}</span>
+                <sc-if value="{{ it.isNew }}" hint-placeholder-val="{{ false }}"><span style="background:#B81D24;color:#F1E8D6;font:600 10px 'Oswald',sans-serif;letter-spacing:.16em;padding:1px 6px"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">NEW</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">NOUVEAU</sc-if></span></sc-if>
+                <sc-if value="{{ it.locked }}" hint-placeholder-val="{{ false }}"><span style="font:600 10px 'Oswald',sans-serif;letter-spacing:.16em;color:#3E3A78">🔒︎ <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">LOCKED</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">VERROUILLÉ</sc-if></span></sc-if>
+              </div>
+              <span style="font:400 21px/1.15 'Courier Prime',monospace;font-weight:700;opacity:{{ it.op }}">{{ it.name }}</span>
+              <span style="font:600 10px 'Oswald',sans-serif;letter-spacing:.16em;color:#6F736C">{{ it.sub }}</span>
+              <sc-if value="{{ it.locked }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:4px;margin-top:auto">
+                  <span style="font:13px 'Courier Prime',monospace;color:#3E3A78">{{ it.req }}</span>
+                  <div style="height:5px;background:rgba(62,58,120,.18)"><div style="height:100%;width:{{ it.prog }};background:#3E3A78"></div></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ it.on }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;right:10px;bottom:10px;transform:rotate(-8deg);border:2px solid #B81D24;color:#B81D24;font:700 12px/1 'Stardos Stencil',serif;letter-spacing:.12em;padding:3px 6px;animation:lkSlam .3s ease-out forwards"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">ISSUED</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ATTRIBUÉ</sc-if></div>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ showColours }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px;padding-top:6px;border-top:1px dashed rgba(42,36,32,.35)">
+            <span style="font:600 11px 'Oswald',sans-serif;letter-spacing:.2em;color:#6F736C"><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">HAIR COLOUR · ALSO FOR BEARD &amp; MOUSTACHE</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">COULEUR DES CHEVEUX · BARBE ET MOUSTACHE AUSSI</sc-if></span>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <sc-for list="{{ colours }}" as="cc" hint-placeholder-count="5">
+                <button onClick="{{ cc.pick }}" title="{{ cc.name }}" style="width:40px;height:40px;border-radius:50%;padding:0;cursor:pointer;background:{{ cc.hex }};border:2px solid #2A2420;box-shadow:{{ cc.ring }}"></button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="margin-top:auto;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;font:13px 'Courier Prime',monospace;color:#6F736C">
+          <span><sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">Locked items can be tried on in the fitting room. Earn them in races.</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">Tu peux essayer les objets verrouillés. Gagne-les en course.</sc-if></span>
+          <span style="font:500 11px 'IBM Plex Mono',monospace;color:#2A2420;background:#F1E8D6;border:1px solid #2A2420;padding:2px 6px">← → <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">TABS</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">ONGLETS</sc-if></span>
+        </div>
+      </div>
+
+      <sc-if value="{{ dirty }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 32px;background:#2A2420;color:#F1E8D6;font:600 11px 'Oswald',sans-serif;letter-spacing:.2em">
+          <span style="width:8px;height:8px;border-radius:50%;background:#E2B23A;animation:lkPulse 1.2s infinite"></span>
+          <sc-if value="{{ en }}" hint-placeholder-val="{{ true }}">UNSIGNED CHANGES · SIGN THE FORM TO KEEP THEM</sc-if><sc-if value="{{ fr }}" hint-placeholder-val="{{ false }}">CHANGEMENTS NON SIGNÉS · SIGNE LE FORMULAIRE</sc-if>
+        </div>
+      </sc-if>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultLang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;en&quot;,&quot;fr&quot;],&quot;default&quot;:&quot;en&quot;,&quot;tsType&quot;:&quot;'en' | 'fr'&quot;}}">class Component extends DCLogic {
+  DEF = { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: '#4A3526' };
+  state = { lang: null, tab: 'hair', cfg: { ...this.DEF }, savedCfg: { ...this.DEF }, hover: null, shake: null, saved: false, roll: 0,
+    nameIdx: Math.floor(Math.random() * 8), nameNo: 100 + Math.floor(Math.random() * 900) };
+  clerkRef = React.createRef();
+  CATS = {
+    hair: { code: 'H', en: 'HAIR', fr: 'CHEVEUX', opts: [
+      ['side', 'Side part', 'Raie de côté', 'CLERK STANDARD', 'STANDARD'], ['buzz', 'Buzz cut', 'Coupe rase', 'BARRACKS', 'CASERNE'],
+      ['quiff', 'Quiff', 'Banane', 'DANCE HALL', 'SALLE DE BAL', { en: 'Join the 50 WPM club', fr: 'Atteins 50 MPM', p: 0.62 }],
+      ['bowl', 'Bowl cut', 'Coupe au bol', 'HOME-MADE', 'FAIT MAISON'],
+      ['bald', 'Bald', 'Chauve', 'POLISHED', 'LUSTRÉ', { en: 'Finish a race at 100% accuracy', fr: 'Termine une course à 100 %', p: 0 }]] },
+    glasses: { code: 'G', en: 'GLASSES', fr: 'LUNETTES', opts: [
+      ['round', 'Round wire', 'Rondes en laiton', 'BRASS FRAME', 'MONTURE LAITON'],
+      ['dark', 'Dark lenses', 'Verres fumés', 'NIGHT SHIFT', 'QUART DE NUIT', { en: 'Win 10 races (3/10)', fr: 'Gagne 10 courses (3/10)', p: 0.3 }],
+      ['square', 'Square frames', 'Monture carrée', 'ACCOUNTANT', 'COMPTABLE', null, true],
+      ['monocle', 'Monocle', 'Monocle', 'OLD MONEY', 'VIEILLE FORTUNE', { en: 'Win your first race', fr: 'Gagne ta première course', p: 0 }],
+      ['none', 'None', 'Aucunes', '20/20 VISION', 'VUE PARFAITE']] },
+    hat: { code: 'T', en: 'HAT', fr: 'CHAPEAU', opts: [
+      ['none', 'None', 'Aucun', 'INDOORS', "À L'INTÉRIEUR"],
+      ['ushanka', 'Ushanka', 'Chapka', 'WINTER ISSUE', "TENUE D'HIVER", { en: '7-day typing streak (4/7)', fr: 'Série de 7 jours (4/7)', p: 0.57 }],
+      ['kepka', 'Flat cap', 'Casquette plate', 'FACTORY FLOOR', 'ATELIER', null, true],
+      ['eyeshade', 'Eyeshade', 'Visière', 'NIGHT SHIFT', 'QUART DE NUIT'],
+      ['beret', 'Beret', 'Béret', 'ARTIST UNION', 'UNION DES ARTISTES', { en: 'Accent master: 200 accents (120/200)', fr: 'Maître des accents : 200 accents (120/200)', p: 0.6 }]] },
+    clothes: { code: 'C', en: 'CLOTHES', fr: 'VÊTEMENTS', opts: [
+      ['vest', 'Knit vest', 'Gilet tricoté', 'OLIVE WOOL', 'LAINE OLIVE'], ['cardigan', 'Cardigan', 'Cardigan', 'GRANDMA KNIT', 'TRICOT DE MAMIE'],
+      ['jacket', 'Work jacket', 'Veste de travail', 'NAVY CANVAS', 'TOILE MARINE', { en: 'Reach the rank of Officer', fr: "Atteins le grade d'Officier", p: 0.4 }],
+      ['sweater', 'Sweater', 'Chandail', 'GREY RIB', 'CÔTES GRISES'], ['braces', 'Shirt & braces', 'Chemise et bretelles', 'SUMMER', 'ÉTÉ']] },
+    face: { code: 'F', en: 'FACE', fr: 'VISAGE', opts: [
+      ['stache', 'Moustache', 'Moustache', 'REGULATION', 'RÉGLEMENTAIRE'], ['clean', 'Clean shave', 'Rasé de près', 'FRESH RAZOR', 'RASOIR NEUF'],
+      ['beard', 'Full beard', 'Barbe pleine', 'PHILOSOPHER', 'PHILOSOPHE', { en: 'Reach the rank of Commissar', fr: 'Atteins le grade de Commissaire', p: 0.1 }]] },
+  };
+  COLOURS = [['#4A3526', 'Chestnut', 'Châtain'], ['#1E1A17', 'Ink', 'Encre'], ['#A4552A', 'Copper', 'Cuivre'], ['#C9A465', 'Wheat', 'Blé'], ['#8C8A84', 'Ash', 'Cendre']];
+  componentDidMount() {
+    this._key = e => {
+      if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      const keys = Object.keys(this.CATS), i = keys.indexOf(this.state.tab);
+      if (e.key === 'ArrowRight') this.setState({ tab: keys[(i + 1) % keys.length] });
+      if (e.key === 'ArrowLeft') this.setState({ tab: keys[(i + keys.length - 1) % keys.length] });
+    };
+    this._move = e => {
+      if (this._raf) return;
+      this._raf = requestAnimationFrame(() => {
+        this._raf = 0; const f = this.clerkRef.current; if (!f || !f.contentWindow) return;
+        const r = f.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height * 0.32;
+        f.contentWindow.postMessage({ type: 'fc-look', x: Math.max(-1, Math.min(1, (e.clientX - cx) / (innerWidth / 2))), y: Math.max(-1, Math.min(1, (e.clientY - cy) / (innerHeight / 2))) }, '*');
+      });
+    };
+    addEventListener('keydown', this._key); addEventListener('mousemove', this._move);
+  }
+  componentWillUnmount() { removeEventListener('keydown', this._key); removeEventListener('mousemove', this._move); clearTimeout(this._t1); clearTimeout(this._t2); }
+  send(cfg) { const f = this.clerkRef.current; if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'fc-setcfg', cfg }, '*'); }
+  shownCfg(s) { return s.hover ? { ...s.cfg, [s.hover[0]]: s.hover[1] } : s.cfg; }
+  componentDidUpdate(_, prev) { const a = this.shownCfg(this.state), b = this.shownCfg(prev); if (JSON.stringify(a) !== JSON.stringify(b)) this.send(a); }
+  renderVals() {
+    const en = (this.state.lang ?? this.props.defaultLang ?? 'en') === 'en', L = en ? 1 : 2, S = en ? 3 : 4;
+    const s = this.state, cfg = s.cfg, set = p => this.setState(p);
+    const ANIMALS = [['Sparrow', 'Moineau'], ['Badger', 'Blaireau'], ['Heron', 'Héron'], ['Marmot', 'Marmotte'], ['Lynx', 'Lynx'], ['Otter', 'Loutre'], ['Crow', 'Corbeau'], ['Hedgehog', 'Hérisson']];
+    const guestName = (en ? 'Comrade ' : 'Camarade ') + ANIMALS[s.nameIdx][en ? 0 : 1] + '-' + s.nameNo;
+    const all = Object.values(this.CATS).flatMap(c => c.opts), owned = all.filter(o => !o[5]).length;
+    const tabs = Object.entries(this.CATS).map(([k, c]) => ({ label: en ? c.en : c.fr, bg: s.tab === k ? '#2A2420' : 'transparent', fg: s.tab === k ? '#F1E8D6' : '#2A2420', hasNew: c.opts.some(o => o[6]), pick: () => set({ tab: k, hover: null }) }));
+    const C = this.CATS[s.tab];
+    const items = C.opts.map((o, i) => {
+      const id = o[0], lock = o[5], isNew = o[6], on = cfg[s.tab] === id, shaking = s.shake === s.tab + id;
+      return {
+        code: C.code + '-' + String(i + 1).padStart(2, '0'), name: o[L], sub: o[S], isNew: !!isNew && !lock, locked: !!lock, on,
+        req: lock ? (en ? lock.en : lock.fr) : '', prog: lock ? Math.round(lock.p * 100) + '%' : '0%',
+        bg: on ? '#FFFAEE' : lock ? 'rgba(241,232,214,.45)' : 'rgba(255,250,238,.6)',
+        border: on ? '3px solid #2A2420' : lock ? '2px dashed rgba(62,58,120,.6)' : '2px solid rgba(42,36,32,.35)',
+        op: lock ? 0.55 : 1, anim: shaking ? 'lkShake .4s ease-in-out' : 'none',
+        pick: () => {
+          if (lock) { set({ shake: s.tab + id, hover: [s.tab, id] }); clearTimeout(this._t2); this._t2 = setTimeout(() => this.setState({ shake: null }), 420); return; }
+          set({ cfg: { ...cfg, [s.tab]: id }, hover: null, saved: false });
+        },
+        hover: () => { if (lock) set({ hover: [s.tab, id] }); },
+      };
+    });
+    const colours = this.COLOURS.map(([hex, n1, n2]) => ({ hex, name: en ? n1 : n2, ring: cfg.hairCol === hex ? '0 0 0 3px #E4D6B8, 0 0 0 5px #2A2420' : 'none', pick: () => set({ cfg: { ...cfg, hairCol: hex }, saved: false }) }));
+    const dirty = JSON.stringify(cfg) !== JSON.stringify(s.savedCfg);
+    return {
+      en, fr: !en, guestName, tabs, items, colours, showColours: s.tab === 'hair' || s.tab === 'face',
+      ownedCount: owned, totalCount: all.length, ownedPct: Math.round(owned / all.length * 100) + '%',
+      previewing: !!s.hover, saved: s.saved, dirty, vents: [0, 1, 2, 3, 4], clerkRef: this.clerkRef,
+      enBg: en ? '#2A2420' : 'transparent', enFg: en ? '#F1E8D6' : '#2A2420', frBg: en ? 'transparent' : '#2A2420', frFg: en ? '#2A2420' : '#F1E8D6',
+      saveBg: dirty ? '#B81D24' : '#6F736C', saveLabel: dirty ? (en ? 'SIGN & FILE' : 'SIGNER ET CLASSER') : (en ? 'ON FILE' : 'CLASSÉ'),
+      diceAnim: s.roll ? 'lkSpin .4s ease-out' : 'none',
+      setEn: () => set({ lang: 'en' }), setFr: () => set({ lang: 'fr' }),
+      unhover: () => set({ hover: null }),
+      onClerkLoad: () => this.send(this.shownCfg(this.state)),
+      randomize: () => {
+        const c = { ...cfg };
+        Object.entries(this.CATS).forEach(([k, v]) => { const ok = v.opts.filter(o => !o[5]); c[k] = ok[Math.floor(Math.random() * ok.length)][0]; });
+        c.hairCol = this.COLOURS[Math.floor(Math.random() * this.COLOURS.length)][0];
+        set({ cfg: c, hover: null, saved: false, roll: s.roll + 1 }); clearTimeout(this._t1); this._t1 = setTimeout(() => this.setState({ roll: 0 }), 420);
+      },
+      reset: () => set({ cfg: { ...s.savedCfg }, hover: null, saved: false }),
+      save: () => { if (!dirty) return; set({ savedCfg: { ...cfg }, saved: true, hover: null }); clearTimeout(this._t1); this._t1 = setTimeout(() => this.setState({ saved: false }), 1800); },
+    };
+  }
+}</script>
+</body>
+</html>

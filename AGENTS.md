@@ -19,6 +19,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - install: `npm install` (npm workspaces: root = web app, `packages/*`, `services/*`)
 - dev: `npm run dev` (web) · `npm run dev:race` (race server, `/health` on :4000) · build race server: `npm run build:race`
 - check (lint, types, boundaries, unit; prints <=20 lines): `scripts/check.sh`
+  (unit step needs Redis: `npm run db:up` and `REDIS_URL` loaded from `.env`; race-server room tests fail without it)
 - e2e: `npx playwright test [path]`
 - prisma validate: `npx prisma validate`
 - prisma migrate (DEV DB only): `npx prisma migrate dev --name <slug>`
@@ -46,7 +47,8 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - System shape (containers, protocol, data ownership, deploy): `docs/architecture/ARCHITECTURE.md`; it links the ADRs and never contradicts them.
 - Data model: `prisma/schema/*.prisma`. Never copy field lists elsewhere; link to the file.
 - Card spec, dependencies, in-flight notes: the GitHub issue (body, sub-issues, "blocked by", comments). Card state: the Project's Status field.
-- Product spec: `docs/spec/fifth-copy-spec.md` + art direction `docs/spec/art-direction.{pdf,md}` (source of truth for what to build).
+- Product spec: `docs/spec/fifth-copy-spec.md` (source of truth for what to build; wins over the bundle snapshot `docs/design/bible/FIFTH_COPY_SPEC.md`).
+- **Design bible (source of truth for EVERY design decision)**: `docs/design/bible/FIFTH_COPY_DESIGN_BIBLE.md` + its reference wireframes in `docs/design/bible/` (its `/reference` = that folder). Visual, motion, 3D, copy, UX: the bible wins over `docs/spec/art-direction.*`, tokens, existing UI and your own taste.
 - Board plan and key-to-issue map: `work/plan/fifth-copy-board.json`; requirements: `work/plan/fifth-copy-requirements.md`.
 - Executable form of a card's contract: tests in `e2e/` and `src/**/*.test.ts`, committed in the card's PR.
 - Milestones and findings after delivery: `work/log/<n>.md`, one file per card.
@@ -65,6 +67,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 3. Leave the worktree clean or say exactly what is uncommitted.
 
 ## Hard rules
+- Design: every visual, motion, 3D, copy or UX choice comes from the design bible (section 0 precedence, section 18 checklist). Match its reference files 1:1; not covered = extend the closest bible pattern and add the decision to the bible in the same PR. Never invent a style.
 - One card per session. Do not widen scope. Out-of-scope findings become new Backlog cards labeled `discovered`.
 - Never change a card's Contract section. If it is wrong, label `needs-replan` and stop.
 - If a change conflicts with an accepted ADR, stop. Write a `proposed` ADR in the PR and label `needs-human`. Do not choose architecture silently.
@@ -93,6 +96,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Env access only through `src/env.ts` (validated).
 - New dependencies need a one-line justification in the PR.
 - Playwright: Next.js renders a hidden route announcer with `role="alert"`. Filter `getByRole("alert")` by text.
+- `public/3d/*.html` is generated from the bible's reference 3D pages by `scripts/embeds.ts` (`npm run embeds`, drift-checked in unit tests); never edit it by hand. Landing e2e: gate interactions on hydration (`ready(page)` in `e2e/landing.spec.ts`).
 
 ## Architecture map
 One VPS runs three processes plus Postgres and Redis behind Caddy: **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: rollups, purges). Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.

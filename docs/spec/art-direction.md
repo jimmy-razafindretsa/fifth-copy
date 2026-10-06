@@ -89,4 +89,4 @@ Tube colours (phosphor `#5CFF8A`, nixie `#FF9A3C`) appear only inside physical d
 - **Icon: FC monogram.** The wordmark in two letters: stencil "F" on top, "C" knocked out of the same 8° bar. It reads as Fifth Copy even at 16px.
 - **Rules:** tagline only when there's room. Never recolour the bar violet or gold, never straighten it, and keep clear space of one bar height around the mark.
 
-> Brief compliance (spec section 3.4): the brief forbids AI for the name and logo. The logo drafts are AI-assisted sketches; the team must redraw the final logo by hand (card "Hand-draw the final wordmark and FC monogram").
+> Brief compliance (spec section 3.4): the brief forbids AI for the name and logo. On 2026-10-04 the team confirmed that the logo on page 8 is its own design and not AI-generated. The final vector assets are extracted from this page into `public/brand/` (provenance in `public/brand/README.md`).

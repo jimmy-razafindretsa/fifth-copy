@@ -13,6 +13,9 @@
   "dependencies": {
     "@fifth-copy/engine": "0.1.0",
     "@fifth-copy/protocol": "0.1.0",
+    "ioredis": "^5.11.1",
+    "jose": "^6.2.12",
+    "socket.io": "^4.8.4",
     "zod": "^4.6.5"
   }
 }

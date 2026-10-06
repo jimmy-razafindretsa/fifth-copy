@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FIFTH COPY — The Major</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT"
+  }
+}
+</script>
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}canvas{display:block;width:100%;height:100%}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+// The Major alone, for the not-found page (design bible 10.3, 14.3). Geometry and colours are the
+// Full Lobby reference's Major, verbatim (`Fifth Copy Full Lobby.html`); no desk, no props, no red.
+// Idle: breathing, the head follows the cursor (page-wide through `fc-look`, bible 15) and, left alone,
+// scans the room and stares. A click or `fc-stare` makes him square up and lean in for a moment.
+import * as THREE from 'three';
+
+const COL = { brass: 0xB8933F, gold: 0xE2B23A, ink: 0x2A2420 };
+const MAJ = { olive: 0x5B5E3C, oliveD: 0x3F4229, gold: COL.gold, boot: 0x161514, skin: 0xEBC09C, grey: 0x9A978E, belt: 0x3A2A1C };
+const S = (r, w = 8, h = 6) => new THREE.SphereGeometry(r, w, h);
+const C = (rt, rb, h, s = 8, open = false) => new THREE.CylinderGeometry(rt, rb, h, s, 1, open);
+const B = (x, y, z) => new THREE.BoxGeometry(x, y, z);
+const LATHE = (pts, s = 14) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), s);
+const part = (g, geo, col, x, y, z) => { const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); g.add(m); return m; };
+
+function flip(g) { const i = g.index.array; for (let k = 0; k < i.length; k += 3) { const t = i[k]; i[k] = i[k + 2]; i[k + 2] = t; } const n = g.attributes.normal.array; for (let k = 0; k < n.length; k++) n[k] *= -1; }
+function merge(root) {
+  root.updateMatrixWorld(true);
+  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color();
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const g = o.geometry.clone();
+    if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
+    if (g.type === 'LatheGeometry') { const p = g.attributes.position, n = g.attributes.normal, i = Math.floor(p.count / 2); if (p.getX(i) * n.getX(i) + p.getZ(i) * n.getZ(i) < 0) flip(g); }
+    g.applyMatrix4(o.matrixWorld);
+    c.setHex(o.userData.col).convertSRGBToLinear();
+    const base = pos.length / 3, p = g.attributes.position.array, n = g.attributes.normal.array;
+    for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
+    for (let i = 0; i < p.length / 3; i++) col.push(c.r, c.g, c.b);
+    for (const i of g.index.array) idx.push(base + i);
+    g.dispose(); o.geometry.dispose();
+  });
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  out.setIndex(idx); out.computeBoundingSphere();
+  return out;
+}
+
+// ---------- the Major (Full Lobby reference, 10.3) ----------
+const majBody = new THREE.Group(), majHead = new THREE.Group(), majArmG = {};
+{
+  const P = (geo, c, x, y, z) => part(majBody, geo, c, x, y, z);
+  [-1, 1].forEach(s => {
+    P(C(0.08, 0.075, 0.26, 10), MAJ.boot, s * 0.11, 0.13, 0);
+    P(C(0.086, 0.086, 0.03, 10), 0x2A2826, s * 0.11, 0.255, 0);
+    P(S(0.08, 10, 6), MAJ.boot, s * 0.11, 0.04, 0.05).scale.set(1, 0.55, 1.5);
+    P(S(0.12, 10, 8), MAJ.olive, s * 0.115, 0.33, 0).scale.set(0.95, 1.2, 1);
+  });
+  const pear = [[0, 0], [0.19, 0.01], [0.28, 0.08], [0.31, 0.2], [0.3, 0.32], [0.26, 0.42], [0.18, 0.5], [0.08, 0.54], [0, 0.55]];
+  P(LATHE(pear), MAJ.olive, 0, 0.36, 0).scale.set(1, 1, 0.88);
+  P(LATHE(pear.slice(1, 5).map(([x, y]) => [x * 1.05, y])), MAJ.olive, 0, 0.33, 0).scale.set(1, 1, 0.88);
+  P(C(0.316, 0.316, 0.05, 16), MAJ.belt, 0, 0.56, 0).scale.set(1, 1, 0.88);
+  P(B(0.08, 0.05, 0.02), COL.brass, 0, 0.56, 0.28);
+  [0.5, 0.64, 0.74, 0.83].forEach(y => P(S(0.013, 6, 4), COL.brass, 0, y, y < 0.6 ? 0.27 : 0.25 - (y - 0.64) * 0.5));
+  P(C(0.11, 0.13, 0.06, 12), MAJ.olive, 0, 0.92, 0);
+  [-1, 1].forEach(s => {
+    P(B(0.04, 0.03, 0.01), MAJ.gold, s * 0.05, 0.92, 0.12);
+    const ep = P(B(0.15, 0.03, 0.11), MAJ.gold, s * 0.22, 0.85, 0); ep.rotation.z = s * -0.35;
+    P(B(0.012, 0.6, 0.012), MAJ.oliveD, s * 0.115, 0.35, 0.115);
+  });
+  const RIB = [MAJ.gold, 0x3E3A78, 0x2F7A52, 0xE8DCC0, 0x3E3A78, MAJ.gold];
+  RIB.forEach((c, k) => { const m = P(B(0.05, 0.022, 0.012), c, -0.2 + (k % 3) * 0.055, 0.78 - Math.floor(k / 3) * 0.028, 0.215); m.rotation.y = -0.45; });
+  [-0.19, -0.13].forEach((x, k) => { const m = P(C(0.028, 0.028, 0.01, 5), MAJ.gold, x, 0.69, 0.235 - k * 0.012); m.rotation.x = Math.PI / 2; m.rotation.y = -0.4; });
+  const hero = P(C(0.035, 0.035, 0.012, 5), MAJ.gold, 0.13, 0.75, 0.235); hero.rotation.x = Math.PI / 2; hero.rotation.y = 0.4;
+  [-1, 1].forEach(s => {
+    const a = new THREE.Group(); majArmG[s] = a;
+    part(a, new THREE.CapsuleGeometry(0.07, 0.17, 2, 8), MAJ.olive, 0, -0.12, 0);
+    part(a, C(0.074, 0.074, 0.03, 8), MAJ.gold, 0, -0.23, 0);
+    part(a, S(0.06, 8, 6), MAJ.skin, 0, -0.3, 0);
+  });
+  const Q = (geo, c, x, y, z) => part(majHead, geo, c, x, y, z);
+  Q(S(0.24, 14, 10), MAJ.skin, 0, 0, 0).scale.set(1.08, 0.98, 1);
+  Q(S(0.2, 12, 8), MAJ.skin, 0, -0.11, 0.06).scale.set(1.22, 0.75, 1);
+  Q(S(0.06, 8, 6), MAJ.skin, 0, -0.02, 0.24).scale.set(1, 0.9, 1.1);
+  [-1, 1].forEach(s => {
+    Q(S(0.045, 6, 4), MAJ.skin, s * 0.255, -0.01, 0).scale.set(0.5, 1, 0.8);
+    Q(S(0.022, 6, 4), COL.ink, s * 0.085, 0.05, 0.215);
+    Q(new THREE.CapsuleGeometry(0.022, 0.07, 2, 6), MAJ.grey, s * 0.085, 0.1, 0.205).rotation.z = Math.PI / 2 + s * 0.3;
+    Q(new THREE.CapsuleGeometry(0.03, 0.09, 2, 6), MAJ.grey, s * 0.075, -0.075, 0.225).rotation.z = Math.PI / 2 - s * 0.35;
+  });
+  Q(new THREE.TorusGeometry(0.04, 0.007, 4, 12), COL.brass, 0.085, 0.05, 0.228);
+  Q(B(0.005, 0.14, 0.005), COL.brass, 0.125, -0.03, 0.2);
+  Q(S(0.27, 16, 8), MAJ.olive, 0, 0.2, -0.02).scale.set(1.3, 0.38, 1.35);
+  Q(C(0.235, 0.235, 0.07, 16), MAJ.oliveD, 0, 0.15, 0);
+  Q(C(0.239, 0.239, 0.016, 16), MAJ.gold, 0, 0.18, 0);
+  const vis = Q(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 12, 1, false, -Math.PI / 2, Math.PI), MAJ.boot, 0, 0.12, 0.13); vis.scale.set(1, 1, 0.7); vis.rotation.x = 0.25;
+  Q(C(0.045, 0.045, 0.015, 5), MAJ.gold, 0, 0.2, 0.345).rotation.x = Math.PI / 2;
+}
+
+const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const major = new THREE.Group();
+const bodyMesh = new THREE.Mesh(merge(majBody), mat), headMesh = new THREE.Mesh(merge(majHead), mat);
+headMesh.position.set(0, 1.13, 0.02);
+major.add(bodyMesh, headMesh);
+// arms rest over the belly (reference REST targets), aimed once
+const ARM = 0.3, DOWN = new THREE.Vector3(0, -1, 0), _v = new THREE.Vector3();
+const SH = { '-1': new THREE.Vector3(-0.29, 0.8, 0), '1': new THREE.Vector3(0.29, 0.8, 0) };
+const REST = { '-1': new THREE.Vector3(-0.41, 0.53, 0.04), '1': new THREE.Vector3(0.41, 0.53, 0.04) };
+[-1, 1].forEach(s => {
+  const m = new THREE.Mesh(merge(majArmG[s]), mat); m.position.copy(SH[s]); major.add(m);
+  _v.subVectors(REST[s], SH[s]); const len = _v.length(); _v.normalize();
+  m.quaternion.setFromUnitVectors(DOWN, _v); m.scale.set(1, Math.min(1.35, Math.max(0.8, len / ARM)), 1);
+});
+// a soft shadow blob under his boots (bible 12 LOW: blob circles)
+const blob = new THREE.Mesh(new THREE.CircleGeometry(0.42, 24), new THREE.MeshBasicMaterial({ color: 0x2A2420, transparent: true, opacity: 0.14, depthWrite: false }));
+blob.rotation.x = -Math.PI / 2; blob.position.y = 0.002; major.add(blob);
+
+// ---------- stage (the Your Clerk reference's lighting, transparent ground) ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 0); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.getElementById('root').appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.add(major);
+const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 20);
+scene.add(new THREE.HemisphereLight(0xF4EEE0, 0x6A6252, 2.4));
+const key = new THREE.DirectionalLight(0xFFF4E0, 1.8); key.position.set(2, 3, 3); scene.add(key);
+const rim = new THREE.DirectionalLight(0xC8D2DA, 1.0); rim.position.set(-2, 2, -3); scene.add(rim);
+function size() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; const fit = Math.max(1, 0.95 / camera.aspect); camera.position.set(0, 0.95, 4.6 * fit); camera.lookAt(0, 0.82, 0); camera.updateProjectionMatrix(); }
+addEventListener('resize', size); size();
+
+// ---------- behaviour ----------
+let mx = 0, my = 0, hx = 0, hy = 0, t = 0, last = performance.now(), lastInput = -10;
+const look = { ty: 0, tp: 0.06, next: 0 };
+let stare = -10;
+addEventListener('message', e => { const d = e.data || {}; if (d.type === 'fc-look') { mx = d.x; my = d.y; lastInput = t; } if (d.type === 'fc-stare') stare = t; });
+addEventListener('pointermove', e => { mx = (e.clientX / innerWidth) * 2 - 1; my = (e.clientY / innerHeight) * 2 - 1.1; lastInput = t; });
+addEventListener('pointerdown', () => { stare = t; });
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  // breathing (10.3)
+  bodyMesh.scale.set(1 + Math.sin(t * 1.4) * 0.01, 1, 1 + Math.sin(t * 1.4) * 0.01);
+  const idle = t - lastInput > 4;
+  if (idle) {
+    // left alone he scans the room and stops to stare (10.3 idle)
+    if (t > look.next) { look.ty = [-0.6, -0.3, 0, 0.3, 0.6][Math.floor(Math.random() * 5)]; look.tp = 0.06; look.next = t + 2.5 + Math.random() * 2.5; }
+  } else {
+    look.ty = Math.max(-1, Math.min(1, mx)) * 0.6; look.tp = Math.max(-1, Math.min(1, my)) * 0.35 + 0.04;
+  }
+  const staring = t - stare < 1.4, sk = staring ? Math.sin(Math.min(1, (t - stare) / 1.4) * Math.PI) : 0;
+  const ease = 1 - Math.exp(-dt * (idle ? 3 : 5));
+  hx += ((staring ? 0 : look.ty) - hx) * ease; hy += ((staring ? 0.02 : look.tp) - hy) * ease;
+  headMesh.rotation.set(hy + Math.sin(t * 0.5) * 0.015, hx, 0);
+  major.rotation.y = hx * 0.2;
+  major.rotation.x = sk * 0.07; major.position.z = sk * 0.12;
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

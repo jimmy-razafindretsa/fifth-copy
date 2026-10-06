@@ -19,12 +19,18 @@ const eslintConfig = defineConfig([
   {
     // Race server: env only through services/race-server/src/env.ts; never the Next.js app (ADR 0006).
     files: ["services/race-server/**/*.ts"],
-    ignores: ["services/race-server/src/env.ts"],
+    ignores: ["services/race-server/src/env.ts", "services/race-server/src/**/*.test.ts"],
     rules: {
       "no-restricted-properties": [
         "error",
         { object: "process", property: "env", message: "Use parseEnv() from ./env instead." },
       ],
+    },
+  },
+  {
+    // Tests may read process.env (e.g. REDIS_URL for integration tests) but never import the app.
+    files: ["services/race-server/**/*.ts"],
+    rules: {
       "no-restricted-imports": [
         "error",
         { patterns: ["@/*", "next", "next/*", "react", "@prisma/*"] },
@@ -58,6 +64,7 @@ const eslintConfig = defineConfig([
   },
   globalIgnores([
     ".next/**",
+    "public/3d/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
@@ -67,6 +74,8 @@ const eslintConfig = defineConfig([
     "services/*/dist/**",
     ".worktrees/**",
     ".claude/**",
+    // Design bible reference implementations: ported 1:1, never linted as app code.
+    "docs/design/bible/**",
     "playwright-report/**",
     "test-results/**",
   ]),

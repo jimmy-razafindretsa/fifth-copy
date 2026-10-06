@@ -6,7 +6,7 @@ const variants = {
   primary: "bg-primary text-primary-fg hover:bg-primary-hover",
   secondary: "bg-surface text-fg border border-border hover:bg-surface-muted",
   ghost: "bg-transparent text-fg hover:bg-surface-muted",
-  danger: "bg-danger text-primary-fg hover:opacity-90",
+  danger: "bg-pressed text-primary-fg hover:opacity-90",
 } as const;
 
 const sizes = {

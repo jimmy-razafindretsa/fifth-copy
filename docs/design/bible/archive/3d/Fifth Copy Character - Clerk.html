@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FIFTH COPY — Character: The Clerk</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Stardos+Stencil:wght@700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#2B2C2A;overflow:hidden}
+three-d-stage{position:fixed;inset:0}
+three-d-stage:not(:defined){visibility:hidden}
+.plate{position:fixed;left:20px;top:16px;display:flex;flex-direction:column;gap:4px;z-index:5;pointer-events:none}
+.plate h1{margin:0;font:700 22px 'Stardos Stencil',serif;letter-spacing:.08em;color:#E8DCC0;white-space:nowrap}
+.plate p{margin:0;font:12px 'Share Tech Mono',monospace;letter-spacing:.14em;color:#9C9A8E;white-space:nowrap}
+</style>
+</head>
+<body>
+<three-d-stage name="fifth-copy-clerk" background="#2B2C2A" autorotate></three-d-stage>
+<div class="plate"><h1>THE CLERK</h1><p>PLAYER CHARACTER · DESK 05</p></div>
+<script src="three-d-stage.js"></script>
+<script type="module">
+import * as THREE from 'three';
+const stage = document.querySelector('three-d-stage');
+
+const M = (name, color, o = {}) => { const m = new THREE.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0, ...o }); m.name = name; return m; };
+const mat = {
+  skin: M('skin', 0xE2B48F, { roughness: 0.65 }),
+  cheek: M('cheek', 0xD98E78, { roughness: 0.7 }),
+  hair: M('hair_dark_brown', 0x3A2A1F),
+  black: M('ink_black', 0x141414, { roughness: 0.4 }),
+  white: M('eye_white', 0xF4EFE4, { roughness: 0.3 }),
+  shirt: M('shirt_cream', 0xE6DCC6),
+  vest: M('knit_vest_olive', 0x5E6140, { roughness: 0.95 }),
+  vestRib: M('knit_rib', 0x4C4F33, { roughness: 0.95 }),
+  tie: M('tie_ink', 0x2A3140),
+  trousers: M('trousers_grey', 0x55544E),
+  belt: M('belt_leather', 0x2B1E16, { roughness: 0.55 }),
+  brass: M('brass', 0xB8933F, { metalness: 0.8, roughness: 0.35 }),
+  shoe: M('shoe_leather', 0x241914, { roughness: 0.35 }),
+  sole: M('shoe_sole', 0x111010),
+  garter: M('sleeve_garter', 0x1E1E1E, { roughness: 0.5 }),
+  visor: M('visor_green_celluloid', 0x2F8A5A, { transparent: true, opacity: 0.72, roughness: 0.25, side: THREE.DoubleSide }),
+  visorBand: M('visor_band', 0x1C3D2B),
+  scarf: M('id_scarf_teal', 0x2E8C8A, { roughness: 0.95 }),
+  pencil: M('pencil_ochre', 0xD9A63A, { roughness: 0.5 }),
+  wood: M('pencil_wood', 0xE8C99A),
+  ink: M('ink_stain_blue', 0x2C3E8C, { roughness: 0.3 }),
+  glassLens: M('lens', 0xCFE3E8, { transparent: true, opacity: 0.18, roughness: 0.05 }),
+};
+
+const S = (r, w = 20, h = 14) => new THREE.SphereGeometry(r, w, h);
+const C = (rt, rb, h, s = 20, open = false) => new THREE.CylinderGeometry(rt, rb, h, s, 1, open);
+const B = (x, y, z) => new THREE.BoxGeometry(x, y, z);
+const CAP = (r, l, s = 14) => new THREE.CapsuleGeometry(r, l, 6, s);
+const T = (r, t, rs = 10, ts = 28) => new THREE.TorusGeometry(r, t, rs, ts);
+function mesh(name, geo, m, x, y, z, parent) {
+  const o = new THREE.Mesh(geo, m); o.name = name; o.position.set(x, y, z);
+  o.castShadow = true; o.receiveShadow = true; parent.add(o); return o;
+}
+
+const clerk = new THREE.Group(); clerk.name = 'clerk';
+
+// Shoes
+[-1, 1].forEach(s => {
+  const x = s * 0.08;
+  mesh(`shoe_${s}`, S(0.06), mat.shoe, x, 0.042, 0.03, clerk).scale.set(0.95, 0.62, 1.55);
+  mesh(`shoe_toe_${s}`, S(0.045), mat.shoe, x, 0.034, 0.1, clerk).scale.set(1.1, 0.7, 1);
+  mesh(`sole_${s}`, B(0.11, 0.016, 0.21), mat.sole, x, 0.008, 0.035, clerk);
+  mesh(`heel_${s}`, B(0.1, 0.026, 0.05), mat.sole, x, 0.013, -0.045, clerk);
+  mesh(`lace_${s}`, B(0.04, 0.008, 0.05), mat.black, x, 0.078, 0.06, clerk).rotation.x = -0.35;
+});
+// Legs + cuffs
+[-1, 1].forEach(s => {
+  mesh(`leg_${s}`, CAP(0.058, 0.24), mat.trousers, s * 0.08, 0.24, 0, clerk);
+  mesh(`cuff_${s}`, C(0.064, 0.066, 0.035), mat.trousers, s * 0.08, 0.1, 0.005, clerk);
+  mesh(`crease_${s}`, B(0.006, 0.2, 0.006), mat.vestRib, s * 0.08, 0.24, 0.058, clerk);
+});
+// Hips + belt
+mesh('hips', S(0.14), mat.trousers, 0, 0.4, 0, clerk).scale.set(1.12, 0.62, 0.85);
+mesh('belt', C(0.148, 0.148, 0.035, 28), mat.belt, 0, 0.44, 0, clerk).scale.set(1.05, 1, 0.85);
+mesh('buckle', B(0.05, 0.034, 0.012), mat.brass, 0, 0.44, 0.128, clerk);
+mesh('buckle_hole', B(0.03, 0.016, 0.014), mat.belt, 0, 0.44, 0.129, clerk);
+
+// Torso: shirt underneath, knit vest over
+mesh('torso_shirt', CAP(0.155, 0.16), mat.shirt, 0, 0.6, 0, clerk).scale.set(1.05, 1, 0.8);
+mesh('vest', CAP(0.162, 0.1), mat.vest, 0, 0.575, 0, clerk).scale.set(1.06, 1, 0.82);
+mesh('vest_hem', C(0.168, 0.162, 0.04, 28), mat.vestRib, 0, 0.47, 0, clerk).scale.set(1.04, 1, 0.82);
+for (let i = -3; i <= 3; i++) mesh(`vest_rib_${i}`, B(0.006, 0.038, 0.006), mat.vest, i * 0.03, 0.47, 0.137, clerk);
+// V-neck reveal: shirt wedge + rib trim + tie
+const vee = mesh('vee_shirt', B(0.12, 0.12, 0.01), mat.shirt, 0, 0.66, 0.131, clerk); vee.rotation.z = Math.PI / 4; vee.scale.set(0.7, 0.7, 1);
+[-1, 1].forEach(s => { const r = mesh(`vee_trim_${s}`, B(0.016, 0.13, 0.012), mat.vestRib, s * 0.032, 0.655, 0.133, clerk); r.rotation.z = s * 0.5; });
+mesh('tie_knot', B(0.028, 0.026, 0.02), mat.tie, 0, 0.71, 0.13, clerk);
+const tie = mesh('tie_blade', C(0.02, 0.012, 0.09, 4), mat.tie, 0, 0.655, 0.136, clerk); tie.scale.set(1, 1, 0.3); tie.rotation.y = Math.PI / 4;
+// Collar points
+[-1, 1].forEach(s => { const c = mesh(`collar_${s}`, B(0.05, 0.03, 0.01), mat.shirt, s * 0.03, 0.725, 0.125, clerk); c.rotation.z = s * -0.6; c.rotation.x = -0.3; });
+// Vest buttons
+[0.6, 0.555, 0.51].forEach((y, i) => mesh(`vest_btn_${i}`, C(0.008, 0.008, 0.006, 10), mat.brass, 0, y, 0.133, clerk).rotation.x = Math.PI / 2);
+
+// ID badge (desk number)
+const cv = document.createElement('canvas'); cv.width = 128; cv.height = 160;
+const g = cv.getContext('2d');
+g.fillStyle = '#E8DCC0'; g.fillRect(0, 0, 128, 160);
+g.strokeStyle = '#23201D'; g.lineWidth = 6; g.strokeRect(6, 6, 116, 148);
+g.fillStyle = '#23201D'; g.font = '700 22px "Stardos Stencil", serif'; g.textAlign = 'center'; g.fillText('DESK', 64, 44);
+g.font = '700 72px "Stardos Stencil", serif'; g.fillText('05', 64, 116);
+g.fillRect(20, 132, 88, 6);
+const badgeTex = new THREE.CanvasTexture(cv); badgeTex.colorSpace = THREE.SRGBColorSpace;
+const badgeMat = new THREE.MeshStandardMaterial({ map: badgeTex, roughness: 0.9 }); badgeMat.name = 'id_badge';
+const badge = mesh('id_badge', B(0.05, 0.062, 0.004), badgeMat, -0.075, 0.6, 0.118, clerk); badge.rotation.y = -0.38; badge.rotation.z = 0.06;
+mesh('badge_clip', B(0.018, 0.01, 0.008), mat.brass, -0.075, 0.633, 0.12, clerk).rotation.y = -0.38;
+// Pen in shirt pocket area (vest side)
+const pen = mesh('pocket_pen', C(0.006, 0.006, 0.06, 8), mat.black, 0.07, 0.625, 0.12, clerk); pen.rotation.y = 0.4;
+mesh('pocket_pen_clip', B(0.004, 0.03, 0.004), mat.brass, 0.073, 0.635, 0.127, clerk);
+
+// Neck + identity scarf
+mesh('neck', C(0.05, 0.055, 0.07), mat.skin, 0, 0.76, 0, clerk);
+mesh('scarf_ring', T(0.075, 0.035, 10, 24), mat.scarf, 0, 0.745, 0.005, clerk).rotation.x = Math.PI / 2;
+const tail1 = mesh('scarf_tail_a', B(0.05, 0.16, 0.022), mat.scarf, 0.06, 0.66, 0.11, clerk); tail1.rotation.z = 0.12; tail1.rotation.x = -0.12;
+const tail2 = mesh('scarf_tail_b', B(0.045, 0.12, 0.02), mat.scarf, 0.035, 0.68, 0.125, clerk); tail2.rotation.z = -0.18; tail2.rotation.x = -0.1;
+[0, 1, 2].forEach(i => mesh(`scarf_fringe_${i}`, B(0.008, 0.025, 0.006), mat.scarf, 0.045 + i * 0.016, 0.57, 0.128, clerk));
+
+// Arms: rolled sleeves, garters, ink-stained fingers
+[-1, 1].forEach(s => {
+  const sh = new THREE.Group(); sh.name = `arm_${s}`; sh.position.set(s * 0.175, 0.69, 0); sh.rotation.z = s * 0.13; sh.rotation.x = s * 0.04; clerk.add(sh);
+  mesh(`shoulder_${s}`, S(0.06), mat.shirt, 0, 0, 0, sh);
+  mesh(`upper_sleeve_${s}`, CAP(0.05, 0.13), mat.shirt, 0, -0.1, 0, sh);
+  mesh(`garter_${s}`, T(0.052, 0.009, 8, 22), mat.garter, 0, -0.1, 0, sh).rotation.x = Math.PI / 2;
+  mesh(`rolled_cuff_${s}`, T(0.046, 0.016, 8, 22), mat.shirt, 0, -0.2, 0, sh).rotation.x = Math.PI / 2;
+  mesh(`forearm_${s}`, CAP(0.038, 0.12), mat.skin, 0, -0.28, 0.005, sh);
+  const hand = new THREE.Group(); hand.position.set(0, -0.39, 0.01); sh.add(hand);
+  mesh(`palm_${s}`, S(0.048), mat.skin, 0, 0, 0, hand).scale.set(0.8, 1.05, 0.9);
+  const th = mesh(`thumb_${s}`, CAP(0.015, 0.025, 8), mat.skin, -s * 0.03, 0.008, 0.028, hand); th.rotation.z = -s * 0.5; th.rotation.x = 0.4;
+  for (let f = 0; f < 4; f++) {
+    const fx = (f - 1.5) * 0.017 * -s;
+    const fg = mesh(`finger_${s}_${f}`, CAP(0.011, 0.03, 8), mat.skin, fx * 0.9, -0.05, 0.012 - Math.abs(f - 1.5) * 0.004, hand); fg.rotation.x = 0.25;
+    if (s === 1 && f < 2) mesh(`ink_tip_${f}`, S(0.011, 8, 6), mat.ink, fx * 0.9, -0.072, 0.018, hand);
+  }
+});
+
+// Head
+const R = 0.2;
+const head = new THREE.Group(); head.name = 'head'; head.position.set(0, 0.97, 0.01); clerk.add(head);
+mesh('skull', S(R, 28, 20), mat.skin, 0, 0, 0, head).scale.set(1, 1.08, 0.98);
+mesh('jowl', S(R * 0.8, 24, 16), mat.skin, 0, -R * 0.45, R * 0.12, head).scale.set(1.1, 0.7, 1);
+mesh('nose', S(R * 0.3, 16, 12), mat.skin, 0, -R * 0.06, R * 0.96, head).scale.set(1, 0.95, 1.1);
+[-1, 1].forEach(s => {
+  mesh(`ear_${s}`, S(R * 0.22, 12, 10), mat.skin, s * R * 0.97, -R * 0.02, -R * 0.02, head).scale.set(0.45, 1, 0.75);
+  mesh(`cheek_${s}`, S(R * 0.18, 12, 10), mat.cheek, s * R * 0.55, -R * 0.28, R * 0.78, head).scale.set(1, 0.6, 0.4);
+  const ex = s * R * 0.36, ey = R * 0.18, ez = R * 0.88;
+  mesh(`eye_white_${s}`, S(R * 0.15, 14, 10), mat.white, ex, ey, ez - 0.012, head).scale.set(1, 1.1, 0.5);
+  mesh(`pupil_${s}`, S(R * 0.08, 12, 8), mat.black, ex + s * -0.004, ey - 0.002, ez + 0.012, head);
+  const brow = mesh(`brow_${s}`, CAP(R * 0.045, R * 0.26, 8), mat.hair, ex, ey + R * 0.3, ez - 0.01, head); brow.rotation.z = Math.PI / 2 + s * 0.18;
+  // round wire glasses
+  mesh(`glasses_rim_${s}`, T(R * 0.22, R * 0.022, 8, 28), mat.brass, ex, ey, ez + 0.022, head);
+  mesh(`glasses_lens_${s}`, C(R * 0.21, R * 0.21, 0.003, 24), mat.glassLens, ex, ey, ez + 0.022, head).rotation.x = Math.PI / 2;
+  const arm = mesh(`glasses_arm_${s}`, B(0.004, 0.004, R * 0.95), mat.brass, s * R * 0.6, ey + 0.004, R * 0.42, head); arm.rotation.y = s * 0.24;
+});
+mesh('glasses_bridge', T(R * 0.08, R * 0.018, 6, 12, Math.PI), mat.brass, 0, R * 0.2, R * 0.97, head);
+// moustache (small, tidy) + mouth
+[-1, 1].forEach(s => { const m = mesh(`stache_${s}`, CAP(R * 0.08, R * 0.2, 8), mat.hair, s * R * 0.14, -R * 0.3, R * 0.93, head); m.rotation.z = Math.PI / 2 + s * 0.22; });
+const mouth = mesh('mouth', T(R * 0.13, R * 0.022, 6, 14, Math.PI * 0.8), mat.black, 0, -R * 0.38, R * 0.9, head); mouth.rotation.z = Math.PI + Math.PI * 0.1;
+// hair: combed back, side parting
+mesh('hair_cap', S(R * 1.03, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), mat.hair, 0, R * 0.08, -R * 0.06, head);
+mesh('hair_back', S(R * 0.95, 20, 14), mat.hair, 0, -R * 0.05, -R * 0.2, head).scale.set(1.02, 0.95, 0.85);
+[-1, 1].forEach(s => mesh(`sideburn_${s}`, B(R * 0.08, R * 0.32, R * 0.18), mat.hair, s * R * 0.92, -R * 0.02, R * 0.18, head));
+mesh('parting', B(R * 0.02, R * 0.01, R * 1.2), mat.skin, -R * 0.35, R * 0.98, -R * 0.1, head).rotation.z = 0.35;
+// green celluloid eyeshade
+mesh('visor_band', C(R * 1.06, R * 1.06, R * 0.16, 32, true), mat.visorBand, 0, R * 0.55, 0, head).scale.set(1, 1, 0.98);
+const brim = mesh('visor_brim', new THREE.CylinderGeometry(R * 1.55, R * 1.06, R * 0.02, 32, 1, true, -Math.PI * 0.42, Math.PI * 0.84), mat.visor, 0, R * 0.48, 0, head);
+brim.rotation.x = 0.0;
+const brimShape = new THREE.Shape();
+brimShape.absarc(0, 0, R * 1.5, Math.PI * 0.08, Math.PI * 0.92, false);
+brimShape.absarc(0, 0, R * 1.04, Math.PI * 0.92, Math.PI * 0.08, true);
+const brimFlat = mesh('visor_shade', new THREE.ShapeGeometry(brimShape, 24), mat.visor, 0, R * 0.5, 0, head);
+brimFlat.rotation.x = -Math.PI / 2 + 0.32;
+head.remove(brim);
+// pencil tucked behind right ear
+const pc = mesh('ear_pencil', C(0.008, 0.008, 0.15, 6), mat.pencil, R * 1.02, R * 0.12, -R * 0.02, head);
+pc.rotation.x = Math.PI / 2; pc.rotation.y = 0.15;
+mesh('ear_pencil_tip', C(0.0, 0.008, 0.02, 6), mat.wood, R * 1.02, R * 0.12, R * 0.38, head).rotation.x = Math.PI / 2;
+mesh('ear_pencil_eraser', C(0.0085, 0.0085, 0.015, 8), mat.cheek, R * 1.02, R * 0.12, -R * 0.42, head).rotation.x = Math.PI / 2;
+
+head.rotation.x = 0.04; head.rotation.y = -0.08; head.rotation.z = 0.03;
+
+await stage.ready;
+stage.setObject(clerk);
+</script>
+</body>
+</html>

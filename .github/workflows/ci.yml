@@ -1,4 +1,6 @@
-# Required checks for main (configure branch protection to require: check, migrations, e2e, visual).
+# Required checks for main: check, migrations, e2e, visual. The merge gate is scripts/merge.sh (private
+# free-plan repo, no branch protection); .github/branch-protection.json lists these job names as the
+# required contexts, so renaming a job means updating that file (scripts/lib/protection.test.ts).
 name: CI
 
 on:
@@ -25,9 +27,32 @@ env:
 
 jobs:
   check:
-    name: check (format, lint, types, boundaries, unit, ADR lint, prisma validate)
+    # format, lint, types, boundaries, unit, ADR lint, prisma validate
+    name: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      # Race-server integration tests run against a real Redis (ADR 0008, ARCHITECTURE 10).
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+      # DB-backed Vitest suites (describe.skipIf(!TEST_DATABASE_URL)) run here, not skipped (#501).
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      REDIS_URL: redis://localhost:6379/0
+      # The throwaway service DB is both the app DB and the test DB (docs/adr/0003).
+      DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+      TEST_DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,7 +60,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: scripts/test-db.sh
       - run: scripts/check.sh
+      - name: Unit summary (DB suites ran, none skipped)
+        if: always()
+        # Vitest colours its output on Actions: strip ANSI codes before matching the totals.
+        run: sed -E 's/\x1b\[[0-9;]*m//g' .cache/check/unit.log | grep -E '^ *(Test Files|Tests) '
       - name: Race server bundles (docs/adr/0006)
         run: npm run build:race
       - name: Show failing logs
@@ -43,7 +73,8 @@ jobs:
         run: tail -n 60 .cache/check/*.log
 
   migrations:
-    name: migrations (deploy to throwaway Postgres, drift check)
+    # deploy to a throwaway Postgres, merged migrations immutable, drift check
+    name: migrations
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -70,8 +101,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git fetch --depth=1 origin "${{ github.base_ref }}"
-          changed=$(git diff --name-only --diff-filter=MDR "origin/${{ github.base_ref }}" -- prisma/migrations || true)
-          if [ -n "$changed" ]; then echo "Edited/deleted merged migrations (fix forward instead):"; echo "$changed"; exit 1; fi
+          scripts/merged-migrations.sh "origin/${{ github.base_ref }}"
       - run: npx prisma migrate deploy
       - run: npx prisma migrate status
       - name: Schema drift (schema changed without a migration)
@@ -84,7 +114,8 @@ jobs:
           exit $code
 
   e2e:
-    name: e2e (Playwright, functional + a11y)
+    # Playwright, functional + a11y
+    name: e2e
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -97,10 +128,25 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+      # Race server for the browser tests (#165), real Redis like the check job (ADR 0008).
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       # The throwaway service DB is both the app DB and the test DB (docs/adr/0003).
       DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
       TEST_DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+      # Throwaway CI value (like the service DB password); src/env.ts requires >= 32 chars.
+      RACE_TOKEN_SECRET: ci-only-race-token-secret-0123456789abcdef0123456789abcdef
+      AUTH_SECRET: ci-only-auth-secret-0123456789abcdef0123456789abcdef
+      # Race server under Playwright (playwright.config.ts webServer); NEXT_PUBLIC_* is inlined at build.
+      REDIS_URL: redis://localhost:6379/0
+      RACE_SERVER_PORT: "4000"
+      NEXT_PUBLIC_RACE_SERVER_URL: http://localhost:4000
+      RACE_SERVER_INTERNAL_URL: http://localhost:4000
+      WEB_ORIGIN: http://localhost:3100
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -111,6 +157,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: scripts/test-db.sh
       - run: npm run build
+      - run: npm run build:race
       - run: npx playwright test
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -120,7 +167,8 @@ jobs:
           retention-days: 7
 
   visual:
-    name: visual (pinned Playwright image)
+    # pinned Playwright image
+    name: visual
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Pinned to the @playwright/test version in package.json. Bump both together.
@@ -135,10 +183,23 @@ jobs:
           POSTGRES_DB: app
         options: >-
           --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
+      # Race server for the browser tests (#165), real Redis like the check job (ADR 0008).
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
       TEST_DATABASE_URL: postgresql://app:app@postgres:5432/app?schema=public
       DB_GUARD_ALLOWED_HOSTS: postgres
+      RACE_TOKEN_SECRET: ci-only-race-token-secret-0123456789abcdef0123456789abcdef
+      AUTH_SECRET: ci-only-auth-secret-0123456789abcdef0123456789abcdef
+      # Race server under Playwright (playwright.config.ts webServer); NEXT_PUBLIC_* is inlined at build.
+      REDIS_URL: redis://redis:6379/0
+      RACE_SERVER_PORT: "4000"
+      NEXT_PUBLIC_RACE_SERVER_URL: http://localhost:4000
+      RACE_SERVER_INTERNAL_URL: http://localhost:4000
+      WEB_ORIGIN: http://localhost:3100
       PW_VISUAL: "1"
       HOME: /root
     steps:
@@ -150,6 +211,7 @@ jobs:
       - run: npm ci
       - run: scripts/test-db.sh
       - run: npm run build
+      - run: npm run build:race
       - name: Visual tests
         if: ${{ !inputs.update-baselines }}
         run: npx playwright test --grep @visual

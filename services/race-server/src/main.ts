@@ -1,39 +1,30 @@
 /**
- * Race server entry point. Today: an HTTP server with /health and graceful shutdown, so the
- * process, build, env and gates exist before the first feature card. Socket.IO, Redis and rooms
- * land through the cards of epic #148 (see docs/architecture/ARCHITECTURE.md section 11).
+ * Race server entry point: env, Redis, then the composition root (`app.ts`: GET /health,
+ * POST /internal/rooms, Socket.IO waiting room). SIGTERM/SIGINT disconnect every socket and exit
+ * (ADR 0012; docs/architecture/ARCHITECTURE.md section 11).
  */
-import { createServer } from "node:http";
+import { createRaceServer } from "./app";
+import { systemClock } from "./clock";
 import { parseEnv } from "./env";
-import { healthBody } from "./health";
+import { createRedis } from "./redis/client";
 
 const env = parseEnv();
-const state = { rooms: 0, draining: false };
+const server = createRaceServer({ env, redis: createRedis(env.REDIS_URL), clock: systemClock });
 
-const server = createServer((req, res) => {
-  if (req.method === "GET" && req.url === "/health") {
-    const body = healthBody(state);
-    res.writeHead(body.ok ? 200 : 503, { "content-type": "application/json" });
-    res.end(JSON.stringify(body));
-    return;
-  }
-  res.writeHead(404, { "content-type": "application/json" });
-  res.end(JSON.stringify({ error: "not found" }));
+void server.listen(env.RACE_SERVER_PORT).then((port) => {
+  console.log(JSON.stringify({ level: "info", msg: "race-server listening", port }));
 });
 
-server.listen(env.RACE_SERVER_PORT, () => {
-  console.log(
-    JSON.stringify({ level: "info", msg: "race-server listening", port: env.RACE_SERVER_PORT }),
-  );
-});
-
-/** Drain: stop accepting work, let live rooms finish, then exit (ADR 0012 deploy rule). */
 function shutdown(signal: string) {
-  state.draining = true;
   console.log(
-    JSON.stringify({ level: "info", msg: "race-server draining", signal, rooms: state.rooms }),
+    JSON.stringify({
+      level: "info",
+      msg: "race-server draining",
+      signal,
+      rooms: server.registry.count(),
+    }),
   );
-  server.close(() => process.exit(0));
+  void server.close().finally(() => process.exit(0));
   setTimeout(() => process.exit(0), 5_000).unref();
 }
 process.on("SIGTERM", () => shutdown("SIGTERM"));

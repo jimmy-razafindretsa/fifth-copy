@@ -24,6 +24,67 @@ test.describe("design system page", () => {
     await expectNoA11yViolations(page);
   });
 
+  for (const [scheme, bg, fg] of [
+    ["light", "rgb(241, 232, 214)", "rgb(42, 36, 32)"],
+    ["dark", "rgb(62, 57, 52)", "rgb(244, 236, 220)"],
+  ] as const) {
+    test(`paints the Fifth Copy ${scheme} ground and ink`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/design");
+      const body = await page.evaluate(() => {
+        const style = getComputedStyle(document.body);
+        return { bg: style.backgroundColor, fg: style.color };
+      });
+      expect(body).toEqual({ bg, fg });
+    });
+  }
+
+  test("shows every colour role with its name and the typing and device samples", async ({
+    page,
+  }) => {
+    await page.goto("/design");
+    const section = page.getByRole("region", { name: "Colour roles" });
+    await expect(section.getByRole("heading", { level: 2, name: "Colour roles" })).toBeVisible();
+    const roles = [
+      "bg",
+      "surface",
+      "surface-muted",
+      "fg",
+      "fg-muted",
+      "border",
+      "primary",
+      "primary-hover",
+      "primary-fg",
+      "pressed",
+      "danger",
+      "danger-surface",
+      "success",
+      "success-surface",
+      "focus",
+      "link",
+      "you",
+      "rival",
+      "reward",
+      "untyped",
+      "room",
+      "tape",
+      "typing-done",
+      "typing-next",
+      "typing-next-bg",
+      "typing-remaining",
+      "typing-error",
+      "device-phosphor",
+      "device-nixie",
+      "device-bezel",
+    ];
+    await expect(section.locator("[data-role]")).toHaveCount(roles.length);
+    for (const role of roles) {
+      await expect(section.locator(`[data-role="${role}"]`)).toHaveText(role);
+    }
+    await expect(section.locator('[data-sample="typing"]')).toHaveText("Type fast. Tupe first.");
+    await expect(section.locator('[data-sample="device"]')).toBeVisible();
+  });
+
   test("is keyboard navigable with visible focus", async ({ page }) => {
     await page.goto("/design");
     await page.keyboard.press("Tab");

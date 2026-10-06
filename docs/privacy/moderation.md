@@ -74,15 +74,13 @@ lobby (see [Teacher removal](#teacher-removal)) and forwards the username and lo
 1. Find the account by username (read only, after `scripts/db-guard.sh`).
 2. Decide: is the name against the conduct rules (`usernames` section)?
 3. Not against the rules: no change; tell the teacher why.
-4. Against the rules, first time: **rename** to a generated typist name (same generator as guests). Stats and history
-   stay; the student picks a new acceptable name at the next sign-in. Add the missed word or spelling to the filter
-   list in a normal PR.
+4. Against the rules, first time: **rename** with `scripts/rename-user.ts <username|id> --yes` (#528). It runs
+   `scripts/db-guard.sh`, replaces the name with a fresh generated typist name (same generator as guests; an account
+   with a username also signs in with the new name) and prints only the user id and the new name, for the moderation
+   log and the teacher. Stats and history stay. Add the missed word or spelling to the filter list in a normal PR.
 5. Serious (threat, hate, sexual, names a real person to hurt them) or repeated after a rename: **delete** the
    account with the operator deletion script (`scripts/delete-user.ts <username|id> --yes`, card #83, now part of
    #81), after telling the teacher or school.
-
-There is no rename script yet. Until one exists, the operator renames with a single audited database update after
-`scripts/db-guard.sh` and records it in the moderation log (follow-up card #528).
 
 ## Avatars
 

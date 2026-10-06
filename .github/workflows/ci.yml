@@ -64,7 +64,8 @@ jobs:
       - run: scripts/check.sh
       - name: Unit summary (DB suites ran, none skipped)
         if: always()
-        run: grep -E '^ *(Test Files|Tests) ' .cache/check/unit.log || true
+        # Vitest colours its output on Actions: strip ANSI codes before matching the totals.
+        run: sed -E 's/\x1b\[[0-9;]*m//g' .cache/check/unit.log | grep -E '^ *(Test Files|Tests) '
       - name: Race server bundles (docs/adr/0006)
         run: npm run build:race
       - name: Show failing logs

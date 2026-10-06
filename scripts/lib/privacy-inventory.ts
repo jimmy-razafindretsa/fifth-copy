@@ -10,7 +10,7 @@ const NON_PERSONAL_HEADING = /^##\s+Non-personal models\s*$/i;
 
 /** Model names declared in a .prisma file's text, in order. Enums, types and comments are ignored. */
 export function modelsFromSchema(text: string): string[] {
-  return [...text.matchAll(MODEL_BLOCK)].map((m) => m[1]);
+  return [...text.matchAll(MODEL_BLOCK)].map((m) => m[1] as string);
 }
 
 function cells(row: string): string[] {
@@ -18,7 +18,7 @@ function cells(row: string): string[] {
 }
 
 function tokens(text: string): string[] {
-  return [...text.matchAll(MODEL_TOKEN)].map((m) => m[1]);
+  return [...text.matchAll(MODEL_TOKEN)].map((m) => m[1] as string);
 }
 
 /**

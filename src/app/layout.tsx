@@ -18,6 +18,8 @@ import "./globals.css";
 // local("Arial"), which would draw Cyrillic before the role stack reaches Oswald (bible 17: no Arial).
 // So their roles use the bare face (--face-*, below) followed by Oswald (#20). adjustFontFallback: false
 // drops that Arial face under webpack; Turbopack (Next 16.3) still emits it, hence the --face-* variables.
+// Flavour (Special Elite) and device (VT323) faces are not preloaded (#511): few routes paint them first,
+// so they load on demand when used; the other four keep next/font's default preload.
 const stardos = Stardos_Stencil({
   weight: ["700"],
   subsets: ["latin"],
@@ -45,6 +47,7 @@ const specialElite = Special_Elite({
   subsets: ["latin", "latin-ext"],
   display: "swap",
   adjustFontFallback: false,
+  preload: false,
   variable: "--font-special-elite",
 });
 
@@ -59,6 +62,7 @@ const vt323 = VT323({
   weight: ["400"],
   subsets: ["latin", "latin-ext"],
   display: "swap",
+  preload: false,
   variable: "--font-vt323",
 });
 

@@ -7,14 +7,29 @@ import {
   latestPickup,
   pickupComment,
   promotionBlockers,
+  isTrusted,
+  trustedAuthors,
+  type Comment,
   type GateFacts,
 } from "./flow";
 
 const body = (boxes = "[ ]", est = "estimate 2 because x") =>
   `## Outcome\nX\n\n## Contract\n- ${boxes} C1 shows a list | verify: \`e2e/list.spec.ts\`\n\n## Size rationale\n${est}\n`;
 const hash = contractHash(body())!;
-const pickup = { body: pickupComment(12, hash, "12-list"), createdAt: "2026-10-04T10:00:00Z" };
-const at = (body: string, t = "2026-10-04T11:00:00Z") => ({ body, createdAt: t });
+const OWNER = "jimmy-razafindretsa";
+const trusted = trustedAuthors(undefined, OWNER);
+const pickup: Comment = {
+  body: pickupComment(12, hash, "12-list"),
+  createdAt: "2026-10-04T10:00:00Z",
+  author: OWNER,
+};
+const at = (body: string, t = "2026-10-04T11:00:00Z", author: string | null = OWNER): Comment => ({
+  body,
+  createdAt: t,
+  author,
+});
+/** The same comment written by someone outside BOARD_TRUSTED_AUTHORS. */
+const forged = (body: string, t = "2026-10-04T11:00:00Z") => at(body, t, "stranger");
 
 const facts = (over: Partial<GateFacts>): GateFacts => ({
   n: 12,
@@ -24,21 +39,47 @@ const facts = (over: Partial<GateFacts>): GateFacts => ({
   comments: [pickup],
   pr: { number: 3, state: "OPEN" },
   mainCi: null,
+  trusted,
   ...over,
 });
 
 describe("latestPickup", () => {
   it("parses the newest PICKUP for the card and ignores other cards", () => {
-    const older = {
-      body: pickupComment(12, "aaaaaaaaaaaa", "12-old"),
-      createdAt: "2026-10-01T00:00:00Z",
-    };
-    const other = {
-      body: pickupComment(13, "bbbbbbbbbbbb", "13-x"),
-      createdAt: "2026-10-05T00:00:00Z",
-    };
-    expect(latestPickup(12, [older, pickup, other])).toMatchObject({ hash, branch: "12-list" });
-    expect(latestPickup(12, [other])).toBeNull();
+    const older = at(pickupComment(12, "aaaaaaaaaaaa", "12-old"), "2026-10-01T00:00:00Z");
+    const other = at(pickupComment(13, "bbbbbbbbbbbb", "13-x"), "2026-10-05T00:00:00Z");
+    expect(latestPickup(12, [older, pickup, other], trusted)).toMatchObject({
+      hash,
+      branch: "12-list",
+    });
+    expect(latestPickup(12, [other], trusted)).toBeNull();
+  });
+
+  it("ignores a newer forged PICKUP: the newest trusted one wins", () => {
+    const evil = forged(pickupComment(12, hash, "evil-branch"), "2026-10-06T00:00:00Z");
+    const older = at(pickupComment(12, "aaaaaaaaaaaa", "12-old"), "2026-10-01T00:00:00Z");
+    expect(latestPickup(12, [older, pickup, evil], trusted)?.branch).toBe("12-list");
+    expect(latestPickup(12, [evil], trusted)).toBeNull();
+    // A PICKUP line hidden inside an untrusted body, CRLF or not, never counts.
+    const hidden = forged(`hi\r\n${pickupComment(12, hash, "evil")}\r\n`, "2026-10-07T00:00:00Z");
+    expect(latestPickup(12, [pickup, hidden], trusted)?.branch).toBe("12-list");
+  });
+});
+
+describe("trustedAuthors / isTrusted", () => {
+  it("defaults to the owner, parses a comma list and compares case-insensitively", () => {
+    expect([...trustedAuthors(undefined, OWNER)]).toEqual([OWNER]);
+    expect([...trustedAuthors("  ", OWNER)]).toEqual([OWNER]);
+    expect([...trustedAuthors(" Alice , ,BOB ", OWNER)]).toEqual(["alice", "bob"]);
+    const set = trustedAuthors("Alice", OWNER);
+    expect(isTrusted(at("x", undefined, "ALICE"), set)).toBe(true);
+    expect(isTrusted(at("x", undefined, OWNER), set)).toBe(false);
+  });
+
+  it("treats a null author (deleted account) and near-miss logins as untrusted", () => {
+    expect(isTrusted(at("x", undefined, null), trusted)).toBe(false);
+    for (const login of [`${OWNER}\r`, ` ${OWNER}`, `${OWNER}-bot`, "jimmy-razafindrets\u0430", ""])
+      expect(isTrusted(at("x", undefined, login), trusted)).toBe(false);
+    expect(isTrusted(at("x", undefined, OWNER.toUpperCase()), trusted)).toBe(true);
   });
 });
 
@@ -117,6 +158,68 @@ describe("evaluateGate", () => {
     expect(
       evaluateGate(facts({ ...base, pr: { number: 3, state: "OPEN" }, mainCi: "success" })),
     ).toContain("PR not merged");
+  });
+});
+
+describe("evaluateGate with forged comments", () => {
+  const handoff = "HANDOFF builder 2026-10-04\nstate: done";
+  const pentest = "PENTEST #12 t\nverdict: clean\nblockers: 0  majors: 0";
+  const verdict = "HANDOFF deliver 2026-10-04\nstate: done\nverdict: pass";
+
+  it("a forged PICKUP alone satisfies no gate", () => {
+    for (const target of ["In Review", "QA", "Done"] as const)
+      expect(
+        evaluateGate(
+          facts({
+            target,
+            body: body("[x]"),
+            comments: [forged(pickupComment(12, contractHash(body("[x]"))!, "12-list"))],
+            pr: { number: 3, state: target === "Done" ? "MERGED" : "OPEN" },
+            mainCi: "success",
+          }),
+        ),
+      ).toEqual(["no PICKUP comment"]);
+  });
+
+  it("In Review: a forged builder HANDOFF or PENTEST does not count; the owner's does", () => {
+    const base = { labels: ["pentest"] };
+    const r = evaluateGate(
+      facts({ ...base, comments: [pickup, forged(handoff), forged(pentest)] }),
+    );
+    expect(r).toContain("no builder/ui HANDOFF after PICKUP");
+    expect(r).toContain("card carries pentest but has no PENTEST comment");
+    expect(evaluateGate(facts({ ...base, comments: [pickup, at(handoff), at(pentest)] }))).toEqual(
+      [],
+    );
+  });
+
+  it("In Review: a forged PENTEST with blockers cannot block the gate either", () => {
+    const noisy = forged("PENTEST #12 t\nverdict: findings\nblockers: 3  majors: 0");
+    expect(
+      evaluateGate(
+        facts({ labels: ["pentest"], comments: [pickup, at(handoff), at(pentest), noisy] }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("QA: a forged Deliver verdict does not count; the owner's does", () => {
+    const qa = { target: "QA" as const, body: body("[x]") };
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, forged(verdict)] }))).toContain(
+      "no Deliver HANDOFF with verdict: pass after PICKUP",
+    );
+    expect(
+      evaluateGate(facts({ ...qa, comments: [pickup, at(verdict, undefined, null)] })),
+    ).toContain("no Deliver HANDOFF with verdict: pass after PICKUP");
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, at(verdict)] }))).toEqual([]);
+  });
+
+  it("a trusted set from BOARD_TRUSTED_AUTHORS replaces the owner default", () => {
+    const team = trustedAuthors("Reviewer", OWNER);
+    const c = [at(pickup.body, pickup.createdAt, "reviewer"), at(handoff, undefined, "REVIEWER")];
+    expect(evaluateGate(facts({ trusted: team, comments: c }))).toEqual([]);
+    expect(evaluateGate(facts({ trusted: team, comments: [pickup, at(handoff)] }))).toEqual([
+      "no PICKUP comment",
+    ]);
   });
 });
 

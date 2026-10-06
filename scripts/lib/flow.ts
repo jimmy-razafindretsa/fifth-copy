@@ -1,22 +1,27 @@
 /**
- * Pure logic for the parallel card flow (no network): PICKUP parsing, gate evaluation,
+ * Pure logic for the parallel card flow (no network): PICKUP parsing, gate evaluation (trusted comments only),
  * Backlog -> Ready promotion checks and pipeline tiers. See agents/PROTOCOL.md sections 5, 7 and 13.
  * Unit-tested in flow.test.ts; scripts/board.ts gathers the facts and applies the verdicts.
  */
 import { contractHash, parseContract } from "./kit";
 import { NEEDS_LABELS } from "./board";
+import { trustedOnly, type Comment } from "./trust";
 
-export type Comment = { body: string; createdAt: string };
+export { isTrusted, trustedAuthors, trustedOnly, type Comment } from "./trust";
 export type Pickup = { hash: string; branch: string; worktree: string; at: string };
 
 export const pickupComment = (n: number, hash: string, branch: string) =>
   `PICKUP #${n} contract_hash=${hash} branch=${branch} worktree=.worktrees/${n}`;
 
-/** The newest PICKUP comment for card n, or null. */
-export function latestPickup(n: number, comments: Comment[]): Pickup | null {
+/** The newest PICKUP comment for card n written by a trusted author (trust.ts), or null. */
+export function latestPickup(
+  n: number,
+  comments: readonly Comment[],
+  trusted: ReadonlySet<string>,
+): Pickup | null {
   const re = new RegExp(`^PICKUP #${n} contract_hash=(\\w+) branch=(\\S+) worktree=(\\S+)`, "m");
   let best: Pickup | null = null;
-  for (const c of comments) {
+  for (const c of trustedOnly(comments, trusted)) {
     const m = re.exec(c.body);
     if (m && (!best || c.createdAt > best.at))
       best = { hash: m[1]!, branch: m[2]!, worktree: m[3]!, at: c.createdAt };
@@ -24,7 +29,7 @@ export function latestPickup(n: number, comments: Comment[]): Pickup | null {
   return best;
 }
 
-const after = (comments: Comment[], since: string, re: RegExp) =>
+const after = (comments: readonly Comment[], since: string, re: RegExp) =>
   comments.some((c) => c.createdAt >= since && re.test(c.body));
 
 export const GATE_TARGETS = ["In Review", "QA", "Done"] as const;
@@ -36,6 +41,8 @@ export type GateFacts = {
   body: string;
   labels: string[];
   comments: Comment[];
+  /** Logins whose comments count (trust.ts); every other comment is ignored by every gate. */
+  trusted: ReadonlySet<string>;
   pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED" } | null;
   /** Conclusion of the CI run on main for the PR's merge commit (Done gate only). */
   mainCi: "success" | "failure" | "pending" | "missing" | null;
@@ -45,9 +52,11 @@ export type GateFacts = {
  * PROTOCOL section 5 preconditions that a script can check. Returns the failures (empty = pass).
  * `scripts/check.sh` green is checked by the caller (loop.sh runs it in the worktree before the In Review gate).
  */
-export function evaluateGate(f: GateFacts): string[] {
+export function evaluateGate(facts: GateFacts): string[] {
+  // Filter once: PICKUP, HANDOFF, PENTEST and Deliver verdicts count only from trusted authors.
+  const f = { ...facts, comments: trustedOnly(facts.comments, facts.trusted) };
   const out: string[] = [];
-  const pickup = latestPickup(f.n, f.comments);
+  const pickup = latestPickup(f.n, f.comments, f.trusted);
   if (!pickup) return ["no PICKUP comment"];
   const hash = contractHash(f.body);
   if (hash !== pickup.hash)

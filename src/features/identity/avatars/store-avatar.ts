@@ -14,6 +14,8 @@ const WEBP_QUALITY = 82;
 
 /** The square the user chose, in pixels of the image as displayed (after EXIF orientation). */
 export type Crop = { x: number; y: number; size: number };
+/** `"center"`: the largest centered square, resolved on the oriented image (OAuth import, #52). */
+export type CropRequest = Crop | "center";
 
 /** Outcome of moderation; mirrors the AvatarStatus values a fresh upload can take. */
 export type AvatarVerdict = "APPROVED" | "PENDING" | "REJECTED";
@@ -35,7 +37,7 @@ export type StoreAvatarOptions = {
 export async function storeAvatar(
   userId: string,
   bytes: Uint8Array,
-  crop: Crop,
+  request: CropRequest,
   options: StoreAvatarOptions = {},
 ): Promise<StoredAvatar> {
   assertUserId(userId);
@@ -60,6 +62,7 @@ export async function storeAvatar(
   if (!width || !height) throw new Undecodable();
   if (width * height > maxPixels) throw new TooLarge();
   if (width < MIN_AVATAR_PX || height < MIN_AVATAR_PX) throw new TooSmall();
+  const crop = request === "center" ? centerSquare(width, height) : request;
   assertCrop(crop, width, height);
 
   const files = await decode(() => render(input, decoder, crop));
@@ -77,6 +80,11 @@ export async function storeAvatar(
   }
   await store.delete(userId, { keep: version });
   return stored;
+}
+
+function centerSquare(width: number, height: number): Crop {
+  const size = Math.min(width, height);
+  return { x: Math.floor((width - size) / 2), y: Math.floor((height - size) / 2), size };
 }
 
 function assertCrop(crop: Crop, width: number, height: number): void {

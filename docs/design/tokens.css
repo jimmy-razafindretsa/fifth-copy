@@ -121,6 +121,9 @@
   /* breakpoints (mobile first): md = tablet 768px, xl = desktop 1280px */
   --breakpoint-md: 48rem;
   --breakpoint-xl: 80rem;
+
+  /* motion (#28): `transition-*` utilities default to the fast token (zeroed under reduce, below) */
+  --default-transition-duration: var(--motion-duration-fast);
 }
 
 /*
@@ -179,6 +182,50 @@
   --t-focus: var(--brand-night-ink);
   --t-link: var(--brand-night-ink);
   --t-untyped: var(--brand-night-muted);
+}
+
+/*
+ * Motion (#28, design bible 8): UI transitions and micro-motion read these, never a literal duration.
+ * One setting drives them: `prefers-reduced-motion` or `<html data-motion="reduce">` (the pair below
+ * mirrors the theme pair above) zeroes the four durations. The bible-8 keyframes (caret, marquee, stars,
+ * bob, pulse, slams) keep their listed seconds and stop in their own reduce blocks under both selectors.
+ * `--motion-duration-slam` is contracted for the stamp (#26) and is not bound to anything yet.
+ */
+:root {
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-slam: 180ms;
+  --motion-duration-slow: 600ms;
+  /* fcPop (bible 8) eases out; the slam overshoots like the lobby's fcSlam */
+  --motion-ease-out: ease-out;
+  --motion-ease-slam: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration-base: 0ms;
+    --motion-duration-slam: 0ms;
+    --motion-duration-slow: 0ms;
+  }
+}
+
+:root[data-motion="reduce"] {
+  --motion-duration-fast: 0ms;
+  --motion-duration-base: 0ms;
+  --motion-duration-slam: 0ms;
+  --motion-duration-slow: 0ms;
+}
+
+/* Tailwind's motion-reduce: variant follows the same two selectors (Spinner, Skeleton: bible 8 "disable
+   spins"). */
+@custom-variant motion-reduce {
+  @media (prefers-reduced-motion: reduce) {
+    @slot;
+  }
+  :root[data-motion="reduce"] & {
+    @slot;
+  }
 }
 
 /*

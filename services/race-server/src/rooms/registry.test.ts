@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { Redis } from "ioredis";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import type { Command, Redis } from "ioredis";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFakeClock } from "../clock";
 import { createRedis } from "../redis/client";
 import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
@@ -204,5 +204,85 @@ describe("room registry: count (C7)", () => {
     const { registry } = setup();
     for (let i = 0; i < 30; i++) await openRoom(registry);
     expect(registry.count()).toBe(30);
+  });
+});
+
+// Every command the client sends (direct or queued in a MULTI) goes through sendCommand, so the
+// spy sees the exact wire order. Commands between MULTI and EXEC form one transaction.
+function recordCommands() {
+  const sent: string[][] = [];
+  const original = redis.sendCommand.bind(redis);
+  vi.spyOn(redis, "sendCommand").mockImplementation((command: Command, ...rest) => {
+    sent.push([command.name.toLowerCase(), ...command.args.map(String)]);
+    return original(command, ...(rest as []));
+  });
+  return () => {
+    const groups: { atomic: boolean; commands: string[][] }[] = [];
+    let open: string[][] | null = null;
+    for (const cmd of sent) {
+      if (cmd[0] === "multi") open = [];
+      else if (cmd[0] === "exec" && open) {
+        groups.push({ atomic: true, commands: open });
+        open = null;
+      } else if (open) open.push(cmd);
+      else groups.push({ atomic: false, commands: [cmd] });
+    }
+    return groups;
+  };
+}
+
+describe("room registry: atomic writes (#517)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("never writes a room or members hash outside a MULTI that also sets both TTLs", async () => {
+    const { registry } = setup();
+    const lobbyId = lobby();
+    const hashKeys = [roomKey(lobbyId), membersKey(lobbyId)];
+    const groups = recordCommands();
+
+    await registry.open({ lobbyId, code: "ABCD", hostUserId: "host" });
+    await registry.open({ lobbyId, code: "WXYZ", hostUserId: "other" });
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    await registry.join(lobbyId, { userId: "b", name: "Bob" });
+    await registry.leave(lobbyId, "a");
+
+    const writes = ["hset", "hsetnx", "hmset"];
+    const writing = groups().filter(({ commands }) =>
+      commands.some(([name, key]) => writes.includes(name!) && hashKeys.includes(key!)),
+    );
+    // open twice + join twice: four write transactions, nothing written outside them.
+    expect(writing).toHaveLength(4);
+    for (const { atomic, commands } of writing) {
+      expect(atomic).toBe(true);
+      for (const key of hashKeys)
+        expect(commands).toContainEqual(["expire", key, String(ROOM_TTL_S)]);
+    }
+    for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(0);
+  });
+
+  it("open repairs a half-written room hash without overwriting its fields", async () => {
+    const { registry } = setup();
+    const lobbyId = lobby();
+    await redis.hset(roomKey(lobbyId), { openedAt: "1", code: "OLD1" });
+    expect(await registry.open({ lobbyId, code: "NEW2", hostUserId: "host" })).toEqual({
+      created: false,
+      room: { roomId: lobbyId, code: "OLD1", phase: "waiting" },
+    });
+    expect(await redis.hgetall(roomKey(lobbyId))).toEqual({
+      openedAt: "1",
+      code: "OLD1",
+      hostUserId: "host",
+      phase: "waiting",
+    });
+    expect(await redis.ttl(roomKey(lobbyId))).toBeGreaterThan(0);
+  });
+
+  it("surfaces a command error inside the transaction instead of ignoring it", async () => {
+    const { registry } = setup();
+    const lobbyId = lobby();
+    await redis.set(roomKey(lobbyId), "not a hash", "EX", 60);
+    await expect(registry.open({ lobbyId, code: "ABCD", hostUserId: "host" })).rejects.toThrow(
+      /WRONGTYPE/,
+    );
   });
 });

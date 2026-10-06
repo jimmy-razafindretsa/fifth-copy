@@ -1,4 +1,4 @@
-import { base64url } from "jose";
+import { base64url, SignJWT } from "jose";
 import { afterEach, describe, expect, it } from "vitest";
 import { PROTOCOL_VERSION, RACE_TOKEN_TTL_S } from "@fifth-copy/protocol";
 import { boot, connectError, SECRET, type Booted } from "../testing/harness";
@@ -60,6 +60,14 @@ describe("token rejections over the wire (C2)", () => {
         b.clock.advance((RACE_TOKEN_TTL_S + 1) * 1000);
         return token;
       },
+    ],
+    [
+      "signed with the right secret but without exp",
+      async (b: Booted, lobby: string) =>
+        new SignJWT({ v: PROTOCOL_VERSION, sub: "usr_noexp", name: "Ada", lobby, role: "player" })
+          .setProtectedHeader({ alg: "HS256" })
+          .setIssuedAt(Math.floor(b.clock.now() / 1000))
+          .sign(new TextEncoder().encode(SECRET)),
     ],
     [
       "tampered (lobby swapped)",

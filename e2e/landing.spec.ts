@@ -377,6 +377,15 @@ test.describe("landing page (#497)", () => {
     await expect(next).toHaveCSS("background-color", await role(page, "--color-typing-next-bg"));
   });
 
+  test("#28 reduced motion: a newly typed character does not pop in", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await ready(page);
+    await tapeInput(page).pressSequentially("T");
+    const typed = page.locator("[data-tape] [data-last='true']");
+    await expect(typed).toHaveCount(1);
+    await expect(typed).toHaveCSS("animation-name", "none");
+  });
+
   for (const scheme of ["light", "dark"] as const) {
     test(`C12 ${scheme}: accessible, no horizontal scroll, in both languages`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });

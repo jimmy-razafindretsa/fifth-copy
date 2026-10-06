@@ -448,9 +448,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* #28: .char[data-last] (fcPop) outranks .char; no global clamp hides it any more */
   .roomStamp,
   .liveDot,
   .char,
+  .char[data-last="true"],
   .tapeStamp {
     animation: none;
   }

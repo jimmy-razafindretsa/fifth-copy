@@ -389,6 +389,7 @@ Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis
 | `RACE_TOKEN_SECRET` | web, race-server | race tokens and internal HMAC |
 | `AUTH_SECRET`, `AUTH_GITHUB_ID/SECRET`, `AUTH_DISCORD_ID/SECRET` | web | Auth.js |
 | `NEXT_PUBLIC_APP_URL` | web | absolute links |
+| `AVATAR_DIR` | web | avatar files root (ADR 0014); default `.data/avatars`, `/data/avatars` volume in production |
 
 ### 11.3 Versioning
 Semver tags `vX.Y.Z` with a changelog (card #417); `PROTOCOL_VERSION` and `ENGINE_VERSION` are independent integers/semvers bumped by the card that changes them.

@@ -38,8 +38,21 @@ jobs:
         ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+      # DB-backed Vitest suites (describe.skipIf(!TEST_DATABASE_URL)) run here, not skipped (#501).
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       REDIS_URL: redis://localhost:6379/0
+      # The throwaway service DB is both the app DB and the test DB (docs/adr/0003).
+      DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+      TEST_DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,7 +60,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: scripts/test-db.sh
       - run: scripts/check.sh
+      - name: Unit summary (DB suites ran, none skipped)
+        if: always()
+        run: grep -E '^ *(Test Files|Tests) ' .cache/check/unit.log || true
       - name: Race server bundles (docs/adr/0006)
         run: npm run build:race
       - name: Show failing logs

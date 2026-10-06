@@ -1,7 +1,7 @@
 /**
  * Who the board tooling believes (pure, no network). The repository is public: anyone can comment on a card,
  * so gates, `pickup-branch` and agents act only on comments whose author is in the trusted set.
- * Set: env `BOARD_TRUSTED_AUTHORS` (comma-separated logins), default the repository owner from `BOARD_REPO`.
+ * Set: env `BOARD_TRUSTED_AUTHORS` (logins separated by commas or whitespace), default the repository owner from `BOARD_REPO`.
  * Logins compare case-insensitively (GitHub logins are case-insensitive); a null author (deleted account) is
  * never trusted. Used by flow.ts (gates, latestPickup) and board.ts (formatComment).
  */
@@ -11,7 +11,7 @@ export type Comment = { body: string; createdAt: string; author: string | null }
 /** The trusted logins, lowercased. An unset or blank env falls back to the owner. */
 export function trustedAuthors(env: string | undefined, owner: string): ReadonlySet<string> {
   const list = (env ?? "")
-    .split(",")
+    .split(/[,\s]+/)
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   return new Set(list.length ? list : [owner.trim().toLowerCase()].filter(Boolean));

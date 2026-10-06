@@ -113,11 +113,17 @@ jobs:
           if [ "$code" = "2" ]; then cat drift.txt; echo "Schema has changes with no migration. Run prisma migrate dev locally."; exit 1; fi
           exit $code
 
-  e2e:
-    # Playwright, functional + a11y
-    name: e2e
+  e2e-shard:
+    # Playwright, functional + a11y, split into shards (#532): one runner ran ~250 tests in ~17 min and
+    # hit the 20-min timeout. Each shard has its own services and build; `e2e` below is the required check.
+    name: e2e (${{ matrix.shard }}/${{ matrix.shardTotal }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        shardTotal: [4]
     services:
       postgres:
         image: postgres:17-alpine
@@ -158,13 +164,29 @@ jobs:
       - run: scripts/test-db.sh
       - run: npm run build
       - run: npm run build:race
-      - run: npx playwright test
+      - run: npx playwright test --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report
           retention-days: 7
+
+  e2e:
+    # The one required e2e check (.github/branch-protection.json, scripts/merge.sh): fails unless every
+    # shard succeeded, including when a shard failed, timed out, was cancelled or skipped.
+    name: e2e
+    needs: e2e-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All e2e shards passed
+        env:
+          SHARDS: ${{ needs.e2e-shard.result }}
+        run: |
+          echo "e2e shards: $SHARDS"
+          test "$SHARDS" = "success"
 
   visual:
     # pinned Playwright image

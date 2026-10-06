@@ -82,7 +82,7 @@ lobby (see [Teacher removal](#teacher-removal)) and forwards the username and lo
    #81), after telling the teacher or school.
 
 There is no rename script yet. Until one exists, the operator renames with a single audited database update after
-`scripts/db-guard.sh` and records it in the moderation log (follow-up card filed by #91).
+`scripts/db-guard.sh` and records it in the moderation log (follow-up card #528).
 
 ## Avatars
 

@@ -70,6 +70,10 @@ this is not enough, the fix is a new card, not a change to this file alone.
 
 ## Parent information letter
 
+**When to send it.** Send the letter only once the deletion in settings (#81), the 12-month guest deletion (#86) and
+the 30-day keystroke deletion (#315) are delivered, or once the privacy page `/privacy` (#76) says they are live. The
+letter describes them as facts; until then, it would promise something the app does not do yet.
+
 The teacher copies the letter, fills in the brackets and removes this line.
 
 ### Lettre aux parents (français)
@@ -86,8 +90,9 @@ The teacher copies the letter, fills in the brackets and removes this line.
 > 30 jours. Si votre enfant crée un compte, il choisit un nom d'utilisateur et un mot de passe.
 >
 > **Ce que l'application ne demande jamais.** Ni courriel, ni téléphone, ni date de naissance, ni nom réel, ni nom de
-> l'école. Il n'y a pas de clavardage. Une photo de profil est facultative et seuls les joueurs de la même partie la
-> voient.
+> l'école. Il n'y a pas de clavardage. Une photo de profil est facultative. Seuls les joueurs de la même partie la
+> voient, ainsi que la personne responsable, uniquement pour vérifier qu'elle respecte les règles quand elle est
+> retenue pour vérification ou signalée.
 >
 > **Combien de temps.** Un profil invité qui n'est plus utilisé pendant 12 mois est effacé. Votre enfant peut effacer
 > son compte en tout temps dans les paramètres. Le détail est sur la page `/privacy` de l'application.
@@ -119,7 +124,8 @@ The teacher copies the letter, fills in the brackets and removes this line.
 > account, they choose a username and a password.
 >
 > **What the app never asks for.** No email, phone number, birth date, real name or school name. There is no chat. A
-> profile picture is optional and only the players in the same game can see it.
+> profile picture is optional. Only the players in the same game can see it, and the person in charge, only to check
+> it against the rules when it is held for review or reported.
 >
 > **How long.** A guest profile that is not used for 12 months is deleted. Your child can delete their account at any
 > time in the settings. The details are on the app's `/privacy` page.

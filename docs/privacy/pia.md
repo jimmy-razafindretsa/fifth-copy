@@ -68,7 +68,7 @@ flowchart LR
 | Race results | race-server -> web | Results and compressed keystrokes per player | HMAC with timestamp and nonce, idempotency keys | ADR 0008 |
 | Storage | web, worker -> Postgres | Every row of the [inventory](inventory.md) | Only the web app and worker write; private compose network | ADR 0002, ADR 0008, ADR 0011 |
 | Live state | race-server -> Redis | Room members, progress, invites, rate-limit counters | Private network, every key has a TTL | ADR 0008 |
-| Avatar files | web -> avatar volume | Uploaded or imported pictures | Re-encoded, metadata stripped, served only to lobby members | ADR 0014 |
+| Avatar files | web -> avatar volume | Uploaded or imported pictures | Re-encoded, metadata stripped, served only to lobby members (and seen by the operator when held or reported, to check it) | ADR 0014 |
 | Logs | Caddy, web, race-server -> Docker logs | IP addresses, request paths, ids | PII redaction in app logs, 30-day rotation | ADR 0012, #420 |
 | Backups | Postgres, avatar volume -> bucket | A full copy of the database and pictures | Off the server, 14-day rotation; encryption at rest stated by #81 | ADR 0012, #403, [backup-retention.md](backup-retention.md) |
 | GitHub sign-in | Browser <-> GitHub, web <-> GitHub | Provider id, login, profile picture URL; no email requested or stored | OAuth, picture fetched only from the provider's CDN | ADR 0009, #49, #539 |
@@ -87,7 +87,7 @@ a picture, or exposure of who they are.
 |---|---|---|---|---|---|
 | 1 | Re-identification of guests: classmates know who sits at which desk, so a "random" typist name and its results point to a known student | High (in class) | Low | Generated names, no real names or contact details asked, guests deleted after the retention period; whether results appear on a public leaderboard is still open (#445) | ADR 0009, #86 |
 | 2 | Avatar misuse: a picture of another student, sexual or violent content, or a picture showing a school or address | Medium | High | Pictures re-encoded, held hidden while checked, refused or reviewed; teacher removal; moderation procedure | ADR 0014, card #64 (avatar check), [moderation.md](moderation.md) |
-| 3 | Avatar copying: lobby members screenshot a student's picture | Medium | Medium | Pictures optional, visible only to lobby members, own face discouraged in the conduct rules | ADR 0014, #91 |
+| 3 | Avatar copying: lobby members screenshot a student's picture | Medium | Medium | Pictures optional, visible only to lobby members and, when held for review or reported, to the operator only to check them against the rules; own face discouraged in the conduct rules | ADR 0014, #91 |
 | 4 | Hidden data in pictures (location, camera, date in the file) | Medium | Medium | Every picture is re-encoded and its metadata stripped before storage | ADR 0014 |
 | 5 | OAuth data: the provider sends more than needed, or a student under 13 signs in with GitHub or Discord | Medium | Medium | Only id, login and picture kept, no email scope; under-13 notice on the buttons; picture goes through the same check | ADR 0009, #49, #539 |
 | 6 | Hosting location: the server or the backup bucket is outside Québec (s. 17) | Medium | Medium | Provider not chosen yet; the stack runs on any Docker host so a Québec or Canadian host stays possible; s. 17 assessment before launch | ADR 0012, #445 |

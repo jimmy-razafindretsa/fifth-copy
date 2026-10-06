@@ -3,8 +3,9 @@
 How long Fifth Copy keeps each kind of personal information, and what enforces it. Card #71 (epic #29).
 Requirements: R152, R164. Index: [README](README.md). What each item contains: [inventory.md](inventory.md).
 
-This file is the only place where retention periods are written. The privacy page (#76) and the guest purge job
-(#86) read their numbers from it; when a period changes here, they change in the same PR.
+This file is the only place where retention periods are decided. Other files quote them (the privacy page #76, the
+guest purge job #86, the parent letter in consent.md, pia.md, backup-retention.md); when a period changes here, they
+change in the same PR.
 
 Law 25 asks that personal information be destroyed (or anonymised) once the purpose it was collected for is
 achieved (s. 23). The periods below are the project's reading of "no longer than needed" for a typing game used by
@@ -30,7 +31,7 @@ They are the project's choices, not legal advice.
 | Job records | Until the job ends and the account is deleted; exact period set by the card that creates `JobRun` | ADR 0011, #81 deletion step |
 | Backups | 14 days, then overwritten; a deleted account disappears from backups within 14 days of its deletion | ADR 0012, #403, [backup-retention.md](backup-retention.md) (#81) |
 | Moderation log entries | 12 months after the decision, or when the account is deleted, whichever comes first | The operator, by hand ([moderation.md](moderation.md)) |
-| Requests to the person in charge | 12 months after the answer (proposed by #71, to confirm in the review) | The person in charge, by hand ([responsible.md](responsible.md)) |
+| Requests to the person in charge | 12 months after the answer. Proposed, not decided: the person in charge (Jimmy Razafindretsa) confirms it before the classroom pilot (#432) | The person in charge, by hand ([responsible.md](responsible.md)) |
 
 ## What "deleted" means
 

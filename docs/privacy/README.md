@@ -12,7 +12,7 @@ project sees risk. They do not say the project is compliant, and they are not le
 | Document | What it answers | Owner card |
 |---|---|---|
 | [inventory.md](inventory.md) | What personal information exists, why, where it lives and what deletes it | #71 |
-| [retention.md](retention.md) | How long each kind of information is kept (the only place with periods) | #71 |
+| [retention.md](retention.md) | How long each kind of information is kept (the only place where periods are decided; other files quote them and change in the same PR) | #71 |
 | [consent.md](consent.md) | Who agrees to what, the school's role, the parent letter (the only place with the consent position) | #71 |
 | [pia.md](pia.md) | Privacy impact assessment: data flows, risks for minors, mitigations, residual risk | #71 |
 | [responsible.md](responsible.md) | Who is in charge of personal information and how to reach them | #75 |
@@ -28,8 +28,8 @@ The privacy page that students and parents read is `/privacy` (#76); it takes it
   the same PR. `npx tsx scripts/privacy-inventory-check.ts` (step `privacy` of `scripts/check.sh`) fails otherwise.
 - A new kind of personal information, a new third party or a new place where data is stored also updates
   [pia.md](pia.md) in the same PR.
-- A changed period is changed in [retention.md](retention.md) only, then in the code that enforces it and on the
-  privacy page.
+- A period is decided in [retention.md](retention.md); the same PR updates the code that enforces it and every file
+  that quotes it (privacy page, parent letter, PIA, backup document).
 
 ## Review
 

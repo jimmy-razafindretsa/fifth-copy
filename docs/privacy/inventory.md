@@ -5,12 +5,13 @@ and what removes it. Card #71 (epic #29). Requirements: R1, R152, R164. Index: [
 
 Users are students aged 12 to 17. Most of them play as guests: a random typist name and typing statistics tied to a
 cookie, nothing that names them. Fifth Copy never asks for an email address, a real name, a birth date or a school
-(ADR 0009). Avatars are seen only by the members of a lobby (ADR 0014).
+(ADR 0009). Avatars are seen only by the members of a lobby (ADR 0014), and by the operator when a picture is held
+for review or reported, only to check it against the rules ([moderation.md](moderation.md)).
 
 How to read this table:
 - **Necessity** answers Law 25 s. 5: collect only what the stated purpose needs. "Needed" means the feature cannot
   work without it; "Optional" means the student chooses to give it.
-- **Retention** links to [retention.md](retention.md), the only place where periods are written.
+- **Retention** links to [retention.md](retention.md), the only place where periods are decided.
 - **Where** names the schema file and `Model.field` (field lists live only in `prisma/schema/*.prisma`), a code path,
   or "outside the app".
 - **Status**: "in schema" exists today; "planned #n" is designed in ARCHITECTURE 9.2 and arrives with that card.

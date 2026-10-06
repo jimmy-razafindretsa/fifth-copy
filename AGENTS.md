@@ -97,6 +97,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - New dependencies need a one-line justification in the PR.
 - Playwright: Next.js renders a hidden route announcer with `role="alert"`. Filter `getByRole("alert")` by text.
 - `public/3d/*.html` is generated from the bible's reference 3D pages by `scripts/embeds.ts` (`npm run embeds`, drift-checked in unit tests); never edit it by hand. Landing e2e: gate interactions on hydration (`ready(page)` in `e2e/landing.spec.ts`).
+- Animations: UI transitions and micro-motion read `--motion-*` tokens (tokens.css), never literal durations; bible-8 keyframes keep their listed durations; every animation stops under `prefers-reduced-motion` and `[data-motion="reduce"]`, never `!important`.
 
 ## Architecture map
 One VPS runs three processes plus Postgres and Redis behind Caddy: **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: rollups, purges). Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.

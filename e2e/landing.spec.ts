@@ -368,13 +368,22 @@ test.describe("landing page (#497)", () => {
     const animated = await page.evaluate(() =>
       [...document.querySelectorAll("main *")]
         .map((el) => getComputedStyle(el))
-        // globals.css clamps every duration to 0.01ms (Chrome reports it as "1e-05s")
+        // every keyframe stops in its own reduce block (#28: no global duration clamp any more)
         .filter((s) => s.animationName !== "none" && parseFloat(s.animationDuration) > 0.001)
         .map((s) => s.animationName),
     );
     expect(animated).toEqual([]);
     const next = page.locator("[data-tape] [data-state='next']");
     await expect(next).toHaveCSS("background-color", await role(page, "--color-typing-next-bg"));
+  });
+
+  test("#28 reduced motion: a newly typed character does not pop in", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await ready(page);
+    await tapeInput(page).pressSequentially("T");
+    const typed = page.locator("[data-tape] [data-last='true']");
+    await expect(typed).toHaveCount(1);
+    await expect(typed).toHaveCSS("animation-name", "none");
   });
 
   for (const scheme of ["light", "dark"] as const) {

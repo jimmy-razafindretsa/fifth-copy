@@ -196,6 +196,7 @@ describe("storeAvatar", () => {
               width: 300,
               height: 300,
               channels: 3,
+              background: RED,
               noise: { type: "gaussian", mean: 128, sigma: 30 },
             },
           })

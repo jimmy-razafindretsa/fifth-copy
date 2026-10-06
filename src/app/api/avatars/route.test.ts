@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { FsAvatarStore } from "@/features/identity/avatars/fs-store";
 import { GUEST_COOKIE, signGuestCookie } from "@/server/auth/guest-cookie";
 
 // C8: GET /api/avatars/[userId] through the real viewer resolution (signed guest cookie), the
@@ -45,6 +44,7 @@ vi.mock("@/server/db", () => ({
 }));
 
 const { GET } = await import("./[userId]/route");
+const { avatarStore } = await import("@/features/identity");
 
 const row = (id: string, extra: Partial<Row> = {}): Row => ({
   id,
@@ -67,9 +67,11 @@ describe("GET /api/avatars/[userId]", () => {
   beforeEach(async () => {
     state.jar.clear();
     state.rows = [row("alice"), row("bob"), row("pending", { avatarStatus: "PENDING" })];
-    const store = new FsAvatarStore(state.dir);
     for (const id of ["alice", "bob", "pending"]) {
-      await store.put(id, VERSION, { 256: Buffer.from(`${id}-256`), 64: Buffer.from(`${id}-64`) });
+      await avatarStore.put(id, VERSION, {
+        256: Buffer.from(`${id}-256`),
+        64: Buffer.from(`${id}-64`),
+      });
     }
   });
   afterAll(() => rmSync(state.dir, { recursive: true, force: true }));

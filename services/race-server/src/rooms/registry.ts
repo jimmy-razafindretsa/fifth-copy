@@ -1,4 +1,4 @@
-import type { Redis } from "ioredis";
+import type { ChainableCommander, Redis } from "ioredis";
 import { z } from "zod";
 import type { Member } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
@@ -47,13 +47,19 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     return next;
   }
 
-  /** Relative EXPIRE (never from the injected clock: a skewed clock must not expire a live room). */
-  function touch(lobbyId: string) {
-    return redis
-      .multi()
+  /**
+   * Sends `tx` with both room TTLs appended, as one MULTI/EXEC: a write never lands without its
+   * TTL (ADR 0008, #517). Relative EXPIRE (never from the injected clock: a skewed clock must not
+   * expire a live room). ioredis reports per-command errors as [err, value] pairs: rethrow them.
+   */
+  async function withTtl(lobbyId: string, tx: ChainableCommander) {
+    const results = await tx
       .expire(roomKey(lobbyId), ROOM_TTL_S)
       .expire(membersKey(lobbyId), ROOM_TTL_S)
       .exec();
+    if (!results) throw new Error(`room ${lobbyId}: transaction aborted`);
+    for (const [err] of results) if (err) throw err;
+    return results.map(([, value]) => value);
   }
 
   async function readRoom(lobbyId: string) {
@@ -86,9 +92,17 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     open: ({ lobbyId, code, hostUserId }) =>
       serial(lobbyId, async () => {
         const key = roomKey(lobbyId);
-        const created = (await redis.hsetnx(key, "openedAt", String(clock.now()))) === 1;
-        if (created) await redis.hset(key, { code, hostUserId, phase: "waiting" });
-        await touch(lobbyId);
+        // HSETNX per field: only a new room gets its fields, a half-written one is completed.
+        const [openedAt] = await withTtl(
+          lobbyId,
+          redis
+            .multi()
+            .hsetnx(key, "openedAt", String(clock.now()))
+            .hsetnx(key, "code", code)
+            .hsetnx(key, "hostUserId", hostUserId)
+            .hsetnx(key, "phase", "waiting"),
+        );
+        const created = openedAt === 1;
         const room = await readRoom(lobbyId);
         return { created, room: { roomId: lobbyId, code: room?.code ?? code, phase: "waiting" } };
       }),
@@ -100,8 +114,10 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const seats = await readSeats(lobbyId);
         const desk = seats.get(userId)?.desk ?? nextDesk([...seats.values()].map((s) => s.desk));
         seats.set(userId, { desk, name });
-        await redis.hset(membersKey(lobbyId), userId, JSON.stringify({ desk, name }));
-        await touch(lobbyId);
+        await withTtl(
+          lobbyId,
+          redis.multi().hset(membersKey(lobbyId), userId, JSON.stringify({ desk, name })),
+        );
         return {
           ok: true,
           desk,
@@ -121,7 +137,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
           openRooms.delete(lobbyId);
           return { members: [], closed: true };
         }
-        await touch(lobbyId);
+        await withTtl(lobbyId, redis.multi());
         return { members: toMembers(seats, room.hostUserId), closed: false };
       }),
 

@@ -23,7 +23,7 @@ export const FR: readonly Entry[] = [
     bâtard bâtards baiseur baiseuse suceur suceuse
     violer violeur pédo inceste zoophile sodomite sodomie sodomiser
     clito vagin pénis anus anal sperme porno nichons nibards
-    christ criss crisse calvaire sacrament sacrement viarge
+    christ criss crisse caliss calvaire sacrament sacrement viarge
     ostie osti hostie esti estie astie sti
     marde plotte plottes noune nounes guidoune guidounes crosseur crosseuse crosser
   `),
@@ -39,6 +39,6 @@ export const FR: readonly Entry[] = [
     mange_de_la_marde enfant_de_chienne
     bougnoule bougnoules chinetoque chinetoques sale_arabe sale_noir sale_juif nazillon
     tabarnak tabarnac tabarnaque tabarnack tabernak
-    câlisse câlice kâlisse caliss ciboire cibouère
+    câlisse câlice kâlisse ciboire cibouère
   `),
 ];

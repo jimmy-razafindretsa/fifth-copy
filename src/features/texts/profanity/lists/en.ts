@@ -19,7 +19,7 @@ export const EN: readonly Entry[] = [
     penis erection boner cum semen sperm anal anus porn porno nude nudes sex xxx
     horny orgy fap dilf queef felch fisting rimming
     rape raped raping rapist rapey pedo paedo
-    nazi heil kkk fag fags homo dyke tranny coon spic spick chink gook kike kyke
+    nazi hitler heil milf kkk fag fags homo dyke tranny coon spic spick chink gook kike kyke
     beaner paki retard retarded tard spaz moron kys
     damn goddamn crap crappy piss pissed pisser douche turd bugger minge numbnuts
   `),
@@ -30,9 +30,9 @@ export const EN: readonly Entry[] = [
     bitch sonofabitch bastard whore wanker bollocks
     dildo jizz cumshot cumslut blowjob handjob rimjob deepthroat gangbang bukkake
     masturbate masturbation jerkoff jackoff nutsack ballsack smegma upskirt
-    vagina clitoris scrotum testicle orgasm ejaculate milf pornhub shemale
+    vagina clitoris scrotum testicle orgasm ejaculate pornhub shemale
     pedophile paedophile molester incest bestiality necrophilia
     nigger nigga niggas sandnigger faggot wetback raghead towelhead
-    hitler siegheil whitepower killyourself douchebag scumbag
+    siegheil whitepower killyourself douchebag scumbag
   `),
 ];

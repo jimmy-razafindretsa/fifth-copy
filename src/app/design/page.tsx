@@ -49,7 +49,7 @@ function TypeRole({ name, children }: { name: string; children: ReactNode }) {
       <dt>
         <code className="font-typing text-sm text-fg-muted">{name}</code>
       </dt>
-      <dd className="min-w-0 break-words">{children}</dd>
+      <dd className="min-w-0">{children}</dd>
     </div>
   );
 }
@@ -120,8 +120,9 @@ export default function DesignPage() {
         </h2>
         <dl className="flex flex-col gap-4">
           <TypeRole name="type-display-lg">
+            {/* PAPERWORK at 3.5rem is wider than a 375px phone: a soft hyphen breaks it there only */}
             <p data-type-role="display-lg" className="type-display-lg">
-              HERO OF PAPERWORK
+              HERO OF PAPER{"\u00AD"}WORK
             </p>
           </TypeRole>
           <TypeRole name="type-display-md">

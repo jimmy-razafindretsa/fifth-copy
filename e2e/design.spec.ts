@@ -144,7 +144,8 @@ test.describe("design system page", () => {
       ["lg", 56],
     ] as const) {
       const sample = section.locator(`[data-type-role="display-${size}"]`);
-      await expect(sample).toHaveText("HERO OF PAPERWORK");
+      // display-lg carries a soft hyphen (U+00AD) so PAPERWORK breaks on phones only
+      expect((await sample.textContent())?.replace(/\u00AD/g, "").trim()).toBe("HERO OF PAPERWORK");
       const t = await typeOf(sample);
       expect(t.family, size).toMatch(FACE.display);
       expect(t.weight).toBe("700");

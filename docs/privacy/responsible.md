@@ -15,7 +15,7 @@ its website. This file is the source for what the privacy page (#80, epic #29) p
 
 ## Delegation
 
-None. Fifth Copy is run by Jimmy Razafindretsa as its operator, so he holds the highest authority over it and is
+None. Fifth Copy is run by Jimmy Razafindretsa as its operator, who holds the highest authority over it and is
 in charge by default under s. 3.1. If the project is later run by an organisation (for example the cégep), the
 person with the highest authority there is in charge unless they delegate in writing, and this file changes.
 
@@ -34,7 +34,7 @@ give the app an email or any other new personal information.
 ## Publication
 
 - Where: the privacy page `/privacy` (#76 / #80), French first then English, in a "Person in charge" section
-  showing the name, role, the student route (teacher or school office) and the Aegis Corp contact address.
+  showing the name, role, the student route (teacher or school office) and the contact address.
 - The page reads its values from this file's table; when this file changes, the page changes in the same PR.
 
 ## Before launch (open items)

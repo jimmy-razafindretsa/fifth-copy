@@ -1,6 +1,16 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Alert, Button, Card, EmptyState, Field, Skeleton, Spinner } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  MotionSafe,
+  Skeleton,
+  Spinner,
+} from "@/components/ui";
+import demo from "./motion-demo.module.css";
 
 export const metadata: Metadata = { title: "Design system" };
 
@@ -244,6 +254,26 @@ export default function DesignPage() {
           </Alert>
           <Alert tone="success" title="Saved" />
           <Alert title="Heads up">Informational message.</Alert>
+        </div>
+      </section>
+
+      <section aria-labelledby="motion" className="flex flex-col gap-3">
+        <h2 id="motion" className="type-display-md">
+          Motion
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          Durations come from the motion tokens. Under reduced motion, from the system or from
+          data-motion on the page, they drop to zero and the box stands still.
+        </p>
+        <div className="flex flex-wrap items-center gap-6">
+          <span
+            aria-hidden
+            data-motion-demo
+            className={`inline-block size-12 rounded-sm border-2 border-fg bg-surface ${demo.pulse}`}
+          />
+          <p data-motion-safe className="type-label">
+            <MotionSafe fallback="Motion reduced">Motion on</MotionSafe>
+          </p>
         </div>
       </section>
     </main>

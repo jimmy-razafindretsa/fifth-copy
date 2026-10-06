@@ -16,7 +16,7 @@ export function Spinner({ size = "md", label = "Loading", className }: SpinnerPr
       aria-label={label || undefined}
       aria-hidden={label ? undefined : true}
       className={cn(
-        "inline-block animate-spin rounded-full border-current border-t-transparent",
+        "inline-block animate-spin motion-reduce:animate-none rounded-full border-current border-t-transparent",
         sizes[size],
         className,
       )}

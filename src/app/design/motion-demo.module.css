@@ -1,0 +1,14 @@
+/* #28 C6: the /design motion demo. Transform only (no opacity or colour change), so the loop models the
+   flash rule (components.md "Motion"); the duration is the token, zeroed under reduce. */
+.pulse {
+  animation: demoPulse var(--motion-duration-base) var(--motion-ease-out) infinite alternate;
+}
+
+@keyframes demoPulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}

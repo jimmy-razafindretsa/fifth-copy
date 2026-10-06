@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { isBenignEmbedAbort, isBenignFlightAbort, watchPage, type FailedRequest } from "./fixtures";
+import {
+  describeFailure,
+  isBenignEmbedAbort,
+  isBenignFlightAbort,
+  watchPage,
+  type FailedRequest,
+} from "./fixtures";
+import type { Request } from "@playwright/test";
 
 // #519, #107: the failed-request guard exempts only an aborted Flight fetch (server-action POST or
 // RSC GET) answered 2xx text/x-component.
@@ -126,5 +133,60 @@ test.describe("failed-request guard (#519)", () => {
         `requestfailed: POST ${origin}/action net::ERR_ABORTED`,
         `requestfailed: GET ${origin}/rsc net::ERR_ABORTED`,
       ]);
+  });
+
+  // #545: a request failing as the page closes must not reject after the test ended
+  test("describes a failed request read after its page closed, header reads fall back to null", async ({
+    page,
+  }) => {
+    const origin = "http://guard.test";
+    await page.route(`${origin}/`, (route) =>
+      route.fulfill({ contentType: "text/html", body: "<!doctype html><title>guard</title>" }),
+    );
+    await page.route(`${origin}/data`, (route) => route.abort("aborted"));
+    await page.goto(`${origin}/`);
+    const failed = new Promise<Request>((resolve) => page.once("requestfailed", resolve));
+    await page.evaluate(() => fetch("/data", { headers: { rsc: "1" } }).catch(() => {}));
+    const request = await failed;
+    await page.close();
+    await expect(describeFailure(request)).resolves.toEqual({
+      errorText: "net::ERR_ABORTED",
+      path: "/data",
+      method: "GET",
+      nextAction: null,
+      rsc: null,
+      status: null,
+      contentType: null,
+    });
+  });
+
+  test("a request failing while the page closes settles without a stray rejection and is still flagged", async ({
+    page,
+  }) => {
+    const origin = "http://guard.test";
+    await page.route(`${origin}/`, (route) =>
+      route.fulfill({ contentType: "text/html", body: "<!doctype html><title>guard</title>" }),
+    );
+    await page.route(`${origin}/data`, (route) => route.abort("aborted"));
+    await page.goto(`${origin}/`);
+    const { settle } = watchPage(page);
+    const stray: unknown[] = [];
+    const onRejection = (e: unknown) => stray.push(e);
+    process.on("unhandledRejection", onRejection);
+    try {
+      const failed = page.waitForEvent("requestfailed");
+      await page.evaluate(() => {
+        void fetch("/data").catch(() => {});
+      });
+      await failed;
+      await page.close();
+      await expect(settle()).resolves.toEqual([
+        `requestfailed: GET ${origin}/data net::ERR_ABORTED`,
+      ]);
+      await new Promise((r) => setTimeout(r, 100));
+      expect(stray).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
   });
 });

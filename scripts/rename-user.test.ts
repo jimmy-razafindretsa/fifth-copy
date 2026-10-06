@@ -8,7 +8,6 @@ import { normalizeUsername } from "../src/features/identity/schema";
 import { main, type RenameDeps } from "./rename-user";
 
 // ADR 0003: DB-backed tests target the test database, not the app env.
-// eslint-disable-next-line no-restricted-properties
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const ROOT = path.resolve(__dirname, "..");
 const TSX = path.join(ROOT, "node_modules/.bin/tsx");
@@ -57,7 +56,7 @@ describe("rename-user CLI guards", () => {
   it("the real command refuses without --yes and prints nothing on stdout", () => {
     const r = spawnSync(TSX, ["scripts/rename-user.ts", "Sparrow-482"], {
       cwd: ROOT,
-      env: { PATH: process.env.PATH ?? "", DATABASE_URL: REMOTE },
+      env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", DATABASE_URL: REMOTE },
       encoding: "utf8",
     });
     expect(r.status).not.toBe(0);
@@ -68,7 +67,12 @@ describe("rename-user CLI guards", () => {
   it("the real command runs scripts/db-guard.sh and refuses a remote database", () => {
     const r = spawnSync(TSX, ["scripts/rename-user.ts", "Sparrow-482", "--yes"], {
       cwd: ROOT,
-      env: { PATH: process.env.PATH ?? "", DATABASE_URL: REMOTE, DB_GUARD_ALLOWED_HOSTS: "" },
+      env: {
+        NODE_ENV: "test",
+        PATH: process.env.PATH ?? "",
+        DATABASE_URL: REMOTE,
+        DB_GUARD_ALLOWED_HOSTS: "",
+      },
       encoding: "utf8",
     });
     expect(r.status).not.toBe(0);

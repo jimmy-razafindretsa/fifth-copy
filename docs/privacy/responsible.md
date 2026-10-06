@@ -10,19 +10,14 @@ its website. This file is the source for what the privacy page (#80, epic #29) p
 | Field | Value |
 |---|---|
 | Name | Jimmy Razafindretsa |
-| Role | Developer, Aegis Corp |
+| Role | Student at Cégep de Sorel-Tracy, developer and operator of Fifth Copy |
 | Function | Person in charge of the protection of personal information for Fifth Copy |
 
 ## Delegation
 
-Jimmy Razafindretsa is a developer at Aegis Corp, not (as far as this file records) the person with the highest
-authority there. Under s. 3.1 the function stays with that person unless it is **delegated in writing**.
-
-- Status: **delegation letter pending**. Before launch (classroom pilot, #432), Aegis Corp's highest authority
-  signs a short written delegation naming Jimmy Razafindretsa as person in charge for Fifth Copy.
-- The signed letter is kept outside the repository (it is a corporate record); this file records only that it
-  exists and its date: `Delegation signed: <date, to fill when signed>`.
-- If the delegation is not signed, the privacy page names Aegis Corp's highest authority instead.
+None. Fifth Copy is run by Jimmy Razafindretsa as its operator, so he holds the highest authority over it and is
+in charge by default under s. 3.1. If the project is later run by an organisation (for example the cégep), the
+person with the highest authority there is in charge unless they delegate in writing, and this file changes.
 
 ## Contact channel
 
@@ -32,8 +27,8 @@ give the app an email or any other new personal information.
 - **Students**: the in-app `/privacy` section tells them to go through their teacher or their school office.
   The teacher or school forwards the request (access, correction, deletion, complaint) to the person in charge.
 - **Teachers, schools and parents**: the `/privacy` page publishes the person in charge's name, role and a
-  professional contact address of Aegis Corp (`<Aegis Corp contact address, to fill before launch>`). Publishing
-  the enterprise's own address collects nothing from users and is what s. 3.1 asks for.
+  contact address for the person in charge (`<contact address, to fill before launch>`). Publishing the
+  operator's own address collects nothing from users and is what s. 3.1 asks for.
 - Requests are answered within 30 days (Law 25, s. 32); the deletion procedure itself is #81.
 
 ## Publication
@@ -44,7 +39,7 @@ give the app an email or any other new personal information.
 
 ## Before launch (open items)
 
-1. Signed written delegation from Aegis Corp's highest authority (see Delegation).
-2. Aegis Corp contact address filled in above.
-3. A lawyer or Aegis Corp's legal contact reviews the Law 25 file (#71) and the privacy page (#76) before the
-   pilot. This file applies s. 3.1 as written; it is not legal advice.
+1. Contact address filled in above.
+2. Before the classroom pilot (#432), check with Cégep de Sorel-Tracy whether the pilot falls under the cégep's own
+   privacy officer (public-sector access act), and have a qualified person review the Law 25 file (#71) and the
+   privacy page (#76). This file applies s. 3.1 as written; it is not legal advice.

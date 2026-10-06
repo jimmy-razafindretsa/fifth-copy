@@ -1,7 +1,8 @@
 // Curated guest-name words (design bible section 2): common nouns and animals,
 // no proper names, one word each (no space, no hyphen). Each list starts with
-// the 8 bible animals. Reviewed by hand in #32; the automated profanity check
-// follows #42. Avoid words that read as slang or insults in either language.
+// the 8 bible animals. Reviewed by hand in #32; every word must also pass
+// `isClean` from the texts feature (words.test.ts, #42). Avoid words that read
+// as slang or insults in either language.
 export const EN_WORDS = [
   // bible animals
   "Sparrow",

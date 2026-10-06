@@ -1,7 +1,7 @@
 ---
 id: "0014"
 title: Avatars are re-encoded WebP files on a private volume, written only by the web app and served only through /api/avatars/[userId]
-status: proposed
+status: accepted
 category: data
 scope: ["src/features/identity/avatars/**", "src/app/api/avatars/**", "deploy/**"]
 supersedes: []

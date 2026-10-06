@@ -462,3 +462,18 @@
     color: var(--color-typing-next);
   }
 }
+
+/* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
+:root[data-motion="reduce"] .roomStamp,
+:root[data-motion="reduce"] .liveDot,
+:root[data-motion="reduce"] .char,
+:root[data-motion="reduce"] .tapeStamp {
+  animation: none;
+}
+
+/* a solid red cell instead of the blinking caret (bible 8) */
+:root[data-motion="reduce"] .char[data-state="next"] {
+  animation: none;
+  background: var(--color-typing-next-bg);
+  color: var(--color-typing-next);
+}

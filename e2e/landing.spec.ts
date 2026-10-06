@@ -368,7 +368,7 @@ test.describe("landing page (#497)", () => {
     const animated = await page.evaluate(() =>
       [...document.querySelectorAll("main *")]
         .map((el) => getComputedStyle(el))
-        // globals.css clamps every duration to 0.01ms (Chrome reports it as "1e-05s")
+        // every keyframe stops in its own reduce block (#28: no global duration clamp any more)
         .filter((s) => s.animationName !== "none" && parseFloat(s.animationDuration) > 0.001)
         .map((s) => s.animationName),
     );

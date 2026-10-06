@@ -13,6 +13,8 @@ const server = z.object({
   /** Signs race tokens and the internal HMAC API (ADR 0006, 0009). Shared with the race server. */
   RACE_TOKEN_SECRET: z.string().min(32),
   RACE_SERVER_INTERNAL_URL: z.url().default("http://localhost:4000"),
+  /** Avatar files root (ADR 0014). Production mounts a volume at /data/avatars; locally a gitignored dir. */
+  AVATAR_DIR: z.string().min(1).default(".data/avatars"),
 });
 
 const client = z.object({
@@ -29,6 +31,7 @@ function parse() {
     AUTH_SECRET: process.env.AUTH_SECRET,
     RACE_TOKEN_SECRET: process.env.RACE_TOKEN_SECRET,
     RACE_SERVER_INTERNAL_URL: process.env.RACE_SERVER_INTERNAL_URL,
+    AVATAR_DIR: process.env.AVATAR_DIR,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_RACE_SERVER_URL: process.env.NEXT_PUBLIC_RACE_SERVER_URL,
   });

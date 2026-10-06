@@ -218,6 +218,21 @@
       "supersededBy": [],
       "rule": "WebGL code is confined to src/features/race-3d (client-only, next/dynamic with ssr:false, imported only by the race route after the HUD mounts); the telex strip, typed sheet, keyboard, counters, race card, stamps and plaques are HTML overlays driven by the same race store; the scene reads the store and never owns state; bundle, fps and draw-call budgets are checked in CI.",
       "file": "docs/adr/0013-frontend-performance-and-3d.md"
+    },
+    {
+      "id": "0014",
+      "title": "Avatars are re-encoded WebP files on a private volume, written only by the web app and served only through /api/avatars/[userId]",
+      "status": "accepted",
+      "category": "data",
+      "scope": [
+        "src/features/identity/avatars/**",
+        "src/app/api/avatars/**",
+        "deploy/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Avatar bytes enter only through storeAvatar (magic-byte sniff, sharp decode with limitInputPixels and pages 1, square crop, WebP 256 and 64 px, metadata stripped) and leave only through /api/avatars/[userId] after an authorization check; files live under AVATAR_DIR behind the AvatarStore interface, keyed <userId>/<version>-<size>.webp from validated ids, never from user input; Postgres keeps avatarKey and avatarStatus as the record.",
+      "file": "docs/adr/0014-avatar-storage.md"
     }
   ]
 }

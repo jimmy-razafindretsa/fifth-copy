@@ -100,3 +100,59 @@ describe("CI unit step runs the DB-backed suites (card #501)", () => {
     expect(summary).toMatchObject({ if: "always()" });
   });
 });
+
+// Card #532: the e2e suite runs as a Playwright --shard matrix so each shard fits the time budget,
+// while `e2e` stays ONE required check (.github/branch-protection.json, scripts/merge.sh): an
+// aggregating job that needs every shard and passes only when all of them succeeded.
+describe("CI e2e is sharded behind one required check (card #532)", () => {
+  type MatrixJob = Job & {
+    name?: string;
+    needs?: string | string[];
+    if?: string;
+    "timeout-minutes"?: number;
+    strategy?: { "fail-fast"?: boolean; matrix?: { shard?: number[]; shardTotal?: number[] } };
+  };
+  const all = workflow.jobs as Record<string, MatrixJob>;
+  const required = (
+    JSON.parse(readFileSync(path.join(root, ".github/branch-protection.json"), "utf8")) as {
+      required_status_checks: { contexts: string[] };
+    }
+  ).required_status_checks.contexts;
+  const shardIds = Object.keys(all).filter((id) => all[id]?.strategy?.matrix?.shard);
+  const shardId = shardIds[0] ?? "";
+  const shard = all[shardId];
+  const gate = all.e2e;
+
+  it("C2 every required check is a non-matrix job named exactly like it, e2e included", () => {
+    expect(required).toContain("e2e");
+    for (const context of required) {
+      const job = Object.entries(all).find(([id, j]) => (j.name ?? id) === context)?.[1];
+      expect(job, context).toBeDefined();
+      expect(job?.strategy?.matrix, context).toBeUndefined();
+    }
+  });
+
+  it("C2 the e2e check needs the shard job, always runs, and fails unless every shard succeeded", () => {
+    expect(shardIds).toHaveLength(1);
+    expect(gate?.name ?? "e2e").toBe("e2e");
+    expect([gate?.needs].flat()).toContain(shardId);
+    expect(gate?.if).toBe("always()");
+    const run = runs(gate ?? { steps: [] }).join("\n");
+    expect(run).toMatch(/= *"?success"?/);
+    expect(JSON.stringify(gate?.steps)).toContain(`needs.${shardId}.result`);
+  });
+
+  it("C1 the shard matrix covers 1..N exactly and each shard runs its slice of the full suite", () => {
+    const total = shard?.strategy?.matrix?.shardTotal ?? [];
+    expect(total).toHaveLength(1);
+    const n = total[0] ?? 0;
+    expect(n).toBeGreaterThan(1);
+    expect(shard?.strategy?.matrix?.shard).toEqual(Array.from({ length: n }, (_, i) => i + 1));
+    expect(shard?.strategy?.["fail-fast"]).toBe(false);
+    const pw = runs(shard ?? { steps: [] }).filter((r) => r.includes("playwright test"));
+    expect(pw).toEqual([
+      "npx playwright test --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}",
+    ]);
+    expect(shard?.["timeout-minutes"]).toBeLessThanOrEqual(15);
+  });
+});

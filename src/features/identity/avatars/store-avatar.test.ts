@@ -39,7 +39,7 @@ describe("storeAvatar", () => {
   let clock: number;
   const now = () => clock++;
   const files = async () => (await readdir(path.join(root, "user1")).catch(() => [])).sort();
-  const store1 = (bytes: Buffer, crop: Crop = CROP, extra = {}) =>
+  const store1 = (bytes: Buffer, crop: Crop | "center" = CROP, extra = {}) =>
     storeAvatar("user1", bytes, crop, { store, now, ...extra });
 
   beforeEach(async () => {
@@ -116,6 +116,40 @@ describe("storeAvatar", () => {
 
     // In bounds of the stored (unrotated) pixels but outside the displayed image.
     await expect(store1(oriented, { x: 100, y: 0, size: 100 })).rejects.toBeInstanceOf(BadCrop);
+  });
+
+  describe('crop "center" (OAuth import, #52)', () => {
+    it("takes the largest centered square of a wide image", async () => {
+      // 300x100: red | blue halves; the centered 100 px square straddles both (x 100..200).
+      const wide = await (await halves(300, 100)).png().toBuffer();
+      const { version } = await store1(wide, "center");
+      const color = await meanColor((await store.get("user1", version, 256))!);
+      expect(color.r).toBeGreaterThan(100);
+      expect(color.b).toBeGreaterThan(100);
+    });
+
+    it("works on odd sizes and keeps the square inside the image", async () => {
+      await expect(store1(await encode("png", 101, 67), "center")).resolves.toMatchObject({
+        status: "APPROVED",
+      });
+      await expect(store1(await encode("jpeg", 65, 199), "center")).resolves.toMatchObject({
+        status: "APPROVED",
+      });
+    });
+
+    it("is resolved on the EXIF-oriented image", async () => {
+      // Stored 200x100 red|blue with orientation 6: displayed 100x200, red top, blue bottom;
+      // the centered square straddles both.
+      const rotated = await (await halves(200, 100)).jpeg().withExif({ IFD0: {} }).toBuffer();
+      const oriented = await sharp(rotated).withMetadata({ orientation: 6 }).jpeg().toBuffer();
+      const { version } = await store1(oriented, "center");
+      const meta = await sharp((await store.get("user1", version, 256))!).metadata();
+      expect(meta).toMatchObject({ width: 256, height: 256 });
+    });
+
+    it("still rejects an image under 64 px", async () => {
+      await expect(store1(await encode("png", 63, 300), "center")).rejects.toBeInstanceOf(TooSmall);
+    });
   });
 
   it("C4: exactly 64x64 is accepted", async () => {

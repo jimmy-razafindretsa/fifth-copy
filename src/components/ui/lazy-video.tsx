@@ -27,8 +27,8 @@ const useHydrated = () =>
  * A decorative, muted, looping video (the landing live feed, bible 7.8). The server renders the poster
  * only; the sources are written once the video comes near the viewport (same margin as `EmbedFrame`),
  * so nothing downloads before. It plays while on screen and pauses off screen. Under reduced motion
- * (#28) it never plays and shows the poster. `data-feed`: idle (server), armed (hydrated), near
- * (sources written).
+ * (#28) it has no source at all: it never plays and shows the poster. `data-feed`: idle (server),
+ * armed (hydrated), near (within the margin; sources written unless motion is reduced).
  */
 export function LazyVideo({ poster, sources, className }: Props) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -36,25 +36,29 @@ export function LazyVideo({ poster, sources, className }: Props) {
   const near = useNearViewport(ref);
   const visible = useInViewport(ref);
   const reduced = useReducedMotion();
-  const key = sources.map((s) => s.src).join(" ");
+  const live = near && !reduced;
+  const key = live ? sources.map((s) => s.src).join(" ") : "";
 
-  // a new clip (or a switch to reduced motion): reload, which also puts the poster back
+  // new sources, or none (reduced motion): reload, which also puts the poster back
+  const loaded = useRef("");
   useEffect(() => {
     const video = ref.current;
-    if (video && near) video.load();
-  }, [near, key, reduced]);
+    if (!video || loaded.current === key) return;
+    loaded.current = key;
+    video.load();
+  }, [key]);
 
   useEffect(() => {
     const video = ref.current;
-    if (!video || !near) return;
-    if (visible && !reduced) {
+    if (!video || !live) return;
+    if (visible) {
       // React does not render the `muted` attribute; autoplay policies read the property
       video.muted = true;
       video.play().catch(() => {});
-    } else {
+    } else if (!video.paused) {
       video.pause();
     }
-  }, [near, visible, reduced, key]);
+  }, [live, visible, key]);
 
   return (
     <video
@@ -64,11 +68,11 @@ export function LazyVideo({ poster, sources, className }: Props) {
       muted
       loop
       playsInline
-      preload={near && !reduced ? "auto" : "none"}
+      preload={live ? "auto" : "none"}
       aria-hidden="true"
       data-feed={!hydrated ? "idle" : near ? "near" : "armed"}
     >
-      {near && sources.map(({ src, type }) => <source key={src} src={src} type={type} />)}
+      {live && sources.map(({ src, type }) => <source key={src} src={src} type={type} />)}
     </video>
   );
 }

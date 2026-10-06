@@ -530,7 +530,8 @@ test.describe("landing live feed video (#552)", () => {
     await video.scrollIntoViewIfNeeded();
     await expect.poll(async () => (await media(page)).paused, AFTER_ACTION).toBe(false);
     await page.locator("footer").scrollIntoViewIfNeeded();
-    await expect.poll(async () => (await media(page)).paused).toBe(true);
+    // scrolling mounts the clerk and medal embeds: give the observer room on a loaded machine
+    await expect.poll(async () => (await media(page)).paused, AFTER_ACTION).toBe(true);
     await video.scrollIntoViewIfNeeded();
     await expect.poll(async () => (await media(page)).paused, AFTER_ACTION).toBe(false);
   });

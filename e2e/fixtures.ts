@@ -40,6 +40,19 @@ export function isBenignEmbedAbort(f: FailedRequest): boolean {
 }
 
 /**
+ * The live feed's recorded loops (#552): a `<video>` fetches its clip in Range requests and cancels them
+ * itself (it reads ahead, then pauses off screen, swaps view or reloads to the poster), which Chromium
+ * reports as `net::ERR_ABORTED`. Only GETs of `/media/live-feed/` are tolerated.
+ */
+export function isBenignMediaAbort(f: FailedRequest): boolean {
+  return (
+    f.errorText === "net::ERR_ABORTED" &&
+    f.method === "GET" &&
+    f.path.startsWith("/media/live-feed/")
+  );
+}
+
+/**
  * Never rejects (#545): a request can fail while its page, context or browser closes (teardown), and
  * reading its headers then throws after the test ended. Every remote read falls back to `null`; the
  * failure itself (`errorText`, url, method) is local, so a genuine failure is still reported.
@@ -95,7 +108,7 @@ export function watchPage(page: Page): { errors: string[]; settle: () => Promise
   page.on("requestfailed", (r) =>
     pending.push(
       describeFailure(r).then((f) => {
-        if (!isBenignFlightAbort(f) && !isBenignEmbedAbort(f)) {
+        if (!isBenignFlightAbort(f) && !isBenignEmbedAbort(f) && !isBenignMediaAbort(f)) {
           errors.push(`requestfailed: ${r.method()} ${r.url()} ${f.errorText ?? ""}`.trimEnd());
         }
       }),

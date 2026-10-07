@@ -100,6 +100,8 @@ describe("create action (C4)", () => {
   it("maps an unavailable race server and a throw to error lines", async () => {
     vi.mocked(createLobby).mockResolvedValue({ ok: false, error: "race-server-unavailable" });
     expect(await makeCreateAction(vi.fn())()).toEqual({ error: "race-server-unavailable" });
+    vi.mocked(createLobby).mockResolvedValue({ ok: false, error: "invalid-settings" });
+    expect(await makeCreateAction(vi.fn())()).toEqual({ error: "generic" });
     vi.mocked(createLobby).mockRejectedValue(new Error("boom"));
     expect(await makeCreateAction(vi.fn())()).toEqual({ error: "generic" });
     const html = renderToStaticMarkup(

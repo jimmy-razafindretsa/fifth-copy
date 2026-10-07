@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Command, Redis } from "ioredis";
+import { DEFAULT_RACE_SETTINGS, type RaceSettings } from "@fifth-copy/protocol";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFakeClock } from "../clock";
 import { createRedis } from "../redis/client";
@@ -36,6 +37,9 @@ function setup() {
   return { clock, registry: createRoomRegistry({ redis, clock }) };
 }
 
+const settings = DEFAULT_RACE_SETTINGS;
+const custom: RaceSettings = { ...settings, timerS: 120, bots: [{ level: "major" }] };
+
 function lobby() {
   const id = `lob_${randomUUID()}`;
   opened.push(id);
@@ -43,7 +47,7 @@ function lobby() {
 }
 
 async function openRoom(registry: RoomRegistry, lobbyId = lobby(), hostUserId = "host") {
-  await registry.open({ lobbyId, code: "ABCD", hostUserId });
+  await registry.open({ lobbyId, code: "ABCD", hostUserId, settings });
   return lobbyId;
 }
 
@@ -55,21 +59,60 @@ describe("room registry: open (C1)", () => {
   it("creates the room once; a second open returns created: false and the same room", async () => {
     const { registry } = setup();
     const lobbyId = lobby();
-    const first = await registry.open({ lobbyId, code: "ABCD", hostUserId: "host" });
+    const first = await registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings });
     expect(first).toEqual({
       created: true,
-      room: { roomId: lobbyId, code: "ABCD", phase: "waiting" },
+      room: { roomId: lobbyId, code: "ABCD", phase: "waiting", settings },
     });
-    const second = await registry.open({ lobbyId, code: "WXYZ", hostUserId: "other" });
+    const second = await registry.open({
+      lobbyId,
+      code: "WXYZ",
+      hostUserId: "other",
+      settings: custom,
+    });
     expect(second).toEqual({ created: false, room: first.room });
+    expect(second.room.settings).toEqual(settings);
+    expect(await registry.settings(lobbyId)).toEqual(settings);
   });
 
   it("never resets members", async () => {
     const { registry } = setup();
     const lobbyId = await openRoom(registry);
     await registry.join(lobbyId, { userId: "a", name: "Ada" });
-    await registry.open({ lobbyId, code: "ABCD", hostUserId: "host" });
+    await registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings });
     expect(await registry.members(lobbyId)).toEqual([{ desk: 1, name: "Ada", isHost: false }]);
+  });
+});
+
+describe("room registry: settings (#568 C4)", () => {
+  it("stores the settings with the room TTL and reads them back parsed", async () => {
+    const { registry } = setup();
+    const lobbyId = lobby();
+    const { room } = await registry.open({
+      lobbyId,
+      code: "ABCD",
+      hostUserId: "host",
+      settings: custom,
+    });
+    expect(room.settings).toEqual(custom);
+    expect(await registry.settings(lobbyId)).toEqual(custom);
+    expect(await redis.ttl(roomKey(lobbyId))).toBeGreaterThan(0);
+    const joined = await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    expect(joined.ok && joined.room.settings).toEqual(custom);
+  });
+
+  it("returns null for an unknown room", async () => {
+    const { registry } = setup();
+    expect(await registry.settings(lobby())).toBeNull();
+  });
+
+  it("rejects a corrupt settings field instead of returning a default", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await redis.hset(roomKey(lobbyId), "settings", '{"wordCount":5}');
+    await expect(registry.settings(lobbyId)).rejects.toThrow();
+    await redis.hset(roomKey(lobbyId), "settings", "not json");
+    await expect(registry.settings(lobbyId)).rejects.toThrow();
   });
 });
 
@@ -96,7 +139,7 @@ describe("room registry: join (C2, C3)", () => {
         { desk: 1, name: "Ada", isHost: false },
         { desk: 2, name: "Bob", isHost: false },
       ],
-      room: { roomId: lobbyId, code: "ABCD", phase: "waiting" },
+      room: { roomId: lobbyId, code: "ABCD", phase: "waiting", settings },
     });
   });
 
@@ -240,8 +283,8 @@ describe("room registry: atomic writes (#517)", () => {
     const hashKeys = [roomKey(lobbyId), membersKey(lobbyId)];
     const groups = recordCommands();
 
-    await registry.open({ lobbyId, code: "ABCD", hostUserId: "host" });
-    await registry.open({ lobbyId, code: "WXYZ", hostUserId: "other" });
+    await registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings });
+    await registry.open({ lobbyId, code: "WXYZ", hostUserId: "other", settings: custom });
     await registry.join(lobbyId, { userId: "a", name: "Ada" });
     await registry.join(lobbyId, { userId: "b", name: "Bob" });
     await registry.leave(lobbyId, "a");
@@ -258,21 +301,29 @@ describe("room registry: atomic writes (#517)", () => {
         expect(commands).toContainEqual(["expire", key, String(ROOM_TTL_S)]);
     }
     for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(0);
+    // #568: the settings field is written in the open transaction, next to both TTLs.
+    expect(writing[0]!.commands).toContainEqual([
+      "hsetnx",
+      roomKey(lobbyId),
+      "settings",
+      JSON.stringify(settings),
+    ]);
   });
 
   it("open repairs a half-written room hash without overwriting its fields", async () => {
     const { registry } = setup();
     const lobbyId = lobby();
     await redis.hset(roomKey(lobbyId), { openedAt: "1", code: "OLD1" });
-    expect(await registry.open({ lobbyId, code: "NEW2", hostUserId: "host" })).toEqual({
+    expect(await registry.open({ lobbyId, code: "NEW2", hostUserId: "host", settings })).toEqual({
       created: false,
-      room: { roomId: lobbyId, code: "OLD1", phase: "waiting" },
+      room: { roomId: lobbyId, code: "OLD1", phase: "waiting", settings },
     });
     expect(await redis.hgetall(roomKey(lobbyId))).toEqual({
       openedAt: "1",
       code: "OLD1",
       hostUserId: "host",
       phase: "waiting",
+      settings: JSON.stringify(settings),
     });
     expect(await redis.ttl(roomKey(lobbyId))).toBeGreaterThan(0);
   });
@@ -281,8 +332,8 @@ describe("room registry: atomic writes (#517)", () => {
     const { registry } = setup();
     const lobbyId = lobby();
     await redis.set(roomKey(lobbyId), "not a hash", "EX", 60);
-    await expect(registry.open({ lobbyId, code: "ABCD", hostUserId: "host" })).rejects.toThrow(
-      /WRONGTYPE/,
-    );
+    await expect(
+      registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings }),
+    ).rejects.toThrow(/WRONGTYPE/);
   });
 });

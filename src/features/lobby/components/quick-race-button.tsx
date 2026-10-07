@@ -18,8 +18,10 @@ export type QuickRaceState = { error: EntryError | null };
 export function makeQuickRaceAction(navigate: (href: string) => void) {
   return async function quickRace(): Promise<QuickRaceState> {
     try {
-      const result = await createLobby({ type: "PUBLIC" });
-      if (!result.ok) return { error: result.error };
+      const result = await createLobby({ settings: { lobbyType: "public" } });
+      // invalid-settings cannot come from this fixed call: no catalog line of its own.
+      if (!result.ok)
+        return { error: result.error === "invalid-settings" ? "generic" : result.error };
       navigate(`/lobby/${result.code}`);
       return { error: null };
     } catch {

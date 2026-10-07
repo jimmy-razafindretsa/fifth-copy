@@ -1,6 +1,11 @@
 import "dotenv/config";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { openRoomRequestSchema, PROTOCOL_VERSION, ROOM_CODE_RE } from "@fifth-copy/protocol";
+import {
+  DEFAULT_RACE_SETTINGS,
+  openRoomRequestSchema,
+  PROTOCOL_VERSION,
+  ROOM_CODE_RE,
+} from "@fifth-copy/protocol";
 import { createPrismaClient } from "@/server/db-client";
 import {
   startRaceServerStub,
@@ -99,8 +104,43 @@ describe("createLobby", () => {
         lobbyId: lobby!.id,
         code: lobby!.code,
         hostUserId: fake.users[0]!.id,
+        settings: DEFAULT_RACE_SETTINGS,
+      });
+      expect(lobby).toMatchObject({ type: "PRIVATE" });
+    });
+
+    it("#568 C3: merges partial settings over the defaults, derives a PUBLIC row and sends them", async () => {
+      const result = await createLobby({
+        settings: { lobbyType: "public", wordCount: 120, bots: [{ level: "clerk" }] },
+      });
+      const [lobby] = fake.lobbies;
+      expect(result).toEqual({ ok: true, code: lobby!.code });
+      expect(lobby).toMatchObject({ type: "PUBLIC" });
+      expect(JSON.parse(stub.requests[0]!.body).settings).toEqual({
+        ...DEFAULT_RACE_SETTINGS,
+        lobbyType: "public",
+        wordCount: 120,
+        bots: [{ level: "clerk" }],
       });
     });
+
+    it.each([
+      ["wordCount 5", { wordCount: 5 }],
+      ["an unknown key", { theme: "dark" }],
+      ["a non-object", "public"],
+    ])(
+      "#568 C3: invalid settings (%s) return invalid-settings with no guest, no lobby, no internal call",
+      async (_label, settings) => {
+        await expect(createLobby({ settings })).resolves.toEqual({
+          ok: false,
+          error: "invalid-settings",
+        });
+        expect(fake.db.user.create).not.toHaveBeenCalled();
+        expect(fake.db.lobby.create).not.toHaveBeenCalled();
+        expect(stub.requests).toHaveLength(0);
+        expect(state.jar.size).toBe(0);
+      },
+    );
 
     it("C4: a 500 deletes the lobby row and returns race-server-unavailable", async () => {
       stub.reply(() => ({ status: 500 }));
@@ -192,6 +232,21 @@ describe("createLobby", () => {
           lobbyId: lobbies[0]!.id,
           code: lobbies[0]!.code,
           hostUserId,
+          settings: DEFAULT_RACE_SETTINGS,
+        });
+      });
+
+      it("#568 C3: public settings create a PUBLIC row and send the merged settings", async () => {
+        const result = await createLobby({ settings: { lobbyType: "public", wordCount: 120 } });
+        const hostUserId = await guestId();
+        const lobbies = await db.lobby.findMany({ where: { hostUserId } });
+        expect(lobbies).toHaveLength(1);
+        expect(lobbies[0]).toMatchObject({ type: "PUBLIC", status: "WAITING" });
+        expect(result).toEqual({ ok: true, code: lobbies[0]!.code });
+        expect(openRoomRequestSchema.parse(JSON.parse(stub.requests[0]!.body)).settings).toEqual({
+          ...DEFAULT_RACE_SETTINGS,
+          lobbyType: "public",
+          wordCount: 120,
         });
       });
 

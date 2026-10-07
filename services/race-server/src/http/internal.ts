@@ -39,8 +39,8 @@ export function internalRoutes({ registry }: Pick<Deps, "registry">): InternalRo
       async handle(body) {
         const parsed = openRoomRequestSchema.safeParse(body);
         if (!parsed.success) return error(400, "bad-body");
-        const { lobbyId, code, hostUserId } = parsed.data;
-        const { created, room } = await registry.open({ lobbyId, code, hostUserId });
+        const { lobbyId, code, hostUserId, settings } = parsed.data;
+        const { created, room } = await registry.open({ lobbyId, code, hostUserId, settings });
         const res: OpenRoomResponse = {
           v: PROTOCOL_VERSION,
           roomId: room.roomId,

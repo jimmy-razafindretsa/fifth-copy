@@ -20,7 +20,7 @@ describe("quick race action", () => {
     vi.mocked(createLobby).mockResolvedValue({ ok: true, code: "KGB-4821" as never });
     const navigate = vi.fn();
     expect(await makeQuickRaceAction(navigate)()).toEqual({ error: null });
-    expect(createLobby).toHaveBeenCalledWith({ type: "PUBLIC" });
+    expect(createLobby).toHaveBeenCalledWith({ settings: { lobbyType: "public" } });
     expect(navigate).toHaveBeenCalledWith("/lobby/KGB-4821");
   });
 
@@ -28,6 +28,13 @@ describe("quick race action", () => {
     vi.mocked(createLobby).mockResolvedValue({ ok: false, error: "race-server-unavailable" });
     const navigate = vi.fn();
     expect(await makeQuickRaceAction(navigate)()).toEqual({ error: "race-server-unavailable" });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("maps invalid-settings to the generic line (no catalog string for it)", async () => {
+    vi.mocked(createLobby).mockResolvedValue({ ok: false, error: "invalid-settings" });
+    const navigate = vi.fn();
+    expect(await makeQuickRaceAction(navigate)()).toEqual({ error: "generic" });
     expect(navigate).not.toHaveBeenCalled();
   });
 

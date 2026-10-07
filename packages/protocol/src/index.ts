@@ -8,3 +8,4 @@ export * from "./room-code";
 export * from "./race-token";
 export * from "./socket";
 export * from "./internal";
+export * from "./settings";

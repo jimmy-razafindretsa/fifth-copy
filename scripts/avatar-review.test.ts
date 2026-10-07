@@ -14,6 +14,8 @@ const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const ROOT = path.resolve(__dirname, "..");
 const TSX = path.join(ROOT, "node_modules/.bin/tsx");
 const REMOTE = "postgresql://u:hunter2@db.prod.example.com:5432/app";
+/** The real-command cases start tsx in a child process: slow on a busy machine. */
+const SPAWN_TIMEOUT_MS = 30_000;
 
 type Io = { out: string[]; err: string[] };
 function deps(overrides: Partial<ReviewDeps> = {}): ReviewDeps & Io {
@@ -64,33 +66,41 @@ describe("avatar-review CLI guards", () => {
     expect(d.out).toEqual([]);
   });
 
-  it("the real command runs scripts/db-guard.sh and refuses a remote database", () => {
-    const r = spawnSync(TSX, ["scripts/avatar-review.ts", "user1", "reject"], {
-      cwd: ROOT,
-      env: {
-        NODE_ENV: "test",
-        PATH: process.env.PATH ?? "",
-        DATABASE_URL: REMOTE,
-        DB_GUARD_ALLOWED_HOSTS: "",
-      },
-      encoding: "utf8",
-    });
-    expect(r.status).not.toBe(0);
-    expect(r.stdout).toBe("");
-    expect(r.stderr).toMatch(/db-guard: REFUSED/);
-    expect(r.stdout + r.stderr).not.toContain("hunter2");
-  });
+  it(
+    "the real command runs scripts/db-guard.sh and refuses a remote database",
+    () => {
+      const r = spawnSync(TSX, ["scripts/avatar-review.ts", "user1", "reject"], {
+        cwd: ROOT,
+        env: {
+          NODE_ENV: "test",
+          PATH: process.env.PATH ?? "",
+          DATABASE_URL: REMOTE,
+          DB_GUARD_ALLOWED_HOSTS: "",
+        },
+        encoding: "utf8",
+      });
+      expect(r.status).not.toBe(0);
+      expect(r.stdout).toBe("");
+      expect(r.stderr).toMatch(/db-guard: REFUSED/);
+      expect(r.stdout + r.stderr).not.toContain("hunter2");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 
-  it("the real command prints usage and nothing on stdout without a decision", () => {
-    const r = spawnSync(TSX, ["scripts/avatar-review.ts", "user1"], {
-      cwd: ROOT,
-      env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", DATABASE_URL: REMOTE },
-      encoding: "utf8",
-    });
-    expect(r.status).toBe(2);
-    expect(r.stdout).toBe("");
-    expect(r.stderr).toMatch(/usage/);
-  });
+  it(
+    "the real command prints usage and nothing on stdout without a decision",
+    () => {
+      const r = spawnSync(TSX, ["scripts/avatar-review.ts", "user1"], {
+        cwd: ROOT,
+        env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", DATABASE_URL: REMOTE },
+        encoding: "utf8",
+      });
+      expect(r.status).toBe(2);
+      expect(r.stdout).toBe("");
+      expect(r.stderr).toMatch(/usage/);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 });
 
 describe.skipIf(!testDatabaseUrl)(

@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Command, Redis } from "ioredis";
-import { DEFAULT_RACE_SETTINGS, type RaceSettings } from "@fifth-copy/protocol";
+import {
+  DEFAULT_RACE_SETTINGS,
+  deskIdentity,
+  memberSchema,
+  type Member,
+  type RaceSettings,
+} from "@fifth-copy/protocol";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFakeClock } from "../clock";
 import { createRedis } from "../redis/client";
@@ -12,6 +18,15 @@ import { createRoomRegistry, type RoomRegistry } from "./registry";
 // The db index may be shared with other card worktrees, so tests only ever delete their own keys.
 let redis: Redis;
 const opened: string[] = [];
+
+/** A human member as the registry fills it: identity from `deskIdentity` (#557). */
+const m = (desk: number, name: string, isHost: boolean): Member => ({
+  desk,
+  name,
+  isHost,
+  isBot: false,
+  ...deskIdentity(desk),
+});
 
 beforeAll(async () => {
   const url = process.env.REDIS_URL;
@@ -80,7 +95,7 @@ describe("room registry: open (C1)", () => {
     const lobbyId = await openRoom(registry);
     await registry.join(lobbyId, { userId: "a", name: "Ada" });
     await registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings });
-    expect(await registry.members(lobbyId)).toEqual([{ desk: 1, name: "Ada", isHost: false }]);
+    expect(await registry.members(lobbyId)).toEqual([m(1, "Ada", false)]);
   });
 });
 
@@ -135,10 +150,7 @@ describe("room registry: join (C2, C3)", () => {
     expect(again).toEqual({
       ok: true,
       desk: 1,
-      members: [
-        { desk: 1, name: "Ada", isHost: false },
-        { desk: 2, name: "Bob", isHost: false },
-      ],
+      members: [m(1, "Ada", false), m(2, "Bob", false)],
       room: { roomId: lobbyId, code: "ABCD", phase: "waiting", settings },
     });
   });
@@ -163,6 +175,19 @@ describe("room registry: join (C2, C3)", () => {
     expect(desks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
+  it("fills every member with isBot: false and the deskIdentity of its desk (#557 C2)", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    for (let i = 0; i < 14; i++) await registry.join(lobbyId, { userId: `u${i}`, name: `U${i}` });
+    const members = (await registry.members(lobbyId)) ?? [];
+    expect(members).toHaveLength(14);
+    for (const member of members) {
+      expect(member).toMatchObject({ isBot: false, ...deskIdentity(member.desk) });
+      expect(memberSchema.safeParse(member).success).toBe(true);
+    }
+    expect(members[12]).toMatchObject({ desk: 13, color: 0, marker: "square" });
+  });
+
   it("marks only the host as isHost and sorts members by desk", async () => {
     const { registry } = setup();
     const lobbyId = await openRoom(registry, lobby(), "h");
@@ -171,10 +196,10 @@ describe("room registry: join (C2, C3)", () => {
     await registry.leave(lobbyId, "a");
     await registry.join(lobbyId, { userId: "z", name: "z" });
     expect(await registry.members(lobbyId)).toEqual([
-      { desk: 1, name: "z", isHost: false },
-      { desk: 2, name: "h", isHost: true },
-      { desk: 3, name: "b", isHost: false },
-      { desk: 4, name: "c", isHost: false },
+      m(1, "z", false),
+      m(2, "h", true),
+      m(3, "b", false),
+      m(4, "c", false),
     ]);
   });
 });
@@ -188,7 +213,7 @@ describe("room registry: leave (C4)", () => {
     const before = registry.count();
 
     expect(await registry.leave(lobbyId, "a")).toEqual({
-      members: [{ desk: 2, name: "Bob", isHost: false }],
+      members: [m(2, "Bob", false)],
       closed: false,
     });
     expect(await registry.leave(lobbyId, "b")).toEqual({ members: [], closed: true });

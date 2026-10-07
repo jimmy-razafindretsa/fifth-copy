@@ -1,6 +1,11 @@
 import type { ChainableCommander, Redis } from "ioredis";
 import { z } from "zod";
-import { raceSettingsSchema, type Member, type RaceSettings } from "@fifth-copy/protocol";
+import {
+  deskIdentity,
+  raceSettingsSchema,
+  type Member,
+  type RaceSettings,
+} from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import { nextDesk } from "./desks";
 import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
@@ -98,7 +103,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
 
   function toMembers(seats: Map<string, Seat>, hostUserId: string): Member[] {
     return [...seats.entries()]
-      .map(([userId, { desk, name }]) => ({ desk, name, isHost: userId === hostUserId }))
+      .map(([userId, { desk, name }]) => ({
+        desk,
+        name,
+        isHost: userId === hostUserId,
+        isBot: false,
+        ...deskIdentity(desk),
+      }))
       .sort((a, b) => a.desk - b.desk);
   }
 

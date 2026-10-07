@@ -30,8 +30,27 @@ describe("authenticateHandshake (C2)", () => {
     expect(await t.server.registry.members(lobby)).toEqual([]);
   });
 
+  it("accepts a well-formed resumeKey (restoring a desk is #178's)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const token = await t.token({ lobby });
+    const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
+    const auth = { v: PROTOCOL_VERSION, token, resumeKey: "ab".repeat(32) };
+    expect(await authenticateHandshake(auth, deps)).toMatchObject({ ok: true });
+  });
+
   it.each([
     ["no auth", () => undefined, "version"],
+    [
+      "a junk resumeKey",
+      (tok: string) => ({ v: PROTOCOL_VERSION, token: tok, resumeKey: "x" }),
+      "bad-token",
+    ],
+    [
+      "an oversize resumeKey",
+      (tok: string) => ({ v: PROTOCOL_VERSION, token: tok, resumeKey: "a".repeat(65) }),
+      "bad-token",
+    ],
     ["auth.v: 1", (tok: string) => ({ v: 1, token: tok }), "version"],
     ["a missing token", () => ({ v: PROTOCOL_VERSION }), "bad-token"],
     ["an empty token", () => ({ v: PROTOCOL_VERSION, token: "" }), "bad-token"],
@@ -43,6 +62,19 @@ describe("authenticateHandshake (C2)", () => {
     expect(await authenticateHandshake(auth(await t.token({ lobby })), deps)).toEqual({
       ok: false,
       reason,
+    });
+  });
+});
+
+describe("spectator tokens (#557)", () => {
+  it("refuses a valid spectator token as bad-token until the spectator channel lands (#187)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const token = await t.token({ lobby, role: "spectator" });
+    const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
+    expect(await authenticateHandshake({ v: PROTOCOL_VERSION, token }, deps)).toEqual({
+      ok: false,
+      reason: "bad-token",
     });
   });
 });

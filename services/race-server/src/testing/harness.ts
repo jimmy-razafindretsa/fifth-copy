@@ -317,7 +317,9 @@ export async function startedRace(
     await until(() => !!seen.welcome, 3_000, `welcome ${i}`);
     racers.push({ client, seen, desk: seen.welcome!.you!, sub, token });
   }
-  await until(() => racers.every((r) => r.seen.roster?.length === players), 3_000, "seated");
+  // Bots of the settings are seated at open (#156) and count in the roster.
+  const seated = players + settings.bots.length;
+  await until(() => racers.every((r) => r.seen.roster?.length === seated), 3_000, "seated");
   const ack = await racers[0]!.client.timeout(2_000).emitWithAck("host:start", {
     v: PROTOCOL_VERSION,
   });

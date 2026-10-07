@@ -91,13 +91,14 @@ describe("waiting room over Socket.IO (C1)", () => {
     const seen = track(
       t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby: lobbyId }) }),
     );
-    await until(() => !!seen.welcome && host.roster?.length === 2, 2_000, "welcome");
+    // The settings' one bot is seated at open on desk 2 (#156): the player takes desk 3.
+    await until(() => !!seen.welcome && host.roster?.length === 3, 2_000, "welcome");
     expect(seen.welcome?.settings).toEqual(settings);
 
     // #557 C4: the v4 welcome parses, carries the token role, no race yet, the server clock.
     for (const [who, role, you] of [
       [host, "host", 1],
-      [seen, "player", 2],
+      [seen, "player", 3],
     ] as const) {
       const welcome = who.welcome!;
       expect(welcomeSchema.safeParse(welcome).success).toBe(true);
@@ -113,7 +114,7 @@ describe("waiting room over Socket.IO (C1)", () => {
       expect(Math.abs(welcome.serverNow - t.clock.now())).toBeLessThanOrEqual(1_000);
     }
     for (const member of [...seen.welcome!.members, ...host.roster!]) {
-      expect(member).toMatchObject({ isBot: false, ...deskIdentity(member.desk) });
+      expect(member).toMatchObject({ isBot: member.desk === 2, ...deskIdentity(member.desk) });
     }
     expect(host.roster?.find((m) => m.desk === 1)?.isHost).toBe(true);
   });

@@ -131,6 +131,10 @@ export function attachSocketServer(
           log("settings", { lobby, outcome: result.ok ? "ok" : result.reason, keys });
           if (!result.ok) return reply({ ok: false, error: result.reason });
           io.to(room).emit("settings", { v: PROTOCOL_VERSION, settings: result.settings });
+          // A `bots` patch re-seated the room (#156): the bot desks changed.
+          if (result.members) {
+            io.to(room).emit("roster", { v: PROTOCOL_VERSION, members: result.members });
+          }
           reply({ ok: true, settings: result.settings });
         },
         // No wire code for a Redis failure: no ack, no broadcast; the client times out.

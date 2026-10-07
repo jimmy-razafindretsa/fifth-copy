@@ -1,6 +1,7 @@
 import type { ChainableCommander, Redis } from "ioredis";
 import { z } from "zod";
 import {
+  botLevelSchema,
   deskIdentity,
   msSchema,
   phaseSchema,
@@ -8,6 +9,7 @@ import {
   raceSettingsPatchSchema,
   raceSettingsSchema,
   startRaceRequestSchema,
+  type BotLevel,
   type Member,
   type Phase,
   type RaceInfo,
@@ -16,6 +18,7 @@ import {
   type StartRaceRequest,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
+import { botName, botUserId, isBotUserId, planBotSeats } from "./bots";
 import { nextDesk } from "./desks";
 import { desksKey, membersKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
 
@@ -38,21 +41,30 @@ export type RoomState = {
   race: RaceInfo | null;
   /** Server ms epoch at which the race ends on time; null before the first start. */
   endAt: number | null;
-  /** Current members as desks, by desk ascending (humans only until bots are seated, #156). */
+  /** Current members as desks, by desk ascending, bots included (`userId: null`, #156). */
   seated: RaceDesk[];
   /** Desks captured at start (ranked at the end even if they left); null before the first start. */
   desks: RaceDesk[] | null;
 };
 
-/** `in-progress`: a user who is not already a member while the phase is not `waiting` (#166). */
+/**
+ * `in-progress`: a user who is not already a member while the phase is not `waiting` (#166).
+ * `bot-id`: a user id in the bots' reserved `bot:` space (#156; web user ids are cuids).
+ */
 export type JoinResult =
   | { ok: true; desk: number; members: Member[]; room: Room }
-  | { ok: false; reason: "no-room" | "in-progress" };
-/** `closed` is true only when this call removed the last member and deleted the room's keys. */
+  | { ok: false; reason: "no-room" | "in-progress" | "bot-id" };
+/**
+ * `closed` is true only when this call removed the last human member and deleted the room's keys
+ * (bots seated with no human left go with the room, ARCHITECTURE 7.1 "last human leaves").
+ */
 export type LeaveResult = { members: Member[]; closed: boolean };
+/** `members` is set when the patch carried `bots`: the room was re-seated (#156). */
 export type UpdateSettingsResult =
-  | { ok: true; settings: RaceSettings }
+  | { ok: true; settings: RaceSettings; members?: Member[] }
   | { ok: false; reason: "no-room" | "not-host" | "not-waiting" | "invalid" };
+export type SetBotsResult =
+  { ok: true; members: Member[] } | { ok: false; reason: "no-room" | "not-waiting" | "invalid" };
 
 export type RoomRegistry = {
   /** Idempotent: a room keeps the fields (settings included) of its first open. */
@@ -67,6 +79,13 @@ export type RoomRegistry = {
   }>;
   join(lobbyId: string, member: { userId: string; name: string }): Promise<JoinResult>;
   leave(lobbyId: string, userId: string): Promise<LeaveResult>;
+  /**
+   * Seats one bot member per entry (#156): `settings.bots` and the bot records of the members hash
+   * are written together, in one MULTI with the TTLs. Bots keep their desks lowest first, new ones
+   * take the lowest free desks (never desk 1), extra ones leave highest desk first. Only while the
+   * phase is `waiting`. `open` and a `bots` patch of `updateSettings` seat through the same rule.
+   */
+  setBots(lobbyId: string, bots: { level: BotLevel }[]): Promise<SetBotsResult>;
   members(lobbyId: string): Promise<Member[] | null>;
   /** The room's settings; null for an unknown room; rejects when the stored field is missing or corrupt. */
   settings(lobbyId: string): Promise<RaceSettings | null>;
@@ -106,8 +125,15 @@ export type RoomRegistry = {
 
 const raceDesksSchema = startRaceRequestSchema.shape.desks;
 
-const seatSchema = z.object({ desk: z.int().min(1), name: z.string().min(1) });
+/** A members-hash record: humans `{ desk, name }`, bots also `isBot: true` and their level (#156). */
+const seatSchema = z.object({
+  desk: z.int().min(1),
+  name: z.string().min(1),
+  isBot: z.literal(true).optional(),
+  level: botLevelSchema.optional(),
+});
 type Seat = z.infer<typeof seatSchema>;
+const botsSchema = raceSettingsSchema.shape.bots;
 
 /**
  * Live membership and lifecycle fields of rooms (ADR 0008 "Live room"; ARCHITECTURE 7.1). Redis is the state;
@@ -185,20 +211,55 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
 
   function toMembers(seats: Map<string, Seat>, hostUserId: string): Member[] {
     return [...seats.entries()]
-      .map(([userId, { desk, name }]) => ({
+      .map(([userId, { desk, name, isBot = false }]) => ({
         desk,
         name,
-        isHost: userId === hostUserId,
-        isBot: false,
+        isHost: !isBot && userId === hostUserId,
+        isBot,
         ...deskIdentity(desk),
       }))
       .sort((a, b) => a.desk - b.desk);
   }
 
+  /** Bots have no user on the wire (`startRaceRequest.desks[].userId`). */
   function toDesks(seats: Map<string, Seat>): RaceDesk[] {
     return [...seats.entries()]
-      .map(([userId, { desk, name }]) => ({ desk, userId, name, isBot: false }))
+      .map(([userId, { desk, name, isBot = false }]) => ({
+        desk,
+        userId: isBot ? null : userId,
+        name,
+        isBot,
+      }))
       .sort((a, b) => a.desk - b.desk);
+  }
+
+  /**
+   * Appends to `tx` the members-hash writes that seat `bots` (one per entry), and applies them to
+   * `seats`. Not queued: callers run it inside their own `serial` step (never nest `serial`).
+   */
+  function seatBots(
+    tx: ChainableCommander,
+    lobbyId: string,
+    seats: Map<string, Seat>,
+    bots: readonly { level: BotLevel }[],
+  ) {
+    const botDesks = [...seats.values()].filter((s) => s.isBot).map((s) => s.desk);
+    const taken = [...seats.values()].map((s) => s.desk);
+    const plan = planBotSeats(
+      botDesks,
+      taken,
+      bots.map((b) => b.level),
+    );
+    if (plan.remove.length) {
+      tx.hdel(membersKey(lobbyId), ...plan.remove.map(botUserId));
+      for (const desk of plan.remove) seats.delete(botUserId(desk));
+    }
+    for (const { desk, level } of plan.seats) {
+      const seat: Seat = { desk, name: botName(desk), isBot: true, level };
+      seats.set(botUserId(desk), seat);
+      tx.hset(membersKey(lobbyId), botUserId(desk), JSON.stringify(seat));
+    }
+    return tx;
   }
 
   return {
@@ -217,6 +278,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
             .hsetnx(key, "settings", JSON.stringify(settings)),
         );
         const created = openedAt === 1;
+        // Only a new room seats the bots of its settings; a re-open leaves the seats alone.
+        if (created && settings.bots.length) {
+          await withTtl(
+            lobbyId,
+            seatBots(redis.multi(), lobbyId, await readSeats(lobbyId), settings.bots),
+          );
+        }
         const room = await readRoom(lobbyId);
         return {
           created,
@@ -234,6 +302,8 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
 
     join: (lobbyId, { userId, name }) =>
       serial(lobbyId, async (): Promise<JoinResult> => {
+        // Belt and braces: token subs are web-minted cuids, the `bot:` space is the bots'.
+        if (isBotUserId(userId)) return { ok: false, reason: "bot-id" };
         const room = await readRoom(lobbyId);
         if (!room) return { ok: false, reason: "no-room" };
         const settings = parseSettings(lobbyId, room.settings);
@@ -261,7 +331,8 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         if (!room) return { members: [], closed: false };
         const removed = await redis.hdel(membersKey(lobbyId), userId);
         const seats = await readSeats(lobbyId);
-        if (removed === 1 && seats.size === 0) {
+        const humans = [...seats.values()].filter((s) => !s.isBot).length;
+        if (removed === 1 && humans === 0) {
           // The trace lists (#592) of the last race's desks go with the room.
           const traces = room.desks
             ? raceDesksSchema
@@ -274,6 +345,20 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         }
         await withTtl(lobbyId, redis.multi());
         return { members: toMembers(seats, room.hostUserId), closed: false };
+      }),
+
+    setBots: (lobbyId, bots) =>
+      serial(lobbyId, async (): Promise<SetBotsResult> => {
+        const room = await readRoom(lobbyId);
+        if (!room) return { ok: false, reason: "no-room" };
+        if (parsePhase(room.phase) !== "waiting") return { ok: false, reason: "not-waiting" };
+        const parsed = botsSchema.safeParse(bots);
+        if (!parsed.success) return { ok: false, reason: "invalid" };
+        const settings = { ...parseSettings(lobbyId, room.settings), bots: parsed.data };
+        const seats = await readSeats(lobbyId);
+        const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(settings));
+        await withTtl(lobbyId, seatBots(tx, lobbyId, seats, parsed.data));
+        return { ok: true, members: toMembers(seats, room.hostUserId) };
       }),
 
     members: async (lobbyId) => {
@@ -305,11 +390,15 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
           ...clean,
         });
         if (!merged.success) return { ok: false, reason: "invalid" };
-        await withTtl(
-          lobbyId,
-          redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(merged.data)),
-        );
-        return { ok: true, settings: merged.data };
+        const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(merged.data));
+        if (!("bots" in clean)) {
+          await withTtl(lobbyId, tx);
+          return { ok: true, settings: merged.data };
+        }
+        // A bots patch re-seats in the same step and the same MULTI (#156).
+        const seats = await readSeats(lobbyId);
+        await withTtl(lobbyId, seatBots(tx, lobbyId, seats, merged.data.bots));
+        return { ok: true, settings: merged.data, members: toMembers(seats, room.hostUserId) };
       }),
 
     withRoom: serial,

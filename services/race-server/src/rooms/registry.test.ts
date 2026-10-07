@@ -242,6 +242,89 @@ describe("room registry: TTL on every key (C5)", () => {
   });
 });
 
+describe("room registry: updateSettings (#101 C3)", () => {
+  async function stored(lobbyId: string) {
+    return JSON.parse((await redis.hget(roomKey(lobbyId), "settings")) ?? "null") as unknown;
+  }
+
+  it("merges a patch over the stored settings, writes and returns the whole object", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    const result = await registry.updateSettings(lobbyId, "host", {
+      timerS: 120,
+      errorMode: "block",
+    });
+    const expected = { ...settings, timerS: 120, errorMode: "block" };
+    expect(result).toEqual({ ok: true, settings: expected });
+    expect(await stored(lobbyId)).toEqual(expected);
+    expect(await registry.settings(lobbyId)).toEqual(expected);
+    for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(0);
+  });
+
+  it("replaces a top-level field whole: bots set, then emptied", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.updateSettings(lobbyId, "host", { bots: [{ level: "recruit" }, { level: "clerk" }] });
+    expect(await registry.updateSettings(lobbyId, "host", { bots: [{ level: "major" }] })).toEqual({
+      ok: true,
+      settings: { ...settings, bots: [{ level: "major" }] },
+    });
+    expect(await registry.updateSettings(lobbyId, "host", { bots: [] })).toEqual({
+      ok: true,
+      settings: { ...settings, bots: [] },
+    });
+    expect(await stored(lobbyId)).toEqual({ ...settings, bots: [] });
+  });
+
+  it("serialises two concurrent patches on one room", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    const [first, second] = await Promise.all([
+      registry.updateSettings(lobbyId, "host", { timerS: 120, wordCount: 80 }),
+      registry.updateSettings(lobbyId, "host", { timerS: 300, language: "fr" }),
+    ]);
+    expect(first.ok && second.ok).toBe(true);
+    const expected = { ...settings, wordCount: 80, timerS: 300, language: "fr" };
+    expect(second).toEqual({ ok: true, settings: expected });
+    expect(await stored(lobbyId)).toEqual(expected);
+  });
+
+  it("refuses: no-room, not-host, not-waiting, invalid; the hash is unchanged", async () => {
+    const { registry } = setup();
+    expect(await registry.updateSettings(lobby(), "host", { timerS: 120 })).toEqual({
+      ok: false,
+      reason: "no-room",
+    });
+    const lobbyId = await openRoom(registry);
+    const before = await redis.hgetall(roomKey(lobbyId));
+    expect(await registry.updateSettings(lobbyId, "player", { timerS: 120 })).toEqual({
+      ok: false,
+      reason: "not-host",
+    });
+    for (const patch of [{ wordCount: 9 }, { lobbyType: "public" }, { nope: 1 }, { timerS: "60" }])
+      expect(await registry.updateSettings(lobbyId, "host", patch as never)).toEqual({
+        ok: false,
+        reason: "invalid",
+      });
+    expect(await redis.hgetall(roomKey(lobbyId))).toEqual(before);
+    await redis.hset(roomKey(lobbyId), "phase", "countdown");
+    expect(await registry.updateSettings(lobbyId, "host", { timerS: 120 })).toEqual({
+      ok: false,
+      reason: "not-waiting",
+    });
+    expect(await stored(lobbyId)).toEqual(settings);
+  });
+
+  it("ignores a key whose value is undefined instead of throwing or erasing it", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    expect(
+      await registry.updateSettings(lobbyId, "host", { wordCount: undefined, timerS: 60 } as never),
+    ).toEqual({ ok: true, settings: { ...settings, timerS: 60 } });
+    expect(await stored(lobbyId)).toEqual({ ...settings, timerS: 60 });
+  });
+});
+
 describe("room registry: count (C7)", () => {
   it("counts 30 rooms opened in a loop as 30", async () => {
     const { registry } = setup();
@@ -288,13 +371,14 @@ describe("room registry: atomic writes (#517)", () => {
     await registry.join(lobbyId, { userId: "a", name: "Ada" });
     await registry.join(lobbyId, { userId: "b", name: "Bob" });
     await registry.leave(lobbyId, "a");
+    await registry.updateSettings(lobbyId, "host", { timerS: 60 });
 
     const writes = ["hset", "hsetnx", "hmset"];
     const writing = groups().filter(({ commands }) =>
       commands.some(([name, key]) => writes.includes(name!) && hashKeys.includes(key!)),
     );
-    // open twice + join twice: four write transactions, nothing written outside them.
-    expect(writing).toHaveLength(4);
+    // open twice + join twice + updateSettings: five write transactions, nothing outside them.
+    expect(writing).toHaveLength(5);
     for (const { atomic, commands } of writing) {
       expect(atomic).toBe(true);
       for (const key of hashKeys)
@@ -307,6 +391,13 @@ describe("room registry: atomic writes (#517)", () => {
       roomKey(lobbyId),
       "settings",
       JSON.stringify(settings),
+    ]);
+    // #101: updateSettings writes the merged settings in a MULTI next to both TTLs.
+    expect(writing[4]!.commands).toContainEqual([
+      "hset",
+      roomKey(lobbyId),
+      "settings",
+      JSON.stringify({ ...settings, timerS: 60 }),
     ]);
   });
 

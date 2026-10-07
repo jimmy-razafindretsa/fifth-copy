@@ -8,7 +8,8 @@ import {
 } from "@fifth-copy/protocol";
 import { createHmac } from "node:crypto";
 import { createRaceServer, type RaceServer } from "../app";
-import { createFakeClock } from "../clock";
+import { unavailableWebApi } from "../persist/web-api";
+import { createFakeClock, createFakeScheduler } from "../clock";
 import { membersKey, roomKey } from "../rooms/keys";
 import { connectRedis } from "../testing/harness";
 import { MAX_INTERNAL_BODY_BYTES } from "./internal";
@@ -30,9 +31,11 @@ async function start(skewS = 0) {
   await redis.del(roomKey("lob_test"), membersKey("lob_test"));
   const clock = createFakeClock((Number(V.timestamp) + skewS) * 1000);
   server = createRaceServer({
-    env: { RACE_TOKEN_SECRET: V.secret, WEB_ORIGIN: "http://localhost:3000" },
+    env: { RACE_TOKEN_SECRET: V.secret, WEB_ORIGIN: "http://localhost:3000", RACE_FAST_CLOCK: "0" },
     redis,
     clock,
+    scheduler: createFakeScheduler(clock),
+    webApi: unavailableWebApi,
   });
   return `http://127.0.0.1:${await server.listen(0, "127.0.0.1")}`;
 }

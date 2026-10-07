@@ -2,13 +2,17 @@ import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import {
   hostSettingsSchema,
+  hostStartSchema,
+  pingSchema,
   PROTOCOL_VERSION,
   type ClientToServerEvents,
   type HostSettingsAck,
+  type HostStartAck,
   type RaceTokenClaims,
   type RoomCode,
   type ServerToClientEvents,
 } from "@fifth-copy/protocol";
+import type { Lifecycle } from "../rooms/lifecycle";
 import { createHandshakeMiddleware, type HandshakeDeps } from "./handshake";
 
 /** Per-socket state, set by the handshake middleware from the verified race token. */
@@ -25,13 +29,14 @@ const log = (msg: string, fields: Record<string, unknown>) =>
 /**
  * The waiting room's network edge (ADR 0006, ARCHITECTURE 7.1). Room rules stay in the registry: on
  * connect the socket's user joins (`welcome` to it, `roster` to the room); the desk is released when
- * the user's last socket disconnects. Client events (`keys`, `host:*`) register on the socket by name.
+ * the user's last socket disconnects. Client events (`keys`, `host:*`, `ping`) register on the socket
+ * by name; phase transitions belong to the lifecycle (`rooms/lifecycle.ts`, #166).
  */
 export function attachSocketServer(
   httpServer: HttpServer,
-  deps: HandshakeDeps & { origin: string },
+  deps: HandshakeDeps & { origin: string; lifecycle: Lifecycle },
 ): RaceIo {
-  const { registry } = deps;
+  const { registry, lifecycle } = deps;
   const io: RaceIo = new Server(httpServer, {
     cors: { origin: deps.origin, credentials: false },
     transports: ["websocket", "polling"],
@@ -61,8 +66,8 @@ export function attachSocketServer(
           room: { code: joined.room.code as RoomCode, phase: joined.room.phase },
           members: joined.members,
           settings: joined.room.settings,
-          // No race yet: start (#166) and resume (#178) fill these.
-          race: null,
+          race: joined.room.race,
+          // Resume (#178) and keystrokes (#173) fill these.
           state: null,
           overlay: null,
           resumeKey: null,
@@ -98,6 +103,28 @@ export function attachSocketServer(
         // No wire code for a Redis failure: no ack, no broadcast; the client times out.
         () => log("settings failed", { lobby, keys }),
       );
+    });
+
+    // Answered only through the ack (`rejected` is for unsolicited refusals). The lifecycle
+    // authorises (token role and `sub` against the room's host), so this edge only parses.
+    socket.on("host:start", (raw: unknown, ack: unknown) => {
+      const reply = typeof ack === "function" ? (ack as (a: HostStartAck) => void) : () => {};
+      if (!hostStartSchema.safeParse(raw).success) {
+        // No wire code for a malformed start: no ack, the client times out.
+        return log("start", { lobby, outcome: "invalid" });
+      }
+      void lifecycle.start(lobby, { sub, role }).then(reply);
+    });
+
+    // Clock sync (#172): to the sender only, in any phase. A malformed ping is dropped.
+    socket.on("ping", (raw: unknown) => {
+      const parsed = pingSchema.safeParse(raw);
+      if (!parsed.success) return;
+      socket.emit("pong", {
+        v: PROTOCOL_VERSION,
+        sent: parsed.data.sent,
+        serverNow: deps.clock.now(),
+      });
     });
 
     socket.on("disconnect", () => {

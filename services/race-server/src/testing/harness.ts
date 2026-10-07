@@ -11,10 +11,13 @@ import {
   type RaceSettings,
   type RaceTokenClaims,
   type ServerToClientEvents,
+  type StartRaceResponse,
   type Welcome,
 } from "@fifth-copy/protocol";
 import { createRaceServer, type RaceServer } from "../app";
-import { createFakeClock, type FakeClock } from "../clock";
+import { createFakeClock, createFakeScheduler, type FakeClock } from "../clock";
+import type { WebApi } from "../persist/web-api";
+import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
 import { membersKey, roomKey } from "../rooms/keys";
 
@@ -42,6 +45,32 @@ export async function connectRedis(url: string | undefined): Promise<Redis> {
   return redis;
 }
 
+/** The text every start of the default fake `WebApi` gets. */
+export const FIXTURE_TEXT = {
+  content: "Le formulaire est en triple exemplaire.",
+  language: "fr",
+  wordCount: 6,
+  sourceRef: null,
+} satisfies StartRaceResponse["text"];
+
+/** A `WebApi` that accepts every start with `FIXTURE_TEXT`; `calls` records each request. */
+export function fixtureWebApi(clock: { now(): number }) {
+  const calls: Parameters<WebApi["startRace"]>[0][] = [];
+  const api: WebApi = {
+    startRace: async (request) => {
+      calls.push(request);
+      return {
+        v: PROTOCOL_VERSION,
+        raceId: request.raceId,
+        text: FIXTURE_TEXT,
+        settings: request.settings,
+        startedAt: clock.now(),
+      };
+    },
+  };
+  return { api, calls };
+}
+
 export type Booted = {
   server: RaceServer;
   url: string;
@@ -56,12 +85,22 @@ export type Booted = {
   stop(): Promise<void>;
 };
 
-export async function boot(redisUrl: string | undefined): Promise<Booted> {
+/**
+ * Boots the server on port 0 with a fake clock whose `advance` also fires the fake scheduler's
+ * timers. `webApi` defaults to `fixtureWebApi`.
+ */
+export async function boot(
+  redisUrl: string | undefined,
+  options: { webApi?: WebApi; onRaceEnded?: (ended: RaceEnded) => void } = {},
+): Promise<Booted> {
   const clock = createFakeClock(Date.now());
   const server = createRaceServer({
-    env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000" },
+    env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000", RACE_FAST_CLOCK: "0" },
     redis: await connectRedis(redisUrl),
     clock,
+    scheduler: createFakeScheduler(clock),
+    webApi: options.webApi ?? fixtureWebApi(clock).api,
+    onRaceEnded: options.onRaceEnded,
   });
   const port = await server.listen(0, "127.0.0.1");
   const url = `http://127.0.0.1:${port}`;

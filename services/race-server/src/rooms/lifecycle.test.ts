@@ -194,10 +194,10 @@ describe("lifecycle: text from the web app over the signed internal API (#199 C5
     stub = await startWebStub();
     const web = stub;
     // The real HMAC client against the in-process stub; wired once the boot's clock exists.
-    let real: WebApi | undefined;
-    const webApi: WebApi = { startRace: (req) => real!.startRace(req) };
+    const wired: { api?: WebApi } = {};
+    const webApi: WebApi = { startRace: (req) => wired.api!.startRace(req) };
     const { booted, lobby, host, seenHost, others, connectAs } = await room({ players: 2, webApi });
-    real = createWebApi({
+    wired.api = createWebApi({
       baseUrl: web.url,
       secret: SECRET,
       clock: booted.clock,

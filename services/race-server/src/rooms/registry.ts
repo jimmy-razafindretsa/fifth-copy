@@ -17,7 +17,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import { nextDesk } from "./desks";
-import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
+import { desksKey, membersKey, ROOM_TTL_S, roomKey } from "./keys";
 
 export type { Phase };
 /** One desk of a race as sent to the web app at start and kept in the room hash (`desks`). */
@@ -129,14 +129,15 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
   }
 
   /**
-   * Sends `tx` with both room TTLs appended, as one MULTI/EXEC: a write never lands without its
-   * TTL (ADR 0008, #517). Relative EXPIRE (never from the injected clock: a skewed clock must not
+   * Sends `tx` with the room TTLs appended, as one MULTI/EXEC: a write never lands without its
+   * TTL (ADR 0008, #517); the desks hash (#173) is refreshed with the room. Relative EXPIRE (never from the injected clock: a skewed clock must not
    * expire a live room). ioredis reports per-command errors as [err, value] pairs: rethrow them.
    */
   async function withTtl(lobbyId: string, tx: ChainableCommander) {
     const results = await tx
       .expire(roomKey(lobbyId), ROOM_TTL_S)
       .expire(membersKey(lobbyId), ROOM_TTL_S)
+      .expire(desksKey(lobbyId), ROOM_TTL_S)
       .exec();
     if (!results) throw new Error(`room ${lobbyId}: transaction aborted`);
     for (const [err] of results) if (err) throw err;
@@ -261,7 +262,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const removed = await redis.hdel(membersKey(lobbyId), userId);
         const seats = await readSeats(lobbyId);
         if (removed === 1 && seats.size === 0) {
-          await redis.del(roomKey(lobbyId), membersKey(lobbyId));
+          await redis.del(roomKey(lobbyId), membersKey(lobbyId), desksKey(lobbyId));
           openRooms.delete(lobbyId);
           return { members: [], closed: true };
         }

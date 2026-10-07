@@ -10,3 +10,10 @@ export const roomKey = (lobbyId: string) => `room:${lobbyId}`;
 
 /** Hash: `userId` -> JSON `{ desk, name }`. */
 export const membersKey = (lobbyId: string) => `room:${lobbyId}:members`;
+
+/**
+ * Hash: desk number -> JSON `DeskState` (#173): the live mirror of each desk's engine state, its
+ * trace and anomaly count, written once per tick for the desks changed since the previous one. A
+ * mirror, never a recovery source (a running room is voided on restart, ADR 0008).
+ */
+export const desksKey = (lobbyId: string) => `room:${lobbyId}:desks`;

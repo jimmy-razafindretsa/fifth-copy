@@ -6,16 +6,27 @@ import type { RaceServerEnv } from "./env";
 import { createInternalHandler } from "./http/internal";
 import { createHttpHandler } from "./http/router";
 import type { WebApi } from "./persist/web-api";
+import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-state";
 import { durationsFor } from "./rooms/durations";
+import { ingest } from "./rooms/ingest";
 import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecycle";
 import { createRoomRegistry, type RoomRegistry } from "./rooms/registry";
-import { attachSocketServer, lobbyRoom, type RaceIo } from "./socket/server";
+import { createTicker } from "./rooms/tick";
+import {
+  attachSocketServer,
+  deskRoom,
+  lobbyRoom,
+  type RacePort,
+  type RaceIo,
+} from "./socket/server";
 
 export type RaceServer = {
   httpServer: HttpServer;
   io: RaceIo;
   registry: RoomRegistry;
   lifecycle: Lifecycle;
+  /** The live desks of running rooms (#173). */
+  desks: DesksState;
   /** Resolves with the bound port (pass 0 for an ephemeral one in tests). */
   listen(port: number, host?: string): Promise<number>;
   /** Marks draining, disconnects every socket, closes HTTP, then quits Redis. */
@@ -41,6 +52,54 @@ export function createRaceServer({
   const registry = createRoomRegistry({ redis, clock });
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
   const sockets: { io?: RaceIo } = {};
+  // Socket.IO cannot narrow a generic event name to its payload; the callers type the pair.
+  const to = (room: string) =>
+    sockets.io?.to(room) as { emit(e: string, p: unknown): boolean } | undefined;
+
+  // Live race (#173): desks' runtime, 10 Hz tick, keystroke ingestion; started at GO, ended with
+  // the race, dropped after `onRaceEnded` (persistence reads the traces, #189) or on room close.
+  const desksState = createDesksState({ redis });
+  const ticker = createTicker({
+    desksState,
+    clock,
+    scheduler,
+    emit: {
+      room: (lobbyId: string, event: string, payload: unknown) =>
+        void to(lobbyRoom(lobbyId))?.emit(event, payload),
+      desk: (lobbyId, desk, payload) => void to(deskRoom(lobbyId, desk))?.emit("event", payload),
+    },
+    onTerminal: (lobbyId) => void lifecycle.onDeskTerminal(lobbyId).catch(() => undefined),
+  });
+  const race: RacePort = {
+    ingest: (lobbyId, desk, batch) => ingest(desksState.get(lobbyId), desk, batch, clock.now()),
+    stateOf: (lobbyId, desk) => {
+      const state = desksState.states(lobbyId).get(desk);
+      return state && desksState.get(lobbyId)?.phase === "running" ? playerStateOf(state) : null;
+    },
+  };
+  const raceHooks = {
+    deskStates: async (lobbyId: string) => desksState.states(lobbyId),
+    onGo: (lobbyId: string, init: Parameters<typeof desksState.open>[1]) => {
+      desksState.open(lobbyId, init);
+      ticker.start(lobbyId);
+    },
+    onEnded: (lobbyId: string) => {
+      ticker.finish(lobbyId);
+      desksState.end(lobbyId);
+    },
+    onClosed: (lobbyId: string) => {
+      ticker.stop(lobbyId);
+      desksState.close(lobbyId);
+    },
+    onRaceEnded: (ended: RaceEnded) => {
+      try {
+        onRaceEnded?.(ended);
+      } finally {
+        desksState.release(ended.lobbyId);
+      }
+    },
+  };
+
   const lifecycle = createLifecycle({
     registry,
     clock,
@@ -53,7 +112,7 @@ export function createRaceServer({
         { emit(e: string, p: unknown): boolean } | undefined;
       room?.emit(event, payload);
     },
-    onRaceEnded,
+    ...raceHooks,
   });
   const secret = env.RACE_TOKEN_SECRET;
   let draining = false;
@@ -70,6 +129,7 @@ export function createRaceServer({
     secret,
     clock,
     origin: env.WEB_ORIGIN,
+    race,
   });
   sockets.io = io;
 
@@ -78,6 +138,7 @@ export function createRaceServer({
     io,
     registry,
     lifecycle,
+    desks: desksState,
     listen: (port, host) =>
       new Promise((resolve) => {
         httpServer.listen(port, host, () => resolve((httpServer.address() as AddressInfo).port));
@@ -85,6 +146,7 @@ export function createRaceServer({
     close: async () => {
       draining = true;
       lifecycle.close();
+      ticker.close();
       await new Promise<void>((resolve) => void io.close(() => resolve()));
       await redis.quit().catch(() => undefined);
     },

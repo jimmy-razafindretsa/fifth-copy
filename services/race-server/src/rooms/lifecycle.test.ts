@@ -89,7 +89,11 @@ async function room({
     others.push({ client, seen: watch(client) });
   }
   await until(
-    () => [seenHost, ...others.map((o) => o.seen)].every((s) => s.roster?.length === players + 1),
+    // The settings' bots are seated at open (#156) and count in the roster.
+    () =>
+      [seenHost, ...others.map((o) => o.seen)].every(
+        (s) => s.roster?.length === players + 1 + settings.bots.length,
+      ),
     3_000,
     "everyone seated",
   );
@@ -180,6 +184,21 @@ describe("lifecycle: host start and countdown (C1)", () => {
           { desk: 3, userId: "usr_p1", name: "Clerk 1", isBot: false },
         ],
       },
+    ]);
+  });
+});
+
+describe("lifecycle: bots count as desks (#156 C3)", () => {
+  it("the host alone with one bot starts; the start request lists the bot without a user", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const settings: RaceSettings = { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }] };
+    const { host } = await room({ players: 0, settings, webApi: web.api });
+    expect(await start(host)).toEqual({ ok: true, raceId: expect.any(String) });
+    expect(web.calls).toHaveLength(1);
+    expect(startRaceRequestSchema.safeParse(web.calls[0]).success).toBe(true);
+    expect(web.calls[0]!.desks).toEqual([
+      { desk: 1, userId: HOST_SUB, name: "Ada", isBot: false },
+      { desk: 2, userId: null, name: expect.any(String), isBot: true },
     ]);
   });
 });

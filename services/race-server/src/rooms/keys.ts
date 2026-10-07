@@ -8,7 +8,10 @@ export const ROOM_TTL_S = 3600;
  */
 export const roomKey = (lobbyId: string) => `room:${lobbyId}`;
 
-/** Hash: `userId` -> JSON `{ desk, name }`. */
+/**
+ * Hash: `userId` -> JSON `{ desk, name }`; a bot seat (#156) is keyed `bot:<desk>` -> JSON
+ * `{ desk, name, isBot: true, level }`.
+ */
 export const membersKey = (lobbyId: string) => `room:${lobbyId}:members`;
 
 /**

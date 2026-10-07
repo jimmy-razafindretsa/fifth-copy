@@ -15,6 +15,8 @@ const server = z.object({
   RACE_SERVER_INTERNAL_URL: z.url().default("http://localhost:4000"),
   /** Avatar files root (ADR 0014). Production mounts a volume at /data/avatars; locally a gitignored dir. */
   AVATAR_DIR: z.string().min(1).default(".data/avatars"),
+  /** Avatar moderator (ADR 0015): the local heuristic, or the colour-driven fake for tests (never in production). */
+  AVATAR_MODERATOR: z.enum(["heuristic", "fake"]).default("heuristic"),
 });
 
 const client = z.object({
@@ -22,7 +24,16 @@ const client = z.object({
   NEXT_PUBLIC_RACE_SERVER_URL: z.url().default("http://localhost:4000"),
 });
 
-const schema = server.extend(client.shape);
+const schema = server.extend(client.shape).superRefine((value, ctx) => {
+  // The fake approves, flags or rejects by colour: a production server must never run it.
+  if (value.NODE_ENV === "production" && value.AVATAR_MODERATOR === "fake") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["AVATAR_MODERATOR"],
+      message: "fake is not allowed in production",
+    });
+  }
+});
 
 function parse() {
   const result = schema.safeParse({
@@ -32,6 +43,7 @@ function parse() {
     RACE_TOKEN_SECRET: process.env.RACE_TOKEN_SECRET,
     RACE_SERVER_INTERNAL_URL: process.env.RACE_SERVER_INTERNAL_URL,
     AVATAR_DIR: process.env.AVATAR_DIR,
+    AVATAR_MODERATOR: process.env.AVATAR_MODERATOR,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_RACE_SERVER_URL: process.env.NEXT_PUBLIC_RACE_SERVER_URL,
   });

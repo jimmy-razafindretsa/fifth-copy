@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   jar: new Map<string, string>(),
   rows: [] as Row[],
   dir: "",
+  moderator: undefined as string | undefined,
 }));
 
 vi.mock("next/headers", () => ({
@@ -32,6 +33,9 @@ vi.mock("@/env", () => ({
     NODE_ENV: "test",
     get AVATAR_DIR() {
       return state.dir;
+    },
+    get AVATAR_MODERATOR() {
+      return state.moderator;
     },
   },
 }));
@@ -61,6 +65,10 @@ const { storeAvatar, MAX_AVATAR_BYTES } = await import("../avatars/store-avatar"
 const { revalidatePath } = await import("next/cache");
 const { db } = await import("@/server/db");
 const { UnauthenticatedError } = await import("@/server/auth");
+const { readAvatarFile } = await import("../queries/avatar-file");
+const { avatarNotice } = await import("../avatars/moderation/notice");
+const { en } = await import("@/i18n/en");
+const { fr } = await import("@/i18n/fr");
 
 const guest = (id: string): Row => ({
   id,
@@ -71,8 +79,8 @@ const guest = (id: string): Row => ({
 });
 const signIn = (id: string) => state.jar.set(GUEST_COOKIE, signGuestCookie(id, SECRET));
 
-async function png(width = 200, height = 200) {
-  return sharp({ create: { width, height, channels: 3, background: "#c33" } })
+async function png(width = 200, height = 200, background = "#c33") {
+  return sharp({ create: { width, height, channels: 3, background } })
     .png()
     .toBuffer();
 }
@@ -93,6 +101,7 @@ describe("uploadAvatar (server action)", () => {
       await rm(path.join(state.dir, entry), { recursive: true, force: true });
     state.jar.clear();
     state.rows = [guest("alice"), guest("bob")];
+    state.moderator = undefined;
     vi.clearAllMocks();
   });
   afterAll(() => rm(state.dir, { recursive: true, force: true }));
@@ -108,7 +117,7 @@ describe("uploadAvatar (server action)", () => {
   it("C7: a guest uploads; the row gets the new key and status; the header is revalidated", async () => {
     signIn("alice");
     const result = await uploadAvatar(form(new Blob([await png()])));
-    expect(result).toEqual({ ok: true, version: expect.any(Number) });
+    expect(result).toEqual({ ok: true, version: expect.any(Number), status: "APPROVED" });
     const version = (result as { version: number }).version;
     expect(state.rows[0]).toMatchObject({
       avatarKey: `alice/${version}`,
@@ -181,5 +190,118 @@ describe("uploadAvatar (server action)", () => {
       `${v2}-64.webp`,
     ]);
     expect(state.rows[0]?.avatarKey).toBe(`alice/${v2}`);
+  });
+
+  describe("C4: moderation verdicts (ADR 0015), driven by the fake moderator", () => {
+    // AVATAR_MODERATOR=fake: green approve, blue flag, red reject (moderation/fake.ts).
+    const GREEN = "#00c000";
+    const BLUE = "#0000e0";
+    const RED = "#e00000";
+    const upload = async (colour: string) =>
+      uploadAvatar(form(new Blob([await png(200, 200, colour)])));
+    const owner = { id: "alice", isGuest: true } as Parameters<typeof readAvatarFile>[0];
+    const filesOf = async (id: string) =>
+      (await readdir(path.join(state.dir, id)).catch(() => [] as string[])).sort();
+    beforeEach(() => {
+      state.moderator = "fake";
+      signIn("alice");
+    });
+
+    it("approve: APPROVED, files kept, the owner is served the picture, no notice", async () => {
+      const result = await upload(GREEN);
+      expect(result).toEqual({ ok: true, version: expect.any(Number), status: "APPROVED" });
+      const { version } = result as { version: number };
+      expect(state.rows[0]).toMatchObject({
+        avatarKey: `alice/${version}`,
+        avatarStatus: "APPROVED",
+      });
+      expect(await filesOf("alice")).toHaveLength(2);
+      expect(await readAvatarFile(owner, "alice", version, 256)).toBeInstanceOf(Buffer);
+      expect(avatarNotice(result, en)).toEqual([]);
+    });
+
+    it("flag: PENDING, files kept, every viewer including the owner gets the default portrait, review message", async () => {
+      const result = await upload(BLUE);
+      expect(result).toEqual({ ok: true, version: expect.any(Number), status: "PENDING" });
+      const { version } = result as { version: number };
+      expect(state.rows[0]).toMatchObject({
+        avatarKey: `alice/${version}`,
+        avatarStatus: "PENDING",
+      });
+      expect(await filesOf("alice")).toEqual([`${version}-256.webp`, `${version}-64.webp`]);
+      // The reader serves APPROVED only: null means the default portrait, for the owner too.
+      expect(await readAvatarFile(owner, "alice", version, 256)).toBeNull();
+      expect(await readAvatarFile(owner, "alice", version, 64)).toBeNull();
+      expect(avatarNotice(result, en)).toEqual([en.settings.avatar.moderation.pending]);
+      expect(avatarNotice(result, fr)).toEqual([fr.settings.avatar.moderation.pending]);
+      expect(en.settings.avatar.moderation.pending).toMatch(/being reviewed/i);
+    });
+
+    it("reject: nothing written, the previous approved avatar stays, rejection message with the appeal path", async () => {
+      const first = (await upload(GREEN)) as { version: number };
+      vi.mocked(db.user.update).mockClear();
+      await new Promise((r) => setTimeout(r, 2));
+
+      const result = await upload(RED);
+      expect(result).toEqual({ ok: false, code: "Rejected" });
+      expect(db.user.update).not.toHaveBeenCalled();
+      expect(state.rows[0]).toMatchObject({
+        avatarKey: `alice/${first.version}`,
+        avatarStatus: "APPROVED",
+      });
+      expect(await filesOf("alice")).toEqual([
+        `${first.version}-256.webp`,
+        `${first.version}-64.webp`,
+      ]);
+      expect(await readAvatarFile(owner, "alice", first.version, 256)).toBeInstanceOf(Buffer);
+      expect(avatarNotice(result, en)).toEqual([
+        en.settings.avatar.moderation.rejected,
+        en.settings.avatar.moderation.appeal,
+      ]);
+      expect(avatarNotice(result, fr)).toEqual([
+        fr.settings.avatar.moderation.rejected,
+        fr.settings.avatar.moderation.appeal,
+      ]);
+      // The appeal path of docs/privacy/moderation.md: through the teacher or school office.
+      expect(en.settings.avatar.moderation.appeal).toMatch(/teacher.*school office/i);
+      expect(fr.settings.avatar.moderation.appeal).toMatch(/enseignant.*école/i);
+    });
+
+    it("reject with no previous avatar: the row stays NONE and no file exists", async () => {
+      expect(await upload(RED)).toEqual({ ok: false, code: "Rejected" });
+      expect(state.rows[0]).toMatchObject({ avatarKey: null, avatarStatus: "NONE" });
+      expect(await readdir(state.dir)).toEqual([]);
+    });
+
+    it("a flagged upload replaces an approved one (fail safe: hidden until reviewed)", async () => {
+      const first = (await upload(GREEN)) as { version: number };
+      await new Promise((r) => setTimeout(r, 2));
+      const second = (await upload(BLUE)) as { version: number };
+      expect(state.rows[0]).toMatchObject({
+        avatarKey: `alice/${second.version}`,
+        avatarStatus: "PENDING",
+      });
+      expect(await filesOf("alice")).toEqual([
+        `${second.version}-256.webp`,
+        `${second.version}-64.webp`,
+      ]);
+      expect(await readAvatarFile(owner, "alice", first.version, 256)).toBeNull();
+    });
+
+    it("the default (heuristic) moderator is used when AVATAR_MODERATOR is unset", async () => {
+      state.moderator = undefined;
+      // A flat skin-toned square: the heuristic flags it.
+      expect(await upload("#e0ac8c")).toEqual({
+        ok: true,
+        version: expect.any(Number),
+        status: "PENDING",
+      });
+      // Red is not skin: the heuristic approves what the fake would reject.
+      expect(await upload(RED)).toMatchObject({ ok: true, status: "APPROVED" });
+    });
+
+    it("other error codes carry no moderation notice", () => {
+      expect(avatarNotice({ ok: false, code: "TooLarge" }, en)).toEqual([]);
+    });
   });
 });

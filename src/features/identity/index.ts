@@ -8,4 +8,5 @@ export { readAvatarFile } from "./queries/avatar-file";
 export { avatarStore } from "./avatars/default-store";
 export type { AvatarStore, AvatarSize } from "./avatars/store";
 export type { AvatarErrorCode } from "./avatars/errors";
+export { avatarNotice } from "./avatars/moderation/notice";
 export { avatarQuery, normalizeUsername } from "./schema";

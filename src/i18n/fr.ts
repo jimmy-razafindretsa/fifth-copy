@@ -246,4 +246,16 @@ export const fr = {
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",
   },
+  settings: {
+    avatar: {
+      moderation: {
+        pending:
+          "Ta photo est en vérification. Tant qu'une personne ne l'a pas vue, tout le monde voit le portrait par défaut, toi aussi.",
+        rejected:
+          "Ta photo a été refusée. Elle ne respecte pas les règles sur les photos, alors elle n'a pas été classée.",
+        appeal:
+          "Tu crois que c'est une erreur ? Demande à ton enseignant ou au secrétariat de ton école de joindre la personne responsable.",
+      },
+    },
+  },
 } satisfies Messages;

@@ -9,6 +9,7 @@ import {
   fetchProviderImage,
 } from "./fetch-provider-image";
 import { FsAvatarStore } from "./fs-store";
+import type { AvatarModerator, ModerationVerdict } from "./moderation/moderator";
 import type { OauthAvatarUsers } from "./oauth-avatar-users";
 import {
   OAUTH_AVATAR_WARNING,
@@ -29,6 +30,11 @@ const png = (width = 300, height = 200) =>
     .toBuffer();
 
 type FakeFetch = ReturnType<typeof vi.fn<typeof fetch>>;
+
+/** A moderator with a fixed verdict (ADR 0015); the real ones are tested in moderation/. */
+const always = (verdict: ModerationVerdict): AvatarModerator => ({
+  check: async () => ({ verdict, reason: "clear" }),
+});
 
 function imageResponse(body: BodyInit | null, headers: Record<string, string> = {}, status = 200) {
   return new Response(body, { status, headers: { "content-type": "image/png", ...headers } });
@@ -219,6 +225,7 @@ describe("importOauthAvatar", () => {
     importOauthAvatar(USER, url, {
       fetch: fake,
       store,
+      moderator: always("approve"),
       users,
       warn,
       now: () => 1_700_000_000_000,
@@ -381,6 +388,26 @@ describe("importOauthAvatar", () => {
         expect(warn).not.toHaveBeenCalled();
       },
     );
+  });
+
+  describe("moderation (ADR 0015, #64): imports pass the same check as uploads", () => {
+    it("a flagged picture is stored PENDING", async () => {
+      const fake: FakeFetch = vi.fn(async () => imageResponse(await png(200, 200)));
+      const result = await run(GITHUB, fake, { moderator: always("flag") });
+      expect(result).toEqual({ imported: true, key: "user1/1700000000000" });
+      expect(row).toEqual({ avatarKey: "user1/1700000000000", avatarStatus: "PENDING" });
+      expect(await files()).toHaveLength(2);
+    });
+
+    it("a rejected picture is skipped: nothing written, default portrait stays", async () => {
+      const fake: FakeFetch = vi.fn(async () => imageResponse(await png(200, 200)));
+      const result = await run(GITHUB, fake, { moderator: always("reject") });
+      expect(result).toEqual({ imported: false, reason: "rejected" });
+      expect(row).toEqual({ avatarKey: null, avatarStatus: "NONE" });
+      expect(users.setAvatarIfNone).not.toHaveBeenCalled();
+      expect(await readdir(root)).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(OAUTH_AVATAR_WARNING, { reason: "rejected" });
+    });
   });
 
   describe("C3: never overwrites a stored avatar", () => {

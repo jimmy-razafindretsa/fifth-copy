@@ -6,6 +6,7 @@ export const AVATAR_ERROR_CODES = [
   "TooSmall",
   "Undecodable",
   "BadCrop",
+  "Rejected",
 ] as const;
 export type AvatarErrorCode = (typeof AVATAR_ERROR_CODES)[number];
 
@@ -45,4 +46,8 @@ export class Undecodable extends AvatarError {
 /** The square crop is malformed or does not lie inside the image. */
 export class BadCrop extends AvatarError {
   readonly code = "BadCrop";
+}
+/** The moderator rejected the picture (ADR 0015): nothing was written, the previous avatar stays. */
+export class Rejected extends AvatarError {
+  readonly code = "Rejected";
 }

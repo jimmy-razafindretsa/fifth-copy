@@ -6,12 +6,23 @@ import {
   type RejectReason,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
+import type { ResumeKeys } from "../players/resume-keys";
 import type { RoomRegistry } from "../rooms/registry";
 import { verifyRaceToken } from "./race-token";
 
-export type HandshakeDeps = { secret: string; registry: RoomRegistry; clock: Clock };
+export type HandshakeDeps = {
+  secret: string;
+  registry: RoomRegistry;
+  clock: Clock;
+  /** Resume key resolution (#178); without it no handshake resumes. */
+  resumeKeys?: Pick<ResumeKeys, "lookup">;
+};
+/**
+ * `resume`: the handshake carried the user's own resume key for this room while a race is on
+ * (countdown or running); the socket edge then resumes its line-cut desk (#178).
+ */
 export type HandshakeResult =
-  { ok: true; claims: RaceTokenClaims } | { ok: false; reason: RejectReason };
+  { ok: true; claims: RaceTokenClaims; resume: boolean } | { ok: false; reason: RejectReason };
 
 /**
  * Decides whether a Socket.IO handshake may proceed (ADR 0006, 0009). Order: protocol version, then
@@ -19,10 +30,14 @@ export type HandshakeResult =
  * claim, the only source of the room: a client never names one; then `in-progress` for a new user of
  * a started room. Reads only; joining happens on connect.
  * A `spectator` token is refused as `bad-token` until the spectator channel exists (#187).
+ * Last, `auth.resumeKey` (#178, ADR 0009): read only after all of the above passed and only while a
+ * race is on; it resumes only when it resolves to this token's `lobby` and `sub`. Any other key
+ * (another user's, another lobby's, made up, expired, or a failed lookup) is ignored: a plain join.
+ * The key never grants access on its own and is never logged.
  */
 export async function authenticateHandshake(
   auth: unknown,
-  { secret, registry, clock }: HandshakeDeps,
+  { secret, registry, clock, resumeKeys }: HandshakeDeps,
 ): Promise<HandshakeResult> {
   if ((auth as { v?: unknown } | null | undefined)?.v !== PROTOCOL_VERSION) {
     return { ok: false, reason: "version" };
@@ -41,7 +56,14 @@ export async function authenticateHandshake(
   ) {
     return { ok: false, reason: "in-progress" };
   }
-  return { ok: true, claims: verified.claims };
+  const { resumeKey } = parsed.data;
+  const raceOn = room.phase === "countdown" || room.phase === "running";
+  if (!resumeKey || !raceOn || !resumeKeys) {
+    return { ok: true, claims: verified.claims, resume: false };
+  }
+  const entry = await resumeKeys.lookup(resumeKey).catch(() => null);
+  const resume = entry?.lobbyId === verified.claims.lobby && entry.userId === verified.claims.sub;
+  return { ok: true, claims: verified.claims, resume };
 }
 
 /** Socket.IO middleware: refusal is `connect_error` with the reason as its message. */
@@ -56,6 +78,7 @@ export function createHandshakeMiddleware(deps: HandshakeDeps) {
           return next(new Error(result.reason));
         }
         socket.data.claims = result.claims;
+        socket.data.resume = result.resume;
         next();
       },
       () => next(new Error("no-room" satisfies RejectReason)),

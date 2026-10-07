@@ -422,18 +422,22 @@ describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {
     const { booted, host, lobby, seenHost, others } = await room({
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
     });
+    const lineCuts: number[] = [];
+    host.on("event", (e) => void (e.kind === "line-cut" && lineCuts.push(e.desk)));
     await start(host);
     booted.clock.advance(3_000);
     await eventually(async () => (await phaseOf(lobby)) === "running", "phase running");
     const before = (await hash(lobby)).fields;
 
+    // #178: the desk is line-cut, not freed; the clock never pauses.
     others[0]!.client.disconnect();
-    await until(() => seenHost.roster?.length === 1, 2_000, "roster after leave");
+    await until(() => lineCuts.length === 1, 2_000, "line cut");
     const after = await hash(lobby);
     expect(after.fields).toEqual(before);
     expect(after.ttl).toBeGreaterThan(0);
+    expect(await booted.server.registry.members(lobby)).toHaveLength(2);
 
-    // The leaver is still ranked from the desks captured at start.
+    // The dropped desk is still ranked from the desks captured at start.
     booted.clock.advance(60_000);
     await until(() => seenHost.ended.length === 1, 2_000, "ended");
     expect(seenHost.ended[0]!.ranking.map((r) => r.desk).sort()).toEqual([1, 2]);
@@ -441,10 +445,26 @@ describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {
 });
 
 describe("lifecycle: room close", () => {
-  it("cancels the room's timers when its last member leaves", async () => {
+  it("closing the room cancels its lifecycle and grace timers (#178: no leave mid-race)", async () => {
     const { booted, host, lobby, others } = await room();
     await start(host);
     expect(booted.scheduler.armed()).toBe(2);
+    others[0]!.client.disconnect();
+    host.disconnect();
+    // GO, timer end, two grace timers; the room stays open while the race is on.
+    await until(() => booted.scheduler.armed() === 4, 2_000, "grace timers armed");
+    expect((await hash(lobby)).fields.openedAt).toBeDefined();
+    booted.server.lifecycle.onRoomClosed(lobby);
+    expect(booted.scheduler.armed()).toBe(0);
+  });
+
+  it("the last member leaving after the end closes the room with no timer left", async () => {
+    const { booted, host, lobby, seenHost, others } = await room({
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+    });
+    await start(host);
+    booted.clock.advance(63_000);
+    await until(() => seenHost.ended.length === 1, 2_000, "ended");
     others[0]!.client.disconnect();
     host.disconnect();
     await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");

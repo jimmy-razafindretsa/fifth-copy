@@ -1,4 +1,6 @@
 export { Alert, type AlertProps } from "./alert";
+export { Monogram, type MonogramProps, type MonogramVariant } from "./brand/monogram";
+export { Wordmark, type WordmarkProps, type WordmarkVariant } from "./brand/wordmark";
 export { Button, type ButtonProps } from "./button";
 export { Card } from "./card";
 export { EmbedFrame } from "./embed-frame";

@@ -6,7 +6,8 @@ import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
-  return { title: t.meta.title, description: t.meta.description };
+  // the brand name, not translated (bible 1); the icons are src/app/{favicon.ico,icon.svg,apple-icon.png}
+  return { title: t.meta.title, description: t.meta.description, applicationName: "Fifth Copy" };
 }
 
 /**

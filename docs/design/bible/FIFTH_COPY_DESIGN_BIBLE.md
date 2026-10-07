@@ -149,6 +149,7 @@ For size `S` (px): radius `0.225S`. Background red (or paper/ink).
 - Bar: left `0.2S`, top `0.5S`, width `0.95S`, height `0.36S`, ink, `skewY(-8deg)`, origin `0 100%`.
 - `C`: left `0.4S`, top `0.47S`, `700 0.44S/1`, **same colour as the background** (knocked out), same skew.
 - Works down to 16px (favicon).
+- Site icons (extension, #24): the paper-tile monogram is the favicon (16 and 32 px, transparent corners) and the SVG icon; the 180px Apple touch icon is the same raster flattened on paper, since iOS paints transparency black. Details: `docs/design/logo.md` "Site icons".
 
 Rules: no recolouring the bar violet or gold, never straighten it, and keep clear space of one bar height around the mark.
 

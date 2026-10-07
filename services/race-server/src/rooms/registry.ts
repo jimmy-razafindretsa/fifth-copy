@@ -2,21 +2,52 @@ import type { ChainableCommander, Redis } from "ioredis";
 import { z } from "zod";
 import {
   deskIdentity,
+  msSchema,
+  phaseSchema,
+  raceInfoSchema,
   raceSettingsPatchSchema,
   raceSettingsSchema,
+  startRaceRequestSchema,
   type Member,
+  type Phase,
+  type RaceInfo,
   type RaceSettings,
   type RaceSettingsPatch,
+  type StartRaceRequest,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import { nextDesk } from "./desks";
 import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
 
-export type Phase = "waiting";
-export type Room = { roomId: string; code: string; phase: Phase; settings: RaceSettings };
+export type { Phase };
+/** One desk of a race as sent to the web app at start and kept in the room hash (`desks`). */
+export type RaceDesk = StartRaceRequest["desks"][number];
+export type Room = {
+  roomId: string;
+  code: string;
+  phase: Phase;
+  settings: RaceSettings;
+  /** Set from `host:start` on (#166); null while the room has never started a race. */
+  race: RaceInfo | null;
+};
+/** What the lifecycle reads, inside `withRoom`, to decide a transition (#166). */
+export type RoomState = {
+  hostUserId: string;
+  phase: Phase;
+  settings: RaceSettings;
+  race: RaceInfo | null;
+  /** Server ms epoch at which the race ends on time; null before the first start. */
+  endAt: number | null;
+  /** Current members as desks, by desk ascending (humans only until bots are seated, #156). */
+  seated: RaceDesk[];
+  /** Desks captured at start (ranked at the end even if they left); null before the first start. */
+  desks: RaceDesk[] | null;
+};
 
+/** `in-progress`: a user who is not already a member while the phase is not `waiting` (#166). */
 export type JoinResult =
-  { ok: true; desk: number; members: Member[]; room: Room } | { ok: false; reason: "no-room" };
+  | { ok: true; desk: number; members: Member[]; room: Room }
+  | { ok: false; reason: "no-room" | "in-progress" };
 /** `closed` is true only when this call removed the last member and deleted the room's keys. */
 export type LeaveResult = { members: Member[]; closed: boolean };
 export type UpdateSettingsResult =
@@ -32,7 +63,7 @@ export type RoomRegistry = {
     settings: RaceSettings;
   }): Promise<{
     created: boolean;
-    room: Room;
+    room: Room & { phase: "waiting" };
   }>;
   join(lobbyId: string, member: { userId: string; name: string }): Promise<JoinResult>;
   leave(lobbyId: string, userId: string): Promise<LeaveResult>;
@@ -50,15 +81,36 @@ export type RoomRegistry = {
     byUserId: string,
     patch: RaceSettingsPatch,
   ): Promise<UpdateSettingsResult>;
+  /**
+   * Runs `fn` in the room's queue, after every pending join/leave/settings call of that room and
+   * before the next one. `room`, `startRace` and `setPhase` are called inside it (never the queued
+   * methods above: they would wait on themselves).
+   */
+  withRoom<T>(lobbyId: string, fn: () => Promise<T>): Promise<T>;
+  /** The room's lifecycle fields; null for an unknown room; rejects on a corrupt hash. */
+  room(lobbyId: string): Promise<RoomState | null>;
+  hasMember(lobbyId: string, userId: string): Promise<boolean>;
+  /**
+   * Phase `countdown` with the race, its clock and its desks, in one MULTI with both TTLs (ADR
+   * 0008). The caller checked the phase under `withRoom`.
+   */
+  startRace(
+    lobbyId: string,
+    fields: { race: RaceInfo; endAt: number; desks: RaceDesk[] },
+  ): Promise<void>;
+  /** Writes the phase in one MULTI with both TTLs; the caller checked the room under `withRoom`. */
+  setPhase(lobbyId: string, phase: Phase): Promise<void>;
   /** Rooms open on this process (ADR 0008 in-process cache); drives /health and the deploy drain. */
   count(): number;
 };
+
+const raceDesksSchema = startRaceRequestSchema.shape.desks;
 
 const seatSchema = z.object({ desk: z.int().min(1), name: z.string().min(1) });
 type Seat = z.infer<typeof seatSchema>;
 
 /**
- * Live membership of waiting rooms (ADR 0008 "Live room"; ARCHITECTURE 7.1). Redis is the state;
+ * Live membership and lifecycle fields of rooms (ADR 0008 "Live room"; ARCHITECTURE 7.1). Redis is the state;
  * this process keeps only the set of open room ids for count(). join/leave read-modify-write the
  * members hash, so calls on one room are serialised in-process (one race server per deployment).
  */
@@ -103,8 +155,16 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
       hostUserId: room.hostUserId ?? "",
       phase: room.phase,
       settings: room.settings,
+      race: room.race,
+      endAt: room.endAt,
+      desks: room.desks,
     };
   }
+
+  /** Fails loud on a missing or unknown phase, like settings. */
+  const parsePhase = (raw: string | undefined): Phase => phaseSchema.parse(raw);
+  const parseRace = (raw: string | undefined): RaceInfo | null =>
+    raw === undefined ? null : raceInfoSchema.parse(JSON.parse(raw));
 
   /** Fails loud: a room without valid settings is a bug, never a silent default. */
   function parseSettings(lobbyId: string, raw: string | undefined): RaceSettings {
@@ -134,6 +194,12 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
       .sort((a, b) => a.desk - b.desk);
   }
 
+  function toDesks(seats: Map<string, Seat>): RaceDesk[] {
+    return [...seats.entries()]
+      .map(([userId, { desk, name }]) => ({ desk, userId, name, isBot: false }))
+      .sort((a, b) => a.desk - b.desk);
+  }
+
   return {
     open: ({ lobbyId, code, hostUserId, settings }) =>
       serial(lobbyId, async () => {
@@ -156,8 +222,11 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
           room: {
             roomId: lobbyId,
             code: room?.code ?? code,
+            // The open response's wire literal (`openRoomResponseSchema`); a re-open of a started
+            // room ("Race again", #143) is decided there.
             phase: "waiting",
             settings: room ? parseSettings(lobbyId, room.settings) : settings,
+            race: room ? parseRace(room.race) : null,
           },
         };
       }),
@@ -167,7 +236,10 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const room = await readRoom(lobbyId);
         if (!room) return { ok: false, reason: "no-room" };
         const settings = parseSettings(lobbyId, room.settings);
+        const phase = parsePhase(room.phase);
         const seats = await readSeats(lobbyId);
+        // Defence in depth behind the handshake: once started, only existing members come back.
+        if (phase !== "waiting" && !seats.has(userId)) return { ok: false, reason: "in-progress" };
         const desk = seats.get(userId)?.desk ?? nextDesk([...seats.values()].map((s) => s.desk));
         seats.set(userId, { desk, name });
         await withTtl(
@@ -178,7 +250,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
           ok: true,
           desk,
           members: toMembers(seats, room.hostUserId),
-          room: { roomId: lobbyId, code: room.code, phase: "waiting", settings },
+          room: { roomId: lobbyId, code: room.code, phase, settings, race: parseRace(room.race) },
         };
       }),
 
@@ -232,6 +304,43 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         );
         return { ok: true, settings: merged.data };
       }),
+
+    withRoom: serial,
+
+    room: async (lobbyId) => {
+      const room = await readRoom(lobbyId);
+      if (!room) return null;
+      const seats = await readSeats(lobbyId);
+      return {
+        hostUserId: room.hostUserId,
+        phase: parsePhase(room.phase),
+        settings: parseSettings(lobbyId, room.settings),
+        race: parseRace(room.race),
+        endAt: room.endAt === undefined ? null : msSchema.parse(Number(room.endAt)),
+        seated: toDesks(seats),
+        desks: room.desks === undefined ? null : raceDesksSchema.parse(JSON.parse(room.desks)),
+      };
+    },
+
+    hasMember: async (lobbyId, userId) => (await redis.hexists(membersKey(lobbyId), userId)) === 1,
+
+    startRace: async (lobbyId, { race, endAt, desks }) => {
+      await withTtl(
+        lobbyId,
+        redis.multi().hset(roomKey(lobbyId), {
+          phase: "countdown",
+          raceId: race.raceId,
+          t0: String(race.t0),
+          endAt: String(endAt),
+          race: JSON.stringify(race),
+          desks: JSON.stringify(desks),
+        }),
+      );
+    },
+
+    setPhase: async (lobbyId, phase) => {
+      await withTtl(lobbyId, redis.multi().hset(roomKey(lobbyId), "phase", phase));
+    },
 
     count: () => openRooms.size,
   };

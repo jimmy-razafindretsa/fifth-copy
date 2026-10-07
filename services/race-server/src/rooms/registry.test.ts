@@ -11,7 +11,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { createFakeClock } from "../clock";
 import { createRedis } from "../redis/client";
 import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
-import { createRoomRegistry, type RoomRegistry } from "./registry";
+import { createRoomRegistry, type RaceDesk, type RoomRegistry } from "./registry";
 
 // Integration tests against a real Redis (ADR 0008, ARCHITECTURE 10). They fail, never skip, when
 // Redis is missing: a card worktree loads REDIS_URL from its .env, CI from the `check` job service.
@@ -77,7 +77,7 @@ describe("room registry: open (C1)", () => {
     const first = await registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings });
     expect(first).toEqual({
       created: true,
-      room: { roomId: lobbyId, code: "ABCD", phase: "waiting", settings },
+      room: { roomId: lobbyId, code: "ABCD", phase: "waiting", settings, race: null },
     });
     const second = await registry.open({
       lobbyId,
@@ -151,7 +151,7 @@ describe("room registry: join (C2, C3)", () => {
       ok: true,
       desk: 1,
       members: [m(1, "Ada", false), m(2, "Bob", false)],
-      room: { roomId: lobbyId, code: "ABCD", phase: "waiting", settings },
+      room: { roomId: lobbyId, code: "ABCD", phase: "waiting", settings, race: null },
     });
   });
 
@@ -353,6 +353,87 @@ describe("room registry: updateSettings (#101 C3)", () => {
   });
 });
 
+const race = {
+  raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+  text: "Le dossier est en retard.",
+  language: "fr" as const,
+  wordCount: 5,
+  t0: Date.UTC(2026, 9, 5) + 3000,
+  timerS: 60,
+};
+
+describe("room registry: lifecycle fields (#166)", () => {
+  it("room() reads phase, settings, seated desks, and the race fields once started", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    await registry.join(lobbyId, { userId: "b", name: "Bob" });
+    const seated: RaceDesk[] = [
+      { desk: 1, userId: "host", name: "Ada", isBot: false },
+      { desk: 2, userId: "b", name: "Bob", isBot: false },
+    ];
+    expect(await registry.room(lobbyId)).toEqual({
+      hostUserId: "host",
+      phase: "waiting",
+      settings,
+      race: null,
+      endAt: null,
+      seated,
+      desks: null,
+    });
+    expect(await registry.room(`lob_${randomUUID()}`)).toBeNull();
+
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks: seated });
+    expect(await registry.room(lobbyId)).toMatchObject({
+      phase: "countdown",
+      race,
+      endAt: race.t0 + 60_000,
+      desks: seated,
+    });
+    expect(await redis.hmget(roomKey(lobbyId), "raceId", "t0", "endAt")).toEqual([
+      race.raceId,
+      String(race.t0),
+      String(race.t0 + 60_000),
+    ]);
+    for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(0);
+
+    await registry.setPhase(lobbyId, "running");
+    expect((await registry.room(lobbyId))?.phase).toBe("running");
+  });
+
+  it("join refuses a new user once started with in-progress; a member still joins with the race", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks: [] });
+    await registry.setPhase(lobbyId, "running");
+
+    expect(await registry.join(lobbyId, { userId: "late", name: "Lou" })).toEqual({
+      ok: false,
+      reason: "in-progress",
+    });
+    expect(await registry.hasMember(lobbyId, "late")).toBe(false);
+    expect(await registry.hasMember(lobbyId, "host")).toBe(true);
+    expect(await registry.join(lobbyId, { userId: "host", name: "Ada" })).toMatchObject({
+      ok: true,
+      desk: 1,
+      room: { phase: "running", race },
+    });
+  });
+
+  it("withRoom runs after the room's pending calls", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    const join = registry.join(lobbyId, { userId: "a", name: "Ada" });
+    const seen = await registry.withRoom(
+      lobbyId,
+      async () => (await registry.room(lobbyId))?.seated,
+    );
+    await join;
+    expect(seen).toHaveLength(1);
+  });
+});
+
 describe("room registry: count (C7)", () => {
   it("counts 30 rooms opened in a loop as 30", async () => {
     const { registry } = setup();
@@ -400,13 +481,16 @@ describe("room registry: atomic writes (#517)", () => {
     await registry.join(lobbyId, { userId: "b", name: "Bob" });
     await registry.leave(lobbyId, "a");
     await registry.updateSettings(lobbyId, "host", { timerS: 60 });
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks: [] });
+    await registry.setPhase(lobbyId, "running");
 
     const writes = ["hset", "hsetnx", "hmset"];
     const writing = groups().filter(({ commands }) =>
       commands.some(([name, key]) => writes.includes(name!) && hashKeys.includes(key!)),
     );
-    // open twice + join twice + updateSettings: five write transactions, nothing outside them.
-    expect(writing).toHaveLength(5);
+    // open twice + join twice + updateSettings + startRace + setPhase (#166): seven write
+    // transactions, nothing outside them.
+    expect(writing).toHaveLength(7);
     for (const { atomic, commands } of writing) {
       expect(atomic).toBe(true);
       for (const key of hashKeys)
@@ -426,7 +510,24 @@ describe("room registry: atomic writes (#517)", () => {
       roomKey(lobbyId),
       "settings",
       JSON.stringify({ ...settings, timerS: 60 }),
+    ]); // #166: the race, its clock and its desks land in one MULTI, then each phase change.
+    expect(writing[5]!.commands).toContainEqual([
+      "hset",
+      roomKey(lobbyId),
+      "phase",
+      "countdown",
+      "raceId",
+      race.raceId,
+      "t0",
+      String(race.t0),
+      "endAt",
+      String(race.t0 + 60_000),
+      "race",
+      JSON.stringify(race),
+      "desks",
+      "[]",
     ]);
+    expect(writing[6]!.commands).toContainEqual(["hset", roomKey(lobbyId), "phase", "running"]);
   });
 
   it("open repairs a half-written room hash without overwriting its fields", async () => {
@@ -435,7 +536,7 @@ describe("room registry: atomic writes (#517)", () => {
     await redis.hset(roomKey(lobbyId), { openedAt: "1", code: "OLD1" });
     expect(await registry.open({ lobbyId, code: "NEW2", hostUserId: "host", settings })).toEqual({
       created: false,
-      room: { roomId: lobbyId, code: "OLD1", phase: "waiting", settings },
+      room: { roomId: lobbyId, code: "OLD1", phase: "waiting", settings, race: null },
     });
     expect(await redis.hgetall(roomKey(lobbyId))).toEqual({
       openedAt: "1",

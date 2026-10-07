@@ -6,7 +6,7 @@ import { initialState } from "@fifth-copy/engine";
 import { DEFAULT_RACE_SETTINGS, snapshotSchema, type RaceInfo } from "@fifth-copy/protocol";
 import { connectRedis } from "../testing/harness";
 import { createDesksState, type DeskState } from "./desks-state";
-import { desksKey, ROOM_TTL_S } from "./keys";
+import { desksKey, ROOM_TTL_S, traceKey } from "./keys";
 import { collectSnapshot } from "./live-rank";
 
 // #173 C6: the per-tick budget for 100 desks at late-race magnitudes (ARCHITECTURE 10: snapshot
@@ -18,7 +18,11 @@ beforeAll(async () => {
 });
 afterEach(() => vi.restoreAllMocks());
 afterAll(async () => {
-  if (lobbies.length) await redis.del(...lobbies.map(desksKey));
+  const keys = lobbies.flatMap((id) => [
+    desksKey(id),
+    ...Array.from({ length: DESKS }, (_, i) => traceKey(id, i + 1)),
+  ]);
+  if (keys.length) await redis.del(...keys);
   redis.disconnect();
 });
 
@@ -102,36 +106,100 @@ describe("snapshot budget (C6)", () => {
     );
   });
 
-  it("writes 100 changed desks in one pipeline (one EXEC) with the room TTL", async () => {
+  it("writes 100 changed desks in one pipeline (one EXEC), every written key with the room TTL", async () => {
     const { lobbyId, desksState } = lateRoom();
-    const sent: string[][] = [];
-    const original = redis.sendCommand.bind(redis);
-    vi.spyOn(redis, "sendCommand").mockImplementation((command: Command, ...rest) => {
-      sent.push([command.name.toLowerCase(), ...command.args.slice(0, 3).map(String)]);
-      return original(command, ...(rest as []));
-    });
+    const sent = spyCommands();
     const start = performance.now();
     await desksState.flush(lobbyId);
     const flushMs = performance.now() - start;
 
-    expect(sent.filter(([name]) => name === "exec")).toHaveLength(1);
-    expect(sent.map(([name]) => name)).toEqual(["multi", "hset", "expire", "exec"]);
-    expect(sent[2]).toEqual(["expire", desksKey(lobbyId), String(ROOM_TTL_S)]);
+    expect(sent.filter(({ name }) => name === "exec")).toHaveLength(1);
+    expect(sent.slice(0, 3).map(({ args }) => args.slice(0, 2))).toEqual([
+      [],
+      [desksKey(lobbyId), "1"],
+      [desksKey(lobbyId), String(ROOM_TTL_S)],
+    ]);
+    expectEveryWriteHasTtl(sent);
     expect(await redis.hlen(desksKey(lobbyId))).toBe(DESKS);
     expect(await redis.ttl(desksKey(lobbyId))).toBeGreaterThan(0);
+    const seven = desksState.states(lobbyId).get(7)!;
+    expect(await redis.llen(traceKey(lobbyId, 7))).toBe(seven.trace.length);
+    expect(await redis.ttl(traceKey(lobbyId, 7))).toBeGreaterThan(0);
+    console.log(JSON.stringify({ bench: "desks-mirror-first", flushMs }));
+  });
 
-    // Next tick: every desk typed 2 keys. Only the new keystrokes are serialised; the field still
-    // holds the whole trace. Measured, not asserted: the Redis write itself is #592's.
-    for (let desk = 1; desk <= DESKS; desk++) {
-      const state = desksState.states(lobbyId).get(desk)!;
-      state.trace.push({ t: 500_000, key: "e" }, { t: 500_001, key: "e" });
-      desksState.set(lobbyId, desk, { ...state, total: state.total + 2 });
-    }
-    const next = performance.now();
+  it("C1: the next tick (2 new keys x 100 desks) builds in < 10 ms (median of 20) and queues < 100 kB", async () => {
+    const { lobbyId, desksState } = lateRoom();
     await desksState.flush(lobbyId);
-    const nextFlushMs = performance.now() - next;
-    const stored = JSON.parse((await redis.hget(desksKey(lobbyId), "7"))!) as DeskState;
-    expect(stored.trace).toEqual(desksState.states(lobbyId).get(7)!.trace);
-    console.log(JSON.stringify({ bench: "desks-mirror", flushMs, nextFlushMs }));
+    const builds: number[] = [];
+    const flushes: number[] = [];
+    let bytes = 0;
+    for (let run = 0; run < 20; run++) {
+      for (let desk = 1; desk <= DESKS; desk++) {
+        const state = desksState.states(lobbyId).get(desk)!;
+        state.trace.push({ t: 500_000 + run * 2, key: "e" }, { t: 500_001 + run * 2, key: "e" });
+        desksState.set(lobbyId, desk, { ...state, total: state.total + 2 });
+      }
+      const sent = spyCommands();
+      const start = performance.now();
+      await desksState.flush(lobbyId);
+      flushes.push(performance.now() - start);
+      const exec = sent.find(({ name }) => name === "exec")!;
+      builds.push(exec.at - start);
+      expect(sent.filter(({ name }) => name === "exec")).toHaveLength(1);
+      expect(sent.filter(({ name }) => name === "del")).toHaveLength(0);
+      expectEveryWriteHasTtl(sent);
+      bytes = Math.max(
+        bytes,
+        sent.reduce((sum, { bytes: b }) => sum + b, 0),
+      );
+      vi.restoreAllMocks();
+    }
+    expect(median(builds)).toBeLessThan(10);
+    expect(bytes).toBeLessThan(100_000);
+
+    // The mirror still holds the whole trace, in order.
+    const seven = desksState.states(lobbyId).get(7)!;
+    const stored = (await redis.lrange(traceKey(lobbyId, 7), 0, -1)).map((e) => JSON.parse(e));
+    expect(stored).toEqual(seven.trace);
+    console.log(
+      JSON.stringify({
+        bench: "desks-mirror-next",
+        buildMs: median(builds),
+        flushMs: median(flushes),
+        bytes,
+      }),
+    );
   });
 });
+
+type Sent = { name: string; args: string[]; bytes: number; at: number };
+
+/** Records every command with its argument bytes and the instant it was handed to the client. */
+function spyCommands() {
+  const sent: Sent[] = [];
+  const original = redis.sendCommand.bind(redis);
+  vi.spyOn(redis, "sendCommand").mockImplementation((command: Command, ...rest) => {
+    const args = command.args.map(String);
+    const bytes = command.args.reduce<number>(
+      (sum, a) => sum + (Buffer.isBuffer(a) ? a.length : Buffer.byteLength(String(a))),
+      0,
+    );
+    sent.push({ name: command.name.toLowerCase(), args, bytes, at: performance.now() });
+    return original(command, ...(rest as []));
+  });
+  return sent;
+}
+
+/** Every key written in the transaction (HSET, RPUSH, DEL) also gets `EXPIRE key ROOM_TTL_S` (C2). */
+function expectEveryWriteHasTtl(sent: Sent[]) {
+  const written = new Set(
+    sent.filter(({ name }) => ["hset", "rpush", "del"].includes(name)).map(({ args }) => args[0]),
+  );
+  const expired = new Set(
+    sent
+      .filter(({ name, args }) => name === "expire" && args[1] === String(ROOM_TTL_S))
+      .map(({ args }) => args[0]),
+  );
+  for (const key of written) expect(expired, `TTL for ${key}`).toContain(key);
+}

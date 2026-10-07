@@ -20,7 +20,8 @@ const SKIN_LIGHT: Rgb = { r: 224, g: 172, b: 140 };
 const SKIN_MID: Rgb = { r: 198, g: 134, b: 66 };
 const SKIN_DARK: Rgb = { r: 141, g: 85, b: 36 };
 
-const plain = (c: Rgb) => sharp({ create: { width: SIZE, height: SIZE, channels: 3, background: c } });
+const plain = (c: Rgb) =>
+  sharp({ create: { width: SIZE, height: SIZE, channels: 3, background: c } });
 
 /** Deterministic "photo-like" noise: every channel of every pixel drawn from a seeded LCG. */
 function noise(seed = 1) {
@@ -60,7 +61,12 @@ describe("heuristic moderator (C3, ADR 0015)", () => {
     ["medium skin-tone block", () => plain(SKIN_MID), "flag", "skin"],
     ["dark skin-tone block", () => plain(SKIN_DARK), "flag", "skin"],
     ["60% skin block over noise", () => block(noise(5), SKIN_LIGHT, 0.6), "flag", "skin"],
-    ["30% flat skin block over grey", () => block(plain(GREY), SKIN_MID, 0.3), "flag", "smooth-skin"],
+    [
+      "30% flat skin block over grey",
+      () => block(plain(GREY), SKIN_MID, 0.3),
+      "flag",
+      "smooth-skin",
+    ],
   ];
 
   it.each(table)("%s -> %s (%s)", async (_label, make, verdict, reason) => {

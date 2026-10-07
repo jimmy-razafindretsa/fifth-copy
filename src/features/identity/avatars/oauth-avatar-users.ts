@@ -4,5 +4,8 @@ import type { StoredAvatarStatus } from "./store-avatar";
 export interface OauthAvatarUsers {
   hasAvatar(userId: string): Promise<boolean>;
   /** Sets the key only while the row still has none; false when someone else got there first. */
-  setAvatarIfNone(userId: string, avatar: { key: string; status: StoredAvatarStatus }): Promise<boolean>;
+  setAvatarIfNone(
+    userId: string,
+    avatar: { key: string; status: StoredAvatarStatus },
+  ): Promise<boolean>;
 }

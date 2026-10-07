@@ -5,7 +5,9 @@ import { fakeModerator } from "./fake";
 // C6: the fake moderator (AVATAR_MODERATOR=fake, never in production) reads the verdict from the
 // image's dominant colour, so #60's e2e can drive both messages with plain fixtures.
 const image = (background: { r: number; g: number; b: number }, format: "webp" | "png" = "webp") =>
-  sharp({ create: { width: 256, height: 256, channels: 3, background } })[format]().toBuffer();
+  sharp({ create: { width: 256, height: 256, channels: 3, background } })
+    [format]()
+    .toBuffer();
 
 describe("fake moderator (C6)", () => {
   it.each([

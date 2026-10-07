@@ -293,13 +293,16 @@ describe("room registry: updateSettings (#101 C3)", () => {
     await registry.updateSettings(lobbyId, "host", {
       bots: [{ level: "recruit" }, { level: "clerk" }],
     });
+    // A bots patch also re-seats the room and returns its members (#156, rooms/bots.test.ts).
     expect(await registry.updateSettings(lobbyId, "host", { bots: [{ level: "major" }] })).toEqual({
       ok: true,
       settings: { ...settings, bots: [{ level: "major" }] },
+      members: [expect.objectContaining({ desk: 2, isBot: true })],
     });
     expect(await registry.updateSettings(lobbyId, "host", { bots: [] })).toEqual({
       ok: true,
       settings: { ...settings, bots: [] },
+      members: [],
     });
     expect(await stored(lobbyId)).toEqual({ ...settings, bots: [] });
   });

@@ -8,7 +8,10 @@ import {
 } from "@fifth-copy/protocol";
 import { signInternalBody } from "./sign";
 
-/** Internal request bodies are small JSON objects; anything larger is refused before hashing. */
+/**
+ * Internal request bodies are small JSON objects; anything larger is refused before hashing. A route
+ * whose protocol schema bounds a larger body passes its own `maxBodyBytes` (results, #189).
+ */
 export const MAX_INTERNAL_BODY_BYTES = 64 * 1024;
 
 const HEX_SHA256 = /^[0-9a-f]{64}$/;
@@ -47,16 +50,21 @@ async function readCapped(request: Request, max: number): Promise<string | null>
 
 /**
  * Verifies a race server -> web internal request (ADR 0006 point 6), with the race server's rules
- * and order (`services/race-server/src/http/internal.ts`): raw body capped at 64 KiB (400 `bad-body`),
+ * and order (`services/race-server/src/http/internal.ts`): raw body capped at `maxBodyBytes` (default
+ * `MAX_INTERNAL_BODY_BYTES`, 400 `bad-body`),
  * timestamp format and skew (401 `stale-timestamp`), HMAC-SHA256 hex over `${timestamp}.${rawBody}`
  * compared in constant time (401 `bad-signature`), JSON object (400 `bad-body`), then `v` (426
  * `version`). The caller parses `body` with its protocol schema. Nothing here logs.
  */
 export async function requireInternal(
   request: Request,
-  { secret, nowMs = Date.now() }: { secret: string; nowMs?: number },
+  {
+    secret,
+    nowMs = Date.now(),
+    maxBodyBytes = MAX_INTERNAL_BODY_BYTES,
+  }: { secret: string; nowMs?: number; maxBodyBytes?: number },
 ): Promise<InternalVerified | InternalRefusal> {
-  const rawBody = await readCapped(request, MAX_INTERNAL_BODY_BYTES);
+  const rawBody = await readCapped(request, maxBodyBytes);
   if (rawBody === null) return { ok: false, status: 400, error: "bad-body" };
 
   const timestamp = request.headers.get(INTERNAL_HEADERS.timestamp);

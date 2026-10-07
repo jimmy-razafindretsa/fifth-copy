@@ -2,13 +2,18 @@ import { randomUUID } from "node:crypto";
 import type { Redis } from "ioredis";
 import { SignJWT } from "jose";
 import { io as connectClient, type Socket as ClientSocket } from "socket.io-client";
+import type { Keystroke } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   PROTOCOL_VERSION,
   RACE_TOKEN_TTL_S,
   type ClientToServerEvents,
+  type Ended,
   type Member,
+  type RaceEvent,
   type RaceSettings,
+  type Rejected,
+  type Snapshot,
   type RaceTokenClaims,
   type ServerToClientEvents,
   type StartRaceResponse,
@@ -19,7 +24,7 @@ import { createFakeClock, createFakeScheduler, type FakeClock, type FakeSchedule
 import type { WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
-import { membersKey, roomKey } from "../rooms/keys";
+import { desksKey, membersKey, roomKey } from "../rooms/keys";
 
 // Test-only harness for the race server's integration tests (real Redis, ARCHITECTURE testing table).
 // Fails, never skips, without Redis. Deletes only the keys of lobbies it created (shared db index).
@@ -155,7 +160,7 @@ export async function boot(
       for (const c of clients) c.disconnect();
       await server.close();
       const cleanup = await connectRedis(redisUrl);
-      const keys = lobbies.flatMap((id) => [roomKey(id), membersKey(id)]);
+      const keys = lobbies.flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]);
       if (keys.length) await cleanup.del(...keys);
       cleanup.disconnect();
     },
@@ -193,4 +198,97 @@ export async function until(check: () => boolean, ms: number, what = "condition"
     if (Date.now() > deadline) throw new Error(`timed out after ${ms} ms waiting for ${what}`);
     await new Promise((r) => setTimeout(r, 20));
   }
+}
+
+/** A `WebApi` that starts every race on `content` (one word, e.g. "bonjour"). */
+export function textWebApi(content: string): WebApi {
+  return {
+    startRace: async (request) => ({
+      v: PROTOCOL_VERSION,
+      raceId: request.raceId,
+      text: { content, language: "fr", wordCount: content.split(" ").length, sourceRef: null },
+      settings: request.settings,
+      startedAt: 0,
+    }),
+  };
+}
+
+/** What a racer's client received during a race (#173). */
+export type RaceSeen = ReturnType<typeof track> & {
+  snapshots: Snapshot[];
+  events: RaceEvent[];
+  ended: Ended[];
+  rejected: Rejected[];
+};
+
+export function watchRace(client: Client): RaceSeen {
+  const seen: RaceSeen = Object.assign(track(client), {
+    snapshots: [] as Snapshot[],
+    events: [] as RaceEvent[],
+    ended: [] as Ended[],
+    rejected: [] as Rejected[],
+  });
+  client.on("snapshot", (s) => void seen.snapshots.push(s));
+  client.on("event", (e) => void seen.events.push(e));
+  client.on("ended", (e) => void seen.ended.push(e));
+  client.on("rejected", (r) => void seen.rejected.push(r));
+  return seen;
+}
+
+export type Racer = { client: Client; seen: RaceSeen; desk: number };
+
+/**
+ * Boots a server, seats the host (desk 1) and `players - 1` players (desks 2..), starts a race on
+ * `text` and, unless `go` is false, advances the fake clock to GO and waits for the desks' runtime.
+ */
+export async function startedRace(
+  redisUrl: string | undefined,
+  {
+    players = 2,
+    text = "bonjour",
+    settings = DEFAULT_RACE_SETTINGS,
+    go = true,
+    onRaceEnded,
+  }: {
+    players?: number;
+    text?: string;
+    settings?: RaceSettings;
+    go?: boolean;
+    onRaceEnded?: (ended: RaceEnded) => void;
+  } = {},
+) {
+  const booted = await boot(redisUrl, { webApi: textWebApi(text), onRaceEnded });
+  const lobby = await booted.openRoom("KGB-4821", settings);
+  const racers: Racer[] = [];
+  for (let i = 0; i < players; i++) {
+    const sub = i === 0 ? HOST_SUB : `usr_p${i}`;
+    const role = i === 0 ? "host" : "player";
+    const client = booted.connect({
+      v: PROTOCOL_VERSION,
+      token: await booted.token({ lobby, sub, name: `Clerk ${i}`, role }),
+    });
+    const seen = watchRace(client);
+    await until(() => !!seen.welcome, 3_000, `welcome ${i}`);
+    racers.push({ client, seen, desk: seen.welcome!.you! });
+  }
+  await until(() => racers.every((r) => r.seen.roster?.length === players), 3_000, "seated");
+  const ack = await racers[0]!.client.timeout(2_000).emitWithAck("host:start", {
+    v: PROTOCOL_VERSION,
+  });
+  if (!ack.ok) throw new Error(`start failed: ${ack.error}`);
+  const t0 = booted.clock.now() + 3_000;
+  if (go) await reachGo(booted, lobby, t0);
+  return { booted, lobby, racers, t0 };
+}
+
+/** Advances the fake clock to GO and waits until the room's desks run. */
+export async function reachGo(booted: Booted, lobby: string, t0: number) {
+  booted.clock.advance(t0 - booted.clock.now());
+  await until(() => booted.server.desks.get(lobby)?.phase === "running", 3_000, "GO");
+}
+
+/** Sends `keys` with one keystroke per character of `chars` at `t` ms since GO (+ `step` each). */
+export function typeKeys(client: Client, chars: string, t: number, step = 0) {
+  const batch: Keystroke[] = [...chars].map((key, i) => ({ t: t + i * step, key }));
+  client.emit("keys", { v: PROTOCOL_VERSION, batch });
 }

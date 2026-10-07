@@ -148,4 +148,3 @@ export type RankingEntry = z.infer<typeof rankingEntrySchema>;
 /** `void`: the race was annulled (#204); a void race is never sent to the results route. */
 export const endReasonSchema = z.enum(["all-finished", "timer", "void"]);
 export type EndReason = z.infer<typeof endReasonSchema>;
-

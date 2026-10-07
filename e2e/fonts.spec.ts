@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 
-// Contract of #21: the six brand families self-hosted through next/font/google.
+// Contract of #21: the six brand families self-hosted through next/font (next/font/local since #574).
 // next/font renames each family ('__Courier_Prime_<hash>'), and document.fonts.check() is true when
 // no face matches at all, so every check first resolves the real family from its CSS variable and
 // asserts that document.fonts.load() returned loaded faces.
@@ -70,7 +70,9 @@ test.describe("fonts (#21)", () => {
       const s = getComputedStyle(document.body);
       return { fontFamily: s.fontFamily, fontSize: s.fontSize, lineHeight: s.lineHeight };
     });
-    expect(body.fontFamily.split(",")[0]?.trim()).toBe(family);
+    // Computed font-family prints an identifier family (Courier_Prime, #574) unquoted: compare unquoted.
+    const unquote = (f: string) => f.replace(/^['"]|['"]$/g, "");
+    expect(unquote(body.fontFamily.split(",")[0]?.trim() ?? "")).toBe(unquote(family));
     expect(body.fontSize).toBe("16px");
     expect(Number.parseFloat(body.lineHeight)).toBeCloseTo(16 * 1.55, 1);
   });

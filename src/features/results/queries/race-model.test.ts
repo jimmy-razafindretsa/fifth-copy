@@ -15,8 +15,11 @@ describe.skipIf(!testDatabaseUrl)(
     const PREFIX = "test-race-";
     const CODE = "RCE-1880";
 
-    // Deleting the prefixed users cascades to their lobbies, races, results and keystrokes.
+    // Races outlive their lobby (#572: SetNull), so created races are deleted by id; that
+    // cascades to their results and keystrokes. Then the lobbies and the prefixed users.
+    const raceIds: string[] = [];
     const cleanup = async () => {
+      await db.race.deleteMany({ where: { id: { in: raceIds.splice(0) } } });
       await db.lobby.deleteMany({ where: { code: CODE } });
       await db.user.deleteMany({ where: { typistName: { startsWith: PREFIX } } });
     };
@@ -27,9 +30,11 @@ describe.skipIf(!testDatabaseUrl)(
     /** A lobby hosted by `host` and one race in it. */
     const race = async (hostUserId: string) => {
       const lobby = await db.lobby.create({ data: { code: CODE, hostUserId } });
+      const id = randomUUID();
+      raceIds.push(id);
       return db.race.create({
         data: {
-          id: randomUUID(),
+          id,
           lobbyId: lobby.id,
           textContent: "le chat dort",
           textLanguage: "FR",
@@ -166,15 +171,41 @@ describe.skipIf(!testDatabaseUrl)(
       expect(await db.raceKeystrokes.count({ where: { raceId: r.id } })).toBe(0);
     });
 
-    it("deletes the race with its lobby", async () => {
+    it("keeps the race, its results and keystrokes when the lobby is deleted", async () => {
       const typist = await user("lobby-del");
       const r = await race(typist.id);
       await result(r.id, 0, { userId: typist.id });
+      await result(r.id, 1, { isBot: true });
+      await keystrokes(r.id, 0, typist.id);
 
-      await db.lobby.delete({ where: { id: r.lobbyId } });
+      await db.lobby.delete({ where: { id: r.lobbyId! } });
 
-      expect(await db.race.findUnique({ where: { id: r.id } })).toBeNull();
-      expect(await db.raceResult.count({ where: { raceId: r.id } })).toBe(0);
+      const kept = await db.race.findUnique({ where: { id: r.id } });
+      expect(kept).not.toBeNull();
+      expect(kept!.lobbyId).toBeNull();
+      expect(await db.raceResult.count({ where: { raceId: r.id } })).toBe(2);
+      expect(await db.raceKeystrokes.count({ where: { raceId: r.id } })).toBe(1);
+    });
+
+    it("deleting the host keeps the other player's result and keystrokes, removes the host's", async () => {
+      const host = await user("host-del");
+      const other = await user("other");
+      const r = await race(host.id);
+      await result(r.id, 0, { userId: host.id });
+      await result(r.id, 1, { userId: other.id });
+      await keystrokes(r.id, 0, host.id);
+      await keystrokes(r.id, 1, other.id);
+
+      await db.user.delete({ where: { id: host.id } });
+
+      expect(await db.lobby.findUnique({ where: { id: r.lobbyId! } })).toBeNull();
+      const kept = await db.race.findUnique({ where: { id: r.id } });
+      expect(kept).not.toBeNull();
+      expect(kept!.lobbyId).toBeNull();
+      expect(await db.raceResult.count({ where: { raceId: r.id, userId: other.id } })).toBe(1);
+      expect(await db.raceKeystrokes.count({ where: { raceId: r.id, userId: other.id } })).toBe(1);
+      expect(await db.raceResult.count({ where: { userId: host.id } })).toBe(0);
+      expect(await db.raceKeystrokes.count({ where: { userId: host.id } })).toBe(0);
     });
   },
 );

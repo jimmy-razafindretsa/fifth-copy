@@ -7,7 +7,7 @@ import {
   snapshotSchema,
   type RaceInfo,
 } from "@fifth-copy/protocol";
-import { startedRace, typeKeys, until, type Booted } from "../testing/harness";
+import { startedRace, typeKeys, until, type Booted, type RaceSeen } from "../testing/harness";
 import { createDesksState } from "./desks-state";
 import { ingest } from "./ingest";
 import { collectSnapshot, diffRanks, raceElapsed } from "./live-rank";
@@ -116,8 +116,7 @@ describe("overtake events over the wire (C4)", () => {
     await tick();
     await tick();
 
-    const kinds = (seen: typeof one.seen, kind: string) =>
-      seen.events.filter((e) => e.kind === kind);
+    const kinds = (seen: RaceSeen, kind: string) => seen.events.filter((e) => e.kind === kind);
     expect(kinds(two!.seen, "overtake")).toEqual([
       { v: PROTOCOL_VERSION, kind: "overtake", desk: 2, passed: 1 },
     ]);

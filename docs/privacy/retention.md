@@ -31,7 +31,7 @@ They are the project's choices, not legal advice.
 | Job records | Until the job ends and the account is deleted; exact period set by the card that creates `JobRun` | ADR 0011, #81 deletion step |
 | Backups | 14 days, then overwritten; a deleted account disappears from backups within 14 days of its deletion | ADR 0012, #403, [backup-retention.md](backup-retention.md) (#81) |
 | Moderation log entries | 12 months after the decision, or when the account is deleted, whichever comes first | The operator, by hand ([moderation.md](moderation.md)) |
-| Requests to the person in charge | 12 months after the answer. Proposed, not decided: the person in charge (Jimmy Razafindretsa) confirms it before the classroom pilot (#432) | The person in charge, by hand ([responsible.md](responsible.md)) |
+| Requests to the person in charge | 12 months after the answer, so a later complaint to the Commission d'accès à l'information can be answered with the record. Decided by the person in charge (Jimmy Razafindretsa) on 2026-10-06 | The person in charge, by hand ([responsible.md](responsible.md)) |
 
 ## What "deleted" means
 

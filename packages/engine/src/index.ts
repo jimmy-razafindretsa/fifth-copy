@@ -19,5 +19,11 @@ export { blockMode } from "./reducers/block";
 export { backspace } from "./reducers/backspace";
 export { initialState, type PlayerState } from "./reducers/state";
 
+// scoring: the numbers shown and stored for one player (elapsed time is injected, ms since GO)
+export { accuracy, elapsedFor, progress, rawWpm, wpm } from "./scoring/scoring";
+
+// ranking: one comparator for live and final order
+export { compareResults, placeOf, rank, type Rankable } from "./ranking/compare";
+
 /** Bumped whenever scoring, ranking or text handling changes. Stored on every race result. */
-export const ENGINE_VERSION = "0.2.0";
+export const ENGINE_VERSION = "0.3.0";

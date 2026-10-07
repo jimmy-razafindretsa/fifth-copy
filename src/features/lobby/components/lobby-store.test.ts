@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Member } from "@fifth-copy/protocol";
+import { DEFAULT_RACE_SETTINGS, PROTOCOL_VERSION, type Member } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
 import { bindRoomSocket, initialLobbyState, reduceLobby, type LobbyEvent } from "./lobby-store";
 
@@ -9,10 +9,11 @@ const bob: Member = { desk: 2, name: "Bob", isHost: false };
 const cyd: Member = { desk: 5, name: "Cyd", isHost: false };
 
 const welcome = (you: number, members: Member[]): RoomEvents["welcome"] => ({
-  v: 2,
+  v: PROTOCOL_VERSION,
   you,
   room: { code: "KGB-4821" as never, phase: "waiting" },
   members,
+  settings: DEFAULT_RACE_SETTINGS,
 });
 
 function run(...events: LobbyEvent[]) {
@@ -48,7 +49,7 @@ describe("reduceLobby", () => {
   it("roster replaces the list and keeps the viewer's desk", () => {
     const state = run(
       { type: "welcome", payload: welcome(2, [ada, bob]) },
-      { type: "roster", payload: { v: 2, members: [cyd, ada] } },
+      { type: "roster", payload: { v: PROTOCOL_VERSION, members: [cyd, ada] } },
     );
     expect(state.members).toEqual([ada, cyd]);
     expect(state.you).toBe(2);
@@ -64,7 +65,7 @@ describe("reduceLobby", () => {
       { type: "welcome", payload: welcome(1, [ada]) },
       { type: "connect-error", reason },
       { type: "reconnected" },
-      { type: "roster", payload: { v: 2, members: [ada, bob] } },
+      { type: "roster", payload: { v: PROTOCOL_VERSION, members: [ada, bob] } },
     );
     expect(state.phase).toBe("error");
     expect(state.error).toBe(error);
@@ -110,13 +111,13 @@ describe("bindRoomSocket", () => {
 
     const w = welcome(1, [ada]);
     fire("welcome", w);
-    fire("roster", { v: 2, members: [ada, bob] });
+    fire("roster", { v: PROTOCOL_VERSION, members: [ada, bob] });
     fire("connectError", "transport" satisfies ConnectErrorReason);
     fire("reconnecting", 1);
     fire("reconnected", 1);
     expect(dispatch.mock.calls.map(([e]) => e)).toEqual([
       { type: "welcome", payload: w },
-      { type: "roster", payload: { v: 2, members: [ada, bob] } },
+      { type: "roster", payload: { v: PROTOCOL_VERSION, members: [ada, bob] } },
       { type: "connect-error", reason: "transport" },
       { type: "reconnecting" },
       { type: "reconnected" },
@@ -128,7 +129,7 @@ describe("bindRoomSocket", () => {
     let state = initialLobbyState;
     bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)));
     fire("welcome", welcome(2, [bob]));
-    fire("roster", { v: 2, members: [bob, ada] });
+    fire("roster", { v: PROTOCOL_VERSION, members: [bob, ada] });
     expect(state).toEqual({ phase: "live", error: null, you: 2, members: [ada, bob] });
   });
 });

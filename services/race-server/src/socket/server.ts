@@ -1,8 +1,10 @@
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
+import type { Keystroke } from "@fifth-copy/engine";
 import {
   hostSettingsSchema,
   hostStartSchema,
+  keysSchema,
   pingSchema,
   PROTOCOL_VERSION,
   type ClientToServerEvents,
@@ -11,17 +13,31 @@ import {
   type RaceTokenClaims,
   type RoomCode,
   type ServerToClientEvents,
+  type Welcome,
 } from "@fifth-copy/protocol";
+import type { IngestResult } from "../rooms/ingest";
 import type { Lifecycle } from "../rooms/lifecycle";
 import { createHandshakeMiddleware, type HandshakeDeps } from "./handshake";
 
-/** Per-socket state, set by the handshake middleware from the verified race token. */
-export type SocketData = { claims: RaceTokenClaims };
+/**
+ * Per-socket state: `claims` set by the handshake middleware from the verified race token, `desk`
+ * once the registry seated the socket's user.
+ */
+export type SocketData = { claims: RaceTokenClaims; desk?: number };
+
+/** The live race behind the `keys` edge (#173): `rooms/ingest.ts` over the desks' runtime. */
+export type RacePort = {
+  ingest(lobbyId: string, desk: number, batch: Keystroke[]): IngestResult;
+  /** The desk's engine state while a race runs (`welcome.state`), else null. */
+  stateOf(lobbyId: string, desk: number): Welcome["state"];
+};
 
 export type RaceIo = Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
 type RaceSocket = Socket<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
 
 export const lobbyRoom = (lobbyId: string) => `lobby:${lobbyId}`;
+/** The sockets of one desk (a user's tabs): per-desk events such as `overtake` (#173). */
+export const deskRoom = (lobbyId: string, desk: number) => `lobby:${lobbyId}:desk:${desk}`;
 
 const log = (msg: string, fields: Record<string, unknown>) =>
   console.log(JSON.stringify({ level: "info", msg, ...fields }));
@@ -34,9 +50,9 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  */
 export function attachSocketServer(
   httpServer: HttpServer,
-  deps: HandshakeDeps & { origin: string; lifecycle: Lifecycle },
+  deps: HandshakeDeps & { origin: string; lifecycle: Lifecycle; race: RacePort },
 ): RaceIo {
-  const { registry, lifecycle } = deps;
+  const { registry, lifecycle, race } = deps;
   const io: RaceIo = new Server(httpServer, {
     cors: { origin: deps.origin, credentials: false },
     transports: ["websocket", "polling"],
@@ -58,6 +74,8 @@ export function attachSocketServer(
     registry.join(lobby, { userId: sub, name }).then(
       (joined) => {
         if (!joined.ok) return void socket.disconnect(true);
+        socket.data.desk = joined.desk;
+        void socket.join(deskRoom(lobby, joined.desk));
         socket.emit("welcome", {
           v: PROTOCOL_VERSION,
           role,
@@ -67,8 +85,8 @@ export function attachSocketServer(
           members: joined.members,
           settings: joined.room.settings,
           race: joined.room.race,
-          // Resume (#178) and keystrokes (#173) fill these.
-          state: null,
+          // Resume (#178) fills the rest.
+          state: race.stateOf(lobby, joined.desk),
           overlay: null,
           resumeKey: null,
           serverNow: deps.clock.now(),
@@ -114,6 +132,24 @@ export function attachSocketServer(
         return log("start", { lobby, outcome: "invalid" });
       }
       void lifecycle.start(lobby, { sub, role }).then(reply);
+    });
+
+    // Keystrokes (#173, ADR 0006 point 3): parsed here, applied by the runtime only. A malformed
+    // batch, a socket not yet seated or a spectator is dropped silently; a refusal by phase is
+    // `rejected` to the sender. No per-socket rate limit yet (#207).
+    socket.on("keys", (raw: unknown) => {
+      const parsed = keysSchema.safeParse(raw);
+      const { desk } = socket.data;
+      if (!parsed.success || desk === undefined || role === "spectator") return;
+      const result = race.ingest(lobby, desk, parsed.data.batch);
+      if (result.rejected) {
+        socket.emit("rejected", { v: PROTOCOL_VERSION, reason: result.rejected });
+      }
+      if (result.terminal) {
+        lifecycle
+          .onDeskTerminal(lobby)
+          .catch((err: unknown) => log("desk terminal failed", { lobby, err: String(err) }));
+      }
     });
 
     // Clock sync (#172): to the sender only, in any phase. A malformed ping is dropped.

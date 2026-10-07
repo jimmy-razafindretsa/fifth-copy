@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { charsOf, type PlayerState, type PlayerStatus } from "@fifth-copy/engine";
+import {
+  charsOf,
+  normalizeTypeable,
+  type PlayerState,
+  type PlayerStatus,
+} from "@fifth-copy/engine";
 import {
   MAX_RACE_MS,
   PROTOCOL_VERSION,
@@ -8,6 +13,7 @@ import {
   type HostStartAck,
   type RaceInfo,
   type RaceRole,
+  type RaceSettings,
   type RankingEntry,
   type ServerToClientEvents,
 } from "@fifth-copy/protocol";
@@ -15,7 +21,7 @@ import type { Clock, Scheduler, TimerHandle } from "../clock";
 import type { WebApi } from "../persist/web-api";
 import type { Durations } from "./durations";
 import { rankingFor } from "./ranking";
-import type { RoomRegistry } from "./registry";
+import type { RaceDesk, RoomRegistry } from "./registry";
 
 /** The room broadcasts the lifecycle sends; implemented by the socket edge with `io.to(room)`. */
 type RoomEvents = Pick<ServerToClientEvents, "countdown" | "ended">;
@@ -73,6 +79,9 @@ export function createLifecycle({
   emit,
   onRaceEnded = () => {},
   deskStates = async () => new Map(),
+  onGo = () => {},
+  onEnded = () => {},
+  onClosed = () => {},
 }: {
   registry: RoomRegistry;
   clock: Clock;
@@ -84,6 +93,15 @@ export function createLifecycle({
   onRaceEnded?: (ended: RaceEnded) => void;
   /** Authoritative desk states (#173); a missing desk is `initialState()`. */
   deskStates?: (lobbyId: string) => Promise<ReadonlyMap<number, PlayerState>>;
+  /** The room is `running` (#173: the desks' runtime and the tick loop start here). */
+  onGo?: (
+    lobbyId: string,
+    init: { race: RaceInfo; settings: RaceSettings; desks: RaceDesk[] },
+  ) => void;
+  /** The race is ending: ranked, phase `ended`, `ended` not yet emitted (#173: last tick, keys refused). */
+  onEnded?: (lobbyId: string) => void;
+  /** The room closed (#173: the tick loop and the runtime are dropped). */
+  onClosed?: (lobbyId: string) => void;
 }): Lifecycle {
   const timers = new Map<string, TimerHandle[]>();
 
@@ -123,6 +141,7 @@ export function createLifecycle({
       const room = await registry.room(lobbyId);
       if (room?.phase !== "countdown" || room.race?.raceId !== raceId) return;
       await registry.setPhase(lobbyId, "running");
+      onGo(lobbyId, { race: room.race, settings: room.settings, desks: room.desks ?? room.seated });
     });
 
   async function begin(lobbyId: string, by: { sub: string; role: RaceRole }) {
@@ -201,11 +220,16 @@ export function createLifecycle({
         const ranking = rankingFor(
           room.desks ?? room.seated,
           await deskStates(lobbyId),
-          charsOf(race.text).length,
+          charsOf(normalizeTypeable(race.text)).length,
           elapsed,
         );
         await registry.setPhase(lobbyId, "ended");
         cancel(lobbyId);
+        try {
+          onEnded(lobbyId);
+        } catch (err) {
+          log("onEnded failed", { lobby: lobbyId, err: String(err) });
+        }
         emit(lobbyId, "ended", { v: PROTOCOL_VERSION, raceId: race.raceId, reason, ranking });
         log("ended", { lobby: lobbyId, reason, desks: ranking.length });
         try {
@@ -227,7 +251,10 @@ export function createLifecycle({
       if (done) await lifecycle.endRace(lobbyId, "all-finished");
     },
 
-    onRoomClosed: (lobbyId) => cancel(lobbyId),
+    onRoomClosed: (lobbyId) => {
+      cancel(lobbyId);
+      onClosed(lobbyId);
+    },
 
     close: () => {
       for (const lobbyId of [...timers.keys()]) cancel(lobbyId);

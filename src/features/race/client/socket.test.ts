@@ -5,7 +5,9 @@ import {
   DEFAULT_RACE_SETTINGS,
   PROTOCOL_VERSION,
   roomCodeSchema,
+  type HostSettingsAck,
   type Roster,
+  type SettingsEvent,
   type Welcome,
 } from "@fifth-copy/protocol";
 import { connectToRoom, type IoFactory } from "./socket";
@@ -24,7 +26,8 @@ function makeEmitter() {
       listeners.get(event)?.delete(fn);
       if (listeners.get(event)?.size === 0) listeners.delete(event);
     },
-    emit(event: string, ...args: unknown[]) {
+    /** Inbound: the server delivering `event` to the client's listeners. */
+    deliver(event: string, ...args: unknown[]) {
       for (const fn of listeners.get(event) ?? []) fn(...args);
     },
   };
@@ -34,7 +37,9 @@ function makeFakeSocket() {
   const socket = makeEmitter();
   const manager = makeEmitter();
   const disconnect = vi.fn();
-  return { ...socket, io: manager, disconnect };
+  /** Outbound: what the client sends; distinct from the inbound `deliver`. */
+  const emit = vi.fn();
+  return { ...socket, io: manager, disconnect, emit };
 }
 
 function setup(token = "tok.en.value") {
@@ -104,10 +109,10 @@ describe("parsed events (C2)", () => {
     room.onRoster(onRoster);
     room.onProtocolError(onProtocolError);
 
-    fake.emit("welcome", welcome);
-    fake.emit("welcome", { ...welcome, you: 0 });
-    fake.emit("roster", roster);
-    fake.emit("roster", { v: PROTOCOL_VERSION, members: "nope" });
+    fake.deliver("welcome", welcome);
+    fake.deliver("welcome", { ...welcome, you: 0 });
+    fake.deliver("roster", roster);
+    fake.deliver("roster", { v: PROTOCOL_VERSION, members: "nope" });
 
     expect(onWelcome).toHaveBeenCalledTimes(1);
     expect(onWelcome).toHaveBeenCalledWith(welcome);
@@ -131,7 +136,7 @@ describe("connection lifecycle (C3)", () => {
       const { fake, room } = setup();
       const cb = vi.fn();
       room.onConnectError(cb);
-      fake.emit("connect_error", new Error(reason));
+      fake.deliver("connect_error", new Error(reason));
       expect(cb).toHaveBeenCalledWith(reason);
     },
   );
@@ -140,8 +145,8 @@ describe("connection lifecycle (C3)", () => {
     const { fake, room } = setup();
     const cb = vi.fn();
     room.onConnectError(cb);
-    fake.emit("connect_error", new Error("xhr poll error"));
-    fake.emit("connect_error", undefined);
+    fake.deliver("connect_error", new Error("xhr poll error"));
+    fake.deliver("connect_error", undefined);
     expect(cb.mock.calls).toEqual([["transport"], ["transport"]]);
   });
 
@@ -151,8 +156,8 @@ describe("connection lifecycle (C3)", () => {
     const onReconnected = vi.fn();
     room.onReconnecting(onReconnecting);
     room.onReconnected(onReconnected);
-    fake.io.emit("reconnect_attempt", 2);
-    fake.io.emit("reconnect", 2);
+    fake.io.deliver("reconnect_attempt", 2);
+    fake.io.deliver("reconnect", 2);
     expect(onReconnecting).toHaveBeenCalledWith(2);
     expect(onReconnected).toHaveBeenCalledWith(2);
   });
@@ -163,6 +168,7 @@ describe("close (C4)", () => {
     const { fake, room } = setup();
     room.onWelcome(() => {});
     room.onRoster(() => {});
+    room.onSettings(() => {});
     room.onProtocolError(() => {});
     room.onConnectError(() => {});
     room.onReconnecting(() => {});
@@ -170,11 +176,92 @@ describe("close (C4)", () => {
     expect(fake.listeners.size).toBeGreaterThan(0);
     expect(fake.io.listeners.size).toBeGreaterThan(0);
 
+    expect(fake.listeners.has("settings")).toBe(true);
+
     room.close();
 
     expect(fake.listeners.size).toBe(0);
     expect(fake.io.listeners.size).toBe(0);
     expect(fake.disconnect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("settings (#101 C4)", () => {
+  const settingsEvent: SettingsEvent = {
+    v: PROTOCOL_VERSION,
+    settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+  };
+  const okAck: HostSettingsAck = { ok: true, settings: settingsEvent.settings };
+
+  afterEach(() => vi.useRealTimers());
+
+  /** The ack callback the client passed with its last `host:settings` emit. */
+  function lastAck(fake: ReturnType<typeof makeFakeSocket>) {
+    const call = fake.emit.mock.calls.at(-1)!;
+    return call[2] as (a: unknown) => void;
+  }
+
+  it("onSettings delivers a parsed payload and routes an invalid one to onProtocolError", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    const onSettings = vi.fn();
+    const onProtocolError = vi.fn();
+    room.onSettings(onSettings);
+    room.onProtocolError(onProtocolError);
+    fake.deliver("settings", settingsEvent);
+    fake.deliver("settings", { v: PROTOCOL_VERSION, settings: { timerS: 60 } });
+    expect(onSettings.mock.calls).toEqual([[settingsEvent]]);
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "settings" });
+  });
+
+  it("sendHostSettings emits host:settings with the protocol version and resolves with the ack", async () => {
+    const { fake, room } = setup();
+    const pending = room.sendHostSettings({ timerS: 60 });
+    expect(fake.emit).toHaveBeenCalledWith(
+      "host:settings",
+      { v: PROTOCOL_VERSION, patch: { timerS: 60 } },
+      expect.any(Function),
+    );
+    lastAck(fake)(okAck);
+    await expect(pending).resolves.toEqual(okAck);
+  });
+
+  it("passes a refusal through", async () => {
+    const { fake, room } = setup();
+    const pending = room.sendHostSettings({ timerS: 60 });
+    lastAck(fake)({ ok: false, error: "not-host" });
+    await expect(pending).resolves.toEqual({ ok: false, error: "not-host" });
+  });
+
+  it("resolves timeout after 5 s without an ack, never rejects, ignores a late ack", async () => {
+    vi.useFakeTimers();
+    const { fake, room } = setup();
+    let settled: unknown;
+    const pending = room.sendHostSettings({ timerS: 60 }).then(
+      (r) => (settled = r),
+      (e: unknown) => (settled = { rejected: e }),
+    );
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(settled).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(settled).toEqual({ ok: false, error: "timeout" });
+    lastAck(fake)(okAck);
+    await vi.runAllTimersAsync();
+    expect(settled).toEqual({ ok: false, error: "timeout" });
+  });
+
+  it("an invalid ack resolves timeout and reports a protocol error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    const onProtocolError = vi.fn();
+    room.onProtocolError(onProtocolError);
+    const pending = room.sendHostSettings({ timerS: 60 });
+    lastAck(fake)({ ok: false, error: "teapot" });
+    await expect(pending).resolves.toEqual({ ok: false, error: "timeout" });
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "host:settings" });
   });
 });
 

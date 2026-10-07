@@ -2,9 +2,11 @@ import type { ChainableCommander, Redis } from "ioredis";
 import { z } from "zod";
 import {
   deskIdentity,
+  raceSettingsPatchSchema,
   raceSettingsSchema,
   type Member,
   type RaceSettings,
+  type RaceSettingsPatch,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import { nextDesk } from "./desks";
@@ -17,6 +19,9 @@ export type JoinResult =
   { ok: true; desk: number; members: Member[]; room: Room } | { ok: false; reason: "no-room" };
 /** `closed` is true only when this call removed the last member and deleted the room's keys. */
 export type LeaveResult = { members: Member[]; closed: boolean };
+export type UpdateSettingsResult =
+  | { ok: true; settings: RaceSettings }
+  | { ok: false; reason: "no-room" | "not-host" | "not-waiting" | "invalid" };
 
 export type RoomRegistry = {
   /** Idempotent: a room keeps the fields (settings included) of its first open. */
@@ -34,6 +39,17 @@ export type RoomRegistry = {
   members(lobbyId: string): Promise<Member[] | null>;
   /** The room's settings; null for an unknown room; rejects when the stored field is missing or corrupt. */
   settings(lobbyId: string): Promise<RaceSettings | null>;
+  /**
+   * The one place a room's settings change (#101): only the room's host (`byUserId` equals the
+   * hash's `hostUserId`, never a token role), only while the phase is `waiting`; the patch replaces
+   * whole top-level fields and the merged object is validated before it is written. Rejects only on a
+   * Redis error or a corrupt room hash.
+   */
+  updateSettings(
+    lobbyId: string,
+    byUserId: string,
+    patch: RaceSettingsPatch,
+  ): Promise<UpdateSettingsResult>;
   /** Rooms open on this process (ADR 0008 in-process cache); drives /health and the deploy drain. */
   count(): number;
 };
@@ -82,7 +98,12 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
       return null;
     }
     openRooms.add(lobbyId);
-    return { code: room.code ?? "", hostUserId: room.hostUserId ?? "", settings: room.settings };
+    return {
+      code: room.code ?? "",
+      hostUserId: room.hostUserId ?? "",
+      phase: room.phase,
+      settings: room.settings,
+    };
   }
 
   /** Fails loud: a room without valid settings is a bug, never a silent default. */
@@ -186,6 +207,31 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
       const room = await readRoom(lobbyId);
       return room ? parseSettings(lobbyId, room.settings) : null;
     },
+
+    updateSettings: (lobbyId, byUserId, patch) =>
+      serial(lobbyId, async (): Promise<UpdateSettingsResult> => {
+        const room = await readRoom(lobbyId);
+        if (!room) return { ok: false, reason: "no-room" };
+        if (byUserId !== room.hostUserId) return { ok: false, reason: "not-host" };
+        if (room.phase !== "waiting") return { ok: false, reason: "not-waiting" };
+        // Re-checked here for in-process callers (the socket edge already parsed it): no lobbyType,
+        // no unknown key. A key present with an undefined value passes .partial(): drop it.
+        const parsed = raceSettingsPatchSchema.safeParse(patch);
+        if (!parsed.success) return { ok: false, reason: "invalid" };
+        const clean = Object.fromEntries(
+          Object.entries(parsed.data).filter(([, value]) => value !== undefined),
+        );
+        const merged = raceSettingsSchema.safeParse({
+          ...parseSettings(lobbyId, room.settings),
+          ...clean,
+        });
+        if (!merged.success) return { ok: false, reason: "invalid" };
+        await withTtl(
+          lobbyId,
+          redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(merged.data)),
+        );
+        return { ok: true, settings: merged.data };
+      }),
 
     count: () => openRooms.size,
   };

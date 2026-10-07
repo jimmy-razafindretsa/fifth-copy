@@ -29,11 +29,11 @@ enum ResultStatus {
 model Race {
   /// Supplied by the race server (uuid); no default on purpose.
   id              String           @id
-  /// Cascade: nothing deletes a Lobby that has races today (#143 only marks CLOSED). A future card
-  /// that deletes Lobby rows must first make this `String?` with `onDelete: SetNull`, since results
-  /// outlive the 24 h lobby retention (docs/privacy/retention.md).
-  lobbyId         String
-  lobby           Lobby            @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
+  /// SetNull (#572): results outlive the 24 h lobby retention and are kept until their owner's
+  /// account is deleted (docs/privacy/retention.md), so deleting a Lobby (retention sweep, or the
+  /// cascade from deleting its host User) keeps the race and every other player's rows.
+  lobbyId         String?
+  lobby           Lobby?           @relation(fields: [lobbyId], references: [id], onDelete: SetNull)
   /// Exact text snapshot typed in this race.
   textContent     String
   textLanguage    RaceLanguage

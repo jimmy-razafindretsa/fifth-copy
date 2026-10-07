@@ -250,6 +250,7 @@ describe("room registry: updateSettings (#101 C3)", () => {
   it("merges a patch over the stored settings, writes and returns the whole object", async () => {
     const { registry } = setup();
     const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
     const result = await registry.updateSettings(lobbyId, "host", {
       timerS: 120,
       errorMode: "block",
@@ -264,7 +265,9 @@ describe("room registry: updateSettings (#101 C3)", () => {
   it("replaces a top-level field whole: bots set, then emptied", async () => {
     const { registry } = setup();
     const lobbyId = await openRoom(registry);
-    await registry.updateSettings(lobbyId, "host", { bots: [{ level: "recruit" }, { level: "clerk" }] });
+    await registry.updateSettings(lobbyId, "host", {
+      bots: [{ level: "recruit" }, { level: "clerk" }],
+    });
     expect(await registry.updateSettings(lobbyId, "host", { bots: [{ level: "major" }] })).toEqual({
       ok: true,
       settings: { ...settings, bots: [{ level: "major" }] },

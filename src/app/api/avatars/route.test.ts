@@ -131,7 +131,7 @@ describe("GET /api/avatars/[userId]", () => {
   });
 
   it.each(["NONE", "PENDING", "REJECTED"] as const)(
-    "C8: an avatar whose status is %s is not served, even to its owner",
+    "C8 (#62), C5 (#64): an avatar whose status is %s is not served, even to its owner",
     async (status) => {
       state.rows[0]!.avatarStatus = status;
       as("alice");

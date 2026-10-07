@@ -49,13 +49,8 @@ export type RoomRuntime = {
   readonly budgets: Map<number, { tokens: number; at: number }>;
 };
 
-/** Keystrokes a desk may store per character of the race text (typing, errors, corrections). */
-export const TRACE_KEYS_PER_CHAR = 4;
-/** Fixed allowance on top, for short texts and many corrections. */
-export const TRACE_ALLOWANCE = 1_000;
-/** The most keystrokes one desk's trace holds for a text of `textLength` characters. */
-export const traceCapOf = (textLength: number) =>
-  TRACE_KEYS_PER_CHAR * textLength + TRACE_ALLOWANCE;
+/** The trace bound lives in the engine, shared with the web's persistence (#189). */
+export { TRACE_ALLOWANCE, TRACE_KEYS_PER_CHAR, traceCapOf } from "@fifth-copy/engine";
 
 export type DesksState = {
   /** Creates the runtime at GO: every desk at `initialState()`, all dirty. Replaces a previous race's. */

@@ -4,6 +4,7 @@ import {
   fetchProviderImage,
   type ProviderImageFailure,
 } from "./fetch-provider-image";
+import type { AvatarModerator } from "./moderation/moderator";
 import type { AvatarStore } from "./store";
 import type { OauthAvatarUsers } from "./oauth-avatar-users";
 import { storeAvatar } from "./store-avatar";
@@ -13,7 +14,7 @@ import { storeAvatar } from "./store-avatar";
 // depend on a third-party CDN. Only the storage key is persisted, never the provider URL.
 
 export type ImportSkipReason =
-  "no-url" | "has-avatar" | ProviderImageFailure | "image" | "raced" | "error";
+  "no-url" | "has-avatar" | ProviderImageFailure | "image" | "rejected" | "raced" | "error";
 
 export type { OauthAvatarUsers };
 
@@ -30,6 +31,8 @@ export type OauthAvatarWarn = (
 export type ImportOauthAvatarDeps = {
   fetch?: typeof fetch;
   store?: AvatarStore;
+  /** ADR 0015; default: the app's moderator, the same one uploads use. */
+  moderator?: AvatarModerator;
   users?: OauthAvatarUsers;
   warn?: OauthAvatarWarn;
   now?: () => number;
@@ -56,7 +59,7 @@ export async function importOauthAvatar(
     const { key } = await storeAvatar(userId, bytes, "center", {
       store: deps.store,
       now: deps.now,
-      // Default moderator: #64 swaps it for uploads and imports at once.
+      moderator: deps.moderator,
       commit: async ({ key, status }) => {
         if (!(await users.setAvatarIfNone(userId, { key, status }))) throw new RaceLost();
       },
@@ -71,7 +74,9 @@ export async function importOauthAvatar(
         : error instanceof AvatarError
           ? error.code === "TooLarge"
             ? "too-large"
-            : "image"
+            : error.code === "Rejected"
+              ? "rejected"
+              : "image"
           : "error";
     try {
       warn(OAUTH_AVATAR_WARNING, { reason });

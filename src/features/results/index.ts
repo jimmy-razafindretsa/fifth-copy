@@ -3,3 +3,5 @@
 // component.
 export { startRace } from "./actions/start-race";
 export type { StartRaceResult } from "./actions/start-race";
+export { MAX_RESULTS_BODY_BYTES, persistRaceResults } from "./actions/persist-results";
+export type { PersistResultsResult } from "./actions/persist-results";

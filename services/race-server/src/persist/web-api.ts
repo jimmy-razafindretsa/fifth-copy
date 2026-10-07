@@ -1,5 +1,8 @@
 import {
+  raceResultsResponseSchema,
   startRaceResponseSchema,
+  type RaceResultsRequest,
+  type RaceResultsResponse,
   type StartRaceRequest,
   type StartRaceResponse,
 } from "@fifth-copy/protocol";
@@ -14,10 +17,16 @@ import { internalHeaders } from "../http/sign";
 export type WebApi = {
   /** `POST /api/internal/races`: creates the Race row and picks the text. Idempotent on `raceId`. */
   startRace(request: StartRaceRequest): Promise<StartRaceResponse>;
+  /**
+   * `POST /api/internal/races/:id/results` (#189): stores one chunk of results. Idempotent per
+   * (race, desk); the outbox (`persist/outbox.ts`) is the retry.
+   */
+  postResults(request: RaceResultsRequest): Promise<RaceResultsResponse>;
 };
 
 export const WEB_API_TIMEOUT_MS = 5_000;
-/** Same cap as inbound internal bodies: a start answer is a few kB of text and settings. */
+/** Same cap as inbound internal bodies: a start answer is a few kB of text and settings, a results
+ * answer a list of desks. */
 export const MAX_WEB_RESPONSE_BYTES = 64 * 1024;
 
 /** Reads at most `max` bytes of a response body, then gives up (the rest is never buffered). */
@@ -55,8 +64,8 @@ type Options = {
 };
 
 /**
- * Signed JSON POSTs to the web app. No retry inside a call: `host:start` is the retry, and the
- * lifecycle bounds it. Logs the path, status and outcome only, never a body or a header.
+ * Signed JSON POSTs to the web app. No retry inside a call: `host:start` is the retry and the
+ * lifecycle bounds it; for results the outbox retries. Logs the path, status and outcome only, never a body or a header.
  */
 export function createWebApi({
   baseUrl,
@@ -112,6 +121,10 @@ export function createWebApi({
   return {
     startRace: (request) =>
       post("/api/internal/races", request, (json) => startRaceResponseSchema.parse(json)),
+    postResults: (request) =>
+      post(`/api/internal/races/${encodeURIComponent(request.raceId)}/results`, request, (json) =>
+        raceResultsResponseSchema.parse(json),
+      ),
   };
 }
 

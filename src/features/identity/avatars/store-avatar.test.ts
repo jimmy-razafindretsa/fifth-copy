@@ -3,8 +3,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AvatarError, BadCrop, TooLarge, TooSmall, Undecodable, WrongType } from "./errors";
+import {
+  AvatarError,
+  BadCrop,
+  Rejected,
+  TooLarge,
+  TooSmall,
+  Undecodable,
+  WrongType,
+} from "./errors";
 import { FsAvatarStore } from "./fs-store";
+import type { AvatarModerator, ModerationVerdict } from "./moderation/moderator";
 import { MAX_AVATAR_BYTES, storeAvatar, type Crop } from "./store-avatar";
 
 // Fixtures are generated with sharp in the test: no binary files in the repo.
@@ -33,6 +42,12 @@ async function meanColor(bytes: Buffer) {
 
 const CROP: Crop = { x: 10, y: 10, size: 150 };
 
+/** A moderator with a fixed verdict (ADR 0015); the real ones are tested in moderation/. */
+const always = (verdict: ModerationVerdict) => {
+  const check = vi.fn<AvatarModerator["check"]>(async () => ({ verdict, reason: "clear" }));
+  return { check } satisfies AvatarModerator;
+};
+
 describe("storeAvatar", () => {
   let root: string;
   let store: FsAvatarStore;
@@ -40,7 +55,7 @@ describe("storeAvatar", () => {
   const now = () => clock++;
   const files = async () => (await readdir(path.join(root, "user1")).catch(() => [])).sort();
   const store1 = (bytes: Buffer, crop: Crop | "center" = CROP, extra = {}) =>
-    storeAvatar("user1", bytes, crop, { store, now, ...extra });
+    storeAvatar("user1", bytes, crop, { store, now, moderator: always("approve"), ...extra });
 
   beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), "fc-store-avatar-"));
@@ -161,7 +176,11 @@ describe("storeAvatar", () => {
   });
 
   it("C4: the previous version's files are removed, other users untouched", async () => {
-    await storeAvatar("user2", await encode("png"), CROP, { store, now });
+    await storeAvatar("user2", await encode("png"), CROP, {
+      store,
+      now,
+      moderator: always("approve"),
+    });
     const first = await store1(await encode("png"));
     const second = await store1(await encode("jpeg"));
     expect(second.version).toBeGreaterThan(first.version);
@@ -191,11 +210,57 @@ describe("storeAvatar", () => {
     expect(await files()).toEqual([`${first.version}-256.webp`, `${first.version}-64.webp`]);
   });
 
-  it("the moderator hook sees the 256 px output and decides the status", async () => {
-    const moderator = vi.fn(async () => "PENDING" as const);
-    const result = await store1(await encode("png"), CROP, { moderator });
-    expect(result.status).toBe("PENDING");
-    expect(moderator).toHaveBeenCalledWith({ userId: "user1", image: expect.any(Buffer) });
+  describe("moderation (ADR 0015, #64)", () => {
+    it("the moderator sees only the 256 px WebP output, no user id", async () => {
+      const moderator = always("approve");
+      await store1(await encode("png"), CROP, { moderator });
+      expect(moderator.check).toHaveBeenCalledTimes(1);
+      const [image, ...rest] = moderator.check.mock.calls[0]!;
+      expect(rest).toEqual([]);
+      expect(await sharp(image).metadata()).toMatchObject({ format: "webp", width: 256 });
+    });
+
+    it("approve stores APPROVED", async () => {
+      const commit = vi.fn(async () => undefined);
+      const result = await store1(await encode("png"), CROP, { commit });
+      expect(result.status).toBe("APPROVED");
+      expect(commit).toHaveBeenCalledWith(expect.objectContaining({ status: "APPROVED" }));
+    });
+
+    it("flag stores PENDING and keeps the files", async () => {
+      const commit = vi.fn(async () => undefined);
+      const result = await store1(await encode("png"), CROP, { commit, moderator: always("flag") });
+      expect(result.status).toBe("PENDING");
+      expect(commit).toHaveBeenCalledWith(expect.objectContaining({ status: "PENDING" }));
+      expect(await files()).toEqual([`${result.version}-256.webp`, `${result.version}-64.webp`]);
+    });
+
+    it("reject throws Rejected before any write; the previous avatar and row stay", async () => {
+      const first = await store1(await encode("png"));
+      const commit = vi.fn(async () => undefined);
+      const put = vi.spyOn(store, "put");
+      const error = await store1(await encode("png"), CROP, {
+        commit,
+        moderator: always("reject"),
+      }).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(Rejected);
+      expect((error as Rejected).code).toBe("Rejected");
+      expect(put).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
+      expect(await files()).toEqual([`${first.version}-256.webp`, `${first.version}-64.webp`]);
+    });
+
+    it("an unknown verdict is refused and writes nothing", async () => {
+      const moderator = always("maybe" as ModerationVerdict);
+      await expect(store1(await encode("png"), CROP, { moderator })).rejects.toThrow(/verdict/);
+      expect(await readdir(root)).toEqual([]);
+    });
+
+    it("a moderator that throws writes nothing", async () => {
+      const moderator: AvatarModerator = { check: async () => Promise.reject(new Error("boom")) };
+      await expect(store1(await encode("png"), CROP, { moderator })).rejects.toThrow("boom");
+      expect(await readdir(root)).toEqual([]);
+    });
   });
 
   describe("C5: rejections are typed and write nothing", () => {

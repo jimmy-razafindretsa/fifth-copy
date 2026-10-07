@@ -244,6 +244,17 @@ export const en = {
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
   },
+  settings: {
+    avatar: {
+      moderation: {
+        pending:
+          "Your picture is being reviewed. Until a person checks it, everyone sees the default portrait, you too.",
+        rejected: "Your picture was refused. It breaks the picture rules, so it was not filed.",
+        appeal:
+          "Think this is a mistake? Ask your teacher or your school office to contact the person in charge.",
+      },
+    },
+  },
 };
 
 export type Messages = typeof en;

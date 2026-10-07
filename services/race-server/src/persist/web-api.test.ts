@@ -5,6 +5,7 @@ import {
   DEFAULT_RACE_SETTINGS,
   INTERNAL_HEADERS,
   PROTOCOL_VERSION,
+  type RaceResultsRequest,
   type StartRaceRequest,
   type StartRaceResponse,
 } from "@fifth-copy/protocol";
@@ -190,5 +191,71 @@ describe("createWebApi.startRace (C4)", () => {
     await expect(setup(declared as unknown as typeof fetch).api.startRace(request)).rejects.toThrow(
       /too large/,
     );
+  });
+});
+
+describe("createWebApi.postResults (#189)", () => {
+  const results: RaceResultsRequest = {
+    v: PROTOCOL_VERSION,
+    raceId: RACE_ID,
+    endedAt: 1_767_225_660_000,
+    reason: "timer",
+    lobbySize: 1,
+    results: [
+      {
+        desk: 1,
+        userId: "usr_host",
+        name: "Ada",
+        isBot: false,
+        place: 1,
+        status: "typing",
+        wpm: 0,
+        rawWpm: 0,
+        cleanWpm: 0,
+        adjustedWpm: 0,
+        accuracy: 1,
+        progress: 0,
+        correct: 0,
+        errors: 0,
+        total: 0,
+        durationMs: 60_000,
+        finishedAtMs: null,
+        bonusesSent: 0,
+        bonusesReceived: 0,
+        bonusLog: [],
+        flags: [],
+        engineVersion: "1",
+        trace: { encoding: "gzip+base64", data: "", count: 0 },
+      },
+    ],
+  };
+
+  it("POSTs the signed chunk to /api/internal/races/:id/results and parses the ack", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const ack = { v: PROTOCOL_VERSION, raceId: RACE_ID, persisted: [1] };
+    const fetchImpl = vi.fn(async () => json(200, ack));
+    const { api, clock, scheduler } = setup(fetchImpl as unknown as typeof fetch);
+
+    expect(await api.postResults(results)).toEqual(ack);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(url)).toBe(`http://web.test:5199/api/internal/races/${RACE_ID}/results`);
+    const headers = init.headers as Record<string, string>;
+    expect(JSON.parse(init.body as string)).toEqual(results);
+    expect(
+      verifyInternalRequest({
+        secret: SECRET,
+        timestamp: headers[INTERNAL_HEADERS.timestamp],
+        signature: headers[INTERNAL_HEADERS.signature],
+        rawBody: init.body as string,
+        nowMs: clock.now(),
+      }),
+    ).toEqual({ ok: true });
+    expect(scheduler.armed()).toBe(0);
+
+    const bad = setup((async () => json(200, { v: PROTOCOL_VERSION })) as unknown as typeof fetch);
+    await expect(bad.api.postResults(results)).rejects.toThrow();
+    const refused = setup((async () =>
+      json(400, { error: "bad-body" })) as unknown as typeof fetch);
+    await expect(refused.api.postResults(results)).rejects.toThrow(/status 400/);
   });
 });

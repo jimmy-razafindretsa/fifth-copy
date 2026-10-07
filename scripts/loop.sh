@@ -100,7 +100,7 @@ run_role() { # role card tier dir extra
   # shellcheck disable=SC2086
   (cd "$dir" && $AGENT_CMD $MODEL_FLAG "$model" "$prompt") >"$log" 2>&1
   local result
-  result="$(grep -Eo 'RESULT: (done|partial|blocked)' "$log" | tail -1 | cut -d' ' -f2)"
+  result="$(grep -Eo '^RESULT: (done|partial|blocked)' "$log" | tail -1 | cut -d' ' -f2)"
   say "#$n <- $role: ${result:-unknown}"
   [[ "$result" == "done" ]]
 }

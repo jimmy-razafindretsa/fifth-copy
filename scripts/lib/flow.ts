@@ -1,31 +1,70 @@
 /**
- * Pure logic for the parallel card flow (no network): PICKUP parsing, gate evaluation,
+ * Pure logic for the parallel card flow (no network): PICKUP parsing, gate evaluation (trusted comments only),
  * Backlog -> Ready promotion checks and pipeline tiers. See agents/PROTOCOL.md sections 5, 7 and 13.
  * Unit-tested in flow.test.ts; scripts/board.ts gathers the facts and applies the verdicts.
  */
 import { contractHash, parseContract } from "./kit";
 import { NEEDS_LABELS } from "./board";
+import { trustedOnly, type Comment } from "./trust";
 
-export type Comment = { body: string; createdAt: string };
+export { isTrusted, trustedAuthors, trustedOnly, type Comment } from "./trust";
 export type Pickup = { hash: string; branch: string; worktree: string; at: string };
 
 export const pickupComment = (n: number, hash: string, branch: string) =>
   `PICKUP #${n} contract_hash=${hash} branch=${branch} worktree=.worktrees/${n}`;
 
-/** The newest PICKUP comment for card n, or null. */
-export function latestPickup(n: number, comments: Comment[]): Pickup | null {
-  const re = new RegExp(`^PICKUP #${n} contract_hash=(\\w+) branch=(\\S+) worktree=(\\S+)`, "m");
+/**
+ * Gate signatures (PICKUP, HANDOFF, PENTEST) count only at the very start of a comment body (after leading
+ * whitespace): a trusted comment that quotes a forged line further down, even at column 0 inside a code fence,
+ * does not carry that line's meaning. Fields (`verdict:`, `blockers:`) are read only from the header block
+ * (signature line up to the first blank line or ``` fence), from the first line that starts with the field name.
+ */
+const head = (body: string) => body.trimStart();
+const startsWith = (body: string, sig: RegExp) => sig.test(head(body));
+/** Header block: the signature line up to the first blank line or code fence (quoted text never counts). */
+function headerOf(body: string): string[] {
+  const out: string[] = [];
+  for (const line of head(body).split(/\r?\n/)) {
+    if (!line.trim() || line.trimStart().startsWith("```")) break;
+    out.push(line);
+  }
+  return out;
+}
+function fieldOf(body: string, name: string): string | null {
+  const re = new RegExp(`^${name}:[ \\t]*(\\S+)`);
+  for (const line of headerOf(body)) {
+    const m = re.exec(line);
+    if (m) return m[1]!;
+  }
+  return null;
+}
+
+/** A PENTEST blocks unless its header has `blockers: 0` (missing or unparsable blocks: fail closed). */
+const blocking = (body: string) => !/^0+$/.test(fieldOf(body, "blockers") ?? "");
+
+/** The newest PICKUP comment for card n written by a trusted author (trust.ts), or null. */
+export function latestPickup(
+  n: number,
+  comments: readonly Comment[],
+  trusted: ReadonlySet<string>,
+): Pickup | null {
+  const re = new RegExp(`^PICKUP #${n} contract_hash=(\\w+) branch=(\\S+) worktree=(\\S+)`);
   let best: Pickup | null = null;
-  for (const c of comments) {
-    const m = re.exec(c.body);
+  for (const c of trustedOnly(comments, trusted)) {
+    const m = re.exec(head(c.body));
     if (m && (!best || c.createdAt > best.at))
       best = { hash: m[1]!, branch: m[2]!, worktree: m[3]!, at: c.createdAt };
   }
   return best;
 }
 
-const after = (comments: Comment[], since: string, re: RegExp) =>
-  comments.some((c) => c.createdAt >= since && re.test(c.body));
+/** Some comment at or after `since` whose body starts with `sig` and satisfies `ok`. */
+const after = (
+  comments: readonly Comment[],
+  since: string,
+  sig: RegExp,
+  ok: (body: string) => boolean = () => true,
+) => comments.some((c) => c.createdAt >= since && startsWith(c.body, sig) && ok(c.body));
 
 export const GATE_TARGETS = ["In Review", "QA", "Done"] as const;
 export type GateTarget = (typeof GATE_TARGETS)[number];
@@ -36,6 +75,8 @@ export type GateFacts = {
   body: string;
   labels: string[];
   comments: Comment[];
+  /** Logins whose comments count (trust.ts); every other comment is ignored by every gate. */
+  trusted: ReadonlySet<string>;
   pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED" } | null;
   /** Conclusion of the CI run on main for the PR's merge commit (Done gate only). */
   mainCi: "success" | "failure" | "pending" | "missing" | null;
@@ -45,9 +86,11 @@ export type GateFacts = {
  * PROTOCOL section 5 preconditions that a script can check. Returns the failures (empty = pass).
  * `scripts/check.sh` green is checked by the caller (loop.sh runs it in the worktree before the In Review gate).
  */
-export function evaluateGate(f: GateFacts): string[] {
+export function evaluateGate(facts: GateFacts): string[] {
+  // Filter once: PICKUP, HANDOFF, PENTEST and Deliver verdicts count only from trusted authors.
+  const f = { ...facts, comments: trustedOnly(facts.comments, facts.trusted) };
   const out: string[] = [];
-  const pickup = latestPickup(f.n, f.comments);
+  const pickup = latestPickup(f.n, f.comments, f.trusted);
   if (!pickup) return ["no PICKUP comment"];
   const hash = contractHash(f.body);
   if (hash !== pickup.hash)
@@ -59,20 +102,18 @@ export function evaluateGate(f: GateFacts): string[] {
 
   if (f.target === "In Review") {
     if (!f.pr || f.pr.state === "CLOSED") out.push("no open PR for the card branch");
-    if (!after(f.comments, pickup.at, /^HANDOFF (builder|ui)\b/m))
+    if (!after(f.comments, pickup.at, /^HANDOFF (builder|ui)\b/))
       out.push("no builder/ui HANDOFF after PICKUP");
-    if (f.labels.includes("pentest") && !after(f.comments, pickup.at, /^PENTEST #\d+/m))
+    if (f.labels.includes("pentest") && !after(f.comments, pickup.at, /^PENTEST #\d+/))
       out.push("card carries pentest but has no PENTEST comment");
-    if (
-      f.labels.includes("pentest") &&
-      after(f.comments, pickup.at, /^PENTEST #\d+[\s\S]*?blockers:\s*[1-9]/m)
-    )
+    if (f.labels.includes("pentest") && after(f.comments, pickup.at, /^PENTEST #\d+/, blocking))
       out.push("PENTEST reports blockers");
   }
   if (f.target === "QA") {
     if (f.pr?.state !== "OPEN") out.push("PR is not open");
     // A needs-human verdict counts once the human removed the needs-human label (checked above).
-    if (!after(f.comments, pickup.at, /^HANDOFF deliver\b[\s\S]*?verdict:\s*(pass|needs-human)\b/m))
+    const passed = (b: string) => ["pass", "needs-human"].includes(fieldOf(b, "verdict") ?? "");
+    if (!after(f.comments, pickup.at, /^HANDOFF deliver\b/, passed))
       out.push("no Deliver HANDOFF with verdict: pass after PICKUP");
     if (unticked.length) out.push(`contract not ticked by Deliver: ${unticked.join(",")}`);
   }

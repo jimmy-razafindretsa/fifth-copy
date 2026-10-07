@@ -74,15 +74,15 @@ Where the bible's value fails WCAG 3.3 (4.5:1), the nearest bible-palette value 
 - Danger button fill: `pressed` (banner) under `primary-fg` (paper), 8.75:1 in both themes; `danger` is a text and border role.
 
 ## Fonts
-Loaded in `src/app/layout.tsx` with `next/font/google` (fetched at build, served from `/_next/static/media`, no runtime request to Google), all `display: "swap"` with next/font's size-adjusted fallbacks. Use the role token, never the family variable. Roles: art-direction 7 and design bible 4 (flavour and device: bible 4 extension).
-| Family | Weights | Subsets | Variable | Role token (utility) | Generic fallback | Use |
-|---|---|---|---|---|---|---|
-| Stardos Stencil | 700 | latin (only subset offered; Cyrillic falls to Oswald, "Type roles") | `--font-stardos` (bare face `--face-stardos`) | `--font-display` (`font-display`) | `Oswald, Impact, sans-serif` | titles, stamps, medals |
-| Oswald | 600, 700 | latin, latin-ext, cyrillic | `--font-oswald` | `--font-label` (`font-label`) | `Impact, sans-serif` | labels, tabs, dockets, buttons |
-| IBM Plex Mono | 400, 700 | latin, latin-ext, cyrillic | `--font-plex-mono` | `--font-typing` (`font-typing`) | `ui-monospace, monospace` | text to type, data, codes |
-| Special Elite | 400 | latin, latin-ext (Cyrillic falls to Oswald) | `--font-special-elite` (bare face `--face-special-elite`) | `--font-flavour` (`font-flavour`) | `Oswald, ui-monospace, monospace` | story cards, cables, quotes; never text to type |
-| Courier Prime | 400, 700 | latin, latin-ext | `--font-courier-prime` | `--font-body` (`font-body`) | `ui-monospace, monospace` | body copy; `<body class="type-body">` (16px / 1.55) |
-| VT323 | 400 | latin, latin-ext | `--font-vt323` | `--font-device` (`font-device`) | `ui-monospace, monospace` | numerals in nixie tubes and CRTs only |
+Loaded in `src/app/layout.tsx` with `next/font/google` (fetched at build, served from `/_next/static/media`, no runtime request to Google), all `display: "swap"` with next/font's size-adjusted fallbacks. Preload: every family except Special Elite and VT323 emits `<link rel="preload" as="font">` on every route; flavour and device faces are `preload: false` and load on demand where a route uses them (#511, checked in `e2e/fonts.spec.ts`). Use the role token, never the family variable. Roles: art-direction 7 and design bible 4 (flavour and device: bible 4 extension).
+| Family | Weights | Subsets | Variable | Role token (utility) | Generic fallback | Preload | Use |
+|---|---|---|---|---|---|---|---|
+| Stardos Stencil | 700 | latin (only subset offered; Cyrillic falls to Oswald, "Type roles") | `--font-stardos` (bare face `--face-stardos`) | `--font-display` (`font-display`) | `Oswald, Impact, sans-serif` | yes | titles, stamps, medals |
+| Oswald | 600, 700 | latin, latin-ext, cyrillic | `--font-oswald` | `--font-label` (`font-label`) | `Impact, sans-serif` | yes | labels, tabs, dockets, buttons |
+| IBM Plex Mono | 400, 700 | latin, latin-ext, cyrillic | `--font-plex-mono` | `--font-typing` (`font-typing`) | `ui-monospace, monospace` | yes | text to type, data, codes |
+| Special Elite | 400 | latin, latin-ext (Cyrillic falls to Oswald) | `--font-special-elite` (bare face `--face-special-elite`) | `--font-flavour` (`font-flavour`) | `Oswald, ui-monospace, monospace` | no (on demand) | story cards, cables, quotes; never text to type |
+| Courier Prime | 400, 700 | latin, latin-ext | `--font-courier-prime` | `--font-body` (`font-body`) | `ui-monospace, monospace` | yes | body copy; `<body class="type-body">` (16px / 1.55) |
+| VT323 | 400 | latin, latin-ext | `--font-vt323` | `--font-device` (`font-device`) | `ui-monospace, monospace` | no (on demand) | numerals in nixie tubes and CRTs only |
 
 ## Type roles
 One utility per role in `docs/design/tokens.css` (`@utility`, #20) bakes face, weight, case, tracking, size and line-height; these six are the only `font-family` declarations of the app. Write the role, then at most a core size (`type-label text-xs`) to resize it. Sources: art-direction 7, design bible 2 and 4. Specimen: `/design` "Type roles".

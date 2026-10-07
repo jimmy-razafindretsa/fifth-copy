@@ -17,3 +17,15 @@ export const membersKey = (lobbyId: string) => `room:${lobbyId}:members`;
  * mirror, never a recovery source (a running room is voided on restart, ADR 0008).
  */
 export const desksKey = (lobbyId: string) => `room:${lobbyId}:desks`;
+
+/** Lifetime of a race's pending results (#189): retried for up to a day, then dropped (ADR 0008). */
+export const OUTBOX_TTL_S = 24 * 3600;
+
+/**
+ * List: the JSON entries still to send for an ended race, one results chunk each (#189,
+ * `persist/outbox.ts`); an entry leaves on acknowledgement. TTL `OUTBOX_TTL_S` from the enqueue.
+ */
+export const outboxKey = (raceId: string) => `outbox:${raceId}`;
+
+/** Set: race ids with a pending outbox, re-sent on boot. TTL `OUTBOX_TTL_S`, refreshed per enqueue. */
+export const OUTBOXES_KEY = "outboxes";

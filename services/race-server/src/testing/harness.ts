@@ -36,11 +36,12 @@ export type Client = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 
 /**
  * `url` is the REDIS_URL the calling test file read from its environment (env access stays in test
- * files and env.ts).
+ * files and env.ts). `keyPrefix` isolates a test's keys (and the global `outboxes` set) on the
+ * shared db.
  */
-export async function connectRedis(url: string | undefined): Promise<Redis> {
+export async function connectRedis(url: string | undefined, keyPrefix?: string): Promise<Redis> {
   if (!url) throw new Error("REDIS_URL is not set: load the worktree .env (set -a; . ./.env)");
-  const redis = createRedis(url);
+  const redis = createRedis(url, { keyPrefix });
   try {
     await redis.connect();
   } catch (err) {
@@ -113,13 +114,18 @@ export type Booted = {
  */
 export async function boot(
   redisUrl: string | undefined,
-  options: { webApi?: WebApi; onRaceEnded?: (ended: RaceEnded) => void } = {},
+  options: {
+    webApi?: WebApi;
+    onRaceEnded?: (ended: RaceEnded) => void;
+    /** Isolated key space (outbox tests, #189): the server and the cleanup both use it. */
+    redisPrefix?: string;
+  } = {},
 ): Promise<Booted> {
   const clock = createFakeClock(Date.now());
   const scheduler = createFakeScheduler(clock);
   const server = createRaceServer({
     env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000", RACE_FAST_CLOCK: "0" },
-    redis: await connectRedis(redisUrl),
+    redis: await connectRedis(redisUrl, options.redisPrefix),
     clock,
     scheduler,
     webApi: options.webApi ?? fixtureWebApi(clock).api,
@@ -174,7 +180,7 @@ export async function boot(
     async stop() {
       for (const c of clients) c.disconnect();
       await server.close();
-      const cleanup = await connectRedis(redisUrl);
+      const cleanup = await connectRedis(redisUrl, options.redisPrefix);
       const keys = lobbies.flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]);
       if (keys.length) await cleanup.del(...keys);
       cleanup.disconnect();
@@ -271,15 +277,24 @@ export async function startedRace(
     settings = DEFAULT_RACE_SETTINGS,
     go = true,
     onRaceEnded,
+    postResults,
+    redisPrefix,
   }: {
     players?: number;
     text?: string;
     settings?: RaceSettings;
     go?: boolean;
     onRaceEnded?: (ended: RaceEnded) => void;
+    /** The fake web's results answer (default: acknowledge every desk). */
+    postResults?: WebApi["postResults"];
+    redisPrefix?: string;
   } = {},
 ) {
-  const booted = await boot(redisUrl, { webApi: textWebApi(text), onRaceEnded });
+  const booted = await boot(redisUrl, {
+    webApi: textWebApi(text, postResults),
+    onRaceEnded,
+    redisPrefix,
+  });
   const lobby = await booted.openRoom("KGB-4821", settings);
   const racers: Racer[] = [];
   for (let i = 0; i < players; i++) {

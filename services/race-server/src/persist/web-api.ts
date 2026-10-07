@@ -122,10 +122,8 @@ export function createWebApi({
     startRace: (request) =>
       post("/api/internal/races", request, (json) => startRaceResponseSchema.parse(json)),
     postResults: (request) =>
-      post(
-        `/api/internal/races/${encodeURIComponent(request.raceId)}/results`,
-        request,
-        (json) => raceResultsResponseSchema.parse(json),
+      post(`/api/internal/races/${encodeURIComponent(request.raceId)}/results`, request, (json) =>
+        raceResultsResponseSchema.parse(json),
       ),
   };
 }

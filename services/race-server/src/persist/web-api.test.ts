@@ -254,7 +254,8 @@ describe("createWebApi.postResults (#189)", () => {
 
     const bad = setup((async () => json(200, { v: PROTOCOL_VERSION })) as unknown as typeof fetch);
     await expect(bad.api.postResults(results)).rejects.toThrow();
-    const refused = setup((async () => json(400, { error: "bad-body" })) as unknown as typeof fetch);
+    const refused = setup((async () =>
+      json(400, { error: "bad-body" })) as unknown as typeof fetch);
     await expect(refused.api.postResults(results)).rejects.toThrow(/status 400/);
   });
 });

@@ -139,6 +139,7 @@ Then drop candidates that violate a lock (section 7). With `BOARD_FOCUS_LABEL` s
 - A gate failure gets `3` fix cycles. Then label `needs-human`, post the failure summary, and move on to an independent card.
 - Same error three times in a row means stop. You are in a loop.
 - `discovered` follow-ups: at most one per delivered card unless it is a correctness or security bug; file it under the Hardening epic (agents/BOARD.md) with priority Low and a full Contract, never in the active epic. The loop picks Hardening cards only when a parallel slot has nothing else to do (they sort last by priority).
+- A `discovered` card for a security finding that is not yet fixed (any role) never describes it: neutral title, the draft private security advisory id that holds the details (roles/pentester.md step 5), or "details with the human" when no advisory can be created (the details then go only to the human, in the final reply). The repo is public.
 - In parallel mode a card that reaches `needs-human` is parked (stays In Review, frees its WIP slot, keeps its locks) and the human is notified; removing `needs-human` lets the loop merge it (`scripts/loop.sh --finish <n>` does it by hand).
 - Loop halts when: (sequential mode only) the next card is `autonomy:hitl`; `3` consecutive cards blocked; GitHub is unreachable; the dependency graph has a cycle; the cost or time budget is exhausted; no Ready cards remain (report why: blockers, unapproved epics, or replan needed).
 - Rolling-wave planning: when Ready cards in approved epics are fewer than `3 x WIP_LIMIT`, or the active epic is >=80% Done, Picker labels the next epic `needs-replan` so Analyst details it.
@@ -156,7 +157,7 @@ verify: <commands run -> result>
 blockers: <or none>
 ```
 BRIEF comment (Explorer): see roles/explorer.md (includes `architecture:`, `design:`, `criteria:` and `pentest:` lines).
-PENTEST comment (Pen tester, <= ~150 tokens). The repo is public, so it carries no findings list and no reproduction: the threat model, each finding (`blocker|major|minor <title> | repro | observed | expected control`) and the attack classes tried go to a draft private GitHub security advisory (roles/pentester.md), read by Deliver and the Builder:
+PENTEST comment (Pen tester, <= ~150 tokens). The repo is public, so it carries no findings list and no reproduction: the threat model, each finding of every severity, minors included (`blocker|major|minor <title> | repro | observed | expected control`) and the attack classes tried go to a draft private GitHub security advisory (roles/pentester.md), read by Deliver and the Builder:
 ```
 PENTEST #n <ISO-datetime>
 verdict: clean | findings
@@ -193,10 +194,10 @@ Log file `work/log/<n>.md` (<= ~200 words): date, one-line outcome, decisions, g
 | picker | board read/write (Status, close/reopen, labels, relationships, comments), git read | edit source, run builds |
 | analyst | repo read, board create/relate/comment | edit source, merge |
 | explorer | repo read, shell read-only, board comment | edit any file, network |
-| builder / ui | repo write in its worktree, local shell, local DB, board comment, read the card's security advisory | prod credentials, merge, tick contract, edit Contract |
+| builder / ui | repo write in its worktree, local shell, local DB, board comment, read the card's security advisory, create a draft repository security advisory for an unfixed security finding (PROTOCOL 8) | prod credentials, merge, tick contract, edit Contract |
 | deliver | repo read, test runners, browser to localhost/preview only, `gh pr`, board (labels, comments, contract checkboxes), set `status: accepted` on ADRs proposed in the card's PR, read the card's security advisory | edit source (except fix-forward within budget as builder), prod credentials |
 | pentester | repo read, local shell and browser against localhost only, test DB, board comment, create a draft repository security advisory for its findings | edit any file, non-local URLs (except that advisory API call), prod credentials |
-| sweep | repo read, git read, board create (`discovered` under Hardening) | edit any file, move cards |
+| sweep | repo read, git read, board create (`discovered` under Hardening), create a draft repository security advisory for an unfixed security finding (PROTOCOL 8) | edit any file, move cards, describe an unfixed security finding in a card |
 - Destructive commands denied: `git push --force` to base, `rm -rf` outside the worktree, `prisma migrate reset`, dropping databases, any command against a non-local `DATABASE_URL`.
 - Never print or log secrets. Never place secrets in issues, comments, PRs, logs or `.eyes/`.
 

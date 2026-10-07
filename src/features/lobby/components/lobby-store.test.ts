@@ -26,6 +26,8 @@ function fakeSocket() {
   const socket: RoomSocket = {
     onWelcome: (cb) => void (cbs.welcome = cb as never),
     onRoster: (cb) => void (cbs.roster = cb as never),
+    onSettings: (cb) => void (cbs.settings = cb as never),
+    sendHostSettings: vi.fn(),
     onProtocolError: (cb) => void (cbs.protocolError = cb as never),
     onConnectError: (cb) => void (cbs.connectError = cb as never),
     onReconnecting: (cb) => void (cbs.reconnecting = cb as never),

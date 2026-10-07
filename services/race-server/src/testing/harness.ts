@@ -22,6 +22,8 @@ import { membersKey, roomKey } from "../rooms/keys";
 // Fails, never skips, without Redis. Deletes only the keys of lobbies it created (shared db index).
 
 export const SECRET = "race-server-test-secret-0123456789abcdef";
+/** The `hostUserId` of every room `openRoom` opens: a token with this `sub` is the host's. */
+export const HOST_SUB = "usr_host";
 export type Client = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 
 /** `url` is the test's `process.env.REDIS_URL` (env access stays in test files and env.ts). */
@@ -76,7 +78,7 @@ export async function boot(redisUrl: string | undefined): Promise<Booted> {
     lobby,
     async openRoom(code = "KGB-4821", settings = DEFAULT_RACE_SETTINGS) {
       const lobbyId = lobby();
-      await server.registry.open({ lobbyId, code, hostUserId: "usr_host", settings });
+      await server.registry.open({ lobbyId, code, hostUserId: HOST_SUB, settings });
       return lobbyId;
     },
     token(claims, key = SECRET) {
@@ -114,10 +116,16 @@ export async function boot(redisUrl: string | undefined): Promise<Booted> {
   };
 }
 
-/** Records every `welcome` and the latest `roster` a client received. */
+/** Records every `welcome`, the latest `roster` and every `settings` broadcast a client received. */
 export function track(client: Client) {
-  const seen: { welcome?: Welcome; roster?: Member[]; rosters: number } = { rosters: 0 };
+  const seen: {
+    welcome?: Welcome;
+    roster?: Member[];
+    rosters: number;
+    settings: RaceSettings[];
+  } = { rosters: 0, settings: [] };
   client.on("welcome", (w) => (seen.welcome = w));
+  client.on("settings", (s) => void seen.settings.push(s.settings));
   client.on("roster", (r) => {
     seen.roster = r.members;
     seen.rosters += 1;

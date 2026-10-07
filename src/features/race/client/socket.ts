@@ -1,8 +1,11 @@
 import { io as realIo } from "socket.io-client";
 import {
+  clientAcks,
   PROTOCOL_VERSION,
   rejectReasonSchema,
   serverEvents,
+  type HostSettingsAck,
+  type RaceSettingsPatch,
   type RejectReason,
 } from "@fifth-copy/protocol";
 import type { z } from "zod";
@@ -13,12 +16,26 @@ export type RoomEvents = { [K in keyof typeof serverEvents]: z.infer<(typeof ser
 /** Handshake refusals from the race server, plus `transport` for anything else (network, timeout). */
 export type ConnectErrorReason = RejectReason | "transport";
 
-export type ProtocolError = { event: keyof RoomEvents; issues: z.core.$ZodIssue[] };
+/** A server payload or a server acknowledgement that failed its protocol schema. */
+export type ProtocolError = {
+  event: keyof RoomEvents | keyof typeof clientAcks;
+  issues: z.core.$ZodIssue[];
+};
+
+/** The ack of `host:settings`, or `timeout` when none (or an invalid one) arrived in time. */
+export type HostSettingsResult = HostSettingsAck | { ok: false; error: "timeout" };
+
+/** How long `sendHostSettings` waits for the server's acknowledgement. */
+export const HOST_SETTINGS_TIMEOUT_MS = 5_000;
 
 /** The only way the web app talks to a race room; the raw socket is never exposed. */
 export interface RoomSocket {
   onWelcome(cb: (payload: RoomEvents["welcome"]) => void): void;
   onRoster(cb: (payload: RoomEvents["roster"]) => void): void;
+  /** The room's full settings after each host change. */
+  onSettings(cb: (payload: RoomEvents["settings"]) => void): void;
+  /** Host only: asks the server to apply `patch`; never rejects. */
+  sendHostSettings(patch: RaceSettingsPatch): Promise<HostSettingsResult>;
   onProtocolError(cb: (error: ProtocolError) => void): void;
   onConnectError(cb: (reason: ConnectErrorReason) => void): void;
   onReconnecting(cb: (attempt: number) => void): void;
@@ -33,7 +50,11 @@ type Emitter = {
   off(event: string, fn: Listener): unknown;
 };
 /** Untyped view of a socket.io-client socket: payloads stay `unknown` until parsed. */
-type RawSocket = Emitter & { io: Emitter; disconnect(): unknown };
+type RawSocket = Emitter & {
+  io: Emitter;
+  emit(event: string, payload: unknown, ack: (raw: unknown) => void): unknown;
+  disconnect(): unknown;
+};
 
 export type IoFactory = (
   url: string,
@@ -66,16 +87,44 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
         cb(result.data as RoomEvents[K]);
         return;
       }
-      const error: ProtocolError = { event, issues: result.error.issues };
-      // Never log the payload or the token: issues only.
-      console.warn("[race] dropped invalid payload", error);
-      for (const fn of protocolErrorListeners) fn(error);
+      reportProtocolError({ event, issues: result.error.issues });
+    });
+  }
+
+  function reportProtocolError(error: ProtocolError) {
+    // Never log the payload or the token: issues only.
+    console.warn("[race] dropped invalid payload", error);
+    for (const fn of protocolErrorListeners) fn(error);
+  }
+
+  function sendHostSettings(patch: RaceSettingsPatch): Promise<HostSettingsResult> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (result: HostSettingsResult) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      };
+      const timer = setTimeout(
+        () => settle({ ok: false, error: "timeout" }),
+        HOST_SETTINGS_TIMEOUT_MS,
+      );
+      socket.emit("host:settings", { v: PROTOCOL_VERSION, patch }, (raw: unknown) => {
+        if (settled) return;
+        const ack = clientAcks["host:settings"].safeParse(raw);
+        if (ack.success) return settle(ack.data);
+        reportProtocolError({ event: "host:settings", issues: ack.error.issues });
+        settle({ ok: false, error: "timeout" });
+      });
     });
   }
 
   return {
     onWelcome: (cb) => on("welcome", cb),
     onRoster: (cb) => on("roster", cb),
+    onSettings: (cb) => on("settings", cb),
+    sendHostSettings,
     onProtocolError: (cb) => {
       protocolErrorListeners.add(cb);
     },

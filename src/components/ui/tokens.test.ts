@@ -360,24 +360,31 @@ describe("#574 committed fonts", () => {
   it("C1 every family in the components.md Fonts table has a Cyrillic-aware set of files", () => {
     const woff2 = readdirSync(fontsDir).filter((f) => f.endsWith(".woff2"));
     expect(woff2.some((f) => f.startsWith("oswald-") && f.endsWith("-cyrillic.woff2"))).toBe(true);
-    expect(woff2.some((f) => f.startsWith("ibm-plex-mono-") && f.endsWith("-cyrillic.woff2"))).toBe(true);
+    expect(woff2.some((f) => f.startsWith("ibm-plex-mono-") && f.endsWith("-cyrillic.woff2"))).toBe(
+      true,
+    );
   });
 
-  it("C4 every family in the components.md Fonts table ships its OFL licence", () => {
+  it("C4 every family in the components.md Fonts table ships its files and its licence", () => {
     const section = docs.split("## Fonts")[1]?.split("\n## ")[0] ?? "";
-    const families = [...section.matchAll(/^\| ([A-Z][A-Za-z0-9 ]+?) \| \d/gm)].map((m) => m[1] ?? "");
+    expect(section).toContain("next/font/local");
+    const families = [...section.matchAll(/^\| ([A-Z][A-Za-z0-9 ]+?) \| \d/gm)].map(
+      (m) => m[1] ?? "",
+    );
     expect(families).toHaveLength(6);
+    const files = readdirSync(fontsDir);
     for (const family of families) {
       const slug = family.toLowerCase().replace(/ /g, "-");
-      const licence = path.join(fontsDir, `${slug}-LICENSE-OFL.txt`);
-      expect(existsSync(licence), licence).toBe(true);
-      expect(readFileSync(licence, "utf8"), family).toMatch(/SIL OPEN FONT LICENSE/i);
-      expect(woff2Of(slug).length, family).toBeGreaterThan(0);
+      expect(
+        files.filter((f) => f.startsWith(`${slug}-`) && f.endsWith(".woff2")).length,
+        family,
+      ).toBeGreaterThan(0);
+      // SIL OFL 1.1 for five families; Special Elite is Apache 2.0 (google/fonts apache/specialelite).
+      const licences = files.filter((f) => f.startsWith(`${slug}-LICENSE-`));
+      expect(licences, family).toHaveLength(1);
+      const text = readFileSync(path.join(fontsDir, licences[0] ?? ""), "utf8");
+      expect(text, family).toMatch(/SIL OPEN FONT LICENSE|Apache License/i);
     }
-    function woff2Of(slug: string) {
-      return readdirSync(fontsDir).filter((f) => f.startsWith(`${slug}-`) && f.endsWith(".woff2"));
-    }
-    expect(section).toContain("next/font/local");
   });
 });
 

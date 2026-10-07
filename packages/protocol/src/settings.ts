@@ -1,4 +1,4 @@
-import type { EngineSettings, ErrorMode } from "@fifth-copy/engine";
+import { type EngineSettings, type ErrorMode, isTypeable } from "@fifth-copy/engine";
 import { z } from "zod";
 
 /**
@@ -44,10 +44,14 @@ export const MAX_BOTS = 29;
 /** The engine owns the error modes (ADR 0007); this only mirrors its type for parsing. */
 const errorModeSchema = z.enum(["continue", "block"]) satisfies z.ZodType<ErrorMode>;
 
-/** One NFC-normalised character (NFD input is rejected, not normalised). */
+/**
+ * One typeable letter: a member of the engine's whitelist (`isTypeable`, #157: one NFC code point,
+ * never control, format, zero-width or emoji; NFD input is rejected, not normalised) that is also a
+ * Unicode letter (no space, digit, punctuation or symbol).
+ */
 const practiceLetterSchema = z
   .string()
-  .refine((s) => s.normalize("NFC") === s && [...s].length === 1, "one NFC character");
+  .refine((s) => isTypeable(s) && /^\p{L}$/u.test(s), "one typeable letter");
 
 export const raceSettingsSchema = z.strictObject({
   language: raceLanguageSchema,

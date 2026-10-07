@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
@@ -8,7 +10,7 @@ import {
 } from "@fifth-copy/protocol";
 import { createFakeClock, createFakeScheduler } from "../clock";
 import { verifyInternalRequest } from "../http/hmac";
-import { createWebApi, WEB_API_TIMEOUT_MS } from "./web-api";
+import { createWebApi, MAX_WEB_RESPONSE_BYTES, WEB_API_TIMEOUT_MS } from "./web-api";
 
 const SECRET = "web-api-test-secret-0123456789abcdef";
 const RACE_ID = "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60";
@@ -117,5 +119,76 @@ describe("createWebApi.startRace (C4)", () => {
     clock.advance(1);
     await expect(call).rejects.toThrow(/timeout/);
     expect(signal?.aborted).toBe(true);
+  });
+
+  it("asks fetch not to follow redirects and rejects a 3xx", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(null, { status: 302, headers: { location: "http://elsewhere.test/" } }),
+    );
+    const { api } = setup(fetchImpl as unknown as typeof fetch);
+    await expect(api.startRace(request)).rejects.toThrow();
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(init.redirect).toBe("manual");
+  });
+
+  it("over real HTTP, a redirect is not followed: the target is never called", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const hits: string[] = [];
+    const server = createServer((req, res) => {
+      hits.push(req.url ?? "");
+      if (req.url === "/api/internal/races") {
+        res.writeHead(307, { location: "/elsewhere" });
+        return res.end();
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(answer));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const clock = createFakeClock(1_767_225_600_000);
+      const api = createWebApi({
+        baseUrl: `http://127.0.0.1:${port}`,
+        secret: SECRET,
+        clock,
+        scheduler: createFakeScheduler(clock),
+      });
+      await expect(api.startRace(request)).rejects.toThrow();
+      expect(hits).toEqual(["/api/internal/races"]);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it("rejects a response larger than the cap without reading all of it", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const chunk = new Uint8Array(16 * 1024).fill(0x20);
+    let produced = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        produced += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const { api, scheduler } = setup(
+      (async () => new Response(endless, { status: 200 })) as unknown as typeof fetch,
+    );
+    await expect(api.startRace(request)).rejects.toThrow(/too large/);
+    expect(produced).toBeLessThanOrEqual(MAX_WEB_RESPONSE_BYTES + 4 * chunk.byteLength);
+    expect(scheduler.armed()).toBe(0);
+
+    const declared = vi.fn(
+      async () =>
+        new Response("{}", {
+          status: 200,
+          headers: { "content-length": String(MAX_WEB_RESPONSE_BYTES + 1) },
+        }),
+    );
+    await expect(setup(declared as unknown as typeof fetch).api.startRace(request)).rejects.toThrow(
+      /too large/,
+    );
   });
 });

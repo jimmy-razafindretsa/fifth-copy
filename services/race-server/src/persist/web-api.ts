@@ -8,7 +8,8 @@ import { internalHeaders } from "../http/sign";
 
 /**
  * The race server's port to the web app's internal API (ADR 0006 point 6). `createWebApi` is the HMAC
- * HTTP implementation; it rejects on any transport error, non-200, timeout or unparsable body.
+ * HTTP implementation; it rejects on any transport error, non-200 (redirects are not followed),
+ * timeout, body over `MAX_WEB_RESPONSE_BYTES` or unparsable body.
  */
 export type WebApi = {
   /** `POST /api/internal/races`: creates the Race row and picks the text. Idempotent on `raceId`. */
@@ -16,6 +17,30 @@ export type WebApi = {
 };
 
 export const WEB_API_TIMEOUT_MS = 5_000;
+/** Same cap as inbound internal bodies: a start answer is a few kB of text and settings. */
+export const MAX_WEB_RESPONSE_BYTES = 64 * 1024;
+
+/** Reads at most `max` bytes of a response body, then gives up (the rest is never buffered). */
+async function readCapped(response: Response, max: number): Promise<string> {
+  const tooLarge = () => new Error(`web api response too large (> ${max} bytes)`);
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) throw tooLarge();
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 type Options = {
   /** The web app's origin (`WEB_ORIGIN`). */
@@ -62,10 +87,15 @@ export function createWebApi({
         },
         body: rawBody,
         signal: controller.signal,
+        // A redirect is an answer from the wrong place: never followed, never re-signed elsewhere.
+        redirect: "manual",
       });
       status = response.status;
-      if (status !== 200) throw new Error(`web api status ${status}`);
-      return parse(await response.json());
+      if (status !== 200) {
+        await response.body?.cancel().catch(() => {});
+        throw new Error(`web api status ${status}`);
+      }
+      return parse(JSON.parse(await readCapped(response, MAX_WEB_RESPONSE_BYTES)));
     };
     try {
       const result = await Promise.race([call(), timedOut]);

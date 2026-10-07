@@ -47,7 +47,13 @@ describe("raceSettingsSchema", () => {
   });
 
   it("fixes the bot levels and the bot cap", () => {
-    expect(BOT_LEVEL_WPM).toEqual({ recruit: 20, clerk: 35, officer: 50, commissar: 70, major: 90 });
+    expect(BOT_LEVEL_WPM).toEqual({
+      recruit: 20,
+      clerk: 35,
+      officer: 50,
+      commissar: 70,
+      major: 90,
+    });
     expect(MAX_BOTS).toBe(29);
   });
 });

@@ -58,10 +58,25 @@ export const FIXTURE_TEXT = {
   sourceRef: null,
 } satisfies StartRaceResponse["text"];
 
-/** A `WebApi` that accepts every start with `FIXTURE_TEXT`; `calls` records each request. */
+/** `WebApi.postResults` of the fakes: acknowledges every desk of the chunk (#189). */
+export const ackResults: WebApi["postResults"] = async (request) => ({
+  v: PROTOCOL_VERSION,
+  raceId: request.raceId,
+  persisted: request.results.map((r) => r.desk),
+});
+
+/**
+ * A `WebApi` that accepts every start with `FIXTURE_TEXT` and acknowledges every results chunk;
+ * `calls` records each start request, `results` each results request.
+ */
 export function fixtureWebApi(clock: { now(): number }) {
   const calls: Parameters<WebApi["startRace"]>[0][] = [];
+  const results: Parameters<WebApi["postResults"]>[0][] = [];
   const api: WebApi = {
+    postResults: (request) => {
+      results.push(request);
+      return ackResults(request);
+    },
     startRace: async (request) => {
       calls.push(request);
       return {
@@ -73,7 +88,7 @@ export function fixtureWebApi(clock: { now(): number }) {
       };
     },
   };
-  return { api, calls };
+  return { api, calls, results };
 }
 
 export type Booted = {
@@ -200,9 +215,16 @@ export async function until(check: () => boolean, ms: number, what = "condition"
   }
 }
 
-/** A `WebApi` that starts every race on `content` (one word, e.g. "bonjour"). */
-export function textWebApi(content: string): WebApi {
+/**
+ * A `WebApi` that starts every race on `content` (one word, e.g. "bonjour"); results go to
+ * `postResults` (acknowledged by default).
+ */
+export function textWebApi(
+  content: string,
+  postResults: WebApi["postResults"] = ackResults,
+): WebApi {
   return {
+    postResults,
     startRace: async (request) => ({
       v: PROTOCOL_VERSION,
       raceId: request.raceId,

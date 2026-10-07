@@ -18,25 +18,61 @@ import path from "node:path";
 
 /** Families, weights and subsets exactly as layout.tsx asked next/font/google for them before #574. */
 const FAMILIES = [
-  { family: "Stardos Stencil", weights: ["700"], subsets: ["latin"], licence: "ofl/stardosstencil/OFL.txt" },
-  { family: "Oswald", weights: ["600", "700"], subsets: ["latin", "latin-ext", "cyrillic"], licence: "ofl/oswald/OFL.txt" },
-  { family: "IBM Plex Mono", weights: ["400", "700"], subsets: ["latin", "latin-ext", "cyrillic"], licence: "ofl/ibmplexmono/OFL.txt" },
-  { family: "Special Elite", weights: ["400"], subsets: ["latin", "latin-ext"], licence: "apache/specialelite/LICENSE.txt" },
-  { family: "Courier Prime", weights: ["400", "700"], subsets: ["latin", "latin-ext"], licence: "ofl/courierprime/OFL.txt" },
-  { family: "VT323", weights: ["400"], subsets: ["latin", "latin-ext"], licence: "ofl/vt323/OFL.txt" },
+  {
+    family: "Stardos Stencil",
+    weights: ["700"],
+    subsets: ["latin"],
+    licence: "ofl/stardosstencil/OFL.txt",
+  },
+  {
+    family: "Oswald",
+    weights: ["600", "700"],
+    subsets: ["latin", "latin-ext", "cyrillic"],
+    licence: "ofl/oswald/OFL.txt",
+  },
+  {
+    family: "IBM Plex Mono",
+    weights: ["400", "700"],
+    subsets: ["latin", "latin-ext", "cyrillic"],
+    licence: "ofl/ibmplexmono/OFL.txt",
+  },
+  {
+    family: "Special Elite",
+    weights: ["400"],
+    subsets: ["latin", "latin-ext"],
+    licence: "apache/specialelite/LICENSE.txt",
+  },
+  {
+    family: "Courier Prime",
+    weights: ["400", "700"],
+    subsets: ["latin", "latin-ext"],
+    licence: "ofl/courierprime/OFL.txt",
+  },
+  {
+    family: "VT323",
+    weights: ["400"],
+    subsets: ["latin", "latin-ext"],
+    licence: "ofl/vt323/OFL.txt",
+  },
 ] as const;
 
 // The User-Agent next/font/google sends (node_modules/next/dist/compiled/@next/font/dist/google/fetch-resource.js):
 // it decides that Google serves woff2.
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36";
-const ALLOWED_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com", "github.com", "raw.githubusercontent.com"]);
+const ALLOWED_HOSTS = new Set([
+  "fonts.googleapis.com",
+  "fonts.gstatic.com",
+  "github.com",
+  "raw.githubusercontent.com",
+]);
 const OUT = path.join(process.cwd(), "public/fonts");
 
 async function get(url: string): Promise<Buffer> {
   if (!ALLOWED_HOSTS.has(new URL(url).hostname)) throw new Error(`host not allowed: ${url}`);
   const res = await fetch(url, { headers: { "User-Agent": USER_AGENT }, redirect: "follow" });
-  if (!ALLOWED_HOSTS.has(new URL(res.url).hostname)) throw new Error(`redirected off the allowed hosts: ${res.url}`);
+  if (!ALLOWED_HOSTS.has(new URL(res.url).hostname))
+    throw new Error(`redirected off the allowed hosts: ${res.url}`);
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   return Buffer.from(await res.arrayBuffer());
 }
@@ -48,12 +84,14 @@ const cssUrl = (family: string, weights: readonly string[]) =>
 type Face = { subset: string; weight: string; url: string; unicodeRange: string };
 
 function parseFaces(css: string): Face[] {
-  return [...css.matchAll(/\/\*\s*([a-z-]+)\s*\*\/\s*@font-face\s*\{([^}]*)\}/g)].map(([, subset = "", body = ""]) => ({
-    subset,
-    weight: /font-weight:\s*([^;]+);/.exec(body)?.[1]?.trim() ?? "",
-    url: /src:\s*url\(([^)]+)\)/.exec(body)?.[1]?.trim() ?? "",
-    unicodeRange: /unicode-range:\s*([^;]+);/.exec(body)?.[1]?.trim() ?? "",
-  }));
+  return [...css.matchAll(/\/\*\s*([a-z-]+)\s*\*\/\s*@font-face\s*\{([^}]*)\}/g)].map(
+    ([, subset = "", body = ""]) => ({
+      subset,
+      weight: /font-weight:\s*([^;]+);/.exec(body)?.[1]?.trim() ?? "",
+      url: /src:\s*url\(([^)]+)\)/.exec(body)?.[1]?.trim() ?? "",
+      unicodeRange: /unicode-range:\s*([^;]+);/.exec(body)?.[1]?.trim() ?? "",
+    }),
+  );
 }
 
 async function main() {
@@ -76,7 +114,9 @@ async function main() {
         fs.writeFileSync(path.join(OUT, name), data);
         files++;
         bytes += data.length;
-        console.log(`${name}\t${data.length}\tweights ${same.map((f) => f.weight).join(",")}\t${same[0]?.unicodeRange}`);
+        console.log(
+          `${name}\t${data.length}\tweights ${same.map((f) => f.weight).join(",")}\t${same[0]?.unicodeRange}`,
+        );
       }
     }
     const text = await get(`https://github.com/google/fonts/raw/main/${licence}`);

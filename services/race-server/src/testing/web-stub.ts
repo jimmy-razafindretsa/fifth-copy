@@ -4,7 +4,8 @@ import { PROTOCOL_VERSION, type StartRaceResponse } from "@fifth-copy/protocol";
 
 // Test-only in-process HTTP stub standing in for the web app's internal API (#199), the mirror of
 // the web's `src/server/internal-api/stub-server.ts` (services never import src/). Not imported by
-// app code. It answers `POST /api/internal/races` with `STUB_TEXT` and records every request.
+// app code. It answers `POST /api/internal/races` with `STUB_TEXT`, acknowledges every results
+// chunk and records every request.
 
 export type WebStubRequest = {
   method?: string;
@@ -34,14 +35,25 @@ export async function startWebStub(now: () => number = Date.now): Promise<WebStu
     req.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")));
     req.on("end", () => {
       requests.push({ method: req.method, url: req.url, headers: req.headers, body });
-      const parsed = JSON.parse(body) as { raceId: string; settings: unknown };
-      const answer = {
-        v: PROTOCOL_VERSION,
-        raceId: parsed.raceId,
-        text: STUB_TEXT,
-        settings: parsed.settings,
-        startedAt: now(),
+      const parsed = JSON.parse(body) as {
+        raceId: string;
+        settings: unknown;
+        results?: { desk: number }[];
       };
+      // `POST /api/internal/races/:id/results` (#189): every desk of the chunk is acknowledged.
+      const answer = parsed.results
+        ? {
+            v: PROTOCOL_VERSION,
+            raceId: parsed.raceId,
+            persisted: parsed.results.map((r) => r.desk),
+          }
+        : {
+            v: PROTOCOL_VERSION,
+            raceId: parsed.raceId,
+            text: STUB_TEXT,
+            settings: parsed.settings,
+            startedAt: now(),
+          };
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(answer));
     });

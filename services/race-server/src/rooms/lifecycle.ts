@@ -38,6 +38,8 @@ export type RaceEnded = {
   ranking: RankingEntry[];
   /** Server ms epoch. */
   endedAt: number;
+  /** Ms since GO at the end, clamped to `[0, MAX_RACE_MS]`: the ranking's race elapsed time. */
+  elapsedMs: number;
 };
 
 export type Lifecycle = {
@@ -233,7 +235,14 @@ export function createLifecycle({
         emit(lobbyId, "ended", { v: PROTOCOL_VERSION, raceId: race.raceId, reason, ranking });
         log("ended", { lobby: lobbyId, reason, desks: ranking.length });
         try {
-          onRaceEnded({ lobbyId, raceId: race.raceId, reason, ranking, endedAt: now });
+          onRaceEnded({
+            lobbyId,
+            raceId: race.raceId,
+            reason,
+            ranking,
+            endedAt: now,
+            elapsedMs: elapsed,
+          });
         } catch (err) {
           log("onRaceEnded failed", { lobby: lobbyId, err: String(err) });
         }

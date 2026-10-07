@@ -36,11 +36,12 @@ export type Client = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 
 /**
  * `url` is the REDIS_URL the calling test file read from its environment (env access stays in test
- * files and env.ts).
+ * files and env.ts). `keyPrefix` isolates a test's keys (and the global `outboxes` set) on the
+ * shared db.
  */
-export async function connectRedis(url: string | undefined): Promise<Redis> {
+export async function connectRedis(url: string | undefined, keyPrefix?: string): Promise<Redis> {
   if (!url) throw new Error("REDIS_URL is not set: load the worktree .env (set -a; . ./.env)");
-  const redis = createRedis(url);
+  const redis = createRedis(url, { keyPrefix });
   try {
     await redis.connect();
   } catch (err) {
@@ -58,10 +59,25 @@ export const FIXTURE_TEXT = {
   sourceRef: null,
 } satisfies StartRaceResponse["text"];
 
-/** A `WebApi` that accepts every start with `FIXTURE_TEXT`; `calls` records each request. */
+/** `WebApi.postResults` of the fakes: acknowledges every desk of the chunk (#189). */
+export const ackResults: WebApi["postResults"] = async (request) => ({
+  v: PROTOCOL_VERSION,
+  raceId: request.raceId,
+  persisted: request.results.map((r) => r.desk),
+});
+
+/**
+ * A `WebApi` that accepts every start with `FIXTURE_TEXT` and acknowledges every results chunk;
+ * `calls` records each start request, `results` each results request.
+ */
 export function fixtureWebApi(clock: { now(): number }) {
   const calls: Parameters<WebApi["startRace"]>[0][] = [];
+  const results: Parameters<WebApi["postResults"]>[0][] = [];
   const api: WebApi = {
+    postResults: (request) => {
+      results.push(request);
+      return ackResults(request);
+    },
     startRace: async (request) => {
       calls.push(request);
       return {
@@ -73,7 +89,7 @@ export function fixtureWebApi(clock: { now(): number }) {
       };
     },
   };
-  return { api, calls };
+  return { api, calls, results };
 }
 
 export type Booted = {
@@ -98,13 +114,18 @@ export type Booted = {
  */
 export async function boot(
   redisUrl: string | undefined,
-  options: { webApi?: WebApi; onRaceEnded?: (ended: RaceEnded) => void } = {},
+  options: {
+    webApi?: WebApi;
+    onRaceEnded?: (ended: RaceEnded) => void;
+    /** Isolated key space (outbox tests, #189): the server and the cleanup both use it. */
+    redisPrefix?: string;
+  } = {},
 ): Promise<Booted> {
   const clock = createFakeClock(Date.now());
   const scheduler = createFakeScheduler(clock);
   const server = createRaceServer({
     env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000", RACE_FAST_CLOCK: "0" },
-    redis: await connectRedis(redisUrl),
+    redis: await connectRedis(redisUrl, options.redisPrefix),
     clock,
     scheduler,
     webApi: options.webApi ?? fixtureWebApi(clock).api,
@@ -159,7 +180,7 @@ export async function boot(
     async stop() {
       for (const c of clients) c.disconnect();
       await server.close();
-      const cleanup = await connectRedis(redisUrl);
+      const cleanup = await connectRedis(redisUrl, options.redisPrefix);
       const keys = lobbies.flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]);
       if (keys.length) await cleanup.del(...keys);
       cleanup.disconnect();
@@ -200,9 +221,16 @@ export async function until(check: () => boolean, ms: number, what = "condition"
   }
 }
 
-/** A `WebApi` that starts every race on `content` (one word, e.g. "bonjour"). */
-export function textWebApi(content: string): WebApi {
+/**
+ * A `WebApi` that starts every race on `content` (one word, e.g. "bonjour"); results go to
+ * `postResults` (acknowledged by default).
+ */
+export function textWebApi(
+  content: string,
+  postResults: WebApi["postResults"] = ackResults,
+): WebApi {
   return {
+    postResults,
     startRace: async (request) => ({
       v: PROTOCOL_VERSION,
       raceId: request.raceId,
@@ -249,15 +277,24 @@ export async function startedRace(
     settings = DEFAULT_RACE_SETTINGS,
     go = true,
     onRaceEnded,
+    postResults,
+    redisPrefix,
   }: {
     players?: number;
     text?: string;
     settings?: RaceSettings;
     go?: boolean;
     onRaceEnded?: (ended: RaceEnded) => void;
+    /** The fake web's results answer (default: acknowledge every desk). */
+    postResults?: WebApi["postResults"];
+    redisPrefix?: string;
   } = {},
 ) {
-  const booted = await boot(redisUrl, { webApi: textWebApi(text), onRaceEnded });
+  const booted = await boot(redisUrl, {
+    webApi: textWebApi(text, postResults),
+    onRaceEnded,
+    redisPrefix,
+  });
   const lobby = await booted.openRoom("KGB-4821", settings);
   const racers: Racer[] = [];
   for (let i = 0; i < players; i++) {

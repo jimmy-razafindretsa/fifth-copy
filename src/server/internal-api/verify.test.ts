@@ -91,6 +91,28 @@ describe("requireInternal (C2)", () => {
     });
   });
 
+  it("a route may raise the cap (#189): accepted up to maxBodyBytes, refused one byte over", async () => {
+    const pad = (n: number) => {
+      const base = JSON.stringify({ ...JSON.parse(body), pad: "" });
+      return JSON.stringify({ ...JSON.parse(body), pad: "x".repeat(n - base.length) });
+    };
+    const maxBodyBytes = 4 * MAX_INTERNAL_BODY_BYTES;
+    const atCap = pad(maxBodyBytes);
+    expect(Buffer.byteLength(atCap)).toBe(maxBodyBytes);
+    const opts = { secret, nowMs: vectorNowMs, maxBodyBytes };
+    expect((await requireInternal(signed(atCap), opts)).ok).toBe(true);
+    expect(await requireInternal(signed(pad(maxBodyBytes + 1)), opts)).toEqual({
+      ok: false,
+      status: 400,
+      error: "bad-body",
+    });
+    // The default stays 64 KiB for every other route.
+    expect(await requireInternal(signed(atCap), { secret, nowMs: vectorNowMs })).toMatchObject({
+      status: 400,
+      error: "bad-body",
+    });
+  });
+
   it("refuses signed non-JSON and non-object bodies as bad-body", async () => {
     for (const raw of ["not json", "[1]", "null", "42"]) {
       expect(await requireInternal(signed(raw), { secret, nowMs: vectorNowMs })).toEqual({

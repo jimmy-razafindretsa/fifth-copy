@@ -22,6 +22,9 @@ export { initialState, type PlayerState } from "./reducers/state";
 // scoring: the numbers shown and stored for one player (elapsed time is injected, ms since GO)
 export { accuracy, elapsedFor, progress, rawWpm, wpm } from "./scoring/scoring";
 
+// trace: the bound on one desk's stored keystrokes (race server ingest, web persistence)
+export { TRACE_ALLOWANCE, TRACE_KEYS_PER_CHAR, traceCapOf } from "./trace/cap";
+
 // ranking: one comparator for live and final order
 export { compareResults, placeOf, rank, type Rankable } from "./ranking/compare";
 

@@ -5,6 +5,8 @@ import type { Clock, Scheduler } from "./clock";
 import type { RaceServerEnv } from "./env";
 import { createInternalHandler } from "./http/internal";
 import { createHttpHandler } from "./http/router";
+import { createOutbox, type Outbox } from "./persist/outbox";
+import { buildResults, sendResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
 import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-state";
 import { durationsFor } from "./rooms/durations";
@@ -27,11 +29,16 @@ export type RaceServer = {
   lifecycle: Lifecycle;
   /** The live desks of running rooms (#173). */
   desks: DesksState;
+  /** Results of ended races still to persist (#189); drained on creation. */
+  outbox: Outbox;
   /** Resolves with the bound port (pass 0 for an ephemeral one in tests). */
   listen(port: number, host?: string): Promise<number>;
   /** Marks draining, disconnects every socket, closes HTTP, then quits Redis. */
   close(): Promise<void>;
 };
+
+const log = (msg: string, fields: Record<string, unknown>) =>
+  console.log(JSON.stringify({ level: "info", msg, ...fields }));
 
 /** Composition root: main.ts wires signals around it, tests boot it on port 0. */
 export function createRaceServer({
@@ -77,6 +84,25 @@ export function createRaceServer({
       return state && desksState.get(lobbyId)?.phase === "running" ? playerStateOf(state) : null;
     },
   };
+  // Results (#189, ADR 0008 write path): built from the in-process states and traces before
+  // `release` frees them, then queued in Redis and posted; pending entries of a previous process
+  // are re-sent now.
+  const outbox = createOutbox({ redis, clock, scheduler, send: sendResults(webApi) });
+  const persist = (ended: RaceEnded) => {
+    if (ended.reason === "void") return;
+    const runtime = desksState.get(ended.lobbyId);
+    if (runtime?.raceId !== ended.raceId) {
+      log("results skipped", { lobby: ended.lobbyId, cause: "no runtime" });
+      return;
+    }
+    outbox
+      .enqueue(ended.raceId, buildResults(ended, runtime))
+      .catch((err: unknown) =>
+        log("results enqueue failed", { lobby: ended.lobbyId, err: String(err) }),
+      );
+  };
+  outbox.drain().catch((err: unknown) => log("outbox drain failed", { err: String(err) }));
+
   const raceHooks = {
     deskStates: async (lobbyId: string) => desksState.states(lobbyId),
     onGo: (lobbyId: string, init: Parameters<typeof desksState.open>[1]) => {
@@ -93,6 +119,11 @@ export function createRaceServer({
     },
     onRaceEnded: (ended: RaceEnded) => {
       try {
+        try {
+          persist(ended);
+        } catch (err) {
+          log("results build failed", { lobby: ended.lobbyId, err: String(err) });
+        }
         onRaceEnded?.(ended);
       } finally {
         desksState.release(ended.lobbyId);
@@ -139,6 +170,7 @@ export function createRaceServer({
     registry,
     lifecycle,
     desks: desksState,
+    outbox,
     listen: (port, host) =>
       new Promise((resolve) => {
         httpServer.listen(port, host, () => resolve((httpServer.address() as AddressInfo).port));
@@ -147,6 +179,7 @@ export function createRaceServer({
       draining = true;
       lifecycle.close();
       ticker.close();
+      outbox.close();
       await new Promise<void>((resolve) => void io.close(() => resolve()));
       await redis.quit().catch(() => undefined);
     },

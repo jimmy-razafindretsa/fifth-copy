@@ -11,8 +11,11 @@ import {
   type HostStartAck,
   type Pong,
   type RaceSettings,
+  INTERNAL_HEADERS,
+  startRaceRequestSchema,
 } from "@fifth-copy/protocol";
-import type { WebApi } from "../persist/web-api";
+import { verifyInternalRequest } from "../http/hmac";
+import { createWebApi, type WebApi } from "../persist/web-api";
 import {
   boot,
   connectError,
@@ -23,8 +26,10 @@ import {
   track,
   until,
   type Booted,
+  SECRET,
   type Client,
 } from "../testing/harness";
+import { startWebStub, STUB_TEXT, type WebStub } from "../testing/web-stub";
 import { membersKey, roomKey } from "./keys";
 import type { RaceEnded } from "./lifecycle";
 
@@ -175,6 +180,74 @@ describe("lifecycle: host start and countdown (C1)", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("lifecycle: text from the web app over the signed internal API (#199 C5)", () => {
+  let stub: WebStub | undefined;
+  afterEach(async () => {
+    await stub?.close();
+    stub = undefined;
+  });
+
+  it("host:start -> one signed request listing every desk; countdown and a second tab carry the text", async () => {
+    stub = await startWebStub();
+    const web = stub;
+    // The real HMAC client against the in-process stub; wired once the boot's clock exists.
+    const wired: { api?: WebApi } = {};
+    const webApi: WebApi = { startRace: (req) => wired.api!.startRace(req) };
+    const { booted, lobby, host, seenHost, others, connectAs } = await room({ players: 2, webApi });
+    wired.api = createWebApi({
+      baseUrl: web.url,
+      secret: SECRET,
+      clock: booted.clock,
+      scheduler: booted.scheduler,
+    });
+
+    const ack = await start(host);
+    expect(ack).toMatchObject({ ok: true });
+    expect(web.requests).toHaveLength(1);
+    const [request] = web.requests;
+    expect(request).toMatchObject({ method: "POST", url: "/api/internal/races" });
+    expect(
+      verifyInternalRequest({
+        secret: SECRET,
+        timestamp: request!.headers[INTERNAL_HEADERS.timestamp] as string,
+        signature: request!.headers[INTERNAL_HEADERS.signature] as string,
+        rawBody: request!.body,
+        nowMs: booted.clock.now(),
+      }),
+    ).toEqual({ ok: true });
+    const body = startRaceRequestSchema.parse(JSON.parse(request!.body));
+    expect(body).toMatchObject({
+      raceId: (ack as { raceId: string }).raceId,
+      lobbyId: lobby,
+      hostUserId: HOST_SUB,
+    });
+    expect(body.desks).toEqual([
+      { desk: 1, userId: HOST_SUB, name: "Ada", isBot: false },
+      { desk: 2, userId: "usr_p0", name: "Clerk 0", isBot: false },
+      { desk: 3, userId: "usr_p1", name: "Clerk 1", isBot: false },
+    ]);
+
+    const everyone = [seenHost, ...others.map((o) => o.seen)];
+    await until(() => everyone.every((s) => s.countdown.length === 1), 2_000, "countdown");
+    for (const seen of everyone) {
+      expect(seen.countdown[0]!.race).toMatchObject({
+        text: STUB_TEXT.content,
+        language: STUB_TEXT.language,
+        wordCount: STUB_TEXT.wordCount,
+      });
+    }
+
+    booted.clock.advance(3_000);
+    await eventually(async () => (await phaseOf(lobby)) === "running", "phase running");
+    const tab = watch(await connectAs("usr_p0", "Clerk 0"));
+    await until(() => !!tab.welcome, 2_000, "second tab welcome");
+    const welcome = welcomeSchema.parse(tab.welcome);
+    expect(welcome.room.phase).toBe("running");
+    expect(welcome.race?.text).toBe(STUB_TEXT.content);
+    expect(web.requests).toHaveLength(1);
   });
 });
 

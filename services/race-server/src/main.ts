@@ -6,7 +6,7 @@
 import { createRaceServer } from "./app";
 import { systemClock, systemScheduler } from "./clock";
 import { parseEnv } from "./env";
-import { unavailableWebApi } from "./persist/web-api";
+import { createWebApi } from "./persist/web-api";
 import { createRedis } from "./redis/client";
 
 const env = parseEnv();
@@ -15,8 +15,13 @@ const server = createRaceServer({
   redis: createRedis(env.REDIS_URL),
   clock: systemClock,
   scheduler: systemScheduler,
-  // Until the HMAC client lands (#199) every host:start acks `start-failed`.
-  webApi: unavailableWebApi,
+  // WEB_ORIGIN doubles as the web app's base URL for the signed internal API (#199).
+  webApi: createWebApi({
+    baseUrl: env.WEB_ORIGIN,
+    secret: env.RACE_TOKEN_SECRET,
+    clock: systemClock,
+    scheduler: systemScheduler,
+  }),
 });
 
 void server.listen(env.RACE_SERVER_PORT).then((port) => {

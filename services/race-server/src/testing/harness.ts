@@ -161,6 +161,7 @@ export async function boot(
       await server.close();
       const cleanup = await connectRedis(redisUrl);
       const keys = lobbies.flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]);
+      for (const id of lobbies) keys.push(...(await cleanup.keys(`${roomKey(id)}:trace:*`)));
       if (keys.length) await cleanup.del(...keys);
       cleanup.disconnect();
     },

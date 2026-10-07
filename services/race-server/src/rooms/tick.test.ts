@@ -9,7 +9,8 @@ import {
   type Snapshot,
 } from "@fifth-copy/protocol";
 import { createFakeClock, createFakeScheduler } from "../clock";
-import { createDesksState } from "./desks-state";
+import { performance } from "node:perf_hooks";
+import { createDesksState, traceCapOf } from "./desks-state";
 import { ingest } from "./ingest";
 import { createTicker, TICK_MS } from "./tick";
 
@@ -143,5 +144,31 @@ describe("tick loop (C3)", () => {
       { v: PROTOCOL_VERSION, kind: "finished", desk: 2, place: 1 },
     ]);
     expect(terminal).toEqual(["lob"]);
+  });
+
+  it("a desk streaming keys at the wire's maximum stays bounded; the others keep flowing", () => {
+    const { clock, rt, snapshots, desksState } = setup();
+    const churn = (t: number) =>
+      Array.from({ length: 64 }, (_, i) => ({ t, key: i % 2 === 0 ? "x" : "Backspace" }));
+    const durations: number[] = [];
+    for (let step = 0; step < 600; step++) {
+      const t = clock.now() - T0;
+      // Desk 1: one full batch every 10 ms (6 400 keys/s) for 60 s.
+      for (let k = 0; k < 10; k++) ingest(rt, 1, churn(t), clock.now());
+      // Desk 2: about 1 character per 100 ms, a normal typist.
+      if (step < race.text.length) ingest(rt, 2, [{ t, key: race.text[step]! }], clock.now());
+      const start = performance.now();
+      clock.advance(TICK_MS);
+      durations.push(performance.now() - start);
+    }
+    const flood = desksState.states("lob").get(1)!;
+    expect(flood.trace.length).toBeLessThanOrEqual(traceCapOf(rt.textLength));
+    expect(flood.droppedKeys).toBe(600 * 640 - flood.trace.length);
+    expect(desksState.states("lob").get(2)).toMatchObject({ droppedKeys: 0, status: "finished" });
+    expect(snapshots).toHaveLength(600);
+    expect(snapshots.every((s) => s.desks.length === 3)).toBe(true);
+    // Per-tick work does not grow with the flood: the median tick stays far below TICK_MS.
+    const median = [...durations].sort((a, b) => a - b)[durations.length >> 1]!;
+    expect(median).toBeLessThan(5);
   });
 });

@@ -13,7 +13,8 @@ import {
 } from "@fifth-copy/protocol";
 import { connectRedis, startedRace, typeKeys, until, type Booted } from "../testing/harness";
 import { createDesksState, deskStateOf, type DeskState } from "./desks-state";
-import { ingest, MAX_LAG_MS, MAX_LEAD_MS } from "./ingest";
+import { traceCapOf } from "./desks-state";
+import { ingest, KEYS_BURST, KEYS_PER_SECOND, MAX_LAG_MS, MAX_LEAD_MS } from "./ingest";
 import { desksKey } from "./keys";
 import type { RaceEnded } from "./lifecycle";
 
@@ -126,10 +127,80 @@ describe("ingest: server clock (C2)", () => {
 
   it("an engine-rejected key is traced but changes nothing else", () => {
     const { rt } = runtime();
-    const before = deskStateOf(initialState(), { lastKeyAt: T0, timingAnomalies: 0, trace: [] });
+    const before = deskStateOf(initialState(), {
+      lastKeyAt: T0,
+      timingAnomalies: 0,
+      droppedKeys: 0,
+      trace: [],
+    });
     expect(rt.states.get(1)).toEqual(before);
     ingest(rt, 1, [{ t: 100, key: "☃" }], T0 + 100);
     expect(rt.states.get(1)).toMatchObject({ cursor: 0, total: 0, trace: [{ t: 100, key: "☃" }] });
+  });
+});
+
+describe("ingest: per-desk bounds", () => {
+  /** 64 keys alternating a wrong key and Backspace: the cursor never passes 1. */
+  const churn = (t: number): Keystroke[] =>
+    Array.from({ length: 64 }, (_, i) => ({ t, key: i % 2 === 0 ? "x" : "Backspace" }));
+
+  it("stores at most traceCapOf(textLength) keystrokes; the rest is counted, not applied", () => {
+    const { rt } = runtime();
+    const cap = traceCapOf(rt.textLength);
+    const batches = Math.ceil(cap / 64) + 5;
+    for (let i = 0; i < batches; i++) {
+      // 2 s apart: the rate budget is full again at every batch.
+      const elapsed = 2_000 * (i + 1);
+      ingest(rt, 1, churn(elapsed), T0 + elapsed);
+    }
+    const desk = rt.states.get(1)!;
+    expect(desk.trace).toHaveLength(cap);
+    expect(desk.droppedKeys).toBe(batches * 64 - cap);
+    expect(desk.total).toBe(cap);
+    expect(desk.status).toBe("typing");
+  });
+
+  it("accepts a burst of KEYS_BURST, then KEYS_PER_SECOND; excess keys are counted, not applied", () => {
+    const { rt } = runtime();
+    for (let i = 0; i < 3; i++) ingest(rt, 1, churn(1_000), T0 + 1_000);
+    expect(rt.states.get(1)).toMatchObject({ total: KEYS_BURST, droppedKeys: 3 * 64 - KEYS_BURST });
+    ingest(rt, 1, churn(2_000), T0 + 2_000);
+    expect(rt.states.get(1)!.total).toBe(KEYS_BURST + KEYS_PER_SECOND);
+    // Another desk's budget is its own.
+    ingest(rt, 2, churn(2_000), T0 + 2_000);
+    expect(rt.states.get(2)).toMatchObject({ total: 64, droppedKeys: 0 });
+  });
+
+  it("never drops a 150 WPM typist with corrections over 2 minutes, in 50 ms batches", () => {
+    const text = "le formulaire est en triple exemplaire et doit etre signe par le chef ".repeat(
+      30,
+    );
+    const state = createDesksState({ redis: {} as Redis });
+    const rt = state.open("lob", {
+      race: { ...race, text },
+      settings: DEFAULT_RACE_SETTINGS,
+      desks,
+    });
+    const perSecond = (150 * 5) / 60; // 12.5 characters per second
+    let typedChars = 0;
+    let pending: Keystroke[] = [];
+    for (let ms = 0; ms <= 120_000; ms += 10) {
+      if (ms * perSecond >= (typedChars + 1) * 1000) {
+        const ch = text[typedChars]!;
+        // Every 20th character is mistyped first, then erased.
+        if (typedChars % 20 === 0) pending.push({ t: ms, key: "q" }, { t: ms, key: "Backspace" });
+        pending.push({ t: ms, key: ch });
+        typedChars += 1;
+      }
+      if (ms % 50 === 0 && pending.length > 0) {
+        ingest(rt, 1, pending, T0 + ms);
+        pending = [];
+      }
+    }
+    const desk = rt.states.get(1)!;
+    expect(typedChars).toBe(1_500);
+    expect(desk).toMatchObject({ droppedKeys: 0, timingAnomalies: 0, errors: 0 });
+    expect(desk.cursor).toBe(typedChars);
   });
 });
 

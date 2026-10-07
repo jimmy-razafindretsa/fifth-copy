@@ -317,7 +317,7 @@ describe("lifecycle: timer end (C3)", () => {
     booted.clock.advance(1);
     await until(() => seenHost.ended.length === 1, 2_000, "hard stop");
     expect(seenHost.ended[0]!.reason).toBe("timer");
-  });
+  }, 20_000); // ~36 000 fake ticks of 10 Hz snapshots (#173) run inside one hour of fake time
 });
 
 describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {

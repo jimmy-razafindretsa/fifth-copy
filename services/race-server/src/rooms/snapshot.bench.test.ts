@@ -54,6 +54,7 @@ function lateDesk(i: number): DeskState {
     finishedAt: finished ? 400_000 + i : null,
     lastKeyAt: 400_000 + i,
     timingAnomalies: 0,
+    droppedKeys: 0,
     trace: Array.from({ length: cursor + 15 }, (_, k) => ({ t: k * 150, key: "e" })),
   };
 }
@@ -119,15 +120,18 @@ describe("snapshot budget (C6)", () => {
     expect(await redis.hlen(desksKey(lobbyId))).toBe(DESKS);
     expect(await redis.ttl(desksKey(lobbyId))).toBeGreaterThan(0);
 
-    // Measured, not asserted (BRIEF risk b): the full mirror (typed row and trace per desk).
-    const stringify = performance.now();
-    for (let desk = 1; desk <= DESKS; desk++) JSON.stringify(desksState.states(lobbyId).get(desk));
-    console.log(
-      JSON.stringify({
-        bench: "desks-mirror",
-        stringifyMs: performance.now() - stringify,
-        flushMs,
-      }),
-    );
+    // Next tick: every desk typed 2 keys. Only the new keystrokes are serialised; the field still
+    // holds the whole trace. Measured, not asserted: the Redis write itself is #592's.
+    for (let desk = 1; desk <= DESKS; desk++) {
+      const state = desksState.states(lobbyId).get(desk)!;
+      state.trace.push({ t: 500_000, key: "e" }, { t: 500_001, key: "e" });
+      desksState.set(lobbyId, desk, { ...state, total: state.total + 2 });
+    }
+    const next = performance.now();
+    await desksState.flush(lobbyId);
+    const nextFlushMs = performance.now() - next;
+    const stored = JSON.parse((await redis.hget(desksKey(lobbyId), "7"))!) as DeskState;
+    expect(stored.trace).toEqual(desksState.states(lobbyId).get(7)!.trace);
+    console.log(JSON.stringify({ bench: "desks-mirror", flushMs, nextFlushMs }));
   });
 });

@@ -1,11 +1,18 @@
 import { applyKeystroke, type Keystroke } from "@fifth-copy/engine";
 import { MAX_RACE_MS, type Rejected } from "@fifth-copy/protocol";
-import type { RoomRuntime } from "./desks-state";
+import { traceCapOf, type RoomRuntime } from "./desks-state";
 
 /** How far behind the server clock a keystroke's `t` may be (ARCHITECTURE 7.3). */
 export const MAX_LAG_MS = 2_000;
 /** How far ahead of the server clock a keystroke's `t` may be. */
 export const MAX_LEAD_MS = 200;
+/**
+ * Sustained keystrokes per second a desk may send: 40/s is ~480 WPM, about twice the fastest
+ * recorded human bursts, so a fast typist with corrections is never refused.
+ */
+export const KEYS_PER_SECOND = 40;
+/** Keystrokes a desk may send at once (two full batches), e.g. after a network stall. */
+export const KEYS_BURST = 128;
 
 export type IngestResult = {
   /** Sent back as `rejected`; absent when the batch was applied or silently dropped. */
@@ -24,8 +31,10 @@ const DROPPED: IngestResult = { terminal: false };
  * `[elapsed - MAX_LAG_MS, min(elapsed + MAX_LEAD_MS, MAX_RACE_MS)]`, then raised to the desk's
  * `lastT` (the engine ignores an older `t`); a clamp, a decrease within the batch or a raise counts
  * one timing anomaly per batch. Every key then goes through `applyKeystroke`, in order, until the
- * desk stops typing; the applied keystrokes are appended to the trace. Bots (#366) and the rate
- * limiter (#207) wrap this function.
+ * desk stops typing; the applied keystrokes are appended to the trace. Two bounds per desk: a
+ * budget of `KEYS_PER_SECOND` refilled on the server clock (at most `KEYS_BURST`), and a history of
+ * at most `traceCapOf(textLength)` keystrokes; a key over either is neither applied nor traced and
+ * counts in `droppedKeys`. Bots (#366) and the shared socket limiter (#207) wrap this function.
  */
 export function ingest(
   runtime: RoomRuntime | undefined,
@@ -44,11 +53,26 @@ export function ingest(
   const { text, engine } = runtime;
   const { trace } = start;
 
+  const cap = traceCapOf(runtime.textLength);
+  const budget = runtime.budgets.get(desk) ?? { tokens: KEYS_BURST, at: now };
+  budget.tokens = Math.min(
+    KEYS_BURST,
+    budget.tokens + (Math.max(0, now - budget.at) * KEYS_PER_SECOND) / 1000,
+  );
+  budget.at = now;
+  runtime.budgets.set(desk, budget);
+
   let state = start;
   let anomaly = false;
+  let dropped = 0;
   let previous = -1;
   for (const { t, key } of batch) {
     if (state.status !== "typing") break;
+    if (budget.tokens < 1 || trace.length >= cap) {
+      dropped += 1;
+      continue;
+    }
+    budget.tokens -= 1;
     const clamped = Math.min(hi, Math.max(lo, t));
     const applied = Math.max(clamped, state.lastT);
     if (clamped !== t || t < previous || applied !== clamped) anomaly = true;
@@ -63,6 +87,7 @@ export function ingest(
     ...state,
     lastKeyAt: now,
     timingAnomalies: start.timingAnomalies + (anomaly ? 1 : 0),
+    droppedKeys: start.droppedKeys + dropped,
     trace,
   };
   runtime.states.set(desk, next);

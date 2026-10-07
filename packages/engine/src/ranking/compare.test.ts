@@ -186,29 +186,37 @@ function randomRace(seed: number): Rankable[] {
 
 const desksOf = (list: Rankable[]) => list.map((p) => p.desk);
 
-describe("compareResults is a strict total order (C4)", () => {
-  it("over 500 seeded random races", () => {
-    for (let seed = 1; seed <= 500; seed++) {
-      const race = randomRace(seed);
-      const ctx = `seed ${seed}`;
-      for (const a of race) {
-        expect(Object.is(compareResults(a, a), 0), ctx).toBe(true);
-        for (const b of race) {
-          const ab = compareResults(a, b);
-          expect([-1, 0, 1], ctx).toContain(ab);
-          expect(ab === -compareResults(b, a), ctx).toBe(true);
-          // total: with unique desks only a player equals itself
-          expect(ab === 0, ctx).toBe(a.desk === b.desk);
-          for (const c of race) {
-            if (ab <= 0 && compareResults(b, c) <= 0) {
-              expect(compareResults(a, c) <= 0, ctx).toBe(true);
-            }
-          }
+/** Every order-law violation in one race, as readable strings (empty when the laws hold). */
+function violations(race: Rankable[]): string[] {
+  const out: string[] = [];
+  for (const a of race) {
+    if (!Object.is(compareResults(a, a), 0)) out.push(`reflexive ${a.desk}`);
+    for (const b of race) {
+      const ab = compareResults(a, b);
+      if (ab !== -1 && ab !== 0 && ab !== 1) out.push(`range ${a.desk},${b.desk}=${ab}`);
+      if (ab !== -compareResults(b, a)) out.push(`antisymmetric ${a.desk},${b.desk}`);
+      // total: with unique desks only a player equals itself
+      if ((ab === 0) !== (a.desk === b.desk)) out.push(`total ${a.desk},${b.desk}`);
+      if (ab > 0) continue;
+      for (const c of race) {
+        if (compareResults(b, c) <= 0 && compareResults(a, c) > 0) {
+          out.push(`transitive ${a.desk},${b.desk},${c.desk}`);
         }
       }
-      const once = rank(race);
-      expect(desksOf(rank(once)), ctx).toEqual(desksOf(once));
-      expect(desksOf(rank([...race].reverse())), ctx).toEqual(desksOf(once));
     }
+  }
+  const once = desksOf(rank(race));
+  if (desksOf(rank(rank(race))).join() !== once.join()) out.push("sort twice");
+  if (desksOf(rank([...race].reverse())).join() !== once.join()) out.push("sort reversed");
+  return out;
+}
+
+describe("compareResults is a strict total order (C4)", () => {
+  it("over 500 seeded random races", () => {
+    const failures: string[] = [];
+    for (let seed = 1; seed <= 500; seed++) {
+      for (const v of violations(randomRace(seed))) failures.push(`seed ${seed}: ${v}`);
+    }
+    expect(failures.slice(0, 10)).toEqual([]);
   });
 });

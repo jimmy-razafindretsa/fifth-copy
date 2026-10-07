@@ -15,15 +15,17 @@ import {
   type ServerToClientEvents,
   type Welcome,
 } from "@fifth-copy/protocol";
+import type { Presence } from "../players/presence";
 import type { IngestResult } from "../rooms/ingest";
 import type { Lifecycle } from "../rooms/lifecycle";
 import { createHandshakeMiddleware, type HandshakeDeps } from "./handshake";
 
 /**
- * Per-socket state: `claims` set by the handshake middleware from the verified race token, `desk`
- * once the registry seated the socket's user.
+ * Per-socket state: `claims` and `resume` (the handshake carried the user's own resume key, #178)
+ * set by the handshake middleware from the verified race token, `desk` once the registry seated the
+ * socket's user.
  */
-export type SocketData = { claims: RaceTokenClaims; desk?: number };
+export type SocketData = { claims: RaceTokenClaims; resume?: boolean; desk?: number };
 
 /** The live race behind the `keys` edge (#173): `rooms/ingest.ts` over the desks' runtime. */
 export type RacePort = {
@@ -43,62 +45,75 @@ const log = (msg: string, fields: Record<string, unknown>) =>
   console.log(JSON.stringify({ level: "info", msg, ...fields }));
 
 /**
- * The waiting room's network edge (ADR 0006, ARCHITECTURE 7.1). Room rules stay in the registry: on
- * connect the socket's user joins (`welcome` to it, `roster` to the room); the desk is released when
- * the user's last socket disconnects. Client events (`keys`, `host:*`, `ping`) register on the socket
- * by name; phase transitions belong to the lifecycle (`rooms/lifecycle.ts`, #166).
+ * The room's network edge (ADR 0006, ARCHITECTURE 7.1). Room rules stay in the registry: on connect
+ * the socket's user joins (`welcome` to it with the user's resume key, `roster` to the room). What the
+ * user's last disconnect means is presence's decision (`players/presence.ts`, #178): in `waiting` and
+ * `ended` the desk is released (`roster`); during a race it is line-cut and kept for the grace. A
+ * handshake with the user's own resume key resumes the desk, and its `welcome` carries the server's
+ * state. Client events (`keys`, `host:*`, `ping`) register on the socket by name; phase transitions
+ * belong to the lifecycle (`rooms/lifecycle.ts`, #166).
  */
 export function attachSocketServer(
   httpServer: HttpServer,
-  deps: HandshakeDeps & { origin: string; lifecycle: Lifecycle; race: RacePort },
+  deps: HandshakeDeps & {
+    origin: string;
+    lifecycle: Lifecycle;
+    race: RacePort;
+    presence: Presence;
+  },
 ): RaceIo {
-  const { registry, lifecycle, race } = deps;
+  const { registry, lifecycle, race, presence } = deps;
   const io: RaceIo = new Server(httpServer, {
     cors: { origin: deps.origin, credentials: false },
     transports: ["websocket", "polling"],
   });
   io.use(createHandshakeMiddleware(deps));
 
-  // Sockets per (lobby, user) on this process: two tabs of one user share a desk.
-  const sockets = new Map<string, number>();
-
   io.on("connection", (socket: RaceSocket) => {
     const { lobby, sub, name, role } = socket.data.claims;
-    const key = `${lobby}\u0000${sub}`;
     const room = lobbyRoom(lobby);
-    sockets.set(key, (sockets.get(key) ?? 0) + 1);
+    // Two tabs of one user share a desk: presence counts the user's sockets on this process.
+    presence.socketOpened(lobby, sub);
     void socket.join(room);
 
-    // join and leave go through the registry's per-room queue, so a disconnect that races the join
-    // still runs after it.
-    registry.join(lobby, { userId: sub, name }).then(
-      (joined) => {
+    // join, presence and leave go through the registry's per-room queue, so a disconnect that races
+    // the join still runs after it. The desk comes from membership, never from the resume key.
+    registry
+      .join(lobby, { userId: sub, name })
+      .then(async (joined) => {
         if (!joined.ok) return void socket.disconnect(true);
         socket.data.desk = joined.desk;
         void socket.join(deskRoom(lobby, joined.desk));
+        const { resumeKey } = await presence.seated(
+          lobby,
+          sub,
+          joined.desk,
+          socket.data.resume === true,
+        );
+        // The phase may have moved on while presence waited in the queue.
+        const phase = (await registry.room(lobby))?.phase ?? joined.room.phase;
         socket.emit("welcome", {
           v: PROTOCOL_VERSION,
           role,
           you: joined.desk,
           // Parsed by openRoomRequestSchema when the room was opened.
-          room: { code: joined.room.code as RoomCode, phase: joined.room.phase },
+          room: { code: joined.room.code as RoomCode, phase },
           members: joined.members,
           settings: joined.room.settings,
           race: joined.room.race,
-          // Resume (#178) fills the rest.
+          // The server's authority after a resume: the client reconciles from it (#215).
           state: race.stateOf(lobby, joined.desk),
           overlay: null,
-          resumeKey: null,
+          resumeKey,
           serverNow: deps.clock.now(),
         });
         io.to(room).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });
-      },
-      () => {
+      })
+      .catch(() => {
         log("join failed", { lobby });
         socket.disconnect(true);
-      },
-    );
+      });
 
     // Registered synchronously with the join: the registry's per-room queue runs it after the join.
     // The host is the token's `sub` matched against the room's `hostUserId` (ADR 0009), never `role`.
@@ -164,17 +179,20 @@ export function attachSocketServer(
     });
 
     socket.on("disconnect", () => {
-      const left = (sockets.get(key) ?? 1) - 1;
-      if (left > 0) return void sockets.set(key, left);
-      sockets.delete(key);
-      registry.leave(lobby, sub).then(
-        ({ members, closed }) => {
-          if (closed) lifecycle.onRoomClosed(lobby);
-          else io.to(room).emit("roster", { v: PROTOCOL_VERSION, members });
-          log("left", { lobby, members: members.length, closed });
-        },
-        () => log("leave failed", { lobby }),
-      );
+      presence
+        .socketClosed(lobby, sub)
+        .then(async (closed) => {
+          // A new socket of the user queued its join meanwhile: it keeps the desk.
+          if (closed !== "leave" || presence.sockets(lobby, sub) > 0) return;
+          const { members, closed: roomClosed } = await registry.leave(lobby, sub);
+          if (roomClosed) lifecycle.onRoomClosed(lobby);
+          else {
+            await presence.left(lobby, sub);
+            io.to(room).emit("roster", { v: PROTOCOL_VERSION, members });
+          }
+          log("left", { lobby, members: members.length, closed: roomClosed });
+        })
+        .catch(() => log("leave failed", { lobby }));
     });
   });
 

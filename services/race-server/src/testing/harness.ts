@@ -24,7 +24,7 @@ import { createFakeClock, createFakeScheduler, type FakeClock, type FakeSchedule
 import type { WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
-import { desksKey, membersKey, roomKey } from "../rooms/keys";
+import { desksKey, membersKey, resumeIndexKey, resumeKey, roomKey } from "../rooms/keys";
 
 // Test-only harness for the race server's integration tests (real Redis, ARCHITECTURE testing table).
 // Fails, never skips, without Redis. Deletes only the keys of lobbies it created (shared db index).
@@ -181,8 +181,17 @@ export async function boot(
       for (const c of clients) c.disconnect();
       await server.close();
       const cleanup = await connectRedis(redisUrl, options.redisPrefix);
-      const keys = lobbies.flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]);
-      for (const id of lobbies) keys.push(...(await cleanup.keys(`${roomKey(id)}:trace:*`)));
+      const keys = lobbies.flatMap((id) => [
+        roomKey(id),
+        membersKey(id),
+        desksKey(id),
+        resumeIndexKey(id),
+      ]);
+      for (const id of lobbies) {
+        keys.push(...(await cleanup.keys(`${roomKey(id)}:trace:*`)));
+        // Resume keys still indexed (#178); an expired or dropped one is already gone.
+        keys.push(...Object.values(await cleanup.hgetall(resumeIndexKey(id))).map(resumeKey));
+      }
       if (keys.length) await cleanup.del(...keys);
       cleanup.disconnect();
     },
@@ -264,7 +273,8 @@ export function watchRace(client: Client): RaceSeen {
   return seen;
 }
 
-export type Racer = { client: Client; seen: RaceSeen; desk: number };
+/** `sub` and `token` let a test reconnect as the same user (#178). */
+export type Racer = { client: Client; seen: RaceSeen; desk: number; sub: string; token: string };
 
 /**
  * Boots a server, seats the host (desk 1) and `players - 1` players (desks 2..), starts a race on
@@ -301,13 +311,11 @@ export async function startedRace(
   for (let i = 0; i < players; i++) {
     const sub = i === 0 ? HOST_SUB : `usr_p${i}`;
     const role = i === 0 ? "host" : "player";
-    const client = booted.connect({
-      v: PROTOCOL_VERSION,
-      token: await booted.token({ lobby, sub, name: `Clerk ${i}`, role }),
-    });
+    const token = await booted.token({ lobby, sub, name: `Clerk ${i}`, role });
+    const client = booted.connect({ v: PROTOCOL_VERSION, token });
     const seen = watchRace(client);
     await until(() => !!seen.welcome, 3_000, `welcome ${i}`);
-    racers.push({ client, seen, desk: seen.welcome!.you! });
+    racers.push({ client, seen, desk: seen.welcome!.you!, sub, token });
   }
   await until(() => racers.every((r) => r.seen.roster?.length === players), 3_000, "seated");
   const ack = await racers[0]!.client.timeout(2_000).emitWithAck("host:start", {

@@ -8,6 +8,8 @@ import { createHttpHandler } from "./http/router";
 import { createOutbox, type Outbox } from "./persist/outbox";
 import { buildResults, sendResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
+import { createPresence, type Presence } from "./players/presence";
+import { createResumeKeys } from "./players/resume-keys";
 import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-state";
 import { durationsFor } from "./rooms/durations";
 import { ingest } from "./rooms/ingest";
@@ -31,6 +33,8 @@ export type RaceServer = {
   desks: DesksState;
   /** Results of ended races still to persist (#189); drained on creation. */
   outbox: Outbox;
+  /** Socket presence, line cuts and resumes (#178). */
+  presence: Presence;
   /** Resolves with the bound port (pass 0 for an ephemeral one in tests). */
   listen(port: number, host?: string): Promise<number>;
   /** Marks draining, disconnects every socket, closes HTTP, then quits Redis. */
@@ -77,6 +81,18 @@ export function createRaceServer({
     },
     onTerminal: (lobbyId) => void lifecycle.onDeskTerminal(lobbyId).catch(() => undefined),
   });
+  // Presence (#178): line cut and resume of the desks, resume keys in Redis, grace on the scheduler.
+  const durations = durationsFor(env);
+  const resumeKeys = createResumeKeys({ redis });
+  const presence = createPresence({
+    registry,
+    desksState,
+    resumeKeys,
+    clock,
+    scheduler,
+    durations,
+    emit: (lobbyId, event) => void to(lobbyRoom(lobbyId))?.emit("event", event),
+  });
   const race: RacePort = {
     ingest: (lobbyId, desk, batch) => ingest(desksState.get(lobbyId), desk, batch, clock.now()),
     stateOf: (lobbyId, desk) => {
@@ -105,8 +121,10 @@ export function createRaceServer({
 
   const raceHooks = {
     deskStates: async (lobbyId: string) => desksState.states(lobbyId),
+    onEnding: (lobbyId: string) => presence.settle(lobbyId),
     onGo: (lobbyId: string, init: Parameters<typeof desksState.open>[1]) => {
       desksState.open(lobbyId, init);
+      presence.onGo(lobbyId);
       ticker.start(lobbyId);
     },
     onEnded: (lobbyId: string) => {
@@ -116,6 +134,7 @@ export function createRaceServer({
     onClosed: (lobbyId: string) => {
       ticker.stop(lobbyId);
       desksState.close(lobbyId);
+      presence.closeRoom(lobbyId);
     },
     onRaceEnded: (ended: RaceEnded) => {
       try {
@@ -136,7 +155,7 @@ export function createRaceServer({
     clock,
     scheduler,
     webApi,
-    durations: durationsFor(env),
+    durations,
     emit: (lobbyId, event, payload) => {
       // Socket.IO cannot narrow a generic event name to its payload; `Emit` types the pair.
       const room = sockets.io?.to(lobbyRoom(lobbyId)) as
@@ -161,6 +180,8 @@ export function createRaceServer({
     clock,
     origin: env.WEB_ORIGIN,
     race,
+    presence,
+    resumeKeys,
   });
   sockets.io = io;
 
@@ -171,6 +192,7 @@ export function createRaceServer({
     lifecycle,
     desks: desksState,
     outbox,
+    presence,
     listen: (port, host) =>
       new Promise((resolve) => {
         httpServer.listen(port, host, () => resolve((httpServer.address() as AddressInfo).port));
@@ -178,6 +200,7 @@ export function createRaceServer({
     close: async () => {
       draining = true;
       lifecycle.close();
+      presence.close();
       ticker.close();
       outbox.close();
       await new Promise<void>((resolve) => void io.close(() => resolve()));

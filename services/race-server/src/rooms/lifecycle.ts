@@ -81,6 +81,7 @@ export function createLifecycle({
   emit,
   onRaceEnded = () => {},
   deskStates = async () => new Map(),
+  onEnding = async () => {},
   onGo = () => {},
   onEnded = () => {},
   onClosed = () => {},
@@ -95,6 +96,11 @@ export function createLifecycle({
   onRaceEnded?: (ended: RaceEnded) => void;
   /** Authoritative desk states (#173); a missing desk is `initialState()`. */
   deskStates?: (lobbyId: string) => Promise<ReadonlyMap<number, PlayerState>>;
+  /**
+   * The race is ending, before the ranking is computed, inside the room's queue (#178: line-cut
+   * desks turn `expired`). Must not call the registry's queued methods.
+   */
+  onEnding?: (lobbyId: string) => Promise<void>;
   /** The room is `running` (#173: the desks' runtime and the tick loop start here). */
   onGo?: (
     lobbyId: string,
@@ -219,6 +225,11 @@ export function createLifecycle({
         const { race } = room;
         const now = clock.now();
         const elapsed = Math.min(Math.max(0, now - race.t0), MAX_RACE_MS);
+        try {
+          await onEnding(lobbyId);
+        } catch (err) {
+          log("onEnding failed", { lobby: lobbyId, err: String(err) });
+        }
         const ranking = rankingFor(
           room.desks ?? room.seated,
           await deskStates(lobbyId),

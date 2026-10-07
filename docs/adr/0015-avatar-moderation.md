@@ -35,6 +35,7 @@ Scores: 1 (poor) to 3 (good) for the project, one VPS, a single operator, users 
   - skin ratio >= `SKIN_FLAG_RATIO` (0.5) -> `flag` (`skin`);
   - skin ratio >= `SMOOTH_SKIN_RATIO` (0.25) and entropy < `LOW_ENTROPY_BITS` (1.5) -> `flag` (`smooth-skin`: a large flat skin-toned area);
   - otherwise `approve` (`clear`).
+  - an image the decoder cannot read (should not happen: it is our own WebP) -> `flag` (`unreadable`).
   The heuristic never returns `reject`: it is not proof (`docs/privacy/moderation.md`). The thresholds are exported constants pinned by the table test `moderation/moderator.test.ts`; tuning them is a normal PR that updates this list and the test.
 - **Consequences of a verdict** (`storeAvatar`, `moderator.ts` `statusFor`):
   - `approve` -> files written, `avatarStatus = APPROVED`, shown to whoever may see it (ADR 0014 reader).

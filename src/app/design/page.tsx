@@ -13,6 +13,8 @@ import {
   Spinner,
   Wordmark,
 } from "@/components/ui";
+import { getTheme, ThemeToggle } from "@/features/preferences";
+import { getT } from "@/i18n";
 import demo from "./motion-demo.module.css";
 
 export const metadata: Metadata = { title: "Design system" };
@@ -107,7 +109,8 @@ function Plate({
 }
 
 /** Living inventory of src/components/ui (see docs/design/components.md). Used by e2e + visual tests. */
-export default function DesignPage() {
+export default async function DesignPage() {
+  const [t, theme] = await Promise.all([getT(), getTheme()]);
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-4 py-10 md:px-8">
       <header className="flex flex-col gap-3">
@@ -359,6 +362,19 @@ export default function DesignPage() {
           </Alert>
           <Alert tone="success" title="Saved" />
           <Alert title="Heads up">Informational message.</Alert>
+        </div>
+      </section>
+
+      <section aria-labelledby="preferences" className="flex flex-col gap-3">
+        <h2 id="preferences" className="type-display-md">
+          Preferences
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The NIGHT SHIFT toggle of the header: the gold dot lights on the night ground. The choice
+          lives in the theme cookie; without it the page follows the system.
+        </p>
+        <div data-preferences-demo className="flex flex-wrap items-center gap-3">
+          <ThemeToggle theme={theme} label={t.header.nightShift} />
         </div>
       </section>
 

@@ -80,7 +80,13 @@ describe.skipIf(!testDatabaseUrl)(
         { t: 110, key: "e" },
       ];
       return db.raceKeystrokes.create({
-        data: { raceId, desk, userId, data: gzipSync(JSON.stringify(strokes)), count: strokes.length },
+        data: {
+          raceId,
+          desk,
+          userId,
+          data: gzipSync(JSON.stringify(strokes)),
+          count: strokes.length,
+        },
       });
     };
 

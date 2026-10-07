@@ -3,7 +3,11 @@
 # branch protection or auto-merge. This gives the same guarantee: one merge at a time, and a PR merges only
 # when its head contains the current main AND every CI check on that head is green.
 #
-#   scripts/merge.sh <n>        merge card n's open PR (branch from its PICKUP comment)
+#   scripts/merge.sh <n>        merge card n's open PR (branch from its newest TRUSTED PICKUP comment)
+#
+# The repo is public: the branch comes only from `board.ts pickup-branch` (comments by BOARD_TRUSTED_AUTHORS),
+# and only a PR from this repository is merged (a fork can open a PR from a branch with the card's name).
+# Env: MERGE_LOCK overrides the queue lock directory (tests only).
 #
 # Exit: 0 merged | 1 checks failed or PR not mergeable | 4 merge conflict with main (resolve in the worktree,
 # push, re-run) | 5 queue lock timeout.
@@ -14,12 +18,13 @@ REPO="${BOARD_REPO:-jimmy-razafindretsa/fifth-copy}"
 n="${1:-}"; n="${n#\#}"
 [[ "$n" =~ ^[0-9]+$ ]] || { echo "usage: scripts/merge.sh <n>"; exit 2; }
 
-branch="$(npx tsx scripts/board.ts get "$n" --comments 100 | grep -Eo "^PICKUP #$n contract_hash=[0-9a-f]+ branch=[^ ]+" | tail -1 | sed 's/.*branch=//')"
-[[ -n "$branch" ]] || { echo "merge: #$n has no PICKUP comment"; exit 1; }
-pr="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number -q '.[0].number')"
-[[ -n "$pr" ]] || { echo "merge: no open PR for $branch"; exit 1; }
+branch="$(npx tsx scripts/board.ts pickup-branch "$n")" || branch=""
+[[ -n "$branch" ]] || { echo "merge: #$n has no PICKUP comment from a trusted author"; exit 1; }
+pr="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number,isCrossRepository \
+  -q '[.[] | select(.isCrossRepository == false)][0].number // empty')"
+[[ "$pr" =~ ^[0-9]+$ ]] || { echo "merge: no open PR for $branch from $REPO (fork PRs are never merged)"; exit 1; }
 
-LOCK="$ROOT/.cache/merge.lock"
+LOCK="${MERGE_LOCK:-$ROOT/.cache/merge.lock}"
 mkdir -p "$ROOT/.cache"
 for ((i = 0; i < 360; i++)); do mkdir "$LOCK" 2>/dev/null && break; sleep 10; done
 [[ -d "$LOCK" ]] || { echo "merge: queue lock timeout ($LOCK)"; exit 5; }

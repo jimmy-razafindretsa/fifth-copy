@@ -225,3 +225,48 @@ test.describe("Cyrillic and accented glyph coverage (#20)", () => {
       .toEqual(["Stardos", "Oswald", "Oswald+Stardos"]);
   });
 });
+
+// Contract of #511: only the faces a typical route paints first are preloaded. Special Elite (flavour)
+// and VT323 (device) load on demand; Courier Prime (body) keeps its preload. Each preload href is
+// matched against the @font-face src URLs of the family's real (next/font renamed) name.
+
+test.describe("font preloads (#511)", () => {
+  test("C2 / preloads no Special Elite or VT323 face, and at least one Courier Prime face", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const variables = ["--font-special-elite", "--font-vt323", "--font-courier-prime"] as const;
+    const names: Record<string, string> = {};
+    for (const v of variables) {
+      names[v] = (await resolveFamily(page, v)).replace(/^['"]|['"]$/g, "");
+    }
+    const { preloads, srcByFamily } = await page.evaluate((families) => {
+      const preloads = Array.from(
+        document.querySelectorAll<HTMLLinkElement>('link[rel="preload"][as="font"]'),
+      ).map((l) => new URL(l.getAttribute("href") ?? "", location.href).href);
+      const srcByFamily: Record<string, string[]> = {};
+      for (const sheet of Array.from(document.styleSheets)) {
+        for (const rule of Array.from(sheet.cssRules)) {
+          if (!(rule instanceof CSSFontFaceRule)) continue;
+          const family = rule.style.getPropertyValue("font-family").replace(/^['"]|['"]$/g, "");
+          if (!families.includes(family)) continue;
+          const base = sheet.href ?? location.href;
+          const urls = Array.from(rule.style.getPropertyValue("src").matchAll(/url\(([^)]+)\)/g))
+            .map((m) => (m[1] ?? "").trim().replace(/^['"]|['"]$/g, ""))
+            .map((u) => new URL(u, base).href);
+          (srcByFamily[family] ??= []).push(...urls);
+        }
+      }
+      return { preloads, srcByFamily };
+    }, Object.values(names));
+
+    const preloadedOf = (v: (typeof variables)[number]) => {
+      const srcs = srcByFamily[names[v] ?? ""] ?? [];
+      expect(srcs.length, `@font-face src for ${v}`).toBeGreaterThan(0);
+      return preloads.filter((href) => srcs.includes(href));
+    };
+    expect(preloadedOf("--font-special-elite"), "Special Elite preloads").toEqual([]);
+    expect(preloadedOf("--font-vt323"), "VT323 preloads").toEqual([]);
+    expect(preloadedOf("--font-courier-prime").length, "Courier Prime preloads").toBeGreaterThan(0);
+  });
+});

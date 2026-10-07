@@ -37,3 +37,14 @@ export const outboxKey = (raceId: string) => `outbox:${raceId}`;
 
 /** Set: race ids with a pending outbox, re-sent on boot. TTL `OUTBOX_TTL_S`, refreshed per enqueue. */
 export const OUTBOXES_KEY = "outboxes";
+
+/**
+ * String: JSON `{ lobbyId, userId, desk }` of a resume key (#178, ARCHITECTURE 7.4), `key` = 32
+ * random bytes hex. TTL `ROOM_TTL_S` while its user is connected, `GRACE_MS` once the desk is
+ * line-cut; deleted at grace expiry, at the race end of a line-cut desk, on leave and with the room.
+ * Never a credential: the handshake reads it only after the race token verified (ADR 0009).
+ */
+export const resumeKey = (key: string) => `resume:${key}`;
+
+/** Hash: `userId` -> its resume key, so every `welcome` of a user returns the same one. Room TTL. */
+export const resumeIndexKey = (lobbyId: string) => `room:${lobbyId}:resume`;

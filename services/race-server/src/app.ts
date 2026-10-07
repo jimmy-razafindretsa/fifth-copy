@@ -40,7 +40,7 @@ export function createRaceServer({
 }): RaceServer {
   const registry = createRoomRegistry({ redis, clock });
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
-  let broadcast: RaceIo | undefined;
+  const sockets: { io?: RaceIo } = {};
   const lifecycle = createLifecycle({
     registry,
     clock,
@@ -49,7 +49,7 @@ export function createRaceServer({
     durations: durationsFor(env),
     emit: (lobbyId, event, payload) => {
       // Socket.IO cannot narrow a generic event name to its payload; `Emit` types the pair.
-      const room = broadcast?.to(lobbyRoom(lobbyId)) as
+      const room = sockets.io?.to(lobbyRoom(lobbyId)) as
         { emit(e: string, p: unknown): boolean } | undefined;
       room?.emit(event, payload);
     },
@@ -71,7 +71,7 @@ export function createRaceServer({
     clock,
     origin: env.WEB_ORIGIN,
   });
-  broadcast = io;
+  sockets.io = io;
 
   return {
     httpServer,

@@ -39,10 +39,14 @@ describe("avatar-review CLI guards", () => {
     ["no arguments", []],
     ["no decision", ["user1"]],
     ["an unknown decision", ["user1", "delete"]],
-    ["too many arguments", ["user1", "approve", "extra"]],
+    ["too many arguments", ["user1", "approve", "--version=1", "extra"]],
+    ["approve without --version", ["user1", "approve"]],
     ["an id with a path in it", ["../etc", "reject"]],
-    ["an unknown flag", ["user1", "approve", "--force"]],
+    ["an unknown flag", ["user1", "approve", "--version=1", "--force"]],
     ["a bad --version", ["user1", "approve", "--version=abc"]],
+    ["a hex --version", ["user1", "approve", "--version=0x10"]],
+    ["an exponent --version", ["user1", "reject", "--version=1e3"]],
+    ["a zero --version", ["user1", "reject", "--version=0"]],
   ])("refuses %s before touching the database", async (_label, argv) => {
     const d = deps();
     expect(await main(argv, d)).toBe(2);
@@ -52,9 +56,15 @@ describe("avatar-review CLI guards", () => {
     expect(d.err.join("\n")).toMatch(/usage|user id/i);
   });
 
+  it("approve names --version as required (decide only the picture looked at)", async () => {
+    const d = deps();
+    expect(await main(["user1", "approve"], d)).toBe(2);
+    expect(d.err.join("\n")).toMatch(/approve needs --version/);
+  });
+
   it("refuses without DATABASE_URL", async () => {
     const d = deps({ databaseUrl: undefined });
-    expect(await main(["user1", "approve"], d)).toBe(2);
+    expect(await main(["user1", "approve", "--version=1"], d)).toBe(2);
     expect(d.connect).not.toHaveBeenCalled();
   });
 
@@ -163,7 +173,7 @@ describe.skipIf(!testDatabaseUrl)(
 
     it("approve: a PENDING avatar becomes APPROVED, files kept, stdout is id and status only", async () => {
       const u = await typist("approve", "PENDING");
-      const r = await run([u.id, "approve"]);
+      const r = await run([u.id, "approve", `--version=${VERSION}`]);
       expect(r.code).toBe(0);
       expect(r.guard).toHaveBeenCalledWith(testDatabaseUrl);
       expect(await row(u.id)).toEqual({
@@ -202,11 +212,49 @@ describe.skipIf(!testDatabaseUrl)(
     ] as const)("approve refuses %s and changes nothing", async (_label, status) => {
       const u = await typist(`noop-${status}`, status, status === "APPROVED");
       const before = await row(u.id);
-      const r = await run([u.id, "approve"]);
+      const r = await run([u.id, "approve", `--version=${VERSION}`]);
       expect(r.code).toBe(1);
       expect(r.out).toEqual([]);
       expect(r.err.join("\n")).toMatch(/not pending/i);
       expect(await row(u.id)).toEqual(before);
+    });
+
+    it("reject with no file under AVATAR_DIR: row hidden, exit 1, AVATAR_DIR named, nothing on stdout", async () => {
+      const u = await typist("missing-files", "PENDING");
+      const elsewhere = await mkdtemp(path.join(tmpdir(), "fc-avatar-review-other-"));
+      try {
+        const d = deps({
+          databaseUrl: testDatabaseUrl!,
+          avatarDir: elsewhere,
+          connect: (url: string) => createPrismaClient(url),
+        });
+        expect(await main([u.id, "reject"], d)).toBe(1);
+        expect(d.out).toEqual([]);
+        expect(d.err.join("\n")).toMatch(/AVATAR_DIR/);
+        expect(d.err.join("\n")).not.toContain(elsewhere);
+        // Fail safe: the row is hidden anyway; the files under the real dir are untouched.
+        expect(await row(u.id)).toEqual({ avatarKey: null, avatarStatus: "REJECTED" });
+        expect(await filesOf(u.id)).toHaveLength(2);
+      } finally {
+        await rm(elsewhere, { recursive: true, force: true });
+      }
+    });
+
+    it("reject deletes only the version it read: a newer upload's files stay", async () => {
+      const u = await typist("only-read-version", "PENDING");
+      // Files of a newer version written by a concurrent upload (its row update not yet committed).
+      await store.put(u.id, VERSION + 5, { 256: Buffer.from("n"), 64: Buffer.from("n") });
+      expect((await run([u.id, "reject"])).code).toBe(0);
+      expect(await filesOf(u.id)).toEqual([`${VERSION + 5}-256.webp`, `${VERSION + 5}-64.webp`]);
+      expect(await row(u.id)).toEqual({ avatarKey: null, avatarStatus: "REJECTED" });
+    });
+
+    it("reject --version refuses a version that is not the stored one", async () => {
+      const u = await typist("reject-version", "APPROVED");
+      const r = await run([u.id, "reject", `--version=${VERSION + 1}`]);
+      expect(r.code).toBe(1);
+      expect(await row(u.id)).toMatchObject({ avatarStatus: "APPROVED" });
+      expect(await filesOf(u.id)).toHaveLength(2);
     });
 
     it("reject refuses an account with no avatar", async () => {
@@ -229,7 +277,7 @@ describe.skipIf(!testDatabaseUrl)(
     });
 
     it("an unknown user id is refused", async () => {
-      const r = await run(["no-such-user-0000", "approve"]);
+      const r = await run(["no-such-user-0000", "approve", `--version=${VERSION}`]);
       expect(r.code).toBe(1);
       expect(r.err.join("\n")).toMatch(/no account/i);
     });

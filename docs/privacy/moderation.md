@@ -96,13 +96,21 @@ Discord, is re-encoded, then checked by a local heuristic. No picture leaves the
 - `reject`: files deleted, the previous approved picture stays, the owner sees the rejection message with the appeal
   path.
 
-**Review of `PENDING` pictures.** The operator reviews them with `scripts/avatar-review.ts <userId> approve|reject`
-(#64), which runs `scripts/db-guard.sh` first. A teacher can ask for a review of a picture in their class through
+**Review of `PENDING` pictures.** The operator reviews them with `scripts/avatar-review.ts` (#64), which runs
+`scripts/db-guard.sh` first:
+- `scripts/avatar-review.ts <userId> approve --version=<v>`: `<v>` is the version in the file name the operator
+  looked at (`<v>-256.webp` under `AVATAR_DIR/<userId>/`). `--version` is required, so a picture uploaded after the
+  operator looked is never approved unseen; a different stored version is refused.
+- `scripts/avatar-review.ts <userId> reject [--version=<v>]`: hides the picture (status `REJECTED`), then deletes the
+  files of that version.
+Run it with the same `AVATAR_DIR` as the app (production: `/data/avatars`; the default `.data/avatars` is relative
+to the working directory). If no file is found there, the picture is still hidden but the command fails and says
+so: find and delete the files by hand. A teacher can ask for a review of a picture in their class through
 the contact route but does not see `PENDING` pictures. Delay: see [Response times](#response-times). The operator
 looks at the picture only to decide, does not copy it, and records only the decision.
 
 **Reported approved picture.** A teacher forwards the username and lobby code. The operator looks at it and, if it
-breaks the rules, rejects it with the same script: files are deleted and the default portrait shows. Urgent content
+breaks the rules, rejects it with the same script (`reject`): files are deleted and the default portrait shows. Urgent content
 is rejected first and reviewed after.
 
 **Appeal path.** The rejection message tells the student to ask their teacher or school office to contact the person

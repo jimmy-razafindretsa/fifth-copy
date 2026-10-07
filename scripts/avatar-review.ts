@@ -1,15 +1,19 @@
 /**
  * Operator review of avatars (docs/privacy/moderation.md, Avatars; card #64, ADR 0015).
  *
- *   npx tsx scripts/avatar-review.ts <userId> approve|reject [--version=<v>]
+ *   npx tsx scripts/avatar-review.ts <userId> approve --version=<v>
+ *   npx tsx scripts/avatar-review.ts <userId> reject [--version=<v>]
  *
- * Runs scripts/db-guard.sh on DATABASE_URL first.
- * - approve: a PENDING avatar becomes APPROVED (files kept). Anything else is refused.
- * - reject: the row is set to REJECTED with no avatarKey first (hidden right away), then every file
- *   of the user under AVATAR_DIR is deleted. Works on PENDING and on reported APPROVED avatars.
- * `--version=<v>` (the `<v>` of the `<v>-256.webp` file the operator looked at) makes the change
- * only if that is still the stored version, so a picture uploaded since is never decided unseen.
- * The update is conditional on the row read, so a concurrent upload makes it fail instead.
+ * Runs scripts/db-guard.sh on DATABASE_URL first. Files live under AVATAR_DIR (same variable and
+ * default as the app, `.data/avatars` relative to the working directory): run it with the app's.
+ * `<v>` is the version of the `<v>-256.webp` file the operator looked at; the change happens only
+ * if that is still the stored version, so a picture uploaded since is never decided unseen.
+ * - approve (needs --version): a PENDING avatar becomes APPROVED (files kept). Else refused.
+ * - reject: the row is set to REJECTED with no avatarKey first (hidden right away), then the files
+ *   of the version read are deleted (a newer upload's files are left alone). Works on PENDING and
+ *   on reported APPROVED avatars. If no file of that version was found under AVATAR_DIR, the row
+ *   stays hidden but the command exits 1 and says so: the files must be found and removed.
+ * Updates are conditional on the row read, so a concurrent upload makes them fail instead.
  * Prints only `<user id> <APPROVED|REJECTED>` on stdout, never names or file contents.
  */
 import "dotenv/config";
@@ -17,6 +21,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createPrismaClient } from "../src/server/db-client";
 import { FsAvatarStore } from "../src/features/identity/avatars/fs-store";
+import { AVATAR_SIZES } from "../src/features/identity/avatars/store";
 
 type Db = ReturnType<typeof createPrismaClient>;
 
@@ -31,7 +36,8 @@ export type ReviewDeps = {
   printError: (line: string) => void;
 };
 
-const USAGE = "usage: scripts/avatar-review.ts <userId> approve|reject [--version=<v>]";
+const USAGE =
+  "usage: scripts/avatar-review.ts <userId> approve --version=<v> | reject [--version=<v>]";
 // Same id shape the avatar store accepts (src/features/identity/avatars/store.ts).
 const USER_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const DECISIONS = ["approve", "reject"] as const;
@@ -53,11 +59,18 @@ export async function main(argv: readonly string[], deps: ReviewDeps): Promise<n
   }
   let version: number | undefined;
   if (versionFlag) {
-    version = Number(versionFlag.slice("--version=".length));
-    if (!Number.isSafeInteger(version) || version <= 0) {
+    const raw = versionFlag.slice("--version=".length);
+    version = /^[1-9][0-9]{0,15}$/.test(raw) ? Number(raw) : NaN;
+    if (!Number.isSafeInteger(version)) {
       deps.printError(`avatar-review: --version must be a positive integer. ${USAGE}`);
       return 2;
     }
+  }
+  if (decision === "approve" && version === undefined) {
+    deps.printError(
+      `avatar-review: approve needs --version=<v> (the file you looked at). ${USAGE}`,
+    );
+    return 2;
   }
   if (!deps.databaseUrl) {
     deps.printError("avatar-review: DATABASE_URL is not set");
@@ -75,7 +88,20 @@ export async function main(argv: readonly string[], deps: ReviewDeps): Promise<n
       deps.printError("avatar-review: no account has this id");
       return 1;
     }
-    if (version !== undefined && row.avatarKey !== `${userId}/${version}`) {
+    if (decision === "approve" && (row.avatarStatus !== "PENDING" || row.avatarKey === null)) {
+      deps.printError("avatar-review: the avatar is not pending; nothing to approve");
+      return 1;
+    }
+    if (decision === "reject" && row.avatarKey === null) {
+      deps.printError("avatar-review: the account has no stored avatar; nothing to reject");
+      return 1;
+    }
+    const storedVersion = Number(row.avatarKey!.slice(userId!.length + 1));
+    if (row.avatarKey !== `${userId}/${storedVersion}` || !Number.isSafeInteger(storedVersion)) {
+      deps.printError("avatar-review: the stored avatar key is malformed; fix it by hand");
+      return 1;
+    }
+    if (version !== undefined && version !== storedVersion) {
       deps.printError("avatar-review: the stored picture is not that version; look again");
       return 1;
     }
@@ -83,27 +109,31 @@ export async function main(argv: readonly string[], deps: ReviewDeps): Promise<n
     const where = { id: userId!, avatarKey: row.avatarKey, avatarStatus: row.avatarStatus };
 
     if (decision === "approve") {
-      if (row.avatarStatus !== "PENDING" || row.avatarKey === null) {
-        deps.printError("avatar-review: the avatar is not pending; nothing to approve");
-        return 1;
-      }
       const { count } = await db.user.updateMany({ where, data: { avatarStatus: "APPROVED" } });
       if (count !== 1) return changed(deps);
       deps.print(`${userId} APPROVED`);
       return 0;
     }
 
-    if (row.avatarKey === null) {
-      deps.printError("avatar-review: the account has no stored avatar; nothing to reject");
-      return 1;
-    }
     // Hide first (row), delete after (files): a crash in between leaves orphans never served.
     const { count } = await db.user.updateMany({
       where,
       data: { avatarStatus: "REJECTED", avatarKey: null },
     });
     if (count !== 1) return changed(deps);
-    await new FsAvatarStore(deps.avatarDir).delete(userId!);
+    // Only the version read: a concurrent upload's newer files (and its row) stay consistent.
+    const store = new FsAvatarStore(deps.avatarDir);
+    const found = await Promise.all(
+      AVATAR_SIZES.map((size) => store.get(userId!, storedVersion, size)),
+    );
+    await store.delete(userId!, { version: storedVersion });
+    if (found.every((file) => file === null)) {
+      deps.printError(
+        "avatar-review: row set to REJECTED, but no file of that version was found under " +
+          "AVATAR_DIR; run again with the app's AVATAR_DIR and delete the files by hand",
+      );
+      return 1;
+    }
     deps.print(`${userId} REJECTED`);
     return 0;
   } finally {

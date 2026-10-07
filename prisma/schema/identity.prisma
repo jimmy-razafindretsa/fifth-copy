@@ -9,20 +9,22 @@ enum AvatarStatus {
 }
 
 model User {
-  id                 String       @id @default(cuid())
-  isGuest            Boolean      @default(true)
+  id                 String           @id @default(cuid())
+  isGuest            Boolean          @default(true)
   /// Unique public display name (guests get `<Animal>-<3 digits>`).
-  typistName         String       @unique
+  typistName         String           @unique
   /// As typed by the user; uniqueness is enforced on usernameNormalized.
   username           String?
   /// normalizeUsername(username) from src/features/identity: case-insensitive uniqueness.
-  usernameNormalized String?      @unique
+  usernameNormalized String?          @unique
   passwordHash       String?
   /// Bumped to revoke every JWT issued before (ADR 0009).
-  tokenVersion       Int          @default(0)
+  tokenVersion       Int              @default(0)
   avatarKey          String?
-  avatarStatus       AvatarStatus @default(NONE)
-  createdAt          DateTime     @default(now())
-  lastSeenAt         DateTime     @default(now())
-  hostedLobbies      Lobby[]      @relation("LobbyHost")
+  avatarStatus       AvatarStatus     @default(NONE)
+  createdAt          DateTime         @default(now())
+  lastSeenAt         DateTime         @default(now())
+  hostedLobbies      Lobby[]          @relation("LobbyHost")
+  raceResults        RaceResult[]
+  raceKeystrokes     RaceKeystrokes[]
 }

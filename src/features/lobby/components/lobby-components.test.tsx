@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { Member } from "@fifth-copy/protocol";
+import { deskIdentity, type Member } from "@fifth-copy/protocol";
 import { en } from "@/i18n/en";
 import { deskLabel, fill, playersLabel } from "./lobby-labels";
 import { LobbyLiveView } from "./lobby-live";
@@ -14,7 +14,13 @@ const labels = en.lobby;
 const errors = en.landing.errors;
 const CODE = "KGB-4821";
 
-const member = (desk: number, isHost = false): Member => ({ desk, name: `Clerk-${desk}`, isHost });
+const member = (desk: number, isHost = false): Member => ({
+  desk,
+  name: `Clerk-${desk}`,
+  isHost,
+  isBot: false,
+  ...deskIdentity(desk),
+});
 const live = (members: Member[], you = 1): LobbyState => ({
   phase: "live",
   error: null,

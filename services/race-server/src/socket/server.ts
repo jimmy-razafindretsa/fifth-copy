@@ -42,7 +42,7 @@ export function attachSocketServer(
   const sockets = new Map<string, number>();
 
   io.on("connection", (socket: RaceSocket) => {
-    const { lobby, sub, name } = socket.data.claims;
+    const { lobby, sub, name, role } = socket.data.claims;
     const key = `${lobby}\u0000${sub}`;
     const room = lobbyRoom(lobby);
     sockets.set(key, (sockets.get(key) ?? 0) + 1);
@@ -55,11 +55,18 @@ export function attachSocketServer(
         if (!joined.ok) return void socket.disconnect(true);
         socket.emit("welcome", {
           v: PROTOCOL_VERSION,
+          role,
           you: joined.desk,
           // Parsed by openRoomRequestSchema when the room was opened.
           room: { code: joined.room.code as RoomCode, phase: joined.room.phase },
           members: joined.members,
           settings: joined.room.settings,
+          // No race yet: start (#166) and resume (#178) fill these.
+          race: null,
+          state: null,
+          overlay: null,
+          resumeKey: null,
+          serverNow: deps.clock.now(),
         });
         io.to(room).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });

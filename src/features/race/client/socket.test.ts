@@ -49,13 +49,26 @@ function setup(token = "tok.en.value") {
   return { fake, io, room };
 }
 
-const member = { desk: 1, name: "Ada", isHost: true };
+const member = {
+  desk: 1,
+  name: "Ada",
+  isHost: true,
+  isBot: false,
+  color: 0,
+  marker: "circle",
+} as const;
 const welcome: Welcome = {
   v: PROTOCOL_VERSION,
+  role: "host",
   you: 1,
   room: { code: roomCodeSchema.parse("KGB-4821"), phase: "waiting" },
   members: [member],
   settings: DEFAULT_RACE_SETTINGS,
+  race: null,
+  state: null,
+  overlay: null,
+  resumeKey: null,
+  serverNow: 1767225600000,
 };
 const roster: Roster = { v: PROTOCOL_VERSION, members: [member] };
 

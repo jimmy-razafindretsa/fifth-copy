@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import {
   DEFAULT_RACE_SETTINGS,
+  deskIdentity,
   INTERNAL_HEADERS,
   PROTOCOL_VERSION,
   type RaceSettings,
+  welcomeSchema,
 } from "@fifth-copy/protocol";
 import { boot, connectError, SECRET, track, until, type Booted } from "../testing/harness";
 
@@ -15,6 +17,8 @@ afterEach(async () => {
   t = undefined;
 });
 
+const ada = { desk: 1, name: "Ada", isHost: false, isBot: false, color: 0, marker: "circle" };
+
 describe("waiting room over Socket.IO (C1)", () => {
   it("welcomes a joiner with its desk, rosters both on join and the first on leave", async () => {
     t = await boot(process.env.REDIS_URL);
@@ -24,10 +28,16 @@ describe("waiting room over Socket.IO (C1)", () => {
     await until(() => !!seenA.welcome, 2_000, "welcome A");
     expect(seenA.welcome).toEqual({
       v: PROTOCOL_VERSION,
+      role: "player",
       you: 1,
       room: { code: "KGB-4821", phase: "waiting" },
-      members: [{ desk: 1, name: "Ada", isHost: false }],
+      members: [ada],
       settings: DEFAULT_RACE_SETTINGS,
+      race: null,
+      state: null,
+      overlay: null,
+      resumeKey: null,
+      serverNow: t.clock.now(),
     });
 
     const b = t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby, name: "Bob" }) });
@@ -38,7 +48,7 @@ describe("waiting room over Socket.IO (C1)", () => {
 
     b.disconnect();
     await until(() => seenA.roster?.length === 1, 2_000, "roster 1");
-    expect(seenA.roster).toEqual([{ desk: 1, name: "Ada", isHost: false }]);
+    expect(seenA.roster).toEqual([ada]);
     expect(await t.server.registry.members(lobby)).toHaveLength(1);
   });
 
@@ -70,11 +80,41 @@ describe("waiting room over Socket.IO (C1)", () => {
       body,
     });
     expect(res.status).toBe(200);
+    const host = track(
+      t.connect({
+        v: PROTOCOL_VERSION,
+        token: await t.token({ lobby: lobbyId, sub: "usr_host", role: "host" }),
+      }),
+    );
+    await until(() => !!host.welcome, 2_000, "host welcome");
     const seen = track(
       t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby: lobbyId }) }),
     );
-    await until(() => !!seen.welcome, 2_000, "welcome");
+    await until(() => !!seen.welcome && host.roster?.length === 2, 2_000, "welcome");
     expect(seen.welcome?.settings).toEqual(settings);
+
+    // #557 C4: the v4 welcome parses, carries the token role, no race yet, the server clock.
+    for (const [who, role, you] of [
+      [host, "host", 1],
+      [seen, "player", 2],
+    ] as const) {
+      const welcome = who.welcome!;
+      expect(welcomeSchema.safeParse(welcome).success).toBe(true);
+      expect(welcome).toMatchObject({
+        role,
+        you,
+        room: { phase: "waiting" },
+        race: null,
+        state: null,
+        overlay: null,
+        resumeKey: null,
+      });
+      expect(Math.abs(welcome.serverNow - t.clock.now())).toBeLessThanOrEqual(1_000);
+    }
+    for (const member of [...seen.welcome!.members, ...host.roster!]) {
+      expect(member).toMatchObject({ isBot: false, ...deskIdentity(member.desk) });
+    }
+    expect(host.roster?.find((m) => m.desk === 1)?.isHost).toBe(true);
   });
 
   it("two sockets of one user share a desk, released only when the last disconnects", async () => {
@@ -111,6 +151,13 @@ describe("handshake rejections over the wire (C2)", () => {
       }),
     ],
     ["bad-token", async () => ({ v: PROTOCOL_VERSION })],
+    [
+      "bad-token",
+      async (b: Booted, lobby: string) => ({
+        v: PROTOCOL_VERSION,
+        token: await b.token({ lobby, role: "spectator" }),
+      }),
+    ],
     [
       "no-room",
       async (b: Booted) => ({ v: PROTOCOL_VERSION, token: await b.token({ lobby: b.lobby() }) }),

@@ -9,3 +9,5 @@ export * from "./race-token";
 export * from "./socket";
 export * from "./internal";
 export * from "./settings";
+export * from "./race";
+export * from "./events";

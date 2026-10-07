@@ -1,0 +1,26 @@
+import type { Rng } from "../types";
+
+/**
+ * Seeded mulberry32 PRNG for property tests. Internal (not re-exported): same seed, same sequence,
+ * so a failing property run is reproducible from its seed.
+ */
+export function mulberry32(seed: number): Rng {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Integer in [0, n). */
+export function pickInt(rng: Rng, n: number): number {
+  return Math.floor(rng() * n);
+}
+
+/** One element of a non-empty array. */
+export function pick<T>(rng: Rng, items: readonly T[]): T {
+  return items[pickInt(rng, items.length)] as T;
+}

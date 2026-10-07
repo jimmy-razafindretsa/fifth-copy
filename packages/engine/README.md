@@ -11,5 +11,9 @@ The engine is the one place that knows how a race is scored. The race server run
 - Every exported function has table-driven unit tests next to it (`*.test.ts`).
 - Bump `ENGINE_VERSION` on any change that alters scores, ranking or text handling; results store the version they were computed with.
 
-## Modules (planned, one card each; see `docs/architecture/ARCHITECTURE.md` section 11)
-`text/` normalisation and per-player text overlays (bonus deltas) · `reducers/` continue mode, block mode, backspace · `scoring/` WPM, raw WPM, accuracy, progress · `ranking/` final comparator · `bonus/` eligibility, effects, cooldowns · `bots/` typing model (injected RNG) · `anticheat/` trace analysis.
+## Modules
+Landed (re-exported from `src/index.ts`; `ENGINE_VERSION` 0.2.0):
+- `text/`: `normalizeTypeable(s)` (NFC, look-alike map, typeable whitelist `TYPEABLE` / `isTypeable`, whitespace collapse, trim; idempotent; BMP-only, so `text[i]` is the i-th character), `wordCount(s)`, `charsOf(text)`.
+- `reducers/`: `applyKeystroke(state, keystroke, text, settings)` (the only dispatcher) composed from `continueMode`, `blockMode`, `backspace`; `PlayerState`, `initialState()`. `text` must already be normalised; rejected keystrokes return the same state reference; `typed.length === cursor`.
+
+Planned (one card each; see `docs/architecture/ARCHITECTURE.md` section 11): `text/` per-player overlays (`effectiveText`) · `scoring/` WPM, raw WPM, accuracy, progress · `ranking/` final comparator · `bonus/` eligibility, effects, cooldowns · `bots/` typing model (injected RNG) · `anticheat/` trace analysis.

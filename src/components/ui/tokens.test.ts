@@ -527,3 +527,19 @@ describe("#28 motion tokens", () => {
     expect(code).toContain(':root[data-motion="reduce"]');
   });
 });
+
+// Contract of #15: printed geometry (bible 6, 7.4, 17): no radius, no blur shadows, the tape shadow stays.
+describe("#15 printed geometry", () => {
+  it("C14 sets every radius token to 0 but --radius-full (Spinner, dots)", () => {
+    for (const name of ["--radius-sm", "--radius-md", "--radius-lg"]) {
+      expect(theme.get(name), name).toBe("0");
+    }
+    expect(theme.get("--radius-full")).toBe("9999px");
+  });
+
+  it("C13 removes the blur shadows and keeps the tape's inner sepia (bible 3.1, 7.7)", () => {
+    // names built at run time so the C13 grep over src/ stays empty
+    for (const size of ["sm", "md"]) expect(theme.has(`--shadow-${size}`), size).toBe(false);
+    expect(theme.get("--shadow-tape")).toBe(norm("inset 0 0 22px rgb(156 122 69 / 0.45)"));
+  });
+});

@@ -108,13 +108,12 @@
   /* spacing: Tailwind multiplies this base (p-4 = 1rem) */
   --spacing: 0.25rem;
 
-  /* radius and elevation */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  /* radius and elevation (#15, printed look): no radius (bible 7.4, 6, 17), full only for the spinner
+     and dots; no blur shadow, hard print offsets are written where the bible places them (6, 7.1) */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
   --radius-full: 9999px;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.06);
-  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.12);
   /* the typing strip's inner sepia (bible 3.1 tape-paper), the one soft shadow the bible allows */
   --shadow-tape: inset 0 0 22px rgb(156 122 69 / 0.45);
 

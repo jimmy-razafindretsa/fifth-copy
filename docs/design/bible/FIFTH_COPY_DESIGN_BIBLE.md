@@ -181,6 +181,7 @@ Rules: no recolouring the bar violet or gold, never straighten it, and keep clea
 - **Segmented toggle** (EN/FR, views): `border:2px solid ink`, buttons Oswald 600 11–12px; active = ink bg + paper text.
 - **Social button** (footer): `2px solid rgba(paper,.35)`, 26px red square tag with stencil abbreviation (GH, IN, DC, YT), hover border/text gold.
 - Extension (#20): the `Button` primitive is this label-button family (secondary, ink, segmented): Oswald 600 caps `.18em` through the `type-label` role at 12 / 14 / 16px for sm / md / lg, in every variant. The Stardos stamp CTA (primary, inverted) is a separate pattern, never a `Button` size.
+- Extension (#15): the `Button` primary variant is a red label button: `background:red; color:paper; border:2px solid ink`, hover banner, active banner with the label 1px down, no shadow, no radius. The ghost variant is the link-like label: no fill, no border, ink text, underline on hover. Danger fills with banner under paper text and the same 2px ink rule.
 
 ### 7.2 Inputs
 - Room code: inside an ink-bordered newsprint group: `[ JOIN WITH CODE | KGB-4821 | JOIN → ]`. Input IBM Plex Mono 500 18px `.08em`, auto-uppercase, maxLength 8.
@@ -199,6 +200,7 @@ Rules: no recolouring the bar violet or gold, never straighten it, and keep clea
 - Multi-cell grids use `gap:2px; background:ink` on the grid with paper cells. **Never** per-cell borders (they double up when the grid wraps).
 - **Roll rows** (extension, #107): a list of people is a `ul` inside a docket, one `li` per person as a `120px | 1fr` row: `DESK 05` (Oswald 600 11px `.2em`, muted) | name (IBM Plex Mono 400 18px) then its badges (a 7.3 stamp such as `HOST`, the ink `YOU` tag: Oswald 600 10px `.16em`, ink bg, paper text, `padding:1px 6px`). Badges wrap under the name on phones. The roll docket sits on paper (the room docket beside it on newsprint); it scrolls inside itself (`max-height:60vh`), focusable and named.
 - **Skeleton rows** (extension, #107): the same row grid with flat newsprint blocks, no shimmer and no gradient (6), the list `aria-busy="true"`.
+- **Alert row** (Extension (#15)): an inline message is a docket row: the tone in its ground (newsprint-tinted info, newsprint success, red-tinted error), `2px solid ink`, no left rule, no radius; title Stardos 700, message Courier Prime.
 - **Notice row** (extension, #107): a live-state label row at the top of a docket (e.g. `CONNECTION LOST, RETRYING`), Oswald 600 11px `.16em`, dashed separator under it, pulsing with `lkPulse` (8); still under reduced motion.
 
 ### 7.5 Tabs
@@ -210,6 +212,7 @@ Stardos 700 13px `.12em`. Active tab = ink bg, paper text. A 7px red dot marks t
 - **Owned:** `rgba(255,250,238,.6)`, `2px solid rgba(42,36,32,.35)`.
 - **Locked:** `2px dashed rgba(62,58,120,.6)`, name at 55% opacity, violet `🔒︎ LOCKED`, the requirement in violet, and a 5px violet progress bar. Clicking a locked card **shakes** it (0.4s) and puts it on in the **fitting room** (preview only).
 - **New:** red `NEW` tag.
+- Extension (#15): an empty state (nothing filed yet) borrows the locked card's dashed rule: `2px dashed` hairline ink (`border` role), centred title in ink, description muted, one next-step button.
 - Hover: lift `translate(-2px,-2px)` with `box-shadow:4px 4px 0 ink`.
 
 ### 7.7 Typing strip ("try the keys" and the in-race telex)

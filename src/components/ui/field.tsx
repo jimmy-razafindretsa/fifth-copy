@@ -32,8 +32,9 @@ export function Field({ label, hint, error, id, className, required, ...rest }: 
         aria-invalid={error ? true : undefined}
         aria-describedby={[hintId, errorId].filter(Boolean).join(" ") || undefined}
         className={cn(
-          "h-10 rounded-md border bg-surface px-3 text-base text-fg placeholder:text-fg-muted",
-          error ? "border-danger" : "border-border",
+          // bible 7.2: paper inside a 2px ink rule; the danger role when invalid (banner, night-ink)
+          "h-10 border-2 bg-bg px-3 text-base text-fg placeholder:text-fg-muted",
+          error ? "border-danger" : "border-fg",
           className,
         )}
         {...rest}

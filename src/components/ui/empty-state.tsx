@@ -9,11 +9,12 @@ export type EmptyStateProps = {
   className?: string;
 };
 
+/** Nothing here yet: the dashed rule of the locked item card (bible 7.6), no radius. */
 export function EmptyState({ title, description, action, className }: EmptyStateProps) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-8 text-center",
+        "flex flex-col items-center gap-2 border-2 border-dashed border-border p-8 text-center",
         className,
       )}
     >

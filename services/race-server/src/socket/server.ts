@@ -133,7 +133,8 @@ export function attachSocketServer(
       sockets.delete(key);
       registry.leave(lobby, sub).then(
         ({ members, closed }) => {
-          if (!closed) io.to(room).emit("roster", { v: PROTOCOL_VERSION, members });
+          if (closed) lifecycle.onRoomClosed(lobby);
+          else io.to(room).emit("roster", { v: PROTOCOL_VERSION, members });
           log("left", { lobby, members: members.length, closed });
         },
         () => log("leave failed", { lobby }),

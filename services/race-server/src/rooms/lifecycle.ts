@@ -44,6 +44,8 @@ export type Lifecycle = {
   endRace(lobbyId: string, reason: EndReason): Promise<void>;
   /** A desk reached a terminal status (#173): ends the race when every desk is terminal. */
   onDeskTerminal(lobbyId: string): Promise<void>;
+  /** The room was closed (its keys deleted): its timers are cancelled, nothing is emitted. */
+  onRoomClosed(lobbyId: string): void;
   /** Cancels every pending timer (shutdown). */
   close(): void;
 };
@@ -224,6 +226,8 @@ export function createLifecycle({
       });
       if (done) await lifecycle.endRace(lobbyId, "all-finished");
     },
+
+    onRoomClosed: (lobbyId) => cancel(lobbyId),
 
     close: () => {
       for (const lobbyId of [...timers.keys()]) cancel(lobbyId);

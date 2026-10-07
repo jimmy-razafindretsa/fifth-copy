@@ -15,7 +15,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { createRaceServer, type RaceServer } from "../app";
-import { createFakeClock, createFakeScheduler, type FakeClock } from "../clock";
+import { createFakeClock, createFakeScheduler, type FakeClock, type FakeScheduler } from "../clock";
 import type { WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
@@ -75,6 +75,8 @@ export type Booted = {
   server: RaceServer;
   url: string;
   clock: FakeClock;
+  /** Drives the server's timers through `clock.advance`; `armed()` counts pending ones. */
+  scheduler: FakeScheduler;
   /** Opens a room for a fresh lobby id (cleaned up by `stop`), with the default settings unless given. */
   openRoom(code?: string, settings?: RaceSettings): Promise<string>;
   /** A fresh lobby id with no room (cleaned up by `stop`). */
@@ -94,11 +96,12 @@ export async function boot(
   options: { webApi?: WebApi; onRaceEnded?: (ended: RaceEnded) => void } = {},
 ): Promise<Booted> {
   const clock = createFakeClock(Date.now());
+  const scheduler = createFakeScheduler(clock);
   const server = createRaceServer({
     env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000", RACE_FAST_CLOCK: "0" },
     redis: await connectRedis(redisUrl),
     clock,
-    scheduler: createFakeScheduler(clock),
+    scheduler,
     webApi: options.webApi ?? fixtureWebApi(clock).api,
     onRaceEnded: options.onRaceEnded,
   });
@@ -117,6 +120,7 @@ export async function boot(
     server,
     url,
     clock,
+    scheduler,
     lobby,
     async openRoom(code = "KGB-4821", settings = DEFAULT_RACE_SETTINGS) {
       const lobbyId = lobby();

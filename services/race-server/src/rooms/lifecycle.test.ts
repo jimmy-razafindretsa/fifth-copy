@@ -360,6 +360,18 @@ describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {
   });
 });
 
+describe("lifecycle: room close", () => {
+  it("cancels the room's timers when its last member leaves", async () => {
+    const { booted, host, lobby, others } = await room();
+    await start(host);
+    expect(booted.scheduler.armed()).toBe(2);
+    others[0]!.client.disconnect();
+    host.disconnect();
+    await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
+    await until(() => booted.scheduler.armed() === 0, 2_000, "no timer armed");
+  });
+});
+
 describe("lifecycle: room keys (C6)", () => {
   it("keeps both room keys under a TTL through start and end", async () => {
     const redis = await connectRedis(process.env.REDIS_URL);

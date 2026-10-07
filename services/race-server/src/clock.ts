@@ -36,7 +36,10 @@ export const systemScheduler: Scheduler = {
  * A scheduler driven by `clock.advance`: advancing fires every due callback in time order (ties in
  * scheduling order), with the clock set to each callback's instant while it runs. Wraps `advance`.
  */
-export function createFakeScheduler(clock: FakeClock): Scheduler {
+/** A `Scheduler` whose `armed()` counts the callbacks still pending (tests assert cleanup). */
+export type FakeScheduler = Scheduler & { armed(): number };
+
+export function createFakeScheduler(clock: FakeClock): FakeScheduler {
   type Pending = { at: number; seq: number; fn: () => void };
   const pending = new Set<Pending>();
   let seq = 0;
@@ -63,5 +66,6 @@ export function createFakeScheduler(clock: FakeClock): Scheduler {
       return { timer: entry };
     },
     clear: (handle) => void pending.delete(handle.timer as Pending),
+    armed: () => pending.size,
   };
 }

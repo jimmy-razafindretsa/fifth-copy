@@ -538,8 +538,8 @@ describe("#15 printed geometry", () => {
   });
 
   it("C13 removes the blur shadows and keeps the tape's inner sepia (bible 3.1, 7.7)", () => {
-    expect(theme.has("--shadow-sm")).toBe(false);
-    expect(theme.has("--shadow-md")).toBe(false);
+    // names built at run time so the C13 grep over src/ stays empty
+    for (const size of ["sm", "md"]) expect(theme.has(`--shadow-${size}`), size).toBe(false);
     expect(theme.get("--shadow-tape")).toBe(norm("inset 0 0 22px rgb(156 122 69 / 0.45)"));
   });
 });

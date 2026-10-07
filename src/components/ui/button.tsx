@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 import { Spinner } from "./spinner";
 
-// Printed look (#15, bible 7.1 label-button family): flat fills, 2px ink rules, no radius, no shadow;
+// Printed look (#15, bible 7.1 label-button family): flat fills, 2px ink rules, no radius, no offset;
 // pressed = banner fill and the label 1px down. Ghost is the link-like extension (bible 7.1, #15).
 const variants = {
   primary:

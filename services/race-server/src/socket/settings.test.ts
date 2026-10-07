@@ -103,7 +103,7 @@ describe("host:settings applied by the host (C1)", () => {
       (...args: unknown[]) => void lines.push(args.map(String).join(" ")),
     );
     const { lobby, host } = await room();
-    await send(host, { v: PROTOCOL_VERSION, patch: { practiceLetters: ["ж"], wordCount: 437 } });
+    await send(host, { v: PROTOCOL_VERSION, patch: { practiceLetters: ["Ç"], wordCount: 437 } });
     const line = lines
       .map((l) => JSON.parse(l) as Record<string, unknown>)
       .find((l) => l.msg === "settings");
@@ -116,7 +116,7 @@ describe("host:settings applied by the host (C1)", () => {
     });
     expect((line?.keys as string[]).toSorted()).toEqual(["practiceLetters", "wordCount"]);
     for (const l of lines) {
-      expect(l).not.toContain("ж");
+      expect(l).not.toContain("Ç");
       expect(l).not.toContain("437");
     }
   });

@@ -112,8 +112,9 @@ describe("host:settings applied by the host (C1)", () => {
       msg: "settings",
       lobby,
       outcome: "ok",
-      keys: ["practiceLetters", "wordCount"],
+      keys: expect.any(Array),
     });
+    expect((line?.keys as string[]).toSorted()).toEqual(["practiceLetters", "wordCount"]);
     for (const l of lines) {
       expect(l).not.toContain("ж");
       expect(l).not.toContain("437");
@@ -200,9 +201,11 @@ describe("host:settings refusals (C2)", () => {
 
   it("tolerates a payload sent without an ack callback; the next call still acks", async () => {
     const { host, seenPlayer } = await room();
-    host.emit("host:settings", { v: PROTOCOL_VERSION, patch: { wordCount: 9 } } as never);
-    host.emit("host:settings", "garbage" as never);
-    host.emit("host:settings", { v: PROTOCOL_VERSION, patch: { timerS: 60 } } as never);
+    // An untrusted client may omit the ack: emit through the untyped signature.
+    const raw = host as unknown as { emit(event: string, payload: unknown): void };
+    raw.emit("host:settings", { v: PROTOCOL_VERSION, patch: { wordCount: 9 } });
+    raw.emit("host:settings", "garbage");
+    raw.emit("host:settings", { v: PROTOCOL_VERSION, patch: { timerS: 60 } });
     await until(() => seenPlayer.settings.length === 1, 2_000, "settings from the ackless call");
     expect(await send(host, { v: PROTOCOL_VERSION, patch: { timerS: 90 } })).toEqual({
       ok: true,

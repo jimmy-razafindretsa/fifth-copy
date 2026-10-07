@@ -1,8 +1,10 @@
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import {
+  hostSettingsSchema,
   PROTOCOL_VERSION,
   type ClientToServerEvents,
+  type HostSettingsAck,
   type RaceTokenClaims,
   type RoomCode,
   type ServerToClientEvents,
@@ -67,6 +69,29 @@ export function attachSocketServer(
         socket.disconnect(true);
       },
     );
+
+    // Registered synchronously with the join: the registry's per-room queue runs it after the join.
+    // The host is the token's `sub` matched against the room's `hostUserId` (ADR 0009), never `role`.
+    socket.on("host:settings", (raw: unknown, ack: unknown) => {
+      const reply = typeof ack === "function" ? (ack as (a: HostSettingsAck) => void) : () => {};
+      const parsed = hostSettingsSchema.safeParse(raw);
+      if (!parsed.success) {
+        log("settings", { lobby, outcome: "invalid" });
+        return reply({ ok: false, error: "invalid" });
+      }
+      // Keys only, never values: the strict patch schema bounds them to known setting names.
+      const keys = Object.keys(parsed.data.patch);
+      registry.updateSettings(lobby, sub, parsed.data.patch).then(
+        (result) => {
+          log("settings", { lobby, outcome: result.ok ? "ok" : result.reason, keys });
+          if (!result.ok) return reply({ ok: false, error: result.reason });
+          io.to(room).emit("settings", { v: PROTOCOL_VERSION, settings: result.settings });
+          reply({ ok: true, settings: result.settings });
+        },
+        // No wire code for a Redis failure: no ack, no broadcast; the client times out.
+        () => log("settings failed", { lobby, keys }),
+      );
+    });
 
     socket.on("disconnect", () => {
       const left = (sockets.get(key) ?? 1) - 1;

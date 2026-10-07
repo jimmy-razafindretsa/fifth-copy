@@ -1,7 +1,7 @@
 ---
 id: "0015"
 title: Avatars are moderated on the host by a local heuristic that flags for human review; no third-party API, no runtime dependency
-status: proposed
+status: accepted
 category: security
 scope: ["src/features/identity/avatars/moderation/**", "src/features/identity/avatars/store-avatar.ts", "scripts/avatar-review.ts"]
 supersedes: []

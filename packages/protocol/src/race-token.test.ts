@@ -13,7 +13,10 @@ describe("race token claims", () => {
     ["player role", { ...example, role: "player" }, true],
     ["v: 1", { ...example, v: 1 }, false],
     ["missing lobby", { v: PROTOCOL_VERSION, sub: "usr_1", name: "Ada", role: "host" }, false],
-    ["wrong role", { ...example, role: "spectator" }, false],
+    ["spectator role", { ...example, role: "spectator" }, true],
+    ["wrong role", { ...example, role: "admin" }, false],
+    ["oversize name", { ...example, name: "a".repeat(65) }, false],
+    ["oversize lobby", { ...example, lobby: "l".repeat(129) }, false],
   ])("raceTokenClaimsSchema: %s", (_, payload, ok) => {
     expect(raceTokenClaimsSchema.safeParse(payload).success).toBe(ok);
   });

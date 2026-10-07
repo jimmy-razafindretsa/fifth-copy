@@ -46,14 +46,15 @@
   --color-focus: var(--t-focus);
   --color-link: var(--t-link);
   --color-untyped: var(--t-untyped);
+  --color-rival: var(--t-rival);
 
-  /* theme-invariant roles: reds and gold never change, the tape stays tape-paper (bible 3.2) */
+  /* theme-invariant roles: reds and gold never change, the tape stays tape-paper (bible 3.2); rival is
+     themed above: its Night shift marks lighten ribbon-violet to 3:1 on the night grounds (#19) */
   --color-primary: var(--brand-agit-red);
   --color-primary-hover: var(--brand-banner);
   --color-primary-fg: var(--brand-paper);
   --color-pressed: var(--brand-banner);
   --color-you: var(--brand-agit-red);
-  --color-rival: var(--brand-ribbon-violet);
   --color-reward: var(--brand-medal-gold);
   --color-room: var(--brand-backroom-grey);
 
@@ -127,7 +128,7 @@
 
 /*
  * Light (default). Roles the palette does not name follow mapping (a) (components.md "Colour roles");
- * fg-muted and untyped are bible extensions with their measured ratios (components.md).
+ * fg-muted, untyped and the Night shift rival are bible extensions with their measured ratios (components.md).
  */
 :root {
   color-scheme: light;
@@ -144,6 +145,7 @@
   --t-focus: var(--brand-press-ink);
   --t-link: var(--brand-agit-red);
   --t-untyped: color-mix(in srgb, var(--brand-ribbon-violet) 85%, var(--brand-paper));
+  --t-rival: var(--brand-ribbon-violet);
 }
 
 /* Night shift (bible 3.2): the two dark blocks stay identical (selectors fixed for #19). */
@@ -163,6 +165,7 @@
     --t-focus: var(--brand-night-ink);
     --t-link: var(--brand-night-ink);
     --t-untyped: var(--brand-night-muted);
+    --t-rival: color-mix(in srgb, var(--brand-ribbon-violet) 50%, var(--brand-night-ink));
   }
 }
 
@@ -181,6 +184,7 @@
   --t-focus: var(--brand-night-ink);
   --t-link: var(--brand-night-ink);
   --t-untyped: var(--brand-night-muted);
+  --t-rival: color-mix(in srgb, var(--brand-ribbon-violet) 50%, var(--brand-night-ink));
 }
 
 /*

@@ -8,10 +8,9 @@ import {
 } from "@fifth-copy/protocol";
 import { createHmac } from "node:crypto";
 import { createRaceServer, type RaceServer } from "../app";
-import { unavailableWebApi } from "../persist/web-api";
 import { createFakeClock, createFakeScheduler } from "../clock";
 import { membersKey, roomKey } from "../rooms/keys";
-import { connectRedis } from "../testing/harness";
+import { connectRedis, fixtureWebApi } from "../testing/harness";
 import { MAX_INTERNAL_BODY_BYTES } from "./internal";
 
 // Over real HTTP and real Redis. The vector's lobby id is fixed (`lob_test`), so its keys are deleted
@@ -35,7 +34,7 @@ async function start(skewS = 0) {
     redis,
     clock,
     scheduler: createFakeScheduler(clock),
-    webApi: unavailableWebApi,
+    webApi: fixtureWebApi(clock).api,
   });
   return `http://127.0.0.1:${await server.listen(0, "127.0.0.1")}`;
 }

@@ -1,7 +1,8 @@
 import type { RoomCode } from "@fifth-copy/protocol";
 
 export type CreateLobbyResult =
-  { ok: true; code: RoomCode } | { ok: false; error: "race-server-unavailable" };
+  | { ok: true; code: RoomCode }
+  | { ok: false; error: "race-server-unavailable" | "invalid-settings" };
 
 export type JoinByCodeResult =
   { ok: true; code: RoomCode } | { ok: false; error: "invalid-format" | "not-found" | "closed" };

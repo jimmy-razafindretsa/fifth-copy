@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { roomCodeSchema } from "./room-code";
+import { raceSettingsSchema } from "./settings";
 import { versionSchema } from "./version";
 
 /**
@@ -20,6 +21,8 @@ export const openRoomRequestSchema = z.object({
   lobbyId: z.string().min(1),
   code: roomCodeSchema,
   hostUserId: z.string().min(1),
+  /** The host's validated settings; stored in the room hash on first open. */
+  settings: raceSettingsSchema,
 });
 export type OpenRoomRequest = z.infer<typeof openRoomRequestSchema>;
 
@@ -44,6 +47,11 @@ export type InternalError = z.infer<typeof internalErrorSchema>;
 export const INTERNAL_HMAC_TEST_VECTOR = {
   secret: "test-secret-for-internal-hmac-vector-0123456789",
   timestamp: "1767225600",
-  body: '{"v":2,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test"}',
-  signature: "4e8572b0f66b10adf8a0b1a64f4477743c8782f379731f21369790ac52fcd6f9",
+  body:
+    '{"v":3,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
+    '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
+    '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
+    '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
+  signature: "0eda9a500134020de94914aa1192694751a0998d6bcb38bf60479d3179f9dc24",
 } as const;

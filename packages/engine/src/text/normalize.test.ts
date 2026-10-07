@@ -16,9 +16,16 @@ describe("normalizeTypeable", () => {
     ["−" + "5", "-5"],
     // ellipsis
     ["Attendez…", "Attendez..."],
-    // French guillemets with non-breaking and narrow non-breaking spaces
-    ["«\u00A0Bonjour\u00A0»", '" Bonjour "'],
-    ["«\u202FSalut\u202F»", '" Salut "'],
+    // French guillemets kept (spec 13.2, 14; #571); their NBSP / narrow NBSP spacing -> " "
+    ["« Bonjour »", "« Bonjour »"],
+    ["«\u00A0Bonjour\u00A0»", "« Bonjour »"],
+    ["«\u202FSalut\u202F»", "« Salut »"],
+    // euro sign kept (#571)
+    ["5 €", "5 €"],
+    ["5\u00A0€", "5 €"],
+    ["5€", "5€"],
+    // curly double quotes still map to the ASCII quote
+    ["“« x »”", '"« x »"'],
     ["Quoi\u00A0?", "Quoi ?"],
     ["10\u2009000", "10 000"],
     // composed vs precomposed
@@ -39,7 +46,6 @@ describe("normalizeTypeable", () => {
     ["ligne\nsuivante\ttab", "ligne suivante tab"],
     ["a \u0001 b", "a b"],
     // not typeable: dropped
-    ["5€", "5"],
     ["Хаос chaos", "chaos"],
     ["", ""],
     // ASCII punctuation and symbols kept
@@ -88,8 +94,10 @@ describe("TYPEABLE / isTypeable", () => {
     ["~", true],
     ["é", true],
     ["Œ", true],
+    ["«", true],
+    ["»", true],
+    ["€", true],
     ["\u00A0", false],
-    ["€", false],
     ["\u0000", false],
     ["ab", false],
     ["", false],
@@ -106,7 +114,10 @@ describe("normalizeKey", () => {
     ["e\u0301", "é"],
     ["…", "..."],
     ["\u0007", ""],
-    ["€", ""],
+    ["€", "€"],
+    ["«", "«"],
+    ["»", "»"],
+    ["“", '"'],
     ["Backspace", "Backspace"],
   ])("normalizeKey(%j) is %j (no trim, no collapse)", (key, expected) => {
     expect(normalizeKey(key)).toBe(expected);

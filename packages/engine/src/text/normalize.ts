@@ -12,12 +12,18 @@ const ASCII_PRINTABLE = Array.from({ length: 0x7e - 0x20 + 1 }, (_, i) =>
 );
 const FRENCH_LOWER = [..."àâæçèéêëîïôùûüÿœ"];
 const FRENCH_UPPER = [..."ÀÂÆÇÈÉÊËÎÏÔÙÛÜŸŒ"];
+/** French symbols of the special-characters heatmap row and drill (spec 13.2, 14; #571). */
+const FRENCH_SYMBOLS = [..."«»€"];
 
-/** Every character a player can be asked to type: printable ASCII (incl. space) and French letters. */
+/**
+ * Every character a player can be asked to type: printable ASCII (incl. space), French letters
+ * and the French symbols « » €.
+ */
 export const TYPEABLE: readonly string[] = Object.freeze([
   ...ASCII_PRINTABLE,
   ...FRENCH_LOWER,
   ...FRENCH_UPPER,
+  ...FRENCH_SYMBOLS,
 ]);
 
 const TYPEABLE_SET: ReadonlySet<string> = new Set(TYPEABLE);
@@ -29,8 +35,8 @@ export function isTypeable(ch: string): boolean {
 
 /** Look-alikes mapped to their keyboard form (applied after NFC). */
 const CHAR_MAP: ReadonlyMap<string, string> = new Map([
-  // double quotes, guillemets
-  ...[..."“”„‟″«»"].map((c) => [c, '"'] as const),
+  // curly double quotes (guillemets « » are typeable and kept)
+  ...[..."“”„‟″"].map((c) => [c, '"'] as const),
   // apostrophes, single quotes
   ...[..."‘’‚‛′ʼ‹›"].map((c) => [c, "'"] as const),
   // hyphens, dashes, minus
@@ -53,7 +59,7 @@ function mapChars(s: string): string {
 }
 
 /**
- * Normalises a race text: NFC, look-alike mapping (curly quotes, guillemets, dashes, ellipsis),
+ * Normalises a race text: NFC, look-alike mapping (curly quotes, single guillemets, dashes, ellipsis),
  * any whitespace to one plain space, everything outside the whitelist dropped, runs of spaces
  * collapsed, trimmed. Idempotent.
  */

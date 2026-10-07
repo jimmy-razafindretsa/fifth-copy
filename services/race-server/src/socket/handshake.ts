@@ -17,6 +17,7 @@ export type HandshakeResult =
  * Decides whether a Socket.IO handshake may proceed (ADR 0006, 0009). Order: protocol version, then
  * the auth shape and race token (any failure is `bad-token`), then the room of the token's `lobby`
  * claim, the only source of the room: a client never names one. Reads only; joining happens on connect.
+ * A `spectator` token is refused as `bad-token` until the spectator channel exists (#187).
  */
 export async function authenticateHandshake(
   auth: unknown,
@@ -29,6 +30,7 @@ export async function authenticateHandshake(
   if (!parsed.success) return { ok: false, reason: "bad-token" };
   const verified = await verifyRaceToken(parsed.data.token, secret, Math.floor(clock.now() / 1000));
   if (!verified.ok) return { ok: false, reason: "bad-token" };
+  if (verified.claims.role === "spectator") return { ok: false, reason: "bad-token" };
   if ((await registry.members(verified.claims.lobby)) === null) {
     return { ok: false, reason: "no-room" };
   }

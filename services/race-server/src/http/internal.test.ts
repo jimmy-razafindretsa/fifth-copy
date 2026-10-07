@@ -111,6 +111,18 @@ describe("POST /internal/rooms (C3)", () => {
     }
   });
 
+  it("answers 400 bad-body for a body without settings or with invalid settings, opening nothing (#568)", async () => {
+    const base = await start();
+    const { settings, ...rest } = JSON.parse(V.body) as Record<string, unknown>;
+    for (const body of [
+      JSON.stringify(rest),
+      JSON.stringify({ ...rest, settings: { ...(settings as object), wordCount: 5 } }),
+    ]) {
+      await expectError(await post(base, { body, signature: sign(body) }), 400, "bad-body");
+    }
+    expect(await server!.registry.members("lob_test")).toBeNull();
+  });
+
   it("answers 400 bad-body for an oversized body, before hashing it", async () => {
     const base = await start();
     const body = "x".repeat(MAX_INTERNAL_BODY_BYTES + 1);

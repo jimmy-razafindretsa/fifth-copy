@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PROTOCOL_VERSION } from "@fifth-copy/protocol";
+import { createHmac } from "node:crypto";
+import {
+  DEFAULT_RACE_SETTINGS,
+  INTERNAL_HEADERS,
+  PROTOCOL_VERSION,
+  type RaceSettings,
+} from "@fifth-copy/protocol";
 import { boot, connectError, SECRET, track, until, type Booted } from "../testing/harness";
 
 let t: Booted | undefined;
@@ -21,6 +27,7 @@ describe("waiting room over Socket.IO (C1)", () => {
       you: 1,
       room: { code: "KGB-4821", phase: "waiting" },
       members: [{ desk: 1, name: "Ada", isHost: false }],
+      settings: DEFAULT_RACE_SETTINGS,
     });
 
     const b = t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby, name: "Bob" }) });
@@ -33,6 +40,41 @@ describe("waiting room over Socket.IO (C1)", () => {
     await until(() => seenA.roster?.length === 1, 2_000, "roster 1");
     expect(seenA.roster).toEqual([{ desk: 1, name: "Ada", isHost: false }]);
     expect(await t.server.registry.members(lobby)).toHaveLength(1);
+  });
+
+  it("welcomes a joiner with the settings the room was opened with over POST /internal/rooms (#568 C5)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobbyId = t.lobby();
+    const settings: RaceSettings = {
+      ...DEFAULT_RACE_SETTINGS,
+      bots: [{ level: "major" }],
+      timerS: 120,
+    };
+    const body = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      lobbyId,
+      code: "KGB-4821",
+      hostUserId: "usr_host",
+      settings,
+    });
+    const timestamp = String(Math.floor(t.clock.now() / 1000));
+    const res = await fetch(`${t.url}/internal/rooms`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        [INTERNAL_HEADERS.timestamp]: timestamp,
+        [INTERNAL_HEADERS.signature]: createHmac("sha256", SECRET)
+          .update(`${timestamp}.${body}`)
+          .digest("hex"),
+      },
+      body,
+    });
+    expect(res.status).toBe(200);
+    const seen = track(
+      t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby: lobbyId }) }),
+    );
+    await until(() => !!seen.welcome, 2_000, "welcome");
+    expect(seen.welcome?.settings).toEqual(settings);
   });
 
   it("two sockets of one user share a desk, released only when the last disconnects", async () => {

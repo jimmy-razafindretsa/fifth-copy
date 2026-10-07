@@ -3,10 +3,12 @@ import type { Redis } from "ioredis";
 import { SignJWT } from "jose";
 import { io as connectClient, type Socket as ClientSocket } from "socket.io-client";
 import {
+  DEFAULT_RACE_SETTINGS,
   PROTOCOL_VERSION,
   RACE_TOKEN_TTL_S,
   type ClientToServerEvents,
   type Member,
+  type RaceSettings,
   type RaceTokenClaims,
   type ServerToClientEvents,
   type Welcome,
@@ -39,8 +41,8 @@ export type Booted = {
   server: RaceServer;
   url: string;
   clock: FakeClock;
-  /** Opens a room for a fresh lobby id (cleaned up by `stop`). */
-  openRoom(code?: string): Promise<string>;
+  /** Opens a room for a fresh lobby id (cleaned up by `stop`), with the default settings unless given. */
+  openRoom(code?: string, settings?: RaceSettings): Promise<string>;
   /** A fresh lobby id with no room (cleaned up by `stop`). */
   lobby(): string;
   token(claims: Partial<RaceTokenClaims> & { lobby: string }, key?: string): Promise<string>;
@@ -72,9 +74,9 @@ export async function boot(redisUrl: string | undefined): Promise<Booted> {
     url,
     clock,
     lobby,
-    async openRoom(code = "KGB-4821") {
+    async openRoom(code = "KGB-4821", settings = DEFAULT_RACE_SETTINGS) {
       const lobbyId = lobby();
-      await server.registry.open({ lobbyId, code, hostUserId: "usr_host" });
+      await server.registry.open({ lobbyId, code, hostUserId: "usr_host", settings });
       return lobbyId;
     },
     token(claims, key = SECRET) {

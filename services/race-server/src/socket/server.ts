@@ -57,6 +57,7 @@ export function attachSocketServer(
           // Parsed by openRoomRequestSchema when the room was opened.
           room: { code: joined.room.code as RoomCode, phase: joined.room.phase },
           members: joined.members,
+          settings: joined.room.settings,
         });
         io.to(room).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });

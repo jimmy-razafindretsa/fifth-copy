@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { envelopeSchema, PROTOCOL_VERSION } from "./index";
 
 describe("version", () => {
-  it("is 3", () => {
-    expect(PROTOCOL_VERSION).toBe(3);
+  it("is 4", () => {
+    expect(PROTOCOL_VERSION).toBe(4);
   });
 
   it.each([

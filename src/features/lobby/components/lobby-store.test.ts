@@ -1,19 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_RACE_SETTINGS, PROTOCOL_VERSION, type Member } from "@fifth-copy/protocol";
+import {
+  DEFAULT_RACE_SETTINGS,
+  deskIdentity,
+  PROTOCOL_VERSION,
+  type Member,
+} from "@fifth-copy/protocol";
 import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
 import { bindRoomSocket, initialLobbyState, reduceLobby, type LobbyEvent } from "./lobby-store";
 
 // Contract of card 107, C5: the lobby store reduces `welcome` and `roster` into a desk-sorted list.
-const ada: Member = { desk: 1, name: "Ada", isHost: true };
-const bob: Member = { desk: 2, name: "Bob", isHost: false };
-const cyd: Member = { desk: 5, name: "Cyd", isHost: false };
+// Fixtures of the v4 shape (#557): members carry isBot and their desk identity.
+const member = (desk: number, name: string, isHost: boolean): Member => ({
+  desk,
+  name,
+  isHost,
+  isBot: false,
+  ...deskIdentity(desk),
+});
+const ada = member(1, "Ada", true);
+const bob = member(2, "Bob", false);
+const cyd = member(5, "Cyd", false);
 
 const welcome = (you: number, members: Member[]): RoomEvents["welcome"] => ({
   v: PROTOCOL_VERSION,
+  role: you === 1 ? "host" : "player",
   you,
   room: { code: "KGB-4821" as never, phase: "waiting" },
   members,
   settings: DEFAULT_RACE_SETTINGS,
+  race: null,
+  state: null,
+  overlay: null,
+  resumeKey: null,
+  serverNow: 1767225600000,
 });
 
 function run(...events: LobbyEvent[]) {
@@ -62,6 +81,7 @@ describe("reduceLobby", () => {
     ["no-room", "not-found"],
     ["bad-token", "generic"],
     ["version", "generic"],
+    ["in-progress", "generic"],
   ] as const)("connect-error %s is a terminal %s error", (reason, error) => {
     const state = run(
       { type: "welcome", payload: welcome(1, [ada]) },

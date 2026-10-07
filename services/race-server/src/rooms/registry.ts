@@ -1,6 +1,7 @@
 import type { ChainableCommander, Redis } from "ioredis";
 import { z } from "zod";
 import {
+  deskIdentity,
   raceSettingsPatchSchema,
   raceSettingsSchema,
   type Member,
@@ -123,7 +124,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
 
   function toMembers(seats: Map<string, Seat>, hostUserId: string): Member[] {
     return [...seats.entries()]
-      .map(([userId, { desk, name }]) => ({ desk, name, isHost: userId === hostUserId }))
+      .map(([userId, { desk, name }]) => ({
+        desk,
+        name,
+        isHost: userId === hostUserId,
+        isBot: false,
+        ...deskIdentity(desk),
+      }))
       .sort((a, b) => a.desk - b.desk);
   }
 

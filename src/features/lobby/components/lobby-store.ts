@@ -47,6 +47,8 @@ function connectError(reason: ConnectErrorReason): LobbyError | null {
       return "not-found";
     case "bad-token":
     case "version":
+    // No lobby copy for a race already under way yet (#210 adds it).
+    case "in-progress":
       return "generic";
   }
 }

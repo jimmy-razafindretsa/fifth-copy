@@ -11,10 +11,13 @@ import {
   type RaceSettings,
   type RaceTokenClaims,
   type ServerToClientEvents,
+  type StartRaceResponse,
   type Welcome,
 } from "@fifth-copy/protocol";
 import { createRaceServer, type RaceServer } from "../app";
-import { createFakeClock, type FakeClock } from "../clock";
+import { createFakeClock, createFakeScheduler, type FakeClock, type FakeScheduler } from "../clock";
+import type { WebApi } from "../persist/web-api";
+import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
 import { membersKey, roomKey } from "../rooms/keys";
 
@@ -26,7 +29,10 @@ export const SECRET = "race-server-test-secret-0123456789abcdef";
 export const HOST_SUB = "usr_host";
 export type Client = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 
-/** `url` is the test's `process.env.REDIS_URL` (env access stays in test files and env.ts). */
+/**
+ * `url` is the REDIS_URL the calling test file read from its environment (env access stays in test
+ * files and env.ts).
+ */
 export async function connectRedis(url: string | undefined): Promise<Redis> {
   if (!url) throw new Error("REDIS_URL is not set: load the worktree .env (set -a; . ./.env)");
   const redis = createRedis(url);
@@ -39,10 +45,38 @@ export async function connectRedis(url: string | undefined): Promise<Redis> {
   return redis;
 }
 
+/** The text every start of the default fake `WebApi` gets. */
+export const FIXTURE_TEXT = {
+  content: "Le formulaire est en triple exemplaire.",
+  language: "fr",
+  wordCount: 6,
+  sourceRef: null,
+} satisfies StartRaceResponse["text"];
+
+/** A `WebApi` that accepts every start with `FIXTURE_TEXT`; `calls` records each request. */
+export function fixtureWebApi(clock: { now(): number }) {
+  const calls: Parameters<WebApi["startRace"]>[0][] = [];
+  const api: WebApi = {
+    startRace: async (request) => {
+      calls.push(request);
+      return {
+        v: PROTOCOL_VERSION,
+        raceId: request.raceId,
+        text: FIXTURE_TEXT,
+        settings: request.settings,
+        startedAt: clock.now(),
+      };
+    },
+  };
+  return { api, calls };
+}
+
 export type Booted = {
   server: RaceServer;
   url: string;
   clock: FakeClock;
+  /** Drives the server's timers through `clock.advance`; `armed()` counts pending ones. */
+  scheduler: FakeScheduler;
   /** Opens a room for a fresh lobby id (cleaned up by `stop`), with the default settings unless given. */
   openRoom(code?: string, settings?: RaceSettings): Promise<string>;
   /** A fresh lobby id with no room (cleaned up by `stop`). */
@@ -53,12 +87,23 @@ export type Booted = {
   stop(): Promise<void>;
 };
 
-export async function boot(redisUrl: string | undefined): Promise<Booted> {
+/**
+ * Boots the server on port 0 with a fake clock whose `advance` also fires the fake scheduler's
+ * timers. `webApi` defaults to `fixtureWebApi`.
+ */
+export async function boot(
+  redisUrl: string | undefined,
+  options: { webApi?: WebApi; onRaceEnded?: (ended: RaceEnded) => void } = {},
+): Promise<Booted> {
   const clock = createFakeClock(Date.now());
+  const scheduler = createFakeScheduler(clock);
   const server = createRaceServer({
-    env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000" },
+    env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000", RACE_FAST_CLOCK: "0" },
     redis: await connectRedis(redisUrl),
     clock,
+    scheduler,
+    webApi: options.webApi ?? fixtureWebApi(clock).api,
+    onRaceEnded: options.onRaceEnded,
   });
   const port = await server.listen(0, "127.0.0.1");
   const url = `http://127.0.0.1:${port}`;
@@ -75,6 +120,7 @@ export async function boot(redisUrl: string | undefined): Promise<Booted> {
     server,
     url,
     clock,
+    scheduler,
     lobby,
     async openRoom(code = "KGB-4821", settings = DEFAULT_RACE_SETTINGS) {
       const lobbyId = lobby();

@@ -30,6 +30,31 @@ describe("authenticateHandshake (C2)", () => {
     expect(await t.server.registry.members(lobby)).toEqual([]);
   });
 
+  it("refuses a new user of a started room with in-progress; a member still passes (#166)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const { registry } = t.server;
+    await registry.join(lobby, { userId: "usr_a", name: "Ada" });
+    await registry.startRace(lobby, {
+      race: {
+        raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+        text: "Le dossier.",
+        language: "fr",
+        wordCount: 2,
+        t0: t.clock.now(),
+        timerS: null,
+      },
+      endAt: t.clock.now() + 60_000,
+      desks: [{ desk: 1, userId: "usr_a", name: "Ada", isBot: false }],
+    });
+    await registry.setPhase(lobby, "running");
+    const deps = { secret: SECRET, registry, clock: t.clock };
+    const as = async (sub: string) =>
+      authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token({ lobby, sub }) }, deps);
+    expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
+    expect(await as("usr_a")).toMatchObject({ ok: true });
+  });
+
   it("accepts a well-formed resumeKey (restoring a desk is #178's)", async () => {
     t = await boot(process.env.REDIS_URL);
     const lobby = await t.openRoom();

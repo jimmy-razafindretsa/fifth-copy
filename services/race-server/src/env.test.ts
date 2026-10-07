@@ -13,6 +13,11 @@ describe("race-server env", () => {
     expect(env.RACE_TOKEN_SECRET).toBe(valid.RACE_TOKEN_SECRET);
     expect(env.WEB_ORIGIN).toBe("http://localhost:3000");
     expect(env.RACE_SERVER_PORT).toBe(4000);
+    expect(env.RACE_FAST_CLOCK).toBe("0");
+  });
+
+  it("reads RACE_FAST_CLOCK", () => {
+    expect(parseEnv({ ...valid, RACE_FAST_CLOCK: "1" }).RACE_FAST_CLOCK).toBe("1");
   });
 
   it("reads WEB_ORIGIN", () => {
@@ -27,6 +32,7 @@ describe("race-server env", () => {
     ["missing redis", { RACE_TOKEN_SECRET: valid.RACE_TOKEN_SECRET }, "REDIS_URL"],
     ["bad redis", { ...valid, REDIS_URL: "nope" }, "REDIS_URL"],
     ["bad origin", { ...valid, WEB_ORIGIN: "nope" }, "WEB_ORIGIN"],
+    ["bad fast clock", { ...valid, RACE_FAST_CLOCK: "yes" }, "RACE_FAST_CLOCK"],
   ])("fails on %s naming the variable only", (_, source, name) => {
     expect(() => parseEnv(source)).toThrow(new RegExp(name));
     expect(() => parseEnv(source)).not.toThrow(/short-secret-value|bbbbbbbb/);

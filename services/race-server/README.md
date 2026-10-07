@@ -11,10 +11,10 @@ npm run build:race   # esbuild -> services/race-server/dist/main.js
 
 ## Rules
 - Never import from `src/` (the Next.js app) or `@/`. Only `@fifth-copy/engine`, `@fifth-copy/protocol` and this package.
-- `process.env` only in `src/env.ts` (zod-validated). Secrets are never logged. Variables: `RACE_SERVER_PORT`, `REDIS_URL`, `RACE_TOKEN_SECRET` (>= 32 chars, shared with the web app), `WEB_ORIGIN` (allowed Socket.IO CORS origin, the web app's public URL; default `http://localhost:3000`).
+- `process.env` only in `src/env.ts` (zod-validated). Secrets are never logged. Variables: `RACE_SERVER_PORT`, `REDIS_URL`, `RACE_TOKEN_SECRET` (>= 32 chars, shared with the web app), `WEB_ORIGIN` (allowed Socket.IO CORS origin, the web app's public URL; default `http://localhost:3000`), `RACE_FAST_CLOCK` (`"0"` default, `"1"` divides every lifecycle duration by 10 for e2e, ADR 0012).
 - Every inbound socket event and HTTP body is parsed with a `@fifth-copy/protocol` schema before use.
 - Redis holds ephemeral state only (rooms, presence, resume keys, invite tokens, rate limits), always with a TTL. Anything that must survive a restart goes to Postgres through the internal API.
-- Time comes from one injectable clock (`src/clock.ts`: `systemClock`, `createFakeClock`) so tests and the fast-clock e2e mode can control it.
+- Time comes from one injectable clock and scheduler (`src/clock.ts`: `systemClock`/`systemScheduler`, `createFakeClock`/`createFakeScheduler`, whose `advance` fires due timers) so tests and the fast-clock e2e mode can control it.
 - Tests under `src/rooms/`, `src/socket/` and `src/http/internal.test.ts` run against a real Redis at `REDIS_URL` (worktree `.env`; CI `check` job service) and fail when it is unreachable. They delete only their own keys: never `FLUSHDB` (card worktrees may share a db index).
 
 ## Waiting room (#165)
@@ -23,5 +23,13 @@ npm run build:race   # esbuild -> services/race-server/dist/main.js
 - `POST /internal/rooms` (web -> race server): HMAC over `${timestamp}.${rawBody}`, verified before the body is parsed; 401 `bad-signature`/`stale-timestamp`, 400 `bad-body` (also bodies over 64 kB), 426 `version`.
 - Playwright starts this server as its first `webServer` with `WEB_ORIGIN` = the Playwright base URL. A reused local `npm run dev:race` keeps its own `WEB_ORIGIN`: stop it if browser sockets are refused in e2e.
 
+## Race lifecycle (#166)
+`rooms/lifecycle.ts` owns the phase transitions (ARCHITECTURE 7.1); each runs in the registry's per-room queue (`withRoom`) and writes the room hash (phase, `raceId`, `t0`, `endAt`, `race`, `desks`, one MULTI with the TTLs) before it emits.
+- `host:start {v}` is answered by its ack only: `not-host` (token role not `host` or `sub` not the room's host), `not-waiting`, `too-few` (< 2 members), `start-failed` (the web start call threw, timed out after 5 s or answered another race id; nothing emitted, still `waiting`), else `{ ok: true, raceId }`. A malformed payload gets no ack.
+- On success: `countdown { race }` to the room with `t0 = now + COUNTDOWN_MS` (`rooms/durations.ts`); `running` at `t0`; `endRace(lobbyId, "timer")` at `endAt = t0 + timerS * 1000`, or `t0 + MAX_RACE_MS` for an untimed race (the wire's bound).
+- `endRace(lobbyId, reason)` is the one exit (timer here, all-finished via `onDeskTerminal` in #173, void in #204): idempotent, phase `ended`, `ended { raceId, reason, ranking }` (`rooms/ranking.ts`: engine `rank` and scoring only) to the room, then `onRaceEnded` once.
+- `ping {v, sent}` -> `pong {v, sent, serverNow}` to the sender, any phase. A new user's handshake after `waiting` is `connect_error` `in-progress`; a member's second tab gets `welcome` with the current phase and `race`.
+- `persist/web-api.ts` is the port to `POST /api/internal/races`; main.ts wires `unavailableWebApi` until #199, so a live start acks `start-failed`.
+
 ## Layout (planned, one card each)
-`src/main.ts` boot and graceful shutdown · `app.ts` composition root (`createRaceServer`) · `env.ts` · `http/` health router, internal API (`hmac.ts`, `internal.ts`: landed in #165), drain · `socket/` handshake (race token), waiting-room events (`server.ts`: landed in #165), rate limits · `testing/` integration harness (real Redis, `socket.io-client`) · `rooms/` room registry (`registry.ts`, `desks.ts`, `keys.ts`: waiting phase landed in #167), lifecycle state machine, tick loop (10 Hz) · `players/` presence, reconnection, idle · `bots/` server-side bots on the player code path · `redis/` client (`createRedis`) and adapters · `persist/` result outbox to the web app.
+`src/main.ts` boot and graceful shutdown · `app.ts` composition root (`createRaceServer`) · `env.ts` · `http/` health router, internal API (`hmac.ts`, `internal.ts`: landed in #165), drain · `socket/` handshake (race token), waiting-room events (`server.ts`: landed in #165), rate limits · `testing/` integration harness (real Redis, `socket.io-client`) · `rooms/` room registry (`registry.ts`, `desks.ts`, `keys.ts`: waiting phase landed in #167), lifecycle state machine (`lifecycle.ts`, `durations.ts`, `ranking.ts`: landed in #166), tick loop (10 Hz) · `players/` presence, reconnection, idle · `bots/` server-side bots on the player code path · `redis/` client (`createRedis`) and adapters · `persist/` result outbox to the web app.

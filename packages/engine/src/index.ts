@@ -7,5 +7,17 @@
  */
 export * from "./types";
 
+// text: normalisation to the typeable whitelist, word counting
+export { isTypeable, normalizeTypeable, TYPEABLE } from "./text/normalize";
+export { wordCount } from "./text/word-count";
+export { charsOf } from "./text/chars";
+
+// reducers: how one keystroke changes one player's state
+export { applyKeystroke, BACKSPACE } from "./reducers/apply";
+export { continueMode } from "./reducers/continue";
+export { blockMode } from "./reducers/block";
+export { backspace } from "./reducers/backspace";
+export { initialState, type PlayerState } from "./reducers/state";
+
 /** Bumped whenever scoring, ranking or text handling changes. Stored on every race result. */
-export const ENGINE_VERSION = "0.1.0";
+export const ENGINE_VERSION = "0.2.0";

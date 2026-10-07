@@ -105,7 +105,8 @@ Discord, is re-encoded, then checked by a local heuristic. No picture leaves the
   files of that version.
 Run it with the same `AVATAR_DIR` as the app (production: `/data/avatars`; the default `.data/avatars` is relative
 to the working directory). If no file is found there, the picture is still hidden but the command fails and says
-so: find and delete the files by hand. A teacher can ask for a review of a picture in their class through
+so. A rerun is refused (the key is already cleared): find the files under the right `AVATAR_DIR` and delete
+them by hand. A teacher can ask for a review of a picture in their class through
 the contact route but does not see `PENDING` pictures. Delay: see [Response times](#response-times). The operator
 looks at the picture only to decide, does not copy it, and records only the decision.
 

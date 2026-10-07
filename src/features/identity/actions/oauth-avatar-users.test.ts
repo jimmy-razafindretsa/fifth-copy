@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPrismaClient } from "@/server/db-client";
 import { FsAvatarStore } from "../avatars/fs-store";
+import { heuristicModerator } from "../avatars/moderation/heuristic";
 
 // ADR 0003: DB-backed tests target the test database, not the app env.
 // eslint-disable-next-line no-restricted-properties
@@ -89,6 +90,8 @@ describe.skipIf(!testDatabaseUrl)(
         fetch: vi.fn(image),
         store: new FsAvatarStore(root),
         warn: vi.fn(),
+        // The real heuristic, injected: the env-selected default would need the full app env.
+        moderator: heuristicModerator,
         now: () => 1_700_000_000_000,
       });
       expect(result).toEqual({ imported: true, key: `${id}/1700000000000` });
@@ -114,6 +117,8 @@ describe.skipIf(!testDatabaseUrl)(
         fetch,
         store,
         warn: vi.fn(),
+        // The real heuristic, injected: the env-selected default would need the full app env.
+        moderator: heuristicModerator,
         now: () => 1_700_000_000_000,
       });
       expect(result).toEqual({ imported: false, reason: "raced" });

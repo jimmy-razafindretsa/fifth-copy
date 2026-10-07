@@ -231,6 +231,9 @@ describe.skipIf(!testDatabaseUrl)(
         expect(await main([u.id, "reject"], d)).toBe(1);
         expect(d.out).toEqual([]);
         expect(d.err.join("\n")).toMatch(/AVATAR_DIR/);
+        // A rerun is refused (key cleared), so the message points to the manual step.
+        expect(d.err.join("\n")).not.toMatch(/run again/i);
+        expect(d.err.join("\n")).toMatch(/by hand.*moderation\.md/);
         expect(d.err.join("\n")).not.toContain(elsewhere);
         // Fail safe: the row is hidden anyway; the files under the real dir are untouched.
         expect(await row(u.id)).toEqual({ avatarKey: null, avatarStatus: "REJECTED" });

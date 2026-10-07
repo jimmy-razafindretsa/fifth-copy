@@ -12,7 +12,8 @@
  * - reject: the row is set to REJECTED with no avatarKey first (hidden right away), then the files
  *   of the version read are deleted (a newer upload's files are left alone). Works on PENDING and
  *   on reported APPROVED avatars. If no file of that version was found under AVATAR_DIR, the row
- *   stays hidden but the command exits 1 and says so: the files must be found and removed.
+ *   stays hidden but the command exits 1 and says so: the files must then be deleted by hand (a
+ *   rerun is refused, the key is already cleared).
  * Updates are conditional on the row read, so a concurrent upload makes them fail instead.
  * Prints only `<user id> <APPROVED|REJECTED>` on stdout, never names or file contents.
  */
@@ -130,7 +131,7 @@ export async function main(argv: readonly string[], deps: ReviewDeps): Promise<n
     if (found.every((file) => file === null)) {
       deps.printError(
         "avatar-review: row set to REJECTED, but no file of that version was found under " +
-          "AVATAR_DIR; run again with the app's AVATAR_DIR and delete the files by hand",
+          "AVATAR_DIR; delete them by hand (docs/privacy/moderation.md, Avatars)",
       );
       return 1;
     }

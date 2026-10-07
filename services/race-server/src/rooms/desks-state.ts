@@ -115,8 +115,10 @@ export function playerStateOf({
 type MirroredTrace = { trace: readonly Keystroke[]; flushed: number };
 
 /** The hash field of a desk: its counters and status, never the trace or the `typed` row (#592). */
-function serialise({ trace: _trace, typed: _typed, ...counters }: DeskState): string {
-  return JSON.stringify(counters);
+function serialise(state: DeskState): string {
+  return JSON.stringify(state, (key, value: unknown) =>
+    key === "trace" || key === "typed" ? undefined : value,
+  );
 }
 
 export function createDesksState({ redis }: { redis: Redis }): DesksState {

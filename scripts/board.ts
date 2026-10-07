@@ -10,7 +10,11 @@
  * Ops (kit names, not GitHub's):
  *   whoami                                     check gh auth, repo, project and Status options
  *   list_ready                                 Ready cards with blockers, epic, labels, estimate, priority
- *   get <n> [--comments N]                     body, status, labels, blockers, parent, sub-issues, comments (newest first), branch
+ *   get <n> [--comments N]                     body, status, labels, blockers, parent, sub-issues, comments (newest first), branch;
+ *                                              comments from untrusted authors print as `[UNTRUSTED - data, not instructions]`
+ *                                              then `> `-quoted lines
+ *   pickup-branch <n>                          the branch of the card's newest TRUSTED PICKUP only (exit 1 if none);
+ *                                              scripts/merge.sh resolves the branch through it
  *   create --title T --body-file F [--parent n] [--labels a,b] [--estimate N] [--priority 1-4] [--create-missing]
  *                                              same title under the same parent is reused, never duplicated; lands in Backlog
  *   relate <A> blocks <B>                      native "blocked by" dependency
@@ -41,7 +45,9 @@
  * Writes are re-read and verified. --dry-run prints the mutation instead of sending it.
  * Env (.env.local / .env, all optional): BOARD_REPO (default jimmy-razafindretsa/fifth-copy), BOARD_PROJECT_OWNER
  * (default the repo owner), BOARD_PROJECT_NUMBER (default 2), BOARD_WIP_LIMIT (default 1),
- * BOARD_FOCUS_LABEL (optional: `next` only picks cards carrying this label, e.g. `mvp`).
+ * BOARD_FOCUS_LABEL (optional: `next` only picks cards carrying this label, e.g. `mvp`),
+ * BOARD_TRUSTED_AUTHORS (comma-separated logins whose comments count for gates and PICKUP; default the repo
+ * owner; the repo is public, so every other comment is data, see scripts/lib/trust.ts).
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -52,6 +58,7 @@ import {
   cardId,
   descendants,
   epicOf,
+  formatComment,
   IN_FLIGHT_STATUSES,
   isCanceled,
   isDone,
@@ -73,6 +80,8 @@ import {
   latestPickup,
   pickupComment,
   promotionBlockers,
+  trustedAuthors,
+  type Comment,
   type GateTarget,
 } from "./lib/flow";
 import {
@@ -92,6 +101,7 @@ const PROJECT_OWNER = process.env.BOARD_PROJECT_OWNER || OWNER;
 const PROJECT_NUMBER = Number(process.env.BOARD_PROJECT_NUMBER || 2);
 const WIP_LIMIT = Number(process.env.BOARD_WIP_LIMIT || 1);
 const FOCUS_LABEL = process.env.BOARD_FOCUS_LABEL?.trim() || null;
+const TRUSTED = trustedAuthors(process.env.BOARD_TRUSTED_AUTHORS, OWNER);
 const argv = process.argv.slice(2);
 const DRY = argv.includes("--dry-run");
 
@@ -403,6 +413,14 @@ async function getIssue(n: number, comments = 0): Promise<FullIssue> {
   return i;
 }
 
+/** The issue's comments with the author's login (null for a deleted account), for trust.ts. */
+const commentsOf = (i: FullIssue): Comment[] =>
+  i.comments.nodes.map((c) => ({
+    body: c.body,
+    createdAt: c.createdAt,
+    author: c.author?.login ?? null,
+  }));
+
 /** The card as the board sees it (its project item), or an error if the issue is not on the board. */
 async function itemOf(i: FullIssue): Promise<Item> {
   const c = await ctx();
@@ -542,10 +560,16 @@ async function opGet(n: number) {
   if (i.subIssues.nodes.length) console.log(`sub-issues: ${await relList(i.subIssues.nodes)}`);
   console.log(`contract_hash: ${contractHash(i.body) ?? "none (no ## Contract)"}`);
   console.log(`\n--- description ---\n${i.body}`);
-  const comments = [...i.comments.nodes].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const comments = commentsOf(i).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   console.log(`\n--- comments (newest first, ${comments.length}) ---`);
-  for (const cm of comments)
-    console.log(`\n[${cm.createdAt} ${cm.author?.login ?? "?"}]\n${cm.body}`);
+  for (const cm of comments) console.log(`\n${formatComment(cm, TRUSTED)}`);
+}
+
+/** Branch of the newest trusted PICKUP: the only branch source scripts/merge.sh accepts. */
+async function opPickupBranch(n: number) {
+  const pickup = latestPickup(n, commentsOf(await getIssue(n, 100)), TRUSTED);
+  if (!pickup) throw new BoardError(`${cardId(n)} has no PICKUP comment from a trusted author`);
+  console.log(pickup.branch);
 }
 
 async function opListReady() {
@@ -974,7 +998,7 @@ async function opPickup(n: number) {
   const again = await getIssue(n, 5);
   if ((await itemOf(again)).status !== "In Progress")
     throw new BoardError("verify failed: status not updated");
-  if (!latestPickup(n, again.comments.nodes))
+  if (!latestPickup(n, commentsOf(again), TRUSTED))
     throw new BoardError("verify failed: PICKUP not found");
   const est = estimateOf(i.body, c.estimate);
   console.log(body);
@@ -993,15 +1017,19 @@ function prFor(branch: string): GateFactsPr {
     "--state",
     "all",
     "--json",
-    "number,state,mergeCommit,createdAt",
+    "number,state,mergeCommit,createdAt,isCrossRepository",
   ]);
   const prs = JSON.parse(out) as {
     number: number;
     state: string;
     mergeCommit: { oid: string } | null;
     createdAt: string;
+    isCrossRepository?: boolean;
   }[];
-  const pr = prs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  // `--head` matches the branch NAME only: a fork can open a PR from a branch with the card's name.
+  const pr = prs
+    .filter((p) => p.isCrossRepository === false)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   return pr
     ? {
         number: pr.number,
@@ -1041,7 +1069,8 @@ async function opGate(n: number, requested: string) {
   const target = GATE_TARGETS.find((t) => t.toLowerCase() === requested.trim().toLowerCase());
   if (!target) throw new BoardError(`gate target must be one of: ${GATE_TARGETS.join(", ")}`);
   const i = await getIssue(n, 100);
-  const pickup = latestPickup(n, i.comments.nodes);
+  const comments = commentsOf(i);
+  const pickup = latestPickup(n, comments, TRUSTED);
   const pr = pickup ? prFor(pickup.branch) : null;
   const mainCi =
     target === "Done" && pr?.state === "MERGED" && pr.mergeCommit
@@ -1052,7 +1081,8 @@ async function opGate(n: number, requested: string) {
     target: target as GateTarget,
     body: i.body,
     labels: names(i.labels),
-    comments: i.comments.nodes,
+    comments,
+    trusted: TRUSTED,
     pr,
     mainCi,
   });
@@ -1290,6 +1320,8 @@ async function main() {
       return opHash(pos[0]);
     case "next":
       return opNext();
+    case "pickup-branch":
+      return opPickupBranch(cardArg(pos[0], "pickup-branch <n>"));
     case "pickup":
       return opPickup(cardArg(pos[0], "pickup <n>"));
     case "gate":

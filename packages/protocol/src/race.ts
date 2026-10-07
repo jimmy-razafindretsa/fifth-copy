@@ -19,13 +19,31 @@ export const MAX_OVERLAY_WORDS = 500;
 /** Opaque ids (users, lobbies) as minted by the web app. */
 export const MAX_ID_LENGTH = 128;
 
+/**
+ * Longest race the wire accepts, in ms since GO: one hour. Timed races stop at 600 s (`timerS` max);
+ * an untimed 500-word text at 10 WPM takes 50 min. The race server ends a race at this bound (#166).
+ */
+export const MAX_RACE_MS = 60 * 60 * 1000;
+
+/** Control, format, surrogate, private-use and line/paragraph separator code points. */
+const UNPRINTABLE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/u;
+/** Same, but ZWNJ/ZWJ stay allowed in names (emoji sequences, Indic and Persian scripts). */
+const UNPRINTABLE_IN_NAME = /(?![\u200C\u200D])[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/u;
+
 export const deskSchema = z.int().min(1).max(MAX_DESKS);
-export const nameSchema = z.string().min(1).max(MAX_NAME_LENGTH);
+/** Display name: no control characters, bidi overrides, null bytes or line breaks. */
+export const nameSchema = z
+  .string()
+  .min(1)
+  .max(MAX_NAME_LENGTH)
+  .refine((name) => !UNPRINTABLE_IN_NAME.test(name), "printable characters only");
 export const idSchema = z.string().min(1).max(MAX_ID_LENGTH);
 /** Chosen by the race server (uuid v4) so `POST /api/internal/races` is idempotent. */
 export const raceIdSchema = z.uuidv4();
-/** Milliseconds: a server epoch or a duration since GO. Never negative. */
+/** Milliseconds of a server epoch (or a client clock). Never negative. */
 export const msSchema = z.int().min(0);
+/** Milliseconds since GO, at most `MAX_RACE_MS`. */
+export const raceMsSchema = z.int().min(0).max(MAX_RACE_MS);
 
 /** Race token role (ADR 0009); also `welcome.role`. A spectator has no desk. */
 export const raceRoleSchema = z.enum(["host", "player", "spectator"]);
@@ -76,16 +94,22 @@ export const resumeKeySchema = z
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/);
 
-/** "Backspace" or exactly one code point (a modifier name such as "Shift" never crosses the wire). */
+/**
+ * "Backspace" or exactly one printable code point: a modifier name such as "Shift", a control or
+ * format character, or a lone surrogate never crosses the wire.
+ */
 const keySchema = z
   .string()
   .min(1)
   .max(16)
-  .refine((key) => key === BACKSPACE || [...key].length === 1, "one character or Backspace");
+  .refine(
+    (key) => key === BACKSPACE || ([...key].length === 1 && !UNPRINTABLE.test(key)),
+    "one printable character or Backspace",
+  );
 
 /** Engine `Keystroke`: `t` is ms since GO on the sender's clock (ARCHITECTURE 7.3). */
 export const keystrokeSchema = z.object({
-  t: msSchema,
+  t: raceMsSchema,
   key: keySchema,
 }) satisfies z.ZodType<Keystroke>;
 
@@ -123,8 +147,8 @@ export const playerStateSchema = z.object({
   total: z.int().min(0),
   typed: z.array(keySchema.nullable()).max(MAX_TEXT_LENGTH),
   status: playerStatusSchema,
-  lastT: msSchema,
-  finishedAt: msSchema.nullable(),
+  lastT: raceMsSchema,
+  finishedAt: raceMsSchema.nullable(),
 }) satisfies z.ZodType<PlayerState>;
 
 export const ratioSchema = z.number().min(0).max(1);
@@ -141,7 +165,7 @@ export const rankingEntrySchema = z.object({
   rawWpm: wpmSchema,
   accuracy: ratioSchema,
   progress: ratioSchema,
-  finishedAt: msSchema.nullable(),
+  finishedAt: raceMsSchema.nullable(),
 });
 export type RankingEntry = z.infer<typeof rankingEntrySchema>;
 

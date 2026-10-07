@@ -6,6 +6,7 @@ import {
   idSchema,
   MAX_DESKS,
   msSchema,
+  raceMsSchema,
   nameSchema,
   playerStatusSchema,
   raceIdSchema,
@@ -33,9 +34,9 @@ export const INTERNAL_MAX_SKEW_S = 300;
 /** `POST /internal/rooms` (web -> race server): open the waiting room of a lobby. Idempotent. */
 export const openRoomRequestSchema = z.object({
   v: versionSchema,
-  lobbyId: z.string().min(1),
+  lobbyId: idSchema,
   code: roomCodeSchema,
-  hostUserId: z.string().min(1),
+  hostUserId: idSchema,
   /** The host's validated settings; stored in the room hash on first open. */
   settings: raceSettingsSchema,
 });
@@ -116,12 +117,12 @@ export const internalRaceResultSchema = z.object({
   correct: counter,
   errors: counter,
   total: counter,
-  durationMs: msSchema,
-  finishedAtMs: msSchema.nullable(),
+  durationMs: raceMsSchema,
+  finishedAtMs: raceMsSchema.nullable(),
   bonusesSent: counter,
   bonusesReceived: counter,
   bonusLog: z
-    .array(z.object({ t: msSchema, kind: bonusKindSchema, from: deskSchema, to: deskSchema }))
+    .array(z.object({ t: raceMsSchema, kind: bonusKindSchema, from: deskSchema, to: deskSchema }))
     .max(1024),
   /** Anti-cheat flags (ARCHITECTURE 7.7). */
   flags: z

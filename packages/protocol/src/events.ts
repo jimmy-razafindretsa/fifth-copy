@@ -6,6 +6,7 @@ import {
   keystrokeSchema,
   MAX_DESKS,
   msSchema,
+  raceMsSchema,
   PLAYER_STATUSES,
   raceIdSchema,
   raceInfoSchema,
@@ -42,7 +43,7 @@ export const snapshotDeskSchema = z.tuple([
 /** 10 Hz full state of every desk (compact tuples, ARCHITECTURE 7.9); `t` is ms since GO. */
 export const snapshotSchema = z.object({
   v: versionSchema,
-  t: msSchema,
+  t: raceMsSchema,
   desks: z.array(snapshotDeskSchema).max(MAX_DESKS),
   ranks: z.array(deskSchema).max(MAX_DESKS),
 });
@@ -63,7 +64,7 @@ export const eventSchema = z.discriminatedUnion("kind", [
   ev("line-cut", { desk }),
   ev("resumed", { desk }),
   /** `kickAt`: ms since GO when the idle desk is put to sleep. */
-  ev("idle-warning", { desk, kickAt: msSchema }),
+  ev("idle-warning", { desk, kickAt: raceMsSchema }),
   ev("asleep", { desk }),
   ev("abandoned", { desk }),
   ev("kicked", { desk }),
@@ -78,7 +79,7 @@ export const eventSchema = z.discriminatedUnion("kind", [
     desk,
     bonus: bonusKindSchema,
     overlay: textOverlaySchema.nullable(),
-    blurUntil: msSchema.nullable(),
+    blurUntil: raceMsSchema.nullable(),
   }),
 ]);
 export type RaceEvent = z.infer<typeof eventSchema>;

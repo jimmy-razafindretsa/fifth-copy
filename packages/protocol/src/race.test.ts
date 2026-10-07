@@ -11,6 +11,8 @@ import {
   markerSchema,
   MAX_DESKS,
   MAX_OVERLAY_WORDS,
+  MAX_RACE_MS,
+  nameSchema,
   MAX_TEXT_LENGTH,
   phaseSchema,
   PLAYER_STATUS_CODES,
@@ -76,6 +78,29 @@ describe("race value schemas", () => {
     ["keystroke astral char", keystrokeSchema, { t: 1, key: "\u{1F600}" }, true],
     ["keystroke two chars", keystrokeSchema, { t: 1, key: "ab" }, false],
     ["keystroke modifier name", keystrokeSchema, { t: 1, key: "Shift" }, false],
+    ["keystroke space", keystrokeSchema, { t: 1, key: " " }, true],
+    ["keystroke NUL", keystrokeSchema, { t: 1, key: "\u0000" }, false],
+    ["keystroke newline", keystrokeSchema, { t: 1, key: "\n" }, false],
+    ["keystroke ESC", keystrokeSchema, { t: 1, key: "\u001B" }, false],
+    ["keystroke DEL", keystrokeSchema, { t: 1, key: "\u007F" }, false],
+    ["keystroke RLO", keystrokeSchema, { t: 1, key: "\u202E" }, false],
+    ["keystroke line separator", keystrokeSchema, { t: 1, key: "\u2028" }, false],
+    ["keystroke paragraph separator", keystrokeSchema, { t: 1, key: "\u2029" }, false],
+    ["keystroke private use", keystrokeSchema, { t: 1, key: "\uE000" }, false],
+    ["keystroke lone high surrogate", keystrokeSchema, { t: 1, key: "\uD800" }, false],
+    ["keystroke lone low surrogate", keystrokeSchema, { t: 1, key: "\uDC00" }, false],
+    ["keystroke t at race max", keystrokeSchema, { t: MAX_RACE_MS, key: "a" }, true],
+    ["keystroke t over race max", keystrokeSchema, { t: MAX_RACE_MS + 1, key: "a" }, false],
+    ["name example", nameSchema, "Fox-042", true],
+    ["name with spaces and accents", nameSchema, "Élise Ŝ 🦊", true],
+    ["name emoji ZWJ sequence", nameSchema, "\u{1F469}\u200D\u{1F4BB}", true],
+    ["name NUL", nameSchema, "Ada\u0000", false],
+    ["name newline", nameSchema, "Ada\nBob", false],
+    ["name RLO", nameSchema, "\u202EadA", false],
+    ["name bidi isolate", nameSchema, "\u2066Ada", false],
+    ["name line separator", nameSchema, "Ada\u2028", false],
+    ["name lone surrogate", nameSchema, "Ada\uD800", false],
+    ["name empty", nameSchema, "", false],
     ["keystroke empty key", keystrokeSchema, { t: 1, key: "" }, false],
     ["keystroke negative t", keystrokeSchema, { t: -1, key: "a" }, false],
     ["keystroke fractional t", keystrokeSchema, { t: 1.5, key: "a" }, false],
@@ -106,6 +131,7 @@ describe("race value schemas", () => {
     ["state initial", playerStateSchema, initialState(), true],
     ["state missing typed", playerStateSchema, { ...state, typed: undefined }, false],
     ["state wrong status", playerStateSchema, { ...state, status: "racing" }, false],
+    ["state lastT over race max", playerStateSchema, { ...state, lastT: MAX_RACE_MS + 1 }, false],
     ["ranking example", rankingEntrySchema, rankingEntry, true],
     ["ranking not finished", rankingEntrySchema, { ...rankingEntry, finishedAt: null }, true],
     ["ranking missing wpm", rankingEntrySchema, { ...rankingEntry, wpm: undefined }, false],
@@ -114,6 +140,12 @@ describe("race value schemas", () => {
     ["ranking long name", rankingEntrySchema, { ...rankingEntry, name: "a".repeat(65) }, false],
   ] as const)("%s", (_, schema, payload, ok) => {
     expect(schema.safeParse(payload).success).toBe(ok);
+  });
+});
+
+describe("race time cap", () => {
+  it("is one hour: 500 words at 10 WPM plus margin, far above the 600 s timer maximum", () => {
+    expect(MAX_RACE_MS).toBe(60 * 60 * 1000);
   });
 });
 

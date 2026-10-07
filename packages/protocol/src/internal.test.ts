@@ -122,6 +122,18 @@ describe("internal API", () => {
       { ...request, hostUserId: undefined },
       false,
     ],
+    [
+      "open request oversize lobbyId",
+      openRoomRequestSchema,
+      { ...request, lobbyId: "l".repeat(129) },
+      false,
+    ],
+    [
+      "open request oversize host",
+      openRoomRequestSchema,
+      { ...request, hostUserId: "u".repeat(129) },
+      false,
+    ],
     ["open request bad code", openRoomRequestSchema, { ...request, code: "KGB4821" }, false],
     ["open response example", openRoomResponseSchema, response, true],
     ["open response v: 1", openRoomResponseSchema, { ...response, v: 1 }, false],

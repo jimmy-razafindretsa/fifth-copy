@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Sent in the socket handshake and the internal API; a mismatch is rejected and the client reloads. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** `v` field every payload carries; only the current version parses. */
 export const versionSchema = z.literal(PROTOCOL_VERSION);

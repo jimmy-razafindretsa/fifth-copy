@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
+  DEFAULT_RACE_SETTINGS,
   INTERNAL_HEADERS,
   openRoomRequestSchema,
   PROTOCOL_VERSION,
@@ -16,6 +17,7 @@ const request: OpenRoomRequest = {
   lobbyId: "lob_1",
   code: "KGB-4821" as RoomCode,
   hostUserId: "usr_1",
+  settings: DEFAULT_RACE_SETTINGS,
 };
 const opened = { v: PROTOCOL_VERSION, roomId: "lob_1", phase: "waiting", created: true };
 

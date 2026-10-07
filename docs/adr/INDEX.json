@@ -233,6 +233,21 @@
       "supersededBy": [],
       "rule": "Avatar bytes enter only through storeAvatar (magic-byte sniff, sharp decode with limitInputPixels and pages 1, square crop, WebP 256 and 64 px, metadata stripped) and leave only through /api/avatars/[userId] after an authorization check; files live under AVATAR_DIR behind the AvatarStore interface, keyed <userId>/<version>-<size>.webp from validated ids, never from user input; Postgres keeps avatarKey and avatarStatus as the record.",
       "file": "docs/adr/0014-avatar-storage.md"
+    },
+    {
+      "id": "0015",
+      "title": "Avatars are moderated on the host by a local heuristic that flags for human review; no third-party API, no runtime dependency",
+      "status": "proposed",
+      "category": "security",
+      "scope": [
+        "src/features/identity/avatars/moderation/**",
+        "src/features/identity/avatars/store-avatar.ts",
+        "scripts/avatar-review.ts"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Every stored avatar passes the injected AvatarModerator on the re-encoded 256 px image inside storeAvatar before any file is written; approve -> APPROVED, flag -> PENDING (files kept, default portrait for everyone), reject -> typed Rejected error and nothing written; the image never leaves the host and no moderation reason is persisted.",
+      "file": "docs/adr/0015-avatar-moderation.md"
     }
   ]
 }

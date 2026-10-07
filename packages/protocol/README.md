@@ -41,7 +41,7 @@ Bounds: every string and array is capped (`MAX_DESKS` 256, `MAX_NAME_LENGTH` 64,
 `raceSettingsSchema` is one strict object (unknown keys rejected); later cards add fields, never rename them. `DEFAULT_RACE_SETTINGS` is the only place defaults live.
 - Text: `language` (`fr`|`en`, independent of the UI locale), `textType` (`sentences`|`words`|`special-characters`), `wordCount` (int 10-500), `accentEveryWord`.
 - Difficulty: `{ level: easy|normal|hard }` or `{ level: "custom", wordLength, rareLetters, punctuationDensity }`.
-- Content: `practiceLetters` (<= 12 distinct single NFC characters), `includeNumbers`, `includeSymbols`, `includePunctuation`.
+- Content: `practiceLetters` (<= 12 distinct letters from the engine typeable whitelist), `includeNumbers`, `includeSymbols`, `includePunctuation`.
 - Race rules: `timerS` (int 60-600 or `null`), `errorMode` (engine `ErrorMode`), `backspace`, `bonuses`; `engineSettingsOf()` returns the engine's `{ errorMode, backspace }`.
 - Bots: `bots: { level }[]`, at most `MAX_BOTS` (29); `BOT_LEVEL_WPM` maps `recruit|clerk|officer|commissar|major` to 20-90 WPM.
 - Lobby: `lobbyType` (`public`|`private`), owned by `Lobby.type` in Postgres, so `raceSettingsPatchSchema` (the `host:settings` patch: every field optional) omits it.

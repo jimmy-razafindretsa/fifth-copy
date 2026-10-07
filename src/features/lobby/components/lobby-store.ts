@@ -46,6 +46,7 @@ function connectError(reason: ConnectErrorReason): LobbyError | null {
     case "no-room":
       return "not-found";
     case "bad-token":
+    // Reached only when the one-shot reload already ran (see `bindRoomSocket`).
     case "version":
     // No lobby copy for a race already under way yet (#210 adds it).
     case "in-progress":
@@ -79,11 +80,69 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
   }
 }
 
-/** Subscribes the room socket's events and turns them into lobby events. */
-export function bindRoomSocket(socket: RoomSocket, dispatch: (event: LobbyEvent) => void) {
-  socket.onWelcome((payload) => dispatch({ type: "welcome", payload }));
+/**
+ * One-shot marker for the version-skew reload (ADR 0006 point 4): set in `sessionStorage` just before the
+ * reload, so a second `version` refusal after it shows the generic error instead of looping; a `welcome`
+ * clears it.
+ */
+export const VERSION_RELOAD_KEY = "fifth-copy:version-reload";
+
+/** The side effects of the version-skew reload, injected so unit tests never touch `window`. */
+export type VersionReload = {
+  reload: () => void;
+  /** `null` when storage is unavailable: then the page never reloads, so it cannot loop. */
+  storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null;
+};
+
+function browserVersionReload(): VersionReload {
+  let storage: VersionReload["storage"] = null;
+  try {
+    storage = window.sessionStorage;
+  } catch {
+    // Blocked site data: no marker, so no reload.
+  }
+  return { reload: () => window.location.reload(), storage };
+}
+
+/** Sets the marker and reloads, unless the marker is already set or cannot be set. */
+function tryVersionReload({ reload, storage }: VersionReload): boolean {
+  try {
+    if (!storage || storage.getItem(VERSION_RELOAD_KEY) !== null) return false;
+    storage.setItem(VERSION_RELOAD_KEY, "1");
+  } catch {
+    return false;
+  }
+  reload();
+  return true;
+}
+
+/**
+ * Subscribes the room socket's events and turns them into lobby events. A first `version` refusal reloads
+ * the page to fetch the bundle of the new `PROTOCOL_VERSION` instead of dispatching an error.
+ */
+export function bindRoomSocket(
+  socket: RoomSocket,
+  dispatch: (event: LobbyEvent) => void,
+  versionReload: VersionReload = browserVersionReload(),
+) {
+  let reloading = false;
+  socket.onWelcome((payload) => {
+    try {
+      versionReload.storage?.removeItem(VERSION_RELOAD_KEY);
+    } catch {
+      // Storage went away: nothing to clear.
+    }
+    dispatch({ type: "welcome", payload });
+  });
   socket.onRoster((payload) => dispatch({ type: "roster", payload }));
-  socket.onConnectError((reason) => dispatch({ type: "connect-error", reason }));
+  socket.onConnectError((reason) => {
+    if (reloading) return;
+    if (reason === "version" && tryVersionReload(versionReload)) {
+      reloading = true;
+      return;
+    }
+    dispatch({ type: "connect-error", reason });
+  });
   socket.onReconnecting(() => dispatch({ type: "reconnecting" }));
   socket.onReconnected(() => dispatch({ type: "reconnected" }));
 }

@@ -6,7 +6,14 @@ import {
   type Member,
 } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
-import { bindRoomSocket, initialLobbyState, reduceLobby, type LobbyEvent } from "./lobby-store";
+import {
+  bindRoomSocket,
+  initialLobbyState,
+  reduceLobby,
+  VERSION_RELOAD_KEY,
+  type LobbyEvent,
+  type VersionReload,
+} from "./lobby-store";
 
 // Contract of card 107, C5: the lobby store reduces `welcome` and `roster` into a desk-sorted list.
 // Fixtures of the v4 shape (#557): members carry isBot and their desk identity.
@@ -126,7 +133,7 @@ describe("bindRoomSocket", () => {
   it("subscribes the socket's events and dispatches them as lobby events", () => {
     const { socket, cbs, fire } = fakeSocket();
     const dispatch = vi.fn();
-    bindRoomSocket(socket, dispatch);
+    bindRoomSocket(socket, dispatch, fakeReload().deps);
     expect(Object.keys(cbs).sort()).toEqual(
       ["connectError", "reconnected", "reconnecting", "roster", "welcome"].sort(),
     );
@@ -149,9 +156,85 @@ describe("bindRoomSocket", () => {
   it("feeds a reducer end to end", () => {
     const { socket, fire } = fakeSocket();
     let state = initialLobbyState;
-    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)));
+    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), fakeReload().deps);
     fire("welcome", welcome(2, [bob]));
     fire("roster", { v: PROTOCOL_VERSION, members: [bob, ada] });
     expect(state).toEqual({ phase: "live", error: null, you: 2, members: [ada, bob] });
+  });
+});
+
+/** An in-memory session storage plus a spy reload (ADR 0006 point 4: a stale bundle reloads once). */
+function fakeReload(initial: Record<string, string> = {}) {
+  const store = new Map(Object.entries(initial));
+  const reload = vi.fn();
+  const deps: VersionReload = {
+    reload,
+    storage: {
+      getItem: (key) => store.get(key) ?? null,
+      setItem: (key, value) => void store.set(key, value),
+      removeItem: (key) => void store.delete(key),
+    },
+  };
+  return { deps, reload, store };
+}
+
+// Card #575: on a `version` refusal the page reloads once; a second refusal falls back to `generic`.
+describe("bindRoomSocket version skew", () => {
+  function wire(initial?: Record<string, string>) {
+    const { socket, fire } = fakeSocket();
+    const fake = fakeReload(initial);
+    let state = initialLobbyState;
+    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), fake.deps);
+    return { fire, ...fake, state: () => state };
+  }
+
+  it("C1: a first version refusal reloads once, sets the marker and stays out of the error phase", () => {
+    const { fire, reload, store, state } = wire();
+    fire("connectError", "version" satisfies ConnectErrorReason);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(store.has(VERSION_RELOAD_KEY)).toBe(true);
+    expect(state().phase).not.toBe("error");
+    // socket.io may report the refusal again before the page unloads: still one reload.
+    fire("connectError", "version" satisfies ConnectErrorReason);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("C2: with the marker already set, a version refusal is the generic error and does not reload", () => {
+    const { fire, reload, state } = wire({ [VERSION_RELOAD_KEY]: "1" });
+    fire("connectError", "version" satisfies ConnectErrorReason);
+    expect(reload).not.toHaveBeenCalled();
+    expect(state()).toMatchObject({ phase: "error", error: "generic" });
+  });
+
+  it("C2: a successful welcome clears the marker", () => {
+    const { fire, store } = wire({ [VERSION_RELOAD_KEY]: "1" });
+    fire("welcome", welcome(1, [ada]));
+    expect(store.has(VERSION_RELOAD_KEY)).toBe(false);
+  });
+
+  it("C2: without storage (blocked or private mode) it never reloads, so it cannot loop", () => {
+    const { socket, fire } = fakeSocket();
+    const reload = vi.fn();
+    let state = initialLobbyState;
+    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), {
+      reload,
+      storage: null,
+    });
+    fire("connectError", "version" satisfies ConnectErrorReason);
+    expect(reload).not.toHaveBeenCalled();
+    expect(state).toMatchObject({ phase: "error", error: "generic" });
+  });
+
+  it.each([
+    ["bad-token", "error", "generic"],
+    ["no-room", "error", "not-found"],
+    ["closed", "error", "closed"],
+    ["transport", "reconnecting", null],
+  ] as const)("C3: %s keeps its mapping and never reloads", (reason, phase, error) => {
+    const { fire, reload, store, state } = wire();
+    fire("connectError", reason);
+    expect(reload).not.toHaveBeenCalled();
+    expect(store.size).toBe(0);
+    expect(state()).toMatchObject({ phase, error });
   });
 });

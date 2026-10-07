@@ -1,9 +1,15 @@
 import type { Redis } from "ioredis";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { initialState, type Keystroke } from "@fifth-copy/engine";
+import {
+  applyKeystroke,
+  initialState,
+  normalizeTypeable,
+  type Keystroke,
+} from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   endedSchema,
+  engineSettingsOf,
   MAX_KEYS_PER_BATCH,
   PLAYER_STATUS_CODES,
   playerStateSchema,
@@ -15,7 +21,7 @@ import { connectRedis, startedRace, typeKeys, until, type Booted } from "../test
 import { createDesksState, deskStateOf, type DeskState } from "./desks-state";
 import { traceCapOf } from "./desks-state";
 import { ingest, KEYS_BURST, KEYS_PER_SECOND, MAX_LAG_MS, MAX_LEAD_MS } from "./ingest";
-import { desksKey } from "./keys";
+import { desksKey, traceKey } from "./keys";
 import type { RaceEnded } from "./lifecycle";
 
 // #173: keystroke ingestion. Unit level (runtime only, no Redis) for the clamping table; socket level
@@ -223,7 +229,7 @@ async function ticks(b: Booted, n: number) {
 }
 
 describe("keys over the wire (C1)", () => {
-  it("bonjour in two batches: finished tuple, finished event, desk hash with a 7-key trace", async () => {
+  it("bonjour in two batches: finished tuple, finished event, a mirror that replays to the state (#592 C3)", async () => {
     const r = await startedRace(process.env.REDIS_URL);
     booted = r.booted;
     const [, me] = r.racers;
@@ -247,11 +253,27 @@ describe("keys over the wire (C1)", () => {
 
     const redis = await connectRedis(process.env.REDIS_URL);
     try {
+      // The hash holds the counters, the desk's list the full trace in order: replaying it through
+      // the engine reproduces the state (the mirror is complete, #592).
       const raw = await redis.hget(desksKey(r.lobby), String(me!.desk));
-      const stored = JSON.parse(raw!) as DeskState;
-      expect(playerStateSchema.parse(stored)).toMatchObject({ cursor: 7, status: "finished" });
-      expect(stored.trace).toHaveLength(7);
+      const stored = JSON.parse(raw!) as Omit<DeskState, "trace" | "typed">;
+      expect(stored).not.toHaveProperty("trace");
+      expect(stored).toMatchObject({ cursor: 7, correct: 7, errors: 0, status: "finished" });
+      const trace = (await redis.lrange(traceKey(r.lobby, me!.desk), 0, -1)).map(
+        (e) => JSON.parse(e) as Keystroke,
+      );
+      expect(trace.map((k) => k.key).join("")).toBe("bonjour");
+      const text = normalizeTypeable(race.text);
+      const engine = engineSettingsOf(DEFAULT_RACE_SETTINGS);
+      const replayed = trace.reduce((s, k) => applyKeystroke(s, k, text, engine), initialState());
+      const { cursor, correct, errors, total, status, lastT, finishedAt } = stored;
+      expect(playerStateSchema.parse(replayed)).toEqual({
+        ...{ cursor, correct, errors, total, status, lastT, finishedAt },
+        typed: replayed.typed,
+      });
+      expect(replayed.typed).toHaveLength(7);
       expect(await redis.ttl(desksKey(r.lobby))).toBeGreaterThan(0);
+      expect(await redis.ttl(traceKey(r.lobby, me!.desk))).toBeGreaterThan(0);
     } finally {
       redis.disconnect();
     }

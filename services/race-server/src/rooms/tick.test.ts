@@ -21,8 +21,7 @@ import { createTicker, TICK_MS } from "./tick";
 function stubRedis() {
   const counts = { exec: 0 };
   const chain: Record<string, unknown> = {};
-  chain.hset = () => chain;
-  chain.expire = () => chain;
+  for (const name of ["hset", "expire", "rpush", "del"]) chain[name] = () => chain;
   chain.exec = async () => {
     counts.exec += 1;
     return [];

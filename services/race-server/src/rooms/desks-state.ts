@@ -8,7 +8,7 @@ import {
   type PlayerState,
 } from "@fifth-copy/engine";
 import { engineSettingsOf, type RaceInfo, type RaceSettings } from "@fifth-copy/protocol";
-import { desksKey, ROOM_TTL_S } from "./keys";
+import { desksKey, ROOM_TTL_S, traceKey } from "./keys";
 import type { RaceDesk } from "./registry";
 
 /**
@@ -67,8 +67,10 @@ export type DesksState = {
   /** Current states by desk; empty for an unknown or released room. */
   states(lobbyId: string): ReadonlyMap<number, DeskState>;
   /**
-   * Writes the dirty desks to `room:<id>:desks` in one MULTI with the room TTL, then clears them.
-   * No Redis call when nothing changed. On failure the desks stay dirty for the next tick.
+   * Writes the dirty desks in one MULTI, every written key with the room TTL, then clears them: the
+   * counters to `room:<id>:desks`, the keystrokes appended since the last flush to
+   * `room:<id>:trace:<desk>` (#592). No Redis call when nothing changed. On failure the desks stay
+   * dirty for the next tick, which rewrites their lists whole.
    */
   flush(lobbyId: string): Promise<void>;
   /** The race ended: phase `ended`, states kept for the end-of-race readers (#189). */
@@ -101,29 +103,24 @@ export function playerStateOf({
 }
 
 /**
- * The JSON of a trace, extended with only the keystrokes appended since the last call: a tick never
- * re-serialises a desk's whole history (the remaining per-tick cost is the Redis write, #592).
+ * What the mirror already holds of a desk's trace: `flushed` entries of this very array. Traces are
+ * appended in place, so the same reference with `length >= flushed` means "push the rest"; any other
+ * array (a `set()` with a new trace, a new race) means "rewrite the list" (#592).
  */
-type TraceJson = { trace: readonly Keystroke[]; length: number; json: string };
+type MirroredTrace = { trace: readonly Keystroke[]; flushed: number };
 
-function serialise(state: DeskState, cache: Map<number, TraceJson>, desk: number): string {
-  const { trace, ...rest } = state;
-  let entry = cache.get(desk);
-  if (entry?.trace !== trace || entry.length > trace.length) {
-    entry = { trace, length: 0, json: "" };
-    cache.set(desk, entry);
-  }
-  for (let i = entry.length; i < trace.length; i++) {
-    entry.json += (i === 0 ? "" : ",") + JSON.stringify(trace[i]);
-  }
-  entry.length = trace.length;
-  const head = JSON.stringify(rest);
-  return `${head.slice(0, -1)}${head.length > 2 ? "," : ""}"trace":[${entry.json}]}`;
+/** The hash field of a desk: its counters and status, never the trace or the `typed` row (#592). */
+function serialise(state: DeskState): string {
+  return JSON.stringify(state, (key, value: unknown) =>
+    key === "trace" || key === "typed" ? undefined : value,
+  );
 }
 
 export function createDesksState({ redis }: { redis: Redis }): DesksState {
   const rooms = new Map<string, RoomRuntime>();
-  const traces = new Map<string, Map<number, TraceJson>>();
+  const mirrored = new Map<string, Map<number, MirroredTrace>>();
+  /** Trace lists of a previous race's desks, deleted by the next successful flush. */
+  const staleTraces = new Map<string, Set<number>>();
 
   return {
     open(lobbyId, { race, settings, desks }) {
@@ -151,8 +148,15 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
         dirty: new Set(desks.map(({ desk }) => desk)),
         budgets: new Map(),
       };
+      // This race's desks have no mirrored trace yet, so their first write empties their list; the
+      // previous race's other desks are emptied explicitly ("Race again" must not append onto it).
+      const stale = staleTraces.get(lobbyId) ?? new Set<number>();
+      for (const { desk } of rooms.get(lobbyId)?.desks ?? []) stale.add(desk);
+      for (const { desk } of desks) stale.delete(desk);
+      if (stale.size) staleTraces.set(lobbyId, stale);
+      else staleTraces.delete(lobbyId);
       rooms.set(lobbyId, runtime);
-      traces.set(lobbyId, new Map());
+      mirrored.set(lobbyId, new Map());
       return runtime;
     },
 
@@ -172,20 +176,45 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
       if (!runtime || runtime.dirty.size === 0) return;
       const desks = [...runtime.dirty];
       runtime.dirty.clear();
-      // Serialised now, so a key applied while EXEC is in flight lands in the next flush.
+      // Built now, so a key applied while EXEC is in flight lands in the next flush.
+      const cache = mirrored.get(lobbyId) ?? new Map<number, MirroredTrace>();
       const fields: Record<string, string> = {};
-      const cache = traces.get(lobbyId) ?? new Map<number, TraceJson>();
+      const lists: { key: string; reset: boolean; entries: string[] }[] = [];
       for (const desk of desks) {
         const state = runtime.states.get(desk);
-        if (state) fields[desk] = serialise(state, cache, desk);
+        if (!state) continue;
+        fields[desk] = serialise(state);
+        const { trace } = state;
+        const seen = cache.get(desk);
+        const reset = !(seen?.trace === trace && seen.flushed <= trace.length);
+        const from = reset ? 0 : seen!.flushed;
+        if (reset || trace.length > from) {
+          const entries = trace.slice(from).map((k) => JSON.stringify(k));
+          lists.push({ key: traceKey(lobbyId, desk), reset, entries });
+        }
+        cache.set(desk, { trace, flushed: trace.length });
       }
       if (Object.keys(fields).length === 0) return;
+      const stale = [...(staleTraces.get(lobbyId) ?? [])];
       const key = desksKey(lobbyId);
+      const tx = redis.multi().hset(key, fields).expire(key, ROOM_TTL_S);
+      for (const { key: list, reset, entries } of lists) {
+        if (reset) tx.del(list);
+        if (entries.length) tx.rpush(list, ...entries);
+        tx.expire(list, ROOM_TTL_S);
+      }
+      for (const desk of stale)
+        tx.del(traceKey(lobbyId, desk)).expire(traceKey(lobbyId, desk), ROOM_TTL_S);
       try {
-        const results = await redis.multi().hset(key, fields).expire(key, ROOM_TTL_S).exec();
+        const results = await tx.exec();
         if (!results) throw new Error(`room ${lobbyId}: desks transaction aborted`);
         for (const [err] of results) if (err) throw err;
+        const pending = staleTraces.get(lobbyId);
+        for (const desk of stale) pending?.delete(desk);
+        if (pending?.size === 0) staleTraces.delete(lobbyId);
       } catch (err) {
+        // At-least-once mirror: forget what was "mirrored", so the next flush rewrites these lists.
+        for (const desk of desks) cache.delete(desk);
         if (rooms.get(lobbyId) === runtime && runtime.phase === "running") {
           for (const desk of desks) runtime.dirty.add(desk);
         }
@@ -205,12 +234,13 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
       runtime.states.clear();
       runtime.dirty.clear();
       runtime.budgets.clear();
-      traces.delete(lobbyId);
+      mirrored.delete(lobbyId);
     },
 
     close: (lobbyId) => {
       rooms.delete(lobbyId);
-      traces.delete(lobbyId);
+      mirrored.delete(lobbyId);
+      staleTraces.delete(lobbyId);
     },
   };
 }

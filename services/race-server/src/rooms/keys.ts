@@ -12,11 +12,19 @@ export const roomKey = (lobbyId: string) => `room:${lobbyId}`;
 export const membersKey = (lobbyId: string) => `room:${lobbyId}:members`;
 
 /**
- * Hash: desk number -> JSON `DeskState` (#173): the live mirror of each desk's engine state, its
- * trace and anomaly count, written once per tick for the desks changed since the previous one. A
- * mirror, never a recovery source (a running room is voided on restart, ADR 0008).
+ * Hash: desk number -> JSON `DeskState` without `trace` and `typed` (#173, #592): the live mirror of
+ * each desk's engine counters, status and anomaly counts, written once per tick for the desks changed
+ * since the previous one (`typed` replays from the trace). A mirror, never a recovery source (a
+ * running room is voided on restart, ADR 0008).
  */
 export const desksKey = (lobbyId: string) => `room:${lobbyId}:desks`;
+
+/**
+ * List: one JSON `Keystroke` per entry, in order (#592): the desk's trace, appended each tick with
+ * only the keys accepted since the previous one. TTL set at each write (not refreshed by the room's
+ * other writes); emptied by the first write of a new race and deleted with the room.
+ */
+export const traceKey = (lobbyId: string, desk: number) => `room:${lobbyId}:trace:${desk}`;
 
 /** Lifetime of a race's pending results (#189): retried for up to a day, then dropped (ADR 0008). */
 export const OUTBOX_TTL_S = 24 * 3600;

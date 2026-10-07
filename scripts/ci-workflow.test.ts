@@ -192,7 +192,10 @@ describe("CI concurrency never cancels a main run (card #543)", () => {
   };
   const at = (ref: string, sha: string) => {
     const ctx = { "github.ref": ref, "github.sha": sha };
-    return { group: evaluate(ctx, block?.group), cancel: evaluate(ctx, block?.["cancel-in-progress"]) };
+    return {
+      group: evaluate(ctx, block?.group),
+      cancel: evaluate(ctx, block?.["cancel-in-progress"]),
+    };
   };
 
   it("C1 a main push is never cancelled: cancel-in-progress is false on refs/heads/main", () => {
@@ -205,11 +208,15 @@ describe("CI concurrency never cancels a main run (card #543)", () => {
   });
 
   it("C1 PR refs keep today's behaviour: group ci-<ref>, cancel-in-progress true", () => {
-    expect(at("refs/pull/12/merge", "aaa111")).toEqual({ group: "ci-refs/pull/12/merge", cancel: true });
+    expect(at("refs/pull/12/merge", "aaa111")).toEqual({
+      group: "ci-refs/pull/12/merge",
+      cancel: true,
+    });
     expect(at("refs/pull/12/merge", "bbb222").group).toBe("ci-refs/pull/12/merge");
   });
 
   it("C1 no job overrides the workflow-level concurrency", () => {
-    for (const [id, job] of jobs) expect((job as Job & { concurrency?: unknown }).concurrency, id).toBeUndefined();
+    for (const [id, job] of jobs)
+      expect((job as Job & { concurrency?: unknown }).concurrency, id).toBeUndefined();
   });
 });

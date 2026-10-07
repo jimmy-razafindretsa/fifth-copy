@@ -41,7 +41,7 @@ export const OWNERSHIP: readonly Ownership[] = [
       "src/app/design/**",
       "src/features/lobby/components/lobby-entry.module.css",
     ],
-    why: "bible 0 glow lives only in devices; lobby-entry: bible 7.1 inverted primary keeps its ink border and offset on the red band in both themes (device-bezel = press-ink; a discovered card moves it to the band role)",
+    why: "bible 0 glow lives only in devices; lobby-entry: bible 7.1 inverted primary keeps its ink border and offset on the red band in both themes (device-bezel = press-ink; #595 moves it to the band role)",
   },
 ];
 

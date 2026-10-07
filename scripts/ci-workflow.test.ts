@@ -156,3 +156,67 @@ describe("CI e2e is sharded behind one required check (card #532)", () => {
     expect(shard?.["timeout-minutes"]).toBeLessThanOrEqual(15);
   });
 });
+
+// Card #543: a push to main never cancels (or evicts) the run of the previous merge commit, which is
+// the run `board.ts gate <n> Done` checks. PR refs keep cancel-in-progress. The yaml parser returns
+// `${{ ... }}` verbatim, so a test-only evaluator handles exactly the shapes the block uses: a bare
+// `<ctx>`, `<ctx> (==|!=) '<lit>'` and `<ctx> == '<lit>' && <ctx> || <ctx>`. Anything else throws.
+describe("CI concurrency never cancels a main run (card #543)", () => {
+  type Ctx = Record<string, string>;
+  type Concurrency = { group?: string; "cancel-in-progress"?: string | boolean };
+  const block = (workflow as Workflow & { concurrency?: Concurrency }).concurrency;
+
+  const value = (ctx: Ctx, token: string): string => {
+    const lit = /^'([^']*)'$/.exec(token);
+    if (lit) return lit[1] ?? "";
+    if (!(token in ctx)) throw new Error(`unknown context ${token}`);
+    return ctx[token] ?? "";
+  };
+  const expr = (ctx: Ctx, src: string): string | boolean => {
+    const s = src.trim();
+    if (/^[\w.]+$/.test(s)) return value(ctx, s);
+    const cmp = /^(\S+) (==|!=) ('[^']*')$/.exec(s);
+    if (cmp) return (value(ctx, cmp[1] ?? "") === value(ctx, cmp[3] ?? "")) === (cmp[2] === "==");
+    const tern = /^(\S+) == ('[^']*') && (\S+) \|\| (\S+)$/.exec(s);
+    if (tern) {
+      const hit = value(ctx, tern[1] ?? "") === value(ctx, tern[2] ?? "");
+      return value(ctx, (hit ? tern[3] : tern[4]) ?? "");
+    }
+    throw new Error(`unsupported expression: ${s}`);
+  };
+  const evaluate = (ctx: Ctx, raw: string | boolean | undefined): string | boolean => {
+    if (typeof raw !== "string") return raw ?? "";
+    const whole = /^\$\{\{(.*)\}\}$/.exec(raw.trim());
+    if (whole) return expr(ctx, whole[1] ?? "");
+    return raw.replace(/\$\{\{(.*?)\}\}/g, (_m, e: string) => String(expr(ctx, e)));
+  };
+  const at = (ref: string, sha: string) => {
+    const ctx = { "github.ref": ref, "github.sha": sha };
+    return {
+      group: evaluate(ctx, block?.group),
+      cancel: evaluate(ctx, block?.["cancel-in-progress"]),
+    };
+  };
+
+  it("C1 a main push is never cancelled: cancel-in-progress is false on refs/heads/main", () => {
+    expect(at("refs/heads/main", "aaa111").cancel).toBe(false);
+  });
+
+  it("C1 each main merge commit gets its own group, so a later push cannot evict it", () => {
+    expect(at("refs/heads/main", "aaa111").group).toBe("ci-aaa111");
+    expect(at("refs/heads/main", "bbb222").group).not.toBe(at("refs/heads/main", "aaa111").group);
+  });
+
+  it("C1 PR refs keep today's behaviour: group ci-<ref>, cancel-in-progress true", () => {
+    expect(at("refs/pull/12/merge", "aaa111")).toEqual({
+      group: "ci-refs/pull/12/merge",
+      cancel: true,
+    });
+    expect(at("refs/pull/12/merge", "bbb222").group).toBe("ci-refs/pull/12/merge");
+  });
+
+  it("C1 no job overrides the workflow-level concurrency", () => {
+    for (const [id, job] of jobs)
+      expect((job as Job & { concurrency?: unknown }).concurrency, id).toBeUndefined();
+  });
+});

@@ -51,6 +51,10 @@ Example: `wordmark-red-on-paper` rendered 240 px wide needs 38.81 x 240 / 217.01
 
 "TYPE FAST · TYPE FIRST" appears only through `wordmark-tagline-red-on-paper`, only when the rendered wordmark is at least 240 px wide, and never with the monogram. Below 240 px use the plain wordmark.
 
+## Site icons
+
+The site icon is `monogram-paper` (#24): `src/app/icon.svg` is the file byte for byte, and `src/app/favicon.ico` (16 and 32 px) is rasterised from it with its transparent corners. `src/app/apple-icon.png` (180 px) is the same raster flattened on paper `#F1E8D6`, because iOS paints transparent corners black; the tile and its border are unchanged. Regenerate with `npx tsx scripts/brand/icons.ts` (`--check` verifies).
+
 ## Forbidden
 
 - A violet or gold bar (or any recolour of the bar beyond the variants above).

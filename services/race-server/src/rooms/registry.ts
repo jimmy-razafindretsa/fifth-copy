@@ -17,7 +17,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import { nextDesk } from "./desks";
-import { desksKey, membersKey, ROOM_TTL_S, roomKey } from "./keys";
+import { desksKey, membersKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
 
 export type { Phase };
 /** One desk of a race as sent to the web app at start and kept in the room hash (`desks`). */
@@ -262,7 +262,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const removed = await redis.hdel(membersKey(lobbyId), userId);
         const seats = await readSeats(lobbyId);
         if (removed === 1 && seats.size === 0) {
-          await redis.del(roomKey(lobbyId), membersKey(lobbyId), desksKey(lobbyId));
+          // The trace lists (#592) of the last race's desks go with the room.
+          const traces = room.desks
+            ? raceDesksSchema
+                .parse(JSON.parse(room.desks))
+                .map(({ desk }) => traceKey(lobbyId, desk))
+            : [];
+          await redis.del(roomKey(lobbyId), membersKey(lobbyId), desksKey(lobbyId), ...traces);
           openRooms.delete(lobbyId);
           return { members: [], closed: true };
         }

@@ -22,8 +22,7 @@ export type HandshakeDeps = {
  * (countdown or running); the socket edge then resumes its line-cut desk (#178).
  */
 export type HandshakeResult =
-  | { ok: true; claims: RaceTokenClaims; resume: boolean }
-  | { ok: false; reason: RejectReason };
+  { ok: true; claims: RaceTokenClaims; resume: boolean } | { ok: false; reason: RejectReason };
 
 /**
  * Decides whether a Socket.IO handshake may proceed (ADR 0006, 0009). Order: protocol version, then

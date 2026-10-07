@@ -55,7 +55,13 @@ describe("resume keys (C6)", () => {
       ["set", resumeKey(key)],
       ["hset", resumeIndexKey(id)],
     ]);
-    expect(tx).toContainEqual(["set", resumeKey(key), expect.any(String), "EX", String(ROOM_TTL_S)]);
+    expect(tx).toContainEqual([
+      "set",
+      resumeKey(key),
+      expect.any(String),
+      "EX",
+      String(ROOM_TTL_S),
+    ]);
     expect(tx).toContainEqual(["expire", resumeIndexKey(id), String(ROOM_TTL_S)]);
     // No write outside the transaction.
     for (const [name] of [...sent.slice(0, from), ...sent.slice(to + 1)]) {

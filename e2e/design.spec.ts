@@ -166,6 +166,46 @@ test.describe("design system page", () => {
     await expect(section.locator('[data-sample="device"]')).toBeVisible();
   });
 
+  test("#24 C6 Brand: wordmarks on their grounds, tagline, monogram ladder, clear-space outline", async ({
+    page,
+  }) => {
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/design");
+      const section = page.getByRole("region", { name: "Brand" });
+      await expect(section.getByRole("heading", { level: 2, name: "Brand" })).toBeVisible();
+      for (const [ground, role, mark] of [
+        ["paper", "band-fg", "wordmark-red-on-paper"],
+        ["red", "primary", "wordmark-ink-on-red"],
+        ["ink", "band", "wordmark-red-on-ink"],
+      ] as const) {
+        const plate = section
+          .locator('[data-brand-demo="wordmarks"]')
+          .locator(`[data-plate="${ground}"]`);
+        await expect(plate.locator(`svg[data-mark="${mark}"]`)).toBeVisible();
+        const bg = await plate.evaluate((el) => getComputedStyle(el).backgroundColor);
+        expect(bg, `${scheme} ${ground}`).toBe(await roleValue(page, role, "backgroundColor"));
+      }
+      const tagline = section.locator('[data-brand-demo="tagline"] svg[data-mark]');
+      await expect(tagline).toHaveAttribute("data-mark", "wordmark-tagline-red-on-paper");
+      const box = await tagline.boundingBox();
+      expect(box!.width).toBeGreaterThanOrEqual(240);
+      const monograms = section.locator('[data-brand-demo="monograms"] svg[data-brand="monogram"]');
+      await expect(monograms).toHaveCount(9);
+      for (const tile of ["paper", "red", "ink"]) {
+        for (const size of [16, 32, 64]) {
+          const m = section.getByRole("img", { name: `FC monogram, ${tile} tile, ${size} px` });
+          const b = await m.boundingBox();
+          expect([b!.width, b!.height]).toEqual([size, size]);
+        }
+      }
+      const outlined = section.locator('[data-brand-demo="clear-space"] svg');
+      await expect(outlined).toHaveAttribute("data-clear-space", /^[1-9]/);
+      expect(await outlined.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("dashed");
+      await expectNoA11yViolations(page);
+    }
+  });
+
   test("is keyboard navigable with visible focus", async ({ page }) => {
     await page.goto("/design");
     await page.keyboard.press("Tab");
@@ -347,7 +387,15 @@ test.describe("design system page", () => {
     const h1 = await typeOf(page.getByRole("heading", { level: 1 }));
     expect(h1.family).toMatch(FACE.display);
     expect(h1.size).toBe(56);
-    for (const name of ["Colour roles", "Type roles", "Buttons", "Fields", "States", "Motion"]) {
+    for (const name of [
+      "Colour roles",
+      "Type roles",
+      "Brand",
+      "Buttons",
+      "Fields",
+      "States",
+      "Motion",
+    ]) {
       const t = await typeOf(page.getByRole("heading", { level: 2, name }));
       expect(t.family, name).toMatch(FACE.display);
       expect(t.size, name).toBe(36);

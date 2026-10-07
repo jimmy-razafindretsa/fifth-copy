@@ -8,7 +8,10 @@ import {
   Field,
   MotionSafe,
   Skeleton,
+  Monogram,
+  type MonogramVariant,
   Spinner,
+  Wordmark,
 } from "@/components/ui";
 import demo from "./motion-demo.module.css";
 
@@ -72,6 +75,34 @@ function Swatch({ role, chip }: { role: string; chip: string }) {
         {role}
       </code>
     </li>
+  );
+}
+
+// Each wordmark on the ground its variant names (docs/design/logo.md): paper, red, ink, in both themes.
+const PLATES = [
+  { ground: "paper", plate: "bg-band-fg", variant: "red-on-paper", label: "Red on paper" },
+  { ground: "red", plate: "bg-primary", variant: "ink-on-red", label: "Ink on red" },
+  { ground: "ink", plate: "bg-band", variant: "red-on-ink", label: "Red on ink" },
+] as const;
+const TILES: MonogramVariant[] = ["paper", "red", "ink"];
+const LADDER = [16, 32, 64] as const;
+
+function Plate({
+  ground,
+  plate,
+  children,
+}: {
+  ground: string;
+  plate: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      data-plate={ground}
+      className={`flex items-center justify-center overflow-hidden border-2 border-fg ${plate}`}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -187,6 +218,80 @@ export default function DesignPage() {
             </p>
           </TypeRole>
         </dl>
+      </section>
+
+      <section aria-labelledby="brand" className="flex flex-col gap-3">
+        <h2 id="brand" className="type-display-md">
+          Brand
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The wordmark and the FC monogram, drawn from the brand files. Each wordmark sits on the
+          ground its variant names; the monogram carries its own tile. Rules: the logo guide.
+        </p>
+        <ul data-brand-demo="wordmarks" className="grid gap-4 md:grid-cols-3">
+          {PLATES.map(({ ground, plate, variant, label }) => (
+            <li key={ground}>
+              <figure className="flex flex-col gap-2">
+                <Plate ground={ground} plate={plate}>
+                  <Wordmark
+                    variant={variant}
+                    title={`Fifth Copy wordmark, ${label.toLowerCase()}`}
+                    width={220}
+                  />
+                </Plate>
+                <figcaption className="text-sm text-fg-muted">{label}</figcaption>
+              </figure>
+            </li>
+          ))}
+        </ul>
+        <div className="grid gap-4 md:grid-cols-2">
+          <figure data-brand-demo="tagline" className="flex flex-col gap-2">
+            <Plate ground="paper" plate="bg-band-fg">
+              <Wordmark
+                variant="red-on-paper"
+                tagline
+                title="Fifth Copy, type fast, type first"
+                width={330}
+              />
+            </Plate>
+            <figcaption className="text-sm text-fg-muted">
+              With the tagline, only from 240 px wide
+            </figcaption>
+          </figure>
+          <figure data-brand-demo="clear-space" className="flex flex-col gap-2">
+            <Plate ground="paper" plate="bg-band-fg">
+              <Wordmark
+                variant="red-on-paper"
+                title="Fifth Copy wordmark with its clear space"
+                width={260}
+                className="outline-2 -outline-offset-2 outline-band outline-dashed"
+              />
+            </Plate>
+            <figcaption className="text-sm text-fg-muted">
+              Clear space: one bar height on every side
+            </figcaption>
+          </figure>
+        </div>
+        <ul data-brand-demo="monograms" className="flex flex-wrap gap-6">
+          {TILES.map((tile) => (
+            <li key={tile}>
+              <figure className="flex flex-col gap-2">
+                <div className="flex items-end gap-3">
+                  {LADDER.map((size) => (
+                    <Monogram
+                      key={size}
+                      variant={tile}
+                      size={size}
+                      clearSpace={false}
+                      title={`FC monogram, ${tile} tile, ${size} px`}
+                    />
+                  ))}
+                </div>
+                <figcaption className="text-sm text-fg-muted">Monogram, {tile} tile</figcaption>
+              </figure>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section aria-labelledby="buttons" className="flex flex-col gap-3">

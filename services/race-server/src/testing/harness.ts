@@ -26,7 +26,7 @@ export const SECRET = "race-server-test-secret-0123456789abcdef";
 export const HOST_SUB = "usr_host";
 export type Client = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 
-/** `url` is the test's `process.env.REDIS_URL` (env access stays in test files and env.ts). */
+/** `url` is the REDIS_URL the calling test file read from its environment (env access stays in test files and env.ts). */
 export async function connectRedis(url: string | undefined): Promise<Redis> {
   if (!url) throw new Error("REDIS_URL is not set: load the worktree .env (set -a; . ./.env)");
   const redis = createRedis(url);

@@ -1,4 +1,4 @@
-import type { SeedSentence } from "./generate";
+import type { SeedSentence } from "./types";
 
 /**
  * French seed sentences of the stub text provider (#199), replaced by the licence-checked corpus of

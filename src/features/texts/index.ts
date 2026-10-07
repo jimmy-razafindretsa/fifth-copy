@@ -3,4 +3,4 @@
 // server-only modules, not here.
 export { isClean } from "./profanity/is-clean";
 export { generateRaceText } from "./generate/generate";
-export type { GeneratedText, SeedSentence, TextProvider } from "./generate/generate";
+export type { GeneratedText, SeedSentence, TextProvider } from "./generate/types";

@@ -20,10 +20,11 @@ import type { Lifecycle } from "../rooms/lifecycle";
 import { createHandshakeMiddleware, type HandshakeDeps } from "./handshake";
 
 /**
- * Per-socket state: `claims` set by the handshake middleware from the verified race token, `desk`
- * once the registry seated the socket's user.
+ * Per-socket state: `claims` and `resume` (the handshake carried the user's own resume key, #178)
+ * set by the handshake middleware from the verified race token, `desk` once the registry seated the
+ * socket's user.
  */
-export type SocketData = { claims: RaceTokenClaims; desk?: number };
+export type SocketData = { claims: RaceTokenClaims; resume?: boolean; desk?: number };
 
 /** The live race behind the `keys` edge (#173): `rooms/ingest.ts` over the desks' runtime. */
 export type RacePort = {

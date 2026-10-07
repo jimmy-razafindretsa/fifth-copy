@@ -32,6 +32,7 @@ describe("@fifth-copy/engine", () => {
     "compareResults",
     "rank",
     "placeOf",
+    "traceCapOf",
   ])("re-exports %s", (name) => {
     expect(engine).toHaveProperty(name);
   });

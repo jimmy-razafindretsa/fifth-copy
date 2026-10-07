@@ -250,6 +250,12 @@ describe("storeAvatar", () => {
       expect(await files()).toEqual([`${first.version}-256.webp`, `${first.version}-64.webp`]);
     });
 
+    it("an unknown verdict is refused and writes nothing", async () => {
+      const moderator = always("maybe" as ModerationVerdict);
+      await expect(store1(await encode("png"), CROP, { moderator })).rejects.toThrow(/verdict/);
+      expect(await readdir(root)).toEqual([]);
+    });
+
     it("a moderator that throws writes nothing", async () => {
       const moderator: AvatarModerator = { check: async () => Promise.reject(new Error("boom")) };
       await expect(store1(await encode("png"), CROP, { moderator })).rejects.toThrow("boom");

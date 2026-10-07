@@ -11,11 +11,12 @@ export interface AvatarModerator {
   check(image: Buffer): Promise<ModerationResult>;
 }
 
-export type ModeratedStatus = "APPROVED" | "PENDING" | "REJECTED";
-
-/** The AvatarStatus a verdict leads to. `reject` never reaches the row of a fresh upload. */
-export function statusFor(verdict: "approve" | "flag"): "APPROVED" | "PENDING";
-export function statusFor(verdict: ModerationVerdict): ModeratedStatus;
-export function statusFor(verdict: ModerationVerdict): ModeratedStatus {
-  return verdict === "approve" ? "APPROVED" : verdict === "flag" ? "PENDING" : "REJECTED";
+/**
+ * The AvatarStatus a stored avatar gets from its verdict. `reject` is never stored (storeAvatar
+ * throws Rejected first), and anything else is a broken moderator: refuse loudly, store nothing.
+ */
+export function statusFor(verdict: "approve" | "flag"): "APPROVED" | "PENDING" {
+  if (verdict === "approve") return "APPROVED";
+  if (verdict === "flag") return "PENDING";
+  throw new Error("Avatar moderator returned an unusable verdict");
 }

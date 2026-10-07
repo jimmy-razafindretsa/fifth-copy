@@ -122,9 +122,14 @@ describe("heuristic moderator (C3, ADR 0015)", () => {
 });
 
 describe("statusFor (verdict -> AvatarStatus)", () => {
-  it("approve is APPROVED, flag is PENDING, reject is REJECTED", () => {
+  it("approve is APPROVED, flag is PENDING", () => {
     expect(statusFor("approve")).toBe("APPROVED");
     expect(statusFor("flag")).toBe("PENDING");
-    expect(statusFor("reject")).toBe("REJECTED");
+  });
+
+  it("refuses reject and any unknown verdict: nothing is ever stored with them", () => {
+    for (const verdict of ["reject", "maybe", "", undefined]) {
+      expect(() => statusFor(verdict as never)).toThrow(/verdict/);
+    }
   });
 });

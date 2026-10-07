@@ -1,0 +1,115 @@
+// Race domain (ADR 0008): the durable record of a race, owned by src/features/results.
+// The race server is database-less; the web app writes these rows through /api/internal/* (#199, #189).
+// Extension points (additive migrations, later cards): stats.prisma (PersonalBest, Achievement,
+// CharStatDaily) relates to Race.id / User.id; texts.prisma (#346) adds a Text foreign key.
+
+enum RaceLanguage {
+  FR
+  EN
+}
+
+enum RaceEndReason {
+  ALL_FINISHED
+  TIMER
+  VOID
+}
+
+/// Finish status of one desk. Mapping from the engine's PlayerStatus (@fifth-copy/engine):
+/// finished -> FINISHED, abandoned -> REASSIGNED, asleep -> ASLEEP, expired -> EXPIRED,
+/// line-cut -> LINE_CUT, typing when the race ends on TIMER -> TIMED_OUT.
+enum ResultStatus {
+  FINISHED
+  REASSIGNED
+  ASLEEP
+  EXPIRED
+  LINE_CUT
+  TIMED_OUT
+}
+
+model Race {
+  /// Supplied by the race server (uuid); no default on purpose.
+  id              String           @id
+  /// Cascade: nothing deletes a Lobby that has races today (#143 only marks CLOSED). A future card
+  /// that deletes Lobby rows must first make this `String?` with `onDelete: SetNull`, since results
+  /// outlive the 24 h lobby retention (docs/privacy/retention.md).
+  lobbyId         String
+  lobby           Lobby            @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
+  /// Exact text snapshot typed in this race.
+  textContent     String
+  textLanguage    RaceLanguage
+  textWordCount   Int
+  /// Free reference to the text source until texts.prisma (#346) adds a foreign key.
+  textSourceRef   String?
+  /// Race settings as sent on the wire (@fifth-copy/protocol), including the text type.
+  settings        Json
+  startedAt       DateTime
+  endedAt         DateTime?
+  endReason       RaceEndReason?
+  lobbySize       Int?
+  /// ENGINE_VERSION of @fifth-copy/engine (ADR 0007).
+  engineVersion   String
+  /// PROTOCOL_VERSION of @fifth-copy/protocol.
+  protocolVersion Int
+  createdAt       DateTime         @default(now())
+  results         RaceResult[]
+  keystrokes      RaceKeystrokes[]
+
+  @@index([lobbyId])
+}
+
+/// One row per desk (human or bot). Suspicious rows are stored but excluded by consumers (ADR 0008).
+model RaceResult {
+  id               String       @id @default(cuid())
+  raceId           String
+  race             Race         @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  /// Null for bots.
+  userId           String?
+  user             User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  desk             Int
+  /// Display name at race time (typist name or bot name).
+  name             String
+  isBot            Boolean
+  place            Int
+  status           ResultStatus
+  wpm              Float
+  rawWpm           Float
+  cleanWpm         Float
+  adjustedWpm      Float
+  /// 0..1, validated at the edge (zod), not by Postgres.
+  accuracy         Float
+  /// 0..1, validated at the edge (zod), not by Postgres.
+  progress         Float
+  correct          Int
+  errors           Int
+  total            Int
+  durationMs       Int
+  /// Milliseconds since GO at which the desk finished; null when it did not finish.
+  finishedAtMs     Int?
+  bonusesSent      Int
+  bonusesReceived  Int
+  bonusLog         Json
+  suspicious       Boolean      @default(false)
+  suspiciousReason String?
+  engineVersion    String
+  createdAt        DateTime     @default(now())
+
+  @@unique([raceId, desk])
+  @@index([userId])
+}
+
+/// Raw keystrokes of one human desk: gzip of the JSON Keystroke[] (@fifth-copy/engine), kept 30 days.
+model RaceKeystrokes {
+  raceId    String
+  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  desk      Int
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      Bytes
+  count     Int
+  /// Drives the 30-day purge (worker job, epic #311).
+  createdAt DateTime @default(now())
+
+  @@id([raceId, desk])
+  @@index([createdAt])
+  @@index([userId])
+}

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { contrastRatio, mixSrgb, parseHex, type Rgb } from "@/lib/color";
@@ -320,6 +320,71 @@ describe("#21 C2 font roles", () => {
     );
     expect(theme.has("--font-sans")).toBe(false);
     expect(theme.has("--font-mono")).toBe(false);
+  });
+});
+
+// Contract of #574: the web fonts are committed files loaded through next/font/local, never fetched at build.
+describe("#574 committed fonts", () => {
+  const root = process.cwd();
+  const fontsDir = path.join(root, "public/fonts");
+  const fontsTs = readFileSync(path.join(root, "src/app/fonts.ts"), "utf8");
+  const GOOGLE_LOADER = ["next", "font", "google"].join("/"); // split so this file never matches the C1 grep
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return sources(full);
+      return /\.(ts|tsx|js|jsx|mjs|cjs|css)$/.test(e.name) ? [full] : [];
+    });
+  }
+
+  it("C1 no source under src/ imports the Google font loader", () => {
+    const hits = sources(path.join(root, "src")).filter((f) =>
+      readFileSync(f, "utf8").includes(GOOGLE_LOADER),
+    );
+    expect(hits.map((f) => path.relative(root, f))).toEqual([]);
+  });
+
+  it("C1 src/app/fonts.ts loads every face from a committed woff2 under public/fonts", () => {
+    expect(fontsTs).toContain('from "next/font/local"');
+    const paths = [...fontsTs.matchAll(/path:\s*"([^"]+)"/g)].map((m) => m[1] ?? "");
+    expect(paths.length).toBeGreaterThan(0);
+    for (const p of paths) {
+      expect(p, p).toMatch(/^\.\.\/\.\.\/public\/fonts\/[a-z0-9-]+\.woff2$/);
+      expect(existsSync(path.join(root, "src/app", p)), p).toBe(true);
+    }
+    const woff2 = readdirSync(fontsDir).filter((f) => f.endsWith(".woff2"));
+    expect(woff2.sort()).toEqual([...new Set(paths.map((p) => path.basename(p)))].sort());
+  });
+
+  it("C1 every family in the components.md Fonts table has a Cyrillic-aware set of files", () => {
+    const woff2 = readdirSync(fontsDir).filter((f) => f.endsWith(".woff2"));
+    expect(woff2.some((f) => f.startsWith("oswald-") && f.endsWith("-cyrillic.woff2"))).toBe(true);
+    expect(woff2.some((f) => f.startsWith("ibm-plex-mono-") && f.endsWith("-cyrillic.woff2"))).toBe(
+      true,
+    );
+  });
+
+  it("C4 every family in the components.md Fonts table ships its files and its licence", () => {
+    const section = docs.split("## Fonts")[1]?.split("\n## ")[0] ?? "";
+    expect(section).toContain("next/font/local");
+    const families = [...section.matchAll(/^\| ([A-Z][A-Za-z0-9 ]+?) \| \d/gm)].map(
+      (m) => m[1] ?? "",
+    );
+    expect(families).toHaveLength(6);
+    const files = readdirSync(fontsDir);
+    for (const family of families) {
+      const slug = family.toLowerCase().replace(/ /g, "-");
+      expect(
+        files.filter((f) => f.startsWith(`${slug}-`) && f.endsWith(".woff2")).length,
+        family,
+      ).toBeGreaterThan(0);
+      // SIL OFL 1.1 for five families; Special Elite is Apache 2.0 (google/fonts apache/specialelite).
+      const licences = files.filter((f) => f.startsWith(`${slug}-LICENSE-`));
+      expect(licences, family).toHaveLength(1);
+      const text = readFileSync(path.join(fontsDir, licences[0] ?? ""), "utf8");
+      expect(text, family).toMatch(/SIL OPEN FONT LICENSE|Apache License/i);
+    }
   });
 });
 

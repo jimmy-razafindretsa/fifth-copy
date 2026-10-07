@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type Sharp } from "sharp";
 import { describe, expect, it } from "vitest";
 import {
   LOW_ENTROPY_BITS,
@@ -34,18 +34,18 @@ function noise(seed = 1) {
 }
 
 /** A square of `colour` covering `fraction` of the image, top-left, over `background`. */
-async function block(background: sharp.Sharp, colour: Rgb, fraction: number) {
+async function block(background: Sharp, colour: Rgb, fraction: number) {
   const side = Math.round(SIZE * Math.sqrt(fraction));
   const square = await plain(colour).resize(side, side).png().toBuffer();
   const base = await background.png().toBuffer();
   return sharp(base).composite([{ input: square, left: 0, top: 0 }]);
 }
 
-const asStored = async (image: sharp.Sharp | Promise<sharp.Sharp>) =>
+const asStored = async (image: Sharp | Promise<Sharp>) =>
   (await image).resize(SIZE, SIZE).webp({ quality: 82 }).toBuffer();
 
 describe("heuristic moderator (C3, ADR 0015)", () => {
-  const table: [string, () => sharp.Sharp | Promise<sharp.Sharp>, ModerationVerdict, ModerationReason][] = [
+  const table: [string, () => Sharp | Promise<Sharp>, ModerationVerdict, ModerationReason][] = [
     ["plain red", () => plain({ r: 255, g: 0, b: 0 }), "approve", "clear"],
     ["plain dark red", () => plain({ r: 204, g: 51, b: 51 }), "approve", "clear"],
     ["plain grey", () => plain(GREY), "approve", "clear"],

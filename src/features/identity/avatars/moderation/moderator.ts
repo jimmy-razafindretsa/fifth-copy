@@ -11,7 +11,11 @@ export interface AvatarModerator {
   check(image: Buffer): Promise<ModerationResult>;
 }
 
+export type ModeratedStatus = "APPROVED" | "PENDING" | "REJECTED";
+
 /** The AvatarStatus a verdict leads to. `reject` never reaches the row of a fresh upload. */
-export function statusFor(verdict: ModerationVerdict): "APPROVED" | "PENDING" | "REJECTED" {
+export function statusFor(verdict: "approve" | "flag"): "APPROVED" | "PENDING";
+export function statusFor(verdict: ModerationVerdict): ModeratedStatus;
+export function statusFor(verdict: ModerationVerdict): ModeratedStatus {
   return verdict === "approve" ? "APPROVED" : verdict === "flag" ? "PENDING" : "REJECTED";
 }

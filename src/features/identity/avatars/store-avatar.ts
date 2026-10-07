@@ -1,5 +1,6 @@
 import sharp, { type SharpOptions } from "sharp";
-import { BadCrop, TooLarge, TooSmall, Undecodable, WrongType } from "./errors";
+import { BadCrop, Rejected, TooLarge, TooSmall, Undecodable, WrongType } from "./errors";
+import { statusFor, type AvatarModerator } from "./moderation/moderator";
 import { sniffImageType } from "./sniff";
 import { AVATAR_SIZES, assertUserId, avatarKey, type AvatarFiles, type AvatarStore } from "./store";
 
@@ -17,16 +18,14 @@ export type Crop = { x: number; y: number; size: number };
 /** `"center"`: the largest centered square, resolved on the oriented image (OAuth import, #52). */
 export type CropRequest = Crop | "center";
 
-/** Outcome of moderation; mirrors the AvatarStatus values a fresh upload can take. */
-export type AvatarVerdict = "APPROVED" | "PENDING" | "REJECTED";
-/** Moderation hook point (#64 replaces the default); sees the 256 px output, never the original. */
-export type AvatarModerator = (input: { userId: string; image: Buffer }) => Promise<AvatarVerdict>;
-export const approveAll: AvatarModerator = async () => "APPROVED";
+/** The AvatarStatus a stored avatar can start with (ADR 0015): a rejected one is never stored. */
+export type StoredAvatarStatus = "APPROVED" | "PENDING";
 
-export type StoredAvatar = { version: number; key: string; status: AvatarVerdict };
+export type StoredAvatar = { version: number; key: string; status: StoredAvatarStatus };
 
 export type StoreAvatarOptions = {
   store?: AvatarStore;
+  /** ADR 0015; default: the moderator AVATAR_MODERATOR selects (moderation/default-moderator.ts). */
   moderator?: AvatarModerator;
   /** Persists the new key (the DB row); runs after the files are written, before old ones go. */
   commit?: (stored: StoredAvatar) => Promise<void>;
@@ -66,7 +65,13 @@ export async function storeAvatar(
   assertCrop(crop, width, height);
 
   const files = await decode(() => render(input, decoder, crop));
-  const status = await (options.moderator ?? approveAll)({ userId, image: files[256] });
+  // Moderation (ADR 0015) on our own 256 px output, before anything is written: a rejected
+  // picture leaves no file and the previous row untouched.
+  const moderator =
+    options.moderator ?? (await import("./moderation/default-moderator")).avatarModerator();
+  const { verdict } = await moderator.check(files[256]);
+  if (verdict === "reject") throw new Rejected();
+  const status = statusFor(verdict);
 
   const store = options.store ?? (await import("./default-store")).avatarStore;
   const version = (options.now ?? Date.now)();

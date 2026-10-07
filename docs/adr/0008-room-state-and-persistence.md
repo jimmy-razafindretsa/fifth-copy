@@ -12,6 +12,7 @@ rule: Anything that must survive a restart or feed statistics is written to Post
 
 ## Context
 Spec section 16.2 puts room state, presence, reconnection tokens, host transfer and single-use links in Redis; section 16.4 lists the durable tables and asks for raw keystrokes with short retention rolled up into daily per-character stats. The race server is a separate process (ADR 0006) and the kit allows Prisma only in `src/server/**` and feature `queries/actions` (ADR 0002). Board cards #150, #151, #188, #189, #312, #314, #315, #339 depend on this choice.
+#188 lands the first `race.prisma` migration (`race_domain`: `Race`, `RaceResult`, `RaceKeystrokes`) under this decision; it changes no decision here.
 
 ## Decision
 ### Ownership

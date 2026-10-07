@@ -26,4 +26,4 @@ export { accuracy, elapsedFor, progress, rawWpm, wpm } from "./scoring/scoring";
 export { compareResults, placeOf, rank, type Rankable } from "./ranking/compare";
 
 /** Bumped whenever scoring, ranking or text handling changes. Stored on every race result. */
-export const ENGINE_VERSION = "0.3.0";
+export const ENGINE_VERSION = "0.3.1";

@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PROTOCOL_VERSION, roomCodeSchema, type Roster, type Welcome } from "@fifth-copy/protocol";
+import {
+  DEFAULT_RACE_SETTINGS,
+  PROTOCOL_VERSION,
+  roomCodeSchema,
+  type Roster,
+  type Welcome,
+} from "@fifth-copy/protocol";
 import { connectToRoom, type IoFactory } from "./socket";
 
 type Listener = (...args: unknown[]) => void;
@@ -44,6 +50,7 @@ const welcome: Welcome = {
   you: 1,
   room: { code: roomCodeSchema.parse("KGB-4821"), phase: "waiting" },
   members: [member],
+  settings: DEFAULT_RACE_SETTINGS,
 };
 const roster: Roster = { v: PROTOCOL_VERSION, members: [member] };
 

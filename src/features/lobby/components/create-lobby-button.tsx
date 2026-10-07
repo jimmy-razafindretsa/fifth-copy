@@ -14,7 +14,9 @@ export function makeCreateAction(navigate: (href: string) => void) {
   return async function create(): Promise<CreateState> {
     try {
       const result = await createLobby();
-      if (!result.ok) return { error: result.error };
+      // invalid-settings cannot come from this fixed call: no catalog line of its own.
+      if (!result.ok)
+        return { error: result.error === "invalid-settings" ? "generic" : result.error };
       navigate(`/lobby/${result.code}`);
       return { error: null };
     } catch {

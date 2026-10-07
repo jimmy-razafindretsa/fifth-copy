@@ -66,13 +66,14 @@ describe.skipIf(!testDatabaseUrl)(
     });
 
     it("seedIdentity is idempotent and creates one guest", async () => {
+      // Scoped to the row the seed owns: other DB test files insert users in
+      // parallel against the same TEST_DATABASE_URL, so a global count races.
+      const seeded = { typistName: SEED_GUEST_TYPIST_NAME };
+      const first = await seedIdentity(db);
       await seedIdentity(db);
-      const after1 = await db.user.count();
-      await seedIdentity(db);
-      expect(await db.user.count()).toBe(after1);
-      const guest = await db.user.findUniqueOrThrow({
-        where: { typistName: SEED_GUEST_TYPIST_NAME },
-      });
+      expect(await db.user.count({ where: seeded })).toBe(1);
+      const guest = await db.user.findUniqueOrThrow({ where: seeded });
+      expect(guest.id).toBe(first.id);
       expect(guest.isGuest).toBe(true);
     });
   },

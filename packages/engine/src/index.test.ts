@@ -9,8 +9,8 @@ describe("@fifth-copy/engine", () => {
     expect(ENGINE_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it("is at 0.2.0 (text and reducers landed)", () => {
-    expect(ENGINE_VERSION).toBe("0.2.0");
+  it("is at 0.3.0 (text, reducers, scoring and ranking landed)", () => {
+    expect(ENGINE_VERSION).toBe("0.3.0");
   });
 
   it.each([
@@ -24,6 +24,14 @@ describe("@fifth-copy/engine", () => {
     "continueMode",
     "blockMode",
     "backspace",
+    "wpm",
+    "rawWpm",
+    "accuracy",
+    "progress",
+    "elapsedFor",
+    "compareResults",
+    "rank",
+    "placeOf",
   ])("re-exports %s", (name) => {
     expect(engine).toHaveProperty(name);
   });

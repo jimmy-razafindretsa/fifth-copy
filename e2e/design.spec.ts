@@ -28,6 +28,56 @@ const FACE = {
   device: /VT323/i,
 } as const;
 
+type Page = import("@playwright/test").Page;
+
+/** The computed value of `prop` for `var(--color-<role>)`, read from a probe so mixes serialize alike. */
+async function roleValue(
+  page: Page,
+  role: string,
+  prop: "backgroundColor" | "color" | "borderTopColor",
+) {
+  return page.evaluate(
+    ([r, p]) => {
+      const probe = document.createElement("div");
+      probe.style.borderStyle = "solid";
+      probe.style[p as "color"] = `var(--color-${r})`;
+      document.body.append(probe);
+      const v = getComputedStyle(probe)[p as "color"];
+      probe.remove();
+      return v;
+    },
+    [role, prop] as const,
+  );
+}
+
+/** The printed-look properties of the first element of `locator` (#15). */
+async function lookOf(locator: Locator) {
+  return locator.first().evaluate((el) => {
+    const s = getComputedStyle(el);
+    return {
+      bg: s.backgroundColor,
+      bgImage: s.backgroundImage,
+      color: s.color,
+      border: [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth],
+      borderStyle: s.borderTopStyle,
+      borderColor: s.borderTopColor,
+      borderLeftColor: s.borderLeftColor,
+      radius: s.borderTopLeftRadius,
+      shadow: s.boxShadow,
+      decoration: s.textDecorationLine,
+      translate: s.translate,
+      transform: s.transform,
+      animation: s.animationName,
+      outlineStyle: s.outlineStyle,
+      outlineWidth: s.outlineWidth,
+      outlineColor: s.outlineColor,
+    };
+  });
+}
+
+const TWO = ["2px", "2px", "2px", "2px"];
+const NONE = ["0px", "0px", "0px", "0px"];
+
 const MAJOR =
   "At dawn, the Major pins a medal on the fastest typist. The slowest is sent to sort files in the basement.";
 
@@ -318,6 +368,161 @@ test.describe("design system page", () => {
       await expect(page).toHaveScreenshot(`design-${scheme}.png`, {
         fullPage: true,
         mask: [page.getByRole("status", { name: "Loading" })],
+      });
+    });
+  }
+});
+
+test.describe("#15 printed look", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test.describe(scheme, () => {
+      test.beforeEach(async ({ page }) => {
+        // reduced motion zeroes the transition tokens, so hover and active read their final colours
+        await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+        await page.goto("/design");
+      });
+
+      test("C13 C15 button variants: fills, 2px ink rules, no radius, no shadow, pressed = banner", async ({
+        page,
+      }) => {
+        const role = (
+          r: string,
+          p: "backgroundColor" | "color" | "borderTopColor" = "backgroundColor",
+        ) => roleValue(page, r, p);
+        const btn = (name: string) => page.getByRole("button", { name, exact: true });
+        const fg = await role("fg", "color");
+        const transparent = "rgba(0, 0, 0, 0)";
+
+        const primary = await lookOf(btn("Primary"));
+        expect(primary.bg).toBe(await role("primary"));
+        expect(primary.color).toBe(await role("primary-fg", "color"));
+        expect(primary.border).toEqual(TWO);
+        expect(primary.borderStyle).toBe("solid");
+        expect(primary.borderColor).toBe(fg);
+
+        const secondary = await lookOf(btn("Secondary"));
+        expect(secondary.bg).toBe(transparent);
+        expect(secondary.color).toBe(fg);
+        expect(secondary.border).toEqual(TWO);
+        expect(secondary.borderColor).toBe(fg);
+
+        const ghost = await lookOf(btn("Ghost"));
+        expect(ghost.bg).toBe(transparent);
+        expect(ghost.color).toBe(fg);
+        expect(ghost.border).toEqual(NONE);
+        expect(ghost.decoration).toBe("none");
+
+        const danger = await lookOf(btn("Danger"));
+        expect(danger.bg).toBe(await role("pressed"));
+        expect(danger.bg).not.toBe(primary.bg);
+        expect(danger.color).toBe(await role("primary-fg", "color"));
+        expect(danger.border).toEqual(TWO);
+        expect(danger.borderColor).toBe(fg);
+
+        for (const name of ["Primary", "Secondary", "Ghost", "Danger", "Small", "Large"]) {
+          const look = await lookOf(btn(name));
+          expect(look.radius, name).toBe("0px");
+          expect(look.shadow, name).toBe("none");
+        }
+
+        await btn("Primary").hover();
+        expect((await lookOf(btn("Primary"))).bg).toBe(await role("primary-hover"));
+        expect((await lookOf(btn("Primary"))).shadow).toBe("none");
+        await btn("Secondary").hover();
+        expect((await lookOf(btn("Secondary"))).bg).toBe(await role("surface"));
+        await btn("Ghost").hover();
+        expect((await lookOf(btn("Ghost"))).decoration).toBe("underline");
+
+        await btn("Primary").hover();
+        await page.mouse.down();
+        const pressed = await lookOf(btn("Primary"));
+        await page.mouse.up();
+        expect(pressed.bg).toBe(await role("pressed"));
+        expect(pressed.translate).toBe("0px 1px");
+        expect(pressed.shadow).toBe("none");
+      });
+
+      test("C13 C16 card, field, alert, skeleton and empty state", async ({ page }) => {
+        const role = (
+          r: string,
+          p: "backgroundColor" | "color" | "borderTopColor" = "backgroundColor",
+        ) => roleValue(page, r, p);
+        const fg = await role("fg", "color");
+
+        const card = await lookOf(
+          page.getByRole("heading", { level: 3, name: "Loading" }).locator(".."),
+        );
+        expect(card.bg).toBe(await role("surface"));
+        expect(card.border).toEqual(TWO);
+        expect(card.borderStyle).toBe("solid");
+        expect(card.borderColor).toBe(fg);
+        expect(card.radius).toBe("0px");
+        expect(card.shadow).toBe("none");
+
+        const email = await lookOf(page.getByRole("textbox", { name: "Email" }));
+        expect(email.bg).toBe(await role("bg"));
+        expect(email.border).toEqual(TWO);
+        expect(email.borderStyle).toBe("solid");
+        expect(email.borderColor).toBe(fg);
+        expect(email.radius).toBe("0px");
+        expect(email.shadow).toBe("none");
+        const invalid = await lookOf(page.getByRole("textbox", { name: "Name" }));
+        expect(invalid.border).toEqual(TWO);
+        expect(invalid.borderColor).toBe(await role("danger", "borderTopColor"));
+
+        for (const [locator, tone] of [
+          [page.getByRole("alert").filter({ hasText: "Could not save" }), "danger-surface"],
+          [page.getByRole("status").filter({ hasText: "Saved" }), "success-surface"],
+          [page.getByRole("status").filter({ hasText: "Heads up" }), "surface-muted"],
+        ] as const) {
+          const alert = await lookOf(locator);
+          expect(alert.bg, tone).toBe(await role(tone));
+          expect(alert.border, tone).toEqual(TWO);
+          expect(alert.borderStyle, tone).toBe("solid");
+          expect(alert.borderColor, tone).toBe(fg);
+          expect(alert.borderLeftColor, `${tone}: no left rule`).toBe(fg);
+          expect(alert.radius, tone).toBe("0px");
+          expect(alert.shadow, tone).toBe("none");
+        }
+
+        const skeleton = await lookOf(
+          page.locator('[aria-label="Loading items"] > div[aria-hidden="true"]'),
+        );
+        expect(skeleton.bg).toBe(await role("surface-muted"));
+        expect(skeleton.bgImage).toBe("none");
+        expect(skeleton.animation).toBe("none");
+        expect(skeleton.radius).toBe("0px");
+
+        const title = page.getByText("No items yet", { exact: true });
+        const empty = await lookOf(title.locator(".."));
+        expect(empty.border).toEqual(TWO);
+        expect(empty.borderStyle).toBe("dashed");
+        expect(empty.borderColor).toBe(await role("border", "borderTopColor"));
+        expect(empty.radius).toBe("0px");
+        expect((await lookOf(title)).color).toBe(fg);
+        expect(
+          (await lookOf(page.getByText("Items you create appear here.", { exact: true }))).color,
+        ).toBe(await role("fg-muted", "color"));
+      });
+
+      test("C17 every interactive primitive shows a 2px focus outline in the focus role", async ({
+        page,
+      }) => {
+        const focus = await roleValue(page, "focus", "color");
+        const names: string[] = [];
+        for (let i = 0; i < 10; i++) {
+          await page.keyboard.press("Tab");
+          const el = page.locator(":focus-visible");
+          const look = await lookOf(el);
+          const name = await el.evaluate(
+            (n) => n.getAttribute("aria-label") ?? n.textContent ?? n.id,
+          );
+          names.push(name);
+          expect(look.outlineStyle, name).toBe("solid");
+          expect(look.outlineWidth, name).toBe("2px");
+          expect(look.outlineColor, name).toBe(focus);
+        }
+        expect(names.slice(0, 4)).toEqual(["Primary", "Secondary", "Ghost", "Danger"]);
       });
     });
   }

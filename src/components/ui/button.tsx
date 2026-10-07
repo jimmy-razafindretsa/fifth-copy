@@ -2,11 +2,14 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 import { Spinner } from "./spinner";
 
+// Printed look (#15, bible 7.1 label-button family): flat fills, 2px ink rules, no radius, no shadow;
+// pressed = banner fill and the label 1px down. Ghost is the link-like extension (bible 7.1, #15).
 const variants = {
-  primary: "bg-primary text-primary-fg hover:bg-primary-hover",
-  secondary: "bg-surface text-fg border border-border hover:bg-surface-muted",
-  ghost: "bg-transparent text-fg hover:bg-surface-muted",
-  danger: "bg-pressed text-primary-fg hover:opacity-90",
+  primary:
+    "border-2 border-fg bg-primary text-primary-fg enabled:hover:bg-primary-hover enabled:active:bg-pressed",
+  secondary: "border-2 border-fg bg-transparent text-fg enabled:hover:bg-surface",
+  ghost: "border-0 bg-transparent text-fg underline-offset-4 enabled:hover:underline",
+  danger: "border-2 border-fg bg-pressed text-primary-fg",
 } as const;
 
 // Labels are the type-label role (bible 7.1 label buttons: Oswald 600, caps); size sets only the size.
@@ -39,7 +42,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "type-label inline-flex items-center justify-center rounded-md transition-colors",
+        "type-label inline-flex items-center justify-center transition-colors enabled:active:translate-y-px",
         "disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],

@@ -200,6 +200,15 @@ describe("grace expiry (C3)", () => {
     await tick(b, host);
     expect(lastRow(host, cut.desk)).toEqual([cut.desk, 3, 3, 0, PLAYER_STATUS_CODES.expired]);
     expect(await redis.exists(resumeKey(key))).toBe(0);
+    // Coming back with the old key after expiry: welcomed with the outcome, no resume.
+    const late = watchRace(b.connect({ v: PROTOCOL_VERSION, token: cut.token, resumeKey: key }));
+    await until(() => !!late.welcome, 2_000, "late welcome");
+    expect(late.welcome).toMatchObject({
+      you: cut.desk,
+      room: { phase: "running" },
+      state: { status: "expired", cursor: 3 },
+    });
+    expect(kinds(host.seen.events, "resumed")).toHaveLength(0);
 
     await advance(b, 180_000 - GRACE_MS);
     await until(() => host.seen.ended.length === 1, 2_000, "ended");

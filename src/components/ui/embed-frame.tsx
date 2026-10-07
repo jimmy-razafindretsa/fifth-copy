@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type Ref } from "react";
+import { useCallback, useRef, type Ref } from "react";
 import { cn } from "@/lib/cn";
 import styles from "./embed-frame.module.css";
+import { useNearViewport } from "./use-near-viewport";
 
 type Props = {
   src: string;
@@ -13,16 +14,14 @@ type Props = {
   ref?: Ref<HTMLIFrameElement>;
 };
 
-const NEAR_VIEWPORT = "320px";
-
 /**
  * A reference 3D page in an iframe (design bible 9, 16), mounted only once it comes near the viewport so
  * the page's first paint never waits for three.js; `loading="lazy"` covers browsers that skip the
  * observer. Pair it with `useEmbedBridge` for the postMessage protocol (bible 15).
  */
 export function EmbedFrame({ src, title, className, decorative = false, ref }: Props) {
-  const [near, setNear] = useState(false);
   const inner = useRef<HTMLIFrameElement | null>(null);
+  const near = useNearViewport(inner);
 
   const setRef = useCallback(
     (node: HTMLIFrameElement | null) => {
@@ -32,27 +31,6 @@ export function EmbedFrame({ src, title, className, decorative = false, ref }: P
     },
     [ref],
   );
-
-  useEffect(() => {
-    const node = inner.current;
-    if (!node) return;
-    if (typeof IntersectionObserver === "undefined") {
-      // no observer support: mount at once by writing the attribute the render would set
-      node.src = src;
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setNear(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: NEAR_VIEWPORT },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [src]);
 
   return (
     <iframe

@@ -37,19 +37,22 @@ const overflow = (page: Page) =>
 /** Server-action re-renders on a loaded dev server take a few seconds. */
 const AFTER_ACTION = { timeout: 20_000 };
 
+/** The live feed's recorded loop (#552). */
+const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']");
+
 /**
- * Loads the landing and waits for hydration: the live-feed frame mounts its embed from an effect, so
- * `data-embed="mounted"` means the client tree is interactive (controlled inputs keep what is typed).
+ * Loads the landing and waits for hydration: the live-feed video leaves `data-feed="idle"` only on the
+ * client, so `armed` or `near` means the tree is interactive (controlled inputs keep what is typed).
  */
 async function ready(page: Page) {
   await page.goto("/");
-  await expect(page.locator("iframe").first()).toHaveAttribute("data-embed", "mounted", {
+  await expect(feedVideo(page)).toHaveAttribute("data-feed", /^(armed|near)$/, {
     timeout: 30_000,
   });
 }
 
 test.describe("landing page (#497)", () => {
-  // three WebGL embeds per page: give parallel workers room (CI runs `next start`, dev is slower)
+  // two WebGL embeds and a video per page: give parallel workers room (CI runs `next start`, dev is slower)
   test.beforeEach(() => test.slow());
 
   test("C1 the bible's sections in order, one h1 and the section headings", async ({ page }) => {
@@ -198,9 +201,7 @@ test.describe("landing page (#497)", () => {
     page,
   }) => {
     await ready(page);
-    const aside = hero(page)
-      .locator("iframe[aria-hidden='true']")
-      .locator("xpath=ancestor::div[2]");
+    const aside = feedVideo(page).locator("xpath=ancestor::div[2]");
     await expect(aside.getByText("LIVE", { exact: true })).toBeVisible();
     const chip = aside.getByText(/^ROOM \d{3} · \d\d:\d\d:\d\d$/);
     await expect(chip).toBeVisible();
@@ -229,9 +230,8 @@ test.describe("landing page (#497)", () => {
     const stamp = aside.locator("[aria-hidden='true']").filter({ hasText: `ROOM ${room}` });
     await expect(stamp).toContainText("30 SEATS");
     expect(await stamp.evaluate((el) => getComputedStyle(el).animationName)).toMatch(/fcBob$/);
-    const frame = hero(page).locator("iframe");
-    await expect(frame).toHaveAttribute("title", "Live render of the ring room");
-    await expect(frame).toHaveAttribute("src", "/3d/lobby.html?embed=1");
+    // #552: the feed is a recorded loop, no longer the lobby embed
+    await expect(hero(page).locator("iframe")).toHaveCount(0);
   });
 
   test("C7 the three embeds are the bible's reference pages, served locally and mounted lazily", async ({
@@ -240,18 +240,18 @@ test.describe("landing page (#497)", () => {
   }) => {
     await ready(page);
     const frames = page.locator("iframe");
-    await expect(frames).toHaveCount(3);
+    // the live feed is a recorded loop since #552; lobby.html stays served for the lobby scene
+    await expect(frames).toHaveCount(2);
     const titles = await frames.evaluateAll((els) => els.map((el) => el.getAttribute("title")));
     expect(titles).toEqual([
-      "Live render of the ring room",
       "Your clerk, a randomly issued 3D character",
       "3D medal you can earn, drag to spin",
     ]);
     // below the fold: not mounted until scrolled near
-    await expect(frames.nth(2)).toHaveAttribute("data-embed", "idle");
-    await frames.nth(2).scrollIntoViewIfNeeded();
-    await expect(frames.nth(2)).toHaveAttribute("data-embed", "mounted", AFTER_ACTION);
-    await expect(frames.nth(2)).toHaveAttribute("src", "/3d/medal.html");
+    await expect(frames.nth(1)).toHaveAttribute("data-embed", "idle");
+    await frames.nth(1).scrollIntoViewIfNeeded();
+    await expect(frames.nth(1)).toHaveAttribute("data-embed", "mounted", AFTER_ACTION);
+    await expect(frames.nth(1)).toHaveAttribute("src", "/3d/medal.html");
     for (const path of ["/3d/lobby.html", "/3d/clerk.html", "/3d/medal.html"]) {
       const res = await request.get(path);
       expect(res.status(), path).toBe(200);
@@ -401,6 +401,140 @@ test.describe("landing page (#497)", () => {
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
   }
+});
+
+// Contract of #552: the live feed plays a recorded loop of the ring room instead of the 3D embed
+// (bible 7.8, 14.1 item 2). Media fetches use Range requests, so requests are counted by distinct URL.
+const isClip = (url: string) =>
+  /\/media\/live-feed\/[a-z]+\.(mp4|webm)$/.test(new URL(url).pathname);
+
+function clipRequests(page: Page): Set<string> {
+  const urls = new Set<string>();
+  page.on("request", (req) => {
+    if (isClip(req.url())) urls.add(new URL(req.url()).pathname);
+  });
+  return urls;
+}
+
+const media = (page: Page) =>
+  feedVideo(page).evaluate((v: HTMLVideoElement) => ({
+    paused: v.paused,
+    muted: v.muted,
+    time: v.currentTime,
+    readyState: v.readyState,
+    src: v.currentSrc,
+  }));
+
+/** After hydration (`ready`), sets the motion attribute like the settings card will (#28). */
+async function reduceByAttribute(page: Page) {
+  await page.evaluate(() => document.documentElement.setAttribute("data-motion", "reduce"));
+}
+
+test.describe("landing live feed video (#552)", () => {
+  test.beforeEach(() => test.slow());
+
+  test("C1 live feed video: a decorative muted inline loop with MP4 and WebM sources and a poster, no lobby embed", async ({
+    page,
+  }) => {
+    const lobby: string[] = [];
+    page.on("request", (req) => {
+      if (new URL(req.url()).pathname.startsWith("/3d/lobby.html")) lobby.push(req.url());
+    });
+    await ready(page);
+    const video = feedVideo(page);
+    await expect(video).toHaveCount(1);
+    await video.scrollIntoViewIfNeeded();
+    await expect(video).toHaveAttribute("data-feed", "near", AFTER_ACTION);
+    await expect(video).toHaveAttribute("loop", "");
+    await expect(video).toHaveAttribute("playsinline", "");
+    await expect(video).toHaveAttribute("aria-hidden", "true");
+    await expect(video).toHaveAttribute("poster", "/media/live-feed/poster.webp");
+    await expect(video).not.toHaveAttribute("controls");
+    await expect(video).not.toHaveAttribute("autoplay");
+    await expect.poll(async () => (await media(page)).muted).toBe(true);
+    const sources = await video
+      .locator("source")
+      .evaluateAll((els) => els.map((el) => [el.getAttribute("src"), el.getAttribute("type")]));
+    expect(sources).toEqual([
+      ["/media/live-feed/auto.mp4", 'video/mp4; codecs="avc1.42E01E"'],
+      ["/media/live-feed/auto.webm", 'video/webm; codecs="vp9"'],
+    ]);
+    expect((await page.request.get("/media/live-feed/poster.webp")).status()).toBe(200);
+    // the whole page, every lazy embed included, never asks for the lobby scene
+    await page.locator("footer").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1000);
+    expect(lobby).toEqual([]);
+    await expect(page.locator("iframe[src*='lobby']")).toHaveCount(0);
+  });
+
+  test("C2 live feed video: nothing loads until near the viewport, then only the selected view's loop", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 480 });
+    const clips = clipRequests(page);
+    await ready(page);
+    const video = feedVideo(page);
+    await expect(video).toHaveAttribute("data-feed", "armed");
+    await page.waitForTimeout(1000);
+    expect([...clips]).toEqual([]);
+    await expect(video.locator("source")).toHaveCount(0);
+    await video.scrollIntoViewIfNeeded();
+    await expect(video).toHaveAttribute("data-feed", "near", AFTER_ACTION);
+    await expect.poll(() => clips.size, AFTER_ACTION).toBe(1);
+    expect([...clips][0]).toMatch(/^\/media\/live-feed\/auto\.(mp4|webm)$/);
+    await page.waitForTimeout(1000);
+    expect(clips.size).toBe(1);
+    await page
+      .getByRole("group", { name: "Camera" })
+      .getByRole("button", { name: "FIRST PERSON" })
+      .click();
+    await expect.poll(() => clips.size, AFTER_ACTION).toBe(2);
+    expect([...clips][1]).toMatch(/^\/media\/live-feed\/pov\.(mp4|webm)$/);
+    await expect.poll(async () => (await media(page)).src).toMatch(/\/pov\.(mp4|webm)$/);
+  });
+
+  test("C4 live feed video: under reduced motion it never plays and shows the poster", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const clips = clipRequests(page);
+    await ready(page);
+    const video = feedVideo(page);
+    await video.scrollIntoViewIfNeeded();
+    await expect(video).toHaveAttribute("data-feed", "near", AFTER_ACTION);
+    await page.waitForTimeout(1500);
+    const m = await media(page);
+    expect(m.paused).toBe(true);
+    expect(m.time).toBe(0);
+    expect(m.readyState).toBe(0); // no frame decoded: the poster is what shows
+    await expect(video).toHaveAttribute("poster", "/media/live-feed/poster.webp");
+    expect([...clips]).toEqual([]);
+  });
+
+  test("C4 live feed video: data-motion=reduce set after hydration stops it back on the poster", async ({
+    page,
+  }) => {
+    await ready(page);
+    const video = feedVideo(page);
+    await video.scrollIntoViewIfNeeded();
+    await expect.poll(async () => (await media(page)).paused, AFTER_ACTION).toBe(false);
+    await reduceByAttribute(page);
+    await expect.poll(async () => (await media(page)).paused).toBe(true);
+    await expect.poll(async () => (await media(page)).readyState).toBe(0);
+    expect((await media(page)).time).toBe(0);
+  });
+
+  test("C5 live feed video: pauses off screen and plays again on return", async ({ page }) => {
+    await ready(page);
+    const video = feedVideo(page);
+    await video.scrollIntoViewIfNeeded();
+    await expect.poll(async () => (await media(page)).paused, AFTER_ACTION).toBe(false);
+    await page.locator("footer").scrollIntoViewIfNeeded();
+    // scrolling mounts the clerk and medal embeds: give the observer room on a loaded machine
+    await expect.poll(async () => (await media(page)).paused, AFTER_ACTION).toBe(true);
+    await video.scrollIntoViewIfNeeded();
+    await expect.poll(async () => (await media(page)).paused, AFTER_ACTION).toBe(false);
+  });
 });
 
 // Contract of #99: the lobby entries in the hero actions row (bible 7.1, 7.2, 7.4).

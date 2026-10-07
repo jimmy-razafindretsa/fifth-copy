@@ -332,8 +332,9 @@
   background: var(--color-band);
 }
 
-.feedEmbed {
-  pointer-events: none;
+.feedVideo {
+  position: absolute;
+  inset: 0;
   background: var(--color-band);
 }
 

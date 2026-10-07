@@ -31,7 +31,12 @@ describe("LiveFeed", () => {
     expect(html).toContain("FREE VIEW");
     expect(html).toContain("FIRST PERSON");
     expect(html).toContain("ROOM 457<br/>30 SEATS");
-    expect(html).toMatch(/<iframe[^>]*aria-hidden="true"/);
+    // #552: a recorded loop, not the 3D embed; the server renders its poster only
+    expect(html).toMatch(
+      /<video[^>]*poster="\/media\/live-feed\/poster.webp"[^>]*aria-hidden="true"/,
+    );
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("/3d/lobby.html");
   });
 });
 

@@ -3,6 +3,7 @@ import {
   describeFailure,
   isBenignEmbedAbort,
   isBenignFlightAbort,
+  isBenignMediaAbort,
   watchPage,
   type FailedRequest,
 } from "./fixtures";
@@ -67,6 +68,22 @@ test.describe("failed-request guard (#519)", () => {
   ] as const) {
     test(`flags ${name} as an embed abort`, () => {
       expect(isBenignEmbedAbort({ ...embedAbort, ...change })).toBe(false);
+    });
+  }
+
+  // #552: a <video> cancels its own Range requests (pause off screen, view swap, reduced motion)
+  const mediaAbort: FailedRequest = { ...embedAbort, path: "/media/live-feed/auto.mp4" };
+  test("exempts an aborted GET of a live feed clip", () => {
+    expect(isBenignMediaAbort(mediaAbort)).toBe(true);
+    expect(isBenignEmbedAbort(mediaAbort)).toBe(false);
+  });
+  for (const [name, change] of [
+    ["another path", { path: "/media/other.mp4" }],
+    ["another network error", { errorText: "net::ERR_FAILED" }],
+    ["a POST", { method: "POST" }],
+  ] as const) {
+    test(`flags ${name} as a media abort`, () => {
+      expect(isBenignMediaAbort({ ...mediaAbort, ...change })).toBe(false);
     });
   }
 

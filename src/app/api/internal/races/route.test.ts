@@ -178,6 +178,46 @@ describe.skipIf(!testDatabaseUrl)(
       expect(await rows()).toBe(0);
     });
 
+    it("ids with control characters are bad-body and create no row", async () => {
+      const cases = [
+        request({ lobbyId: "lob\u0000x" }),
+        request({ hostUserId: "usr\u0007" }),
+        request({ desks: [{ desk: 1, userId: "usr\u001b[2J", name: "Ada", isBot: false }] }),
+      ];
+      for (const body of cases) {
+        const res = await signed(body);
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({ v: PROTOCOL_VERSION, error: "bad-body" });
+      }
+      expect(await rows()).toBe(0);
+    });
+
+    it("an unexpected failure answers a bare 500 with no detail", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const real = state.db;
+      state.db = new Proxy(
+        {},
+        {
+          get: () => ({
+            findUnique: async () => {
+              throw new Error("db exploded: secret detail");
+            },
+          }),
+        },
+      );
+      try {
+        const res = await signed(request());
+        expect(res.status).toBe(500);
+        expect(await res.text()).toBe("");
+        for (const call of vi.mocked(console.error).mock.calls) {
+          expect(JSON.stringify(call)).not.toContain("secret detail");
+        }
+      } finally {
+        state.db = real;
+        vi.restoreAllMocks();
+      }
+    });
+
     it("C2: a raceId already started in another lobby is a conflict and keeps the row", async () => {
       const body = request();
       expect((await signed(body)).status).toBe(200);

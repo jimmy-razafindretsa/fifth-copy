@@ -168,8 +168,13 @@ Rules: no recolouring the bar violet or gold, never straighten it, and keep clea
 | **Stars** | `clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)`, slowly spinning (`fcSpin` 14–90s) | scattered: red, ink, gold, and big faint (`rgba(...,.08–.14)`) 150–180px stars behind sections. 2–4 per section, never over text |
 | **Scanlines** | `repeating-linear-gradient(0deg, rgba(42,36,32,.12) 0 1px, transparent 1px 3px)` multiply | on live camera feeds |
 | **Parallelogram frame** | `clip-path: polygon(12% 0,100% 0,100% 100%,0 100%)` | hero live feed |
+| **Steep band** (extension, #25) | flat agit-red (or banner) strip rotated **30–45°** (default 38°, from the print page bands at 36° / −38°, 16), clipped by its box; a level label rides on a tag of the same fill | constructivist section accents; the 8° band and the ticker skew stay as above |
+| **Misregistration** (extension, #25) | `text-shadow: 1px 1px 0 agit-red` under a stencil display title, no extra DOM, no animation; same red in both themes (3.2) | display titles only |
+| **Device glow** (extension, #25) | `text-shadow: 0 0 6px currentColor` in the phosphor or nixie colour, only inside a device bezel (backroom-grey 2px frame, press-ink interior) | nixie tubes and CRT screens only (0); nowhere else |
 
 **Do not** use generic gradients, glassmorphism, rounded pill cards, emoji or drop-shadow blur. Shadows are **hard print offsets** only.
+
+Textures are opt-in, never on the page body (14 paints a flat paper body). Under `prefers-contrast: more` the halftones and sun rays paint nothing (the ground stays flat); misregistration and device glow stay (extension, #25, from the reduced-motion pattern of 8). Implementation: `docs/design/components.md` "Printed motifs".
 
 ---
 

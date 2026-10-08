@@ -119,7 +119,21 @@ Design bible 0 ("printed, not glowing"), 6, 7 and 17, applied to every primitive
 - **Radius**: none (7.4 "no radius", 6 and 17 "no rounded pill cards"); `--radius-full` stays for the spinner and dots.
 - **Pressed**: banner fill (`pressed`) with the label translated 1px down; hover on red = `primary-hover`.
 - **Fills**: flat roles, no gradients, no shimmer.
-- **Glow**: only inside devices (phosphor, nixie), never on a primitive.
+- **Glow**: only inside devices (phosphor, nixie): the `Device` bezel and its scoped utilities ("Printed motifs"), never on another primitive.
+
+## Printed motifs
+Design bible 0 ("printed, not glowing"), 6 and 17 (#25). Motifs are opt-in utilities in `docs/design/tokens.css` and two primitives; screens never hand-write a recipe (a new motif = a new `@utility` plus a bible 6 row). Specimen: `/design` "Printed motifs".
+| Motif | Utility / component | Recipe (through roles) | Where (bible 6) | Never |
+|---|---|---|---|---|
+| Halftone dots | `paper-grain` | `radial-gradient(color-mix(fg 13%) 1.3px, transparent 1.7px)` at `10px 10px` | hero ground, locker left panel | on `body` or app-wide (bible 14 paints a flat paper body) |
+| Red halftone on red | `paper-grain-red` on a `bg-primary` ground | `radial-gradient(color-mix(primary-hover 75%) 1.6px, transparent 2.1px)` at `11px 11px` | final-call band | on paper or ink grounds |
+| Sun rays | `sun-rays` | `repeating-conic-gradient(from 0deg at 50% 92%, color-mix(primary 9%) 0deg 6deg, transparent 6deg 12deg)` | only behind a character stage (your-clerk stage, locker interior) | as a free ornament or a sunburst component (bible 17) |
+| Ink misregistration | `ink-misregister` on a `type-display-*` element | `text-shadow: 1px 1px 0 var(--color-primary)`, no extra DOM, no animation; same red in both themes (bible 3.2) | display titles | on body copy, labels or text to type |
+| Steep band | `Band` | flat `primary` or `pressed` strip rotated 30-45 degrees (default 38) | constructivist sections (print page bands, bible 16) | outside 30-45 degrees (the hero 8 degree gradient band and the ticker skew stay local to the landing) |
+| Device glow | `device-phosphor`, `device-nixie` | `color` the device role, `text-shadow: 0 0 6px currentColor` | only on or inside `[data-device]` (the `Device` bezel); outside it the class sets nothing | glow on any primitive, text or icon outside a device (bible 0) |
+| Stars | `Star` (Primitives) | bible 6 clip-path | 2-4 per section, never over text | a second star component |
+
+Rules: the patterns are background layers over the element's own ground (they never take a pointer event and never replace the ground colour); under `prefers-contrast: more` `paper-grain`, `paper-grain-red` and `sun-rays` paint nothing, the misregistration and the device glow stay; under reduced motion nothing here moves (stars stop in `star.module.css`). The landing modules compose their halftone with the 8 degree band in one declaration and keep it local; the two hand-written sun-ray stages move to `sun-rays` in #610.
 
 ## Primitives
 | Component | File | Props / variants | Type role | States | A11y notes |
@@ -132,6 +146,8 @@ Design bible 0 ("printed, not glowing"), 6, 7 and 17, applied to every primitive
 | `Skeleton` | `skeleton.tsx` | `className` for size; flat `surface-muted` block, no shimmer, no pulse (bible 7.4 skeleton rows) | none (no text) | n/a | `aria-hidden`; wrap groups in `aria-busy` container with a label |
 | `EmptyState` | `empty-state.tsx` | `title`, `description`, `action`; 2px dashed `border` rule (bible 7.6 locked card), title `fg`, description `fg-muted` | title `type-display-sm`; description `type-body text-sm` | n/a | give it a clear next step via `action` |
 | `Star` | `star.tsx` | `size`, `tone` red, ink, gold, paper, faintRed, faintInk, faintPaper; `spin` seconds; `at` absolute position | none (no text) | n/a | `aria-hidden`; bible 6: scattered, never over text; still under reduced motion |
+| `Band` | `band.tsx` | `angle` degrees (clamped 30-45 by `clampAngle`, default 38), `tone` primary, pressed; `upright` counter-rotates the children on a tag of the band's fill; `className` sizes the clipping box (default `min-h-24`) | children choose (`type-label` on `primary-fg`) | n/a | `role="presentation"` without children; the strip is clipped by its box (no horizontal overflow) and takes no pointer events |
+| `Device` | `device.tsx` | `tone` phosphor, nixie (`DEVICE_TONES` -> `device-phosphor` / `device-nixie`); `className`; children; `room` 2px frame, `device-bezel` interior, `data-device` | `type-device` for numerals, `type-label` for CRT words | n/a | the only place the glow lights (bible 0); colour guard `device` rule owns `src/components/ui/device*.tsx` |
 | `EmbedFrame` | `embed-frame.tsx` | `src`, `title`, `decorative`, `ref`; mounts the iframe near the viewport (`data-embed` idle/mounted) | none (iframe) | idle, mounted | a `title` always; `decorative` hides it from AT and the tab order |
 | `LazyVideo` | `lazy-video.tsx` | `poster`, `sources` ({src,type}[] in preference order; changing them swaps the clip), `className`; the landing **live feed is a recorded loop** of the lobby scene (bible 7.8, #552; `src/features/landing/feed-media.ts`, re-recorded by `scripts/record-live-feed.ts`) | none (video) | idle (server: poster only), armed (hydrated), near (sources written, `data-feed`) | decorative: `aria-hidden`, muted, loop, inline, no controls; nothing loads before 320px of the viewport; pauses off screen; never plays under reduced motion (poster) |
 | `Wordmark` | `brand/wordmark.tsx` | `variant` red-on-paper, ink-on-red, red-on-ink; `tagline` (red-on-paper only, type-checked; only when it renders >= 240 px wide); `title`; `width` px (default 240); `clearSpace` (default true); fills: bar `primary` (red bars) or `band` (ink bar), FIFTH and COPY `band` (ink) or `band-fg` (paper) as in the file, never `fg` | none (vector) | n/a | inline `<svg role="img">` named by its `<title>`; place it on the ground its variant names; rules: [`logo.md`](logo.md) |

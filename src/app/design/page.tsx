@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import {
   Alert,
+  Band,
   Button,
   Card,
+  Device,
   EmptyState,
   Field,
   MotionSafe,
@@ -11,6 +13,7 @@ import {
   Monogram,
   type MonogramVariant,
   Spinner,
+  Star,
   Wordmark,
 } from "@/components/ui";
 import { getTheme, ThemeToggle } from "@/features/preferences";
@@ -105,6 +108,24 @@ function Plate({
     >
       {children}
     </div>
+  );
+}
+
+/** One printed-motif demo (#25): a `data-motif` hook for e2e, a caption naming where the bible allows it. */
+function Motif({
+  name,
+  caption,
+  children,
+}: {
+  name: string;
+  caption: string;
+  children: ReactNode;
+}) {
+  return (
+    <figure data-motif={name} className="flex min-w-0 flex-col gap-2">
+      {children}
+      <figcaption className="text-sm text-fg-muted">{caption}</figcaption>
+    </figure>
   );
 }
 
@@ -295,6 +316,77 @@ export default async function DesignPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="printed-motifs" className="flex flex-col gap-3">
+        <h2 id="printed-motifs" className="type-display-md">
+          Printed motifs
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          Ink on paper: halftone, misregistration, steep bands and stars. Textures are opt-in and
+          step aside under high contrast; glow lives only inside a device.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Motif name="paper-grain" caption="paper-grain: halftone dots on the hero ground">
+            <div
+              data-plate="paper-grain"
+              className="paper-grain flex h-32 items-end border-2 border-fg bg-bg p-4"
+            >
+              <p className="type-label">Hero ground</p>
+            </div>
+          </Motif>
+          <Motif
+            name="paper-grain-red"
+            caption="paper-grain-red: red halftone on the final-call band"
+          >
+            <div
+              data-plate="paper-grain-red"
+              className="paper-grain-red flex h-32 items-end border-2 border-fg bg-primary p-4 text-primary-fg"
+            >
+              <p className="type-label">Final call</p>
+            </div>
+          </Motif>
+          <Motif name="misregister" caption="ink-misregister on a type-display title">
+            <p className="type-display-lg ink-misregister text-fg">FIFTH COPY</p>
+          </Motif>
+          <Motif name="band" caption="Band at 38 degrees with an upright label">
+            <Band upright className="h-40 border-2 border-fg bg-bg">
+              <span className="type-label text-primary-fg">Room 457 · 30 seats</span>
+            </Band>
+          </Motif>
+          <Motif name="stars" caption="Two Stars: red and a big faint one, never over text">
+            <div className="relative h-40 overflow-hidden border-2 border-fg bg-surface">
+              <Star size={56} tone="red" spin={40} at={{ top: 20, left: 24 }} />
+              <Star size={160} tone="faintInk" spin={90} at={{ bottom: -40, right: -20 }} />
+            </div>
+          </Motif>
+          <Motif name="sun-rays" caption="sun-rays: a character-stage ground only">
+            <div
+              data-plate="sun-rays"
+              className="sun-rays flex h-40 items-end justify-center border-2 border-fg bg-bg p-4"
+            >
+              <p className="type-label">Character stage</p>
+            </div>
+          </Motif>
+          <Motif
+            name="device"
+            caption="Device: nixie numerals and a phosphor CRT word, the only glow"
+          >
+            <div className="flex flex-wrap items-center gap-4">
+              <Device tone="nixie">
+                <span className="type-device text-3xl">00 88 66</span>
+              </Device>
+              <Device tone="phosphor">
+                <span className="type-label">READY</span>
+              </Device>
+            </div>
+          </Motif>
+          <Motif name="device-outside" caption="The same glow class outside a Device sets nothing">
+            <p className="type-label text-fg">
+              <span className="device-phosphor">READY</span> outside a device
+            </p>
+          </Motif>
+        </div>
       </section>
 
       <section aria-labelledby="buttons" className="flex flex-col gap-3">

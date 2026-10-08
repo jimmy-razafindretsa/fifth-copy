@@ -282,3 +282,71 @@
   text-transform: none;
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * Printed motifs (#25, design bible 0 "printed, not glowing", 6): opt-in utilities, never on `body`
+ * (bible 14 paints a flat paper body). Recipes are bible 6 through roles, ported from the landing
+ * modules (hero halftone, final-call red halftone, your-clerk sun-ray stage). Each pattern is a
+ * background layer over the element's own ground, so it never takes a pointer event. Under
+ * `prefers-contrast: more` the three textures paint nothing; the misregistration and the device glow
+ * stay. Rules and placement: docs/design/components.md "Printed motifs".
+ */
+@utility paper-grain {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-fg) 13%, transparent) 1.3px,
+    transparent 1.7px
+  );
+  background-size: 10px 10px;
+
+  @media (prefers-contrast: more) {
+    background-image: none;
+  }
+}
+
+/* red halftone on red (bible 6 final CTA band): put it on a `bg-primary` ground */
+@utility paper-grain-red {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-primary-hover) 75%, transparent) 1.6px,
+    transparent 2.1px
+  );
+  background-size: 11px 11px;
+
+  @media (prefers-contrast: more) {
+    background-image: none;
+  }
+}
+
+/* reserved: only behind a character stage (bible 6, 17 "no sun rays outside character stages") */
+@utility sun-rays {
+  background-image: repeating-conic-gradient(
+    from 0deg at 50% 92%,
+    color-mix(in srgb, var(--color-primary) 9%, transparent) 0deg 6deg,
+    transparent 6deg 12deg
+  );
+
+  @media (prefers-contrast: more) {
+    background-image: none;
+  }
+}
+
+/* ink misregistration (bible 0, 6): a red plate printed 1px off under a `type-display` title; reds
+   never change between themes (bible 3.2) */
+@utility ink-misregister {
+  text-shadow: 1px 1px 0 var(--color-primary);
+}
+
+/* device glow (bible 0: glow lives only in CRT screens and nixie tubes): lit only on or inside
+   [data-device] (the `Device` bezel); the same class anywhere else sets nothing */
+@utility device-phosphor {
+  &:where([data-device], [data-device] *) {
+    color: var(--color-device-phosphor);
+    text-shadow: 0 0 6px currentColor;
+  }
+}
+
+@utility device-nixie {
+  &:where([data-device], [data-device] *) {
+    color: var(--color-device-nixie);
+    text-shadow: 0 0 6px currentColor;
+  }
+}

@@ -1,5 +1,11 @@
 import { gzipSync } from "node:zlib";
-import { ENGINE_VERSION, initialState, type Keystroke } from "@fifth-copy/engine";
+import {
+  analyseTrace,
+  ENGINE_VERSION,
+  initialState,
+  type EngineSettings,
+  type Keystroke,
+} from "@fifth-copy/engine";
 import {
   MAX_RACE_MS,
   MAX_RESULTS_PER_REQUEST,
@@ -15,11 +21,20 @@ import { elapsedOf } from "../rooms/ranking";
 import type { RaceDesk } from "../rooms/registry";
 import type { WebApi } from "./web-api";
 
-/** What `buildResults` reads of a room at its end: the desks at start and their final states. */
+/**
+ * What `buildResults` reads of a room at its end: the desks at start, their final states, and the
+ * normalised text and engine settings the states were computed with (replayed by `analyseTrace`).
+ */
 export type EndedRoom = {
+  readonly text: string;
+  readonly engine: EngineSettings;
   readonly desks: readonly RaceDesk[];
   readonly states: ReadonlyMap<number, DeskState>;
 };
+
+/** The trace analysis seam (#195): the engine's `analyseTrace`, injected so tests can spy on it. */
+export type ResultsDeps = { readonly analyse: typeof analyseTrace };
+const DEFAULT_DEPS: ResultsDeps = { analyse: analyseTrace };
 
 /** gzip (`node:zlib`) of the JSON keystroke array, base64, as `InternalRaceResult.trace`. */
 export function encodeTrace(trace: readonly Keystroke[]): InternalRaceResult["trace"] {
@@ -39,11 +54,17 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * The results of an ended race (ADR 0007, 0008; #189), one per desk of `ended.ranking`: place and
  * figures from the engine's ranking, counters and finish from the desk's state, `durationMs` from
  * `elapsedOf`, the gzip trace for a human desk (a bot's is empty). Chunked into requests of at most
- * `MAX_RESULTS_PER_REQUEST`. Extension point: #190 (clean/adjusted WPM, bonus log) and #195 (flags)
- * fill their fields here. A trace over the wire bound is sent empty (logged) rather than blocking
- * the race's results forever. A `void` end builds nothing.
+ * `MAX_RESULTS_PER_REQUEST`. Extension point: #190 (clean/adjusted WPM, bonus log) fills its fields
+ * here. Flags (#195, ADR 0007): every human desk's in-memory trace goes through `analyseTrace`
+ * against its recorded counters and live `timingAnomalies`; a bot is never analysed. The analysis
+ * runs on the trace as applied, before a trace over the wire bound is sent empty (logged) rather
+ * than blocking the race's results forever. A `void` end builds nothing.
  */
-export function buildResults(ended: RaceEnded, room: EndedRoom): RaceResultsRequest[] {
+export function buildResults(
+  ended: RaceEnded,
+  room: EndedRoom,
+  { analyse }: ResultsDeps = DEFAULT_DEPS,
+): RaceResultsRequest[] {
   // A void race is never persisted (#204).
   if (ended.reason === "void") return [];
   const { reason } = ended;
@@ -52,6 +73,15 @@ export function buildResults(ended: RaceEnded, room: EndedRoom): RaceResultsRequ
     const desk = byDesk.get(entry.desk);
     const state = room.states.get(entry.desk) ?? { ...initialState(), trace: [] };
     const isBot = desk?.isBot ?? entry.isBot;
+    const flags = isBot
+      ? []
+      : analyse({
+          keystrokes: state.trace,
+          text: room.text,
+          settings: room.engine,
+          recorded: { cursor: state.cursor, correct: state.correct, errors: state.errors },
+          timingAnomalies: "timingAnomalies" in state ? state.timingAnomalies : 0,
+        });
     let trace = isBot ? EMPTY_TRACE : encodeTrace(state.trace);
     if (trace.data.length > MAX_TRACE_BASE64_LENGTH) {
       log("results trace too large", { race: ended.raceId, desk: entry.desk, count: trace.count });
@@ -83,7 +113,7 @@ export function buildResults(ended: RaceEnded, room: EndedRoom): RaceResultsRequ
       bonusesSent: 0,
       bonusesReceived: 0,
       bonusLog: [],
-      flags: [],
+      flags,
       engineVersion: ENGINE_VERSION,
       trace,
     };

@@ -68,6 +68,8 @@ function results(desks: number): RaceResultsRequest[] {
       elapsedMs: 60_000,
     },
     {
+      text: "bonjour",
+      engine: { errorMode: "continue", backspace: true },
       desks: ranking.map((e) => ({
         desk: e.desk,
         userId: `u${e.desk}`,

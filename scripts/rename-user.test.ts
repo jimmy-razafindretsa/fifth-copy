@@ -15,7 +15,7 @@ const REMOTE = "postgresql://u:hunter2@db.prod.example.com:5432/app";
 // A cold tsx start under load takes seconds (#600); a hung child fails with its own error below
 // the slow project's per-test timeout (vitest.config.ts).
 const SPAWN_TIMEOUT = 30_000;
-const tsx = (args: string[], env: Record<string, string>) => {
+const tsx = (args: string[], env: NodeJS.ProcessEnv) => {
   const r = spawnSync(TSX, args, { cwd: ROOT, env, encoding: "utf8", timeout: SPAWN_TIMEOUT });
   if (r.error) throw r.error;
   return r;

@@ -92,6 +92,49 @@ describe("mintRaceToken (unit, fake DB)", () => {
     expect(state.jar.size).toBe(0);
   });
 
+  it("#187 C1: spectator: true mints a spectator token for a player and for the host", async () => {
+    const host = await mintRaceToken({ code: "KGB-4821", spectator: true });
+    if (!host.ok) throw new Error(host.error);
+    expect((await verified(host.token)).claims).toMatchObject({
+      sub: hostId,
+      lobby: "lob_open",
+      role: "spectator",
+    });
+    state.jar = new Map();
+    const player = await mintRaceToken({ code: "KGB-4821", spectator: true });
+    if (!player.ok) throw new Error(player.error);
+    const claims = (await verified(player.token)).claims;
+    expect(claims).toMatchObject({ lobby: "lob_open", role: "spectator" });
+    expect(claims.sub).not.toBe(hostId);
+  });
+
+  it("#187 C1: spectator: false keeps the host and player roles", async () => {
+    const host = await mintRaceToken({ code: "KGB-4821", spectator: false });
+    if (!host.ok) throw new Error(host.error);
+    expect((await verified(host.token)).claims.role).toBe("host");
+    state.jar = new Map();
+    const player = await mintRaceToken({ code: "KGB-4821", spectator: false });
+    if (!player.ok) throw new Error(player.error);
+    expect((await verified(player.token)).claims.role).toBe("player");
+  });
+
+  it("#187 C1: a CLOSED lobby returns closed for a spectator too", async () => {
+    state.jar = new Map();
+    await expect(mintRaceToken({ code: "ZRT-1093", spectator: true })).resolves.toEqual({
+      ok: false,
+      error: "closed",
+    });
+    expect(fake.db.user.create).not.toHaveBeenCalled();
+  });
+
+  it("#187 C1: a non-boolean spectator flag is not-found, never a role", async () => {
+    state.jar = new Map();
+    await expect(
+      mintRaceToken({ code: "KGB-4821", spectator: "yes" } as unknown as { code: string }),
+    ).resolves.toEqual({ ok: false, error: "not-found" });
+    expect(fake.db.user.create).not.toHaveBeenCalled();
+  });
+
   it("a token signed with another secret is rejected by jwtVerify", async () => {
     const result = await mintRaceToken({ code: "KGB-4821" });
     if (!result.ok) throw new Error(result.error);

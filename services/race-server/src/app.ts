@@ -129,7 +129,12 @@ export function createRaceServer({
 
   const raceHooks = {
     deskStates: async (lobbyId: string) => desksState.states(lobbyId),
-    onEnding: (lobbyId: string) => presence.settle(lobbyId),
+    onEnding: (lobbyId: string) => {
+      // Synchronous, before any await of the ending: abandon and the idle kick stand down (#183).
+      const runtime = desksState.get(lobbyId);
+      if (runtime) runtime.ending = true;
+      return presence.settle(lobbyId);
+    },
     onGo: (lobbyId: string, init: Parameters<typeof desksState.open>[1]) => {
       desksState.open(lobbyId, init);
       presence.onGo(lobbyId);

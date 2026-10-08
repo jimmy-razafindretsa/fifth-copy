@@ -4,7 +4,7 @@ import type { Durations } from "../rooms/durations";
 import type { Presence } from "./presence";
 
 export type AbandonResult = {
-  /** Sent back as `rejected`: no running race, or the desk is not typing. */
+  /** Sent back as `rejected`: no running race (or it is ending), or the desk is not typing. */
   rejected?: Extract<Rejected["reason"], "not-running">;
   /** The desk turned `abandoned` (the caller asks the lifecycle whether every desk is done). */
   terminal: boolean;
@@ -30,6 +30,8 @@ export type Idle = {
  * timers): a desk is warned for the silence that started at the `lastKeyAt` it holds, and any newer
  * `lastKeyAt` opens a fresh window. Status writes go through `desksState.set`; the tick's terminal
  * check then asks the lifecycle to end the race. Bots hold no seat in presence and are never idle.
+ * Neither runs in the room queue: once `endRace` marks the runtime `ending`, both stand down
+ * (abandon is `not-running`), so no exit lands after the ranking was taken.
  */
 export function createIdle({
   desksState,
@@ -49,7 +51,7 @@ export function createIdle({
 
   return {
     step(runtime, now) {
-      if (runtime.phase !== "running") return;
+      if (runtime.phase !== "running" || runtime.ending) return;
       const { lobbyId, t0 } = runtime;
       let room = warned.get(lobbyId);
       for (const [desk, state] of runtime.states) {
@@ -76,7 +78,7 @@ export function createIdle({
     abandon(lobbyId, desk) {
       const runtime = desksState.get(lobbyId);
       const state = runtime?.states.get(desk);
-      if (runtime?.phase !== "running" || state?.status !== "typing") {
+      if (runtime?.phase !== "running" || runtime.ending || state?.status !== "typing") {
         return { rejected: "not-running", terminal: false };
       }
       desksState.set(lobbyId, desk, { ...state, status: "abandoned" });

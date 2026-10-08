@@ -276,6 +276,53 @@ describe("abandon (C4)", () => {
   });
 });
 
+describe("the end-of-race window (#183 pentest)", () => {
+  it("an abandon or a kick while endRace awaits the phase write is refused: event, ranking and result agree", async () => {
+    const posted: RaceResultsRequest[] = [];
+    const race = await startedRace(process.env.REDIS_URL, {
+      players: 2,
+      postResults: async (request) => {
+        posted.push(request);
+        return ackResults(request);
+      },
+    });
+    booted = race.booted;
+    const { booted: b, lobby, t0 } = race;
+    const [one, two] = race.racers as [Racer, Racer];
+    typeKeys(one.client, "b", 0);
+    typeKeys(two.client, "b", 0);
+    await cursorReached(b, lobby, one.desk, 1);
+    await cursorReached(b, lobby, two.desk, 1);
+    await at(b, t0, 30_000, one);
+
+    // The ranking is computed; the race is not yet `ended` in Redis nor in the runtime. Meanwhile
+    // desk 2 sends `abandon`, then both desks pass the kick threshold (ticks run).
+    const registry = b.server.registry;
+    const setPhase = registry.setPhase.bind(registry);
+    registry.setPhase = async (id, phase) => {
+      if (id === lobby && phase === "ended") {
+        abandon(two);
+        await until(
+          () => two.seen.rejected.length > 0 || kinds(two, "abandoned").length > 0,
+          2_000,
+          "abandon answered",
+        );
+        b.clock.advance(40_000);
+      }
+      return setPhase(id, phase);
+    };
+    await b.server.lifecycle.endRace(lobby, "timer");
+    await until(() => one.seen.ended.length === 1, 2_000, "ended");
+
+    expect(kinds(one, "abandoned")).toHaveLength(0);
+    expect(kinds(one, "asleep")).toHaveLength(0);
+    expect(two.seen.rejected).toEqual([{ v, reason: "not-running" }]);
+    expect(one.seen.ended[0]!.ranking.map((r) => r.status)).toEqual(["typing", "typing"]);
+    await until(() => posted.length === 1, 3_000, "results posted");
+    expect(posted[0]!.results.map((r) => r.status)).toEqual(["typing", "typing"]);
+  });
+});
+
 describe("both exits end the race (C5)", () => {
   async function finishedAndOther() {
     const reasons: RaceEnded["reason"][] = [];

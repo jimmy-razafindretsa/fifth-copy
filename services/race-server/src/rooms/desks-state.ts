@@ -1,11 +1,16 @@
 import type { Redis } from "ioredis";
 import {
   charsOf,
+  EMPTY_LEDGER,
+  effectiveText,
   initialState,
   normalizeTypeable,
+  type BonusKind,
+  type BonusLedger,
   type EngineSettings,
   type Keystroke,
   type PlayerState,
+  type TextOverlay,
 } from "@fifth-copy/engine";
 import { engineSettingsOf, type RaceInfo, type RaceSettings } from "@fifth-copy/protocol";
 import { desksKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
@@ -19,12 +24,44 @@ import type { RaceDesk } from "./registry";
  * `trace`: every keystroke handed to the engine, with the `t` it was applied at (persisted by #189);
  * appended in place, so the engine state replays from it. Bounded by `traceCapOf(textLength)`.
  */
-export type DeskState = PlayerState & {
-  readonly lastKeyAt: number;
-  readonly timingAnomalies: number;
-  readonly droppedKeys: number;
-  readonly trace: Keystroke[];
+export type DeskState = PlayerState &
+  DeskBonus & {
+    readonly lastKeyAt: number;
+    readonly timingAnomalies: number;
+    readonly droppedKeys: number;
+    readonly trace: Keystroke[];
+  };
+
+/**
+ * A desk's part of the bonus economy (#190, ADR 0007, 0016), mirrored with the counters (ADR 0008).
+ * `reach`: the furthest cursor the desk ever had (exemption never removes a reached word);
+ * `overlay`: its changes to the base text, null for none; `textLength`: the length of its effective
+ * text (progress, finish, trace cap); `held`: the card it holds, dealt at `since` (server ms epoch);
+ * `lastPlayedAt` (cooldown) and `blurUntil` (smoke break): ms since GO; `lastHitBy`: the hostile
+ * kind that hit it last (repeat immunity); `ledger`: sent, received and the log (never mirrored).
+ */
+export type DeskBonus = {
+  readonly reach: number;
+  readonly overlay: TextOverlay | null;
+  readonly textLength: number;
+  readonly held: { readonly kind: BonusKind; readonly since: number } | null;
+  readonly lastPlayedAt: number | null;
+  readonly lastHitBy: BonusKind | null;
+  readonly blurUntil: number | null;
+  readonly ledger: BonusLedger;
 };
+
+/** A desk with no bonus history on a text of `textLength` characters. */
+export const deskBonusOf = (textLength: number): DeskBonus => ({
+  reach: 0,
+  overlay: null,
+  textLength,
+  held: null,
+  lastPlayedAt: null,
+  lastHitBy: null,
+  blurUntil: null,
+  ledger: EMPTY_LEDGER,
+});
 
 /**
  * The in-process half of a running room (ADR 0008 in-process cache): everything the hot path needs
@@ -37,8 +74,13 @@ export type RoomRuntime = {
   readonly t0: number;
   /** `normalizeTypeable`d once here, as `applyKeystroke` requires. */
   readonly text: string;
+  /** The base text's length; a desk's own effective length is `DeskState.textLength`. */
   readonly textLength: number;
   readonly engine: EngineSettings;
+  /** Host setting `bonuses` at start (#190): off, nobody is dealt a card. */
+  readonly bonuses: boolean;
+  /** Effective text of each desk with an overlay (in-process only, rebuilt by `setOverlay`). */
+  readonly texts: Map<number, string>;
   /** Desks captured at start, by desk ascending. */
   readonly desks: readonly RaceDesk[];
   phase: "running" | "ended";
@@ -54,6 +96,26 @@ export type RoomRuntime = {
   /** Per-desk keystroke budget of `ingest` (in-process only, never mirrored). */
   readonly budgets: Map<number, { tokens: number; at: number }>;
 };
+
+/** The text `desk` types: its effective text when it has an overlay, else the base text. */
+export function textOf(runtime: Pick<RoomRuntime, "text" | "texts">, desk: number): string {
+  return runtime.texts.get(desk) ?? runtime.text;
+}
+
+/**
+ * `state` with `overlay` (ADR 0007): the runtime's effective text of the desk is rebuilt and its
+ * `textLength` follows; the cursor index stays put (effects only change text beyond `reach`).
+ */
+export function withOverlay(
+  runtime: Pick<RoomRuntime, "text" | "texts">,
+  desk: number,
+  state: DeskState,
+  overlay: TextOverlay,
+): DeskState {
+  const text = effectiveText(runtime.text, overlay);
+  runtime.texts.set(desk, text);
+  return { ...state, overlay, textLength: charsOf(text).length };
+}
 
 /** The trace bound lives in the engine, shared with the web's persistence (#189). */
 export { TRACE_ALLOWANCE, TRACE_KEYS_PER_CHAR, traceCapOf } from "@fifth-copy/engine";
@@ -92,9 +154,10 @@ export type DesksState = {
 
 export function deskStateOf(
   state: PlayerState,
-  extra: Omit<DeskState, keyof PlayerState>,
+  extra: Omit<DeskState, keyof PlayerState | keyof DeskBonus> & Partial<DeskBonus>,
+  textLength: number,
 ): DeskState {
-  return { ...state, ...extra };
+  return { ...state, ...deskBonusOf(textLength), ...extra };
 }
 
 /** The engine part of a desk state, as `welcome.state` carries it (a fresh `typed` array). */
@@ -118,10 +181,13 @@ export function playerStateOf({
  */
 type MirroredTrace = { trace: readonly Keystroke[]; flushed: number };
 
-/** The hash field of a desk: its counters and status, never the trace or the `typed` row (#592). */
+/**
+ * The hash field of a desk: its counters, status and bonus state, never the trace, the `typed` row
+ * (#592) or the bonus log (#190: up to 1 024 entries, read only from the process at race end).
+ */
 function serialise(state: DeskState): string {
   return JSON.stringify(state, (key, value: unknown) =>
-    key === "trace" || key === "typed" ? undefined : value,
+    key === "trace" || key === "typed" || key === "log" ? undefined : value,
   );
 }
 
@@ -134,25 +200,27 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
   return {
     open(lobbyId, { race, settings, desks }) {
       const text = normalizeTypeable(race.text);
+      const textLength = charsOf(text).length;
       const runtime: RoomRuntime = {
         lobbyId,
         raceId: race.raceId,
         t0: race.t0,
         text,
-        textLength: charsOf(text).length,
+        textLength,
         engine: engineSettingsOf(settings),
+        bonuses: settings.bonuses,
+        texts: new Map(),
         desks: [...desks].sort((a, b) => a.desk - b.desk),
         phase: "running",
         ending: false,
         states: new Map(
           desks.map(({ desk }) => [
             desk,
-            deskStateOf(initialState(), {
-              lastKeyAt: race.t0,
-              timingAnomalies: 0,
-              droppedKeys: 0,
-              trace: [],
-            }),
+            deskStateOf(
+              initialState(),
+              { lastKeyAt: race.t0, timingAnomalies: 0, droppedKeys: 0, trace: [] },
+              textLength,
+            ),
           ]),
         ),
         dirty: new Set(desks.map(({ desk }) => desk)),
@@ -250,6 +318,7 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
       runtime.states.clear();
       runtime.dirty.clear();
       runtime.budgets.clear();
+      runtime.texts.clear();
       mirrored.delete(lobbyId);
     },
 

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Redis } from "ioredis";
 import { SignJWT } from "jose";
 import { io as connectClient, type Socket as ClientSocket } from "socket.io-client";
-import type { Keystroke } from "@fifth-copy/engine";
+import type { Keystroke, Rng } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   PROTOCOL_VERSION,
@@ -133,6 +133,8 @@ export async function boot(
     recovery?: boolean;
     /** Set by `restart`: the clock's start and the lobbies already created. */
     carry?: { now: number; lobbies: string[] };
+    /** The bonus effects' randomness (#190); the server's default otherwise. */
+    rng?: Rng;
   } = {},
 ): Promise<Booted> {
   const clock = createFakeClock(options.carry?.now ?? Date.now());
@@ -145,6 +147,7 @@ export async function boot(
     webApi: options.webApi ?? fixtureWebApi(clock).api,
     onRaceEnded: options.onRaceEnded,
     recovery: options.recovery ?? false,
+    rng: options.rng,
   });
   const port = await server.listen(0, "127.0.0.1");
   const url = `http://127.0.0.1:${port}`;
@@ -314,6 +317,7 @@ export async function startedRace(
     onRaceEnded,
     postResults,
     redisPrefix,
+    rng,
   }: {
     players?: number;
     text?: string;
@@ -323,12 +327,14 @@ export async function startedRace(
     /** The fake web's results answer (default: acknowledge every desk). */
     postResults?: WebApi["postResults"];
     redisPrefix?: string;
+    rng?: Rng;
   } = {},
 ) {
   const booted = await boot(redisUrl, {
     webApi: textWebApi(text, postResults),
     onRaceEnded,
     redisPrefix,
+    rng,
   });
   const lobby = await booted.openRoom("KGB-4821", settings);
   const racers: Racer[] = [];

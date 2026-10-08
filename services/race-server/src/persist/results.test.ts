@@ -6,12 +6,17 @@ import {
   accuracy,
   analyseTrace,
   charsOf,
+  EMPTY_LEDGER,
+  effectiveText,
   elapsedFor,
   ENGINE_VERSION,
   initialState,
+  mulberry32,
   normalizeTypeable,
   progress,
   rawWpm,
+  record,
+  replayTrace,
   wpm,
   type Keystroke,
   type TraceAnalysisInput,
@@ -32,9 +37,11 @@ import {
   typeKeys,
   until,
   type Booted,
+  type Racer,
 } from "../testing/harness";
-import type { DeskState } from "../rooms/desks-state";
+import { deskBonusOf, type DeskState } from "../rooms/desks-state";
 import type { RaceEnded } from "../rooms/lifecycle";
+import { rankingFor } from "../rooms/ranking";
 import { buildResults, encodeTrace, sendResults, type EndedRoom } from "./results";
 
 // #189 C1: one result per desk at race end, figures from the engine, gzip trace.
@@ -44,6 +51,7 @@ const inflate = (data: string) => JSON.parse(gunzipSync(Buffer.from(data, "base6
 
 const deskState = (over: Partial<DeskState> = {}): DeskState => ({
   ...initialState(),
+  ...deskBonusOf(7),
   lastKeyAt: 0,
   timingAnomalies: 0,
   droppedKeys: 0,
@@ -377,5 +385,111 @@ describe("results at race end over the wire (C1)", () => {
     }
     expect(request.results.find((x) => x.desk === one!.desk)!.trace.count).toBe(7);
     expect(request.results.find((x) => x.desk === two!.desk)!.errors).toBeGreaterThan(0);
+  });
+});
+
+// #190 C6: clean and adjusted WPM, the bonus counts and log, and the analysis on the effective text.
+describe("bonus fields of the results (#190 C6)", () => {
+  it("unit: extra words typed -> clean < adjusted; counts and log from the ledger; replayed on the effective text", () => {
+    const base = "le formulaire est en triple";
+    const overlay = { extra: ["vite", "encore"], removed: [] };
+    const text = effectiveText(base, overlay);
+    const rng = mulberry32(6);
+    let t = 0;
+    const trace: Keystroke[] = [...text].map((key) => ({ t: (t += 120 + Math.floor(rng() * 160)), key }));
+    const engine = { errorMode: "continue", backspace: true } as const;
+    const typed = replayTrace(trace, text, engine);
+    expect(typed.status).toBe("finished");
+    const hit = { t: 400, kind: "extra-paperwork" as const, from: 2, to: [1] };
+    const self = { t: 900, kind: "exemption" as const, from: 2, to: [2] };
+    const states = new Map<number, DeskState>([
+      [
+        1,
+        deskState({
+          ...typed,
+          trace,
+          overlay,
+          textLength: text.length,
+          reach: text.length,
+          ledger: record(EMPTY_LEDGER, 1, hit),
+        }),
+      ],
+      [2, deskState({ ledger: record(record(EMPTY_LEDGER, 2, hit), 2, self) })],
+    ]);
+    const desks = [
+      { desk: 1, userId: "usr_1", name: "Clerk 1", isBot: false },
+      { desk: 2, userId: "usr_2", name: "Clerk 2", isBot: false },
+    ];
+    const ranking = rankingFor(desks, states, base.length, 60_000);
+    const [request] = buildResults(ended(ranking), { text: base, engine, desks, states });
+    const results = raceResultsRequestSchema.parse(request).results;
+    const one = results.find((x) => x.desk === 1)!;
+    const two = results.find((x) => x.desk === 2)!;
+
+    expect(one.cleanWpm).toBeLessThan(one.adjustedWpm);
+    expect(one.adjustedWpm).toBe(one.wpm);
+    expect(one.cleanWpm).toBeCloseTo(base.length / 5 / (typed.finishedAt! / 60_000), 9);
+    expect(one).toMatchObject({ bonusesSent: 0, bonusesReceived: 1, progress: 1 });
+    expect(one.bonusLog).toEqual([{ t: 400, kind: "extra-paperwork", from: 2, to: 1 }]);
+    expect(two).toMatchObject({ bonusesSent: 2, bonusesReceived: 0, cleanWpm: 0, adjustedWpm: 0 });
+    expect(two.bonusLog).toEqual([
+      { t: 400, kind: "extra-paperwork", from: 2, to: 1 },
+      { t: 900, kind: "exemption", from: 2, to: 2 },
+    ]);
+    // Replayed on the base text, the innocent overlaid desk would be "unreproducible".
+    expect(one.flags.map((f) => f.code)).not.toContain("unreproducible");
+    const onBase = analyseTrace({
+      keystrokes: trace,
+      text: base,
+      settings: engine,
+      recorded: { cursor: typed.cursor, correct: typed.correct, errors: typed.errors },
+      timingAnomalies: 0,
+    });
+    expect(onBase.map((f) => f.code)).toContain("unreproducible");
+  });
+
+  it("over the wire: the leader hit by extra-paperwork types its effective text; clean < adjusted, counts and log match the events", async () => {
+    const posted: RaceResultsRequest[] = [];
+    const text = "un deux trois quatre cinq six sept huit";
+    const r = await startedRace(process.env.REDIS_URL, {
+      players: 4,
+      text,
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+      rng: mulberry32(3),
+      redisPrefix: `t190-results-${randomUUID()}:`,
+      postResults: async (request) => {
+        posted.push(request);
+        return ackResults(request);
+      },
+    });
+    booted = r.booted;
+    const [one, two, three] = r.racers as [Racer, Racer, Racer, Racer];
+    const desks = () => r.booted.server.desks.states(r.lobby);
+    typeKeys(one.client, text.slice(0, 10), 0);
+    typeKeys(two.client, text.slice(0, 6), 0);
+    typeKeys(three.client, text.slice(0, 2), 0);
+    await until(() => desks().get(three.desk)?.cursor === 2, 2_000, "typed");
+    await until(() => desks().get(one.desk)?.cursor === 10, 2_000, "typed one");
+    r.booted.clock.advance(100);
+    await until(() => desks().get(three.desk)?.held?.kind === "extra-paperwork", 2_000, "dealt");
+    three.client.emit("bonus:play", { v: PROTOCOL_VERSION });
+    await until(() => desks().get(one.desk)?.overlay !== null, 2_000, "hit");
+    const overlay = desks().get(one.desk)!.overlay!;
+    const rest = effectiveText(text, overlay).slice(10);
+    typeKeys(one.client, rest, 200, 37);
+    await until(() => desks().get(one.desk)?.status === "finished", 2_000, "leader finished");
+
+    r.booted.clock.advance(r.t0 + 60_000 - r.booted.clock.now());
+    await until(() => posted.length === 1, 3_000, "results posted");
+    const results = raceResultsRequestSchema.parse(posted[0]).results;
+    const leader = results.find((x) => x.desk === one.desk)!;
+    const sender = results.find((x) => x.desk === three.desk)!;
+    expect(leader.cleanWpm).toBeLessThan(leader.adjustedWpm);
+    expect(leader).toMatchObject({ bonusesReceived: 1, bonusesSent: 0, status: "finished", progress: 1 });
+    const entry = { t: 100, kind: "extra-paperwork", from: three.desk, to: one.desk };
+    expect(leader.bonusLog).toEqual([entry]);
+    expect(sender).toMatchObject({ bonusesSent: 1, bonusesReceived: 0, bonusLog: [entry] });
+    expect(results.find((x) => x.desk === two.desk)).toMatchObject({ bonusesSent: 0, bonusLog: [] });
+    expect(leader.flags.map((f) => f.code)).not.toContain("unreproducible");
   });
 });

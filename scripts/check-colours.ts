@@ -35,13 +35,8 @@ export const OWNERSHIP: readonly Ownership[] = [
   },
   {
     rule: "device",
-    paths: [
-      "src/components/ui/device*.tsx",
-      "src/features/race/**",
-      "src/app/design/**",
-      "src/features/lobby/components/lobby-entry.module.css",
-    ],
-    why: "bible 0 glow lives only in devices; lobby-entry: bible 7.1 inverted primary keeps its ink border and offset on the red band in both themes (device-bezel = press-ink; #595 moves it to the band role)",
+    paths: ["src/components/ui/device*.tsx", "src/features/race/**", "src/app/design/**"],
+    why: "bible 0 glow lives only in devices",
   },
 ];
 

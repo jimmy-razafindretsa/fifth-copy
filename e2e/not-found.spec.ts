@@ -85,3 +85,47 @@ test.describe("not found (#397)", () => {
     });
   }
 });
+
+// Contract of #610: the Major's stage paints the shared `sun-rays` utility of #25 (bible 6), the same
+// recipe as the /design plate, and nothing under `prefers-contrast: more`.
+const majorStage = (page: Page) => page.locator("iframe").locator("..");
+
+const backgroundOf = (page: Page, selector: string) =>
+  page
+    .locator(selector)
+    .first()
+    .evaluate((el) => getComputedStyle(el).backgroundImage);
+
+test.describe("not-found sun-ray stage (#610)", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C2 ${scheme}: the Major's stage paints the /design sun-rays plate`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/design");
+      const plate = await backgroundOf(page, '[data-plate="sun-rays"]');
+      expect(plate).toContain("repeating-conic-gradient");
+      await page.goto(MISSING);
+      const stage = await majorStage(page).evaluate((el) => {
+        const s = getComputedStyle(el);
+        // unchanged layout: beside the file above 900px, stacked over it below
+        const stacked = window.innerWidth <= 900;
+        return {
+          bgImage: s.backgroundImage,
+          minHeight: s.minHeight,
+          rule: stacked ? s.borderBottomWidth : s.borderRightWidth,
+          stacked,
+        };
+      });
+      expect(stage.bgImage).toBe(plate);
+      expect(stage.minHeight).toBe(stage.stacked ? "440px" : "560px");
+      expect(stage.rule).toBe("2px");
+    });
+  }
+
+  test("C3 under prefers-contrast: more the Major's stage paints no rays", async ({ page }) => {
+    await page.emulateMedia({ contrast: "more" });
+    await page.goto(MISSING);
+    expect(await majorStage(page).evaluate((el) => getComputedStyle(el).backgroundImage)).toBe(
+      "none",
+    );
+  });
+});

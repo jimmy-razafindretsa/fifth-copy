@@ -25,6 +25,8 @@ Spec 10 adds catch-up bonuses (card #190, plan F4.14 and F4.16): Extra Paperwork
 
 ## Consequences
 - The stored result already has the columns (#188); #190 fills them. Bests, ranks and the podium read `cleanWpm`; only the stats card reads `adjustedWpm`.
+- Trace bounds follow the effective text: the race server caps a desk's trace at `traceCapOf(effective length)`; the web, which does not know the overlay yet, accepts up to `traceCapOf(base) + TRACE_KEYS_PER_CHAR * MAX_OVERLAY_WORDS * (MAX_EXTRA_WORD_LENGTH + 1)` keystrokes (`maxStoredTraceKeys`, `src/features/results/actions/persist-results.ts`), so an honest overlaid desk is never refused; #623 can tighten it to the stored overlay.
+- Smoke Break's blur is rendered by the client only (#236): the server records `blurUntil` and sends it in `bonus-hit`, but it does not change what the target may type or how its keystrokes are scored.
 - The stored result carries no overlay yet: worker re-analysis and the per-race WPM series (#302) need it to replay against the effective text; card #623 adds it (protocol + Prisma, additive).
 - Snapshots carry each desk's cursor but not its effective length, so a client's progress bars of rivals drift after a bonus while the ranks stay authoritative; the HUD card (#236) reconciles from `bonus-hit` and `welcome.overlay`.
 - A new bonus is one `BonusKind` member, one `BONUS_RULES` row and one effect function; the race server step (`rooms/bonus-step.ts`) only orchestrates.

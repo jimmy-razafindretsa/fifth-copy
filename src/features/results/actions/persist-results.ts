@@ -5,13 +5,16 @@ import { gunzipSync } from "node:zlib";
 import { z } from "zod";
 import {
   charsOf,
+  MAX_EXTRA_WORD_LENGTH,
   normalizeTypeable,
+  TRACE_KEYS_PER_CHAR,
   traceCapOf,
   type Keystroke,
   type PlayerStatus,
 } from "@fifth-copy/engine";
 import {
   keystrokeSchema,
+  MAX_OVERLAY_WORDS,
   MAX_RESULTS_PER_REQUEST,
   MAX_TRACE_BASE64_LENGTH,
   PROTOCOL_VERSION,
@@ -56,6 +59,20 @@ const REASON_TO_DB: Record<RaceResultsRequest["reason"], RaceEndReason> = {
  * Bounds the inflated size of a trace of `count` keystrokes.
  */
 export const MAX_KEYSTROKE_JSON_BYTES = 32;
+
+/**
+ * The most keystrokes a stored trace may hold for a race whose base text has `baseLength`
+ * characters (#190): the race server caps each desk at `traceCapOf` of its effective text, which
+ * Extra Paperwork lengthens by at most `MAX_OVERLAY_WORDS` words of `MAX_EXTRA_WORD_LENGTH`
+ * characters plus a separator each (Exemption only shortens it). The web stores no overlay yet
+ * (#623), so it bounds by the largest one the wire allows; the inflation cap of `decodeTrace`
+ * follows from the count it admits.
+ */
+export function maxStoredTraceKeys(baseLength: number): number {
+  return (
+    traceCapOf(baseLength) + TRACE_KEYS_PER_CHAR * MAX_OVERLAY_WORDS * (MAX_EXTRA_WORD_LENGTH + 1)
+  );
+}
 
 export type DecodedTrace = { data: Buffer; keystrokes: Keystroke[] };
 
@@ -110,8 +127,8 @@ const isKnownError = (err: unknown, code: string) =>
  * `(raceId, desk)` with no update, so a repeat is a no-op and answers the same. Numbers are stored
  * as sent: the race server ran the engine (ADR 0007), its anti-cheat flags included (`suspicious`,
  * `suspiciousReason` = the flag codes joined by `,`; #195). Refuses an unknown race (`not-found`) and an
- * incoherent chunk or a trace that does not inflate to `count` keystrokes within the race's
- * `traceCapOf` (`bad-body`, nothing written). A desk whose user no longer exists (account deleted
+ * incoherent chunk or a trace that does not inflate to `count` keystrokes within
+ * `maxStoredTraceKeys` of the race's base text (`bad-body`, nothing written). A desk whose user no longer exists (account deleted
  * mid-race) is acknowledged without a row: its deletion would have removed it anyway.
  */
 export async function persistRaceResults(
@@ -125,7 +142,7 @@ export async function persistRaceResults(
   if (!race) return { ok: false, error: "not-found" };
   if (!coherent(request)) return { ok: false, error: "bad-body" };
 
-  const maxKeys = traceCapOf(charsOf(normalizeTypeable(race.textContent)).length);
+  const maxKeys = maxStoredTraceKeys(charsOf(normalizeTypeable(race.textContent)).length);
   const traces = new Map<number, DecodedTrace>();
   for (const result of request.results) {
     const decoded = decodeTrace(result.trace, maxKeys);

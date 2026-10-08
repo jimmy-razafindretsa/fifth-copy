@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  charsOf,
-  normalizeTypeable,
-  type PlayerState,
-  type PlayerStatus,
-} from "@fifth-copy/engine";
+import { charsOf, normalizeTypeable, type PlayerStatus } from "@fifth-copy/engine";
 import {
   MAX_RACE_MS,
   PROTOCOL_VERSION,
@@ -20,7 +15,7 @@ import {
 import type { Clock, Scheduler, TimerHandle } from "../clock";
 import type { WebApi } from "../persist/web-api";
 import type { Durations } from "./durations";
-import { rankingFor } from "./ranking";
+import { rankingFor, type RankedState } from "./ranking";
 import type { RaceDesk, RoomRegistry } from "./registry";
 
 /** The room broadcasts the lifecycle sends; implemented by the socket edge with `io.to(room)`. */
@@ -105,7 +100,7 @@ export function createLifecycle({
   /** Called once per race, after `ended` is emitted (persistence, #189). */
   onRaceEnded?: (ended: RaceEnded) => void;
   /** Authoritative desk states (#173); a missing desk is `initialState()`. */
-  deskStates?: (lobbyId: string) => Promise<ReadonlyMap<number, PlayerState>>;
+  deskStates?: (lobbyId: string) => Promise<ReadonlyMap<number, RankedState>>;
   /**
    * The race is ending, before the ranking is computed, inside the room's queue (#178: line-cut
    * desks turn `expired`). Must not call the registry's queued methods.

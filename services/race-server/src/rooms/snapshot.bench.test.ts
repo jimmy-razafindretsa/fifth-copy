@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { initialState } from "@fifth-copy/engine";
 import { DEFAULT_RACE_SETTINGS, snapshotSchema, type RaceInfo } from "@fifth-copy/protocol";
 import { connectRedis } from "../testing/harness";
-import { createDesksState, type DeskState } from "./desks-state";
+import { createDesksState, deskBonusOf, type DeskState } from "./desks-state";
 import { desksKey, ROOM_TTL_S, traceKey } from "./keys";
 import { collectSnapshot } from "./live-rank";
 
@@ -56,6 +56,7 @@ function lateDesk(i: number): DeskState {
     status: finished ? "finished" : "typing",
     lastT: 400_000 + i,
     finishedAt: finished ? 400_000 + i : null,
+    ...deskBonusOf(TEXT_CHARS),
     lastKeyAt: 400_000 + i,
     timingAnomalies: 0,
     droppedKeys: 0,

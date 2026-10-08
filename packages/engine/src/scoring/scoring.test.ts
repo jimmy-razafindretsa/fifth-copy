@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { initialState, type PlayerState } from "../reducers/state";
-import { accuracy, elapsedFor, progress, rawWpm, wpm } from "./scoring";
+import { replayTrace } from "../anticheat/analyse";
+import { EMPTY_OVERLAY, effectiveText } from "../text/overlay";
+import { accuracy, cleanAndAdjustedWpm, elapsedFor, progress, rawWpm, wpm } from "./scoring";
 
 /**
  * C1: one row per (correct, errors, total, elapsed ms since GO) with the expected numbers to 3 decimals.
@@ -236,5 +238,59 @@ describe("elapsedFor (C2)", () => {
   it("feeds wpm: a finisher is timed at finishedAt, not race end", () => {
     const s = state({ status: "finished", finishedAt: 60_000, correct: 350, cursor: 350 });
     expect(wpm(s, elapsedFor(s, 120_000))).toBeCloseTo(70, 3);
+  });
+});
+
+// C1 (#190): clean WPM counts base characters only, adjusted WPM the whole effective text.
+describe("cleanAndAdjustedWpm (C1)", () => {
+  const base = "aaaa bbbb";
+  const settings = { errorMode: "continue", backspace: true } as const;
+  const typeAll = (text: string, upTo = text.length) =>
+    replayTrace(
+      [...text.slice(0, upTo)].map((key, i) => ({ t: i * 10, key })),
+      text,
+      settings,
+    );
+
+  it("with extra words typed: clean < adjusted", () => {
+    const overlay = { extra: ["cc"], removed: [] };
+    const text = effectiveText(base, overlay); // "aaaa bbbb cc"
+    const state = typeAll(text);
+    const { clean, adjusted } = cleanAndAdjustedWpm(state, base, overlay, 60_000);
+    expect(adjusted).toBeCloseTo(text.length / 5, 6);
+    expect(clean).toBeCloseTo(base.length / 5, 6);
+    expect(clean).toBeLessThan(adjusted);
+  });
+
+  it("extra words not reached yet: equal", () => {
+    const overlay = { extra: ["cc"], removed: [] };
+    const state = typeAll(effectiveText(base, overlay), 6);
+    const { clean, adjusted } = cleanAndAdjustedWpm(state, base, overlay, 60_000);
+    expect(clean).toBe(adjusted);
+  });
+
+  it("with removed words: equal", () => {
+    const overlay = { extra: [], removed: [1] };
+    const state = typeAll(effectiveText(base, overlay));
+    const { clean, adjusted } = cleanAndAdjustedWpm(state, base, overlay, 30_000);
+    expect(clean).toBe(adjusted);
+    expect(adjusted).toBeCloseTo(4 / 5 / 0.5, 6);
+  });
+
+  it("with no overlay: both equal wpm", () => {
+    const state = typeAll(base, 7);
+    const { clean, adjusted } = cleanAndAdjustedWpm(state, base, EMPTY_OVERLAY, 12_345);
+    expect(clean).toBe(wpm(state, 12_345));
+    expect(adjusted).toBe(wpm(state, 12_345));
+  });
+
+  it("wrong characters in the base part do not count as clean", () => {
+    const overlay = { extra: ["cc"], removed: [] };
+    const text = effectiveText(base, overlay);
+    const keys = [...text].map((key, i) => ({ t: i, key: i === 0 ? "z" : key }));
+    const state = replayTrace(keys, text, settings);
+    const { clean, adjusted } = cleanAndAdjustedWpm(state, base, overlay, 60_000);
+    expect(clean).toBeCloseTo((base.length - 1) / 5, 6);
+    expect(adjusted).toBeCloseTo((text.length - 1) / 5, 6);
   });
 });

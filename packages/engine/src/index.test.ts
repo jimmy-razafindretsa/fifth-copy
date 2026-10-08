@@ -9,8 +9,8 @@ describe("@fifth-copy/engine", () => {
     expect(ENGINE_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it("is at 0.3.1 (guillemets and euro sign typeable, #571)", () => {
-    expect(ENGINE_VERSION).toBe("0.3.1");
+  it("is at 0.4.0 (catch-up bonuses, text overlays, clean and adjusted WPM, #190)", () => {
+    expect(ENGINE_VERSION).toBe("0.4.0");
   });
 
   it.each([
@@ -37,6 +37,15 @@ describe("@fifth-copy/engine", () => {
     "replayTrace",
     "DEFAULT_THRESHOLDS",
     "mulberry32",
+    "effectiveText",
+    "wordsOf",
+    "cleanAndAdjustedWpm",
+    "finishIfDone",
+    "eligibleBonus",
+    "applyBonus",
+    "canPlay",
+    "canHit",
+    "record",
   ])("re-exports %s", (name) => {
     expect(engine).toHaveProperty(name);
   });

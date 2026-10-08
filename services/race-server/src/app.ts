@@ -1,6 +1,7 @@
 import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Redis } from "ioredis";
+import type { Rng } from "@fifth-copy/engine";
 import type { RaceEvent } from "@fifth-copy/protocol";
 import type { Clock, Scheduler, TimerHandle } from "./clock";
 import type { RaceServerEnv } from "./env";
@@ -12,6 +13,7 @@ import type { WebApi } from "./persist/web-api";
 import { createIdle } from "./players/idle";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
+import { createBonuses } from "./rooms/bonus-step";
 import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-state";
 import { durationsFor } from "./rooms/durations";
 import { ingest } from "./rooms/ingest";
@@ -53,6 +55,7 @@ export function createRaceServer({
   webApi,
   onRaceEnded,
   recovery = true,
+  rng = Math.random,
 }: {
   env: Pick<RaceServerEnv, "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK">;
   redis: Redis;
@@ -66,6 +69,8 @@ export function createRaceServer({
    * files' live rooms (`testing/harness.ts`).
    */
   recovery?: boolean;
+  /** Randomness of the bonus effects (#190: Extra Paperwork's words); tests seed it. */
+  rng?: Rng;
 }): RaceServer {
   const registry = createRoomRegistry({ redis, clock });
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
@@ -93,6 +98,15 @@ export function createRaceServer({
   });
   // Idle and abandon (#183): a tick step over the connected typing desks, and the abandon edge.
   const idle = createIdle({ desksState, presence, durations, emit: roomEvent });
+  // Spectators hear every desk's events too (#187: a projector shows the overtakes).
+  const deskEvent = (lobbyId: string, desk: number, payload: RaceEvent) =>
+    void to([deskRoom(lobbyId, desk), spectatorRoom(lobbyId)])?.emit("event", payload);
+  // Catch-up bonuses (#190): a tick step dealing cards and playing the bots', and the play edge.
+  const bonuses = createBonuses({
+    desksState,
+    emit: { room: roomEvent, desk: deskEvent },
+    rng,
+  });
   const ticker = createTicker({
     desksState,
     clock,
@@ -100,12 +114,10 @@ export function createRaceServer({
     emit: {
       room: (lobbyId: string, event: string, payload: unknown) =>
         void to(audience(lobbyId))?.emit(event, payload),
-      // Spectators hear every desk's events too (#187: a projector shows the overtakes).
-      desk: (lobbyId, desk, payload) =>
-        void to([deskRoom(lobbyId, desk), spectatorRoom(lobbyId)])?.emit("event", payload),
+      desk: deskEvent,
     },
     onTerminal: (lobbyId) => void lifecycle.onDeskTerminal(lobbyId).catch(() => undefined),
-    steps: [idle.step],
+    steps: [idle.step, bonuses.step],
     // Redis loss mid-race (#204): the room is voided in process.
     onLost: (lobbyId, raceId) =>
       void lifecycle
@@ -115,6 +127,8 @@ export function createRaceServer({
   const race: RacePort = {
     ingest: (lobbyId, desk, batch) => ingest(desksState.get(lobbyId), desk, batch, clock.now()),
     abandon: idle.abandon,
+    playBonus: (lobbyId, desk) => bonuses.play(lobbyId, desk, clock.now()),
+    overlayOf: bonuses.overlayOf,
     stateOf: (lobbyId, desk) => {
       const state = desksState.states(lobbyId).get(desk);
       return state && desksState.get(lobbyId)?.phase === "running" ? playerStateOf(state) : null;

@@ -133,12 +133,11 @@ describe("ingest: server clock (C2)", () => {
 
   it("an engine-rejected key is traced but changes nothing else", () => {
     const { rt } = runtime();
-    const before = deskStateOf(initialState(), {
-      lastKeyAt: T0,
-      timingAnomalies: 0,
-      droppedKeys: 0,
-      trace: [],
-    });
+    const before = deskStateOf(
+      initialState(),
+      { lastKeyAt: T0, timingAnomalies: 0, droppedKeys: 0, trace: [] },
+      rt.textLength,
+    );
     expect(rt.states.get(1)).toEqual(before);
     ingest(rt, 1, [{ t: 100, key: "☃" }], T0 + 100);
     expect(rt.states.get(1)).toMatchObject({ cursor: 0, total: 0, trace: [{ t: 100, key: "☃" }] });

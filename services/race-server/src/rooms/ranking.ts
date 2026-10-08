@@ -19,19 +19,24 @@ import type { RaceDesk } from "./registry";
 export const elapsedOf = (state: PlayerState, raceElapsedMs: number) =>
   elapsedFor(state, state.status === "typing" ? raceElapsedMs : state.lastT);
 
+/** A desk's state as ranked: `textLength` is its effective text's (#190), else the base's. */
+export type RankedState = PlayerState & { readonly textLength?: number };
+
 /**
  * The one mapper from desk states to the wire ranking (ADR 0007): order only through the engine's
  * `rank`, figures only through its scoring. A desk without a state scores as `initialState()`.
- * Elapsed per `elapsedOf`. Reused by the live ranking (#173) and persistence (#189).
+ * Elapsed per `elapsedOf`. Progress is over the desk's own effective text (#190, ADR 0007: finish
+ * order by effective-text completion), `textLength` for a desk without one. Reused by the live
+ * ranking (#173), the race end (#166), the bonus step (#190) and persistence (#189).
  */
 export function rankingFor(
   desks: readonly RaceDesk[],
-  states: ReadonlyMap<number, PlayerState>,
+  states: ReadonlyMap<number, RankedState>,
   textLength: number,
   raceElapsedMs: number,
 ): RankingEntry[] {
   const scored = desks.map(({ desk, name, isBot }) => {
-    const state = states.get(desk) ?? initialState();
+    const state: RankedState = states.get(desk) ?? initialState();
     const elapsed = elapsedOf(state, raceElapsedMs);
     return {
       desk,
@@ -41,7 +46,7 @@ export function rankingFor(
       wpm: wpm(state, elapsed),
       rawWpm: rawWpm(state, elapsed),
       accuracy: accuracy(state),
-      progress: progress(state, textLength),
+      progress: progress(state, state.textLength ?? textLength),
       finishedAt: state.finishedAt,
     };
   });

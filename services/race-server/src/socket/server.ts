@@ -2,6 +2,7 @@ import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import type { Keystroke } from "@fifth-copy/engine";
 import {
+  abandonSchema,
   hostSettingsSchema,
   hostStartSchema,
   keysSchema,
@@ -15,6 +16,7 @@ import {
   type ServerToClientEvents,
   type Welcome,
 } from "@fifth-copy/protocol";
+import type { AbandonResult } from "../players/idle";
 import type { Presence } from "../players/presence";
 import type { IngestResult } from "../rooms/ingest";
 import type { Lifecycle } from "../rooms/lifecycle";
@@ -27,9 +29,13 @@ import { createHandshakeMiddleware, type HandshakeDeps } from "./handshake";
  */
 export type SocketData = { claims: RaceTokenClaims; resume?: boolean; desk?: number };
 
-/** The live race behind the `keys` edge (#173): `rooms/ingest.ts` over the desks' runtime. */
+/**
+ * The live race behind the `keys` and `abandon` edges: `rooms/ingest.ts` over the desks' runtime
+ * (#173), `players/idle.ts` for the abandon (#183).
+ */
 export type RacePort = {
   ingest(lobbyId: string, desk: number, batch: Keystroke[]): IngestResult;
+  abandon(lobbyId: string, desk: number): AbandonResult;
   /** The desk's engine state while a race runs (`welcome.state`), else null. */
   stateOf(lobbyId: string, desk: number): Welcome["state"];
 };
@@ -50,7 +56,7 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * user's last disconnect means is presence's decision (`players/presence.ts`, #178): in `waiting` and
  * `ended` the desk is released (`roster`); during a race it is line-cut and kept for the grace. A
  * handshake with the user's own resume key resumes the desk, and its `welcome` carries the server's
- * state. Client events (`keys`, `host:*`, `ping`) register on the socket by name; phase transitions
+ * state. Client events (`keys`, `abandon`, `host:*`, `ping`) register on the socket by name; phase transitions
  * belong to the lifecycle (`rooms/lifecycle.ts`, #166).
  */
 export function attachSocketServer(
@@ -169,6 +175,24 @@ export function attachSocketServer(
           .onDeskTerminal(lobby)
           .catch((err: unknown) => log("desk terminal failed", { lobby, err: String(err) }));
       }
+    });
+
+    // Abandon (#183, ADR 0006): the desk is the socket's seat, never the payload. Dropped like
+    // `keys` when malformed, unseated or a spectator; refused (`not-running`) outside a running race
+    // or once the desk stopped typing, so a replay changes nothing. No per-socket rate limit (#207).
+    socket.on("abandon", (raw: unknown) => {
+      const { desk } = socket.data;
+      if (!abandonSchema.safeParse(raw).success || desk === undefined || role === "spectator") {
+        return;
+      }
+      const result = race.abandon(lobby, desk);
+      if (result.rejected) {
+        return void socket.emit("rejected", { v: PROTOCOL_VERSION, reason: result.rejected });
+      }
+      log("abandoned", { lobby, desk });
+      lifecycle
+        .onDeskTerminal(lobby)
+        .catch((err: unknown) => log("desk terminal failed", { lobby, err: String(err) }));
     });
 
     // Clock sync (#172): to the sender only, in any phase. A malformed ping is dropped.

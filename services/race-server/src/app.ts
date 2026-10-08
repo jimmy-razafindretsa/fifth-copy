@@ -1,6 +1,7 @@
 import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Redis } from "ioredis";
+import type { RaceEvent } from "@fifth-copy/protocol";
 import type { Clock, Scheduler } from "./clock";
 import type { RaceServerEnv } from "./env";
 import { createInternalHandler } from "./http/internal";
@@ -8,6 +9,7 @@ import { createHttpHandler } from "./http/router";
 import { createOutbox, type Outbox } from "./persist/outbox";
 import { buildResults, sendResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
+import { createIdle } from "./players/idle";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
 import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-state";
@@ -70,17 +72,8 @@ export function createRaceServer({
   // Live race (#173): desks' runtime, 10 Hz tick, keystroke ingestion; started at GO, ended with
   // the race, dropped after `onRaceEnded` (persistence reads the traces, #189) or on room close.
   const desksState = createDesksState({ redis });
-  const ticker = createTicker({
-    desksState,
-    clock,
-    scheduler,
-    emit: {
-      room: (lobbyId: string, event: string, payload: unknown) =>
-        void to(lobbyRoom(lobbyId))?.emit(event, payload),
-      desk: (lobbyId, desk, payload) => void to(deskRoom(lobbyId, desk))?.emit("event", payload),
-    },
-    onTerminal: (lobbyId) => void lifecycle.onDeskTerminal(lobbyId).catch(() => undefined),
-  });
+  const roomEvent = (lobbyId: string, event: RaceEvent) =>
+    void to(lobbyRoom(lobbyId))?.emit("event", event);
   // Presence (#178): line cut and resume of the desks, resume keys in Redis, grace on the scheduler.
   const durations = durationsFor(env);
   const resumeKeys = createResumeKeys({ redis });
@@ -91,10 +84,25 @@ export function createRaceServer({
     clock,
     scheduler,
     durations,
-    emit: (lobbyId, event) => void to(lobbyRoom(lobbyId))?.emit("event", event),
+    emit: roomEvent,
+  });
+  // Idle and abandon (#183): a tick step over the connected typing desks, and the abandon edge.
+  const idle = createIdle({ desksState, presence, durations, emit: roomEvent });
+  const ticker = createTicker({
+    desksState,
+    clock,
+    scheduler,
+    emit: {
+      room: (lobbyId: string, event: string, payload: unknown) =>
+        void to(lobbyRoom(lobbyId))?.emit(event, payload),
+      desk: (lobbyId, desk, payload) => void to(deskRoom(lobbyId, desk))?.emit("event", payload),
+    },
+    onTerminal: (lobbyId) => void lifecycle.onDeskTerminal(lobbyId).catch(() => undefined),
+    steps: [idle.step],
   });
   const race: RacePort = {
     ingest: (lobbyId, desk, batch) => ingest(desksState.get(lobbyId), desk, batch, clock.now()),
+    abandon: idle.abandon,
     stateOf: (lobbyId, desk) => {
       const state = desksState.states(lobbyId).get(desk);
       return state && desksState.get(lobbyId)?.phase === "running" ? playerStateOf(state) : null;
@@ -135,6 +143,7 @@ export function createRaceServer({
       ticker.stop(lobbyId);
       desksState.close(lobbyId);
       presence.closeRoom(lobbyId);
+      idle.closeRoom(lobbyId);
     },
     onRaceEnded: (ended: RaceEnded) => {
       try {

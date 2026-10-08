@@ -8,15 +8,23 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 // Async spawn, not spawnSync: a synchronous child blocks the event loop, so the in-process stub
 // below would never answer and curl would time out with 000.
+// The child carries its own deadline (#600), below the slow project's per-test timeout
+// (vitest.config.ts): a hung script is killed and fails its test with that reason.
+const SPAWN_TIMEOUT = 30_000;
 const runSmoke = (base: string, path = process.env.PATH ?? "") =>
   new Promise<{ status: number | null; stdout: string }>((resolve, reject) => {
     const child = spawn("scripts/deploy-smoke.sh", [base], {
       env: { NODE_ENV: "test", PATH: path },
+      timeout: SPAWN_TIMEOUT,
     });
     let stdout = "";
     child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
     child.on("error", reject);
-    child.on("close", (status) => resolve({ status, stdout }));
+    child.on("close", (status, signal) =>
+      signal
+        ? reject(new Error(`deploy-smoke.sh killed by ${signal} (timeout ${SPAWN_TIMEOUT} ms)`))
+        : resolve({ status, stdout }),
+    );
   });
 
 const lastLine = (out: string) => out.trimEnd().split("\n").at(-1);

@@ -12,6 +12,14 @@ const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const ROOT = path.resolve(__dirname, "..");
 const TSX = path.join(ROOT, "node_modules/.bin/tsx");
 const REMOTE = "postgresql://u:hunter2@db.prod.example.com:5432/app";
+// A cold tsx start under load takes seconds (#600); a hung child fails with its own error below
+// the slow project's per-test timeout (vitest.config.ts).
+const SPAWN_TIMEOUT = 30_000;
+const tsx = (args: string[], env: Record<string, string>) => {
+  const r = spawnSync(TSX, args, { cwd: ROOT, env, encoding: "utf8", timeout: SPAWN_TIMEOUT });
+  if (r.error) throw r.error;
+  return r;
+};
 
 type Io = { out: string[]; err: string[] };
 function deps(overrides: Partial<RenameDeps> = {}): RenameDeps & Io {
@@ -54,10 +62,10 @@ describe("rename-user CLI guards", () => {
   });
 
   it("the real command refuses without --yes and prints nothing on stdout", () => {
-    const r = spawnSync(TSX, ["scripts/rename-user.ts", "Sparrow-482"], {
-      cwd: ROOT,
-      env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", DATABASE_URL: REMOTE },
-      encoding: "utf8",
+    const r = tsx(["scripts/rename-user.ts", "Sparrow-482"], {
+      NODE_ENV: "test",
+      PATH: process.env.PATH ?? "",
+      DATABASE_URL: REMOTE,
     });
     expect(r.status).not.toBe(0);
     expect(r.stdout).toBe("");
@@ -65,15 +73,11 @@ describe("rename-user CLI guards", () => {
   });
 
   it("the real command runs scripts/db-guard.sh and refuses a remote database", () => {
-    const r = spawnSync(TSX, ["scripts/rename-user.ts", "Sparrow-482", "--yes"], {
-      cwd: ROOT,
-      env: {
-        NODE_ENV: "test",
-        PATH: process.env.PATH ?? "",
-        DATABASE_URL: REMOTE,
-        DB_GUARD_ALLOWED_HOSTS: "",
-      },
-      encoding: "utf8",
+    const r = tsx(["scripts/rename-user.ts", "Sparrow-482", "--yes"], {
+      NODE_ENV: "test",
+      PATH: process.env.PATH ?? "",
+      DATABASE_URL: REMOTE,
+      DB_GUARD_ALLOWED_HOSTS: "",
     });
     expect(r.status).not.toBe(0);
     expect(r.stdout).toBe("");

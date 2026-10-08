@@ -248,6 +248,25 @@
       "supersededBy": [],
       "rule": "Every stored avatar passes the injected AvatarModerator on the re-encoded 256 px image inside storeAvatar before any file is written; approve -> APPROVED, flag -> PENDING (files kept, default portrait for everyone), reject -> typed Rejected error and nothing written; the image never leaves the host and no moderation reason is persisted.",
       "file": "docs/adr/0015-avatar-moderation.md"
+    },
+    {
+      "id": "0016",
+      "title": "Shown WPM is clean WPM; text-changing bonuses stay fair through per-desk overlays, effective-text finish order and reproducible traces",
+      "status": "proposed",
+      "category": "architecture",
+      "scope": [
+        "packages/engine/src/bonus/**",
+        "packages/engine/src/text/overlay.ts",
+        "packages/engine/src/scoring/**",
+        "services/race-server/src/rooms/**",
+        "services/race-server/src/persist/results.ts",
+        "src/features/results/**",
+        "src/features/stats/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Nixies, podium, ranking columns, personal bests and ranks show and use clean WPM (base-text characters only); bonus-adjusted WPM is stored and shown only on the personal stats card; finish order and progress are by effective-text completion; bonus effects only change text beyond a desk's high-water mark, and every trace is analysed against the desk's effective text.",
+      "file": "docs/adr/0016-shown-wpm-and-bonus-fairness.md"
     }
   ]
 }

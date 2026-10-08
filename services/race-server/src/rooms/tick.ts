@@ -6,6 +6,8 @@ import { collectSnapshot, diffRanks, raceElapsed } from "./live-rank";
 
 /** Snapshot period (ADR 0006 point 4: 10 Hz). */
 export const TICK_MS = 100;
+/** With nothing to flush, how often a running room's hash is checked for a Redis loss (#204). */
+export const LOST_PROBE_MS = 1_000;
 
 export type TickEmit = {
   /** To everyone in the room. */
@@ -42,6 +44,7 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * `overtake`/`passed` to the two desks, `new-leader` and `finished { place }` to the room. A desk
  * that turned terminal triggers `onTerminal` (the lifecycle ends the race when all are). Extension
  * point: `steps` (idle #183; bonuses #190) run first in every tick but the final one.
+ * A flush that finds the room hash gone (#204: Redis loss) stops the loop and calls `onLost` once.
  */
 export function createTicker({
   desksState,
@@ -50,6 +53,7 @@ export function createTicker({
   emit,
   onTerminal,
   steps = [],
+  onLost = () => {},
 }: {
   desksState: DesksState;
   clock: Clock;
@@ -57,8 +61,15 @@ export function createTicker({
   emit: TickEmit;
   onTerminal: (lobbyId: string) => void;
   steps?: readonly TickStep[];
+  /** The room's keys are gone mid-race (#204); the loop is already stopped. */
+  onLost?: (lobbyId: string, raceId: string) => void;
 }): Ticker {
-  type Loop = { handle: TimerHandle | null; ranks: number[]; announced: Set<number> };
+  type Loop = {
+    handle: TimerHandle | null;
+    ranks: number[];
+    announced: Set<number>;
+    probedAt: number;
+  };
   const loops = new Map<string, Loop>();
   const v = PROTOCOL_VERSION;
 
@@ -67,9 +78,17 @@ export function createTicker({
     if (!runtime) return stop(lobbyId);
     const now = clock.now();
     if (!final) for (const step of steps) step(runtime, now);
-    desksState
-      .flush(lobbyId)
-      .catch((err: unknown) => log("desks flush failed", { lobby: lobbyId, err: String(err) }));
+    const probe = now - loop.probedAt >= LOST_PROBE_MS;
+    if (probe) loop.probedAt = now;
+    desksState.flush(lobbyId, { probe }).then(
+      ({ lost }) => {
+        if (!lost || loops.get(lobbyId) !== loop) return;
+        stop(lobbyId);
+        log("room lost", { lobby: lobbyId });
+        onLost(lobbyId, runtime.raceId);
+      },
+      (err: unknown) => log("desks flush failed", { lobby: lobbyId, err: String(err) }),
+    );
 
     const { snapshot, ranking } = collectSnapshot(runtime, raceElapsed(runtime, now));
     emit.room(lobbyId, "snapshot", snapshot);
@@ -121,6 +140,7 @@ export function createTicker({
         handle: null,
         ranks: collectSnapshot(runtime, 0).snapshot.ranks,
         announced: new Set(),
+        probedAt: clock.now(),
       };
       loops.set(lobbyId, loop);
       schedule(lobbyId, loop);

@@ -5,8 +5,23 @@ export const ROOM_TTL_S = 3600;
  * Hash: `code`, `hostUserId`, `phase` (protocol `Phase`), `openedAt`, `settings` (JSON
  * `RaceSettings`, parsed on read); from `host:start` on (#166): `raceId`, `t0` and `endAt` (server ms
  * epoch of GO and of the timed end), `race` (JSON `RaceInfo`) and `desks` (JSON desks at start).
+ * A room voided by a restart (#204) is `phase: ended` with `endReason: void` and `endedAt` (server ms
+ * epoch), keeps `raceId` and loses `race`, `t0`, `endAt` and `desks`.
  */
 export const roomKey = (lobbyId: string) => `room:${lobbyId}`;
+
+/**
+ * Set: the lobby ids of the open rooms (#204), read back by `rehydrate` on boot (no SCAN). Added in
+ * `open`'s MULTI, removed when the room closes or is found gone; TTL `ROOM_TTL_S`, refreshed with
+ * every room write, so it outlives each of its rooms.
+ */
+export const ROOMS_KEY = "rooms";
+
+/**
+ * TTL of a room voided on restart (#204): its members can still reconnect to read `ended { void }`,
+ * then the lobby can be reopened. A later join refreshes it to `ROOM_TTL_S` like any activity.
+ */
+export const VOID_TTL_S = 300;
 
 /**
  * Hash: `userId` -> JSON `{ desk, name }`; a bot seat (#156) is keyed `bot:<desk>` -> JSON

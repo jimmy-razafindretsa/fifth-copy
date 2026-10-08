@@ -388,6 +388,7 @@ describe("room registry: lifecycle fields (#166)", () => {
       { desk: 2, userId: "b", name: "Bob", isBot: false },
     ];
     expect(await registry.room(lobbyId)).toEqual({
+      code: "ABCD",
       hostUserId: "host",
       phase: "waiting",
       settings,

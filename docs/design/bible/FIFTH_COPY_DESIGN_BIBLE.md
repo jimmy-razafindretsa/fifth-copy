@@ -106,6 +106,7 @@ Reds and gold never change between themes. The tape strip stays `tape-paper` in 
 Text is 4.5:1 minimum. Never put muted text on red. On red grounds use paper or ink at full opacity.
 Red kicker and label text on Night shift uses night-ink (the link role): agit-red on the night ground is 1.76:1 (extension, #494).
 Red error text (the inline error line, 7.4) follows the same link role: agit-red on newsprint in light (5.0:1), night-ink on night newsprint on Night shift (extension, #99).
+Violet rival marks (fills, rules such as the 7.4 docket rule) on Night shift use ribbon-violet mixed 50% with night-ink: ribbon-violet on the night ground is 1.13:1, the mix 3.86:1 on night and 3.20:1 on night newsprint (non-text 3:1, WCAG 1.4.11). Violet text stays the text-still-to-type roles; gold is never text on paper or newsprint (1.62:1), only on ink grounds (extension, #19).
 
 ---
 

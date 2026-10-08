@@ -7,20 +7,6 @@
 
 @reference "../../../app/globals.css";
 
-@keyframes fcSlam {
-  0% {
-    transform: scale(2.2) rotate(-14deg);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(0.9) rotate(-5deg);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) rotate(-6deg);
-  }
-}
-
 .screen {
   --gutter: clamp(16px, 4vw, 48px);
   display: flex;
@@ -79,20 +65,9 @@
   text-wrap: balance;
 }
 
-/* FILE NOT FOUND slams in at -6° (bible 7.3, 8); link role keeps it readable on Night shift (3.3) */
-.stamp {
+/* FILE NOT FOUND is the Stamp primitive (bible 7.3 md); `.file` is a flex column, keep it at its own width */
+.fileStamp {
   align-self: flex-start;
-  border: 4px double var(--color-primary);
-  color: var(--color-link);
-  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
-  padding: 8px 14px;
-  @apply type-display-sm;
-  font-size: clamp(22px, 2.4vw, 30px);
-  line-height: 1.1;
-  letter-spacing: 0.08em;
-  transform: rotate(-6deg);
-  animation: fcSlam 0.4s ease-out;
-  transform-origin: center;
 }
 
 .body {
@@ -216,15 +191,4 @@
   .row {
     grid-template-columns: 96px minmax(0, 1fr);
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .stamp {
-    animation: none;
-  }
-}
-
-/* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
-:root[data-motion="reduce"] .stamp {
-  animation: none;
 }

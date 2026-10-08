@@ -221,7 +221,7 @@ test.describe("lobby waiting room (#107)", () => {
     expect(heading.family).toMatch(/Stardos.?Stencil/i);
     expect(heading.transform).toBe("uppercase");
 
-    const stamp = rows(page).first().getByText("HOST", { exact: true });
+    const stamp = rows(page).first().locator("[data-stamp-tone]");
     await expect(stamp).toBeVisible();
     const s = await stamp.evaluate((el) => {
       const c = getComputedStyle(el);
@@ -259,7 +259,7 @@ test.describe("lobby waiting room (#107)", () => {
   test("C7 the stamp does not slam under reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await createLobby(page);
-    const stamp = rows(page).first().getByText("HOST", { exact: true });
+    const stamp = rows(page).first().locator("[data-stamp-tone]");
     await expect(stamp).toBeVisible();
     const s = await stamp.evaluate((el) => {
       const c = getComputedStyle(el);

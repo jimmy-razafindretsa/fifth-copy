@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Member } from "@fifth-copy/protocol";
+import { Stamp } from "@/components/ui";
 import { deskLabel, type LobbyLabels } from "./lobby-labels";
 import styles from "./lobby.module.css";
 
@@ -7,7 +8,7 @@ type Slot = (member: Member) => ReactNode;
 
 /**
  * The roll of the waiting room: one bible 7.4 docket row per member (`DESK 05 | name`), with the
- * crooked `HOST` stamp (7.3) and the ink `YOU` tag. Slots: `leading` (avatar, card 490) before the name,
+ * crooked `HOST` stamp (7.3, the `Stamp` primitive) and the ink `YOU` tag. Slots: `leading` (avatar, card 490) before the name,
  * `tags` (BOT docket card 490, stamps card 139) after the badges. Scrolls inside its docket, so it is a
  * focusable, named region for keyboard users.
  */
@@ -33,7 +34,9 @@ export function PlayerList({
           <span className={styles.who}>
             {leading?.(member)}
             <span className={styles.name}>{member.name}</span>
-            {member.isHost ? <span className={styles.stamp}>{labels.host}</span> : null}
+            {member.isHost ? (
+              <Stamp lines={[labels.host]} tone="red" size="sm" rotation={-6} role={null} />
+            ) : null}
             {member.desk === you ? <span className={styles.tag}>{labels.you}</span> : null}
             {tags?.(member)}
           </span>

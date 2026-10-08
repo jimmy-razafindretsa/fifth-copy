@@ -403,6 +403,52 @@ test.describe("landing page (#497)", () => {
   }
 });
 
+// Contract of #610: the clerk stage paints the shared `sun-rays` utility of #25 (bible 6), the same
+// recipe as the /design plate, and nothing under `prefers-contrast: more`.
+const clerkStage = (page: Page) => page.locator("[aria-labelledby='clerk-title'] > div").first();
+
+const backgroundOf = (page: Page, selector: string) =>
+  page
+    .locator(selector)
+    .first()
+    .evaluate((el) => getComputedStyle(el).backgroundImage);
+
+test.describe("landing sun-ray stage (#610)", () => {
+  test.beforeEach(() => test.slow());
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C2 ${scheme}: the clerk stage paints the /design sun-rays plate`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/design");
+      const plate = await backgroundOf(page, '[data-plate="sun-rays"]');
+      expect(plate).toContain("repeating-conic-gradient");
+      await ready(page);
+      const stage = await clerkStage(page).evaluate((el) => {
+        const s = getComputedStyle(el);
+        // unchanged layout: beside the file above 900px, stacked over it below
+        const stacked = window.innerWidth <= 900;
+        return {
+          bgImage: s.backgroundImage,
+          minHeight: s.minHeight,
+          rule: stacked ? s.borderBottomWidth : s.borderRightWidth,
+          stacked,
+        };
+      });
+      expect(stage.bgImage).toBe(plate);
+      expect(stage.minHeight).toBe(stage.stacked ? "440px" : "540px");
+      expect(stage.rule).toBe("2px");
+    });
+  }
+
+  test("C3 under prefers-contrast: more the clerk stage paints no rays", async ({ page }) => {
+    await page.emulateMedia({ contrast: "more" });
+    await ready(page);
+    expect(await clerkStage(page).evaluate((el) => getComputedStyle(el).backgroundImage)).toBe(
+      "none",
+    );
+  });
+});
+
 // Contract of #552: the live feed plays a recorded loop of the ring room instead of the 3D embed
 // (bible 7.8, 14.1 item 2). Media fetches use Range requests, so requests are counted by distinct URL.
 const isClip = (url: string) =>

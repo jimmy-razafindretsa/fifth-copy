@@ -30,17 +30,13 @@
   border-bottom: 2px solid var(--color-fg);
 }
 
-/* the Major's stage: sun rays live only behind characters (bible 6) */
+/* the Major's stage: sun rays (`sun-rays` utility) live only behind characters (bible 6) */
 .stage {
   flex: 1 1 420px;
   min-width: 0;
   position: relative;
   min-height: 560px;
-  background-image: repeating-conic-gradient(
-    from 0deg at 50% 92%,
-    color-mix(in srgb, var(--color-primary) 9%, transparent) 0deg 6deg,
-    transparent 6deg 12deg
-  );
+  @apply sun-rays;
   border-right: 2px solid var(--color-fg);
 }
 

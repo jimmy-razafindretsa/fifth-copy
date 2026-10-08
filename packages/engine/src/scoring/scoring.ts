@@ -1,4 +1,6 @@
 import type { PlayerState } from "../reducers/state";
+import { baseLengthOf } from "../text/overlay";
+import type { TextOverlay } from "../types";
 
 /** Characters per word for every WPM figure (spec 4.2). Not the text-length setting (`wordCount`). */
 const CHARS_PER_WORD = 5;
@@ -64,4 +66,26 @@ export function elapsedFor(
   raceElapsedMs: number,
 ): number {
   return status === "finished" && finishedAt !== null ? finishedAt : raceElapsedMs;
+}
+
+/**
+ * Clean and bonus-adjusted WPM (ADR 0007, ADR 0016) of a desk typing `effectiveText(base, overlay)`.
+ * `clean`: the correct characters that belong to the base text (positions before `baseLengthOf`;
+ * `typed[i] === null` is a correct character at `i`), so Extra Paperwork words never count;
+ * `adjusted`: `wpm` over every correct character of the effective text. Removed words are in
+ * neither, so with no `extra` both equal `wpm`.
+ */
+export function cleanAndAdjustedWpm(
+  state: Pick<PlayerState, "correct" | "typed">,
+  base: string,
+  overlay: TextOverlay,
+  elapsedMs: number,
+): { clean: number; adjusted: number } {
+  const adjusted = wpm(state, elapsedMs);
+  if (overlay.extra.length === 0) return { clean: adjusted, adjusted };
+  const baseLength = baseLengthOf(base, overlay);
+  let correct = 0;
+  const end = Math.min(baseLength, state.typed.length);
+  for (let i = 0; i < end; i++) if (state.typed[i] === null) correct += 1;
+  return { clean: perMinute(correct, elapsedMs), adjusted };
 }

@@ -32,3 +32,12 @@ export type PlayerStatus =
 
 /** Deterministic random source for bots and tests (never Math.random inside the engine). */
 export type Rng = () => number;
+
+/** The catch-up bonuses (spec 10, ADR 0016). Mirrored by `bonusKindSchema` in @fifth-copy/protocol. */
+export type BonusKind = "extra-paperwork" | "exemption" | "smoke-break";
+
+/**
+ * One desk's changes to the base text (ADR 0007): `extra` words appended at the end, `removed` base
+ * word indexes. Treated as immutable. Mirrored by `textOverlaySchema` in @fifth-copy/protocol.
+ */
+export type TextOverlay = { extra: string[]; removed: number[] };

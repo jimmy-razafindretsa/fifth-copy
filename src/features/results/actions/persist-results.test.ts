@@ -1,10 +1,16 @@
 import { gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
-import { BACKSPACE, type Keystroke } from "@fifth-copy/engine";
-import { MAX_RACE_MS } from "@fifth-copy/protocol";
+import { BACKSPACE, ENGINE_VERSION, type Keystroke } from "@fifth-copy/engine";
+import {
+  MAX_RACE_MS,
+  PROTOCOL_VERSION,
+  type InternalRaceResult,
+  type RaceResultsRequest,
+} from "@fifth-copy/protocol";
 
 vi.mock("@/server/db", () => ({ db: {} }));
-const { decodeTrace, MAX_KEYSTROKE_JSON_BYTES } = await import("./persist-results");
+const { decodeTrace, MAX_KEYSTROKE_JSON_BYTES, persistRaceResults } =
+  await import("./persist-results");
 
 // #189: the web never trusts a trace's gzip (gzip bomb, count mismatch, foreign JSON).
 
@@ -62,5 +68,64 @@ describe("decodeTrace", () => {
     expect(Math.max(...largest)).toBeLessThanOrEqual(MAX_KEYSTROKE_JSON_BYTES);
     const full = Array.from({ length: 500 }, () => ({ t: MAX_RACE_MS, key: BACKSPACE }));
     expect(decodeTrace(trace(full, 500), 1_000)?.keystrokes).toHaveLength(500);
+  });
+});
+
+describe("persistRaceResults status mapping (#183 C4)", () => {
+  it("stores an abandoned desk as REASSIGNED with its frozen progress, an asleep one as ASLEEP", async () => {
+    const created: { status: string; progress: number; desk: number }[] = [];
+    const tx = {
+      race: { updateMany: async () => ({ count: 1 }) },
+      raceResult: {
+        upsert: async ({ create }: { create: (typeof created)[number] }) =>
+          void created.push(create),
+      },
+      raceKeystrokes: { upsert: async () => undefined },
+    };
+    const db = {
+      race: { findUnique: async () => ({ textContent: "bonjour" }) },
+      user: { findMany: async () => [{ id: "usr_1" }, { id: "usr_2" }] },
+      $transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx),
+    };
+    const result = (desk: number, status: InternalRaceResult["status"], cursor: number) =>
+      ({
+        desk,
+        userId: `usr_${desk}`,
+        name: `Clerk ${desk}`,
+        isBot: false,
+        place: desk,
+        status,
+        wpm: 10,
+        rawWpm: 10,
+        cleanWpm: 10,
+        adjustedWpm: 10,
+        accuracy: 1,
+        progress: cursor / 7,
+        correct: cursor,
+        errors: 0,
+        total: cursor,
+        durationMs: 1_000,
+        finishedAtMs: null,
+        bonusesSent: 0,
+        bonusesReceived: 0,
+        bonusLog: [],
+        flags: [],
+        engineVersion: ENGINE_VERSION,
+        trace: trace([], 0),
+      }) satisfies InternalRaceResult;
+    const request: RaceResultsRequest = {
+      v: PROTOCOL_VERSION,
+      raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+      endedAt: 1_767_225_660_000,
+      reason: "all-finished",
+      lobbySize: 2,
+      results: [result(1, "asleep", 2), result(2, "abandoned", 3)],
+    };
+    const outcome = await persistRaceResults(request, { db: db as never });
+    expect(outcome.ok).toBe(true);
+    expect(created.map(({ desk, status, progress }) => ({ desk, status, progress }))).toEqual([
+      { desk: 1, status: "ASLEEP", progress: 2 / 7 },
+      { desk: 2, status: "REASSIGNED", progress: 3 / 7 },
+    ]);
   });
 });

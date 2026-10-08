@@ -1,7 +1,7 @@
 import type { RaceEvent, Snapshot } from "@fifth-copy/protocol";
 import { PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import type { Clock, Scheduler, TimerHandle } from "../clock";
-import type { DesksState } from "./desks-state";
+import type { DesksState, RoomRuntime } from "./desks-state";
 import { collectSnapshot, diffRanks, raceElapsed } from "./live-rank";
 
 /** Snapshot period (ADR 0006 point 4: 10 Hz). */
@@ -14,6 +14,13 @@ export type TickEmit = {
   /** To the sockets of one desk (a user's tabs share it). */
   desk(lobbyId: string, desk: number, payload: RaceEvent): void;
 };
+
+/**
+ * One extra step of a running room's tick, run before the mirror flush and the snapshot so what it
+ * changes (through `desksState.set`) is in that very tick's snapshot and terminal check. Never run
+ * on the final tick of `finish`: the ranking is already decided. Synchronous, Redis-free.
+ */
+export type TickStep = (runtime: RoomRuntime, now: number) => void;
 
 export type Ticker = {
   /** Starts the room's 10 Hz loop at GO; the runtime must be open. */
@@ -34,7 +41,7 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * dirty desks to Redis (one MULTI), emits the full `snapshot`, then the events of the rank diff:
  * `overtake`/`passed` to the two desks, `new-leader` and `finished { place }` to the room. A desk
  * that turned terminal triggers `onTerminal` (the lifecycle ends the race when all are). Extension
- * point: bonuses (#190) and idle (#183) add a step to `tick`.
+ * point: `steps` (idle #183; bonuses #190) run first in every tick but the final one.
  */
 export function createTicker({
   desksState,
@@ -42,12 +49,14 @@ export function createTicker({
   scheduler,
   emit,
   onTerminal,
+  steps = [],
 }: {
   desksState: DesksState;
   clock: Clock;
   scheduler: Scheduler;
   emit: TickEmit;
   onTerminal: (lobbyId: string) => void;
+  steps?: readonly TickStep[];
 }): Ticker {
   type Loop = { handle: TimerHandle | null; ranks: number[]; announced: Set<number> };
   const loops = new Map<string, Loop>();
@@ -56,11 +65,13 @@ export function createTicker({
   function tick(lobbyId: string, loop: Loop, final: boolean) {
     const runtime = desksState.get(lobbyId);
     if (!runtime) return stop(lobbyId);
+    const now = clock.now();
+    if (!final) for (const step of steps) step(runtime, now);
     desksState
       .flush(lobbyId)
       .catch((err: unknown) => log("desks flush failed", { lobby: lobbyId, err: String(err) }));
 
-    const { snapshot, ranking } = collectSnapshot(runtime, raceElapsed(runtime, clock.now()));
+    const { snapshot, ranking } = collectSnapshot(runtime, raceElapsed(runtime, now));
     emit.room(lobbyId, "snapshot", snapshot);
 
     const { overtakes, newLeader } = diffRanks(loop.ranks, snapshot.ranks);

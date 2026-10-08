@@ -13,7 +13,6 @@ import {
   progress,
   rawWpm,
   wpm,
-  type Flag,
   type Keystroke,
   type TraceAnalysisInput,
 } from "@fifth-copy/engine";
@@ -252,7 +251,7 @@ describe("buildResults flags (#195 C3)", () => {
 
   it("an oversized trace is analysed as applied, before it is sent empty", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
-    const analyse = vi.fn((_input: TraceAnalysisInput): Flag[] => []);
+    const analyse = vi.fn<typeof analyseTrace>(() => []);
     const trace = Array.from({ length: 120_000 }, (_, i) => ({ t: i, key: "x" }));
     const [request] = buildResults(
       ended([entry(1, 1)]),

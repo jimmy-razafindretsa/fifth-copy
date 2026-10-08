@@ -108,7 +108,8 @@ const isKnownError = (err: unknown, code: string) =>
  * transaction: the race's end (`endedAt`, `endReason`, `lobbySize`; first write wins), one
  * `RaceResult` per desk and the `RaceKeystrokes` of each human desk with keystrokes, all upserted by
  * `(raceId, desk)` with no update, so a repeat is a no-op and answers the same. Numbers are stored
- * as sent: the race server ran the engine (ADR 0007). Refuses an unknown race (`not-found`) and an
+ * as sent: the race server ran the engine (ADR 0007), its anti-cheat flags included (`suspicious`,
+ * `suspiciousReason` = the flag codes joined by `,`; #195). Refuses an unknown race (`not-found`) and an
  * incoherent chunk or a trace that does not inflate to `count` keystrokes within the race's
  * `traceCapOf` (`bad-body`, nothing written). A desk whose user no longer exists (account deleted
  * mid-race) is acknowledged without a row: its deletion would have removed it anyway.
@@ -177,6 +178,9 @@ export async function persistRaceResults(
             bonusesSent: r.bonusesSent,
             bonusesReceived: r.bonusesReceived,
             bonusLog: r.bonusLog,
+            // Flags from the race server's trace analysis (#195, ADR 0007): stored, never re-run.
+            suspicious: r.flags.length > 0,
+            suspiciousReason: r.flags.map((f) => f.code).join(",") || null,
             engineVersion: r.engineVersion,
           },
         });

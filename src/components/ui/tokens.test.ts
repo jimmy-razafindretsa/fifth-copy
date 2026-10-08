@@ -543,7 +543,9 @@ describe("#20 type roles", () => {
         if (file.endsWith(".module.css") && /^\s*font(-family)?\s*:/.test(line)) {
           hits.push(`${file}:${i + 1} ${line.trim()}`);
         }
-        if (/var\(--font-(stardos|oswald|plex-mono|special-elite|courier-prime|vt323)\)/.test(line)) {
+        if (
+          /var\(--font-(stardos|oswald|plex-mono|special-elite|courier-prime|vt323)\)/.test(line)
+        ) {
           hits.push(`${file}:${i + 1} ${line.trim()}`);
         }
       });

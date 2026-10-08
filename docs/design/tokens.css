@@ -192,12 +192,12 @@
  * One setting drives them: `prefers-reduced-motion` or `<html data-motion="reduce">` (the pair below
  * mirrors the theme pair above) zeroes the four durations. The bible-8 keyframes (caret, marquee, stars,
  * bob, pulse, slams) keep their listed seconds and stop in their own reduce blocks under both selectors.
- * `--motion-duration-slam` is contracted for the stamp (#26) and is not bound to anything yet.
+ * `--motion-duration-slam` (350ms, bible 8 slams 0.3-0.45s) drives the `Stamp` slam (#26, stamp.module.css).
  */
 :root {
   --motion-duration-fast: 120ms;
   --motion-duration-base: 200ms;
-  --motion-duration-slam: 180ms;
+  --motion-duration-slam: 350ms;
   --motion-duration-slow: 600ms;
   /* fcPop (bible 8) eases out; the slam overshoots like the lobby's fcSlam */
   --motion-ease-out: ease-out;

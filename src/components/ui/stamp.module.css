@@ -1,0 +1,70 @@
+/*
+ * Stamp (#26, design bible 7.3 and 8): a crooked label in a 4px double rule on the paper-ish ground of the
+ * #107 extension, ported 1:1 from the shipped HOST (lobby.module.css) and FILE NOT FOUND
+ * (not-found.module.css) stamps. One fcSlam serves every angle through --stamp-angle (set inline).
+ * Colours are roles only: red = link-role text (agit-red on paper, night-ink on Night shift, bible 3.3)
+ * on a primary rule in both themes; ink = fg text and rule (a 7.3 extension, #26).
+ */
+
+@keyframes fcSlam {
+  0% {
+    transform: scale(2.2) rotate(calc(var(--stamp-angle) - 8deg));
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.9) rotate(calc(var(--stamp-angle) + 1deg));
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(var(--stamp-angle));
+  }
+}
+
+.stamp {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: break-word;
+  border: 4px double;
+  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+  transform: rotate(var(--stamp-angle));
+  transform-origin: center;
+  animation: fcSlam var(--motion-duration-slam) var(--motion-ease-slam) both;
+}
+
+.red {
+  color: var(--color-link);
+  border-color: var(--color-primary);
+}
+
+.ink {
+  color: var(--color-fg);
+  border-color: var(--color-fg);
+}
+
+/* padding by size: sm = the HOST badge (7.3 #107), md = FILE NOT FOUND, lg extends the same step */
+.sm {
+  padding: 2px 8px;
+}
+
+.md {
+  padding: 8px 14px;
+}
+
+.lg {
+  padding: 12px 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
+}
+
+/* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
+:root[data-motion="reduce"] .stamp {
+  animation: none;
+}

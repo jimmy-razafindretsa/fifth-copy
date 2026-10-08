@@ -13,5 +13,15 @@ export { MotionSafe, useReducedMotion } from "./motion";
 export { Skeleton } from "./skeleton";
 export { Spinner, type SpinnerProps } from "./spinner";
 export { Star, type StarTone } from "./star";
+export {
+  STAMP_ANGLE,
+  Stamp,
+  type StampProps,
+  type StampRotation,
+  type StampSize,
+  type StampTone,
+  clampRotation,
+  rotationFromSeed,
+} from "./stamp";
 export { useEmbedBridge } from "./use-embed-bridge";
 export { NEAR_VIEWPORT, useInViewport, useNearViewport } from "./use-near-viewport";

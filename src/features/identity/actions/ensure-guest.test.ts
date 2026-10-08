@@ -76,6 +76,50 @@ function fakeDb() {
 
 const cookie = (): Cookie | undefined => state.jar.get(GUEST_COOKIE);
 
+// Wraps a real client and records every write it is asked to make, on any model or
+// raw. Asserting on calls, not on the global row count, stays exact while other DB
+// test files insert users in parallel. A Proxy, because Prisma 7 model delegates are
+// lazy getters that vi.spyOn cannot redefine.
+const WRITES = new Set([
+  "create",
+  "createMany",
+  "createManyAndReturn",
+  "upsert",
+  "update",
+  "updateMany",
+  "updateManyAndReturn",
+  "delete",
+  "deleteMany",
+]);
+const RAW_WRITES = new Set(["$executeRaw", "$executeRawUnsafe", "$transaction"]);
+function recordWrites<T extends object>(client: T) {
+  const writes: string[] = [];
+  const bind = (target: object, key: PropertyKey) => {
+    const value = Reflect.get(target, key, target) as unknown;
+    return typeof value === "function" ? value.bind(target) : value;
+  };
+  const db = new Proxy(client, {
+    get(target, key) {
+      const value = bind(target, key);
+      if (typeof key !== "string") return value;
+      if (RAW_WRITES.has(key) && typeof value === "function") {
+        return (...args: unknown[]) => (writes.push(key), value(...args));
+      }
+      if (key.startsWith("$") || value === null || typeof value !== "object") return value;
+      return new Proxy(value, {
+        get(delegate, method) {
+          const fn = bind(delegate, method);
+          if (typeof method !== "string" || !WRITES.has(method) || typeof fn !== "function") {
+            return fn;
+          }
+          return (...args: unknown[]) => (writes.push(`${key}.${method}`), fn(...args));
+        },
+      });
+    },
+  });
+  return { db, writes };
+}
+
 describe("ensureGuest (unit, fake DB)", () => {
   let fake: ReturnType<typeof fakeDb>;
 
@@ -201,13 +245,23 @@ describe.skipIf(!testDatabaseUrl)(
     });
 
     it("C3: getViewer never inserts a row, with or without a (bad) cookie", async () => {
-      const before = await db.user.count();
-      await getViewer();
+      const recorded = recordWrites(db);
+      state.db = recorded.db; // the next beforeEach restores the plain client
+
+      await expect(getViewer()).resolves.toBeNull();
+      expect(cookie()).toBeUndefined();
+
+      // A bad cookie is cleared (best-effort delete), never replaced by one naming a new id.
       state.jar.set(GUEST_COOKIE, { value: signGuestCookie("no-such-user", SECRET) });
-      await getViewer();
+      await expect(getViewer()).resolves.toBeNull();
+      expect(cookie()).toBeUndefined();
+
       state.jar.set(GUEST_COOKIE, { value: "tampered.cookie" });
-      await getViewer();
-      expect(await db.user.count()).toBe(before);
+      await expect(getViewer()).resolves.toBeNull();
+      expect(cookie()).toBeUndefined();
+
+      expect(recorded.writes).toEqual([]);
+      await expect(db.user.findUnique({ where: { id: "no-such-user" } })).resolves.toBeNull();
     });
 
     it("C9: an unknown-id cookie is replaced by a freshly signed cookie for a new guest", async () => {

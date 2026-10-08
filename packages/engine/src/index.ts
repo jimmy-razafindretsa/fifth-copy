@@ -25,6 +25,19 @@ export { accuracy, elapsedFor, progress, rawWpm, wpm } from "./scoring/scoring";
 // trace: the bound on one desk's stored keystrokes (race server ingest, web persistence)
 export { TRACE_ALLOWANCE, TRACE_KEYS_PER_CHAR, traceCapOf } from "./trace/cap";
 
+// anticheat: does a desk's keystroke trace look human (server at race end, worker re-analysis)
+export {
+  analyseTrace,
+  replayTrace,
+  type Flag,
+  type FlagCode,
+  type TraceAnalysisInput,
+} from "./anticheat/analyse";
+export { DEFAULT_THRESHOLDS, type Thresholds } from "./anticheat/thresholds";
+
+// testing: the seeded PRNG of the property tests, also used by scripts/trace-fixtures.ts
+export { mulberry32 } from "./testing/rng";
+
 // ranking: one comparator for live and final order
 export { compareResults, placeOf, rank, type Rankable } from "./ranking/compare";
 

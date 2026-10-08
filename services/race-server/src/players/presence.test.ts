@@ -15,6 +15,7 @@ import {
   startedRace,
   typeKeys,
   until,
+  WAIT_MS,
   watchRace,
   type Booted,
   type Racer,
@@ -46,7 +47,7 @@ const lastRow = (r: Racer, desk: number) =>
 async function tick(b: Booted, who: Racer) {
   const before = who.seen.snapshots.length;
   b.clock.advance(100);
-  await until(() => who.seen.snapshots.length > before, 2_000, "snapshot");
+  await until(() => who.seen.snapshots.length > before, WAIT_MS, "snapshot");
 }
 
 /**
@@ -72,7 +73,7 @@ async function advance(b: Booted, ms: number, awake?: { who: Racer; lobby: strin
     });
     await until(
       () => (b.server.desks.states(awake.lobby).get(awake.who.desk)?.total ?? 0) > before,
-      2_000,
+      WAIT_MS,
       "awake keys",
     );
   }
@@ -84,7 +85,7 @@ const statusOf = (b: Booted, lobby: string, desk: number) =>
 async function cursorReached(b: Booted, lobby: string, desk: number, cursor: number) {
   await until(
     () => b.server.desks.states(lobby).get(desk)?.cursor === cursor,
-    2_000,
+    WAIT_MS,
     `desk ${desk} at ${cursor}`,
   );
 }
@@ -99,7 +100,7 @@ async function cutRace(options: Parameters<typeof startedRace>[1] = {}) {
   const key = player.seen.welcome!.resumeKey!;
   const before = await race.booted.server.registry.room(race.lobby);
   player.client.disconnect();
-  await until(() => kinds(host.seen.events, "line-cut").length === 1, 2_000, "line-cut event");
+  await until(() => kinds(host.seen.events, "line-cut").length === 1, WAIT_MS, "line-cut event");
   return { ...race, host, player, key, before };
 }
 
@@ -134,9 +135,9 @@ describe("line cut (C1)", () => {
     booted = race.booted;
     const [host, player] = race.racers as [Racer, Racer];
     player.client.disconnect();
-    await until(() => kinds(host.seen.events, "line-cut").length === 1, 2_000, "line-cut event");
+    await until(() => kinds(host.seen.events, "line-cut").length === 1, WAIT_MS, "line-cut event");
     booted.clock.advance(race.t0 - booted.clock.now());
-    await until(() => booted!.server.desks.get(race.lobby)?.phase === "running", 2_000, "GO");
+    await until(() => booted!.server.desks.get(race.lobby)?.phase === "running", WAIT_MS, "GO");
     expect(statusOf(booted, race.lobby, player.desk)).toBe("line-cut");
   });
 });
@@ -154,7 +155,7 @@ describe("resume (C2)", () => {
 
     const back = b.connect({ v: PROTOCOL_VERSION, token: player.token, resumeKey: key });
     const again = watchRace(back);
-    await until(() => !!again.welcome, 2_000, "welcome after resume");
+    await until(() => !!again.welcome, WAIT_MS, "welcome after resume");
     const welcome = again.welcome!;
     expect(welcomeSchema.safeParse(welcome).success).toBe(true);
     expect(welcome).toMatchObject({
@@ -164,14 +165,14 @@ describe("resume (C2)", () => {
       state: { cursor: 3, status: "typing" },
       resumeKey: key,
     });
-    await until(() => kinds(host.seen.events, "resumed").length === 1, 2_000, "resumed event");
+    await until(() => kinds(host.seen.events, "resumed").length === 1, WAIT_MS, "resumed event");
     expect(kinds(host.seen.events, "resumed")[0]).toMatchObject({ desk: player.desk });
     // Back under the room TTL.
     expect(await redis.ttl(resumeKey(key))).toBeGreaterThan(GRACE_MS / 1000);
 
     // The remaining keys continue from the server's cursor.
     typeKeys(back, "jour", b.clock.now() - welcome.race!.t0);
-    await until(() => statusOf(b, lobby, player.desk) === "finished", 2_000, "finished");
+    await until(() => statusOf(b, lobby, player.desk) === "finished", WAIT_MS, "finished");
     expect(b.server.desks.states(lobby).get(player.desk)?.cursor).toBe(7);
 
     // Listed once, at the same desk.
@@ -212,18 +213,21 @@ describe("grace expiry (C3)", () => {
 
     const key = cut.seen.welcome!.resumeKey!;
     cut.client.disconnect();
-    await until(() => kinds(host.seen.events, "line-cut").length === 1, 2_000, "line-cut");
+    await until(() => kinds(host.seen.events, "line-cut").length === 1, WAIT_MS, "line-cut");
 
     await advance(b, GRACE_MS - 1_000, { who: host, lobby });
     expect(statusOf(b, lobby, cut.desk)).toBe("line-cut");
     await advance(b, 1_000);
-    await until(() => statusOf(b, lobby, cut.desk) === "expired", 2_000, "expired");
+    await until(() => statusOf(b, lobby, cut.desk) === "expired", WAIT_MS, "expired");
     await tick(b, host);
     expect(lastRow(host, cut.desk)).toEqual([cut.desk, 3, 3, 0, PLAYER_STATUS_CODES.expired]);
-    expect(await redis.exists(resumeKey(key))).toBe(0);
+    // The resume-key drop lands after the in-memory state the wait above saw (#600).
+    await expect
+      .poll(() => redis.exists(resumeKey(key)), { timeout: WAIT_MS, interval: 20 })
+      .toBe(0);
     // Coming back with the old key after expiry: welcomed with the outcome, no resume.
     const late = watchRace(b.connect({ v: PROTOCOL_VERSION, token: cut.token, resumeKey: key }));
-    await until(() => !!late.welcome, 2_000, "late welcome");
+    await until(() => !!late.welcome, WAIT_MS, "late welcome");
     expect(late.welcome).toMatchObject({
       you: cut.desk,
       room: { phase: "running" },
@@ -232,7 +236,7 @@ describe("grace expiry (C3)", () => {
     expect(kinds(host.seen.events, "resumed")).toHaveLength(0);
 
     await advance(b, 180_000 - GRACE_MS, { who: host, lobby });
-    await until(() => host.seen.ended.length === 1, 2_000, "ended");
+    await until(() => host.seen.ended.length === 1, WAIT_MS, "ended");
     const ranking = host.seen.ended[0]!.ranking;
     expect(ranking.map((r) => [r.desk, r.status])).toEqual([
       [host.desk, "typing"],
@@ -253,12 +257,15 @@ describe("grace expiry (C3)", () => {
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
     });
     await advance(b, 60_000);
-    await until(() => host.seen.ended.length === 1, 2_000, "ended");
+    await until(() => host.seen.ended.length === 1, WAIT_MS, "ended");
     const entry = host.seen.ended[0]!.ranking.find((r) => r.desk === player.desk);
     expect(host.seen.ended[0]!.reason).toBe("timer");
     expect(entry?.status).toBe("expired");
     expect(entry?.progress).toBeCloseTo(3 / 7);
-    expect(await redis.exists(resumeKey(key))).toBe(0);
+    // The resume-key drop lands after the in-memory state the wait above saw (#600).
+    await expect
+      .poll(() => redis.exists(resumeKey(key)), { timeout: WAIT_MS, interval: 20 })
+      .toBe(0);
     // No grace timer outlives the race.
     expect(b.scheduler.armed()).toBe(0);
   });
@@ -268,9 +275,9 @@ describe("grace expiry (C3)", () => {
     const race = await cutRace({ onRaceEnded: (e) => void ended.push(e.reason) });
     const { booted: b, host, lobby } = race;
     host.client.disconnect();
-    await until(() => statusOf(b, lobby, host.desk) === "line-cut", 2_000, "host line-cut");
+    await until(() => statusOf(b, lobby, host.desk) === "line-cut", WAIT_MS, "host line-cut");
     await advance(b, GRACE_MS + 1_000);
-    await until(() => ended.length === 1, 2_000, "ended");
+    await until(() => ended.length === 1, WAIT_MS, "ended");
     expect(ended).toEqual(["all-finished"]);
   });
 });
@@ -290,14 +297,14 @@ describe("resume keys are bound to the token (C4)", () => {
     const hostTab = watchRace(
       b.connect({ v: PROTOCOL_VERSION, token: host.token, resumeKey: key }),
     );
-    await until(() => !!hostTab.welcome, 2_000, "host tab welcome");
+    await until(() => !!hostTab.welcome, WAIT_MS, "host tab welcome");
     expect(hostTab.welcome?.you).toBe(host.desk);
 
     // The cut user with a made-up key: welcomed (a member), the desk stays line-cut.
     const madeUp = watchRace(
       b.connect({ v: PROTOCOL_VERSION, token: player.token, resumeKey: "f0".repeat(32) }),
     );
-    await until(() => !!madeUp.welcome, 2_000, "made-up welcome");
+    await until(() => !!madeUp.welcome, WAIT_MS, "made-up welcome");
     expect(madeUp.welcome).toMatchObject({ you: player.desk, state: { status: "line-cut" } });
 
     // A resume key with an invalid token is bad-token.
@@ -319,7 +326,7 @@ describe("waiting room and tabs (C5)", () => {
     const [host, player] = race.racers as [Racer, Racer];
     const tab2Client = b.connect({ v: PROTOCOL_VERSION, token: player.token });
     const tab2 = watchRace(tab2Client);
-    await until(() => !!tab2.welcome, 2_000, "tab 2 welcome");
+    await until(() => !!tab2.welcome, WAIT_MS, "tab 2 welcome");
     expect(tab2.welcome?.resumeKey).toBe(player.seen.welcome?.resumeKey);
 
     player.client.disconnect();
@@ -330,7 +337,7 @@ describe("waiting room and tabs (C5)", () => {
     expect(b.server.presence.isConnected(race.lobby, player.desk)).toBe(true);
 
     tab2Client.disconnect();
-    await until(() => kinds(host.seen.events, "line-cut").length === 1, 2_000, "line cut");
+    await until(() => kinds(host.seen.events, "line-cut").length === 1, WAIT_MS, "line cut");
   });
 
   it("after the race ends, the last socket of a user frees the desk (roster)", async () => {
@@ -345,9 +352,9 @@ describe("waiting room and tabs (C5)", () => {
     booted = b;
     const [host, player] = racers as [Racer, Racer];
     await advance(b, 60_000);
-    await until(() => host.seen.ended.length === 1, 2_000, "ended");
+    await until(() => host.seen.ended.length === 1, WAIT_MS, "ended");
     player.client.disconnect();
-    await until(() => host.seen.roster?.length === 1, 2_000, "roster 1");
+    await until(() => host.seen.roster?.length === 1, WAIT_MS, "roster 1");
     expect((await b.server.registry.members(lobby))?.map((m) => m.desk)).toEqual([1]);
   });
 });

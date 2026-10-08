@@ -27,6 +27,7 @@ import {
   HOST_SUB,
   track,
   until,
+  WAIT_MS,
   type Booted,
   SECRET,
   type Client,
@@ -95,7 +96,7 @@ async function room({
       [seenHost, ...others.map((o) => o.seen)].every(
         (s) => s.roster?.length === players + 1 + settings.bots.length,
       ),
-    3_000,
+    WAIT_MS,
     "everyone seated",
   );
   return { booted, lobby, host, seenHost, others, connectAs };
@@ -110,11 +111,11 @@ async function hash(lobby: string) {
   }
 }
 
-/** Polls an async check (Redis reads) every 20 ms. */
-async function eventually(check: () => Promise<boolean>, what: string, ms = 2_000) {
+/** Polls an async check (Redis reads) every 20 ms, with the harness deadline and message. */
+async function eventually(check: () => Promise<boolean>, what: string, ms = WAIT_MS) {
   const deadline = Date.now() + ms;
   while (!(await check())) {
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > deadline) throw new Error(`timed out after ${ms} ms waiting for ${what}`);
     await new Promise((r) => setTimeout(r, 20));
   }
 }
@@ -134,7 +135,7 @@ describe("lifecycle: host start and countdown (C1)", () => {
 
     await until(
       () => seenHost.countdown.length === 1 && others[0]!.seen.countdown.length === 1,
-      2_000,
+      WAIT_MS,
       "countdown to every member",
     );
     for (const seen of [seenHost, others[0]!.seen]) {
@@ -160,7 +161,7 @@ describe("lifecycle: host start and countdown (C1)", () => {
 
     // A second tab of a member: welcome with the current phase and the race filled.
     const tab = watch(await connectAs("usr_p0", "Clerk 0"));
-    await until(() => !!tab.welcome, 2_000, "second tab welcome");
+    await until(() => !!tab.welcome, WAIT_MS, "second tab welcome");
     expect(welcomeSchema.parse(tab.welcome)).toMatchObject({
       you: 2,
       room: { phase: "running" },
@@ -255,7 +256,7 @@ describe("lifecycle: text from the web app over the signed internal API (#199 C5
     ]);
 
     const everyone = [seenHost, ...others.map((o) => o.seen)];
-    await until(() => everyone.every((s) => s.countdown.length === 1), 2_000, "countdown");
+    await until(() => everyone.every((s) => s.countdown.length === 1), WAIT_MS, "countdown");
     for (const seen of everyone) {
       expect(seen.countdown[0]!.race).toMatchObject({
         text: STUB_TEXT.content,
@@ -267,7 +268,7 @@ describe("lifecycle: text from the web app over the signed internal API (#199 C5
     booted.clock.advance(3_000);
     await eventually(async () => (await phaseOf(lobby)) === "running", "phase running");
     const tab = watch(await connectAs("usr_p0", "Clerk 0"));
-    await until(() => !!tab.welcome, 2_000, "second tab welcome");
+    await until(() => !!tab.welcome, WAIT_MS, "second tab welcome");
     const welcome = welcomeSchema.parse(tab.welcome);
     expect(welcome.room.phase).toBe("running");
     expect(welcome.race?.text).toBe(STUB_TEXT.content);
@@ -329,7 +330,7 @@ describe("lifecycle: refusals (C2)", () => {
     };
     const { booted, host, lobby } = await room({ webApi });
     const ack = start(host);
-    await until(() => called, 2_000, "web start call");
+    await until(() => called, WAIT_MS, "web start call");
     booted.clock.advance(5_000);
     expect(await ack).toEqual({ ok: false, error: "start-failed" });
     expect(await phaseOf(lobby)).toBe("waiting");
@@ -376,7 +377,7 @@ describe("lifecycle: timer end (C3)", () => {
       onRaceEnded: (e) => void ends.push(e),
     });
     const ack = await start(host);
-    await until(() => seenHost.countdown.length === 1, 2_000, "countdown");
+    await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
     booted.clock.advance(3_000);
     await eventually(async () => (await phaseOf(lobby)) === "running", "phase running");
     booted.clock.advance(59_999);
@@ -385,7 +386,7 @@ describe("lifecycle: timer end (C3)", () => {
     booted.clock.advance(1);
 
     const everyone = [seenHost, ...others.map((o) => o.seen)];
-    await until(() => everyone.every((s) => s.ended.length === 1), 2_000, "ended to every member");
+    await until(() => everyone.every((s) => s.ended.length === 1), WAIT_MS, "ended to every member");
     for (const seen of everyone) {
       const ended = endedSchema.parse(seen.ended[0]);
       expect(ended).toMatchObject({ raceId: (ack as { raceId: string }).raceId, reason: "timer" });
@@ -404,11 +405,11 @@ describe("lifecycle: timer end (C3)", () => {
   it("an untimed race emits nothing after 10 minutes and ends as timer at t0 + MAX_RACE_MS", async () => {
     const { booted, host, lobby, seenHost, others } = await room();
     await start(host);
-    await until(() => seenHost.countdown.length === 1, 2_000, "countdown");
+    await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
     const t0 = seenHost.countdown[0]!.race.t0;
     expect((await hash(lobby)).fields.endAt).toBe(String(t0 + MAX_RACE_MS));
     booted.clock.advance(3_000);
-    await until(() => booted.server.desks.get(lobby)?.phase === "running", 2_000, "GO");
+    await until(() => booted.server.desks.get(lobby)?.phase === "running", WAIT_MS, "GO");
 
     // Both desks send a wrong key and its correction every 40 s, so neither reaches the idle
     // kick (#183) and the race is still running when the hard stop fires.
@@ -430,7 +431,7 @@ describe("lifecycle: timer end (C3)", () => {
         }
         await until(
           () => totals().reduce((a, b) => a + b, 0) === before + 2 * clients.length,
-          2_000,
+          WAIT_MS,
           "awake keys",
         );
       }
@@ -442,16 +443,16 @@ describe("lifecycle: timer end (C3)", () => {
     await settle();
     expect(seenHost.ended).toHaveLength(0);
     booted.clock.advance(1);
-    await until(() => seenHost.ended.length === 1, 2_000, "hard stop");
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "hard stop");
     expect(seenHost.ended[0]!.reason).toBe("timer");
-  }, 20_000); // ~36 000 fake ticks of 10 Hz snapshots (#173) run inside one hour of fake time
+  }, 10 * WAIT_MS); // ~36 000 fake ticks of 10 Hz snapshots (#173) inside one hour of fake time; scales with the wait deadline (#600)
 });
 
 describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {
   it("ping { sent } -> pong { sent, serverNow } to the sender only; a bad ping is dropped", async () => {
     const { booted, host, seenHost, others } = await room();
     host.emit("ping", { v: PROTOCOL_VERSION, sent: 123 });
-    await until(() => seenHost.pong.length === 1, 2_000, "pong");
+    await until(() => seenHost.pong.length === 1, WAIT_MS, "pong");
     expect(seenHost.pong[0]).toEqual({
       v: PROTOCOL_VERSION,
       sent: 123,
@@ -478,7 +479,7 @@ describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {
 
     // #178: the desk is line-cut, not freed; the clock never pauses.
     others[0]!.client.disconnect();
-    await until(() => lineCuts.length === 1, 2_000, "line cut");
+    await until(() => lineCuts.length === 1, WAIT_MS, "line cut");
     const after = await hash(lobby);
     expect(after.fields).toEqual(before);
     expect(after.ttl).toBeGreaterThan(0);
@@ -486,7 +487,7 @@ describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {
 
     // The dropped desk is still ranked from the desks captured at start.
     booted.clock.advance(60_000);
-    await until(() => seenHost.ended.length === 1, 2_000, "ended");
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
     expect(seenHost.ended[0]!.ranking.map((r) => r.desk).sort()).toEqual([1, 2]);
   });
 });
@@ -499,7 +500,7 @@ describe("lifecycle: room close", () => {
     others[0]!.client.disconnect();
     host.disconnect();
     // GO, timer end, two grace timers; the room stays open while the race is on.
-    await until(() => booted.scheduler.armed() === 4, 2_000, "grace timers armed");
+    await until(() => booted.scheduler.armed() === 4, WAIT_MS, "grace timers armed");
     expect((await hash(lobby)).fields.openedAt).toBeDefined();
     booted.server.lifecycle.onRoomClosed(lobby);
     expect(booted.scheduler.armed()).toBe(0);
@@ -511,11 +512,11 @@ describe("lifecycle: room close", () => {
     });
     await start(host);
     booted.clock.advance(63_000);
-    await until(() => seenHost.ended.length === 1, 2_000, "ended");
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
     others[0]!.client.disconnect();
     host.disconnect();
     await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
-    await until(() => booted.scheduler.armed() === 0, 2_000, "no timer armed");
+    await until(() => booted.scheduler.armed() === 0, WAIT_MS, "no timer armed");
   });
 });
 

@@ -187,8 +187,8 @@
   padding: 20px 34px;
   background: var(--color-primary-fg);
   color: var(--color-primary);
-  border-color: var(--color-device-bezel);
-  box-shadow: 6px 6px 0 var(--color-device-bezel);
+  border-color: var(--color-band);
+  box-shadow: 6px 6px 0 var(--color-band);
 }
 
 .stampInverted:hover {
@@ -198,11 +198,11 @@
 
 .stampInverted:active,
 .stampInverted:disabled {
-  box-shadow: 2px 2px 0 var(--color-device-bezel);
+  box-shadow: 2px 2px 0 var(--color-band);
 }
 
 .stampInverted:disabled {
-  box-shadow: 6px 6px 0 var(--color-device-bezel);
+  box-shadow: 6px 6px 0 var(--color-band);
 }
 
 /* phones: the stamp button fills the column instead of forcing a horizontal scroll */

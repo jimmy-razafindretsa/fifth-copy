@@ -2,6 +2,7 @@ import type { Redis } from "ioredis";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
+  PLAYER_STATUS_CODES,
   PROTOCOL_VERSION,
   snapshotSchema,
   type RaceEvent,
@@ -12,7 +13,7 @@ import { createFakeClock, createFakeScheduler } from "../clock";
 import { performance } from "node:perf_hooks";
 import { createDesksState, traceCapOf } from "./desks-state";
 import { ingest } from "./ingest";
-import { createTicker, TICK_MS } from "./tick";
+import { createTicker, TICK_MS, type TickStep } from "./tick";
 
 // #173: the 10 Hz tick on the fake clock and scheduler (C3). Redis is a stub: the mirror is
 // covered by desks-state.test.ts and snapshot.bench.test.ts.
@@ -40,7 +41,7 @@ const race: RaceInfo = {
 };
 const desks = [1, 2, 3].map((desk) => ({ desk, userId: `u${desk}`, name: "D", isBot: false }));
 
-function setup() {
+function setup(steps: readonly TickStep[] = []) {
   const clock = createFakeClock(T0);
   const scheduler = createFakeScheduler(clock);
   const { redis, counts } = stubRedis();
@@ -60,6 +61,7 @@ function setup() {
       desk: (_lobby, _desk, payload) => void events.push(payload),
     },
     onTerminal: (lobby) => void terminal.push(lobby),
+    steps,
   });
   const rt = desksState.open("lob", { race, settings: DEFAULT_RACE_SETTINGS, desks });
   ticker.start("lob");
@@ -169,5 +171,28 @@ describe("tick loop (C3)", () => {
     // Per-tick work does not grow with the flood: the median tick stays far below TICK_MS.
     const median = [...durations].sort((a, b) => a - b)[durations.length >> 1]!;
     expect(median).toBeLessThan(5);
+  });
+
+  it("each step runs once per tick before the snapshot, never on the final tick (#183)", () => {
+    const calls: number[] = [];
+    // The step turns desk 3 asleep at its second run: that very tick's snapshot shows it, and the
+    // terminal loop of the same tick fires onTerminal.
+    const step: TickStep = (runtime, now) => {
+      calls.push(now - runtime.t0);
+      if (calls.length === 2)
+        a.desksState.set("lob", 3, { ...a.rt.states.get(3)!, status: "asleep" });
+    };
+    const a = setup([step]);
+    a.clock.advance(TICK_MS);
+    expect(calls).toEqual([100]);
+    expect(a.snapshots.at(-1)!.desks.find(([d]) => d === 3)![4]).toBe(PLAYER_STATUS_CODES.typing);
+    a.clock.advance(TICK_MS);
+    expect(calls).toEqual([100, 200]);
+    expect(a.snapshots).toHaveLength(2);
+    expect(a.snapshots.at(-1)!.desks.find(([d]) => d === 3)![4]).toBe(PLAYER_STATUS_CODES.asleep);
+    expect(a.terminal).toEqual(["lob"]);
+    a.ticker.finish("lob");
+    expect(calls).toHaveLength(2);
+    expect(a.snapshots).toHaveLength(3);
   });
 });

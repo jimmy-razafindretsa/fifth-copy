@@ -42,6 +42,12 @@ export type RoomRuntime = {
   /** Desks captured at start, by desk ascending. */
   readonly desks: readonly RaceDesk[];
   phase: "running" | "ended";
+  /**
+   * Set synchronously when `endRace` starts ending this race (its `onEnding`, before the ranking):
+   * from then on no status transition outside the room queue may land (#183: abandon, idle kick),
+   * so what the room is told always matches the ranking and the stored result.
+   */
+  ending: boolean;
   readonly states: Map<number, DeskState>;
   /** Desks changed since the last flush. */
   readonly dirty: Set<number>;
@@ -134,6 +140,7 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
         engine: engineSettingsOf(settings),
         desks: [...desks].sort((a, b) => a.desk - b.desk),
         phase: "running",
+        ending: false,
         states: new Map(
           desks.map(({ desk }) => [
             desk,

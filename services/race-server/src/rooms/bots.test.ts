@@ -323,6 +323,11 @@ describe("race with a bot (C3)", () => {
     for (let left = 60_000; left > 0; left -= 1_000) {
       t.clock.advance(1_000);
       await new Promise((r) => setImmediate(r));
+      // A key at +30 s keeps the host clear of the idle kick at 60 s (#183).
+      if (left === 30_000) {
+        typeKeys(host!.client, "j", t.clock.now() - race.t0);
+        await until(() => t!.server.desks.states(race.lobby).get(1)?.cursor === 4, 2_000, "host j");
+      }
     }
     await until(() => host!.seen.ended.length === 1, 2_000, "ended");
     const { reason, ranking } = host!.seen.ended[0]!;

@@ -2,7 +2,7 @@ import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Redis } from "ioredis";
 import type { RaceEvent } from "@fifth-copy/protocol";
-import type { Clock, Scheduler } from "./clock";
+import type { Clock, Scheduler, TimerHandle } from "./clock";
 import type { RaceServerEnv } from "./env";
 import { createInternalHandler } from "./http/internal";
 import { createHttpHandler } from "./http/router";
@@ -16,7 +16,7 @@ import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-
 import { durationsFor } from "./rooms/durations";
 import { ingest } from "./rooms/ingest";
 import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecycle";
-import { createRoomRegistry, type RoomRegistry } from "./rooms/registry";
+import { createRoomRegistry, RECONCILE_MS, type RoomRegistry } from "./rooms/registry";
 import { createTicker } from "./rooms/tick";
 import {
   attachSocketServer,
@@ -37,7 +37,10 @@ export type RaceServer = {
   outbox: Outbox;
   /** Socket presence, line cuts and resumes (#178). */
   presence: Presence;
-  /** Resolves with the bound port (pass 0 for an ephemeral one in tests). */
+  /**
+   * Rehydrates the rooms of the previous process (#204) before it binds, then starts the count
+   * reconciliation; resolves with the bound port (pass 0 for an ephemeral one in tests).
+   */
   listen(port: number, host?: string): Promise<number>;
   /** Marks draining, disconnects every socket, closes HTTP, then quits Redis. */
   close(): Promise<void>;
@@ -54,6 +57,7 @@ export function createRaceServer({
   scheduler,
   webApi,
   onRaceEnded,
+  recovery = true,
 }: {
   env: Pick<RaceServerEnv, "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK">;
   redis: Redis;
@@ -61,6 +65,12 @@ export function createRaceServer({
   scheduler: Scheduler;
   webApi: WebApi;
   onRaceEnded?: (ended: RaceEnded) => void;
+  /**
+   * Room recovery (#204, ADR 0008 "Restart behaviour"): `rehydrate` in `listen` and the reconcile
+   * timer. Always on in production; off only for tests that share a Redis db with other test
+   * files' live rooms (`testing/harness.ts`).
+   */
+  recovery?: boolean;
 }): RaceServer {
   const registry = createRoomRegistry({ redis, clock });
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
@@ -99,6 +109,11 @@ export function createRaceServer({
     },
     onTerminal: (lobbyId) => void lifecycle.onDeskTerminal(lobbyId).catch(() => undefined),
     steps: [idle.step],
+    // Redis loss mid-race (#204): the room is voided in process.
+    onLost: (lobbyId, raceId) =>
+      void lifecycle
+        .voidRoom(lobbyId, raceId)
+        .catch((err: unknown) => log("void failed", { lobby: lobbyId, err: String(err) })),
   });
   const race: RacePort = {
     ingest: (lobbyId, desk, batch) => ingest(desksState.get(lobbyId), desk, batch, clock.now()),
@@ -144,6 +159,15 @@ export function createRaceServer({
       ticker.finish(lobbyId);
       desksState.end(lobbyId);
     },
+    liveRace: (lobbyId: string) => {
+      const runtime = desksState.get(lobbyId);
+      if (runtime?.phase !== "running") return null;
+      return {
+        raceId: runtime.raceId,
+        t0: runtime.t0,
+        desks: runtime.desks.map(({ desk }) => desk),
+      };
+    },
     onClosed: (lobbyId: string) => {
       ticker.stop(lobbyId);
       desksState.close(lobbyId);
@@ -180,6 +204,14 @@ export function createRaceServer({
   });
   const secret = env.RACE_TOKEN_SECRET;
   let draining = false;
+  // `count()` follows the keys (#204): a room expired or deleted behind our back leaves it.
+  let reconcileTimer: TimerHandle | null = null;
+  const reconcileEvery = () => {
+    reconcileTimer = scheduler.setTimeout(() => {
+      reconcileEvery();
+      registry.reconcile().catch((err: unknown) => log("reconcile failed", { err: String(err) }));
+    }, RECONCILE_MS);
+  };
 
   const httpServer = createServer(
     createHttpHandler({
@@ -207,12 +239,20 @@ export function createRaceServer({
     desks: desksState,
     outbox,
     presence,
-    listen: (port, host) =>
-      new Promise((resolve) => {
+    listen: async (port, host) => {
+      if (recovery) {
+        const { kept, voided, gone } = await registry.rehydrate();
+        log("rooms rehydrated", { kept: kept.length, voided: voided.length, gone: gone.length });
+        reconcileEvery();
+      }
+      return new Promise((resolve) => {
         httpServer.listen(port, host, () => resolve((httpServer.address() as AddressInfo).port));
-      }),
+      });
+    },
     close: async () => {
       draining = true;
+      if (reconcileTimer) scheduler.clear(reconcileTimer);
+      reconcileTimer = null;
       lifecycle.close();
       presence.close();
       ticker.close();

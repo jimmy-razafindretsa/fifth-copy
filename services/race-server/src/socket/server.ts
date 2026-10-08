@@ -97,7 +97,8 @@ export function attachSocketServer(
           socket.data.resume === true,
         );
         // The phase may have moved on while presence waited in the queue.
-        const phase = (await registry.room(lobby))?.phase ?? joined.room.phase;
+        const now = await registry.room(lobby);
+        const phase = now?.phase ?? joined.room.phase;
         socket.emit("welcome", {
           v: PROTOCOL_VERSION,
           role,
@@ -113,6 +114,15 @@ export function attachSocketServer(
           resumeKey,
           serverNow: deps.clock.now(),
         });
+        // A room voided by a restart (#204): this socket hears the race is over, never a frozen race.
+        if (now?.phase === "ended" && now.endReason === "void" && now.raceId !== null) {
+          socket.emit("ended", {
+            v: PROTOCOL_VERSION,
+            raceId: now.raceId,
+            reason: "void",
+            ranking: [],
+          });
+        }
         io.to(room).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });
       })

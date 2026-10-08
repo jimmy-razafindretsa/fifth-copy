@@ -29,7 +29,8 @@ export type HandshakeResult =
  * the auth shape and race token (any failure is `bad-token`), then the room of the token's `lobby`
  * claim, the only source of the room: a client never names one; then `in-progress` for a new user of
  * a started room. Reads only; joining happens on connect.
- * A `spectator` token is refused as `bad-token` until the spectator channel exists (#187).
+ * A `spectator` token (#187, ADR 0006 point 8) needs only its room: it is let in in every phase,
+ * member or not, and never resumes (its `resumeKey` is not even looked up): it never takes a desk.
  * Last, `auth.resumeKey` (#178, ADR 0009): read only after all of the above passed and only while a
  * race is on; it resumes only when it resolves to this token's `lobby` and `sub`. Any other key
  * (another user's, another lobby's, made up, expired, or a failed lookup) is ignored: a plain join.
@@ -46,9 +47,10 @@ export async function authenticateHandshake(
   if (!parsed.success) return { ok: false, reason: "bad-token" };
   const verified = await verifyRaceToken(parsed.data.token, secret, Math.floor(clock.now() / 1000));
   if (!verified.ok) return { ok: false, reason: "bad-token" };
-  if (verified.claims.role === "spectator") return { ok: false, reason: "bad-token" };
   const room = await registry.room(verified.claims.lobby);
   if (room === null) return { ok: false, reason: "no-room" };
+  if (verified.claims.role === "spectator")
+    return { ok: true, claims: verified.claims, resume: false };
   // Once started, only an existing member (a second tab, same `sub`) is let in (#166).
   if (
     room.phase !== "waiting" &&

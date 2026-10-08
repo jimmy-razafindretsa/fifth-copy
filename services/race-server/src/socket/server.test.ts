@@ -154,10 +154,10 @@ describe("handshake rejections over the wire (C2)", () => {
     ],
     ["bad-token", async () => ({ v: PROTOCOL_VERSION })],
     [
-      "bad-token",
-      async (b: Booted, lobby: string) => ({
+      "no-room",
+      async (b: Booted) => ({
         v: PROTOCOL_VERSION,
-        token: await b.token({ lobby, role: "spectator" }),
+        token: await b.token({ lobby: b.lobby(), role: "spectator" }),
       }),
     ],
     [

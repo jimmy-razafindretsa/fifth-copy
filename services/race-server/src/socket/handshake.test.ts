@@ -93,15 +93,50 @@ describe("authenticateHandshake (C2)", () => {
   });
 });
 
-describe("spectator tokens (#557)", () => {
-  it("refuses a valid spectator token as bad-token until the spectator channel lands (#187)", async () => {
+describe("spectator tokens (#187)", () => {
+  it("accepts a spectator token for a waiting room, without membership and without joining", async () => {
     t = await boot(process.env.REDIS_URL);
     const lobby = await t.openRoom();
-    const token = await t.token({ lobby, role: "spectator" });
+    const token = await t.token({ lobby, sub: "usr_s", name: "Eve", role: "spectator" });
+    const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
+    expect(await authenticateHandshake({ v: PROTOCOL_VERSION, token }, deps)).toEqual({
+      ok: true,
+      claims: { v: PROTOCOL_VERSION, sub: "usr_s", name: "Eve", lobby, role: "spectator" },
+      resume: false,
+    });
+    expect(await t.server.registry.members(lobby)).toEqual([]);
+  });
+
+  it("accepts a non-member spectator of a running room; never resumes, never looks a key up", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await runningRoom(t);
+    const lookup = vi.fn(async () => ({ lobbyId: lobby, userId: "usr_a", desk: 1 }));
+    const deps = {
+      secret: SECRET,
+      registry: t.server.registry,
+      clock: t.clock,
+      resumeKeys: { lookup },
+    };
+    // A stranger and a member's own sub (a host's projector tab) with that member's valid key.
+    for (const sub of ["usr_new", "usr_a"]) {
+      const token = await t.token({ lobby, sub, role: "spectator" });
+      expect(
+        await authenticateHandshake(
+          { v: PROTOCOL_VERSION, token, resumeKey: "a1".repeat(32) },
+          deps,
+        ),
+      ).toMatchObject({ ok: true, resume: false, claims: { role: "spectator", sub } });
+    }
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("refuses a spectator token for a missing room with no-room", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const token = await t.token({ lobby: t.lobby(), role: "spectator" });
     const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
     expect(await authenticateHandshake({ v: PROTOCOL_VERSION, token }, deps)).toEqual({
       ok: false,
-      reason: "bad-token",
+      reason: "no-room",
     });
   });
 });

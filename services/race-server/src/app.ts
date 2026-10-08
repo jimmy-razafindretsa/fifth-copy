@@ -18,13 +18,8 @@ import { ingest } from "./rooms/ingest";
 import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecycle";
 import { createRoomRegistry, RECONCILE_MS, type RoomRegistry } from "./rooms/registry";
 import { createTicker } from "./rooms/tick";
-import {
-  attachSocketServer,
-  deskRoom,
-  lobbyRoom,
-  type RacePort,
-  type RaceIo,
-} from "./socket/server";
+import { audience, deskRoom, spectatorRoom } from "./socket/rooms";
+import { attachSocketServer, type RacePort, type RaceIo } from "./socket/server";
 
 export type RaceServer = {
   httpServer: HttpServer;
@@ -76,14 +71,14 @@ export function createRaceServer({
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
   const sockets: { io?: RaceIo } = {};
   // Socket.IO cannot narrow a generic event name to its payload; the callers type the pair.
-  const to = (room: string) =>
+  const to = (room: string | string[]) =>
     sockets.io?.to(room) as { emit(e: string, p: unknown): boolean } | undefined;
 
   // Live race (#173): desks' runtime, 10 Hz tick, keystroke ingestion; started at GO, ended with
   // the race, dropped after `onRaceEnded` (persistence reads the traces, #189) or on room close.
   const desksState = createDesksState({ redis });
   const roomEvent = (lobbyId: string, event: RaceEvent) =>
-    void to(lobbyRoom(lobbyId))?.emit("event", event);
+    void to(audience(lobbyId))?.emit("event", event);
   // Presence (#178): line cut and resume of the desks, resume keys in Redis, grace on the scheduler.
   const durations = durationsFor(env);
   const resumeKeys = createResumeKeys({ redis });
@@ -104,8 +99,10 @@ export function createRaceServer({
     scheduler,
     emit: {
       room: (lobbyId: string, event: string, payload: unknown) =>
-        void to(lobbyRoom(lobbyId))?.emit(event, payload),
-      desk: (lobbyId, desk, payload) => void to(deskRoom(lobbyId, desk))?.emit("event", payload),
+        void to(audience(lobbyId))?.emit(event, payload),
+      // Spectators hear every desk's events too (#187: a projector shows the overtakes).
+      desk: (lobbyId, desk, payload) =>
+        void to([deskRoom(lobbyId, desk), spectatorRoom(lobbyId)])?.emit("event", payload),
     },
     onTerminal: (lobbyId) => void lifecycle.onDeskTerminal(lobbyId).catch(() => undefined),
     steps: [idle.step],
@@ -196,9 +193,7 @@ export function createRaceServer({
     durations,
     emit: (lobbyId, event, payload) => {
       // Socket.IO cannot narrow a generic event name to its payload; `Emit` types the pair.
-      const room = sockets.io?.to(lobbyRoom(lobbyId)) as
-        { emit(e: string, p: unknown): boolean } | undefined;
-      room?.emit(event, payload);
+      void to(audience(lobbyId))?.emit(event, payload);
     },
     ...raceHooks,
   });

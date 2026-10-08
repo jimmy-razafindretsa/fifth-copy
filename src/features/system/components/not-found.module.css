@@ -5,6 +5,8 @@
  * primary/secondary buttons (7.1). Colours are roles from docs/design/tokens.css only.
  */
 
+@reference "../../../app/globals.css";
+
 @keyframes fcSlam {
   0% {
     transform: scale(2.2) rotate(-14deg);
@@ -46,10 +48,9 @@
   position: absolute;
   left: 20px;
   top: 18px;
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.2em;
   color: var(--color-fg-muted);
   pointer-events: none;
@@ -66,20 +67,18 @@
 }
 
 .kicker {
-  font:
-    600 13px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
   letter-spacing: 0.24em;
   color: var(--color-link);
 }
 
 .title {
   margin: 0;
-  font:
-    700 clamp(40px, 5vw, 72px) / 0.98 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-lg;
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 0.98;
   letter-spacing: 0.02em;
   text-wrap: balance;
 }
@@ -91,10 +90,9 @@
   color: var(--color-link);
   background: color-mix(in srgb, var(--color-bg) 90%, transparent);
   padding: 8px 14px;
-  font:
-    700 clamp(22px, 2.4vw, 30px) / 1.1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-sm;
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1.1;
   letter-spacing: 0.08em;
   transform: rotate(-6deg);
   animation: fcSlam 0.4s ease-out;
@@ -104,10 +102,9 @@
 .body {
   margin: 0;
   max-width: 560px;
-  font:
-    400 19px/1.6 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 19px;
+  line-height: 1.6;
   text-wrap: pretty;
 }
 
@@ -124,10 +121,9 @@
   gap: 12px;
   padding: 9px 18px;
   border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
-  font:
-    400 15px var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 15px;
+  line-height: normal;
 }
 
 .row:last-child {
@@ -135,10 +131,9 @@
 }
 
 .row dt {
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.18em;
   color: var(--color-fg-muted);
   align-self: center;
@@ -146,7 +141,10 @@
 
 .row dd {
   margin: 0;
-  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  /* the typing face at the row's own size (data, bible 4) */
+  @apply type-typing;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .actions {
@@ -160,10 +158,8 @@
 /* bible 7.1 primary stamp button, as a link */
 .primary {
   display: inline-block;
-  font:
-    700 clamp(26px, 2.6vw, 36px) / 1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-md;
+  font-size: clamp(26px, 2.6vw, 36px);
   letter-spacing: 0.08em;
   background: var(--color-primary);
   color: var(--color-primary-fg);
@@ -187,10 +183,9 @@
 .secondary {
   display: inline-flex;
   align-items: center;
-  font:
-    600 13px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
   letter-spacing: 0.16em;
   color: var(--color-fg);
   border: 2px solid var(--color-fg);

@@ -7,7 +7,7 @@ import {
   welcomeSchema,
   type RaceEvent,
 } from "@fifth-copy/protocol";
-import type { PlayerStatus } from "@fifth-copy/engine";
+import { BACKSPACE, type PlayerStatus } from "@fifth-copy/engine";
 import { resumeKey } from "../rooms/keys";
 import {
   connectError,
@@ -49,11 +49,32 @@ async function tick(b: Booted, who: Racer) {
   await until(() => who.seen.snapshots.length > before, 2_000, "snapshot");
 }
 
-/** Advances the fake clock by `ms` in 1 s steps (ticks fire along the way). */
-async function advance(b: Booted, ms: number) {
+/**
+ * Advances the fake clock by `ms` in 1 s steps (ticks fire along the way). With `awake`, `who`
+ * sends a wrong key and its correction every 20 s (not on the last step), so a connected desk
+ * never reaches the idle kick (#183) while the test is about something else; its cursor is
+ * unchanged.
+ */
+async function advance(b: Booted, ms: number, awake?: { who: Racer; lobby: string }) {
   for (let left = ms; left > 0; left -= 1_000) {
     b.clock.advance(Math.min(1_000, left));
     await new Promise((r) => setImmediate(r));
+    // Never on the last step: the race may end there.
+    if (!awake || left <= 1_000 || (ms - left + 1_000) % 20_000 !== 0) continue;
+    const before = b.server.desks.states(awake.lobby).get(awake.who.desk)?.total ?? 0;
+    const t = b.clock.now() - b.server.desks.get(awake.lobby)!.t0;
+    awake.who.client.emit("keys", {
+      v: PROTOCOL_VERSION,
+      batch: [
+        { t, key: "x" },
+        { t, key: BACKSPACE },
+      ],
+    });
+    await until(
+      () => (b.server.desks.states(awake.lobby).get(awake.who.desk)?.total ?? 0) > before,
+      2_000,
+      "awake keys",
+    );
   }
 }
 
@@ -129,7 +150,7 @@ describe("resume (C2)", () => {
       );
     }
     const { booted: b, lobby, host, player, key } = await cutRace();
-    await advance(b, 60_000);
+    await advance(b, 60_000, { who: host, lobby });
 
     const back = b.connect({ v: PROTOCOL_VERSION, token: player.token, resumeKey: key });
     const again = watchRace(back);
@@ -193,7 +214,7 @@ describe("grace expiry (C3)", () => {
     cut.client.disconnect();
     await until(() => kinds(host.seen.events, "line-cut").length === 1, 2_000, "line-cut");
 
-    await advance(b, GRACE_MS - 1_000);
+    await advance(b, GRACE_MS - 1_000, { who: host, lobby });
     expect(statusOf(b, lobby, cut.desk)).toBe("line-cut");
     await advance(b, 1_000);
     await until(() => statusOf(b, lobby, cut.desk) === "expired", 2_000, "expired");
@@ -210,7 +231,7 @@ describe("grace expiry (C3)", () => {
     });
     expect(kinds(host.seen.events, "resumed")).toHaveLength(0);
 
-    await advance(b, 180_000 - GRACE_MS);
+    await advance(b, 180_000 - GRACE_MS, { who: host, lobby });
     await until(() => host.seen.ended.length === 1, 2_000, "ended");
     const ranking = host.seen.ended[0]!.ranking;
     expect(ranking.map((r) => [r.desk, r.status])).toEqual([

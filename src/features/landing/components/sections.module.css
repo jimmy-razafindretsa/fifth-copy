@@ -110,7 +110,7 @@
   text-wrap: pretty;
 }
 
-/* 5. your clerk: sun-ray stage (bible 6, only behind characters) beside the personnel file (7.4) */
+/* 5. your clerk: sun-ray stage (bible 6, `sun-rays` utility, only behind characters) beside the personnel file (7.4) */
 .clerk {
   background: var(--color-surface);
   border-top: 2px solid var(--color-fg);
@@ -124,11 +124,7 @@
   min-width: 0;
   position: relative;
   min-height: 540px;
-  background-image: repeating-conic-gradient(
-    from 0deg at 50% 92%,
-    color-mix(in srgb, var(--color-primary) 9%, transparent) 0deg 6deg,
-    transparent 6deg 12deg
-  );
+  @apply sun-rays;
   border-right: 2px solid var(--color-fg);
 }
 

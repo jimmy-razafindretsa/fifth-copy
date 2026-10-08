@@ -21,6 +21,8 @@ import type { Presence } from "../players/presence";
 import type { IngestResult } from "../rooms/ingest";
 import type { Lifecycle } from "../rooms/lifecycle";
 import { createHandshakeMiddleware, type HandshakeDeps } from "./handshake";
+import { audience, deskRoom, lobbyRoom } from "./rooms";
+import { attachSpectator } from "./spectator";
 
 /**
  * Per-socket state: `claims` and `resume` (the handshake carried the user's own resume key, #178)
@@ -43,10 +45,6 @@ export type RacePort = {
 export type RaceIo = Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
 type RaceSocket = Socket<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
 
-export const lobbyRoom = (lobbyId: string) => `lobby:${lobbyId}`;
-/** The sockets of one desk (a user's tabs): per-desk events such as `overtake` (#173). */
-export const deskRoom = (lobbyId: string, desk: number) => `lobby:${lobbyId}:desk:${desk}`;
-
 const log = (msg: string, fields: Record<string, unknown>) =>
   console.log(JSON.stringify({ level: "info", msg, ...fields }));
 
@@ -57,7 +55,8 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * `ended` the desk is released (`roster`); during a race it is line-cut and kept for the grace. A
  * handshake with the user's own resume key resumes the desk, and its `welcome` carries the server's
  * state. Client events (`keys`, `abandon`, `host:*`, `ping`) register on the socket by name; phase transitions
- * belong to the lifecycle (`rooms/lifecycle.ts`, #166).
+ * belong to the lifecycle (`rooms/lifecycle.ts`, #166). A `spectator` token takes the read-only edge
+ * (`spectator.ts`, #187) instead; room-wide broadcasts go to the `audience` (players and spectators).
  */
 export function attachSocketServer(
   httpServer: HttpServer,
@@ -78,6 +77,24 @@ export function attachSocketServer(
   io.on("connection", (socket: RaceSocket) => {
     const { lobby, sub, name, role } = socket.data.claims;
     const room = lobbyRoom(lobby);
+    const everyone = audience(lobby);
+
+    // Clock sync (#172): to the sender only, in any phase and any role. A malformed ping is dropped.
+    socket.on("ping", (raw: unknown) => {
+      const parsed = pingSchema.safeParse(raw);
+      if (!parsed.success) return;
+      socket.emit("pong", {
+        v: PROTOCOL_VERSION,
+        sent: parsed.data.sent,
+        serverNow: deps.clock.now(),
+      });
+    });
+
+    // A spectator (#187) branches off before anything below: it must never reach presence, the
+    // registry's join/leave/settings or the race, whatever `sub` it carries (a host's projector tab).
+    if (role === "spectator") {
+      return attachSpectator(socket, socket.data.claims, { registry, clock: deps.clock });
+    }
     // Two tabs of one user share a desk: presence counts the user's sockets on this process.
     presence.socketOpened(lobby, sub);
     void socket.join(room);
@@ -123,7 +140,7 @@ export function attachSocketServer(
             ranking: [],
           });
         }
-        io.to(room).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
+        io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });
       })
       .catch(() => {
@@ -146,10 +163,10 @@ export function attachSocketServer(
         (result) => {
           log("settings", { lobby, outcome: result.ok ? "ok" : result.reason, keys });
           if (!result.ok) return reply({ ok: false, error: result.reason });
-          io.to(room).emit("settings", { v: PROTOCOL_VERSION, settings: result.settings });
+          io.to(everyone).emit("settings", { v: PROTOCOL_VERSION, settings: result.settings });
           // A `bots` patch re-seated the room (#156): the bot desks changed.
           if (result.members) {
-            io.to(room).emit("roster", { v: PROTOCOL_VERSION, members: result.members });
+            io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: result.members });
           }
           reply({ ok: true, settings: result.settings });
         },
@@ -170,12 +187,12 @@ export function attachSocketServer(
     });
 
     // Keystrokes (#173, ADR 0006 point 3): parsed here, applied by the runtime only. A malformed
-    // batch, a socket not yet seated or a spectator is dropped silently; a refusal by phase is
-    // `rejected` to the sender. No per-socket rate limit yet (#207).
+    // batch or a socket not yet seated is dropped silently (spectators are refused by their own
+    // edge, #187); a refusal by phase is `rejected` to the sender. No per-socket rate limit (#207).
     socket.on("keys", (raw: unknown) => {
       const parsed = keysSchema.safeParse(raw);
       const { desk } = socket.data;
-      if (!parsed.success || desk === undefined || role === "spectator") return;
+      if (!parsed.success || desk === undefined) return;
       const result = race.ingest(lobby, desk, parsed.data.batch);
       if (result.rejected) {
         socket.emit("rejected", { v: PROTOCOL_VERSION, reason: result.rejected });
@@ -188,13 +205,11 @@ export function attachSocketServer(
     });
 
     // Abandon (#183, ADR 0006): the desk is the socket's seat, never the payload. Dropped like
-    // `keys` when malformed, unseated or a spectator; refused (`not-running`) outside a running race
+    // `keys` when malformed or unseated; refused (`not-running`) outside a running race
     // or once the desk stopped typing, so a replay changes nothing. No per-socket rate limit (#207).
     socket.on("abandon", (raw: unknown) => {
       const { desk } = socket.data;
-      if (!abandonSchema.safeParse(raw).success || desk === undefined || role === "spectator") {
-        return;
-      }
+      if (!abandonSchema.safeParse(raw).success || desk === undefined) return;
       const result = race.abandon(lobby, desk);
       if (result.rejected) {
         return void socket.emit("rejected", { v: PROTOCOL_VERSION, reason: result.rejected });
@@ -203,17 +218,6 @@ export function attachSocketServer(
       lifecycle
         .onDeskTerminal(lobby)
         .catch((err: unknown) => log("desk terminal failed", { lobby, err: String(err) }));
-    });
-
-    // Clock sync (#172): to the sender only, in any phase. A malformed ping is dropped.
-    socket.on("ping", (raw: unknown) => {
-      const parsed = pingSchema.safeParse(raw);
-      if (!parsed.success) return;
-      socket.emit("pong", {
-        v: PROTOCOL_VERSION,
-        sent: parsed.data.sent,
-        serverNow: deps.clock.now(),
-      });
     });
 
     socket.on("disconnect", () => {
@@ -226,7 +230,7 @@ export function attachSocketServer(
           if (roomClosed) lifecycle.onRoomClosed(lobby);
           else {
             await presence.left(lobby, sub);
-            io.to(room).emit("roster", { v: PROTOCOL_VERSION, members });
+            io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members });
           }
           log("left", { lobby, members: members.length, closed: roomClosed });
         })

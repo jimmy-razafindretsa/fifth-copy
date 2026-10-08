@@ -50,6 +50,8 @@ export type Room = {
 };
 /** What the lifecycle reads, inside `withRoom`, to decide a transition (#166). */
 export type RoomState = {
+  /** The room's code, as opened (the spectator's `welcome`, #187). */
+  code: string;
   hostUserId: string;
   phase: Phase;
   settings: RaceSettings;
@@ -512,6 +514,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
       if (!room) return null;
       const seats = await readSeats(lobbyId);
       return {
+        code: room.code,
         hostUserId: room.hostUserId,
         phase: parsePhase(room.phase),
         settings: parseSettings(lobbyId, room.settings),

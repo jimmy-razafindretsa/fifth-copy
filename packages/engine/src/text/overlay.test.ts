@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mulberry32, pickInt } from "../testing/rng";
-import {
-  baseLengthOf,
-  EMPTY_OVERLAY,
-  effectiveText,
-  untypedBaseWords,
-  wordsOf,
-} from "./overlay";
+import { baseLengthOf, EMPTY_OVERLAY, effectiveText, untypedBaseWords, wordsOf } from "./overlay";
 
 const BASE = "Le formulaire est en triple exemplaire.";
 
@@ -19,13 +13,21 @@ describe("effectiveText (C1)", () => {
       overlay: { extra: ["vite", "encore"], removed: [] },
       text: `${BASE} vite encore`,
     },
-    { name: "removed only", overlay: { extra: [], removed: [2, 3] }, text: "Le formulaire triple exemplaire." },
+    {
+      name: "removed only",
+      overlay: { extra: [], removed: [2, 3] },
+      text: "Le formulaire triple exemplaire.",
+    },
     {
       name: "both",
       overlay: { extra: ["visa"], removed: [1] },
       text: "Le est en triple exemplaire. visa",
     },
-    { name: "removal of the last word", overlay: { extra: [], removed: [5] }, text: "Le formulaire est en triple" },
+    {
+      name: "removal of the last word",
+      overlay: { extra: [], removed: [5] },
+      text: "Le formulaire est en triple",
+    },
     {
       name: "removal of the last word, then extra",
       overlay: { extra: ["tampon"], removed: [5] },
@@ -38,13 +40,17 @@ describe("effectiveText (C1)", () => {
   it("baseLengthOf is the length of the base part, extras excluded", () => {
     expect(baseLengthOf(BASE, EMPTY_OVERLAY)).toBe(BASE.length);
     expect(baseLengthOf(BASE, { extra: ["x"], removed: [] })).toBe(BASE.length);
-    expect(baseLengthOf(BASE, { extra: [], removed: [5] })).toBe("Le formulaire est en triple".length);
+    expect(baseLengthOf(BASE, { extra: [], removed: [5] })).toBe(
+      "Le formulaire est en triple".length,
+    );
   });
 
   it("wordsOf round-trips any space-separated text", () => {
     const rng = mulberry32(7);
     for (let i = 0; i < 200; i++) {
-      const words = Array.from({ length: pickInt(rng, 8) }, () => "ab".slice(0, 1 + pickInt(rng, 2)));
+      const words = Array.from({ length: pickInt(rng, 8) }, () =>
+        "ab".slice(0, 1 + pickInt(rng, 2)),
+      );
       const text = words.join(" ");
       expect(wordsOf(text).join(" ")).toBe(text);
     }

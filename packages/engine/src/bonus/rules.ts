@@ -110,15 +110,14 @@ const exemption: Effect = ({ base, now, maxOverlayWords }, targets) =>
   targets.flatMap((d) => {
     const room = maxOverlayWords - d.overlay.removed.length;
     const reach = Math.max(d.reach, d.state.cursor);
-    const drop = untypedBaseWords(base, d.overlay, reach).slice(
-      0,
-      Math.min(EXEMPT_WORDS, room),
-    );
+    const drop = untypedBaseWords(base, d.overlay, reach).slice(0, Math.min(EXEMPT_WORDS, room));
     if (drop.length === 0) return [];
     const overlay = { extra: [...d.overlay.extra], removed: [...d.overlay.removed, ...drop] };
     // Never true while `untypedBaseWords` keeps the text longer than `reach`: a guard only.
     const finished = finishIfDone(d.state, effectiveText(base, overlay).length, now);
-    return [{ desk: d.desk, overlay, state: finished === d.state ? null : finished, blurUntil: null }];
+    return [
+      { desk: d.desk, overlay, state: finished === d.state ? null : finished, blurUntil: null },
+    ];
   });
 
 const smokeBreak: Effect = ({ now }, targets) =>

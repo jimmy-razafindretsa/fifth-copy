@@ -1,9 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  charsOf,
-  normalizeTypeable,
-  type PlayerStatus,
-} from "@fifth-copy/engine";
+import { charsOf, normalizeTypeable, type PlayerStatus } from "@fifth-copy/engine";
 import {
   MAX_RACE_MS,
   PROTOCOL_VERSION,

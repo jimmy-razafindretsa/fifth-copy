@@ -117,7 +117,13 @@ describe("effects over the wire (C4)", () => {
     await at(b, t0, 100, three);
     play(three);
     await until(() => kinds(one, "bonus-hit").length === 1, 2_000, "leader hit");
-    const sent = { v, kind: "bonus-sent", from: three.desk, to: [one.desk], bonus: "extra-paperwork" };
+    const sent = {
+      v,
+      kind: "bonus-sent",
+      from: three.desk,
+      to: [one.desk],
+      bonus: "extra-paperwork",
+    };
     for (const r of race.racers) {
       await until(() => kinds(r, "bonus-sent").length === 1, 2_000, `sent to ${r.desk}`);
       expect(kinds(r, "bonus-sent")).toEqual([sent]);
@@ -188,7 +194,14 @@ describe("effects over the wire (C4)", () => {
     for (const r of [one, two, three]) {
       await until(() => kinds(r, "bonus-hit").length === 1, 2_000, `hit ${r.desk}`);
       expect(kinds(r, "bonus-hit")).toEqual([
-        { v, kind: "bonus-hit", desk: r.desk, bonus: "smoke-break", overlay: null, blurUntil: 5_100 },
+        {
+          v,
+          kind: "bonus-hit",
+          desk: r.desk,
+          bonus: "smoke-break",
+          overlay: null,
+          blurUntil: 5_100,
+        },
       ]);
       expect(stateOf(b, lobby, r.desk)).toMatchObject({
         blurUntil: 5_100,
@@ -198,7 +211,13 @@ describe("effects over the wire (C4)", () => {
     }
     await until(() => kinds(four, "bonus-sent").length === 1, 2_000, "sent");
     expect(kinds(four, "bonus-sent")).toEqual([
-      { v, kind: "bonus-sent", from: four.desk, to: [one.desk, two.desk, three.desk], bonus: "smoke-break" },
+      {
+        v,
+        kind: "bonus-sent",
+        from: four.desk,
+        to: [one.desk, two.desk, three.desk],
+        bonus: "smoke-break",
+      },
     ]);
     expect(kinds(four, "bonus-hit")).toEqual([]);
     expect(stateOf(b, lobby, four.desk)).toMatchObject({ held: null, lastPlayedAt: 100 });
@@ -263,7 +282,14 @@ describe("cooldown, immunity, bots (C5)", () => {
     await until(() => kinds(one, "bonus-sent").length === 1, 2_000, "bot played");
     expect(kinds(one, "bonus-sent")[0]).toMatchObject({ from: bot, bonus: "smoke-break" });
     expect(kinds(one, "bonus-hit")).toEqual([
-      { v, kind: "bonus-hit", desk: one.desk, bonus: "smoke-break", overlay: null, blurUntil: 8_100 },
+      {
+        v,
+        kind: "bonus-hit",
+        desk: one.desk,
+        bonus: "smoke-break",
+        overlay: null,
+        blurUntil: 8_100,
+      },
     ]);
   });
 });

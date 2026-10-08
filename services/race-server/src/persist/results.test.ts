@@ -396,7 +396,10 @@ describe("bonus fields of the results (#190 C6)", () => {
     const text = effectiveText(base, overlay);
     const rng = mulberry32(6);
     let t = 0;
-    const trace: Keystroke[] = [...text].map((key) => ({ t: (t += 120 + Math.floor(rng() * 160)), key }));
+    const trace: Keystroke[] = [...text].map((key) => ({
+      t: (t += 120 + Math.floor(rng() * 160)),
+      key,
+    }));
     const engine = { errorMode: "continue", backspace: true } as const;
     const typed = replayTrace(trace, text, engine);
     expect(typed.status).toBe("finished");
@@ -485,11 +488,19 @@ describe("bonus fields of the results (#190 C6)", () => {
     const leader = results.find((x) => x.desk === one.desk)!;
     const sender = results.find((x) => x.desk === three.desk)!;
     expect(leader.cleanWpm).toBeLessThan(leader.adjustedWpm);
-    expect(leader).toMatchObject({ bonusesReceived: 1, bonusesSent: 0, status: "finished", progress: 1 });
+    expect(leader).toMatchObject({
+      bonusesReceived: 1,
+      bonusesSent: 0,
+      status: "finished",
+      progress: 1,
+    });
     const entry = { t: 100, kind: "extra-paperwork", from: three.desk, to: one.desk };
     expect(leader.bonusLog).toEqual([entry]);
     expect(sender).toMatchObject({ bonusesSent: 1, bonusesReceived: 0, bonusLog: [entry] });
-    expect(results.find((x) => x.desk === two.desk)).toMatchObject({ bonusesSent: 0, bonusLog: [] });
+    expect(results.find((x) => x.desk === two.desk)).toMatchObject({
+      bonusesSent: 0,
+      bonusLog: [],
+    });
     expect(leader.flags.map((f) => f.code)).not.toContain("unreproducible");
   });
 });

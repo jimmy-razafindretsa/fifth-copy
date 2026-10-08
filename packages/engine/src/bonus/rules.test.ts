@@ -109,7 +109,10 @@ describe("applyBonus effects", () => {
   it("extra-paperwork skips a finished leader, and is refused with no typing desk ahead", () => {
     const done = { ...typed(BASE.length) };
     expect(done.status).toBe("finished");
-    const out = applyBonus("extra-paperwork", inputOf(4, [{ ...ranks[0]!, state: done }, ...ranks.slice(1)]))!;
+    const out = applyBonus(
+      "extra-paperwork",
+      inputOf(4, [{ ...ranks[0]!, state: done }, ...ranks.slice(1)]),
+    )!;
     expect(out.event.to).toEqual([1]);
     expect(applyBonus("extra-paperwork", inputOf(3, ranks))).toBeNull();
   });
@@ -133,7 +136,10 @@ describe("applyBonus effects", () => {
     const state = typed(7, text); // "un deux" typed, cursor on the space
     const run = (reach: number) =>
       applyBonus("exemption", {
-        ...inputOf(2, [deskOf(1, 1), { desk: 2, state, reach, overlay: EMPTY_OVERLAY, lastHitBy: null }]),
+        ...inputOf(2, [
+          deskOf(1, 1),
+          { desk: 2, state, reach, overlay: EMPTY_OVERLAY, lastHitBy: null },
+        ]),
         base: text,
       });
     expect(run(7)!.hits[0]!.overlay!.removed).toEqual([3]);
@@ -151,12 +157,19 @@ describe("applyBonus effects", () => {
     const out = applyBonus("smoke-break", inputOf(4, ranks))!;
     expect(out.event.to).toEqual([3, 1, 2]);
     for (const hit of out.hits) {
-      expect(hit).toEqual({ desk: hit.desk, overlay: null, state: null, blurUntil: 20_000 + BLUR_MS });
+      expect(hit).toEqual({
+        desk: hit.desk,
+        overlay: null,
+        state: null,
+        blurUntil: 20_000 + BLUR_MS,
+      });
     }
   });
 
   it("immune targets are dropped; all immune -> refused", () => {
-    const immune = ranks.map((d) => (d.desk === 1 ? { ...d, lastHitBy: "smoke-break" as const } : d));
+    const immune = ranks.map((d) =>
+      d.desk === 1 ? { ...d, lastHitBy: "smoke-break" as const } : d,
+    );
     expect(applyBonus("smoke-break", inputOf(4, immune))!.event.to).toEqual([3, 2]);
     const allImmune = ranks.map((d) => ({ ...d, lastHitBy: "smoke-break" as const }));
     expect(applyBonus("smoke-break", inputOf(4, allImmune))).toBeNull();
@@ -192,8 +205,12 @@ describe("overlay properties (C2)", () => {
       const desks = [1, 2, 3, 4].map((desk) => {
         // A prior overlay of earlier plays: some extras, some removed base words.
         const overlay: TextOverlay = {
-          extra: Array.from({ length: pickInt(rng, 3) * 5 }, () => "xyz".slice(0, 1 + pickInt(rng, 3))),
-          removed: [...new Set(Array.from({ length: pickInt(rng, 4) }, () => pickInt(rng, baseWords)))],
+          extra: Array.from({ length: pickInt(rng, 3) * 5 }, () =>
+            "xyz".slice(0, 1 + pickInt(rng, 3)),
+          ),
+          removed: [
+            ...new Set(Array.from({ length: pickInt(rng, 4) }, () => pickInt(rng, baseWords))),
+          ],
         };
         const text = effectiveText(base, overlay);
         const trace = randomTrace(rng, text, pickInt(rng, text.length));
@@ -231,7 +248,8 @@ describe("overlay properties (C2)", () => {
         expect(after.slice(0, d.state.cursor)).toBe(before.slice(0, d.state.cursor));
         const replayed = replayTrace(d.trace, after, SETTINGS);
         expect(replayed).toEqual(d.state);
-        if (d.state.cursor < after.length) expect(after[d.state.cursor]).toBe(before[d.state.cursor]);
+        if (d.state.cursor < after.length)
+          expect(after[d.state.cursor]).toBe(before[d.state.cursor]);
       }
     }
   });

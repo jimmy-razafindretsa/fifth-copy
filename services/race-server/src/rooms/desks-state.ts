@@ -8,7 +8,7 @@ import {
   type PlayerState,
 } from "@fifth-copy/engine";
 import { engineSettingsOf, type RaceInfo, type RaceSettings } from "@fifth-copy/protocol";
-import { desksKey, ROOM_TTL_S, traceKey } from "./keys";
+import { desksKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
 import type { RaceDesk } from "./registry";
 
 /**
@@ -75,10 +75,13 @@ export type DesksState = {
   /**
    * Writes the dirty desks in one MULTI, every written key with the room TTL, then clears them: the
    * counters to `room:<id>:desks`, the keystrokes appended since the last flush to
-   * `room:<id>:trace:<desk>` (#592). No Redis call when nothing changed. On failure the desks stay
-   * dirty for the next tick, which rewrites their lists whole.
+   * `room:<id>:trace:<desk>` (#592). No Redis call when nothing changed, unless `probe`. On failure
+   * the desks stay dirty for the next tick, which rewrites their lists whole.
+   * `lost` (#204): the room hash no longer exists (`EXISTS` in the same MULTI, or alone with
+   * `probe` when nothing changed): its keys are gone, the race cannot go on. A Redis error rejects
+   * instead (transient, retried), never `lost`.
    */
-  flush(lobbyId: string): Promise<void>;
+  flush(lobbyId: string, options?: { probe?: boolean }): Promise<{ lost: boolean }>;
   /** The race ended: phase `ended`, states kept for the end-of-race readers (#189). */
   end(lobbyId: string): void;
   /** Frees the states and traces (after `onRaceEnded`); keys still get `not-running`. */
@@ -178,9 +181,12 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
 
     states: (lobbyId) => rooms.get(lobbyId)?.states ?? new Map(),
 
-    async flush(lobbyId) {
+    async flush(lobbyId, { probe = false } = {}) {
       const runtime = rooms.get(lobbyId);
-      if (!runtime || runtime.dirty.size === 0) return;
+      if (!runtime) return { lost: false };
+      const probeOnly = async () =>
+        probe ? { lost: (await redis.exists(roomKey(lobbyId))) === 0 } : { lost: false };
+      if (runtime.dirty.size === 0) return probeOnly();
       const desks = [...runtime.dirty];
       runtime.dirty.clear();
       // Built now, so a key applied while EXEC is in flight lands in the next flush.
@@ -201,7 +207,7 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
         }
         cache.set(desk, { trace, flushed: trace.length });
       }
-      if (Object.keys(fields).length === 0) return;
+      if (Object.keys(fields).length === 0) return probeOnly();
       const stale = [...(staleTraces.get(lobbyId) ?? [])];
       const key = desksKey(lobbyId);
       const tx = redis.multi().hset(key, fields).expire(key, ROOM_TTL_S);
@@ -212,6 +218,8 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
       }
       for (const desk of stale)
         tx.del(traceKey(lobbyId, desk)).expire(traceKey(lobbyId, desk), ROOM_TTL_S);
+      // Last, read-only: a deleted room hash does not fail the writes above (#204).
+      tx.exists(roomKey(lobbyId));
       try {
         const results = await tx.exec();
         if (!results) throw new Error(`room ${lobbyId}: desks transaction aborted`);
@@ -219,6 +227,7 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
         const pending = staleTraces.get(lobbyId);
         for (const desk of stale) pending?.delete(desk);
         if (pending?.size === 0) staleTraces.delete(lobbyId);
+        return { lost: results.at(-1)?.[1] === 0 };
       } catch (err) {
         // At-least-once mirror: forget what was "mirrored", so the next flush rewrites these lists.
         for (const desk of desks) cache.delete(desk);

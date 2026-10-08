@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   botLevelSchema,
   deskIdentity,
+  endReasonSchema,
   msSchema,
   phaseSchema,
   raceInfoSchema,
@@ -10,6 +11,7 @@ import {
   raceSettingsSchema,
   startRaceRequestSchema,
   type BotLevel,
+  type EndReason,
   type Member,
   type Phase,
   type RaceInfo,
@@ -20,7 +22,20 @@ import {
 import type { Clock } from "../clock";
 import { botName, botUserId, isBotUserId, planBotSeats } from "./bots";
 import { nextDesk } from "./desks";
-import { desksKey, membersKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
+import {
+  desksKey,
+  membersKey,
+  resumeIndexKey,
+  resumeKey,
+  ROOM_TTL_S,
+  roomKey,
+  ROOMS_KEY,
+  traceKey,
+  VOID_TTL_S,
+} from "./keys";
+
+/** Period of `reconcile` (#204): fixed, it must not scale with `RACE_FAST_CLOCK`. */
+export const RECONCILE_MS = 60_000;
 
 export type { Phase };
 /** One desk of a race as sent to the web app at start and kept in the room hash (`desks`). */
@@ -45,7 +60,14 @@ export type RoomState = {
   seated: RaceDesk[];
   /** Desks captured at start (ranked at the end even if they left); null before the first start. */
   desks: RaceDesk[] | null;
+  /** The last race's id; kept by a void (#204), so `ended { void }` can name it. */
+  raceId: string | null;
+  /** Set only on a room voided by a restart (#204): `void`. */
+  endReason: EndReason | null;
 };
+
+/** What `rehydrate` did, by lobby id (#204). */
+export type Rehydrated = { kept: string[]; voided: string[]; gone: string[] };
 
 /**
  * `in-progress`: a user who is not already a member while the phase is not `waiting` (#166).
@@ -119,9 +141,44 @@ export type RoomRegistry = {
   ): Promise<void>;
   /** Writes the phase in one MULTI with both TTLs; the caller checked the room under `withRoom`. */
   setPhase(lobbyId: string, phase: Phase): Promise<void>;
+  /**
+   * Voids the room's race (#204, ADR 0008 "Restart behaviour"), not queued (call it inside
+   * `withRoom`). A room whose hash exists turns `ended` with `endReason: void` and `endedAt`, loses
+   * its race fields, keeps its members and `raceId`, and both hashes get `VOID_TTL_S`; a room whose
+   * hash is gone (Redis loss) is `lost`: its leftover keys are deleted and it leaves `count()`. Both
+   * delete the desks mirror, the trace lists (of the stored desks and of `desks`) and the resume
+   * keys: none is ever read back. One MULTI.
+   */
+  voidRoom(lobbyId: string, desks?: readonly number[]): Promise<{ lost: boolean }>;
+  /**
+   * Boot (#204): for every id of the `rooms` index whose hash exists, `waiting`/`ended` rooms are
+   * counted as they are, `countdown`/`running` ones are voided; ids whose hash is gone leave the index.
+   * Reads only `room:<id>` (and the members through later calls), never the desks mirror.
+   */
+  rehydrate(): Promise<Rehydrated>;
+  /** Drops from `count()` and the index every open room whose hash no longer exists (#204). */
+  reconcile(): Promise<void>;
   /** Rooms open on this process (ADR 0008 in-process cache); drives /health and the deploy drain. */
   count(): number;
 };
+
+const log = (msg: string, fields: Record<string, unknown>) =>
+  console.log(JSON.stringify({ level: "info", msg, ...fields }));
+
+/** What a restart does to a room, by its stored phase (#204; #143's "Race again" reuses it). */
+const RECOVERY: Record<Phase, "keep" | "void"> = {
+  waiting: "keep",
+  ended: "keep",
+  countdown: "void",
+  running: "void",
+};
+
+async function execAll(lobbyId: string, tx: ChainableCommander) {
+  const results = await tx.exec();
+  if (!results) throw new Error(`room ${lobbyId}: transaction aborted`);
+  for (const [err] of results) if (err) throw err;
+  return results.map(([, value]) => value);
+}
 
 const raceDesksSchema = startRaceRequestSchema.shape.desks;
 
@@ -160,14 +217,15 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
    * expire a live room). ioredis reports per-command errors as [err, value] pairs: rethrow them.
    */
   async function withTtl(lobbyId: string, tx: ChainableCommander) {
-    const results = await tx
-      .expire(roomKey(lobbyId), ROOM_TTL_S)
-      .expire(membersKey(lobbyId), ROOM_TTL_S)
-      .expire(desksKey(lobbyId), ROOM_TTL_S)
-      .exec();
-    if (!results) throw new Error(`room ${lobbyId}: transaction aborted`);
-    for (const [err] of results) if (err) throw err;
-    return results.map(([, value]) => value);
+    return execAll(
+      lobbyId,
+      tx
+        .expire(roomKey(lobbyId), ROOM_TTL_S)
+        .expire(membersKey(lobbyId), ROOM_TTL_S)
+        .expire(desksKey(lobbyId), ROOM_TTL_S)
+        // The index outlives each room it lists (#204).
+        .expire(ROOMS_KEY, ROOM_TTL_S),
+    );
   }
 
   async function readRoom(lobbyId: string) {
@@ -185,6 +243,8 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
       race: room.race,
       endAt: room.endAt,
       desks: room.desks,
+      raceId: room.raceId,
+      endReason: room.endReason,
     };
   }
 
@@ -262,6 +322,43 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     return tx;
   }
 
+  async function voidRoom(lobbyId: string, extraDesks: readonly number[] = []) {
+    const room = await redis.hgetall(roomKey(lobbyId));
+    const stored = room.desks
+      ? raceDesksSchema.parse(JSON.parse(room.desks)).map(({ desk }) => desk)
+      : [];
+    const traces = [...new Set([...stored, ...extraDesks])].map((desk) => traceKey(lobbyId, desk));
+    const resume = Object.values(await redis.hgetall(resumeIndexKey(lobbyId))).map(resumeKey);
+    const leftovers = [desksKey(lobbyId), resumeIndexKey(lobbyId), ...traces, ...resume];
+    if (!room.openedAt) {
+      await execAll(
+        lobbyId,
+        redis
+          .multi()
+          .del(roomKey(lobbyId), membersKey(lobbyId), ...leftovers)
+          .srem(ROOMS_KEY, lobbyId),
+      );
+      openRooms.delete(lobbyId);
+      return { lost: true };
+    }
+    await execAll(
+      lobbyId,
+      redis
+        .multi()
+        .hset(roomKey(lobbyId), {
+          phase: "ended",
+          endReason: "void" satisfies EndReason,
+          endedAt: String(clock.now()),
+        })
+        .hdel(roomKey(lobbyId), "race", "t0", "endAt", "desks")
+        .del(...leftovers)
+        .expire(roomKey(lobbyId), VOID_TTL_S)
+        .expire(membersKey(lobbyId), VOID_TTL_S),
+    );
+    openRooms.add(lobbyId);
+    return { lost: false };
+  }
+
   return {
     open: ({ lobbyId, code, hostUserId, settings }) =>
       serial(lobbyId, async () => {
@@ -275,7 +372,8 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
             .hsetnx(key, "code", code)
             .hsetnx(key, "hostUserId", hostUserId)
             .hsetnx(key, "phase", "waiting")
-            .hsetnx(key, "settings", JSON.stringify(settings)),
+            .hsetnx(key, "settings", JSON.stringify(settings))
+            .sadd(ROOMS_KEY, lobbyId),
         );
         const created = openedAt === 1;
         // Only a new room seats the bots of its settings; a re-open leaves the seats alone.
@@ -339,7 +437,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
                 .parse(JSON.parse(room.desks))
                 .map(({ desk }) => traceKey(lobbyId, desk))
             : [];
-          await redis.del(roomKey(lobbyId), membersKey(lobbyId), desksKey(lobbyId), ...traces);
+          await execAll(
+            lobbyId,
+            redis
+              .multi()
+              .del(roomKey(lobbyId), membersKey(lobbyId), desksKey(lobbyId), ...traces)
+              .srem(ROOMS_KEY, lobbyId),
+          );
           openRooms.delete(lobbyId);
           return { members: [], closed: true };
         }
@@ -415,6 +519,8 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         endAt: room.endAt === undefined ? null : msSchema.parse(Number(room.endAt)),
         seated: toDesks(seats),
         desks: room.desks === undefined ? null : raceDesksSchema.parse(JSON.parse(room.desks)),
+        raceId: room.raceId ?? null,
+        endReason: room.endReason === undefined ? null : endReasonSchema.parse(room.endReason),
       };
     },
 
@@ -436,6 +542,45 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
 
     setPhase: async (lobbyId, phase) => {
       await withTtl(lobbyId, redis.multi().hset(roomKey(lobbyId), "phase", phase));
+    },
+
+    voidRoom,
+
+    async rehydrate() {
+      const done: Rehydrated = { kept: [], voided: [], gone: [] };
+      for (const lobbyId of await redis.smembers(ROOMS_KEY)) {
+        try {
+          await serial(lobbyId, async () => {
+            const room = await redis.hgetall(roomKey(lobbyId));
+            if (!room.openedAt) {
+              await redis.srem(ROOMS_KEY, lobbyId);
+              openRooms.delete(lobbyId);
+              return void done.gone.push(lobbyId);
+            }
+            if (RECOVERY[parsePhase(room.phase)] === "keep") {
+              openRooms.add(lobbyId);
+              return void done.kept.push(lobbyId);
+            }
+            await voidRoom(lobbyId);
+            done.voided.push(lobbyId);
+            log("room voided", { lobby: lobbyId, cause: "restart" });
+          });
+        } catch (err) {
+          // One corrupt room never stops the boot; it stays indexed for the next one.
+          log("rehydrate failed", { lobby: lobbyId, err: String(err) });
+        }
+      }
+      return done;
+    },
+
+    async reconcile() {
+      for (const lobbyId of [...openRooms]) {
+        await serial(lobbyId, async () => {
+          if ((await redis.exists(roomKey(lobbyId))) === 1) return;
+          openRooms.delete(lobbyId);
+          await redis.srem(ROOMS_KEY, lobbyId);
+        });
+      }
     },
 
     count: () => openRooms.size,

@@ -48,8 +48,17 @@ export type Lifecycle = {
    * web start call or of Redis is `start-failed`, with nothing emitted and the phase unchanged.
    */
   start(lobbyId: string, by: { sub: string; role: RaceRole }): Promise<HostStartAck>;
-  /** The one exit of a race: timer (here), all-finished (#173), void (#204). Idempotent. */
+  /**
+   * The one exit of a race: timer (here), all-finished (#173), void (#204). Idempotent. A room whose
+   * keys are gone while its race runs in this process is voided (`voidRoom`), never left frozen.
+   */
   endRace(lobbyId: string, reason: EndReason): Promise<void>;
+  /**
+   * The room's keys are gone mid-race (#204: Redis loss, seen by the tick): `ended { void }` with an
+   * empty ranking to the room, nothing persisted, the room dropped from this process and its leftover
+   * keys deleted. Only for the race `raceId` still running here; idempotent.
+   */
+  voidRoom(lobbyId: string, raceId: string): Promise<void>;
   /** A desk reached a terminal status (#173): ends the race when every desk is terminal. */
   onDeskTerminal(lobbyId: string): Promise<void>;
   /** The room was closed (its keys deleted): its timers are cancelled, nothing is emitted. */
@@ -85,6 +94,7 @@ export function createLifecycle({
   onGo = () => {},
   onEnded = () => {},
   onClosed = () => {},
+  liveRace = () => null,
 }: {
   registry: RoomRegistry;
   clock: Clock;
@@ -110,6 +120,8 @@ export function createLifecycle({
   onEnded?: (lobbyId: string) => void;
   /** The room closed (#173: the tick loop and the runtime are dropped). */
   onClosed?: (lobbyId: string) => void;
+  /** The race running in this process for the room (#204: the desks' runtime), else null. */
+  liveRace?: (lobbyId: string) => { raceId: string; t0: number; desks: number[] } | null;
 }): Lifecycle {
   const timers = new Map<string, TimerHandle[]>();
 
@@ -144,10 +156,46 @@ export function createLifecycle({
     });
   }
 
+  /**
+   * The room was lost with its race on (#204), inside its queue: everything of the room in this
+   * process stops first (so no tick rewrites a key), the room hears `ended { void }`, then the
+   * leftover keys go (best effort) and `onRaceEnded` sees the void (nothing is persisted).
+   */
+  async function lose(lobbyId: string, raceId: string) {
+    const live = liveRace(lobbyId);
+    const now = clock.now();
+    const elapsed = live ? Math.min(Math.max(0, now - live.t0), MAX_RACE_MS) : 0;
+    cancel(lobbyId);
+    try {
+      onClosed(lobbyId);
+    } catch (err) {
+      log("onClosed failed", { lobby: lobbyId, err: String(err) });
+    }
+    emit(lobbyId, "ended", { v: PROTOCOL_VERSION, raceId, reason: "void", ranking: [] });
+    log("ended", { lobby: lobbyId, reason: "void", desks: 0 });
+    await registry
+      .voidRoom(lobbyId, live?.desks ?? [])
+      .catch((err: unknown) => log("void cleanup failed", { lobby: lobbyId, err: String(err) }));
+    try {
+      onRaceEnded({
+        lobbyId,
+        raceId,
+        reason: "void",
+        ranking: [],
+        endedAt: now,
+        elapsedMs: elapsed,
+      });
+    } catch (err) {
+      log("onRaceEnded failed", { lobby: lobbyId, err: String(err) });
+    }
+  }
+
   const goRunning = (lobbyId: string, raceId: string) =>
     registry.withRoom(lobbyId, async () => {
       const room = await registry.room(lobbyId);
-      if (room?.phase !== "countdown" || room.race?.raceId !== raceId) return;
+      // Lost during the countdown (#204): GO never comes, the clients must not wait for it.
+      if (room === null) return lose(lobbyId, raceId);
+      if (room.phase !== "countdown" || room.race?.raceId !== raceId) return;
       await registry.setPhase(lobbyId, "running");
       onGo(lobbyId, { race: room.race, settings: room.settings, desks: room.desks ?? room.seated });
     });
@@ -217,6 +265,8 @@ export function createLifecycle({
     endRace: (lobbyId, reason) =>
       registry.withRoom(lobbyId, async () => {
         const room = await registry.room(lobbyId);
+        const live = room === null ? liveRace(lobbyId) : null;
+        if (live) return lose(lobbyId, live.raceId);
         if (!room?.race || (room.phase !== "countdown" && room.phase !== "running")) {
           // Ended already, or the room closed: nothing left to end, no timer left to fire.
           cancel(lobbyId);
@@ -257,6 +307,12 @@ export function createLifecycle({
         } catch (err) {
           log("onRaceEnded failed", { lobby: lobbyId, err: String(err) });
         }
+      }),
+
+    voidRoom: (lobbyId, raceId) =>
+      registry.withRoom(lobbyId, async () => {
+        if (liveRace(lobbyId)?.raceId !== raceId) return;
+        await lose(lobbyId, raceId);
       }),
 
     onDeskTerminal: async (lobbyId) => {

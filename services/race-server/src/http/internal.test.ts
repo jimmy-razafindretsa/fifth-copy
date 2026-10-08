@@ -35,6 +35,8 @@ async function start(skewS = 0) {
     clock,
     scheduler: createFakeScheduler(clock),
     webApi: fixtureWebApi(clock).api,
+    // The shared test db's `rooms` index lists other test files' live rooms (#204).
+    recovery: false,
   });
   return `http://127.0.0.1:${await server.listen(0, "127.0.0.1")}`;
 }

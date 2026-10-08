@@ -10,7 +10,17 @@ import {
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFakeClock } from "../clock";
 import { createRedis } from "../redis/client";
-import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
+import {
+  desksKey,
+  membersKey,
+  resumeIndexKey,
+  resumeKey,
+  ROOM_TTL_S,
+  roomKey,
+  ROOMS_KEY,
+  traceKey,
+  VOID_TTL_S,
+} from "./keys";
 import { createRoomRegistry, type RaceDesk, type RoomRegistry } from "./registry";
 
 // Integration tests against a real Redis (ADR 0008, ARCHITECTURE 10). They fail, never skip, when
@@ -41,8 +51,10 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  const keys = opened.splice(0).flatMap((id) => [roomKey(id), membersKey(id)]);
+  const ids = opened.splice(0);
+  const keys = ids.flatMap((id) => [roomKey(id), membersKey(id)]);
   if (keys.length) await redis.del(...keys);
+  if (ids.length) await redis.srem(ROOMS_KEY, ...ids);
 });
 
 afterAll(() => redis?.disconnect());
@@ -383,6 +395,8 @@ describe("room registry: lifecycle fields (#166)", () => {
       endAt: null,
       seated,
       desks: null,
+      raceId: null,
+      endReason: null,
     });
     expect(await registry.room(`lob_${randomUUID()}`)).toBeNull();
 
@@ -392,6 +406,8 @@ describe("room registry: lifecycle fields (#166)", () => {
       race,
       endAt: race.t0 + 60_000,
       desks: seated,
+      raceId: race.raceId,
+      endReason: null,
     });
     expect(await redis.hmget(roomKey(lobbyId), "raceId", "t0", "endAt")).toEqual([
       race.raceId,
@@ -558,5 +574,121 @@ describe("room registry: atomic writes (#517)", () => {
     await expect(
       registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings }),
     ).rejects.toThrow(/WRONGTYPE/);
+  });
+});
+
+describe("room registry: recovery writes (#204 C6)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("indexes the room in open's MULTI and refreshes the index TTL with every room write", async () => {
+    const { registry } = setup();
+    const lobbyId = lobby();
+    const groups = recordCommands();
+    await registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings });
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    await registry.setPhase(lobbyId, "running");
+    const atomic = groups().filter((g) => g.atomic);
+    expect(atomic).toHaveLength(3);
+    expect(atomic[0]!.commands).toContainEqual(["sadd", ROOMS_KEY, lobbyId]);
+    for (const { commands } of atomic) {
+      expect(commands).toContainEqual(["expire", ROOMS_KEY, String(ROOM_TTL_S)]);
+    }
+    expect(await redis.sismember(ROOMS_KEY, lobbyId)).toBe(1);
+    expect(await redis.ttl(ROOMS_KEY)).toBeGreaterThan(0);
+  });
+
+  it("closing the room removes it from the index in the same MULTI as its keys", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    const groups = recordCommands();
+    expect((await registry.leave(lobbyId, "a")).closed).toBe(true);
+    const closing = groups().find(({ commands }) => commands.some(([name]) => name === "srem"));
+    expect(closing?.atomic).toBe(true);
+    expect(closing!.commands).toContainEqual(["srem", ROOMS_KEY, lobbyId]);
+    expect(
+      closing!.commands.some(([name, key]) => name === "del" && key === roomKey(lobbyId)),
+    ).toBe(true);
+    expect(await redis.sismember(ROOMS_KEY, lobbyId)).toBe(0);
+  });
+
+  it("voidRoom writes its fields in one MULTI with VOID_TTL_S on both hashes and drops the mirror", async () => {
+    const { clock, registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    await registry.join(lobbyId, { userId: "b", name: "Bob" });
+    const desks = [
+      { desk: 1, userId: "a", name: "Ada", isBot: false },
+      { desk: 2, userId: "b", name: "Bob", isBot: false },
+    ];
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks });
+    await registry.setPhase(lobbyId, "running");
+    await redis
+      .multi()
+      .hset(desksKey(lobbyId), "1", "{}")
+      .expire(desksKey(lobbyId), 60)
+      .rpush(traceKey(lobbyId, 2), "{}")
+      .expire(traceKey(lobbyId, 2), 60)
+      .set(resumeKey(`k-${lobbyId}`), "{}", "EX", 60)
+      .hset(resumeIndexKey(lobbyId), "a", `k-${lobbyId}`)
+      .expire(resumeIndexKey(lobbyId), 60)
+      .exec();
+
+    const groups = recordCommands();
+    expect(await registry.voidRoom(lobbyId)).toEqual({ lost: false });
+    const writing = groups().filter(({ commands }) =>
+      commands.some(([name]) => ["hset", "hdel", "del"].includes(name!)),
+    );
+    expect(writing).toHaveLength(1);
+    expect(writing[0]!.atomic).toBe(true);
+    const { commands } = writing[0]!;
+    expect(commands).toContainEqual([
+      "hset",
+      roomKey(lobbyId),
+      "phase",
+      "ended",
+      "endReason",
+      "void",
+      "endedAt",
+      String(clock.now()),
+    ]);
+    expect(commands).toContainEqual(["hdel", roomKey(lobbyId), "race", "t0", "endAt", "desks"]);
+    expect(commands).toContainEqual(["expire", roomKey(lobbyId), String(VOID_TTL_S)]);
+    expect(commands).toContainEqual(["expire", membersKey(lobbyId), String(VOID_TTL_S)]);
+
+    const state = await registry.room(lobbyId);
+    expect(state).toMatchObject({
+      phase: "ended",
+      endReason: "void",
+      raceId: race.raceId,
+      race: null,
+      endAt: null,
+      desks: null,
+    });
+    expect(state!.seated).toHaveLength(2);
+    expect(
+      await redis.exists(
+        desksKey(lobbyId),
+        traceKey(lobbyId, 2),
+        resumeKey(`k-${lobbyId}`),
+        resumeIndexKey(lobbyId),
+      ),
+    ).toBe(0);
+    for (const ttl of await ttls(lobbyId)) {
+      expect(ttl).toBeGreaterThan(0);
+      expect(ttl).toBeLessThanOrEqual(VOID_TTL_S);
+    }
+  });
+
+  it("voidRoom on a room whose hash is gone deletes its leftovers and drops it from count", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    const before = registry.count();
+    await redis.del(roomKey(lobbyId));
+    expect(await registry.voidRoom(lobbyId, [1])).toEqual({ lost: true });
+    expect(registry.count()).toBe(before - 1);
+    expect(await redis.exists(roomKey(lobbyId), membersKey(lobbyId))).toBe(0);
+    expect(await redis.sismember(ROOMS_KEY, lobbyId)).toBe(0);
   });
 });

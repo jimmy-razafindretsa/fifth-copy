@@ -62,6 +62,8 @@ describe("Band (#25 C3)", () => {
     );
     expect(upright).toContain("rotate(-40deg)");
     expect(upright).toContain("data-band-upright");
+    // the level label sits on a tag of the band's fill, so it stays readable past the strip
+    expect(upright).toMatch(/class="[^"]*bg-primary[^"]*" data-band-upright/);
     const slanted = html(
       <Band angle={40}>
         <span>FILED</span>

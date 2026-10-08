@@ -22,7 +22,8 @@ export type BandProps = {
   /** Degrees, clamped to 30-45 (default 38). */
   angle?: number;
   tone?: BandTone;
-  /** Counter-rotates the children so they read level across the slanted band. */
+  /** Counter-rotates the children so they read level across the slanted band, on a tag of the band's
+   *  own fill (a level label is wider than a steep band; print page "MAIN REF" tag). */
   upright?: boolean;
   /** Sizes the clipping box (default `min-h-24`); the strip crosses it edge to edge. */
   className?: string;
@@ -58,7 +59,7 @@ export function Band({
       >
         {labelled && (
           <div
-            className="pointer-events-auto"
+            className={cn("pointer-events-auto", upright && cn("px-2 py-1", FILL[tone]))}
             data-band-upright={upright ? "" : undefined}
             style={upright ? { transform: `rotate(-${a}deg)` } : undefined}
           >

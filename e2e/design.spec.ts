@@ -575,3 +575,148 @@ test.describe("#15 printed look", () => {
     });
   }
 });
+
+/** Computed motif styles of `[data-motif=name]` or one of its descendants (#25). */
+async function motifStyle(page: Page, selector: string) {
+  return page
+    .locator(selector)
+    .first()
+    .evaluate((el) => {
+      const s = getComputedStyle(el);
+      return {
+        bgImage: s.backgroundImage,
+        bgSize: s.backgroundSize,
+        textShadow: s.textShadow,
+        color: s.color,
+        transform: s.transform,
+      };
+    });
+}
+
+const PLATES = {
+  grain: '[data-plate="paper-grain"]',
+  red: '[data-plate="paper-grain-red"]',
+  rays: '[data-plate="sun-rays"]',
+} as const;
+
+test.describe("#25 printed motifs", () => {
+  test("C6 /design demonstrates every motif in a Printed motifs section", async ({ page }) => {
+    await page.goto("/design");
+    const section = page.getByRole("region", { name: "Printed motifs" });
+    await expect(section.getByRole("heading", { level: 2, name: "Printed motifs" })).toBeVisible();
+    for (const motif of [
+      "paper-grain",
+      "paper-grain-red",
+      "misregister",
+      "band",
+      "stars",
+      "sun-rays",
+      "device",
+      "device-outside",
+    ]) {
+      await expect(section.locator(`[data-motif="${motif}"]`), motif).toBeVisible();
+    }
+    await expect(section.locator('[data-motif="misregister"] .type-display-lg')).toHaveClass(
+      /ink-misregister/,
+    );
+    await expect(section.locator('[data-motif="band"] [data-band-upright]')).toHaveText(
+      "Room 457 · 30 seats",
+    );
+    await expect(
+      section.locator('[data-motif="stars"] > div > div[aria-hidden="true"]'),
+    ).toHaveCount(2);
+    await expect(section.locator('[data-motif="sun-rays"]')).toContainText("character-stage");
+    const nixie = section.locator('[data-motif="device"] [data-device="nixie"]');
+    const phosphor = section.locator('[data-motif="device"] [data-device="phosphor"]');
+    await expect(nixie).toHaveText("00 88 66");
+    await expect(phosphor).toHaveText("READY");
+  });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test.describe(scheme, () => {
+      test.beforeEach(async ({ page }) => {
+        await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+        await page.goto("/design");
+      });
+
+      test("C1 grains paint the bible 6 halftones, opt-in, never on body; axe clean", async ({
+        page,
+      }) => {
+        const grain = await motifStyle(page, PLATES.grain);
+        expect(grain.bgImage).toContain("radial-gradient");
+        expect(grain.bgSize).toBe("10px 10px");
+        const red = await motifStyle(page, PLATES.red);
+        expect(red.bgImage).toContain("radial-gradient");
+        expect(red.bgSize).toBe("11px 11px");
+        expect(red.bgImage).not.toBe(grain.bgImage);
+        expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toBe(
+          "none",
+        );
+        // the pattern is a background layer: a hit test at the label lands on the label, not on it
+        for (const plate of [PLATES.grain, PLATES.red]) {
+          const label = page.locator(`${plate} p`);
+          await label.scrollIntoViewIfNeeded();
+          const hit = await label.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.textContent;
+          });
+          expect(hit, plate).toBe(await label.textContent());
+        }
+        await expectNoA11yViolations(page);
+      });
+
+      test("C2 ink-misregister: a 1px primary text-shadow, same red in both themes", async ({
+        page,
+      }) => {
+        const title = await motifStyle(page, '[data-motif="misregister"] .ink-misregister');
+        expect(title.textShadow).toBe("rgb(184, 29, 36) 1px 1px 0px");
+      });
+
+      test("C3 the band is rotated 38 degrees", async ({ page }) => {
+        const strip = await motifStyle(page, '[data-motif="band"] [data-band-strip]');
+        const m = /matrix\(([^)]+)\)/.exec(strip.transform);
+        expect(m, strip.transform).not.toBeNull();
+        const [a, b] = m![1]!.split(",").map(Number) as [number, number];
+        const deg = (Math.atan2(b, a) * 180) / Math.PI;
+        expect(Math.abs(deg - 38)).toBeLessThanOrEqual(0.5);
+        await expect(page.locator('[data-motif="band"] [data-band-angle]')).toHaveAttribute(
+          "data-band-angle",
+          "38",
+        );
+      });
+
+      test("C4 sun-rays paints the bible 6 conic recipe", async ({ page }) => {
+        expect((await motifStyle(page, PLATES.rays)).bgImage).toContain("repeating-conic-gradient");
+      });
+
+      test("C5 device glow only inside [data-device]", async ({ page }) => {
+        for (const tone of ["nixie", "phosphor"] as const) {
+          const inside = await motifStyle(page, `[data-device="${tone}"]`);
+          expect(inside.textShadow, tone).not.toBe("none");
+          expect(inside.textShadow, tone).toContain("0px 0px 6px");
+          expect(inside.color, tone).toBe(await roleValue(page, `device-${tone}`, "color"));
+        }
+        const outside = await motifStyle(page, '[data-motif="device-outside"] .device-phosphor');
+        expect(outside.textShadow).toBe("none");
+        const around = await motifStyle(page, '[data-motif="device-outside"] p');
+        expect(outside.color).toBe(around.color);
+        expect(outside.color).toBe(await roleValue(page, "fg", "color"));
+      });
+
+      test("C7 under prefers-contrast: more the textures paint nothing; misregistration and glow stay", async ({
+        page,
+      }) => {
+        await page.emulateMedia({ contrast: "more" });
+        for (const plate of Object.values(PLATES)) {
+          expect((await motifStyle(page, plate)).bgImage, plate).toBe("none");
+        }
+        expect(
+          (await motifStyle(page, '[data-motif="misregister"] .ink-misregister')).textShadow,
+        ).toBe("rgb(184, 29, 36) 1px 1px 0px");
+        expect((await motifStyle(page, '[data-device="nixie"]')).textShadow).toContain(
+          "0px 0px 6px",
+        );
+      });
+    });
+  }
+});

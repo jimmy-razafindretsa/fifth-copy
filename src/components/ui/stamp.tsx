@@ -110,10 +110,22 @@ export function Stamp({
     }
   }, [reduced]);
 
+  // A server-rendered stamp can land before hydration attaches `onAnimationEnd`: settle at mount when
+  // no slam is running any more (`getAnimations` flushes style first, so a fresh slam is seen running).
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const running = box.current?.getAnimations?.().some((a) => a.playState === "running");
+    if (running === false && !settled.current) {
+      settled.current = true;
+      callback.current?.();
+    }
+  }, []);
+
   const angle = stampAngle(rotation, seed);
   const [first, second] = lines;
   return (
     <span
+      ref={box}
       role={role ?? undefined}
       data-stamp-tone={tone}
       data-stamp-size={size}

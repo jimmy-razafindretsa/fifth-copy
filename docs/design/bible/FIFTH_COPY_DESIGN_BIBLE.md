@@ -200,6 +200,7 @@ Textures are opt-in, never on the page body (14 paints a flat paper body). Under
 - Entry animation: **slam** (scale 2.2 → 0.9 → 1, rotation settles), 0.3–0.45s.
 - Examples: `ACCEPTED · 48 WPM`, `FILED`, `ISSUED`, `ROOM 457 / 30 SEATS` (bobbing), `BUILT BY / AEGIS CORP.`
 - Extension (#107): on UI screens the stamp text uses the link role (red on paper, night-ink on Night shift: agit-red on the night ground is 1.76:1, 3.3); the `4px double` border stays red in both themes. Ground `color-mix(in srgb, var(--color-bg) 90%, transparent)`. The `HOST` stamp is Stardos 700 14px `.08em`, `padding:2px 8px`, a fixed −6°, slamming in with `fcSlam` 0.35s from −14°; none under reduced motion. The lobby keeps a local `.stamp` class until the `Stamp` primitive (#26).
+- Extension (#26): every UI stamp is the `Stamp` primitive (`src/components/ui/stamp.tsx`; the lobby HOST and FILE NOT FOUND stamps move to it in #614). **Two lines**: the headline in Stardos (the display role), then an optional second line in Oswald 600 caps (the label role); a bilingual in-world stamp puts its dual headline on line one and the other language on line two (`ОБГОН! · OVERTAKE` / `DÉPASSEMENT`), the Cyrillic tagged `lang="ru"`. **Sizes** sm / md / lg = the display role at 1.5 / 2.25 / 3.5rem with `padding` 2px 8px (the HOST badge), 8px 14px (FILE NOT FOUND), 12px 20px; the lg stamp wraps inside a 375px phone. **Angle** −6° to +6° (R29, inside the range above); an event stamp takes an angle seeded by its event, so the same event always lands at the same angle, never closer than 2° to level. **The ink tone**: for neutral paperwork (`PASSED`, a merge confirmation) the stamp is ink, text and `4px double` rule both in the `fg` role (press-ink on paper, night-ink on Night shift); red stays for you, urgency and authority (0). The slam is `fcSlam` on `--motion-duration-slam` 350ms (8).
 
 ### 7.4 Dockets / file cards
 - Paper or newsprint, `2px solid ink`, no radius. Header row with mono name plus Oswald tag. Rows are a grid `120px | 1fr` with dashed separators `1px dashed rgba(42,36,32,.3)`.
@@ -255,7 +256,7 @@ All motion is short, mechanical and printed-feeling: stamps slam, paper pops, le
 |---|---|
 | `fcCaret` | 1.05s `steps(1)` infinite, next-letter cell |
 | `fcPop` | 0.18s (letters) / 0.35s (stamps), `scale(1.6)→(0.92)→(1)` |
-| `fcSlam / lkSlam` | 0.3–0.45s, scale 2.2 → 0.9 → 1 with rotation −14° → −8° |
+| `fcSlam / lkSlam` | 0.3–0.45s, scale 2.2 → 0.9 → 1 with rotation −14° → −8° (the `Stamp` primitive: 350ms, from its angle − 8° to its angle, opacity 0 → 1 once; #26) |
 | `fcBlink` | 1.2s `steps(2)`, live dot |
 | `fcMarquee` | ticker, 36s linear infinite, two identical halves, translateX 0 → −50% |
 | `fcSpin` | stars, 14–90s linear |

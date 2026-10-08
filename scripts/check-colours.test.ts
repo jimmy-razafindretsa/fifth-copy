@@ -174,6 +174,17 @@ describe("C4 reward and device ownership", () => {
     ).toEqual(["src/features/stats/a.module.css:1 device"]);
   });
 
+  it("keeps the lobby stamp CTA on the band role, outside the device allowlist (#595)", () => {
+    const lobby = "src/features/lobby/components/lobby-entry.module.css";
+    const device = OWNERSHIP.find((o) => o.rule === "device");
+    expect(device?.paths).not.toContain(lobby);
+    expect(one(lobby, `.a { border-color: var(--color-device-bezel); }`)).toEqual([
+      `${lobby}:1 device`,
+    ]);
+    const css = fs.readFileSync(path.join(__dirname, "..", lobby), "utf8");
+    expect(css).not.toContain("--color-device-");
+  });
+
   it("keeps every allowlist in the one exported OWNERSHIP array, each entry with a reason", () => {
     expect(new Set(OWNERSHIP.map((o) => o.rule))).toEqual(
       new Set(["ink-ground", "reward", "device"]),

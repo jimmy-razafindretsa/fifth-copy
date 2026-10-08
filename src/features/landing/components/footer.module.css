@@ -1,5 +1,7 @@
 /* 10. footer (bible 14.1 item 10): ink ground, 14px red top rule, brand column, link columns, social, stamp. */
 
+@reference "../../../app/globals.css";
+
 .footer {
   background: var(--color-band);
   color: var(--color-band-fg);
@@ -41,19 +43,16 @@
 }
 
 .tagline {
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.32em;
 }
 
 .about {
   margin: 0;
-  font:
-    400 15px/1.55 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 15px;
   color: var(--color-band-muted);
   text-wrap: pretty;
 }
@@ -67,20 +66,18 @@
 
 .colTitle {
   margin: 0;
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.2em;
   color: var(--color-reward);
 }
 
 .colLink {
   color: var(--color-band-fg);
-  font:
-    400 15px/1.4 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.4;
   text-decoration: none;
 }
 
@@ -114,10 +111,9 @@
   color: var(--color-band-fg);
   border: 2px solid color-mix(in srgb, var(--color-band-fg) 35%, transparent);
   padding: 8px 12px;
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.14em;
   text-decoration: none;
 }
@@ -135,10 +131,9 @@
   justify-content: center;
   background: var(--color-primary);
   color: var(--color-primary-fg);
-  font:
-    700 12px var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-sm;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.02em;
 }
 
@@ -148,10 +143,9 @@
   border: 3px double var(--color-reward);
   color: var(--color-reward);
   padding: 6px 12px;
-  font:
-    700 15px/1.1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-sm;
+  font-size: 15px;
+  line-height: 1.1;
   letter-spacing: 0.08em;
   text-align: center;
 }
@@ -163,10 +157,9 @@
   gap: 12px;
   padding: 16px var(--gutter, 48px);
   border-top: 1px solid color-mix(in srgb, var(--color-band-fg) 18%, transparent);
-  font:
-    400 12px var(--font-plex-mono),
-    ui-monospace,
-    monospace;
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
   color: var(--color-band-muted);
 }
 

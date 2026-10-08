@@ -3,6 +3,8 @@
  * typing strip (7.7), QUICK RACE row, entries (card 99) and the live feed (7.8) with its bobbing stamp.
  */
 
+@reference "../../../app/globals.css";
+
 @keyframes fcCaret {
   0%,
   49% {
@@ -140,29 +142,25 @@
 }
 
 .kicker {
-  font:
-    600 13px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
   letter-spacing: 0.24em;
   color: var(--color-link);
 }
 
 .tagline {
-  font:
-    600 14px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  line-height: normal;
   letter-spacing: 0.36em;
   margin-top: -4px;
 }
 
 .pitch {
   margin: 0;
-  font:
-    400 21px/1.5 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 21px;
+  line-height: 1.5;
   max-width: 560px;
   text-wrap: pretty;
 }
@@ -179,16 +177,18 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.2em;
   color: var(--color-fg-muted);
 }
 
 .again {
-  font: inherit;
+  /* a <button> does not inherit the head's face: the label role at the head's size and tracking */
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: inherit;
   background: none;
   border: 0;
@@ -211,10 +211,9 @@
 .chars {
   display: flex;
   flex-wrap: wrap;
-  font:
-    400 clamp(20px, 2.2vw, 30px) / 1.3 var(--font-plex-mono),
-    ui-monospace,
-    monospace;
+  @apply type-typing;
+  font-size: clamp(20px, 2.2vw, 30px);
+  line-height: 1.3;
   color: var(--color-typing-done);
 }
 
@@ -266,10 +265,8 @@
   border: 4px double var(--color-primary);
   color: var(--color-primary);
   background: color-mix(in srgb, var(--color-tape) 92%, transparent);
-  font:
-    700 22px/1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-sm;
+  font-size: 22px;
   letter-spacing: 0.08em;
   padding: 6px 12px;
   pointer-events: none;
@@ -298,10 +295,9 @@
 
 .note {
   margin: 0;
-  font:
-    400 15px/1.45 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
   max-width: 250px;
   color: var(--color-fg);
 }
@@ -367,10 +363,9 @@
   background: var(--color-primary);
   color: var(--color-primary-fg);
   padding: 5px 10px;
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.18em;
 }
 
@@ -386,10 +381,10 @@
   background: color-mix(in srgb, var(--color-band) 82%, transparent);
   color: var(--color-band-fg);
   padding: 5px 10px;
-  font:
-    500 12px var(--font-plex-mono),
-    ui-monospace,
-    monospace;
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
+  font-weight: 500;
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
 }
@@ -398,10 +393,10 @@
   position: absolute;
   right: 14px;
   bottom: 12px;
-  font:
-    500 11px var(--font-plex-mono),
-    ui-monospace,
-    monospace;
+  @apply type-typing;
+  font-size: 11px;
+  line-height: normal;
+  font-weight: 500;
   letter-spacing: 0.08em;
   color: color-mix(in srgb, var(--color-band-fg) 85%, transparent);
   pointer-events: none;
@@ -412,10 +407,9 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  font:
-    400 12px var(--font-plex-mono),
-    ui-monospace,
-    monospace;
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
   color: var(--color-fg-muted);
 }
 

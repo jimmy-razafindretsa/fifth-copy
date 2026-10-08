@@ -1,5 +1,7 @@
 /* Landing header (bible 14.1 item 1), ported 1:1 from the reference. */
 
+@reference "../../../app/globals.css";
+
 .header {
   display: flex;
   align-items: center;
@@ -26,10 +28,8 @@
 }
 
 .brandName {
-  font:
-    700 20px/1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-sm;
+  font-size: 20px;
   letter-spacing: 0.06em;
 }
 
@@ -38,10 +38,9 @@
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.16em;
 }
 
@@ -63,17 +62,15 @@
   background: var(--color-surface);
   border: 2px solid var(--color-fg);
   padding: 5px 10px;
-  font:
-    400 12px var(--font-plex-mono),
-    ui-monospace,
-    monospace;
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
 }
 
 .tag {
-  font:
-    600 10px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
   letter-spacing: 0.16em;
   background: var(--color-fg);
   color: var(--color-bg);

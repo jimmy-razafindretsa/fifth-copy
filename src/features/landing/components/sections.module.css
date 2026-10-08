@@ -3,6 +3,8 @@
  * your clerk (10.2, 15), a little history (7.4 grid), how a race runs, the red final call, the medal (13).
  */
 
+@reference "../../../app/globals.css";
+
 @keyframes fcMarquee {
   from {
     transform: translateX(0);
@@ -28,10 +30,8 @@
   display: flex;
   width: max-content;
   white-space: nowrap;
-  font:
-    700 clamp(28px, 3.4vw, 46px) / 1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-md;
+  font-size: clamp(28px, 3.4vw, 46px);
   letter-spacing: 0.08em;
   color: var(--color-band-fg);
   animation: fcMarquee 36s linear infinite;
@@ -72,10 +72,9 @@
 
 .storyTitle {
   margin: 0;
-  font:
-    700 clamp(40px, 5vw, 72px) / 0.98 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-lg;
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 0.98;
   letter-spacing: 0.02em;
   text-wrap: balance;
 }
@@ -100,10 +99,9 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  font:
-    400 19px/1.6 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 19px;
+  line-height: 1.6;
   max-width: 640px;
 }
 
@@ -142,10 +140,9 @@
   position: absolute;
   left: 20px;
   top: 18px;
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.2em;
   color: var(--color-fg-muted);
   pointer-events: none;
@@ -182,18 +179,17 @@
 }
 
 .docketName {
-  font:
-    500 22px var(--font-plex-mono),
-    ui-monospace,
-    monospace;
+  @apply type-typing;
+  font-size: 22px;
+  line-height: normal;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
 .docketTag {
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.16em;
 }
 
@@ -207,17 +203,15 @@
   gap: 12px;
   padding: 9px 18px;
   border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
-  font:
-    400 15px var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 15px;
+  line-height: normal;
 }
 
 .docketRow dt {
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.18em;
   color: var(--color-fg-muted);
   align-self: center;
@@ -241,10 +235,9 @@
 }
 
 .ladderLabel {
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.2em;
   color: var(--color-fg-muted);
 }
@@ -256,10 +249,9 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.12em;
 }
 
@@ -298,10 +290,7 @@
 .intro {
   margin: 0;
   max-width: 440px;
-  font:
-    400 16px/1.55 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
   color: var(--color-fg-muted);
   text-wrap: pretty;
 }
@@ -325,28 +314,25 @@
 
 .cardTitle {
   margin: 0;
-  font:
-    700 26px/1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-sm;
+  font-size: 26px;
+  letter-spacing: normal; /* reference 14.1: untracked card title */
   color: var(--color-link);
 }
 
 .cardBody {
   margin: 0;
-  font:
-    400 15px/1.55 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: 15px;
   text-wrap: pretty;
 }
 
 .bridge {
   margin: 0;
-  font:
-    700 clamp(20px, 2vw, 26px) / 1.35 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.35;
+  font-weight: 700;
   max-width: 820px;
   text-wrap: pretty;
 }
@@ -387,28 +373,23 @@
 }
 
 .stepNo {
-  font:
-    700 64px/1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-lg;
+  font-size: 64px;
+  letter-spacing: normal; /* reference 14.1: untracked step numeral */
   color: var(--color-link);
 }
 
 .stepTitle {
   margin: 0;
-  font:
-    600 18px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 18px;
+  line-height: normal;
   letter-spacing: 0.1em;
 }
 
 .stepBody {
   margin: 0;
-  font:
-    400 16px/1.55 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
   text-wrap: pretty;
 }
 
@@ -445,10 +426,9 @@
 
 .finalTitle {
   margin: 0;
-  font:
-    700 clamp(40px, 6vw, 88px) / 0.95 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-lg;
+  font-size: clamp(40px, 6vw, 88px);
+  line-height: 0.95;
   letter-spacing: 0.03em;
   text-wrap: balance;
 }
@@ -484,10 +464,7 @@
 
 .medalBody {
   margin: 0;
-  font:
-    400 16px/1.55 var(--font-courier-prime),
-    ui-monospace,
-    monospace;
+  @apply type-body;
   text-wrap: pretty;
 }
 

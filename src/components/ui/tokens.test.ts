@@ -529,6 +529,30 @@ describe("#20 type roles", () => {
     expect(globals.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/font-family\s*:/);
   });
 
+  it("#531 C1 C2 no src/ CSS sets a face itself: no font shorthand or family, no raw family variable", () => {
+    const src = path.join(process.cwd(), "src");
+    const files = (readdirSync(src, { recursive: true }) as string[])
+      .map((f) => f.split(path.sep).join("/"))
+      .filter((f) => f.endsWith(".css") && !f.startsWith("generated/"));
+    expect(files.length).toBeGreaterThan(5);
+    const hits: string[] = [];
+    for (const file of files) {
+      const lines = readFileSync(path.join(src, file), "utf8").split("\n");
+      lines.forEach((line, i) => {
+        // C1 (module CSS: font / font-family declarations), C2 (any CSS: raw next/font family vars)
+        if (file.endsWith(".module.css") && /^\s*font(-family)?\s*:/.test(line)) {
+          hits.push(`${file}:${i + 1} ${line.trim()}`);
+        }
+        if (
+          /var\(--font-(stardos|oswald|plex-mono|special-elite|courier-prime|vt323)\)/.test(line)
+        ) {
+          hits.push(`${file}:${i + 1} ${line.trim()}`);
+        }
+      });
+    }
+    expect(hits).toEqual([]);
+  });
+
   it("C7 C12 C17 documents the roles, the Cyrillic rule and each primitive's role", () => {
     const start = docs.indexOf("## Type roles");
     expect(start).toBeGreaterThan(-1);

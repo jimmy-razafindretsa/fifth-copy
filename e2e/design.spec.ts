@@ -720,3 +720,97 @@ test.describe("#25 printed motifs", () => {
     });
   }
 });
+
+test.describe("#26 stamps", () => {
+  const BRAND = /^(Stardos Stencil|Oswald|IBM Plex Mono|Special Elite|Courier Prime|VT323)\b/i;
+
+  /** Font families (with glyph counts) that drew each stamp's text, through Chromium's CDP. */
+  async function stampFonts(page: Page) {
+    await page.evaluate(() => document.fonts.ready);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("DOM.enable");
+    await cdp.send("CSS.enable");
+    const { root } = await cdp.send("DOM.getDocument", { depth: -1 });
+    const { nodeIds } = await cdp.send("DOM.querySelectorAll", {
+      nodeId: root.nodeId,
+      selector: "[data-stamp-tone] span",
+    });
+    const fonts: { familyName: string; isCustomFont: boolean; glyphCount: number }[] = [];
+    for (const nodeId of nodeIds) {
+      fonts.push(...(await cdp.send("CSS.getPlatformFontsForNode", { nodeId })).fonts);
+    }
+    await cdp.detach();
+    return fonts;
+  }
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C6 the Stamps section shows ink and red bilingual stamps, axe clean (${scheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/design");
+      const section = page.getByRole("region", { name: "Stamps" });
+      await expect(section.getByRole("heading", { level: 2, name: "Stamps" })).toBeVisible();
+      // several live regions on the page (and the route announcer): always filter by text
+      const go = section.getByRole("status").filter({ hasText: "НАЧАЛИ / GO" });
+      const overtake = section.getByRole("status").filter({ hasText: "ОБГОН! · OVERTAKE" });
+      const passed = section.getByRole("status").filter({ hasText: "ОБОГНАЛИ · PASSED" });
+      await expect(go).toHaveAttribute("data-stamp-tone", "red");
+      await expect(overtake).toHaveAttribute("data-stamp-tone", "red");
+      await expect(overtake).toContainText("DÉPASSEMENT");
+      await expect(passed).toHaveAttribute("data-stamp-tone", "ink");
+      for (const [stamp, ru] of [
+        [go, "НАЧАЛИ"],
+        [overtake, "ОБГОН!"],
+        [passed, "ОБОГНАЛИ"],
+      ] as const) {
+        await expect(stamp.locator('span[lang="ru"]')).toHaveText(ru);
+      }
+      // red = link text on a primary rule, ink = fg text and rule (bible 7.3, #107, #26)
+      for (const [stamp, text, rule] of [
+        [go, "link", "primary"],
+        [passed, "fg", "fg"],
+      ] as const) {
+        const look = await stamp.evaluate((el) => {
+          const s = getComputedStyle(el);
+          return { color: s.color, border: s.borderTopColor, style: s.borderTopStyle };
+        });
+        expect(look.color).toBe(await roleValue(page, text, "color"));
+        expect(look.border).toBe(await roleValue(page, rule, "borderTopColor"));
+        expect(look.style).toBe("double");
+      }
+      await expectNoA11yViolations(page);
+    });
+  }
+
+  test("C6 Replay remounts the stamp", async ({ page }) => {
+    await page.goto("/design");
+    const demo = page.locator("[data-stamp-demo]");
+    await page.waitForFunction(() =>
+      Object.keys(document.querySelector("[data-stamp-demo]") ?? {}).some((k) =>
+        k.startsWith("__reactFiber"),
+      ),
+    );
+    await demo.locator("[data-stamp-tone]").evaluate((el) => el.setAttribute("data-old", ""));
+    await demo.getByRole("button", { name: "Replay" }).click();
+    await expect(demo).toHaveAttribute("data-stamp-run", "1");
+    await expect(demo.locator("[data-stamp-tone]")).toHaveCount(1);
+    await expect(demo.locator("[data-old]")).toHaveCount(0);
+    await expect(demo.getByRole("status")).toContainText("ОБГОН! · OVERTAKE");
+  });
+
+  test("C6 every stamp glyph is drawn by a brand face (#20)", async ({ page }) => {
+    await page.goto("/design");
+    await expect
+      .poll(async () =>
+        (await stampFonts(page))
+          .filter((f) => f.glyphCount > 0 && (!f.isCustomFont || !BRAND.test(f.familyName)))
+          .map((f) => f.familyName),
+      )
+      .toEqual([]);
+    const fonts = await stampFonts(page);
+    expect(fonts.reduce((n, f) => n + f.glyphCount, 0)).toBeGreaterThan(0);
+    expect(fonts.some((f) => /Stardos Stencil/i.test(f.familyName))).toBe(true);
+    expect(fonts.some((f) => /Oswald/i.test(f.familyName))).toBe(true);
+  });
+});

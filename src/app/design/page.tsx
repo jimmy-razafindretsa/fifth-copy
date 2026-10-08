@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import {
   Alert,
   Band,
@@ -13,12 +13,14 @@ import {
   Monogram,
   type MonogramVariant,
   Spinner,
+  Stamp,
   Star,
   Wordmark,
 } from "@/components/ui";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import { getT } from "@/i18n";
 import demo from "./motion-demo.module.css";
+import { StampReplay } from "./stamp-demo";
 
 export const metadata: Metadata = { title: "Design system" };
 
@@ -454,6 +456,39 @@ export default async function DesignPage() {
           </Alert>
           <Alert tone="success" title="Saved" />
           <Alert title="Heads up">Informational message.</Alert>
+        </div>
+      </section>
+
+      <section aria-labelledby="stamps" className="flex flex-col gap-3">
+        <h2 id="stamps" className="type-display-md">
+          Stamps
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          A rubber stamp slams in once, crooked, in red or ink. Under reduced motion it is simply
+          there.
+        </p>
+        {/* the slam starts at 2.2x: clip it to the specimen so it never scrolls the page sideways */}
+        <div className="flex flex-wrap items-center gap-8 overflow-x-clip p-4">
+          <Stamp
+            lines={[
+              // RSC checks keys on element arrays passed as props
+              <Fragment key="go">
+                <span lang="ru">НАЧАЛИ</span> / GO
+              </Fragment>,
+            ]}
+          />
+          <Stamp
+            tone="ink"
+            size="sm"
+            rotation="auto"
+            seed="passed"
+            lines={[
+              <Fragment key="passed">
+                <span lang="ru">ОБОГНАЛИ</span> · PASSED
+              </Fragment>,
+            ]}
+          />
+          <StampReplay />
         </div>
       </section>
 

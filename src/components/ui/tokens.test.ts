@@ -556,7 +556,7 @@ describe("#28 motion tokens", () => {
   const DURATIONS = {
     "--motion-duration-fast": "120ms",
     "--motion-duration-base": "200ms",
-    "--motion-duration-slam": "180ms",
+    "--motion-duration-slam": "350ms",
     "--motion-duration-slow": "600ms",
   } as const;
   const reduceMedia = decls(

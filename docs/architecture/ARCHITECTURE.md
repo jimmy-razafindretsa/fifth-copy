@@ -224,7 +224,7 @@ Pure functions over plain data; the full contract is in `packages/engine/README.
 | `ranking` | `compareResults(a, b)` | 4.1 rule 6, 4.4, 4.5, 7.4 |
 | `bonus` | `eligibleBonus(rankPct)`, `applyBonus(room, from, to)`, cooldown and repeat-immunity checks | 10 |
 | `bots` | `botProfile(level)`, `nextBotKeystroke(profile, ctx, rng)` | 9 |
-| `anticheat` | `analyseTrace(keys, text) -> Flag[]` | 16.3 |
+| `anticheat` | `analyseTrace(input, thresholds = DEFAULT_THRESHOLDS) -> Flag[]`, `input = { keystrokes, text, settings, recorded: { cursor, correct, errors }, timingAnomalies }`; also `replayTrace` | 16.3 |
 
 Invariants tested by property tests: normalisation is idempotent; progress never decreases except by backspace; the comparator is a strict total order; replaying a trace through the reducer reproduces the stored final state; bots never produce a constant inter-key delay.
 

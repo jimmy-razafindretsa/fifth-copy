@@ -252,7 +252,7 @@
     {
       "id": "0016",
       "title": "Shown WPM is clean WPM; text-changing bonuses stay fair through per-desk overlays, effective-text finish order and reproducible traces",
-      "status": "proposed",
+      "status": "accepted",
       "category": "architecture",
       "scope": [
         "packages/engine/src/bonus/**",

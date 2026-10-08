@@ -1,7 +1,7 @@
 ---
 id: "0016"
 title: Shown WPM is clean WPM; text-changing bonuses stay fair through per-desk overlays, effective-text finish order and reproducible traces
-status: proposed
+status: accepted
 category: architecture
 scope: ["packages/engine/src/bonus/**", "packages/engine/src/text/overlay.ts", "packages/engine/src/scoring/**", "services/race-server/src/rooms/**", "services/race-server/src/persist/results.ts", "src/features/results/**", "src/features/stats/**"]
 supersedes: []
@@ -29,6 +29,7 @@ Spec 10 adds catch-up bonuses (card #190, plan F4.14 and F4.16): Extra Paperwork
 - Smoke Break's blur is rendered by the client only (#236): the server records `blurUntil` and sends it in `bonus-hit`, but it does not change what the target may type or how its keystrokes are scored.
 - The stored result carries no overlay yet: worker re-analysis and the per-race WPM series (#302) need it to replay against the effective text; card #623 adds it (protocol + Prisma, additive).
 - Snapshots carry each desk's cursor but not its effective length, so a client's progress bars of rivals drift after a bonus while the ranks stay authoritative; the HUD card (#236) reconciles from `bonus-hit` and `welcome.overlay`.
+- The bonus log (`ledger.log`) stays in process like the trace and is never mirrored to the desks hash; the counters, overlay, held card, cooldown, immunity and blur are (ADR 0008, room TTL). A running room is voided on restart (ADR 0008), so the log is never needed for recovery.
 - A new bonus is one `BonusKind` member, one `BONUS_RULES` row and one effect function; the race server step (`rooms/bonus-step.ts`) only orchestrates.
 
 ## Alternatives considered

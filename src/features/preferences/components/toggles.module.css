@@ -1,7 +1,9 @@
 /*
  * Header toggles, ported 1:1 from docs/design/bible/Fifth Copy Landing.dc.html (bible 7.1 segmented
- * toggle, 14.1 item 1). Colours are roles from docs/design/tokens.css only, fonts the next/font variables.
+ * toggle, 14.1 item 1). Colours are roles from docs/design/tokens.css only, fonts the type roles (#20, #531).
  */
+
+@reference "../../../app/globals.css";
 
 .segmented {
   display: flex;
@@ -9,10 +11,9 @@
 }
 
 .segment {
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.14em;
   padding: 5px 10px;
   border: 0;
@@ -30,10 +31,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font:
-    600 12px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
   letter-spacing: 0.14em;
   padding: 7px 12px;
   border: 2px solid var(--color-fg);

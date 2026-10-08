@@ -3,8 +3,10 @@
  * holds what every section shares: the page root with its gutters (7.10), kickers and section headings
  * (4), stamps (7.3) and the ink/secondary buttons (7.1). Stars and embeds are `src/components/ui`
  * primitives; the star cursor (7.9) is global. Colours are roles from docs/design/tokens.css only, fonts
- * the next/font variables; hard print offsets, no radius.
+ * the type roles (#20, #531); hard print offsets, no radius.
  */
+
+@reference "../../../app/globals.css";
 
 /* page root: desktop gutters 48px (header 32px), fluid down to 16px on phones (bible 7.10, 14.3) */
 .page {
@@ -18,10 +20,9 @@
 
 /* red kicker above every H2; the link role keeps it red on paper and night-ink on Night shift (bible 3.3, 4) */
 .kicker {
-  font:
-    600 13px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
   letter-spacing: 0.24em;
   color: var(--color-link);
 }
@@ -29,10 +30,8 @@
 /* section H2 scale (bible 4) */
 .h2 {
   margin: 0;
-  font:
-    700 clamp(36px, 4.4vw, 60px) / 1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-lg;
+  font-size: clamp(36px, 4.4vw, 60px);
   letter-spacing: 0.03em;
 }
 
@@ -47,10 +46,9 @@
   border: 4px double var(--color-primary);
   color: var(--color-link);
   background: color-mix(in srgb, var(--color-bg) 90%, transparent);
-  font:
-    700 20px/1.1 var(--font-stardos),
-    Impact,
-    sans-serif;
+  @apply type-display-sm;
+  font-size: 20px;
+  line-height: 1.1;
   letter-spacing: 0.08em;
   text-align: center;
   pointer-events: none;
@@ -58,10 +56,9 @@
 
 /* bible 7.1 ink button */
 .inkButton {
-  font:
-    600 13px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
   letter-spacing: 0.16em;
   background: var(--color-fg);
   color: var(--color-bg);
@@ -79,10 +76,9 @@
 .secondary {
   display: inline-flex;
   align-items: center;
-  font:
-    600 13px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
   letter-spacing: 0.16em;
   background: transparent;
   color: var(--color-fg);
@@ -104,10 +100,9 @@
 }
 
 .segment {
-  font:
-    600 11px var(--font-oswald),
-    Impact,
-    sans-serif;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
   letter-spacing: 0.14em;
   padding: 5px 9px;
   border: 0;

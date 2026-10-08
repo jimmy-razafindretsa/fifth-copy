@@ -1,13 +1,13 @@
 # Component inventory (`src/components/ui`)
 
-Status: starter primitives (#7) wearing the Fifth Copy palette and colour roles (#16, design bible section 3), the six brand fonts (#21) and the six type roles (#20: buttons and labels in Oswald, titles in Stardos Stencil, copy in Courier Prime). the printed look and the colour usage rules (#15). Still to come: theme switching #19.
+Status: starter primitives (#7) wearing the Fifth Copy palette and colour roles (#16, design bible section 3), the six brand fonts (#21) and the six type roles (#20: buttons and labels in Oswald, titles in Stardos Stencil, copy in Courier Prime), the printed look and the colour usage rules (#15), theme switching and the contrast audit of both themes (#19).
 Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` (visual baselines tagged `@visual`).
 
 ## Rules
 - Tokens only: `docs/design/tokens.css` is the single source. Tailwind's default palette is removed, so `bg-zinc-50` does not exist; use semantic utilities (`bg-surface`, `text-fg`, `text-fg-muted`, `border-border`, `bg-primary`, `text-danger`, ...). Spacing uses the Tailwind scale (`p-4`), no radius (`--radius-{sm,md,lg}` are 0, `rounded-full` only for the spinner and dots; "Printed look"), type through the six roles of "Type roles" below (`type-display-{sm,md,lg}`, `type-label`, `type-typing`, `type-flavour`, `type-body`, `type-device`), sizes `text-{xs..3xl}` only to resize a role. The bare faces `font-{display,label,typing,flavour,body,device}` exist for code samples only (`font-sans`/`font-mono` do not exist).
 - Colours: brand values (`--brand-*`) are never used directly and are not utilities; use a role from the tables below (`bg-you`, `text-rival`, `bg-tape`, ...). Write class names as complete literals (`"bg-you"`, never `` `bg-${role}` ``): Tailwind only emits classes it finds as whole strings.
 - Links: `text-link underline` in both themes.
-- Themes: light by default, dark via `prefers-color-scheme` or `<html data-theme="dark">`. Never use `dark:` color overrides; the tokens switch.
+- Themes: light by default, Night shift via `prefers-color-scheme` or `<html data-theme="dark">`. Never use `dark:` color overrides; the tokens switch. The choice is the `theme` cookie (values `light` and `dark`; absent = follow the OS), HttpOnly, SameSite=Lax, 1 year, written only by the `setTheme` server action (`system` deletes it); the root layout renders `data-theme` from it on the server, so the first paint is already in the chosen theme (ARCHITECTURE 8.4). The control is `ThemeToggle` in `src/features/preferences` (bible 14.1 NIGHT SHIFT, gold dot when on; label from props): in the header (#373) and on `/design` "Preferences"; the account preference (#66) mirrors into the same cookie. Tests: `e2e/theme.spec.ts`.
 - Breakpoints, mobile first: base = mobile (375), `md:` = tablet (768), `xl:` = desktop (1280).
 - Primitives import nothing from features, server or env (boundary-enforced). Import from `@/components/ui`.
 - Every interactive primitive is a real element (`button`, `input`, `a`), keyboard reachable, with visible focus (global `:focus-visible` outline).
@@ -34,51 +34,54 @@ Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` 
 | `nixie` | `#FF9A3C` | device numerals (nixie) |
 
 ## Brand roles
-| Role | Light | Night shift | Use |
-|---|---|---|---|
-| `bg` | `paper` | `night` | page ground |
-| `surface` | `newsprint` | `night-panel` | panels, cards |
-| `fg` | `press-ink` | `night-ink` | text |
-| `primary` / `primary-hover` / `primary-fg` | `agit-red` / `banner` / `paper` | same | primary action |
-| `pressed` | `banner` | same | pressed red, Danger button fill |
-| `you` | `agit-red` | same | the player |
-| `rival` | `ribbon-violet` | same | rivals (fills and marks; as text see #27) |
-| `reward` | `medal-gold` | same | rewards, bests (~2%) |
-| `untyped` | `color-mix(in srgb, #3E3A78 85%, #F1E8D6)` | `#CFC6B3` | text still to type, off the tape |
-| `tape` | `tape-paper` | same | typing strip ground |
-| `typing-done` / `typing-next` on `typing-next-bg` / `typing-remaining` / `typing-error` | `press-ink` / `paper` on `agit-red` / `color-mix(in srgb, #3E3A78 85%, #E8DCC0)` / `agit-red` | same (always on `tape`) | typing strip character states (bible 7.7) |
-| `device-phosphor` / `device-nixie` / `device-bezel` | `phosphor` / `nixie` / `press-ink` | same | device numerals and bezel |
-| `room` | `backroom-grey` | same | room, steel |
-| `band` / `band-fg` / `band-muted` | `press-ink` / `paper` / `night-muted` | same | ink bands (ticker, footer, live-feed frame) and their text (bible 7.10, 14.1) |
+Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured from the declared values by `src/components/ui/tokens.test.ts` (text 4.5:1; `mark` and `ring` are non-text, 3:1).
+| Role | Light | Night shift | Use | Contrast |
+|---|---|---|---|---|
+| `bg` | `paper` | `night` | page ground | ground |
+| `surface` | `newsprint` | `night-panel` | panels, cards | ground |
+| `fg` | `press-ink` | `night-ink` | text | `bg` 12.58 \| 9.72; `surface` 10.65 \| 8.05; `surface-muted` 9.56 \| 6.89 |
+| `primary` / `primary-hover` / `primary-fg` | `agit-red` / `banner` / `paper` | same | primary action | `primary-fg` on `primary` 5.33 \| 5.33; on `primary-hover` 8.75 \| 8.75; on `pressed` 8.75 \| 8.75 |
+| `pressed` | `banner` | same | pressed red, Danger button fill | ground (under `primary-fg`, row above) |
+| `you` | `agit-red` | same | the player | fill |
+| `rival` | `ribbon-violet` | `color-mix(in srgb, #3E3A78 50%, #F4ECDC)` | rivals: fills and marks (violet text is `untyped` / `typing-remaining`; per-rival inks #565) | mark `bg` 8.29 \| 3.86; mark `surface` 7.02 \| 3.20 |
+| `reward` | `medal-gold` | same | rewards, bests (~2%) | `band` 7.77 \| 7.77; mark `bg` n/a \| 5.80 (toggle dot, night only) |
+| `untyped` | `color-mix(in srgb, #3E3A78 85%, #F1E8D6)` | `#CFC6B3` | text still to type, off the tape | `bg` 5.68 \| 6.73; `surface` 4.81 \| 5.58 |
+| `tape` | `tape-paper` | same | typing strip ground | ground |
+| `typing-done` / `typing-next` on `typing-next-bg` / `typing-remaining` / `typing-error` | `press-ink` / `paper` on `agit-red` / `color-mix(in srgb, #3E3A78 85%, #E8DCC0)` / `agit-red` | same (always on `tape`) | typing strip character states (bible 7.7) | done `tape` 11.25 \| 11.25; next `typing-next-bg` 5.33 \| 5.33; remaining `tape` 5.23 \| 5.23; error `tape` 4.76 \| 4.76 |
+| `device-phosphor` / `device-nixie` / `device-bezel` | `phosphor` / `nixie` / `press-ink` | same | device numerals and bezel | phosphor `device-bezel` 11.76 \| 11.76; nixie `device-bezel` 7.25 \| 7.25 |
+| `room` | `backroom-grey` | same | room, steel | fill |
+| `band` / `band-fg` / `band-muted` | `press-ink` / `paper` / `night-muted` | same | ink bands (ticker, footer, live-feed frame) and their text (bible 7.10, 14.1) | fg `band` 12.58 \| 12.58; muted `band` 9.03 \| 9.03 |
 
 ## Colour roles
 Roles the palette does not name follow mapping (a) (human, 2026-10-04) on the Night shift values. Values as declared in `docs/design/tokens.css` (`--t-*`).
-| Role | Light | Night shift | Use |
-|---|---|---|---|
-| `danger` | `#7E1015` | `#F4ECDC` | text and border only; buttons fill with `pressed` |
-| `danger-surface` | `color-mix(in srgb, #E4D6B8 88%, #B81D24 12%)` | `color-mix(in srgb, #4B453E 88%, #B81D24 12%)` | error panel ground (carries the red signal in Night shift) |
-| `success` | `#2A2420` | `#F4ECDC` | = `fg`; no green, approval is an ink stamp |
-| `success-surface` | `#E4D6B8` | `#4B453E` | = `surface` |
-| `focus` | `#2A2420` | `#F4ECDC` | = `fg`; `outline: 2px solid var(--color-focus); outline-offset: 2px` |
-| `link` | `#B81D24` | `#F4ECDC` | links, underlined in both themes |
-| `fg-muted` | `color-mix(in srgb, #2A2420 80%, #F1E8D6 20%)` | `#CFC6B3` | secondary text |
-| `border` | `color-mix(in srgb, #2A2420 25%, transparent)` | `color-mix(in srgb, #F4ECDC 25%, transparent)` | hairlines |
-| `surface-muted` | `color-mix(in srgb, #E4D6B8 94%, #2A2420 6%)` | `color-mix(in srgb, #4B453E 94%, #F4ECDC 6%)` | hover and info grounds |
+| Role | Light | Night shift | Use | Contrast |
+|---|---|---|---|---|
+| `danger` | `#7E1015` | `#F4ECDC` | text and border only; buttons fill with `pressed` | `bg` 8.75 \| 9.72; `surface` 7.41 \| 8.05; `danger-surface` 6.20 \| 8.08 |
+| `danger-surface` | `color-mix(in srgb, #E4D6B8 88%, #B81D24 12%)` | `color-mix(in srgb, #4B453E 88%, #B81D24 12%)` | error panel ground (carries the red signal in Night shift) | ground |
+| `success` | `#2A2420` | `#F4ECDC` | = `fg`; no green, approval is an ink stamp | `success-surface` 10.65 \| 8.05 |
+| `success-surface` | `#E4D6B8` | `#4B453E` | = `surface` | ground |
+| `focus` | `#2A2420` | `#F4ECDC` | = `fg`; `outline: 2px solid var(--color-focus); outline-offset: 2px` | ring `bg` 12.58 \| 9.72; ring `surface` 10.65 \| 8.05 |
+| `link` | `#B81D24` | `#F4ECDC` | links, underlined in both themes | `bg` 5.33 \| 9.72; `surface` 4.51 \| 8.05 |
+| `fg-muted` | `color-mix(in srgb, #2A2420 80%, #F1E8D6 20%)` | `#CFC6B3` | secondary text | `bg` 7.05 \| 6.73; `surface` 5.97 \| 5.58; `surface-muted` 5.35 \| 4.77; `danger-surface` 4.99 \| 5.60 |
+| `border` | `color-mix(in srgb, #2A2420 25%, transparent)` | `color-mix(in srgb, #F4ECDC 25%, transparent)` | hairlines | decorative (2px `fg` rules carry the edges) |
+| `surface-muted` | `color-mix(in srgb, #E4D6B8 94%, #2A2420 6%)` | `color-mix(in srgb, #4B453E 94%, #F4ECDC 6%)` | hover and info grounds | ground |
 
 ### Bible extensions
-Where the bible's value fails WCAG 3.3 (4.5:1), the nearest bible-palette value that passes (sRGB mix, WCAG 2.1 luminance):
+Where the bible's value fails WCAG (bible 3.3: text 4.5:1; WCAG 1.4.11: marks 3:1), the nearest bible-palette value that passes (sRGB mix, WCAG 2.1 luminance):
 - `fg-muted` light: ink share 80% (`#524B44`) instead of backroom-grey (3.97:1): 7.05:1 on paper, 5.97:1 on newsprint, 5.35:1 on `surface-muted`, 4.99:1 on `danger-surface`.
 - `typing-remaining` and `untyped`: violet share 85% instead of 55% (2.66:1 on tape): 5.23:1 on tape, 5.68:1 on paper; `untyped` dark is night-muted `#CFC6B3` (6.73:1), no violet passes on night.
 - `link` dark: night-ink instead of agit-red (1.76:1): 9.72:1 on `bg`.
 - `danger` dark: night-ink instead of agit-red: 9.72:1 on `bg`, 8.08:1 on the dark `danger-surface`.
 - Danger button fill: `pressed` (banner) under `primary-fg` (paper), 8.75:1 in both themes; `danger` is a text and border role.
+- `rival` dark (marks and fills, e.g. the 7.4 docket rule): ribbon-violet 50% with night-ink (`#9993AA`, lightness only, the violet stays) instead of ribbon-violet (1.13:1 on `bg`, 1.07:1 on `surface`): 3.86:1 on `bg`, 3.20:1 on `surface`; light keeps ribbon-violet (8.29:1, 7.02:1). 55% fails `surface` (2.87:1). #19.
 
 ## Colour usage rules
 Design bible 0, 3.1, 3.3 and 7. Every colour is a role (tables above); these rules say where each family may appear. Enforced by `scripts/check-colours.ts` (`scripts/check.sh` step `colours`, rules in `scripts/lib/colour-rules.ts`): no raw hex and no `--brand-*` under `src/` (comments, tests and `%23`-encoded data URIs aside), plus the ink-ground, reward and device rules below. Read-only measurement of a screenshot: `npx tsx scripts/colour-coverage.ts <png...>`.
 - **Red** (`primary`, `you`, `link`, `typing-next-bg`, `typing-error`): headers, primary actions, urgency, *you*. Never decoration.
 - **Banner** (`primary-hover`, `pressed`, light `danger`): red depth, bands, the pressed and hover state of red, the Danger button fill.
-- **Violet** (`rival`, `untyped`, `typing-remaining`): rivals and text still to type, locked items. Nothing else.
-- **Gold** (`reward`): rewards and personal bests, sparingly; also the bible 7.1 social hover and the 7.6 tag on the landing, and the night dot of the theme toggle. Owners: `src/features/{results,stats,landing,preferences}/**`, `src/components/ui/**`, `src/app/design/**`.
+- **Violet** (`rival`, `untyped`, `typing-remaining`): rivals and text still to type, locked items. Nothing else. Violet text uses `untyped` and `typing-remaining`, never `rival` (a fill and mark role, 3:1 as a mark; per-rival inks: #565).
+- **Gold** (`reward`): rewards and personal bests, sparingly; also the bible 7.1 social hover and the 7.6 tag on the landing, and the night dot of the theme toggle. Gold (`reward`) is never text on `bg` or `surface` (1.37 to 1.62:1 in light): gold text lives on `band` (7.77:1); bests and rewards on paper are stamps, medals or gold on an ink plaque; the toggle dot is a state indicator also carried by `aria-pressed`. Owners: `src/features/{results,stats,landing,preferences}/**`, `src/components/ui/**`, `src/app/design/**`.
+- **Focus**: the ring is measured against the ground outside the control (`outline-offset: 2px`), never against the control's fill: 12.58 \| 9.72 on `bg`, 10.65 \| 8.05 on `surface`.
 - **Ink** (`fg`, `band`, `typing-done`, `device-bezel`): type, rules, bands, and the inverted label pair: an ink ground always carries paper text (7.1 ink button, 7.4 `YOU` tag, 7.5 active tab, segmented toggles), so a CSS block painting `var(--color-fg)` declares `color: var(--color-bg)` or `var(--color-band-fg)`. Never an unlabelled panel fill in light: `bg-fg`, `bg-typing-done`, `bg-room` and `bg-danger` classes are swatches for `/design` only (`bg-danger-surface` is a ground). Exceptions (bible-mandated): 7.4 grid gaps (`landing/components/sections.module.css`), 6 ink stars (`ui/star.module.css`).
 - **Phosphor and nixie** (`device-*`): only inside device components (`src/components/ui/device*.tsx`), the race and `/design`. Glow lives only in devices (bible 0). Seeded exception: the inverted stamp CTA border in `lobby/components/lobby-entry.module.css` (press-ink through `device-bezel`, moved to `band` by #595).
 - **Coverage** on a UI screen: paper 55 / red 28 / ink 10 / violet 5 / gold 2 (bible 3.1). `scripts/colour-coverage.ts` buckets each pixel to the nearest brand colour within sRGB distance 48 and warns (`WARN <role>`) when red or paper is more than 15 points off target or gold exceeds 6 points; advisory (`--strict` exits 1). `/design` warns by nature: it is the inventory page, not a screen.

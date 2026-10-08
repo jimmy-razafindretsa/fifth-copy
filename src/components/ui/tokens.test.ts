@@ -160,13 +160,14 @@ describe("C2/C3 themes", () => {
   }
 });
 
+const RIVAL_NIGHT = "color-mix(in srgb, #3E3A78 50%, #F4ECDC)";
+
 describe("C4 new roles", () => {
   const invariant: Record<string, string> = {
     you: BRAND["agit-red"],
     "typing-next-bg": BRAND["agit-red"],
     "typing-error": BRAND["agit-red"],
     reward: BRAND["medal-gold"],
-    rival: BRAND["ribbon-violet"],
     tape: BRAND["tape-paper"],
     "typing-done": BRAND["press-ink"],
     "typing-next": BRAND.paper,
@@ -186,6 +187,9 @@ describe("C4 new roles", () => {
       expect(role("untyped", t)).toBe(
         t === "light" ? norm("color-mix(in srgb, #3E3A78 85%, #F1E8D6)") : h(BRAND["night-muted"]),
       );
+      // #19 C11: rival is themed; Night shift lightens ribbon-violet with night-ink (marks reach 3:1)
+      expect(role("rival", t)).toBe(t === "light" ? h(BRAND["ribbon-violet"]) : norm(RIVAL_NIGHT));
+      expect(theme.get("--color-rival")).toBe("var(--t-rival)");
     });
   }
 });
@@ -243,7 +247,7 @@ describe("C5 mapping (a)", () => {
       .split(/\n(?=## )/)[0]!
       .split("\n")
       .filter((l) => l.startsWith("- "));
-    expect(items).toHaveLength(5);
+    expect(items).toHaveLength(6);
     const expectItem = (re: RegExp, ratio: string) =>
       expect(
         items.some((l) => re.test(l) && l.includes(ratio)),
@@ -254,39 +258,109 @@ describe("C5 mapping (a)", () => {
     expectItem(/`link`.*dark/, "9.72:1");
     expectItem(/`danger`.*dark/, "8.08:1");
     expectItem(/Danger button.*`pressed`/, "8.75:1");
+    // #19 C11: the rival mark on Night shift, before (ribbon-violet) and after (50% with night-ink)
+    expectItem(/`rival` dark.*50%.*night-ink/, "1.13:1");
+    expectItem(/`rival` dark.*50%.*night-ink/, "3.20:1");
   });
 });
 
-describe("C7 contrast (computed from the token values)", () => {
-  const ratio = (a: string, b: string, t: ThemeName) =>
-    contrastRatio(toRgb(role(a, t)), toRgb(role(b, t)));
-  const pairs = (t: ThemeName): [string, string][] => [
-    ["fg", "bg"],
-    ["fg-muted", "bg"],
-    ["primary-fg", "primary"],
-    ["primary-fg", "pressed"],
-    ["link", "bg"],
-    ["untyped", "bg"],
-    ["typing-done", "tape"],
-    ["typing-remaining", "tape"],
-    ["typing-error", "tape"],
-    ["typing-next", "typing-next-bg"],
-    ...(t === "light"
-      ? ([
-          ["fg-muted", "surface"],
-          ["fg-muted", "surface-muted"],
-          ["fg-muted", "danger-surface"],
-        ] satisfies [string, string][])
-      : []),
-  ];
+// #16 C7 and #19 C9-C12: WCAG 2.1 contrast of every pair the design system promises, computed from the
+// declared token values (color-mix resolved with mixSrgb) in light, media dark and attribute dark.
+type Pair = { fg: string; ground: string; kind: "text" | "mark" | "ring"; darkOnly?: boolean };
+const text = (fg: string, ground: string): Pair => ({ fg, ground, kind: "text" });
+const PAIRS: Pair[] = [
+  text("fg", "bg"),
+  text("fg", "surface"),
+  text("fg", "surface-muted"),
+  text("fg-muted", "bg"),
+  text("fg-muted", "surface"),
+  text("fg-muted", "surface-muted"),
+  text("fg-muted", "danger-surface"),
+  text("primary-fg", "primary"),
+  text("primary-fg", "primary-hover"),
+  text("primary-fg", "pressed"),
+  text("link", "bg"),
+  text("link", "surface"),
+  text("danger", "bg"),
+  text("danger", "surface"),
+  text("danger", "danger-surface"),
+  text("success", "success-surface"),
+  text("untyped", "bg"),
+  text("untyped", "surface"),
+  text("typing-done", "tape"),
+  text("typing-remaining", "tape"),
+  text("typing-next", "typing-next-bg"),
+  text("typing-error", "tape"),
+  text("band-fg", "band"),
+  text("band-muted", "band"),
+  text("reward", "band"),
+  text("device-phosphor", "device-bezel"),
+  text("device-nixie", "device-bezel"),
+  { fg: "focus", ground: "bg", kind: "ring" },
+  { fg: "focus", ground: "surface", kind: "ring" },
+  { fg: "rival", ground: "bg", kind: "mark" },
+  { fg: "rival", ground: "surface", kind: "mark" },
+  // the toggle's gold dot lights only on the night ground (bible 14.1)
+  { fg: "reward", ground: "bg", kind: "mark", darkOnly: true },
+];
+const ratio = (a: string, b: string, t: ThemeName) =>
+  contrastRatio(toRgb(role(a, t)), toRgb(role(b, t)));
+const MODES = Object.keys(THEMES) as ThemeName[];
 
-  for (const t of Object.keys(THEMES) as ThemeName[]) {
-    it(`reaches 4.5:1 in ${t}`, () => {
-      for (const [a, b] of pairs(t)) {
-        expect(ratio(a, b, t), `${a}/${b}`).toBeGreaterThanOrEqual(4.5);
+describe("C7 contrast (computed from the token values)", () => {
+  for (const t of MODES) {
+    it(`#19 C9 C10 text pairs reach 4.5:1 and marks and rings 3:1 in ${t}`, () => {
+      for (const p of PAIRS) {
+        if (p.darkOnly && t === "light") continue;
+        const min = p.kind === "text" ? 4.5 : 3;
+        expect(ratio(p.fg, p.ground, t), `${p.kind} ${p.fg}/${p.ground}`).toBeGreaterThanOrEqual(
+          min,
+        );
       }
     });
   }
+
+  it("#19 C9 media dark and attribute dark measure the same", () => {
+    for (const p of PAIRS) {
+      expect(ratio(p.fg, p.ground, "attrDark"), `${p.fg}/${p.ground}`).toBe(
+        ratio(p.fg, p.ground, "mediaDark"),
+      );
+    }
+  });
+
+  it("#19 C10 the bible 7.7 nominal 55% violet on tape is the documented before value", () => {
+    const nominal = contrastRatio(mixSrgb("#3E3A78", "#E8DCC0", 0.55), parseHex("#E8DCC0"));
+    expect(nominal.toFixed(2)).toBe("2.66");
+    expect(docs).toContain("55% (2.66:1 on tape)");
+  });
+
+  it("#19 C12 publishes every measured ratio in the Contrast column (light | dark)", () => {
+    const tables = ["## Brand roles", "## Colour roles"].map((heading) => {
+      const start = docs.indexOf(heading);
+      expect(start, heading).toBeGreaterThan(-1);
+      const lines = docs.slice(start).split("\n");
+      const head = lines.findIndex((l) => l.startsWith("| Role |"));
+      expect(lines[head], heading).toMatch(/\| Contrast \|$/);
+      const rows: string[] = [];
+      for (const l of lines.slice(head + 2)) {
+        if (!l.startsWith("|")) break;
+        rows.push(l);
+      }
+      return rows;
+    });
+    const cells = tables.flat().map((row) => {
+      const parts = row.split(/(?<!\\)\|/).map((c) => c.trim());
+      return { first: parts[1] ?? "", contrast: parts[parts.length - 2] ?? "" };
+    });
+    for (const p of PAIRS) {
+      const row = cells.filter((c) => c.first.includes(`\`${p.fg}\``));
+      expect(row, `one row for ${p.fg}`).toHaveLength(1);
+      const light = p.darkOnly ? "n/a" : ratio(p.fg, p.ground, "light").toFixed(2);
+      const dark = ratio(p.fg, p.ground, "attrDark").toFixed(2);
+      const entry = `${p.kind === "text" ? "" : `${p.kind} `}\`${p.ground}\` ${light} \\| ${dark}`;
+      expect(row[0]!.contrast, `${p.fg}/${p.ground}`).toContain(entry);
+    }
+  });
 });
 
 // Contract of #21: the six font roles in @theme, Tailwind's default families removed.

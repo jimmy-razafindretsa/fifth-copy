@@ -22,12 +22,13 @@ import { createTicker, TICK_MS, type TickStep } from "./tick";
 function stubRedis() {
   const counts = { exec: 0 };
   const chain: Record<string, unknown> = {};
-  for (const name of ["hset", "expire", "rpush", "del"]) chain[name] = () => chain;
+  for (const name of ["hset", "expire", "rpush", "del", "exists"]) chain[name] = () => chain;
   chain.exec = async () => {
     counts.exec += 1;
     return [];
   };
-  return { redis: { multi: () => chain } as unknown as Redis, counts };
+  // The room hash always exists here (#204's loss probe).
+  return { redis: { multi: () => chain, exists: async () => 1 } as unknown as Redis, counts };
 }
 
 const T0 = 50_000;

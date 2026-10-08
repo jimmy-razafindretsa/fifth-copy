@@ -24,7 +24,7 @@ import { createFakeClock, createFakeScheduler, type FakeClock, type FakeSchedule
 import type { WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
-import { desksKey, membersKey, resumeIndexKey, resumeKey, roomKey } from "../rooms/keys";
+import { desksKey, membersKey, resumeIndexKey, resumeKey, roomKey, ROOMS_KEY } from "../rooms/keys";
 
 // Test-only harness for the race server's integration tests (real Redis, ARCHITECTURE testing table).
 // Fails, never skips, without Redis. Deletes only the keys of lobbies it created (shared db index).
@@ -106,6 +106,12 @@ export type Booted = {
   connect(auth: unknown): Client;
   /** Disconnects the clients, closes the server and deletes this boot's keys. */
   stop(): Promise<void>;
+  /**
+   * A process restart (#204): disconnects the clients and closes the server without deleting any
+   * key, then boots a new server on the same Redis key space, with the same options, a fresh fake
+   * clock at this one's instant and this boot's lobbies to clean up.
+   */
+  restart(): Promise<Booted>;
 };
 
 /**
@@ -119,9 +125,17 @@ export async function boot(
     onRaceEnded?: (ended: RaceEnded) => void;
     /** Isolated key space (outbox tests, #189): the server and the cleanup both use it. */
     redisPrefix?: string;
+    /**
+     * Room recovery (#204: rehydrate in `listen`, reconcile timer). Off by default: the shared test
+     * db holds other test files' live rooms in its `rooms` set, so only a test in a key space of its
+     * own (`redisPrefix`) turns it on.
+     */
+    recovery?: boolean;
+    /** Set by `restart`: the clock's start and the lobbies already created. */
+    carry?: { now: number; lobbies: string[] };
   } = {},
 ): Promise<Booted> {
-  const clock = createFakeClock(Date.now());
+  const clock = createFakeClock(options.carry?.now ?? Date.now());
   const scheduler = createFakeScheduler(clock);
   const server = createRaceServer({
     env: { RACE_TOKEN_SECRET: SECRET, WEB_ORIGIN: "http://localhost:3000", RACE_FAST_CLOCK: "0" },
@@ -130,10 +144,11 @@ export async function boot(
     scheduler,
     webApi: options.webApi ?? fixtureWebApi(clock).api,
     onRaceEnded: options.onRaceEnded,
+    recovery: options.recovery ?? false,
   });
   const port = await server.listen(0, "127.0.0.1");
   const url = `http://127.0.0.1:${port}`;
-  const lobbies: string[] = [];
+  const lobbies: string[] = [...(options.carry?.lobbies ?? [])];
   const clients: Client[] = [];
 
   const lobby = () => {
@@ -188,12 +203,21 @@ export async function boot(
         resumeIndexKey(id),
       ]);
       for (const id of lobbies) {
-        keys.push(...(await cleanup.keys(`${roomKey(id)}:trace:*`)));
+        // KEYS takes and returns full names: ioredis does not prefix a pattern.
+        const prefix = options.redisPrefix ?? "";
+        const traces = await cleanup.keys(`${prefix}${roomKey(id)}:trace:*`);
+        keys.push(...traces.map((k) => k.slice(prefix.length)));
         // Resume keys still indexed (#178); an expired or dropped one is already gone.
         keys.push(...Object.values(await cleanup.hgetall(resumeIndexKey(id))).map(resumeKey));
       }
       if (keys.length) await cleanup.del(...keys);
+      if (lobbies.length) await cleanup.srem(ROOMS_KEY, ...lobbies);
       cleanup.disconnect();
+    },
+    async restart() {
+      for (const c of clients) c.disconnect();
+      await server.close();
+      return boot(redisUrl, { ...options, carry: { now: clock.now(), lobbies } });
     },
   };
 }

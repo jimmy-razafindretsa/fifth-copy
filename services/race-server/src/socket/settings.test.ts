@@ -104,9 +104,8 @@ describe("host:settings applied by the host (C1)", () => {
     );
     const { lobby, host } = await room();
     await send(host, { v: PROTOCOL_VERSION, patch: { practiceLetters: ["Ç"], wordCount: 437 } });
-    const line = lines
-      .map((l) => JSON.parse(l) as Record<string, unknown>)
-      .find((l) => l.msg === "settings");
+    const parsed = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+    const line = parsed.find((l) => l.msg === "settings");
     expect(line).toEqual({
       level: "info",
       msg: "settings",
@@ -115,10 +114,12 @@ describe("host:settings applied by the host (C1)", () => {
       keys: expect.any(Array),
     });
     expect((line?.keys as string[]).toSorted()).toEqual(["practiceLetters", "wordCount"]);
-    for (const l of lines) {
-      expect(l).not.toContain("Ç");
-      expect(l).not.toContain("437");
-    }
+    // Field values, not raw substrings: a random `lob_<uuid>` can contain "437" (#619).
+    const values = parsed.flatMap((l) =>
+      Object.values(l).flatMap((v) => (Array.isArray(v) ? (v as unknown[]) : [v])),
+    );
+    expect(values).not.toContain(437);
+    expect(values).not.toContain("Ç");
   });
 });
 

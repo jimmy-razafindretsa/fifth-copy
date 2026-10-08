@@ -217,6 +217,23 @@ describe.skipIf(!testDatabaseUrl)(
       expect(await rowsOf(raceId)).toEqual(rows);
     });
 
+    it("#195 C4: a flagged result is stored suspicious with its codes; an unflagged one is not", async () => {
+      const raceId = await startedRace();
+      const body = request(raceId);
+      body.results[0]!.flags = [
+        { code: "regular-rhythm", detail: "cv=0;same=1" },
+        { code: "timing-anomalies", detail: "count=25;keys=7" },
+      ];
+      const res = await signed(body);
+      expect(res.status).toBe(200);
+      const rows = await rowsOf(raceId);
+      expect(rows.results.map((r) => [r.desk, r.suspicious, r.suspiciousReason])).toEqual([
+        [1, true, "regular-rhythm,timing-anomalies"],
+        [2, false, null],
+        [3, false, null],
+      ]);
+    });
+
     it("C4: an unknown race is 404; a count that does not match its trace is 400 and writes nothing", async () => {
       const missing = randomUUID();
       const res = await signed(request(missing));

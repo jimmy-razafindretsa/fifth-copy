@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   accuracy,
+  analyseTrace,
   charsOf,
   elapsedFor,
   ENGINE_VERSION,
@@ -12,7 +14,9 @@ import {
   rawWpm,
   wpm,
   type Keystroke,
+  type TraceAnalysisInput,
 } from "@fifth-copy/engine";
+
 import {
   DEFAULT_RACE_SETTINGS,
   MAX_TRACE_BASE64_LENGTH,
@@ -31,7 +35,7 @@ import {
 } from "../testing/harness";
 import type { DeskState } from "../rooms/desks-state";
 import type { RaceEnded } from "../rooms/lifecycle";
-import { buildResults, encodeTrace, sendResults } from "./results";
+import { buildResults, encodeTrace, sendResults, type EndedRoom } from "./results";
 
 // #189 C1: one result per desk at race end, figures from the engine, gzip trace.
 
@@ -60,6 +64,12 @@ const entry = (desk: number, place: number, isBot = false): RankingEntry => ({
   finishedAt: null,
 });
 
+/** The text and engine settings of the unit rooms (`EndedRoom`, #195). */
+const ROOM_TEXT = {
+  text: "bonjour",
+  engine: { errorMode: "continue", backspace: true },
+} as const satisfies Pick<EndedRoom, "text" | "engine">;
+
 const ended = (ranking: RankingEntry[], over: Partial<RaceEnded> = {}): RaceEnded => ({
   lobbyId: "lob_1",
   raceId: RACE_ID,
@@ -77,6 +87,7 @@ describe("buildResults (unit)", () => {
       { t: 20, key: "o" },
     ];
     const [request] = buildResults(ended([entry(2, 1), entry(1, 2, true)]), {
+      ...ROOM_TEXT,
       desks: [
         { desk: 1, userId: null, name: "Bot-1", isBot: true },
         { desk: 2, userId: "usr_2", name: "Clerk 2", isBot: false },
@@ -107,6 +118,7 @@ describe("buildResults (unit)", () => {
     };
     const trace: Keystroke[] = [...text.slice(0, 3)].map((key, i) => ({ t: 100 * i, key }));
     const [request] = buildResults(ended([entry(2, 1), abandoned]), {
+      ...ROOM_TEXT,
       desks: [
         { desk: 1, userId: "usr_1", name: "Clerk 1", isBot: false },
         { desk: 2, userId: "usr_2", name: "Clerk 2", isBot: false },
@@ -141,6 +153,7 @@ describe("buildResults (unit)", () => {
   it("chunks 30 desks into requests of 25 and 5; a void end builds nothing", () => {
     const ranking = Array.from({ length: 30 }, (_, i) => entry(i + 1, i + 1));
     const room = {
+      ...ROOM_TEXT,
       desks: ranking.map((e) => ({
         desk: e.desk,
         userId: `u${e.desk}`,
@@ -168,6 +181,7 @@ describe("buildResults (unit)", () => {
     }));
     expect(encodeTrace(trace).data.length).toBeGreaterThan(MAX_TRACE_BASE64_LENGTH);
     const [request] = buildResults(ended([entry(1, 1)]), {
+      ...ROOM_TEXT,
       desks: [{ desk: 1, userId: "u1", name: "Clerk 1", isBot: false }],
       states: new Map([[1, deskState({ trace })]]),
     });
@@ -176,8 +190,88 @@ describe("buildResults (unit)", () => {
   });
 });
 
+describe("buildResults flags (#195 C3)", () => {
+  // The engine's trace fixtures are data files (read, not imported: packages are consumed by name).
+  const fixture = (name: string) =>
+    JSON.parse(
+      readFileSync(
+        new URL(`../../../../packages/engine/src/anticheat/fixtures/${name}.json`, import.meta.url),
+        "utf8",
+      ),
+    ) as TraceAnalysisInput;
+  const constant = fixture("scripted-constant");
+  const human = fixture("human-1");
+  /** A desk whose state is the fixture's recorded counters and trace (what the server applied). */
+  const fromFixture = (f: TraceAnalysisInput) =>
+    deskState({ ...f.recorded, total: f.keystrokes.length, trace: [...f.keystrokes] });
+
+  it("a human desk with a scripted-constant trace carries regular-rhythm; a bot with the same trace is not analysed", () => {
+    const analyse = vi.fn(analyseTrace);
+    const [request] = buildResults(
+      ended([entry(1, 1), entry(2, 2, true)]),
+      {
+        text: constant.text,
+        engine: constant.settings,
+        desks: [
+          { desk: 1, userId: "usr_1", name: "Clerk 1", isBot: false },
+          { desk: 2, userId: null, name: "Bot-2", isBot: true },
+        ],
+        states: new Map([
+          [1, fromFixture(constant)],
+          [2, fromFixture(constant)],
+        ]),
+      },
+      { analyse },
+    );
+    const [clerk, bot] = raceResultsRequestSchema.parse(request).results;
+    expect(clerk).toMatchObject({ desk: 1, flags: [{ code: "regular-rhythm" }] });
+    expect(bot).toMatchObject({ desk: 2, isBot: true, flags: [] });
+    expect(analyse).toHaveBeenCalledTimes(1);
+    expect(analyse.mock.calls[0]![0]).toMatchObject({
+      text: constant.text,
+      recorded: constant.recorded,
+      timingAnomalies: 0,
+    });
+    expect(analyse.mock.calls[0]![0].keystrokes).toEqual(constant.keystrokes);
+  });
+
+  it("a human desk with a human fixture carries no flag; the live anomaly count is analysed", () => {
+    const room = (anomalies: number) => ({
+      text: human.text,
+      engine: human.settings,
+      desks: [{ desk: 1, userId: "usr_1", name: "Clerk 1", isBot: false }],
+      states: new Map([[1, { ...fromFixture(human), timingAnomalies: anomalies }]]),
+    });
+    const flagsOf = (anomalies: number) =>
+      raceResultsRequestSchema.parse(buildResults(ended([entry(1, 1)]), room(anomalies))[0])
+        .results[0]!.flags;
+    expect(flagsOf(0)).toEqual([]);
+    expect(flagsOf(25)).toMatchObject([{ code: "timing-anomalies" }]);
+  });
+
+  it("an oversized trace is analysed as applied, before it is sent empty", () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const analyse = vi.fn<typeof analyseTrace>(() => []);
+    const trace = Array.from({ length: 120_000 }, (_, i) => ({ t: i, key: "x" }));
+    const [request] = buildResults(
+      ended([entry(1, 1)]),
+      {
+        ...ROOM_TEXT,
+        desks: [{ desk: 1, userId: "u1", name: "Clerk 1", isBot: false }],
+        states: new Map([[1, deskState({ trace })]]),
+      },
+      { analyse },
+    );
+    expect(raceResultsRequestSchema.parse(request).results[0]!.trace.count).toBe(0);
+    expect(analyse).toHaveBeenCalledTimes(1);
+    expect(analyse.mock.calls[0]![0]).toMatchObject({ keystrokes: trace });
+    vi.restoreAllMocks();
+  });
+});
+
 describe("sendResults (unit)", () => {
   const [request] = buildResults(ended([entry(1, 1), entry(2, 2)]), {
+    ...ROOM_TEXT,
     desks: [
       { desk: 1, userId: "u1", name: "Clerk 1", isBot: false },
       { desk: 2, userId: "u2", name: "Clerk 2", isBot: false },

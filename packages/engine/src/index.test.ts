@@ -33,6 +33,10 @@ describe("@fifth-copy/engine", () => {
     "rank",
     "placeOf",
     "traceCapOf",
+    "analyseTrace",
+    "replayTrace",
+    "DEFAULT_THRESHOLDS",
+    "mulberry32",
   ])("re-exports %s", (name) => {
     expect(engine).toHaveProperty(name);
   });

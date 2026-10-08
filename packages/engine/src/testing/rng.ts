@@ -1,8 +1,8 @@
 import type { Rng } from "../types";
 
 /**
- * Seeded mulberry32 PRNG for property tests. Internal (not re-exported): same seed, same sequence,
- * so a failing property run is reproducible from its seed.
+ * Seeded mulberry32 PRNG for property tests and `scripts/trace-fixtures.ts` (re-exported, #195):
+ * same seed, same sequence, so a failing property run or a fixture is reproducible from its seed.
  */
 export function mulberry32(seed: number): Rng {
   let a = seed >>> 0;

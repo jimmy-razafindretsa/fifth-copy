@@ -386,7 +386,11 @@ describe("lifecycle: timer end (C3)", () => {
     booted.clock.advance(1);
 
     const everyone = [seenHost, ...others.map((o) => o.seen)];
-    await until(() => everyone.every((s) => s.ended.length === 1), WAIT_MS, "ended to every member");
+    await until(
+      () => everyone.every((s) => s.ended.length === 1),
+      WAIT_MS,
+      "ended to every member",
+    );
     for (const seen of everyone) {
       const ended = endedSchema.parse(seen.ended[0]);
       expect(ended).toMatchObject({ raceId: (ack as { raceId: string }).raceId, reason: "timer" });
@@ -402,50 +406,54 @@ describe("lifecycle: timer end (C3)", () => {
     expect(ends[0]).toMatchObject({ lobbyId: lobby, reason: "timer" });
   });
 
-  it("an untimed race emits nothing after 10 minutes and ends as timer at t0 + MAX_RACE_MS", async () => {
-    const { booted, host, lobby, seenHost, others } = await room();
-    await start(host);
-    await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
-    const t0 = seenHost.countdown[0]!.race.t0;
-    expect((await hash(lobby)).fields.endAt).toBe(String(t0 + MAX_RACE_MS));
-    booted.clock.advance(3_000);
-    await until(() => booted.server.desks.get(lobby)?.phase === "running", WAIT_MS, "GO");
+  it(
+    "an untimed race emits nothing after 10 minutes and ends as timer at t0 + MAX_RACE_MS",
+    async () => {
+      const { booted, host, lobby, seenHost, others } = await room();
+      await start(host);
+      await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
+      const t0 = seenHost.countdown[0]!.race.t0;
+      expect((await hash(lobby)).fields.endAt).toBe(String(t0 + MAX_RACE_MS));
+      booted.clock.advance(3_000);
+      await until(() => booted.server.desks.get(lobby)?.phase === "running", WAIT_MS, "GO");
 
-    // Both desks send a wrong key and its correction every 40 s, so neither reaches the idle
-    // kick (#183) and the race is still running when the hard stop fires.
-    const clients = [host, ...others.map((o) => o.client)];
-    const awakeUntil = async (at: number) => {
-      while (booted.clock.now() < at) {
-        booted.clock.advance(Math.min(40_000, at - booted.clock.now()));
-        const t = booted.clock.now() - t0;
-        const totals = () => [...booted.server.desks.states(lobby).values()].map((d) => d.total);
-        const before = totals().reduce((a, b) => a + b, 0);
-        for (const c of clients) {
-          c.emit("keys", {
-            v: PROTOCOL_VERSION,
-            batch: [
-              { t, key: "x" },
-              { t, key: BACKSPACE },
-            ],
-          });
+      // Both desks send a wrong key and its correction every 40 s, so neither reaches the idle
+      // kick (#183) and the race is still running when the hard stop fires.
+      const clients = [host, ...others.map((o) => o.client)];
+      const awakeUntil = async (at: number) => {
+        while (booted.clock.now() < at) {
+          booted.clock.advance(Math.min(40_000, at - booted.clock.now()));
+          const t = booted.clock.now() - t0;
+          const totals = () => [...booted.server.desks.states(lobby).values()].map((d) => d.total);
+          const before = totals().reduce((a, b) => a + b, 0);
+          for (const c of clients) {
+            c.emit("keys", {
+              v: PROTOCOL_VERSION,
+              batch: [
+                { t, key: "x" },
+                { t, key: BACKSPACE },
+              ],
+            });
+          }
+          await until(
+            () => totals().reduce((a, b) => a + b, 0) === before + 2 * clients.length,
+            WAIT_MS,
+            "awake keys",
+          );
         }
-        await until(
-          () => totals().reduce((a, b) => a + b, 0) === before + 2 * clients.length,
-          WAIT_MS,
-          "awake keys",
-        );
-      }
-    };
-    await awakeUntil(t0 + 10 * 60_000);
-    await settle();
-    expect(seenHost.ended).toHaveLength(0);
-    await awakeUntil(t0 + MAX_RACE_MS - 1);
-    await settle();
-    expect(seenHost.ended).toHaveLength(0);
-    booted.clock.advance(1);
-    await until(() => seenHost.ended.length === 1, WAIT_MS, "hard stop");
-    expect(seenHost.ended[0]!.reason).toBe("timer");
-  }, 10 * WAIT_MS); // ~36 000 fake ticks of 10 Hz snapshots (#173) inside one hour of fake time; scales with the wait deadline (#600)
+      };
+      await awakeUntil(t0 + 10 * 60_000);
+      await settle();
+      expect(seenHost.ended).toHaveLength(0);
+      await awakeUntil(t0 + MAX_RACE_MS - 1);
+      await settle();
+      expect(seenHost.ended).toHaveLength(0);
+      booted.clock.advance(1);
+      await until(() => seenHost.ended.length === 1, WAIT_MS, "hard stop");
+      expect(seenHost.ended[0]!.reason).toBe("timer");
+    },
+    10 * WAIT_MS,
+  ); // ~36 000 fake ticks of 10 Hz snapshots (#173) inside one hour of fake time; scales with the wait deadline (#600)
 });
 
 describe("lifecycle: clock sync and a clock that never pauses (C4)", () => {

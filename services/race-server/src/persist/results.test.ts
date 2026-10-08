@@ -97,6 +97,47 @@ describe("buildResults (unit)", () => {
     expect(inflate(bot!.trace.data)).toEqual([]);
   });
 
+  it("an abandoned desk keeps its frozen figures: status abandoned, progress 3/7 (#183 C4)", () => {
+    // Stored as REASSIGNED by the web (src/features/results/actions/persist-results.ts).
+    const text = "bonjour";
+    const abandoned: RankingEntry = {
+      ...entry(1, 2),
+      status: "abandoned",
+      progress: progress({ ...initialState(), cursor: 3 }, text.length),
+    };
+    const trace: Keystroke[] = [...text.slice(0, 3)].map((key, i) => ({ t: 100 * i, key }));
+    const [request] = buildResults(ended([entry(2, 1), abandoned]), {
+      desks: [
+        { desk: 1, userId: "usr_1", name: "Clerk 1", isBot: false },
+        { desk: 2, userId: "usr_2", name: "Clerk 2", isBot: false },
+      ],
+      states: new Map([
+        [
+          1,
+          deskState({
+            status: "abandoned",
+            cursor: 3,
+            correct: 3,
+            total: 3,
+            lastT: 200,
+            trace,
+          }),
+        ],
+        [2, deskState()],
+      ]),
+    });
+    const result = raceResultsRequestSchema.parse(request).results.find((r) => r.desk === 1);
+    expect(result).toMatchObject({
+      status: "abandoned",
+      progress: 3 / 7,
+      place: 2,
+      correct: 3,
+      total: 3,
+      durationMs: 200,
+    });
+    expect(inflate(result!.trace.data)).toEqual(trace);
+  });
+
   it("chunks 30 desks into requests of 25 and 5; a void end builds nothing", () => {
     const ranking = Array.from({ length: 30 }, (_, i) => entry(i + 1, i + 1));
     const room = {

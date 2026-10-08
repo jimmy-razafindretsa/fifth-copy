@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { deskIdentity, type Member } from "@fifth-copy/protocol";
@@ -125,5 +128,36 @@ describe("PlayerList slots", () => {
     );
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+});
+
+// Card 536 (ADR 0013, 250 kB first-load budget): the socket module pulls socket.io-client and the
+// protocol schemas (zod, ~93 kB gzip) and must stay out of the lobby's first load. Lobby components
+// may import its types; values are loaded with `import("@/features/race")` once the room connects.
+describe("lobby client code keeps @/features/race out of the first load", () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const sources = readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f));
+  const staticImport = /import\s+([^;]*?)\s+from\s+["']@\/features\/race["']/g;
+  const isTypeOnly = (clause: string) =>
+    /^type\s/.test(clause) ||
+    (/^\{[^}]*\}$/.test(clause) &&
+      clause
+        .slice(1, -1)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .every((s) => s.startsWith("type ")));
+
+  it.each(sources)("%s has no static value import of @/features/race", (file) => {
+    const text = readFileSync(path.join(dir, file), "utf8");
+    const values = [...text.matchAll(staticImport)]
+      .map((m) => m[1]!.trim())
+      .filter((c) => !isTypeOnly(c));
+    expect(values).toEqual([]);
+  });
+
+  it("lobby-live loads the race module lazily", () => {
+    const text = readFileSync(path.join(dir, "lobby-live.tsx"), "utf8");
+    expect(text).toMatch(/import\(\s*["']@\/features\/race["']\s*\)/);
   });
 });

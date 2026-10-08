@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer } from "react";
-import { connectToRoom, type RoomSocket } from "@/features/race";
+import type { RoomSocket } from "@/features/race";
 import { mintRaceToken } from "../actions/mint-race-token";
 import { errorMessage, type EntryErrors } from "./entry-errors";
 import { InlineError } from "./inline-error";
@@ -55,7 +55,7 @@ export function LobbyLiveView({ code, state, labels, errors }: ViewProps) {
 
 /**
  * The waiting room's client leaf (ARCHITECTURE 8.3): mints the race token through the action (ADR
- * 0009: never in a URL, the HTML or a cookie), connects through `connectToRoom` (ADR 0006) and keeps
+ * 0009: never in a URL, the HTML or a cookie), connects through a lazily loaded `connectToRoom` (ADR 0006, 0013) and keeps
  * the roster in one store that later cards extend with more events.
  */
 export function LobbyLive({
@@ -73,8 +73,10 @@ export function LobbyLive({
     // StrictMode runs this twice in dev: a stale mint must never open a socket.
     let aborted = false;
     let socket: RoomSocket | null = null;
-    mintRaceToken({ code }).then(
-      (result) => {
+    // The socket module (socket.io-client + protocol schemas) is a lazy chunk (ADR 0013 budget):
+    // its download overlaps the mint round trip, and a failed chunk load is a generic error.
+    Promise.all([mintRaceToken({ code }), import("@/features/race")]).then(
+      ([result, { connectToRoom }]) => {
         if (aborted) return;
         if (!result.ok) return dispatch({ type: "token-error", error: result.error });
         socket = connectToRoom(result.url, result.token);

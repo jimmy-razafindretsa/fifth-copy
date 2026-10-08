@@ -3,6 +3,7 @@ import { Server, type Socket } from "socket.io";
 import type { Keystroke } from "@fifth-copy/engine";
 import {
   abandonSchema,
+  bonusPlaySchema,
   hostSettingsSchema,
   hostStartSchema,
   keysSchema,
@@ -17,6 +18,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import type { AbandonResult } from "../players/idle";
+import type { BonusPlayResult } from "../rooms/bonus-step";
 import type { Presence } from "../players/presence";
 import type { IngestResult } from "../rooms/ingest";
 import type { Lifecycle } from "../rooms/lifecycle";
@@ -32,12 +34,15 @@ import { attachSpectator } from "./spectator";
 export type SocketData = { claims: RaceTokenClaims; resume?: boolean; desk?: number };
 
 /**
- * The live race behind the `keys` and `abandon` edges: `rooms/ingest.ts` over the desks' runtime
- * (#173), `players/idle.ts` for the abandon (#183).
+ * The live race behind the `keys`, `abandon` and `bonus:play` edges: `rooms/ingest.ts` over the
+ * desks' runtime (#173), `players/idle.ts` for the abandon (#183), `rooms/bonus-step.ts` (#190).
  */
 export type RacePort = {
   ingest(lobbyId: string, desk: number, batch: Keystroke[]): IngestResult;
   abandon(lobbyId: string, desk: number): AbandonResult;
+  playBonus(lobbyId: string, desk: number): BonusPlayResult;
+  /** The desk's text overlay while a race runs (`welcome.overlay`), else null. */
+  overlayOf(lobbyId: string, desk: number): Welcome["overlay"];
   /** The desk's engine state while a race runs (`welcome.state`), else null. */
   stateOf(lobbyId: string, desk: number): Welcome["state"];
 };
@@ -54,7 +59,7 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * user's last disconnect means is presence's decision (`players/presence.ts`, #178): in `waiting` and
  * `ended` the desk is released (`roster`); during a race it is line-cut and kept for the grace. A
  * handshake with the user's own resume key resumes the desk, and its `welcome` carries the server's
- * state. Client events (`keys`, `abandon`, `host:*`, `ping`) register on the socket by name; phase transitions
+ * state. Client events (`keys`, `abandon`, `bonus:play`, `host:*`, `ping`) register on the socket by name; phase transitions
  * belong to the lifecycle (`rooms/lifecycle.ts`, #166). A `spectator` token takes the read-only edge
  * (`spectator.ts`, #187) instead; room-wide broadcasts go to the `audience` (players and spectators).
  */
@@ -127,7 +132,7 @@ export function attachSocketServer(
           race: joined.room.race,
           // The server's authority after a resume: the client reconciles from it (#215).
           state: race.stateOf(lobby, joined.desk),
-          overlay: null,
+          overlay: race.overlayOf(lobby, joined.desk),
           resumeKey,
           serverNow: deps.clock.now(),
         });
@@ -218,6 +223,24 @@ export function attachSocketServer(
       lifecycle
         .onDeskTerminal(lobby)
         .catch((err: unknown) => log("desk terminal failed", { lobby, err: String(err) }));
+    });
+
+    // Bonus play (#190, ADR 0006, 0016): the desk is the socket's seat, the card the one the server
+    // dealt it, the targets the engine's; the payload carries nothing else. Dropped when malformed
+    // or unseated; every refusal (phase, bonuses off, no card, cooldown, nothing to hit) is one
+    // `rejected` to the sender and nothing broadcast. No per-socket rate limit (#207).
+    socket.on("bonus:play", (raw: unknown) => {
+      const { desk } = socket.data;
+      if (!bonusPlaySchema.safeParse(raw).success || desk === undefined) return;
+      const result = race.playBonus(lobby, desk);
+      if (result.rejected) {
+        return void socket.emit("rejected", { v: PROTOCOL_VERSION, reason: result.rejected });
+      }
+      if (result.terminal) {
+        lifecycle
+          .onDeskTerminal(lobby)
+          .catch((err: unknown) => log("desk terminal failed", { lobby, err: String(err) }));
+      }
     });
 
     socket.on("disconnect", () => {

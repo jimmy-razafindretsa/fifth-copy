@@ -1,7 +1,15 @@
 import { gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
-import { BACKSPACE, ENGINE_VERSION, type Keystroke } from "@fifth-copy/engine";
 import {
+  BACKSPACE,
+  ENGINE_VERSION,
+  MAX_EXTRA_WORD_LENGTH,
+  TRACE_KEYS_PER_CHAR,
+  traceCapOf,
+  type Keystroke,
+} from "@fifth-copy/engine";
+import {
+  MAX_OVERLAY_WORDS,
   MAX_RACE_MS,
   PROTOCOL_VERSION,
   type InternalRaceResult,
@@ -9,7 +17,7 @@ import {
 } from "@fifth-copy/protocol";
 
 vi.mock("@/server/db", () => ({ db: {} }));
-const { decodeTrace, MAX_KEYSTROKE_JSON_BYTES, persistRaceResults } =
+const { decodeTrace, MAX_KEYSTROKE_JSON_BYTES, maxStoredTraceKeys, persistRaceResults } =
   await import("./persist-results");
 
 // #189: the web never trusts a trace's gzip (gzip bomb, count mismatch, foreign JSON).
@@ -194,5 +202,89 @@ describe("persistRaceResults flags mapping (#195 C4)", () => {
       { desk: 1, suspicious: true, suspiciousReason: "regular-rhythm,wpm-cap" },
       { desk: 2, suspicious: false, suspiciousReason: null },
     ]);
+  });
+});
+
+// #190 (pentest major): a desk hit by Extra Paperwork types a longer effective text, so the race
+// server's trace cap (`traceCapOf(effective length)`) can exceed the base text's; the web bound
+// covers the largest overlay the wire allows.
+describe("persistRaceResults trace bound with bonus overlays (#190)", () => {
+  const BASE = "bonjour";
+  const baseCap = traceCapOf(BASE.length);
+  const bound = baseCap + TRACE_KEYS_PER_CHAR * MAX_OVERLAY_WORDS * (MAX_EXTRA_WORD_LENGTH + 1);
+
+  function setup() {
+    const stored: number[] = [];
+    const tx = {
+      race: { updateMany: async () => ({ count: 1 }) },
+      raceResult: { upsert: async () => undefined },
+      raceKeystrokes: {
+        upsert: async ({ create }: { create: { desk?: number } }) =>
+          void stored.push(create.desk ?? 0),
+      },
+    };
+    const db = {
+      race: { findUnique: async () => ({ textContent: BASE }) },
+      user: { findMany: async () => [{ id: "usr_1" }] },
+      $transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx),
+    };
+    return { db, stored };
+  }
+
+  const request = (t: InternalRaceResult["trace"]): RaceResultsRequest => ({
+    v: PROTOCOL_VERSION,
+    raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+    endedAt: 1_767_225_660_000,
+    reason: "timer",
+    lobbySize: 1,
+    results: [
+      {
+        desk: 1,
+        userId: "usr_1",
+        name: "Clerk 1",
+        isBot: false,
+        place: 1,
+        status: "typing",
+        wpm: 10,
+        rawWpm: 10,
+        cleanWpm: 8,
+        adjustedWpm: 10,
+        accuracy: 1,
+        progress: 0.5,
+        correct: 7,
+        errors: 0,
+        total: t.count,
+        durationMs: 60_000,
+        finishedAtMs: null,
+        bonusesSent: 0,
+        bonusesReceived: 1,
+        bonusLog: [{ t: 100, kind: "extra-paperwork", from: 2, to: 1 }],
+        flags: [],
+        engineVersion: ENGINE_VERSION,
+        trace: t,
+      },
+    ],
+  });
+
+  it("the bound is the base cap plus the largest Extra Paperwork overlay, from shared constants", () => {
+    expect(maxStoredTraceKeys(BASE.length)).toBe(bound);
+  });
+
+  it("a trace above the base cap but within the bound persists", async () => {
+    const count = baseCap + 72;
+    const keystrokes = Array.from({ length: count }, (_, i) => ({ t: i * 30, key: "a" }));
+    const { db, stored } = setup();
+    const outcome = await persistRaceResults(request(trace(keystrokes, count)), {
+      db: db as never,
+    });
+    expect(outcome.ok).toBe(true);
+    expect(stored).toHaveLength(1);
+  });
+
+  it("a trace count above the bound is still refused, before inflating", async () => {
+    const { db, stored } = setup();
+    const outcome = await persistRaceResults(request(trace([], bound + 1)), { db: db as never });
+    expect(outcome).toEqual({ ok: false, error: "bad-body" });
+    expect(stored).toHaveLength(0);
   });
 });

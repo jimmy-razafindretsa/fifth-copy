@@ -1,6 +1,6 @@
 import { applyKeystroke, type Keystroke } from "@fifth-copy/engine";
 import { MAX_RACE_MS, type Rejected } from "@fifth-copy/protocol";
-import { traceCapOf, type RoomRuntime } from "./desks-state";
+import { textOf, traceCapOf, type RoomRuntime } from "./desks-state";
 
 /** How far behind the server clock a keystroke's `t` may be (ARCHITECTURE 7.3). */
 export const MAX_LAG_MS = 2_000;
@@ -33,7 +33,7 @@ const DROPPED: IngestResult = { terminal: false };
  * one timing anomaly per batch. Every key then goes through `applyKeystroke`, in order, until the
  * desk stops typing; the applied keystrokes are appended to the trace. Two bounds per desk: a
  * budget of `KEYS_PER_SECOND` refilled on the server clock (at most `KEYS_BURST`), and a history of
- * at most `traceCapOf(textLength)` keystrokes; a key over either is neither applied nor traced and
+ * at most `traceCapOf` of the desk's effective text length keystrokes; a key over either is neither applied nor traced and
  * counts in `droppedKeys`. Bots (#366) and the shared socket limiter (#207) wrap this function.
  */
 export function ingest(
@@ -50,10 +50,12 @@ export function ingest(
   const elapsed = now - runtime.t0;
   const hi = Math.max(0, Math.min(elapsed + MAX_LEAD_MS, MAX_RACE_MS));
   const lo = Math.min(hi, Math.max(0, elapsed - MAX_LAG_MS));
-  const { text, engine } = runtime;
+  // The desk's own effective text (#190: a bonus overlay), and the trace bound on its length.
+  const text = textOf(runtime, desk);
+  const { engine } = runtime;
   const { trace } = start;
 
-  const cap = traceCapOf(runtime.textLength);
+  const cap = traceCapOf(start.textLength);
   const budget = runtime.budgets.get(desk) ?? { tokens: KEYS_BURST, at: now };
   budget.tokens = Math.min(
     KEYS_BURST,
@@ -63,6 +65,7 @@ export function ingest(
   runtime.budgets.set(desk, budget);
 
   let state = start;
+  let reach = start.reach;
   let anomaly = false;
   let dropped = 0;
   let previous = -1;
@@ -81,10 +84,12 @@ export function ingest(
     trace.push(keystroke);
     // The reducer returns a `PlayerState`: keep the desk fields around it.
     state = { ...state, ...applyKeystroke(state, keystroke, text, engine) };
+    reach = Math.max(reach, state.cursor);
   }
 
   const next = {
     ...state,
+    reach,
     lastKeyAt: now,
     timingAnomalies: start.timingAnomalies + (anomaly ? 1 : 0),
     droppedKeys: start.droppedKeys + dropped,

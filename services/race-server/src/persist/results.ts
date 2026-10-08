@@ -1,8 +1,13 @@
 import { gzipSync } from "node:zlib";
 import {
   analyseTrace,
+  cleanAndAdjustedWpm,
+  EMPTY_LEDGER,
+  EMPTY_OVERLAY,
+  effectiveText,
   ENGINE_VERSION,
   initialState,
+  MAX_LOG_ENTRIES,
   type EngineSettings,
   type Keystroke,
 } from "@fifth-copy/engine";
@@ -23,7 +28,8 @@ import type { WebApi } from "./web-api";
 
 /**
  * What `buildResults` reads of a room at its end: the desks at start, their final states, and the
- * normalised text and engine settings the states were computed with (replayed by `analyseTrace`).
+ * normalised base text and engine settings the states were computed with (each desk's trace is
+ * replayed by `analyseTrace` on its effective text: the base plus its overlay, #190).
  */
 export type EndedRoom = {
   readonly text: string;
@@ -54,8 +60,9 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * The results of an ended race (ADR 0007, 0008; #189), one per desk of `ended.ranking`: place and
  * figures from the engine's ranking, counters and finish from the desk's state, `durationMs` from
  * `elapsedOf`, the gzip trace for a human desk (a bot's is empty). Chunked into requests of at most
- * `MAX_RESULTS_PER_REQUEST`. Extension point: #190 (clean/adjusted WPM, bonus log) fills its fields
- * here. Flags (#195, ADR 0007): every human desk's in-memory trace goes through `analyseTrace`
+ * `MAX_RESULTS_PER_REQUEST`. Bonuses (#190, ADR 0016): `cleanWpm`/`adjustedWpm` from the engine's
+ * `cleanAndAdjustedWpm` over the desk's overlay (equal to `wpm` without one), `bonusesSent`,
+ * `bonusesReceived` and `bonusLog` from its ledger. Flags (#195, ADR 0007): every human desk's in-memory trace goes through `analyseTrace`
  * against its recorded counters and live `timingAnomalies`; a bot is never analysed. The analysis
  * runs on the trace as applied, before a trace over the wire bound is sent empty (logged) rather
  * than blocking the race's results forever. A `void` end builds nothing.
@@ -73,11 +80,14 @@ export function buildResults(
     const desk = byDesk.get(entry.desk);
     const state = room.states.get(entry.desk) ?? { ...initialState(), trace: [] };
     const isBot = desk?.isBot ?? entry.isBot;
+    const overlay = ("overlay" in state ? state.overlay : null) ?? EMPTY_OVERLAY;
+    const ledger = "ledger" in state ? state.ledger : EMPTY_LEDGER;
     const flags = isBot
       ? []
       : analyse({
           keystrokes: state.trace,
-          text: room.text,
+          // The text the desk typed: replaying on the base would flag an overlaid desk.
+          text: effectiveText(room.text, overlay),
           settings: room.engine,
           recorded: { cursor: state.cursor, correct: state.correct, errors: state.errors },
           timingAnomalies: "timingAnomalies" in state ? state.timingAnomalies : 0,
@@ -87,10 +97,9 @@ export function buildResults(
       log("results trace too large", { race: ended.raceId, desk: entry.desk, count: trace.count });
       trace = EMPTY_TRACE;
     }
-    const durationMs = Math.min(
-      MAX_RACE_MS,
-      Math.max(0, Math.round(elapsedOf(state, ended.elapsedMs))),
-    );
+    const elapsed = elapsedOf(state, ended.elapsedMs);
+    const durationMs = Math.min(MAX_RACE_MS, Math.max(0, Math.round(elapsed)));
+    const { clean, adjusted } = cleanAndAdjustedWpm(state, room.text, overlay, elapsed);
     return {
       desk: entry.desk,
       userId: isBot ? null : (desk?.userId ?? null),
@@ -100,9 +109,8 @@ export function buildResults(
       status: entry.status,
       wpm: entry.wpm,
       rawWpm: entry.rawWpm,
-      // Until #190: clean and adjusted WPM equal WPM (ADR 0007).
-      cleanWpm: entry.wpm,
-      adjustedWpm: entry.wpm,
+      cleanWpm: clean,
+      adjustedWpm: adjusted,
       accuracy: entry.accuracy,
       progress: entry.progress,
       correct: state.correct,
@@ -110,9 +118,9 @@ export function buildResults(
       total: state.total,
       durationMs,
       finishedAtMs: entry.finishedAt,
-      bonusesSent: 0,
-      bonusesReceived: 0,
-      bonusLog: [],
+      bonusesSent: ledger.sent,
+      bonusesReceived: ledger.received,
+      bonusLog: ledger.log.slice(0, MAX_LOG_ENTRIES).map((e) => ({ ...e })),
       flags,
       engineVersion: ENGINE_VERSION,
       trace,

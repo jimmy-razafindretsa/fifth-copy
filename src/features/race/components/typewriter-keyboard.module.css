@@ -1,0 +1,184 @@
+/*
+ * Typewriter keyboard (#558, design bible 7.7a, 11.1): the desk station's dark green machine
+ * (`typewriter`) with round cream keys (`typewriter-key`) in chrome rings (`typewriter-chrome`), seen from
+ * the seat. Sized from its own width (container units): platen 100, body 82, housing 78, key bed 74,
+ * key bar 54; keys at a pitch of 1.4 diameters, each row a quarter pitch right of the one behind it.
+ * Printed look: 2px ink rules, a hard 4px ink offset under the whole machine (bible 6, 17: no blur).
+ * Round keys are the one bible 11.1 object exception to the no-radius rule (bible 7.7a).
+ * States: pressed = 1 step down on its stem, darker ring; wrong = the cell red, legend paper;
+ * disabled = dashed ring, muted legend; jammed (root) = key bar, rings and type bars red, body and keys
+ * unchanged, so a Block-mode jam toggling several times a second swings little luminance (bible 8).
+ */
+
+@reference "../../../app/globals.css";
+
+.typewriter {
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  filter: drop-shadow(4px 4px 0 var(--color-band));
+}
+
+/* the rear: housing, spools, basket, platen (inline SVG, 100 units wide) */
+.rear {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.housing {
+  fill: var(--color-typewriter);
+  stroke: var(--color-band);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.flange {
+  fill: var(--color-typewriter-chrome);
+  stroke: var(--color-band);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.ribbon {
+  fill: var(--color-band);
+}
+
+.hub {
+  fill: var(--color-typewriter-chrome);
+}
+
+.basket {
+  fill: var(--color-band);
+}
+
+.bar {
+  stroke: var(--color-typewriter-chrome);
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.jam {
+  stroke: var(--color-typing-error);
+  stroke-width: 3px;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.knob {
+  fill: var(--color-typewriter-chrome);
+  stroke: var(--color-band);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.roller {
+  fill: var(--color-band);
+}
+
+.bail {
+  stroke: var(--color-typewriter-chrome);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+/* the body: key bed, key bar and maker's plate */
+.body {
+  box-sizing: border-box;
+  width: 82cqi;
+  margin-top: -2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.2cqi;
+  padding: 3cqi 0 2.4cqi;
+  background: var(--color-typewriter);
+  border: 2px solid var(--color-band);
+}
+
+/* the bed tilts away from the typist (bible 7.7a, ~14 degrees): back rows recede */
+.bed {
+  --_pitch: calc(74cqi / (var(--_cols) - 0.286 + 0.25 * (var(--_rows) - 1)));
+  --_kd: calc(var(--_pitch) / 1.4);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--_kd) * 0.28);
+  width: fit-content;
+  transform: perspective(90cqi) rotateX(14deg);
+  transform-origin: 50% 100%;
+}
+
+.row {
+  display: flex;
+  gap: calc(var(--_pitch) - var(--_kd));
+  padding-left: calc(var(--_row) * var(--_pitch) * 0.25);
+}
+
+.key {
+  @apply type-label;
+  font-size: calc(var(--_kd) * 0.42);
+  line-height: 1;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--_kd);
+  height: var(--_kd);
+  /* the label role's tracking trails the glyph: indent by the same amount to keep it centred */
+  padding-left: 0.18em;
+  border-radius: var(--radius-full);
+  background: var(--color-typewriter-key);
+  color: var(--color-typewriter-key-fg);
+  border: calc(var(--_kd) * 0.13) solid var(--color-typewriter-chrome);
+  /* the key stem: a hard ink offset under the cap */
+  box-shadow: 0 calc(var(--_kd) * 0.1) 0 var(--color-band);
+}
+
+.key[data-pressed="true"] {
+  translate: 0 calc(var(--_kd) * 0.08);
+  box-shadow: 0 calc(var(--_kd) * 0.02) 0 var(--color-band);
+  border-color: var(--color-typewriter-muted);
+}
+
+.key[data-wrong="true"] {
+  background: var(--color-typing-error);
+  color: var(--color-typing-next);
+}
+
+.key[data-disabled="true"] {
+  border-style: dashed;
+  color: var(--color-typewriter-muted);
+}
+
+.keybar {
+  display: block;
+  width: 54cqi;
+  height: 2cqi;
+  background: var(--color-typewriter-chrome);
+  border: 2px solid var(--color-band);
+}
+
+.plate {
+  color: var(--color-typewriter-key);
+  border: 1px solid var(--color-typewriter-chrome);
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+/* Block mode jam: "the key bar locks red" (spec 8), with the rings and the type bars */
+.typewriter[data-jammed="true"] .key {
+  border-color: var(--color-typing-error);
+}
+
+.typewriter[data-jammed="true"] .keybar {
+  background: var(--color-typing-error);
+}
+
+.typewriter[data-jammed="true"] .bar {
+  stroke: var(--color-typing-error);
+}

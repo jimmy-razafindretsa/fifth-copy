@@ -1,0 +1,89 @@
+/*
+ * Typing surface characters (#558, design bible 7.7, 8): the four states of a char on the tape and on the
+ * sheet, shared by the telex strip and the typed sheet. Keyframes copied 1:1 from the landing strip
+ * (src/features/landing/components/hero.module.css, which keeps its own copy until a later card
+ * de-duplicates). The caret and the pop keep their bible 8 seconds; under reduced motion (the media query
+ * or any `data-motion="reduce"` ancestor: <html>, or a scoped /design specimen) the caret is a solid red
+ * cell and nothing pops.
+ */
+
+@keyframes fcCaret {
+  0%,
+  49% {
+    background: var(--color-typing-next-bg);
+    color: var(--color-typing-next);
+  }
+  50%,
+  100% {
+    background: transparent;
+    color: var(--color-typing-remaining);
+    box-shadow: inset 0 -4px 0 var(--color-typing-next-bg);
+  }
+}
+
+@keyframes fcPop {
+  0% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.92);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.char {
+  display: inline-block;
+  white-space: pre;
+  color: var(--color-typing-done);
+}
+
+.char[data-state="wrong"] {
+  position: relative;
+  color: var(--color-typing-error);
+}
+
+.char[data-state="next"] {
+  color: var(--color-typing-next);
+  background: var(--color-typing-next-bg);
+  animation: fcCaret 1.05s steps(1) infinite;
+}
+
+.char[data-state="remaining"] {
+  color: var(--color-typing-remaining);
+}
+
+/* each newly typed character pops in (bible 7.7, 8) */
+.char[data-last="true"] {
+  animation: fcPop 0.18s var(--motion-ease-out);
+}
+
+/* the sheet keeps a word on one line, as a typist returns the carriage between words */
+.word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* a solid red cell instead of the blinking caret (bible 8) */
+  .char[data-state="next"] {
+    animation: none;
+  }
+
+  .char[data-last="true"] {
+    animation: none;
+  }
+}
+
+/* the same stop under <html data-motion="reduce"> (tokens.css) or a scoped specimen; one class above the
+   starting rules, so it wins whatever the order (#28 gotcha) */
+[data-motion="reduce"] .char[data-state="next"] {
+  animation: none;
+}
+
+[data-motion="reduce"] .char[data-last="true"] {
+  animation: none;
+}

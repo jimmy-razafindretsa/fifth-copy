@@ -59,6 +59,7 @@ export function TypewriterKeyboard({
       data-jammed={flag(jammed)}
     >
       <svg className={styles.rear} viewBox="0 0 100 30" focusable="false">
+        <rect className={styles.shade} x="11.7" y="5.7" width="78" height="25" />
         <rect className={styles.housing} x="11" y="5" width="78" height="25" />
         {[16, 84].map((x) => (
           <g key={x} data-part="spool" transform={`translate(${x} 16)`}>

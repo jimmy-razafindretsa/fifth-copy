@@ -421,6 +421,9 @@ test.describe("design system page", () => {
       await page.goto("/design");
       await expect(page).toHaveScreenshot(`design-${scheme}.png`, {
         fullPage: true,
+        // the page is long (the #558 typing-surface specimens): two full-page shots need more than 5s
+        // in the pinned image's software renderer
+        timeout: 20_000,
         mask: [page.getByRole("status", { name: "Loading" })],
       });
     });

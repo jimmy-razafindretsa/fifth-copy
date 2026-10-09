@@ -3,7 +3,7 @@
  * (`typewriter`) with round cream keys (`typewriter-key`) in chrome rings (`typewriter-chrome`), seen from
  * the seat. Sized from its own width (container units): platen 100, body 82, housing 78, key bed 74,
  * key bar 54; keys at a pitch of 1.4 diameters, each row a quarter pitch right of the one behind it.
- * Printed look: 2px ink rules, a hard 4px ink offset under the whole machine (bible 6, 17: no blur).
+ * Printed look: 2px ink rules, hard ink offsets under the body and the housing (bible 6, 17: no blur).
  * Round keys are the one bible 11.1 object exception to the no-radius rule (bible 7.7a).
  * States: pressed = 1 step down on its stem, darker ring; wrong = the cell red, legend paper;
  * disabled = dashed ring, muted legend; jammed (root) = key bar, rings and type bars red, body and keys
@@ -19,7 +19,6 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  filter: drop-shadow(4px 4px 0 var(--color-band));
 }
 
 /* the rear: housing, spools, basket, platen (inline SVG, 100 units wide) */
@@ -28,6 +27,11 @@
   width: 100%;
   height: auto;
   overflow: visible;
+}
+
+/* hard print offsets (no filter: a drop-shadow over the whole machine is slow to raster) */
+.shade {
+  fill: var(--color-band);
 }
 
 .housing {
@@ -99,6 +103,7 @@
   padding: 3cqi 0 2.4cqi;
   background: var(--color-typewriter);
   border: 2px solid var(--color-band);
+  box-shadow: 4px 4px 0 var(--color-band);
 }
 
 /* the bed tilts away from the typist (bible 7.7a, ~14 degrees): back rows recede */

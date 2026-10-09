@@ -9,13 +9,17 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 const script = path.resolve(__dirname, "merged-migrations.sh");
 const migration = "prisma/migrations/20261001000000_init/migration.sql";
 let repo = "";
+// Every child carries its own deadline (#600), well below the slow project's per-test timeout
+// (vitest.config.ts): a hung git or script fails with its own error, not the runner's.
+const SPAWN_TIMEOUT = 15_000;
+const run = (command: string, args: string[], env?: NodeJS.ProcessEnv) => {
+  const r = spawnSync(command, args, { cwd: repo, encoding: "utf8", env, timeout: SPAWN_TIMEOUT });
+  if (r.error) throw r.error;
+  return r;
+};
 
 const git = (...args: string[]) =>
-  spawnSync("git", args, {
-    cwd: repo,
-    encoding: "utf8",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" },
-  });
+  run("git", args, { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" });
 const write = (rel: string, body: string) => {
   mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true });
   writeFileSync(path.join(repo, rel), body);
@@ -24,7 +28,7 @@ const commit = (msg: string) => {
   git("add", "-A");
   git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", msg);
 };
-const check = () => spawnSync(script, ["base"], { cwd: repo, encoding: "utf8" });
+const check = () => run(script, ["base"]);
 
 beforeEach(() => {
   repo = mkdtempSync(path.join(tmpdir(), "merged-migrations-"));
@@ -67,6 +71,6 @@ describe("merged migrations are immutable (card #8 C3)", () => {
   });
 
   it("refuses to run without a base ref", () => {
-    expect(spawnSync(script, [], { cwd: repo, encoding: "utf8" }).status).toBe(2);
+    expect(run(script, []).status).toBe(2);
   });
 });

@@ -249,8 +249,18 @@ export function connectError(client: Client): Promise<string> {
   });
 }
 
+/**
+ * Deadline of every condition wait (#600). A wait is not a budget: it only has to be long enough
+ * that a hang still fails, and short waits expired on a busy machine (several suites at once).
+ */
+export const WAIT_MS = 10_000;
+
 /** Polls `check` every 20 ms until it is true or `ms` elapses. */
-export async function until(check: () => boolean, ms: number, what = "condition"): Promise<void> {
+export async function until(
+  check: () => boolean,
+  ms: number = WAIT_MS,
+  what = "condition",
+): Promise<void> {
   const deadline = Date.now() + ms;
   while (!check()) {
     if (Date.now() > deadline) throw new Error(`timed out after ${ms} ms waiting for ${what}`);
@@ -344,12 +354,12 @@ export async function startedRace(
     const token = await booted.token({ lobby, sub, name: `Clerk ${i}`, role });
     const client = booted.connect({ v: PROTOCOL_VERSION, token });
     const seen = watchRace(client);
-    await until(() => !!seen.welcome, 3_000, `welcome ${i}`);
+    await until(() => !!seen.welcome, WAIT_MS, `welcome ${i}`);
     racers.push({ client, seen, desk: seen.welcome!.you!, sub, token });
   }
   // Bots of the settings are seated at open (#156) and count in the roster.
   const seated = players + settings.bots.length;
-  await until(() => racers.every((r) => r.seen.roster?.length === seated), 3_000, "seated");
+  await until(() => racers.every((r) => r.seen.roster?.length === seated), WAIT_MS, "seated");
   const ack = await racers[0]!.client.timeout(2_000).emitWithAck("host:start", {
     v: PROTOCOL_VERSION,
   });
@@ -362,7 +372,7 @@ export async function startedRace(
 /** Advances the fake clock to GO and waits until the room's desks run. */
 export async function reachGo(booted: Booted, lobby: string, t0: number) {
   booted.clock.advance(t0 - booted.clock.now());
-  await until(() => booted.server.desks.get(lobby)?.phase === "running", 3_000, "GO");
+  await until(() => booted.server.desks.get(lobby)?.phase === "running", WAIT_MS, "GO");
 }
 
 /** Sends `keys` with one keystroke per character of `chars` at `t` ms since GO (+ `step` each). */

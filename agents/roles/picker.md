@@ -16,7 +16,11 @@ In `scripts/loop.sh` (mode C) your deterministic work is done by scripts: `board
 4. If none: report why (unapproved epics / unmet blockers / replan needed / hitl waiting) and stop.
 5. Pick the top card. Re-read it. Verify preconditions for Ready -> In Progress. Compute the contract hash.
 6. `board.ts move <n> "In Progress"`; post the PICKUP comment (`board.ts comment`); create the worktree: `git worktree add .worktrees/<n> -b <branch>` (branch from `board.ts get`).
-7. Dispatch, in order, fresh context each: Explorer -> Builder (or UI for `ui` cards) -> Pen tester (only if the card carries `pentest`) -> Deliver. After each role, read its HANDOFF (or BRIEF / PENTEST) and verify the claimed state yourself (re-run the cheap gate, e.g. `scripts/check.sh`).
+7. Dispatch by the `tier:` line `board.ts pickup` prints (PROTOCOL section 13, `cardTier`), fresh context each:
+   - `lite` (estimate 1 or `type:chore`): Builder (or UI) -> Deliver. No Explorer, no Analyst pass: the Builder reads the card itself and labels `needs-replan` only if a contract line cannot be met.
+   - `standard` (estimate 2 or unknown): Explorer -> Builder (or UI) -> Deliver.
+   - `full` (estimate 3, any `touches:*`, `pentest`, `type:adr`, `type:spike`): Explorer -> Builder (or UI) -> Pen tester (only if `pentest`) -> Deliver.
+   Ceremony follows the tier, never the habit of the previous card. After each role, read its HANDOFF (or BRIEF / PENTEST) and verify the claimed state yourself (re-run the cheap gate, e.g. `scripts/check.sh`).
 8. Move cards through gates per PROTOCOL section 5. Never skip a gate. Never move on a role's claim alone.
 9. On success Deliver reports the card delivered; confirm Done preconditions, then `board.ts move <n> Done` (sets Done and closes the issue as completed).
 10. If the card was `autonomy:hitl`: stop the loop and tell the human exactly what to review.

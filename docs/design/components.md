@@ -32,6 +32,7 @@ Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` 
 | `night-muted` | `#CFC6B3` | Night shift muted text |
 | `phosphor` | `#5CFF8A` | device numerals (phosphor) |
 | `nixie` | `#FF9A3C` | device numerals (nixie) |
+| `typewriter-green` | `#2F3A2E` | typewriter body (bible 11.1 desk station), both themes (#558) |
 
 ## Brand roles
 Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured from the declared values by `src/components/ui/tokens.test.ts` (text 4.5:1; `mark` and `ring` are non-text, 3:1).
@@ -47,7 +48,9 @@ Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured f
 | `reward` | `medal-gold` | same | rewards, bests (~2%) | `band` 7.77 \| 7.77; mark `bg` n/a \| 5.80 (toggle dot, night only) |
 | `untyped` | `color-mix(in srgb, #3E3A78 85%, #F1E8D6)` | `#CFC6B3` | text still to type, off the tape | `bg` 5.68 \| 6.73; `surface` 4.81 \| 5.58 |
 | `tape` | `tape-paper` | same | typing strip ground | ground |
-| `typing-done` / `typing-next` on `typing-next-bg` / `typing-remaining` / `typing-error` | `press-ink` / `paper` on `agit-red` / `color-mix(in srgb, #3E3A78 85%, #E8DCC0)` / `agit-red` | same (always on `tape`) | typing strip character states (bible 7.7) | done `tape` 11.25 \| 11.25; next `typing-next-bg` 5.33 \| 5.33; remaining `tape` 5.23 \| 5.23; error `tape` 4.76 \| 4.76 |
+| `typing-done` / `typing-next` on `typing-next-bg` / `typing-remaining` / `typing-error` | `press-ink` / `paper` on `agit-red` / `color-mix(in srgb, #3E3A78 85%, #E8DCC0)` / `agit-red` | same (always on `tape`) | typing strip character states (bible 7.7) | done `tape` 11.25 \| 11.25; next `typing-next-bg` 5.33 \| 5.33; remaining `tape` 5.23 \| 5.23; error `tape` 4.76 \| 4.76; done `sheet` 12.58 \| 12.58; error `sheet` 5.33 \| 5.33; remaining `sheet` 5.85 \| 5.85 |
+| `sheet` | `paper` | same | the typed sheet on the typewriter (bible 7.7a): a paper object, invariant like the tape | ground |
+| `typewriter` / `typewriter-key` / `typewriter-key-fg` / `typewriter-chrome` / `typewriter-muted` | `typewriter-green` / `tape-paper` / `press-ink` / `backroom-grey` / `color-mix(in srgb, #6F736C 60%, #2A2420)` | same | the typewriter keyboard (bible 7.7a, 11.1): body, key face and maker's plate text, key legend, chrome rings / key bar / spools / type bars (decoration: 2.46 on the body), disabled legend and pressed ring | key-fg `typewriter-key` 11.25 \| 11.25; muted `typewriter-key` 5.68 \| 5.68; plate `typewriter` 8.74 \| 8.74 |
 | `device-phosphor` / `device-nixie` / `device-bezel` | `phosphor` / `nixie` / `press-ink` | same | device numerals and bezel | phosphor `device-bezel` 11.76 \| 11.76; nixie `device-bezel` 7.25 \| 7.25 |
 | `room` | `backroom-grey` | same | room, steel | fill |
 | `band` / `band-fg` / `band-muted` | `press-ink` / `paper` / `night-muted` | same | ink bands (ticker, footer, live-feed frame) and their text (bible 7.10, 14.1) | fg `band` 12.58 \| 12.58; muted `band` 9.03 \| 9.03 |

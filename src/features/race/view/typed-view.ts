@@ -1,6 +1,6 @@
 /**
  * The typing surface's view model (#558, ADR 0013): what the telex strip, the typed sheet and the
- * typewriter keyboard render, and nothing else. It is data: #559 (`typedViewFrom`) derives it from the
+ * typing machine render, and nothing else. It is data: #559 (`typedViewFrom`) derives it from the
  * engine state; no race rule lives here or in the components (ADR 0007).
  */
 
@@ -11,7 +11,7 @@ export type TypedChar = { ch: string; state: CharState };
 
 /**
  * `chars`: the race text, one grapheme each, in order. `cursor`: the index of the `next` char
- * (`chars.length` once finished). `jammed`: Block mode refused the last key (the keyboard reads red).
+ * (`chars.length` once finished). `jammed`: Block mode refused the last key (the machine jams).
  * `lastTypedAt`: the time of the last accepted keystroke, `null` before the first one; it keys the pop of
  * the char at `cursor - 1`, so a retype at the same index pops again.
  */
@@ -54,7 +54,7 @@ export const typedViewFixtures = {
   racing: fixture(34, { lastTypedAt: 12_400 }),
   // Continue mode: two slips stay on the copy, the last one just typed
   "continue-wrong": fixture(46, { wrong: [37, 45], lastTypedAt: 16_150 }),
-  // Block mode: the cursor holds on the accent and the typewriter jams until the right key
+  // Block mode: the cursor holds on the accent and the machine jams until the right key
   "block-jammed": fixture(48, { jammed: true, lastTypedAt: 18_900 }),
   finished: fixture(LENGTH, { lastTypedAt: 31_700 }),
 } satisfies Record<string, TypedView>;

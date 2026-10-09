@@ -1,3 +1,4 @@
+import { Stamp } from "@/components/ui";
 import { getT } from "@/i18n";
 import { MajorStage } from "./major-stage";
 import styles from "./not-found.module.css";
@@ -20,9 +21,14 @@ export async function NotFoundScreen() {
         <h1 id="not-found-title" className={styles.title}>
           {s.title}
         </h1>
-        <div className={styles.stamp} role="status">
-          {s.stamp}
-        </div>
+        <Stamp
+          lines={[s.stamp]}
+          tone="red"
+          size="md"
+          rotation={-6}
+          role="status"
+          className={styles.fileStamp}
+        />
         <p className={styles.body}>{s.body}</p>
         <p className={styles.body}>{s.body2}</p>
         <dl className={styles.docket}>

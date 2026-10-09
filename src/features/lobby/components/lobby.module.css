@@ -6,20 +6,6 @@
 
 @reference "../../../app/globals.css";
 
-@keyframes fcSlam {
-  0% {
-    transform: scale(2.2) rotate(-14deg);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(0.9) rotate(-5deg);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) rotate(-6deg);
-  }
-}
-
 @keyframes lkPulse {
   50% {
     opacity: 0.55;
@@ -170,22 +156,6 @@
   overflow-wrap: anywhere;
 }
 
-/* bible 7.3 stamp, local until the Stamp primitive (card 26): crooked red double border, slams in.
-   Text uses the link role: agit-red on paper, night-ink on Night shift (bible 3.3). */
-.stamp {
-  display: inline-block;
-  @apply type-display-sm;
-  font-size: 14px;
-  line-height: 1.2;
-  letter-spacing: 0.08em;
-  color: var(--color-link);
-  border: 4px double var(--color-primary);
-  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
-  padding: 2px 8px;
-  transform: rotate(-6deg);
-  animation: fcSlam 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
-}
-
 /* skeleton rows: newsprint blocks in the row grid, no shimmer (bible 6: no generic gradients) */
 .block {
   display: block;
@@ -227,14 +197,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stamp,
   .notice {
     animation: none;
   }
 }
 
 /* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
-:root[data-motion="reduce"] .stamp,
 :root[data-motion="reduce"] .notice {
   animation: none;
 }

@@ -21,9 +21,10 @@ import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   TelexStrip,
   TypedSheet,
-  TypewriterKeyboard,
   type TypedViewFixture,
   typedViewFixtures,
+  TypingMachine,
+  type TypingMachineProps,
 } from "@/features/race";
 import { getT } from "@/i18n";
 import demo from "./motion-demo.module.css";
@@ -64,11 +65,11 @@ const ROLES = [
   ["device-nixie", "bg-device-nixie"],
   ["device-bezel", "bg-device-bezel"],
   ["sheet", "bg-sheet"],
-  ["typewriter", "bg-typewriter"],
-  ["typewriter-key", "bg-typewriter-key"],
-  ["typewriter-key-fg", "bg-typewriter-key-fg"],
-  ["typewriter-chrome", "bg-typewriter-chrome"],
-  ["typewriter-muted", "bg-typewriter-muted"],
+  ["machine-paper", "bg-machine-paper"],
+  ["machine-deck", "bg-machine-deck"],
+  ["machine-ink", "bg-machine-ink"],
+  ["machine-metal", "bg-machine-metal"],
+  ["machine-muted", "bg-machine-muted"],
 ] as const;
 
 // Type roles (#20): art-direction 7 samples, literal strings (ADR 0010, until #372). The two Cyrillic
@@ -144,8 +145,8 @@ function Motif({
   );
 }
 
-// Typing surface (#558, bible 7.7, 7.7a): a QWERTY typewriter for the specimens only; the real layouts
-// arrive as data with #224. Each state names its fixture and the keyboard props it shows.
+// Typing surface (#558, bible 7.7, 7.7a): a QWERTY teleprinter for the specimens only; the real layouts
+// arrive as data with #224. Each state names its fixture and the machine props it shows.
 const QWERTY = [
   ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
   ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -158,7 +159,7 @@ type TypingState = {
   title: string;
   caption: string;
   view: TypedViewFixture;
-  keyboard: { pressed?: string; wrong?: string; disabledKeys?: string[] };
+  machine: Pick<TypingMachineProps, "pressed" | "wrong" | "disabledKeys">;
   reduce?: boolean;
 };
 
@@ -168,7 +169,7 @@ const TYPING_STATES: TypingState[] = [
     title: "Before the start",
     caption: "The caret waits on the first letter; nothing typed yet.",
     view: "before-start",
-    keyboard: {},
+    machine: {},
   },
   {
     id: "racing",
@@ -176,40 +177,41 @@ const TYPING_STATES: TypingState[] = [
     caption:
       "Typed text in ink, the next letter in the red cell, the rest in violet. The key is down.",
     view: "racing",
-    keyboard: { pressed: "m" },
+    machine: { pressed: "m" },
   },
   {
     id: "continue-wrong",
     title: "Continue mode, wrong",
     caption: "Slips stay red on the tape and struck through on the sheet; the wrong key reads red.",
     view: "continue-wrong",
-    keyboard: { wrong: "b" },
+    machine: { wrong: "b" },
   },
   {
     id: "block-jammed",
     title: "Block mode, jammed",
-    caption: "The cursor holds on the letter. The key bar, the rings and the type bars read red.",
+    caption:
+      "The cursor holds on the letter. The machine jams: key outlines, the space bar and the slot read red, with a red X at the printing point.",
     view: "block-jammed",
-    keyboard: { wrong: "a" },
+    machine: { wrong: "a" },
   },
   {
     id: "finished",
     title: "Finished",
-    caption: "The whole copy on the sheet. Keys that do nothing show a dashed ring.",
+    caption: "The whole copy on the sheet. Keys that do nothing show a dashed outline.",
     view: "finished",
-    keyboard: { disabledKeys: QWERTY.flat() },
+    machine: { disabledKeys: [...QWERTY.flat(), " "] },
   },
   {
     id: "reduced-motion",
     title: "Reduced motion",
     caption: "A solid red cell, no pop, and the tape jumps instead of gliding.",
     view: "racing",
-    keyboard: { pressed: "m" },
+    machine: { pressed: "m" },
     reduce: true,
   },
 ];
 
-/** One typing-surface state on its paper backdrop: strip on top, the sheet in the platen, the keyboard. */
+/** One typing-surface state on its paper backdrop: strip on top, the sheet rising out of the machine. */
 function TypingSpecimen({ state }: { state: TypingState }) {
   const view = typedViewFixtures[state.view];
   return (
@@ -224,12 +226,13 @@ function TypingSpecimen({ state }: { state: TypingState }) {
       </figcaption>
       <div className="flex flex-col gap-6 border-2 border-fg bg-band-fg p-4 md:p-6">
         <TelexStrip view={view} labels={{ strip: `Text to type, ${state.title.toLowerCase()}` }} />
-        <div className="mx-auto w-full max-w-xl">
-          {/* the sheet tucks into the platen: the keyboard paints over its bottom edge */}
-          <div className="mx-auto -mb-[2%] w-[72%]">
+        <div className="mx-auto w-full max-w-[620px]">
+          {/* bible 7.7a: the sheet (61% of the machine) rises out of the slot; the machine, later in the
+              DOM, paints over its bottom 22 machine units (3.55% of the machine's width) */}
+          <div className="mx-auto -mb-[3.55%] w-[61.3%]">
             <TypedSheet view={view} />
           </div>
-          <TypewriterKeyboard rows={QWERTY} jammed={view.jammed} {...state.keyboard} />
+          <TypingMachine rows={QWERTY} jammed={view.jammed} {...state.machine} />
         </div>
       </div>
     </figure>
@@ -635,8 +638,8 @@ export default async function DesignPage() {
           Typing surface
         </h2>
         <p className="type-body max-w-prose text-fg">
-          The seat view&apos;s telex strip, the typed sheet in the platen and the typewriter
-          keyboard, in each race state. They are objects, the same in both themes, on a paper
+          The seat view&apos;s telex strip, then the typed sheet rising out of the compact
+          teleprinter, in each race state. They are objects, the same in both themes, on a paper
           backdrop.
         </p>
         <div className="flex flex-col gap-10">

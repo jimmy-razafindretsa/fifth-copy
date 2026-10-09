@@ -1,7 +1,8 @@
 /*
  * Typed sheet (#558, design bible 7.7a): an invariant paper sheet (the `sheet` role, paper in both themes
  * like the tape, bible 3.2) in a 2px ink rule with a hard print offset (bible 6, 17: no blur, no radius).
- * Three typed lines show; the newest sits at the bottom edge (the platen) and older lines leave over the top.
+ * Three typed lines show; the newest sits at the bottom, just above the machine's slot (the bottom padding
+ * leaves room for the 22 machine units the slot covers), and older lines leave over the top.
  * Type: IBM Plex Mono through the typing role at the compact strip size of bible 4.
  */
 
@@ -13,7 +14,7 @@
   background: var(--color-sheet);
   border: 2px solid var(--color-band);
   box-shadow: 4px 4px 0 var(--color-band);
-  padding: 12px 18px 10px;
+  padding: 14px 22px 30px;
 }
 
 .lines {

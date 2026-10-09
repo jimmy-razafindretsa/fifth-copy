@@ -4,7 +4,7 @@ Status: starter primitives (#7) wearing the Fifth Copy palette and colour roles 
 Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` (visual baselines tagged `@visual`).
 
 ## Rules
-- Tokens only: `docs/design/tokens.css` is the single source. Tailwind's default palette is removed, so `bg-zinc-50` does not exist; use semantic utilities (`bg-surface`, `text-fg`, `text-fg-muted`, `border-border`, `bg-primary`, `text-danger`, ...). Spacing uses the Tailwind scale (`p-4`), no radius (`--radius-{sm,md,lg}` are 0, `rounded-full` / `--radius-full` only for the spinner, dots and the round typewriter keys of bible 7.7a; "Printed look"), type through the six roles of "Type roles" below (`type-display-{sm,md,lg}`, `type-label`, `type-typing`, `type-flavour`, `type-body`, `type-device`), sizes `text-{xs..3xl}` only to resize a role. The bare faces `font-{display,label,typing,flavour,body,device}` exist for code samples only (`font-sans`/`font-mono` do not exist).
+- Tokens only: `docs/design/tokens.css` is the single source. Tailwind's default palette is removed, so `bg-zinc-50` does not exist; use semantic utilities (`bg-surface`, `text-fg`, `text-fg-muted`, `border-border`, `bg-primary`, `text-danger`, ...). Spacing uses the Tailwind scale (`p-4`), no radius (`--radius-{sm,md,lg}` are 0, `rounded-full` only for the spinner and dots; "Printed look"), type through the six roles of "Type roles" below (`type-display-{sm,md,lg}`, `type-label`, `type-typing`, `type-flavour`, `type-body`, `type-device`), sizes `text-{xs..3xl}` only to resize a role. The bare faces `font-{display,label,typing,flavour,body,device}` exist for code samples only (`font-sans`/`font-mono` do not exist).
 - Colours: brand values (`--brand-*`) are never used directly and are not utilities; use a role from the tables below (`bg-you`, `text-rival`, `bg-tape`, ...). Write class names as complete literals (`"bg-you"`, never `` `bg-${role}` ``): Tailwind only emits classes it finds as whole strings.
 - Links: `text-link underline` in both themes.
 - Themes: light by default, Night shift via `prefers-color-scheme` or `<html data-theme="dark">`. Never use `dark:` color overrides; the tokens switch. The choice is the `theme` cookie (values `light` and `dark`; absent = follow the OS), HttpOnly, SameSite=Lax, 1 year, written only by the `setTheme` server action (`system` deletes it); the root layout renders `data-theme` from it on the server, so the first paint is already in the chosen theme (ARCHITECTURE 8.4). The control is `ThemeToggle` in `src/features/preferences` (bible 14.1 NIGHT SHIFT, gold dot when on; label from props): in the header (#373) and on `/design` "Preferences"; the account preference (#66) mirrors into the same cookie. Tests: `e2e/theme.spec.ts`.
@@ -32,7 +32,6 @@ Living page: `/design` (`src/app/design/page.tsx`); tests: `e2e/design.spec.ts` 
 | `night-muted` | `#CFC6B3` | Night shift muted text |
 | `phosphor` | `#5CFF8A` | device numerals (phosphor) |
 | `nixie` | `#FF9A3C` | device numerals (nixie) |
-| `typewriter-green` | `#2F3A2E` | typewriter body (bible 11.1 desk station), both themes (#558) |
 
 ## Brand roles
 Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured from the declared values by `src/components/ui/tokens.test.ts` (text 4.5:1; `mark` and `ring` are non-text, 3:1).
@@ -47,10 +46,10 @@ Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured f
 | `rival` | `ribbon-violet` | `color-mix(in srgb, #3E3A78 50%, #F4ECDC)` | rivals: fills and marks (violet text is `untyped` / `typing-remaining`; per-rival inks #565) | mark `bg` 8.29 \| 3.86; mark `surface` 7.02 \| 3.20 |
 | `reward` | `medal-gold` | same | rewards, bests (~2%) | `band` 7.77 \| 7.77; mark `bg` n/a \| 5.80 (toggle dot, night only) |
 | `untyped` | `color-mix(in srgb, #3E3A78 85%, #F1E8D6)` | `#CFC6B3` | text still to type, off the tape | `bg` 5.68 \| 6.73; `surface` 4.81 \| 5.58 |
-| `tape` | `tape-paper` | same | typing strip ground | ground |
+| `tape` | `tape-paper` | same | typing strip ground; the teleprinter's wound tape and maker's plate text (bible 7.7a) | ground; plate `machine-ink` 11.25 \| 11.25 |
 | `typing-done` / `typing-next` on `typing-next-bg` / `typing-remaining` / `typing-error` | `press-ink` / `paper` on `agit-red` / `color-mix(in srgb, #3E3A78 85%, #E8DCC0)` / `agit-red` | same (always on `tape`) | typing strip character states (bible 7.7) | done `tape` 11.25 \| 11.25; next `typing-next-bg` 5.33 \| 5.33; remaining `tape` 5.23 \| 5.23; error `tape` 4.76 \| 4.76; done `sheet` 12.58 \| 12.58; error `sheet` 5.33 \| 5.33; remaining `sheet` 5.85 \| 5.85 |
-| `sheet` | `paper` | same | the typed sheet on the typewriter (bible 7.7a): a paper object, invariant like the tape | ground |
-| `typewriter` / `typewriter-key` / `typewriter-key-fg` / `typewriter-chrome` / `typewriter-muted` | `typewriter-green` / `tape-paper` / `press-ink` / `backroom-grey` / `color-mix(in srgb, #6F736C 60%, #2A2420)` | same | the typewriter keyboard (bible 7.7a, 11.1): body, key face and maker's plate text, key legend, chrome rings / key bar / spools / type bars (decoration: 2.46 on the body), disabled legend and pressed ring | key-fg `typewriter-key` 11.25 \| 11.25; muted `typewriter-key` 5.68 \| 5.68; plate `typewriter` 8.74 \| 8.74 |
+| `sheet` | `paper` | same | the typed sheet rising out of the machine (bible 7.7a): a paper object, invariant like the tape | ground |
+| `machine-paper` / `machine-deck` / `machine-ink` / `machine-metal` / `machine-muted` | `paper` / `newsprint` / `press-ink` / `backroom-grey` / `color-mix(in srgb, #6F736C 60%, #2A2420)` | same | the machine-neutral family every machine skin maps its private colours from (bible 7.7a); the teleprinter: top panel and key legends, key deck and finger holes, caps / rules / slot / hubs / plate, reel flange / dial ring / key stems (decoration: 3.36 on the deck), disabled legends | legend `machine-ink` 12.58 \| 12.58; wrong-key legend `typing-error` 5.33 \| 5.33; muted `machine-deck` 5.38 \| 5.38 |
 | `device-phosphor` / `device-nixie` / `device-bezel` | `phosphor` / `nixie` / `press-ink` | same | device numerals and bezel | phosphor `device-bezel` 11.76 \| 11.76; nixie `device-bezel` 7.25 \| 7.25 |
 | `room` | `backroom-grey` | same | room, steel | fill |
 | `band` / `band-fg` / `band-muted` | `press-ink` / `paper` / `night-muted` | same | ink bands (ticker, footer, live-feed frame) and their text (bible 7.10, 14.1) | fg `band` 12.58 \| 12.58; muted `band` 9.03 \| 9.03 |
@@ -121,7 +120,7 @@ One utility per role in `docs/design/tokens.css` (`@utility`, #20) bakes face, w
 Design bible 0 ("printed, not glowing"), 6, 7 and 17, applied to every primitive (#15):
 - **Rules**: 2px solid ink (`fg`) on every bordered primitive (buttons, fields, cards, alerts); the dashed variant only for empty and locked states (7.6). Hairlines (`border`) only for separators and dashed empties.
 - **Shadows**: hard print offsets only (`6px 6px 0 ink` on the stamp CTA, 7.1; the 7.6 hover lift), written where the bible places them; the tape's inner sepia (`--shadow-tape`, 3.1, 7.7) is the one soft shadow. No blur shadow anywhere; no primitive renders a `box-shadow`.
-- **Radius**: none (7.4 "no radius", 6 and 17 "no rounded pill cards"); `--radius-full` stays for the spinner and dots, and the round typewriter keys (bible 7.7a, the one 11.1 object exception).
+- **Radius**: none (7.4 "no radius", 6 and 17 "no rounded pill cards"); `--radius-full` stays for the spinner and dots.
 - **Pressed**: banner fill (`pressed`) with the label translated 1px down; hover on red = `primary-hover`.
 - **Fills**: flat roles, no gradients, no shimmer.
 - **Glow**: only inside devices (phosphor, nixie): the `Device` bezel and its scoped utilities ("Printed motifs"), never on another primitive.

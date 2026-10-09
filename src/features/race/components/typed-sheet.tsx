@@ -3,9 +3,9 @@ import styles from "./typed-sheet.module.css";
 import { TypingChars } from "./typing-chars";
 
 /**
- * The typed sheet on the typewriter (#558, bible 7.7a): what has been typed so far, on paper, with the
+ * The typed sheet rising out of the machine's slot (#558, bible 7.7a): what has been typed so far, on paper, with the
  * caret cell where the next letter lands (`chars[0..cursor]`, never the text still to type). The newest
- * line sits at the platen edge; older lines leave over the top. A visual echo of the strip, hidden from
+ * line sits just above the slot; older lines leave over the top. A visual echo of the strip, hidden from
  * assistive tech. Server-renderable: it holds no state.
  */
 export function TypedSheet({ view }: { view: TypedView }) {

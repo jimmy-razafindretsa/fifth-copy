@@ -51,8 +51,8 @@ const b = (name: string): Rgb => {
 };
 
 describe("C9 brand palette from tokens.css", () => {
-  it("parses the sixteen --brand-* hexes", () => {
-    expect(Object.keys(brand)).toHaveLength(16);
+  it("parses the fifteen --brand-* hexes", () => {
+    expect(Object.keys(brand)).toHaveLength(15);
     expect(b("paper")).toEqual([241, 232, 214]);
     expect(b("agit-red")).toEqual([184, 29, 36]);
   });
@@ -79,7 +79,6 @@ describe("C8 classification", () => {
     expect(classify(b("press-ink"), light)).toBe("ink");
     expect(classify(b("backroom-grey"), light)).toBe("other");
     expect(classify(b("phosphor"), light)).toBe("other");
-    expect(classify(b("typewriter-green"), light)).toBe("other");
     expect(classify([0, 0, 255], light)).toBe("other");
   });
 

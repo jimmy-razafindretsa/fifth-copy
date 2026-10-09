@@ -39,8 +39,6 @@ const LIGHT: Record<string, Bucket> = {
   "backroom-grey": "other",
   phosphor: "other",
   nixie: "other",
-  // the typewriter body (#558, bible 7.7a) is an object colour, not ink, though it sits near press-ink
-  "typewriter-green": "other",
 };
 const DARK_ONLY: Record<string, Bucket> = { "night-ink": "ink", "night-muted": "ink" };
 

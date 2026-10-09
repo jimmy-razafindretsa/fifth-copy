@@ -158,11 +158,11 @@ test.describe("design system page", () => {
       "device-nixie",
       "device-bezel",
       "sheet",
-      "typewriter",
-      "typewriter-key",
-      "typewriter-key-fg",
-      "typewriter-chrome",
-      "typewriter-muted",
+      "machine-paper",
+      "machine-deck",
+      "machine-ink",
+      "machine-metal",
+      "machine-muted",
     ];
     await expect(section.locator("[data-role]")).toHaveCount(roles.length);
     for (const role of roles) {

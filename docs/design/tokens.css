@@ -25,8 +25,6 @@
   --brand-night-muted: #CFC6B3;
   --brand-phosphor: #5CFF8A;
   --brand-nixie: #FF9A3C;
-  /* the typewriter body of bible 11.1 (desk station), the typing surface's keyboard (#558, bible 7.7a) */
-  --brand-typewriter-green: #2F3A2E;
 }
 
 @theme {
@@ -73,14 +71,15 @@
   --color-typing-remaining: color-mix(in srgb, var(--brand-ribbon-violet) 85%, var(--brand-tape-paper));
   --color-typing-error: var(--brand-agit-red);
 
-  /* typing surface (#558, bible 7.7a, 11.1): the typed sheet and the typewriter are objects, the same in
-     both themes like the tape; chrome is decoration (the keys read through cream on green) */
+  /* typing surface (#558, bible 7.7a): the typed sheet and the machine are objects, the same in both
+     themes like the tape. machine-* is the machine-neutral family every machine skin maps its private
+     colours from (a skin needing a new colour adds a role here) */
   --color-sheet: var(--brand-paper);
-  --color-typewriter: var(--brand-typewriter-green);
-  --color-typewriter-key: var(--brand-tape-paper);
-  --color-typewriter-key-fg: var(--brand-press-ink);
-  --color-typewriter-chrome: var(--brand-backroom-grey);
-  --color-typewriter-muted: color-mix(in srgb, var(--brand-backroom-grey) 60%, var(--brand-press-ink));
+  --color-machine-paper: var(--brand-paper);
+  --color-machine-deck: var(--brand-newsprint);
+  --color-machine-ink: var(--brand-press-ink);
+  --color-machine-metal: var(--brand-backroom-grey);
+  --color-machine-muted: color-mix(in srgb, var(--brand-backroom-grey) 60%, var(--brand-press-ink));
 
   /* devices: phosphor and nixie numerals on an ink bezel */
   --color-device-phosphor: var(--brand-phosphor);

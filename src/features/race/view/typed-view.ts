@@ -23,12 +23,17 @@ export type TypedView = {
 };
 
 /** The fixture text: French, with the accents and guillemets a race text carries (é ç ê « »). */
-const TEXT = "« Le reçu du café est prêt. » Le Major le signe à l'aube et classe la cinquième copie.";
+const TEXT =
+  "« Le reçu du café est prêt. » Le Major le signe à l'aube et classe la cinquième copie.";
 
 /** Static fixture data only: `wrong` lists typed indices that were mistyped (Continue mode). */
 function fixture(
   cursor: number,
-  { wrong = [], jammed = false, lastTypedAt = null }: Partial<{
+  {
+    wrong = [],
+    jammed = false,
+    lastTypedAt = null,
+  }: Partial<{
     wrong: number[];
     jammed: boolean;
     lastTypedAt: number | null;

@@ -16,7 +16,12 @@ const MODULES = [
   "typed-sheet.module.css",
   "typewriter-keyboard.module.css",
 ];
-const COMPONENTS = ["typing-chars.tsx", "telex-strip.tsx", "typed-sheet.tsx", "typewriter-keyboard.tsx"];
+const COMPONENTS = [
+  "typing-chars.tsx",
+  "telex-strip.tsx",
+  "typed-sheet.tsx",
+  "typewriter-keyboard.tsx",
+];
 // comments carry card numbers such as #558, which read like hex
 const tsx = COMPONENTS.map((f) => strip(read(f)).replace(/\/\/[^\n]*/g, "")).join("\n");
 

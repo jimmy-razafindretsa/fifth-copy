@@ -20,7 +20,10 @@ const ROWS = [
 /** Every `data-key` span with its attributes, in document order. */
 function keys(markup: string) {
   return [...markup.matchAll(/<span([^>]*)data-key="([^"]*)"([^>]*)>/g)].map((m) => ({
-    key: m[2]!.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#x27;/g, "'"),
+    key: m[2]!
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, "&")
+      .replace(/&#x27;/g, "'"),
     attrs: `${m[1]}${m[3]}`,
   }));
 }
@@ -56,7 +59,9 @@ describe("TypewriterKeyboard markup (#558 C4)", () => {
     expect(out.match(/data-part="keybar"/g)).toHaveLength(1);
     expect(out.match(/data-part="platen"/g)).toHaveLength(1);
     expect(MAKER_PLATE).toBe("FIFTH COPY · MODEL 5");
-    expect(out).toMatch(/<span[^>]*class="[^"]*type-label[^"]*"[^>]*data-part="plate"[^>]*>FIFTH COPY · MODEL 5</);
+    expect(out).toMatch(
+      /<span[^>]*class="[^"]*type-label[^"]*"[^>]*data-part="plate"[^>]*>FIFTH COPY · MODEL 5</,
+    );
   });
 
   it("uses no raster image and no button: vectors and spans only", () => {

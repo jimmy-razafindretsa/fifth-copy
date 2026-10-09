@@ -44,7 +44,10 @@ describe("TypedSheet markup (#558 C3)", () => {
           .map((c) => c.ch)
           .join(""),
       );
-      expect(out.filter((s) => s.state === "remaining"), name).toHaveLength(0);
+      expect(
+        out.filter((s) => s.state === "remaining"),
+        name,
+      ).toHaveLength(0);
       expect(out.at(-1)?.state, name).toBe("next");
     }
   });
@@ -61,7 +64,9 @@ describe("TypedSheet markup (#558 C3)", () => {
   it("marks the span at cursor - 1 with data-last, and none before the first keystroke", () => {
     for (const name of ["racing", "continue-wrong", "block-jammed", "finished"] as const) {
       const out = spans(html(<TypedSheet view={F[name]} />));
-      const last = out.map((s, i) => (/data-last="true"/.test(s.attrs) ? i : -1)).filter((i) => i >= 0);
+      const last = out
+        .map((s, i) => (/data-last="true"/.test(s.attrs) ? i : -1))
+        .filter((i) => i >= 0);
       expect(last, name).toEqual([F[name].cursor - 1]);
     }
     expect(html(<TypedSheet view={F["before-start"]} />)).not.toContain("data-last");
@@ -73,7 +78,9 @@ describe("TypedSheet markup (#558 C3)", () => {
   });
 
   it("is a visual echo hidden from assistive tech, marked data-sheet", () => {
-    expect(html(<TypedSheet view={F.racing} />)).toMatch(/^<div[^>]*data-sheet[^>]*aria-hidden="true"/);
+    expect(html(<TypedSheet view={F.racing} />)).toMatch(
+      /^<div[^>]*data-sheet[^>]*aria-hidden="true"/,
+    );
   });
 
   it("puts no text node outside the char spans", () => {

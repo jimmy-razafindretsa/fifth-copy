@@ -103,8 +103,8 @@
 
 /* the bed tilts away from the typist (bible 7.7a, ~14 degrees): back rows recede */
 .bed {
-  --_pitch: calc(74cqi / (var(--_cols) - 0.286 + 0.25 * (var(--_rows) - 1)));
-  --_kd: calc(var(--_pitch) / 1.4);
+  --_pitch: calc(77cqi / (var(--_cols) - 0.265 + 0.25 * (var(--_rows) - 1)));
+  --_kd: calc(var(--_pitch) / 1.36);
   display: flex;
   flex-direction: column;
   gap: calc(var(--_kd) * 0.28);
@@ -133,6 +133,8 @@
   padding-left: 0.18em;
   border-radius: var(--radius-full);
   background: var(--color-typewriter-key);
+  /* a dashed (disabled) ring shows the body through its gaps, not the cap */
+  background-clip: padding-box;
   color: var(--color-typewriter-key-fg);
   border: calc(var(--_kd) * 0.13) solid var(--color-typewriter-chrome);
   /* the key stem: a hard ink offset under the cap */

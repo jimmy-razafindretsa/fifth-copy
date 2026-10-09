@@ -58,7 +58,8 @@ describe("typing surface imports (#558 C8)", () => {
   });
 
   it("no module outside the race feature reaches into its components or view", () => {
-    const deep = /["']@\/features\/race\/(components|view)\b|["'][./]+features\/race\/(components|view)\b/;
+    const deep =
+      /["']@\/features\/race\/(components|view)\b|["'][./]+features\/race\/(components|view)\b/;
     const hits = sources(path.join(root, "src"))
       .filter((f) => !f.startsWith(path.join(root, "src/features/race/")))
       .filter((f) => deep.test(readFileSync(f, "utf8")))

@@ -52,7 +52,12 @@ export function TypewriterKeyboard({
   } as CSSProperties;
 
   return (
-    <div className={styles.typewriter} data-typewriter aria-hidden="true" data-jammed={flag(jammed)}>
+    <div
+      className={styles.typewriter}
+      data-typewriter
+      aria-hidden="true"
+      data-jammed={flag(jammed)}
+    >
       <svg className={styles.rear} viewBox="0 0 100 30" focusable="false">
         <rect className={styles.housing} x="11" y="5" width="78" height="25" />
         {[16, 84].map((x) => (

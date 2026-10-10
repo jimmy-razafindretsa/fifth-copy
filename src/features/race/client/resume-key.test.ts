@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  clearResumeKey,
-  readResumeKey,
-  RESUME_KEY_PREFIX,
-  storeResumeKey,
-} from "./resume-key";
+import { clearResumeKey, readResumeKey, RESUME_KEY_PREFIX, storeResumeKey } from "./resume-key";
 
 // Contract of #561 C11: the desk's resume key lives in sessionStorage under
 // `fifth-copy:resume:<lobbyId>`; every call survives a storage that is missing or throws, and reads
@@ -88,5 +83,67 @@ describe("resume key storage (#561 C11)", () => {
     expect(() => storeResumeKey(LOBBY, KEY)).not.toThrow();
     expect(readResumeKey(LOBBY)).toBeNull();
     expect(() => clearResumeKey(LOBBY)).not.toThrow();
+  });
+});
+
+// C11, the other half: the race page writes the key it is given and connects with the one it holds.
+describe("the race page keeps and sends the key (#561 C11)", () => {
+  it("bindRaceSocket stores welcome.resumeKey on every welcome", async () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const { bindRaceSocket } = await import("./store");
+    let onWelcome: ((payload: unknown) => void) | null = null;
+    const off = () => {};
+    const socket = {
+      onWelcome: (cb: (payload: unknown) => void) => ((onWelcome = cb), off),
+      onRoster: () => off,
+      onConnectError: () => off,
+      onReconnecting: () => off,
+      onReconnected: () => off,
+    } as unknown as import("./socket").RoomSocket;
+    const dispatch = vi.fn();
+    bindRaceSocket(socket, dispatch, { lobbyId: LOBBY });
+    const second = `${KEY.slice(0, 40)}`;
+    onWelcome!({ resumeKey: KEY });
+    expect(readResumeKey(LOBBY)).toBe(KEY);
+    onWelcome!({ resumeKey: second });
+    expect(readResumeKey(LOBBY)).toBe(second);
+    // a welcome without a key (a spectator) leaves the stored one alone
+    onWelcome!({ resumeKey: null });
+    expect(readResumeKey(LOBBY)).toBe(second);
+    expect(dispatch).toHaveBeenCalledTimes(3);
+  });
+
+  it("connectSeat connects with the stored key, and without one when none is stored", async () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const { connectSeat } = await import("./connect-seat");
+    const room = {
+      onWelcome: () => () => {},
+      onRoster: () => () => {},
+      onConnectError: () => () => {},
+      onReconnecting: () => () => {},
+      onReconnected: () => () => {},
+      close: vi.fn(),
+    };
+    const connectToRoom = vi.fn(() => room as unknown as import("./socket").RoomSocket);
+    const mint = vi.fn(async () => ({ ok: true as const, token: "tok", url: "http://race.test" }));
+    const open = async () => {
+      const stop = connectSeat({
+        code: "KGB-4821",
+        lobbyId: LOBBY,
+        mint,
+        dispatch: vi.fn(),
+        load: async () => ({ connectToRoom }),
+      });
+      await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalled());
+      stop();
+      return connectToRoom.mock.calls.at(-1) as unknown[];
+    };
+
+    expect(await open()).toEqual(["http://race.test", "tok", { resumeKey: null }]);
+    connectToRoom.mockClear();
+    storeResumeKey(LOBBY, KEY);
+    expect(await open()).toEqual(["http://race.test", "tok", { resumeKey: KEY }]);
   });
 });

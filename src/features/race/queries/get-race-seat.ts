@@ -22,7 +22,10 @@ export async function getRaceSeat(id: string): Promise<RaceSeatInfo | null> {
   if (!parsed.success) return null;
   const { table, id: key } = parsed.data;
   if (table === "lobby") {
-    const lobby = await db.lobby.findUnique({ where: { id: key }, select: { id: true, code: true } });
+    const lobby = await db.lobby.findUnique({
+      where: { id: key },
+      select: { id: true, code: true },
+    });
     return lobby ? { lobbyId: lobby.id, code: lobby.code } : null;
   }
   const race = await db.race.findUnique({

@@ -152,6 +152,7 @@ describe("RaceCard lanes (#560 C2)", () => {
       'aria-label="Place 2, Badger-374, desk 02, 71% typed, LINE CUT"',
     );
     expect(out[2]!.attrs).toContain('aria-label="Place 3, Heron-511, desk 03, 58% typed"');
+    expect(out[3]!.attrs).toContain('aria-label="Place 4, Lynx-785, YOU, desk 05, 52% typed"');
     view.lanes.forEach((lane, i) => {
       expect(out[i]!.body).toMatch(new RegExp(`data-rider[^>]*--_p:${lane.progress}`));
     });

@@ -50,6 +50,7 @@ function LaneRow({
   const words = fill(labels.lane, {
     rank: lane.rank,
     name: lane.name,
+    you: lane.you ? `, ${labels.you}` : "",
     desk: String(lane.desk).padStart(2, "0"),
     progress: percent(lane.progress),
     status: status ? `, ${status}` : "",

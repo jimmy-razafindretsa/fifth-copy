@@ -122,7 +122,7 @@ test.describe("#560 race HUD on /design", () => {
     // the lanes still read in words, names included
     await expect(compact.locator('[data-lane][data-you="true"]')).toHaveAttribute(
       "aria-label",
-      /Sparrow-629, desk 17/,
+      /Sparrow-629, YOU, desk 17/,
     );
   });
 

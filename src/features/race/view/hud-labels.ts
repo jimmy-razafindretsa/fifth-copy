@@ -30,7 +30,8 @@ export type RaceCardLabels = {
   desk: string;
   /** The ink tag on your lane. */
   you: string;
-  /** One lane in words: `{rank}`, `{name}`, `{desk}`, `{progress}` (percent), then `{status}`. */
+  /** One lane in words: `{rank}`, `{name}`, `{you}` (`, YOU` on your lane), `{desk}`, `{progress}`
+   * (percent), then `{status}`. */
   lane: string;
   status: Record<Exclude<LaneStatus, "typing">, string>;
 };
@@ -90,7 +91,7 @@ export const hudLabelFixtures = {
       lanes: "Lanes",
       desk: "DESK {n}",
       you: "YOU",
-      lane: "Place {rank}, {name}, desk {desk}, {progress}% typed{status}",
+      lane: "Place {rank}, {name}{you}, desk {desk}, {progress}% typed{status}",
       status: {
         "line-cut": "LINE CUT",
         asleep: "ASLEEP AT DESK",
@@ -138,7 +139,7 @@ export const hudLabelFixtures = {
       lanes: "Couloirs",
       desk: "BUREAU {n}",
       you: "TOI",
-      lane: "Rang {rank}, {name}, bureau {desk}, {progress} % tapé{status}",
+      lane: "Rang {rank}, {name}{you}, bureau {desk}, {progress} % tapé{status}",
       status: {
         "line-cut": "LIGNE COUPÉE",
         asleep: "ENDORMI AU BUREAU",

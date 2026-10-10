@@ -180,6 +180,17 @@ Design bible 7.7 and 7.7a (#558). Feature components, not primitives: exported o
 | teleprinter skin (`skins/teleprinter.tsx`, internal) | the `TypingMachine` props | the E4 compact teleprinter in the `machine-*` roles (bible 7.7a): top panel with the slot, tape reel, maker's plate and rotary dial (inline SVG); a tilted deck of square ink keys and a space bar | sized in machine units (`--_u` = 1/620 of its width, `min(620px, 100%)`); jam = key outlines, space bar and slot `typing-error` plus the `data-part="jam"` X; no radius |
 Shared: `typing-chars.tsx` (the span renderer) and `typing.module.css` (states, `fcCaret`, `fcPop`, both reduce blocks in the descendant form `[data-motion="reduce"] .x`, so a scoped specimen and `<html>` both stop them). The landing strip keeps its own copy of the keyframes until a later card de-duplicates.
 
+## Seat view HUD dockets (race feature)
+Design bible 7.1 (Abandon), 7.4 (HUD dockets, Sabotage tray, notice row), 7.4a (race card), 7.11 (nixie counters) (#560). Feature components exported only through `src/features/race/index.ts`; they render props (ranks, progress and WPM are the engine's, ADR 0007) and import no socket client, engine or protocol. Copy comes in as `labels` (types and the EN/FR specimen `hudLabelFixtures` in `src/features/race/view/hud-labels.ts`; the race page reads the catalogs, ADR 0010). Specimen: `/design#race-hud`; tests: `src/features/race/components/*.test.tsx`, `e2e/race/hud.spec.ts`.
+| Component | Props | Renders | Notes |
+|---|---|---|---|
+| `NixieCounters` | `wpm`, `place \| null`, `total`, `labels` | a `data-device="nixie"` bezel (`room` frame, `device-bezel`) with two `data-tube` glass tubes, WPM and `04 / 30`, VT323 42px, tags under them | glow only on the tubes (`device-nixie` + inset `device-nixie-glow`); not the `Device` primitive (its root glows); zero-padded, WPM capped at 999 (`nixieNumber`); a named `group`, glyphs hidden |
+| `RaceCard` | `view: RaceCardView`, `labels`, `compact?` | a HUD docket: header tag + `n TYPISTS`, the full-field line (`data-tick` per player, yours red with an `fg` edge, the `data-finish` checker), an `ol` of lanes (`data-lane`, rank, `DESK 07`, name, `YOU`, status tag, marker riding a track) | `--_p` (0..1) positions ticks and markers; `[data-ink]` maps a marker ink to a role (#565 adds rows); compact drops the names (kept in each lane's `aria-label`) |
+| `SabotageTray` | `card \| null`, `cooldownS`, `hint \| null`, `labels` | a HUD docket `SABOTAGE TRAY`: the card as a 7.6 file card, or the dashed empty slot; rows `PLAY` (ready only) and `COOLDOWN` | `data-card`, `data-cooling`; the seconds pulse (`lkPulse`) |
+| `AbandonControl` (client leaf) | `state: idle \| confirm \| disabled`, `onAbandon`, `onConfirm`, `onCancel`, `labels` | the secondary `Button` and, in confirm, the 7.1 ink button beside it | `armAbandonCancel`: `Escape` or `ABANDON_CONFIRM_MS` (5 s) call `onCancel` once; `min-h-11` / 44px targets; the caller owns the state |
+| `RaceNotice` | `kind`, `labels` | a one-row docket `<p role="status">` (7.4 notice row) | `lkPulse` 1.3s dipping to 0.75, still under reduce; `idle-warning` = `data-tone="urgent"` on `danger-surface` |
+Shared: `hud-docket.module.css` (docket, header, tag, mono, rows, notice row, `lkPulse` with both reduce blocks in the descendant form).
+
 ## Screen states checklist (every `ui` card)
 empty (`EmptyState`), loading (`Skeleton`/`Spinner` inside an `aria-busy` region), error (`Alert tone="error"`), populated. Mobile, tablet, desktop. Light and dark.
 

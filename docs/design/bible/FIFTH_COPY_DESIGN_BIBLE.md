@@ -189,6 +189,7 @@ Textures are opt-in, never on the page body (14 paints a flat paper body). Under
 - **Social button** (footer): `2px solid rgba(paper,.35)`, 26px red square tag with stencil abbreviation (GH, IN, DC, YT), hover border/text gold.
 - Extension (#20): the `Button` primitive is this label-button family (secondary, ink, segmented): Oswald 600 caps `.18em` through the `type-label` role at 12 / 14 / 16px for sm / md / lg, in every variant. The Stardos stamp CTA (primary, inverted) is a separate pattern, never a `Button` size.
 - Extension (#15): the `Button` primary variant is a red label button: `background:red; color:paper; border:2px solid ink`, hover banner, active banner with the label 1px down, no shadow, no radius. The ghost variant is the link-like label: no fill, no border, ink text, underline on hover. Danger fills with banner under paper text and the same 2px ink rule.
+- Extension (#560): **Abandon** (spec 4.4), always visible in the seat view: the secondary `Button` `ABANDON` / `ABANDONNER`; pressed, the ink button `CONFIRM · REASSIGN ME` / `CONFIRMER · ME RÉAFFECTER` appears beside it (ABANDON becomes its disclosure, `aria-expanded`). `Escape`, a second ABANDON or 5 s without an answer cancel. Disabled (before GO, after finishing) it stays visible and inert. Both buttons are at least 44px tall.
 
 ### 7.2 Inputs
 - Room code: inside an ink-bordered newsprint group: `[ JOIN WITH CODE | KGB-4821 | JOIN → ]`. Input IBM Plex Mono 500 18px `.08em`, auto-uppercase, maxLength 8.
@@ -210,6 +211,16 @@ Textures are opt-in, never on the page body (14 paints a flat paper body). Under
 - **Skeleton rows** (extension, #107): the same row grid with flat newsprint blocks, no shimmer and no gradient (6), the list `aria-busy="true"`.
 - **Alert row** (Extension (#15)): an inline message is a docket row: the tone in its ground (newsprint-tinted info, newsprint success, red-tinted error), `2px solid ink`, no left rule, no radius; title Stardos 700, message Courier Prime.
 - **Notice row** (extension, #107): a live-state label row at the top of a docket (e.g. `CONNECTION LOST, RETRYING`), Oswald 600 11px `.16em`, dashed separator under it, pulsing with `lkPulse` (8); still under reduced motion.
+  - Extension (#560): on text the pulse dips to opacity **0.75**, never lower, so ink keeps 4.5:1 at the dip (6.02 on paper, 6.26 on night, 4.91 on the light `danger-surface`); muted labels never pulse. Standing alone in the seat view, the notice is a **one-row docket** (2px ink rule, paper ground), `role="status"`: `WAITING FOR THE HOST` / `EN ATTENTE DE L'HÔTE`, `LINE CUT · RECONNECTING` / `LIGNE COUPÉE · RECONNEXION`, `NO PICTURE FROM THE ROOM · KEEP TYPING` / `PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER` (the 3D scene is off, #563), and the idle warning `THE MAJOR IS LOOKING AT YOU. TYPE.` / `LE MAJOR TE REGARDE. TAPE.` in the urgent tone: the error ground of the alert row (`danger-surface`) under ink text, never red text on Night shift (3.3).
+- **HUD dockets** (extension, #560): the seat view's dockets (race card 7.4a, Sabotage tray) are themed like the lobby's (paper ground, `fg` rules: Night shift applies) and sit over the scene or the paper backdrop. Their header row puts the docket's title in the ink tag (the `YOU` tag recipe: Oswald 600 10px `.16em`, ink ground, paper text) with the mono value right (IBM Plex Mono 500 14px `.08em`), e.g. `RACE CARD` | `30 TYPISTS`.
+- **Sabotage tray** (extension, #560, spec 10): a HUD docket titled `SABOTAGE TRAY` / `PLATEAU DE SABOTAGE`. The earned card is a 7.6 file card inside it (newsprint, `2px solid` ink, name Courier Prime 700 19px, effect Courier Prime 14px muted): `EXTRA PAPERWORK` / `PAPERASSE SUPPLÉMENTAIRE` (Adds words to the leader's text.), `EXEMPTION` / `EXEMPTION` (Removes words from your remaining text.), `SMOKE BREAK` / `PAUSE CIGARETTE` (Blurs the text of the typists ahead of you for a few seconds.): set dressing wording, never a joke (2). Under it the rows `PLAY` / `JOUER` | the hint (`ENTER TO PLAY`, #236) while ready, `COOLDOWN` / `RECHARGE` | `12 S` while cooling, its seconds pulsing (`lkPulse`). Empty, the 7.6 dashed empty slot: `NO CARD` / `AUCUNE CARTE`, "Cards go to the typists behind the leader." / « Les cartes vont aux dactylos derrière le premier. ». Cooling without a card shows only the cooldown row; a held card waits out the cooldown without the hint.
+
+### 7.4a Race card (extension, #560; spec 6.2)
+The seat view's "where am I in the race": a HUD docket (7.4) in the left gutter, never over the teleprinter (layout #561, #564), `RACE CARD` / `FICHE DE COURSE` | `30 TYPISTS` / `30 DACTYLOS`. Rendered from `RaceCardView = { field, lanes }` (`src/features/race/view/race-card-view.ts`); it computes nothing (ADR 0007).
+- **Full-field line** under the header: a 2px ink rule with **one tick per player** at its progress (0..1). Rival ticks are 2 x 12 `rival` (ribbon-violet; the per-rival inks are #565); **yours is 6 x 18 agit-red with a 1px `fg` edge** (agit-red is 1.76:1 on the night ground: the night-ink edge carries the mark, 9.72:1). It ends in the **checkered finish**: 12 x 18, 6px squares from `repeating-conic-gradient(finish-ink 0 25%, finish-paper 0 50%)`, hard-edged, no blur (6), framed 1px `finish-ink`. `finish-ink` / `finish-paper` are the theme's ink and paper (press-ink / paper, Night shift night-ink / night). The line reads in words (`30 typists on the line, you at 61%`).
+- **Lanes**: 7.4 rows `120px | 1fr` with dashed separators, in rank order: left the rank (mono 500 14px, `04`) and `DESK 07` / `BUREAU 07` (the roll-row desk label); right the name (mono 15px, ellipsis), then the ink `YOU` / `TOI` tag on your lane, then the status label, and under them a hairline track (`border`) ending in a 2px ink post, the lane's **marker riding it** at its progress. Markers are inline SVG in a 12-unit box, `rival` fill (yours `you`) with a 1.5 `fg` stroke: **circle, square, triangle, diamond** (R80: shape plus desk number, colour never alone). Your name takes the red text role (`link`: red on paper, night-ink on Night shift). Status labels: an Oswald 10px `.16em` tag in a 1px muted hairline: `LINE CUT` / `LIGNE COUPÉE`, `ASLEEP AT DESK` / `ENDORMI AU BUREAU`, `REASSIGNED` / `RÉAFFECTÉ`, `FILED` / `CLASSÉ` (finished); typing shows none. Each lane reads in words: `Place 4, Lynx-785, desk 05, 41% typed, LINE CUT`.
+- **Lanes shown** (spec 6.2, selected by #564): every player up to 8; above 8 the top 3, the two just ahead of you, you and the two just behind.
+- **Compact** (tablets and small laptops, about 208px wide): rows `84px | 1fr`; names go (they stay in the lane's words), markers, desk numbers, statuses, `YOU` and the field line stay.
 
 ### 7.5 Tabs
 Stardos 700 13px `.12em`. Active tab = ink bg, paper text. A 7px red dot marks tabs that contain NEW items. ←/→ keyboard switches tabs.
@@ -265,6 +276,12 @@ Parallelogram frame, scanlines, top-left `● LIVE` red badge (dot blinks 1.2s `
 - Fluid only: `flex-wrap` and `grid repeat(auto-fit, minmax(240px,1fr))`, never fixed widths on text boxes.
 - Section rhythm: paper → newsprint → paper, separated by 2px ink rules. One ink band, then a red final-CTA band, then the ink footer.
 
+### 7.11 Nixie counters (extension, #560; spec 6.1)
+The seat view's counters, top right: **WPM** (clean WPM, ADR 0016) and **place** `04 / 30`. The only nixie glow in the product (0).
+- A **device bezel** (6 device glow): `2px solid` backroom-grey (`room`), press-ink interior (`device-bezel`), padding 8 x 10, holding two **tubes** side by side (gap 12), each with its Oswald tag under it: `WPM` / `MPM`, `PLACE` / `RANG` (10px `.2em`, `band-muted` on the bezel, 9.03:1, no glow).
+- A **tube** is the art-direction print page's nixie: a glass envelope with a rounded top `16px 16px 5px 5px` (the HUD's one rounded shape: glass, not a card), `2px solid device-nixie-glow` rim, press-ink inside with `box-shadow: inset 0 0 12px device-nixie-glow`; numerals VT323 (`type-device`) at 42px, line-height 1, in the nixie colour with `0 0 6px currentColor` (the scoped `device-nixie` utility). `device-nixie-glow` = the nixie colour at 35%, the same in both themes (a device, 3.2); never gold (gold is the reward role).
+- **Numbers**: zero-padded to two digits (`07`, `04 / 30`, `00 / 30` before the start), WPM capped at `999`, larger fields keep their digits (`02 / 100`). Read in words through the bezel (`Words per minute 42, place 4 of 30` / `Mots par minute 42, rang 4 sur 30`); the glyphs are hidden.
+
 ---
 
 ## 8. Motion (UI)
@@ -281,7 +298,7 @@ All motion is short, mechanical and printed-feeling: stamps slam, paper pops, le
 | `fcSpin` | stars, 14–90s linear |
 | `fcBob` | stamps on media, 4s ease-in-out, ±8px with ±3° |
 | `lkShake` | 0.4s horizontal shake for denied actions |
-| `lkPulse` | 1.2–1.4s opacity pulse for live/unsaved indicators |
+| `lkPulse` | 1.2–1.4s opacity pulse for live/unsaved indicators (on text it never dips below 0.75, 7.4, #560) |
 | Dice | the random button's icon spins 0.4s |
 
 Respect `prefers-reduced-motion`: disable marquee, spins, bob and caret blink (show a solid red cell instead).

@@ -51,6 +51,7 @@ Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured f
 | `sheet` | `paper` | same | the typed sheet rising out of the machine (bible 7.7a): a paper object, invariant like the tape | ground |
 | `machine-paper` / `machine-deck` / `machine-ink` / `machine-metal` / `machine-muted` | `paper` / `newsprint` / `press-ink` / `backroom-grey` / `color-mix(in srgb, #6F736C 60%, #2A2420)` | same | the machine-neutral family every machine skin maps its private colours from (bible 7.7a); the teleprinter: top panel and key legends, key deck and finger holes, caps / rules / slot / hubs / plate, reel flange / dial ring / key stems (decoration: 3.36 on the deck), disabled legends | legend `machine-ink` 12.58 \| 12.58; wrong-key legend `typing-error` 5.33 \| 5.33; muted `machine-deck` 5.38 \| 5.38 |
 | `device-phosphor` / `device-nixie` / `device-bezel` | `phosphor` / `nixie` / `press-ink` | same | device numerals and bezel | phosphor `device-bezel` 11.76 \| 11.76; nixie `device-bezel` 7.25 \| 7.25 |
+| `device-nixie-glow` | `color-mix(in srgb, #FF9A3C 35%, transparent)` | same | the nixie tube's glass rim and inner glow (bible 7.11, #560); only inside the tubes | decoration |
 | `room` | `backroom-grey` | same | room, steel | fill |
 | `band` / `band-fg` / `band-muted` | `press-ink` / `paper` / `night-muted` | same | ink bands (ticker, footer, live-feed frame) and their text (bible 7.10, 14.1) | fg `band` 12.58 \| 12.58; muted `band` 9.03 \| 9.03 |
 
@@ -67,6 +68,7 @@ Roles the palette does not name follow mapping (a) (human, 2026-10-04) on the Ni
 | `fg-muted` | `color-mix(in srgb, #2A2420 80%, #F1E8D6 20%)` | `#CFC6B3` | secondary text | `bg` 7.05 \| 6.73; `surface` 5.97 \| 5.58; `surface-muted` 5.35 \| 4.77; `danger-surface` 4.99 \| 5.60 |
 | `border` | `color-mix(in srgb, #2A2420 25%, transparent)` | `color-mix(in srgb, #F4ECDC 25%, transparent)` | hairlines | decorative (2px `fg` rules carry the edges) |
 | `surface-muted` | `color-mix(in srgb, #E4D6B8 94%, #2A2420 6%)` | `color-mix(in srgb, #4B453E 94%, #F4ECDC 6%)` | hover and info grounds | ground |
+| `finish-ink` / `finish-paper` | `#2A2420` / `#F1E8D6` | `#F4ECDC` / `#3E3934` | the race card's checkered finish: hard-edged squares of the theme's ink and paper (bible 6, 7.4a, #560) | mark `finish-paper` 12.58 \| 9.72 |
 
 ### Bible extensions
 Where the bible's value fails WCAG (bible 3.3: text 4.5:1; WCAG 1.4.11: marks 3:1), the nearest bible-palette value that passes (sRGB mix, WCAG 2.1 luminance):
@@ -177,6 +179,17 @@ Design bible 7.7 and 7.7a (#558). Feature components, not primitives: exported o
 | `TypingMachine` (the skin seam) | `rows: string[][]`, `pressed`, `wrong`, `jammed`, `disabledKeys`, `skin: MachineSkinId` (default `"teleprinter"`) | the registered skin named by `skin` from `machineSkins` (`components/machine/skins/index.ts`) inside one root `<div data-machine data-skin aria-hidden>`; every skin renders the keys as `<span role="presentation" data-key>` (plus at most one `data-key=" "` space bar) | `data-pressed` / `data-wrong` / `data-disabled` per key and `data-jammed` on the root, from props only, the same for every skin (`skins/conformance.test.tsx`); a server component; `machineSkinIds` lists the ids |
 | teleprinter skin (`skins/teleprinter.tsx`, internal) | the `TypingMachine` props | the E4 compact teleprinter in the `machine-*` roles (bible 7.7a): top panel with the slot, tape reel, maker's plate and rotary dial (inline SVG); a tilted deck of square ink keys and a space bar | sized in machine units (`--_u` = 1/620 of its width, `min(620px, 100%)`); jam = key outlines, space bar and slot `typing-error` plus the `data-part="jam"` X; no radius |
 Shared: `typing-chars.tsx` (the span renderer) and `typing.module.css` (states, `fcCaret`, `fcPop`, both reduce blocks in the descendant form `[data-motion="reduce"] .x`, so a scoped specimen and `<html>` both stop them). The landing strip keeps its own copy of the keyframes until a later card de-duplicates.
+
+## Seat view HUD dockets (race feature)
+Design bible 7.1 (Abandon), 7.4 (HUD dockets, Sabotage tray, notice row), 7.4a (race card), 7.11 (nixie counters) (#560). Feature components exported only through `src/features/race/index.ts`; they render props (ranks, progress and WPM are the engine's, ADR 0007) and import no socket client, engine or protocol. Copy comes in as `labels` (types and the EN/FR specimen `hudLabelFixtures` in `src/features/race/view/hud-labels.ts`; the race page reads the catalogs, ADR 0010). Specimen: `/design#race-hud`; tests: `src/features/race/components/*.test.tsx`, `e2e/race/hud.spec.ts`.
+| Component | Props | Renders | Notes |
+|---|---|---|---|
+| `NixieCounters` | `wpm`, `place \| null`, `total`, `labels` | a `data-device="nixie"` bezel (`room` frame, `device-bezel`) with two `data-tube` glass tubes, WPM and `04 / 30`, VT323 42px, tags under them | glow only on the tubes (`device-nixie` + inset `device-nixie-glow`); not the `Device` primitive (its root glows); zero-padded, WPM capped at 999 (`nixieNumber`); a named `group`, glyphs hidden |
+| `RaceCard` | `view: RaceCardView`, `labels`, `compact?` | a HUD docket: header tag + `n TYPISTS`, the full-field line (`data-tick` per player, yours red with an `fg` edge, the `data-finish` checker), an `ol` of lanes (`data-lane`, rank, `DESK 07`, name, `YOU`, status tag, marker riding a track) | `--_p` (0..1) positions ticks and markers; `[data-ink]` maps a marker ink to a role (#565 adds rows); compact drops the names (kept in each lane's `aria-label`) |
+| `SabotageTray` | `card \| null`, `cooldownS`, `hint \| null`, `labels` | a HUD docket `SABOTAGE TRAY`: the card as a 7.6 file card, or the dashed empty slot; rows `PLAY` (ready only) and `COOLDOWN` | `data-card`, `data-cooling`; the seconds pulse (`lkPulse`) |
+| `AbandonControl` (client leaf) | `state: idle \| confirm \| disabled`, `onAbandon`, `onConfirm`, `onCancel`, `labels` | the secondary `Button` and, in confirm, the 7.1 ink button beside it | `armAbandonCancel`: `Escape` or `ABANDON_CONFIRM_MS` (5 s) call `onCancel` once; `min-h-11` / 44px targets; the caller owns the state |
+| `RaceNotice` | `kind`, `labels` | a one-row docket `<p role="status">` (7.4 notice row) | `lkPulse` 1.3s dipping to 0.75, still under reduce; `idle-warning` = `data-tone="urgent"` on `danger-surface` |
+Shared: `hud-docket.module.css` (docket, header, tag, mono, rows, notice row, `lkPulse` with both reduce blocks in the descendant form).
 
 ## Screen states checklist (every `ui` card)
 empty (`EmptyState`), loading (`Skeleton`/`Spinner` inside an `aria-busy` region), error (`Alert tone="error"`), populated. Mobile, tablet, desktop. Light and dark.

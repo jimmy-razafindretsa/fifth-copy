@@ -1,0 +1,17 @@
+/*
+ * Race notice (#560, design bible 7.4 notice row): standing alone in the HUD, the row is its own one-row
+ * docket (2px ink rule, paper ground). The idle warning takes the error tone of the 7.4 alert row (a
+ * red-tinted ground, `danger-surface`, under ink text): urgency without red text on Night shift (3.3).
+ */
+
+@reference "../../../app/globals.css";
+
+.notice {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.notice[data-tone="urgent"] {
+  background: var(--color-danger-surface);
+}

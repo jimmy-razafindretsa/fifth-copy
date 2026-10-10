@@ -1,0 +1,39 @@
+/*
+ * Abandon control (#560, design bible 7.1, spec 4.4): the secondary `Button` (ui primitive) and, in
+ * confirm, the 7.1 ink button beside it (Oswald 600 13px, ink ground and paper text, hover red; the
+ * feature-local recipe of landing.module.css and lobby-entry.module.css). Both are at least 44 px tall
+ * (bible 18 touch targets); the pair wraps on a narrow column.
+ */
+
+@reference "../../../app/globals.css";
+
+.control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.ink {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ink:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.ink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

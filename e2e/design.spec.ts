@@ -163,6 +163,10 @@ test.describe("design system page", () => {
       "machine-ink",
       "machine-metal",
       "machine-muted",
+      // #560 the nixie tube glow and the race card's checkered finish
+      "device-nixie-glow",
+      "finish-ink",
+      "finish-paper",
     ];
     await expect(section.locator("[data-role]")).toHaveCount(roles.length);
     for (const role of roles) {

@@ -1,0 +1,67 @@
+/*
+ * Sabotage tray (#560, design bible 7.4, 7.6, spec 10): the earned catch-up card sits in the docket as a
+ * 7.6 file card (newsprint, 2px ink rule, name in Courier Prime 700, effect in Courier Prime), the empty
+ * tray as the 7.6 dashed empty slot (centred ink title, muted line). Rows and the cooldown pulse come from
+ * hud-docket.module.css.
+ */
+
+@reference "../../../app/globals.css";
+
+.tray {
+  display: flex;
+  flex-direction: column;
+}
+
+.slot,
+.empty {
+  margin: 10px 12px;
+  padding: 10px 12px;
+}
+
+.slot {
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+}
+
+.empty {
+  border: 2px dashed var(--color-border);
+  text-align: center;
+}
+
+.name {
+  margin: 0;
+  @apply type-body;
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.emptyTitle {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.effect {
+  margin: 4px 0 0;
+  @apply type-body;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-fg-muted);
+}
+
+.rows {
+  margin: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.rows dd {
+  margin: 0;
+}
+
+.hint {
+  font-weight: 500;
+}

@@ -2,10 +2,29 @@ export { connectToRoom } from "./client/socket";
 export type {
   ConnectErrorReason,
   HostSettingsResult,
+  Off,
   ProtocolError,
   RoomEvents,
   RoomSocket,
 } from "./client/socket";
+/** The seat view (#561, ARCHITECTURE 8.2, ADR 0013): the route's server lookup, the shell, and the one race
+ * store the HUD reads (and the scene, #563). `getRaceSeat` is a server function, so this index stays
+ * importable from client modules (the lobby loads it lazily). */
+export { getRaceSeat, type RaceSeatInfo } from "./queries/get-race-seat";
+export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
+export type { RaceSeatLabels, SeatErrorLabels } from "./seat/seat-view";
+export type { MintRaceToken } from "./client/connect-seat";
+export { bindRaceSocket, createRaceStore, initialRaceState, reduceRace } from "./client/store";
+export type {
+  RaceEvent,
+  RaceLostReason,
+  RacePhase,
+  RaceState,
+  RaceStore,
+  RaceTokenError,
+} from "./client/store";
+export { RaceStoreProvider, useRaceStore } from "./client/use-race-store";
+export { readResumeKey, storeResumeKey, clearResumeKey } from "./client/resume-key";
 /** The typing surface (#558, ADR 0013): pure components that render a TypedView (derived in #559) and the
  * typing machine behind its skin seam (bible 7.7a). */
 export { TelexStrip, type TelexLabels } from "./components/telex-strip";

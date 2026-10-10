@@ -10,7 +10,13 @@ const RaceStoreContext = createContext<RaceStore | null>(null);
  * scene (#563). The race route renders it on the server around server-rendered children; it creates
  * its own store unless one is given (tests, /design specimens).
  */
-export function RaceStoreProvider({ store, children }: { store?: RaceStore; children: ReactNode }) {
+export function RaceStoreProvider({
+  store,
+  children,
+}: {
+  store?: RaceStore;
+  children?: ReactNode;
+}) {
   const [own] = useState(() => store ?? createRaceStore());
   return <RaceStoreContext value={own}>{children}</RaceStoreContext>;
 }

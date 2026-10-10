@@ -246,6 +246,67 @@ export const fr = {
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",
   },
+  race: {
+    kicker: { seat: "VUE DE TA PLACE", desk: "VUE DE TA PLACE · BUREAU {n}" },
+    telex: { strip: "Texte à taper" },
+    loading: "On t'installe à ton bureau…",
+    notice: {
+      "waiting-for-host": "EN ATTENTE DE L'HÔTE",
+      reconnecting: "LIGNE COUPÉE · RECONNEXION",
+      "idle-warning": "LE MAJOR TE REGARDE. TAPE.",
+      "no-scene": "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
+      phones: "LES CELLULAIRES REGARDENT DU FOND DE LA SALLE",
+    },
+    errors: {
+      prefix: "RETOURNÉ ·",
+      closed: "Cette course est fermée.",
+      noRoom: "Cette salle n'est plus ouverte.",
+      inProgress: "Cette course a commencé sans toi.",
+      notFound: "Cette course n'est pas au dossier.",
+      generic: "Quelque chose a coincé. Réessaie.",
+      back: "RETOUR À LA SALLE D'ATTENTE →",
+    },
+    abandon: { abandon: "ABANDONNER", confirm: "CONFIRMER · ME RÉAFFECTER" },
+    nixie: {
+      wpm: "MPM",
+      place: "RANG",
+      aria: "Mots par minute {wpm}, rang {place} sur {total}",
+      ariaNoPlace: "Mots par minute {wpm}, {total} dactylos, pas encore de rang",
+    },
+    raceCard: {
+      title: "FICHE DE COURSE",
+      typists: "{n} DACTYLOS",
+      field: "{n} dactylos sur la ligne, toi à {you} %",
+      lanes: "Couloirs",
+      desk: "BUREAU {n}",
+      you: "TOI",
+      lane: "Rang {rank}, {name}{you}, bureau {desk}, {progress} % tapé{status}",
+      status: {
+        "line-cut": "LIGNE COUPÉE",
+        asleep: "ENDORMI AU BUREAU",
+        abandoned: "RÉAFFECTÉ",
+        finished: "CLASSÉ",
+      },
+    },
+    sabotageTray: {
+      title: "PLATEAU DE SABOTAGE",
+      empty: { title: "AUCUNE CARTE", body: "Les cartes vont aux dactylos derrière le premier." },
+      cards: {
+        "extra-paperwork": {
+          name: "PAPERASSE SUPPLÉMENTAIRE",
+          effect: "Ajoute des mots au texte du premier.",
+        },
+        exemption: { name: "EXEMPTION", effect: "Retire des mots de ton texte restant." },
+        "smoke-break": {
+          name: "PAUSE CIGARETTE",
+          effect: "Brouille le texte des dactylos devant toi pendant quelques secondes.",
+        },
+      },
+      play: "JOUER",
+      cooldown: "RECHARGE",
+      seconds: "{n} S",
+    },
+  },
   settings: {
     avatar: {
       moderation: {

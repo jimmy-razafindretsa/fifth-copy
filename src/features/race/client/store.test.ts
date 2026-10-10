@@ -253,7 +253,7 @@ describe("useRaceStore (#561 C3)", () => {
     store.dispatch({ type: "welcome", payload: welcome() });
     spy.mockClear();
     const html = renderToStaticMarkup(
-      createElement(RaceStoreProvider, { store, children: createElement(Probe) }),
+      createElement(RaceStoreProvider, { store }, createElement(Probe)),
     );
     // the server renders the server snapshot: what the HTML must show before hydration
     expect(html).toBe("<i>connecting:0</i>");
@@ -268,9 +268,7 @@ describe("useRaceStore (#561 C3)", () => {
   });
 
   it("a provider without a store creates its own, starting connecting", () => {
-    const html = renderToStaticMarkup(
-      createElement(RaceStoreProvider, { children: createElement(Probe) }),
-    );
+    const html = renderToStaticMarkup(createElement(RaceStoreProvider, {}, createElement(Probe)));
     expect(html).toBe("<i>connecting:0</i>");
   });
 

@@ -416,14 +416,16 @@ test.describe("design system page", () => {
 
   for (const scheme of ["light", "dark"] as const) {
     test(`visual baseline (${scheme}) @visual`, async ({ page }) => {
+      // the page is long (the #558 typing-surface specimens): six full-page shots in parallel in the
+      // pinned image's software renderer outgrow the 30s test budget on a busy machine (no tolerance change)
+      test.slow();
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await stabilize(page);
       await page.goto("/design");
       await expect(page).toHaveScreenshot(`design-${scheme}.png`, {
         fullPage: true,
-        // the page is long (the #558 typing-surface specimens): two full-page shots need more than 5s
-        // in the pinned image's software renderer
-        timeout: 20_000,
+        // two full-page shots that must match need more than 5s in that renderer
+        timeout: 45_000,
         mask: [page.getByRole("status", { name: "Loading" })],
       });
     });

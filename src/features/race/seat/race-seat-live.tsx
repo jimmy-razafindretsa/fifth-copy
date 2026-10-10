@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
 import type { RaceLostReason, RacePhase } from "../client/store";
@@ -93,11 +93,23 @@ export function RaceSeatLive({
   const store = useRaceStoreApi();
   const phase = useRaceStore((s) => s.phase);
   const lost = useRaceStore((s) => s.lost);
+  // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
+  // guest cookie, and a cookie set in an action re-renders the page): read the latest one, never reconnect
+  // for it.
+  const mintRef = useRef(mint);
+  useEffect(() => {
+    mintRef.current = mint;
+  }, [mint]);
 
   useEffect(() => {
     if (window.matchMedia(PHONE_QUERY).matches) return;
-    return connectSeat({ code, lobbyId, mint, dispatch: store.dispatch });
-  }, [code, lobbyId, mint, store]);
+    return connectSeat({
+      code,
+      lobbyId,
+      mint: (input) => mintRef.current(input),
+      dispatch: store.dispatch,
+    });
+  }, [code, lobbyId, store]);
 
   return <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />;
 }

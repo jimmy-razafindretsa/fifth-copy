@@ -139,8 +139,8 @@ describe("RaceCard lanes (#560 C2)", () => {
     for (const rival of out.filter((l) => !l.attrs.includes("data-you"))) {
       expect(rival.attrs).toContain('data-ink="rival"');
     }
-    expect(rule('[data-ink="rival"]')).toMatch(/--_ink:\s*var\(--color-rival\)/);
-    expect(rule('[data-you="true"]')).toMatch(/--_ink:\s*var\(--color-you\)/);
+    expect(rule('.lane[data-ink="rival"]')).toMatch(/--_ink:\s*var\(--color-rival\)/);
+    expect(rule('.lane[data-you="true"]')).toMatch(/--_ink:\s*var\(--color-you\)/);
     expect(rule(".marker")).toMatch(/fill:\s*var\(--_ink\)/);
     expect(rule('[data-you="true"] .name')).toMatch(/color:\s*var\(--color-link\)/);
   });

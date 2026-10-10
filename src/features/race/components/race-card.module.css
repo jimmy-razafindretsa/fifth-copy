@@ -92,11 +92,11 @@
   padding: 6px 10px;
 }
 
-[data-ink="rival"] {
+.lane[data-ink="rival"] {
   --_ink: var(--color-rival);
 }
 
-[data-you="true"] {
+.lane[data-you="true"] {
   --_ink: var(--color-you);
 }
 

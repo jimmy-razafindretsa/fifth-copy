@@ -19,6 +19,15 @@ import {
 } from "@/components/ui";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
+  hudLabelFixtures,
+  NixieCounters,
+  RaceCard,
+  type RaceCardViewFixture,
+  raceCardViewFixtures,
+  RACE_NOTICES,
+  RaceNotice,
+  SABOTAGE_CARDS,
+  SabotageTray,
   TelexStrip,
   TypedSheet,
   type TypedViewFixture,
@@ -27,6 +36,7 @@ import {
   type TypingMachineProps,
 } from "@/features/race";
 import { getT } from "@/i18n";
+import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
 import demo from "./motion-demo.module.css";
 import { StampReplay } from "./stamp-demo";
 
@@ -70,6 +80,9 @@ const ROLES = [
   ["machine-ink", "bg-machine-ink"],
   ["machine-metal", "bg-machine-metal"],
   ["machine-muted", "bg-machine-muted"],
+  ["device-nixie-glow", "bg-device-nixie-glow"],
+  ["finish-ink", "bg-finish-ink"],
+  ["finish-paper", "bg-finish-paper"],
 ] as const;
 
 // Type roles (#20): art-direction 7 samples, literal strings (ADR 0010, until #372). The two Cyrillic
@@ -238,6 +251,68 @@ function TypingSpecimen({ state }: { state: TypingState }) {
     </figure>
   );
 }
+
+// Seat view HUD (#560, bible 7.4a, 7.11): every state of the dockets, in English (the specimen copy of
+// hudLabelFixtures; the race page reads the catalogs). Each specimen names its state for e2e.
+const HUD = hudLabelFixtures.en;
+
+function HudSpecimen({
+  id,
+  title,
+  caption,
+  reduce,
+  children,
+}: {
+  id: string;
+  title: string;
+  caption: string;
+  reduce?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <figure
+      data-hud-state={id}
+      data-motion={reduce ? "reduce" : undefined}
+      className="flex min-w-0 flex-col gap-2"
+    >
+      <figcaption className="flex flex-col gap-1">
+        <span className="type-label text-fg">{title}</span>
+        <span className="type-body text-sm text-fg-muted">{caption}</span>
+      </figcaption>
+      {children}
+    </figure>
+  );
+}
+
+const NIXIE_STATES = [
+  { id: "nixie-before-start", title: "Before the start", wpm: 0, place: null, caption: "00 / 30" },
+  { id: "nixie-racing", title: "Racing", wpm: 42, place: 4, caption: "42 WPM, fourth" },
+  { id: "nixie-finished", title: "Finished", wpm: 61, place: 1, caption: "The final count" },
+] as const;
+
+const CARD_STATES: { id: RaceCardViewFixture; title: string; caption: string }[] = [
+  {
+    id: "six-leading",
+    title: "6 typists, you leading",
+    caption: "All six lanes; your red tick ahead.",
+  },
+  {
+    id: "six-mid-field",
+    title: "6 typists, mid-field",
+    caption: "Your lane red, the YOU tag on it.",
+  },
+  { id: "six-last", title: "6 typists, you last", caption: "Rivals in ribbon-violet, by shape." },
+  {
+    id: "six-statuses",
+    title: "Statuses",
+    caption: "Filed, line cut, asleep at desk, reassigned.",
+  },
+  {
+    id: "thirty-mid-field",
+    title: "30 typists",
+    caption: "Thirty ticks; lanes for the top 3, the two ahead, you and the two behind.",
+  },
+];
 
 /** Living inventory of src/components/ui (see docs/design/components.md). Used by e2e + visual tests. */
 export default async function DesignPage() {
@@ -646,6 +721,201 @@ export default async function DesignPage() {
           {TYPING_STATES.map((state) => (
             <TypingSpecimen key={state.id} state={state} />
           ))}
+        </div>
+      </section>
+
+      <section id="race-hud" aria-labelledby="race-hud-heading" className="flex flex-col gap-6">
+        <h2 id="race-hud-heading" className="type-display-md">
+          Race HUD
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The seat view&apos;s dockets around the typing surface: nixie counters top right, the race
+          card in the left gutter, the Sabotage tray, the Abandon control and the notice row. They
+          render what the race hands them and decide nothing.
+        </p>
+
+        <h3 className="type-label text-fg">Nixie counters</h3>
+        <div className="flex flex-wrap gap-6">
+          {NIXIE_STATES.map((n) => (
+            <HudSpecimen key={n.id} id={n.id} title={n.title} caption={n.caption}>
+              <div>
+                <NixieCounters wpm={n.wpm} place={n.place} total={30} labels={HUD.nixie} />
+              </div>
+            </HudSpecimen>
+          ))}
+        </div>
+
+        <h3 className="type-label text-fg">Race card</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          {CARD_STATES.map((c) => (
+            <HudSpecimen key={c.id} id={`card-${c.id}`} title={c.title} caption={c.caption}>
+              <div className="w-full max-w-[320px]">
+                <RaceCard view={raceCardViewFixtures[c.id]} labels={HUD.raceCard} />
+              </div>
+            </HudSpecimen>
+          ))}
+          <HudSpecimen
+            id="card-thirty-compact"
+            title="30 typists, compact"
+            caption="Tablets and small laptops: no names; markers, desks and the field line stay."
+          >
+            <div className="w-full max-w-[208px]">
+              <RaceCard
+                view={raceCardViewFixtures["thirty-mid-field"]}
+                labels={HUD.raceCard}
+                compact
+              />
+            </div>
+          </HudSpecimen>
+          <HudSpecimen
+            id="card-six-compact"
+            title="6 typists, compact"
+            caption="Compact, all lanes."
+          >
+            <div className="w-full max-w-[208px]">
+              <RaceCard
+                view={raceCardViewFixtures["six-mid-field"]}
+                labels={HUD.raceCard}
+                compact
+              />
+            </div>
+          </HudSpecimen>
+        </div>
+
+        <h3 className="type-label text-fg">Sabotage tray</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          <HudSpecimen id="tray-empty" title="Empty" caption="No card earned yet.">
+            <div className="max-w-[320px]">
+              <SabotageTray card={null} cooldownS={0} hint={null} labels={HUD.sabotageTray} />
+            </div>
+          </HudSpecimen>
+          {SABOTAGE_CARDS.map((card) => (
+            <HudSpecimen
+              key={card}
+              id={`tray-${card}`}
+              title={HUD.sabotageTray.cards[card].name}
+              caption="Earned and ready, with its play hint."
+            >
+              <div className="max-w-[320px]">
+                <SabotageTray
+                  card={card}
+                  cooldownS={0}
+                  hint="ENTER TO PLAY"
+                  labels={HUD.sabotageTray}
+                />
+              </div>
+            </HudSpecimen>
+          ))}
+          <HudSpecimen id="tray-cooling" title="Cooling" caption="No card; only the cooldown.">
+            <div className="max-w-[320px]">
+              <SabotageTray
+                card={null}
+                cooldownS={12}
+                hint="ENTER TO PLAY"
+                labels={HUD.sabotageTray}
+              />
+            </div>
+          </HudSpecimen>
+          <HudSpecimen
+            id="tray-held-cooling"
+            title="Held while cooling"
+            caption="The card waits out the cooldown; no hint."
+          >
+            <div className="max-w-[320px]">
+              <SabotageTray
+                card="exemption"
+                cooldownS={9}
+                hint="ENTER TO PLAY"
+                labels={HUD.sabotageTray}
+              />
+            </div>
+          </HudSpecimen>
+        </div>
+
+        <h3 className="type-label text-fg">Abandon</h3>
+        <div className="flex flex-wrap gap-8">
+          <HudSpecimen id="abandon-idle" title="Idle" caption="Always visible during a race.">
+            <AbandonSpecimen state="idle" labels={HUD.abandon} />
+          </HudSpecimen>
+          <HudSpecimen id="abandon-confirm" title="Confirm" caption="One more press to leave.">
+            <AbandonSpecimen state="confirm" labels={HUD.abandon} />
+          </HudSpecimen>
+          <HudSpecimen
+            id="abandon-disabled"
+            title="Disabled"
+            caption="Before GO and after finishing."
+          >
+            <AbandonSpecimen state="disabled" labels={HUD.abandon} />
+          </HudSpecimen>
+          <HudSpecimen
+            id="abandon-try"
+            title="Try it"
+            caption="Escape, ABANDON again or 5 seconds cancel the confirm."
+          >
+            <AbandonDemo labels={HUD.abandon} />
+          </HudSpecimen>
+        </div>
+
+        <h3 className="type-label text-fg">Notices</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          {RACE_NOTICES.map((kind) => (
+            <HudSpecimen
+              key={kind}
+              id={`notice-${kind}`}
+              title={kind}
+              caption="Pulses with lkPulse."
+            >
+              <RaceNotice kind={kind} labels={HUD.notice} />
+            </HudSpecimen>
+          ))}
+          <HudSpecimen
+            id="notice-reduced-motion"
+            title="Reduced motion"
+            caption="The row holds still."
+            reduce
+          >
+            <RaceNotice kind="reconnecting" labels={HUD.notice} />
+          </HudSpecimen>
+        </div>
+
+        <h3 className="type-label text-fg">Race stamps</h3>
+        {/* the slam starts at 2.2x: clip it to the specimen so it never scrolls the page sideways */}
+        <div
+          data-hud-state="stamps"
+          className="flex flex-wrap items-center gap-8 overflow-x-clip p-4"
+        >
+          <Stamp
+            role={null}
+            rotation="auto"
+            seed="go"
+            lines={[
+              <Fragment key="go">
+                <span lang="ru">НАЧАЛИ</span> · GO
+              </Fragment>,
+            ]}
+          />
+          <Stamp
+            role={null}
+            rotation="auto"
+            seed="overtake"
+            lines={[
+              <Fragment key="overtake">
+                <span lang="ru">ОБГОН!</span> · OVERTAKE +1
+              </Fragment>,
+            ]}
+          />
+          <Stamp
+            role={null}
+            tone="ink"
+            rotation="auto"
+            seed="passed-1"
+            lines={[
+              <Fragment key="passed">
+                <span lang="ru">ОБОГНАЛИ</span> · PASSED −1
+              </Fragment>,
+            ]}
+          />
+          <Stamp role={null} rotation="auto" seed="accepted-48" lines={["ACCEPTED · 48 WPM"]} />
         </div>
       </section>
     </main>

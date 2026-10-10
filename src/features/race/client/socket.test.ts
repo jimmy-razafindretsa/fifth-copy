@@ -98,6 +98,73 @@ describe("connectToRoom (C1)", () => {
   });
 });
 
+describe("resume key in the handshake (#561 C11)", () => {
+  const KEY = "a".repeat(32) + "_B-9";
+
+  it("puts the key in the handshake auth next to v and token, and nowhere else", () => {
+    const fake = makeFakeSocket();
+    const io = vi.fn(() => fake) as unknown as IoFactory & ReturnType<typeof vi.fn>;
+    connectToRoom("http://localhost:7561", "tok", { io, resumeKey: KEY });
+    expect(io).toHaveBeenCalledTimes(1);
+    const [url, opts] = io.mock.calls[0] as [string, Record<string, unknown>];
+    expect(opts).toEqual({
+      auth: { v: PROTOCOL_VERSION, token: "tok", resumeKey: KEY },
+      transports: ["websocket", "polling"],
+      autoConnect: true,
+    });
+    // not the URL, not a query: only the auth payload carries it
+    expect(url).toBe("http://localhost:7561");
+    expect(opts).not.toHaveProperty("query");
+    const { auth, ...rest } = opts;
+    expect(JSON.stringify(rest)).not.toContain(KEY);
+    expect(auth).toHaveProperty("resumeKey", KEY);
+  });
+
+  it.each([undefined, null, ""])("sends no resumeKey field when the key is %j", (resumeKey) => {
+    const fake = makeFakeSocket();
+    const io = vi.fn(() => fake) as unknown as IoFactory & ReturnType<typeof vi.fn>;
+    connectToRoom("http://x", "t", { io, resumeKey });
+    const [, opts] = io.mock.calls[0] as [string, { auth: Record<string, unknown> }];
+    expect(opts.auth).toEqual({ v: PROTOCOL_VERSION, token: "t" });
+  });
+});
+
+describe("per-listener off (#561 C3: bindRaceSocket unbinds through these)", () => {
+  it("each on* returns an off that removes its own listener and nothing else", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    const kept = vi.fn();
+    const dropped = vi.fn();
+    const offs = [
+      room.onWelcome(dropped),
+      room.onRoster(dropped),
+      room.onSettings(dropped),
+      room.onProtocolError(dropped),
+      room.onConnectError(dropped),
+      room.onReconnecting(dropped),
+      room.onReconnected(dropped),
+    ];
+    room.onWelcome(kept);
+    for (const off of offs) {
+      expect(typeof off).toBe("function");
+      off();
+      off(); // idempotent
+    }
+    fake.deliver("welcome", welcome);
+    fake.deliver("welcome", { ...welcome, you: 0 });
+    fake.deliver("roster", roster);
+    fake.deliver("connect_error", new Error("closed"));
+    fake.io.deliver("reconnect_attempt", 1);
+    fake.io.deliver("reconnect", 1);
+    expect(dropped).not.toHaveBeenCalled();
+    expect(kept).toHaveBeenCalledTimes(1);
+    expect([...fake.listeners.keys()]).toEqual(["welcome"]);
+    expect(fake.io.listeners.size).toBe(0);
+    room.close();
+    expect(fake.listeners.size).toBe(0);
+  });
+});
+
 describe("parsed events (C2)", () => {
   it("delivers only payloads that parse; invalid ones go to onProtocolError", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});

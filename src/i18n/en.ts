@@ -244,6 +244,67 @@ export const en = {
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
   },
+  race: {
+    kicker: { seat: "SEAT VIEW", desk: "SEAT VIEW · DESK {n}" },
+    telex: { strip: "Text to type" },
+    loading: "Taking your seat…",
+    notice: {
+      "waiting-for-host": "WAITING FOR THE HOST",
+      reconnecting: "LINE CUT · RECONNECTING",
+      "idle-warning": "THE MAJOR IS LOOKING AT YOU. TYPE.",
+      "no-scene": "NO PICTURE FROM THE ROOM · KEEP TYPING",
+      phones: "PHONES WATCH FROM THE BACK OF THE ROOM",
+    },
+    errors: {
+      prefix: "RETURNED ·",
+      closed: "This race is closed.",
+      noRoom: "This room is no longer open.",
+      inProgress: "This race started without you.",
+      notFound: "This race is not on file.",
+      generic: "Something jammed. Try again.",
+      back: "BACK TO THE WAITING ROOM →",
+    },
+    abandon: { abandon: "ABANDON", confirm: "CONFIRM · REASSIGN ME" },
+    nixie: {
+      wpm: "WPM",
+      place: "PLACE",
+      aria: "Words per minute {wpm}, place {place} of {total}",
+      ariaNoPlace: "Words per minute {wpm}, {total} typists, no place yet",
+    },
+    raceCard: {
+      title: "RACE CARD",
+      typists: "{n} TYPISTS",
+      field: "{n} typists on the line, you at {you}%",
+      lanes: "Lanes",
+      desk: "DESK {n}",
+      you: "YOU",
+      lane: "Place {rank}, {name}{you}, desk {desk}, {progress}% typed{status}",
+      status: {
+        "line-cut": "LINE CUT",
+        asleep: "ASLEEP AT DESK",
+        abandoned: "REASSIGNED",
+        finished: "FILED",
+      },
+    },
+    sabotageTray: {
+      title: "SABOTAGE TRAY",
+      empty: { title: "NO CARD", body: "Cards go to the typists behind the leader." },
+      cards: {
+        "extra-paperwork": {
+          name: "EXTRA PAPERWORK",
+          effect: "Adds words to the leader's text.",
+        },
+        exemption: { name: "EXEMPTION", effect: "Removes words from your remaining text." },
+        "smoke-break": {
+          name: "SMOKE BREAK",
+          effect: "Blurs the text of the typists ahead of you for a few seconds.",
+        },
+      },
+      play: "PLAY",
+      cooldown: "COOLDOWN",
+      seconds: "{n} S",
+    },
+  },
   settings: {
     avatar: {
       moderation: {

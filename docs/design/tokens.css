@@ -81,10 +81,16 @@
   --color-machine-metal: var(--brand-backroom-grey);
   --color-machine-muted: color-mix(in srgb, var(--brand-backroom-grey) 60%, var(--brand-press-ink));
 
-  /* devices: phosphor and nixie numerals on an ink bezel */
+  /* devices: phosphor and nixie numerals on an ink bezel; the nixie tube's inner glow and glass rim
+     (#560, bible 7.11) is the numeral colour at 35%: a device, the same in Night shift (3.2) */
   --color-device-phosphor: var(--brand-phosphor);
   --color-device-nixie: var(--brand-nixie);
   --color-device-bezel: var(--brand-press-ink);
+  --color-device-nixie-glow: color-mix(in srgb, var(--brand-nixie) 35%, transparent);
+
+  /* the race card's checkered finish (#560, bible 6, 7.4a): ink and paper of the theme, themed below */
+  --color-finish-ink: var(--t-finish-ink);
+  --color-finish-paper: var(--t-finish-paper);
 
   /* typography: six faces by role (art-direction 7); Tailwind's default families are removed.
      Stardos Stencil and Special Elite have no Cyrillic: their roles use the bare face (--face-*, set in
@@ -156,6 +162,8 @@
   --t-link: var(--brand-agit-red);
   --t-untyped: color-mix(in srgb, var(--brand-ribbon-violet) 85%, var(--brand-paper));
   --t-rival: var(--brand-ribbon-violet);
+  --t-finish-ink: var(--brand-press-ink);
+  --t-finish-paper: var(--brand-paper);
 }
 
 /* Night shift (bible 3.2): the two dark blocks stay identical (selectors fixed for #19). */
@@ -176,6 +184,8 @@
     --t-link: var(--brand-night-ink);
     --t-untyped: var(--brand-night-muted);
     --t-rival: color-mix(in srgb, var(--brand-ribbon-violet) 50%, var(--brand-night-ink));
+    --t-finish-ink: var(--brand-night-ink);
+    --t-finish-paper: var(--brand-night);
   }
 }
 
@@ -195,6 +205,8 @@
   --t-link: var(--brand-night-ink);
   --t-untyped: var(--brand-night-muted);
   --t-rival: color-mix(in srgb, var(--brand-ribbon-violet) 50%, var(--brand-night-ink));
+  --t-finish-ink: var(--brand-night-ink);
+  --t-finish-paper: var(--brand-night);
 }
 
 /*

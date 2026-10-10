@@ -185,6 +185,9 @@ describe("C4 new roles", () => {
     "machine-ink": BRAND["press-ink"],
     "machine-metal": BRAND["backroom-grey"],
     "machine-muted": "color-mix(in srgb, #6F736C 60%, #2A2420)",
+    // #560 the nixie tube's inner glow (bible 7.11): the nixie numeral colour at 35%, a device, so the same
+    // in both themes (3.2); never gold (reward is not a device role)
+    "device-nixie-glow": "color-mix(in srgb, #FF9A3C 35%, transparent)",
   };
 
   for (const t of Object.keys(THEMES) as ThemeName[]) {
@@ -195,6 +198,13 @@ describe("C4 new roles", () => {
       expect(role("untyped", t)).toBe(
         t === "light" ? norm("color-mix(in srgb, #3E3A78 85%, #F1E8D6)") : h(BRAND["night-muted"]),
       );
+      // #560 C8: the race card's checkered finish is ink and paper of the theme (bible 6, 7.4a)
+      expect(role("finish-ink", t)).toBe(
+        h(t === "light" ? BRAND["press-ink"] : BRAND["night-ink"]),
+      );
+      expect(role("finish-paper", t)).toBe(h(t === "light" ? BRAND.paper : BRAND.night));
+      expect(theme.get("--color-finish-ink")).toBe("var(--t-finish-ink)");
+      expect(theme.get("--color-finish-paper")).toBe("var(--t-finish-paper)");
       // #19 C11: rival is themed; Night shift lightens ribbon-violet with night-ink (marks reach 3:1)
       expect(role("rival", t)).toBe(t === "light" ? h(BRAND["ribbon-violet"]) : norm(RIVAL_NIGHT));
       expect(theme.get("--color-rival")).toBe("var(--t-rival)");
@@ -317,6 +327,8 @@ const PAIRS: Pair[] = [
   { fg: "focus", ground: "surface", kind: "ring" },
   { fg: "rival", ground: "bg", kind: "mark" },
   { fg: "rival", ground: "surface", kind: "mark" },
+  // #560: the checkered finish's two squares tell apart as marks in both themes
+  { fg: "finish-ink", ground: "finish-paper", kind: "mark" },
   // the toggle's gold dot lights only on the night ground (bible 14.1)
   { fg: "reward", ground: "bg", kind: "mark", darkOnly: true },
 ];

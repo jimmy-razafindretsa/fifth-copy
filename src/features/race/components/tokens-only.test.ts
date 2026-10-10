@@ -68,9 +68,10 @@ describe("typing surface modules use tokens only (#558 C8)", () => {
       }
     });
 
-    it(`${file}: the only literal durations are the bible 8 keyframe seconds (1.05s, 0.18s)`, () => {
+    it(`${file}: the only literal durations are the bible 8 keyframe seconds (1.05s, 0.18s, 1.3s)`, () => {
       const durations = [...css.matchAll(/(?<![\w.-])(\d*\.?\d+)(m?s)\b/g)].map((m) => m[0]);
-      for (const d of durations) expect(["1.05s", "0.18s"], d).toContain(d);
+      // fcCaret 1.05s, fcPop 0.18s (#558); lkPulse 1.3s, inside bible 8's 1.2-1.4s (#560 notice rows)
+      for (const d of durations) expect(["1.05s", "0.18s", "1.3s"], d).toContain(d);
       expect(css).not.toMatch(/transition(-duration)?\s*:[^;]*\d/);
     });
   }
@@ -93,5 +94,49 @@ describe("typing surface modules use tokens only (#558 C8)", () => {
     expect(tsx).not.toMatch(/#[0-9a-fA-F]{3,8}\b(?!-)/);
     expect(tsx).not.toMatch(/\b(color|background|fill|stroke|fontFamily|animation)\s*:/);
     expect(tsx).not.toContain("--brand-");
+  });
+});
+
+// Contract of #560 C8: the seat view HUD dockets (nixie counters, race card, Sabotage tray, Abandon, notices)
+// take every colour, face and duration from the tokens too (the per-module rules above run on them), and
+// the glow lives only in the nixie tubes (bible 0, 6 device glow).
+const HUD_MODULES = [
+  "hud-docket.module.css",
+  "nixie-counters.module.css",
+  "race-card.module.css",
+  "sabotage-tray.module.css",
+  "abandon-control.module.css",
+  "race-notice.module.css",
+];
+const HUD_COMPONENTS = [
+  "nixie-counters.tsx",
+  "race-card.tsx",
+  "sabotage-tray.tsx",
+  "abandon-control.tsx",
+  "race-notice.tsx",
+];
+
+describe("seat view HUD modules use tokens only (#560 C8)", () => {
+  it("covers the five HUD components and their shared docket", () => {
+    for (const f of HUD_MODULES) expect(MODULES, f).toContain(f);
+    for (const f of HUD_COMPONENTS) expect(COMPONENTS, f).toContain(f);
+  });
+
+  it("glow (a blurred shadow or a device glow role) appears only in the nixie tubes", () => {
+    for (const file of HUD_MODULES) {
+      const css = strip(read(file));
+      const blurred = [...css.matchAll(/(?:text|box)-shadow\s*:\s*([^;]+);/g)]
+        .map((m) => m[1]!)
+        .filter((v) => /\b0 0 [1-9]\d*px\b/.test(v) || /device-nixie-glow/.test(v));
+      if (file === "nixie-counters.module.css") expect(blurred.length, file).toBeGreaterThan(0);
+      else expect(blurred, file).toEqual([]);
+      if (file !== "nixie-counters.module.css") expect(css, file).not.toContain("--color-device-");
+    }
+  });
+
+  it("type comes from the roles: VT323 only through type-device, in the nixie counters", () => {
+    const others = [...HUD_MODULES, ...HUD_COMPONENTS].filter((f) => !f.startsWith("nixie-"));
+    for (const file of others) expect(strip(read(file)), file).not.toContain("type-device");
+    expect(read("nixie-counters.tsx")).toMatch(/["\s]type-device[\s"]/);
   });
 });

@@ -1,0 +1,123 @@
+/*
+ * Seat view HUD dockets (#560, design bible 7.4, 7.4a): the race card, the Sabotage tray and the race
+ * notice share the 7.4 docket: 2px ink rule, no radius, paper ground (themed, like the lobby dockets), a
+ * header row with the title as the ink tag (7.4 roll-row `YOU` tag recipe) and an optional mono value,
+ * rows on a `120px | 1fr` grid with dashed separators, and the notice row pulsing with `lkPulse` (8),
+ * still under reduced motion (the media query or any `data-motion="reduce"` ancestor).
+ */
+
+@reference "../../../app/globals.css";
+
+@keyframes lkPulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.docket {
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* header row: the title as the ink tag, the mono value right (bible 7.4) */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.tag {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.mono {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* rows: grid 120px | 1fr, dashed separators (bible 7.4) */
+.row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 12px;
+  padding: 8px 12px;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.label {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.value {
+  @apply type-typing;
+  font-size: 16px;
+  line-height: normal;
+}
+
+/* notice row (bible 7.4, #107): Oswald 600 11px .16em, dashed separator under it, lkPulse 1.3s */
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.notice:not(:last-child) {
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.pulse {
+  animation: lkPulse 1.3s ease-in-out infinite;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
+/* <html data-motion="reduce"> (tokens.css) or a scoped /design specimen: the pulse holds still */
+[data-motion="reduce"] .pulse {
+  animation: none;
+}

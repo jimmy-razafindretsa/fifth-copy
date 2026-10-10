@@ -51,6 +51,7 @@ Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured f
 | `sheet` | `paper` | same | the typed sheet rising out of the machine (bible 7.7a): a paper object, invariant like the tape | ground |
 | `machine-paper` / `machine-deck` / `machine-ink` / `machine-metal` / `machine-muted` | `paper` / `newsprint` / `press-ink` / `backroom-grey` / `color-mix(in srgb, #6F736C 60%, #2A2420)` | same | the machine-neutral family every machine skin maps its private colours from (bible 7.7a); the teleprinter: top panel and key legends, key deck and finger holes, caps / rules / slot / hubs / plate, reel flange / dial ring / key stems (decoration: 3.36 on the deck), disabled legends | legend `machine-ink` 12.58 \| 12.58; wrong-key legend `typing-error` 5.33 \| 5.33; muted `machine-deck` 5.38 \| 5.38 |
 | `device-phosphor` / `device-nixie` / `device-bezel` | `phosphor` / `nixie` / `press-ink` | same | device numerals and bezel | phosphor `device-bezel` 11.76 \| 11.76; nixie `device-bezel` 7.25 \| 7.25 |
+| `device-nixie-glow` | `color-mix(in srgb, #FF9A3C 35%, transparent)` | same | the nixie tube's glass rim and inner glow (bible 7.11, #560); only inside the tubes | decoration |
 | `room` | `backroom-grey` | same | room, steel | fill |
 | `band` / `band-fg` / `band-muted` | `press-ink` / `paper` / `night-muted` | same | ink bands (ticker, footer, live-feed frame) and their text (bible 7.10, 14.1) | fg `band` 12.58 \| 12.58; muted `band` 9.03 \| 9.03 |
 
@@ -67,6 +68,7 @@ Roles the palette does not name follow mapping (a) (human, 2026-10-04) on the Ni
 | `fg-muted` | `color-mix(in srgb, #2A2420 80%, #F1E8D6 20%)` | `#CFC6B3` | secondary text | `bg` 7.05 \| 6.73; `surface` 5.97 \| 5.58; `surface-muted` 5.35 \| 4.77; `danger-surface` 4.99 \| 5.60 |
 | `border` | `color-mix(in srgb, #2A2420 25%, transparent)` | `color-mix(in srgb, #F4ECDC 25%, transparent)` | hairlines | decorative (2px `fg` rules carry the edges) |
 | `surface-muted` | `color-mix(in srgb, #E4D6B8 94%, #2A2420 6%)` | `color-mix(in srgb, #4B453E 94%, #F4ECDC 6%)` | hover and info grounds | ground |
+| `finish-ink` / `finish-paper` | `#2A2420` / `#F1E8D6` | `#F4ECDC` / `#3E3934` | the race card's checkered finish: hard-edged squares of the theme's ink and paper (bible 6, 7.4a, #560) | mark `finish-paper` 12.58 \| 9.72 |
 
 ### Bible extensions
 Where the bible's value fails WCAG (bible 3.3: text 4.5:1; WCAG 1.4.11: marks 3:1), the nearest bible-palette value that passes (sRGB mix, WCAG 2.1 luminance):

@@ -2,9 +2,16 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as race from "@/features/race";
+import { hudLabelFixtures } from "../view/hud-labels";
+import { raceCardViewFixtures } from "../view/race-card-view";
 import { typedViewFixtures } from "../view/typed-view";
+import { AbandonControl } from "./abandon-control";
 import { machineSkinIds } from "./machine/skin";
 import { TypingMachine } from "./machine/typing-machine";
+import { NixieCounters } from "./nixie-counters";
+import { RaceCard } from "./race-card";
+import { RaceNotice } from "./race-notice";
+import { SabotageTray } from "./sabotage-tray";
 import { TelexStrip } from "./telex-strip";
 import { TypedSheet } from "./typed-sheet";
 
@@ -35,6 +42,9 @@ function sources(dir: string): string[] {
 const isTest = (file: string) => /\.test\.tsx?$/.test(file);
 const FILES = [
   path.join(root, "src/features/race/view/typed-view.ts"),
+  // #560 C10: the HUD's view model and copy are data too
+  path.join(root, "src/features/race/view/race-card-view.ts"),
+  path.join(root, "src/features/race/view/hud-labels.ts"),
   ...sources(components).filter((f) => !isTest(f)),
 ];
 
@@ -106,5 +116,37 @@ describe("typing surface imports (#558 C10)", () => {
       .filter((f) => deep.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(root, f));
     expect(hits).toEqual([]);
+  });
+
+  // Contract of #560 C10: the seat view HUD dockets are presentational too (ADR 0013: they take data,
+  // never the socket; ADR 0007: ranks, progress and WPM arrive as props).
+  it("#560 covers the five HUD components and their view model", () => {
+    const rel = FILES.map((f) => path.relative(components, f));
+    for (const f of [
+      "nixie-counters.tsx",
+      "race-card.tsx",
+      "sabotage-tray.tsx",
+      "abandon-control.tsx",
+      "race-notice.tsx",
+      "../view/race-card-view.ts",
+      "../view/hud-labels.ts",
+    ]) {
+      expect(rel, f).toContain(f);
+    }
+  });
+
+  it("#560 exports the HUD components, their view model and copy fixtures through the race index", () => {
+    expect(race.NixieCounters).toBe(NixieCounters);
+    expect(race.RaceCard).toBe(RaceCard);
+    expect(race.SabotageTray).toBe(SabotageTray);
+    expect(race.AbandonControl).toBe(AbandonControl);
+    expect(race.RaceNotice).toBe(RaceNotice);
+    expect(race.raceCardViewFixtures).toBe(raceCardViewFixtures);
+    expect(race.hudLabelFixtures).toBe(hudLabelFixtures);
+    const index = readFileSync(path.join(root, "src/features/race/index.ts"), "utf8");
+    expect(index).toMatch(
+      /export type \{[^}]*\bRaceCardView\b[^}]*\} from "\.\/view\/race-card-view"/,
+    );
+    expect(index).toMatch(/export type \{[^}]*\bHudLabels\b[^}]*\} from "\.\/view\/hud-labels"/);
   });
 });

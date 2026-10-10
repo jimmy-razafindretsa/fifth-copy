@@ -1,0 +1,235 @@
+/*
+ * Teleprinter skin (#558, design bible 7.7a): the owner's compact teleprinter (E4). Every part is sized in
+ * machine units: --_u is 1/620 of the machine's width, so the numbers below read as px at the full 620px
+ * and the machine shrinks whole on a narrow column (nothing overflows at 375). Key parts use --_k, the
+ * same unit unless a long layout needs a smaller pitch to fit the bed (at most 560 units wide).
+ * Colours are private --_ properties mapped from the invariant machine-* roles, the tape and the error red.
+ * Printed look (bible 6, 7.4, 17): 2px ink rules, a hard 6px offset under the deck, square keys with no
+ * radius anywhere. States come from attributes only, and none animates here (the press and the wrong-key
+ * motion are #224).
+ */
+
+@reference "../../../../../app/globals.css";
+
+.machine {
+  --_paper: var(--color-machine-paper);
+  --_deck: var(--color-machine-deck);
+  --_ink: var(--color-machine-ink);
+  --_metal: var(--color-machine-metal);
+  --_muted: var(--color-machine-muted);
+  --_tape: var(--color-tape);
+  --_error: var(--color-typing-error);
+  /* one machine unit; it resolves where it is used, against this container */
+  --_u: calc(100cqi / 620);
+  container-type: inline-size;
+  /* positioned, so the machine paints over the sheet that rises out of its slot */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(620px, 100%);
+  margin-inline: auto;
+}
+
+/* the top panel: paper, the slot at its top edge, the tape reel, the maker's plate, the dial */
+.panel {
+  position: relative;
+  box-sizing: border-box;
+  height: calc(64 * var(--_u));
+  background: var(--_paper);
+  border: 2px solid var(--_ink);
+}
+
+/* where the typed sheet comes up (no platen, no roller); it covers the top rule */
+.slot {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: calc(400 * var(--_u));
+  height: calc(8 * var(--_u));
+  translate: -50% 0;
+  background: var(--_ink);
+}
+
+.stub {
+  position: absolute;
+  top: calc(24 * var(--_u));
+  left: calc(68 * var(--_u));
+  box-sizing: border-box;
+  width: calc(60 * var(--_u));
+  height: calc(12 * var(--_u));
+  background: var(--_tape);
+  border: calc(1.5 * var(--_u)) solid var(--_ink);
+  border-left: 0;
+}
+
+.reel {
+  position: absolute;
+  top: calc(5 * var(--_u));
+  left: calc(20 * var(--_u));
+  width: calc(50 * var(--_u));
+  height: calc(50 * var(--_u));
+}
+
+.flange,
+.ring {
+  fill: var(--_metal);
+  stroke: var(--_ink);
+  stroke-width: 2;
+}
+
+.wound {
+  fill: var(--_tape);
+  stroke: var(--_ink);
+  stroke-width: 1.5;
+}
+
+.hub {
+  fill: var(--_ink);
+}
+
+.plate {
+  position: absolute;
+  top: calc(19 * var(--_u));
+  right: calc(84 * var(--_u));
+  font-size: calc(11 * var(--_u));
+  padding: calc(5 * var(--_u)) calc(12 * var(--_u));
+  white-space: nowrap;
+  background: var(--_ink);
+  color: var(--_tape);
+}
+
+.dial {
+  position: absolute;
+  top: calc(5 * var(--_u));
+  right: calc(18 * var(--_u));
+  width: calc(52 * var(--_u));
+  height: calc(52 * var(--_u));
+}
+
+.hole {
+  fill: var(--_deck);
+  stroke: var(--_ink);
+  stroke-width: 1.5;
+}
+
+.stop {
+  stroke: var(--_ink);
+  stroke-width: 3;
+  stroke-linecap: square;
+}
+
+/* the jam X at the printing point, under the slot; rendered only while jammed */
+.jam {
+  position: absolute;
+  top: calc(14 * var(--_u));
+  left: 50%;
+  width: calc(28 * var(--_u));
+  height: calc(28 * var(--_u));
+  translate: -50% 0;
+}
+
+.jam line {
+  stroke: var(--_error);
+  stroke-width: 4;
+  stroke-linecap: square;
+}
+
+/* the key deck: newsprint, a 2px ink rule shared with the panel, a hard 6px ink offset */
+.deck {
+  --_pitch: min(
+    calc(42 * var(--_u)),
+    calc(560 * var(--_u) / (var(--_cols) - 12 / 42 + 0.25 * (var(--_rows) - 1)))
+  );
+  --_k: calc(var(--_pitch) / 42);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(12 * var(--_k));
+  margin-top: -2px;
+  padding: calc(14 * var(--_u)) 0;
+  background: var(--_deck);
+  border: 2px solid var(--_ink);
+  box-shadow: 6px 6px 0 var(--_ink);
+}
+
+/* the bed tilts away from the typist, hinged at its near edge: the back rows recede */
+.bed {
+  display: flex;
+  flex-direction: column;
+  gap: calc(9 * var(--_k));
+  transform: perspective(calc(560 * var(--_u))) rotateX(22deg);
+  transform-origin: 50% 100%;
+}
+
+/* each row a quarter pitch right of the row behind it */
+.row {
+  display: flex;
+  gap: calc(12 * var(--_k));
+  padding-left: calc(var(--_row) * var(--_pitch) * 0.25);
+}
+
+/* square ink caps, paper legends in the label role, a metal stem offset under each cap */
+.key {
+  @apply type-label;
+  font-size: calc(12 * var(--_k));
+  line-height: 1;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(30 * var(--_k));
+  height: calc(28 * var(--_k));
+  /* the label role's tracking trails the glyph: indent by the same amount to keep it centred */
+  padding-left: 0.18em;
+  background: var(--_ink);
+  color: var(--_paper);
+  border: 2px solid var(--_ink);
+  box-shadow: 0 calc(3 * var(--_k)) 0 var(--_metal);
+}
+
+.space {
+  display: block;
+  box-sizing: border-box;
+  width: calc(300 * var(--_k));
+  height: calc(16 * var(--_k));
+  background: var(--_ink);
+  border: 2px solid var(--_ink);
+  box-shadow: 0 calc(3 * var(--_k)) 0 var(--_metal);
+}
+
+/* pressed: the cap one step down onto its stem */
+.key[data-pressed="true"],
+.space[data-pressed="true"] {
+  translate: 0 calc(2 * var(--_k));
+  box-shadow: 0 calc(1 * var(--_k)) 0 var(--_metal);
+}
+
+/* wrong: that one cap red with a paper legend (one cell, never the deck: bible 8) */
+.key[data-wrong="true"],
+.space[data-wrong="true"] {
+  background: var(--_error);
+  border-color: var(--_error);
+  color: var(--_paper);
+}
+
+/* disabled: a dashed metal outline with the deck showing through, a muted legend */
+.key[data-disabled="true"],
+.space[data-disabled="true"] {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--_metal);
+  color: var(--_muted);
+}
+
+/* Block-mode jam (spec 4.3): every key outline, the space bar and the slot lock red, with the X above;
+   caps and panel keep their colours (flash rule, bible 8). Declared last, so it wins over disabled. */
+[data-machine][data-jammed="true"] .key {
+  border-color: var(--_error);
+}
+
+[data-machine][data-jammed="true"] .space,
+[data-machine][data-jammed="true"] .slot {
+  background: var(--_error);
+  border-color: var(--_error);
+}

@@ -177,6 +177,14 @@ describe("C4 new roles", () => {
     "device-bezel": BRAND["press-ink"],
     room: BRAND["backroom-grey"],
     pressed: BRAND.banner,
+    // #558 typing surface (bible 7.7a): objects, the same in both themes like the tape; machine-* is the
+    // machine-neutral family every machine skin maps its private colours from
+    sheet: BRAND.paper,
+    "machine-paper": BRAND.paper,
+    "machine-deck": BRAND.newsprint,
+    "machine-ink": BRAND["press-ink"],
+    "machine-metal": BRAND["backroom-grey"],
+    "machine-muted": "color-mix(in srgb, #6F736C 60%, #2A2420)",
   };
 
   for (const t of Object.keys(THEMES) as ThemeName[]) {
@@ -291,6 +299,15 @@ const PAIRS: Pair[] = [
   text("typing-remaining", "tape"),
   text("typing-next", "typing-next-bg"),
   text("typing-error", "tape"),
+  // #558: the typed sheet (paper, both themes) and the machine skins (bible 7.7a): key legends on the caps,
+  // the maker's plate, disabled legends on the deck, the wrong-key legend on red
+  text("typing-done", "sheet"),
+  text("typing-error", "sheet"),
+  text("typing-remaining", "sheet"),
+  text("machine-paper", "machine-ink"),
+  text("tape", "machine-ink"),
+  text("machine-muted", "machine-deck"),
+  text("machine-paper", "typing-error"),
   text("band-fg", "band"),
   text("band-muted", "band"),
   text("reward", "band"),

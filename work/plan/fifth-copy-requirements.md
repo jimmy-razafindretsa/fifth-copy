@@ -53,7 +53,7 @@ Extracted 2026-10-02 by the `build-board` workflow from `docs/spec/fifth-copy-sp
 | R47 | functional | Raw WPM (including errors) is computed and stored for stats but not shown on the podium. |
 | R48 | functional | The host chooses the error mode (Continue or Block) per race. |
 | R49 | functional | Continue mode: a wrong letter is accepted, counted as an error, the cursor moves on, and the wrong character shows as a red strike / X overstrike. |
-| R50 | functional | Block mode: the cursor stays on the letter until the correct key is pressed, every wrong press is counted, and the typewriter jams (key bar locks red) until the correct key. |
+| R50 | functional | Block mode: the cursor stays on the letter until the correct key is pressed, every wrong press is counted, and the teleprinter jams (key outlines, the space bar and the paper slot lock red, with a red X at the printing point) until the correct key. |
 | R51 | functional | Backspace is allowed in both error modes by default. |
 | R52 | functional | The host can disable backspace for a race in Continue mode. |
 | R53 | functional | An "Abandon" button is always visible during a race. |
@@ -79,7 +79,7 @@ Extracted 2026-10-02 by the `build-board` workflow from `docs/spec/fifth-copy-sp
 | R73 | functional | Seat view is a first-person 3D POV from your desk: your red sleeves in the bottom corners, the Major in the centre, rivals across the room. |
 | R74 | functional | A telex strip at the top of the seat view shows the text to type, scrolling as you type. |
 | R75 | functional | A typewriter at the bottom of the seat view shows your typed sheet. |
-| R76 | functional | A detailed virtual keyboard (round keys with chrome rings, type-bar basket, spools, maker's plate) animates on each key press; wrong keys flash red. |
+| R76 | functional | Your typed sheet rises from the slot of a compact teleprinter (tape reel, maker's plate, rotary dial, a tilted deck of square keys and a space bar), one machine skin behind a stable interface with more skins later; it animates on each key press and wrong keys flash red. |
 | R77 | functional | Nixie counters at the top right show your live WPM and place in the format "04 / 30". |
 | R78 | functional | The race card shows a full-field line with one tick per player, your tick in red, and a checkered finish. |
 | R79 | functional | The race card shows lanes for all players when there are 8 or fewer; above 8 it shows the top 3 plus the 2 players just ahead of and behind you. |

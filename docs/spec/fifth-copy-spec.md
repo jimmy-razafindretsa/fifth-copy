@@ -126,7 +126,7 @@ Typed-text colour states: **done = ink**, **next character = red cell**, **remai
 | Mode | Behaviour | Visual |
 |---|---|---|
 | **Continue** | Wrong letters are accepted, counted as errors, cursor moves on | Wrong character struck through in red (X overstrike) |
-| **Block** | Cursor stays on the letter until the correct key is pressed. Every wrong press is counted | The typewriter **jams**: key bar locks red until the correct key |
+| **Block** | Cursor stays on the letter until the correct key is pressed. Every wrong press is counted | The teleprinter **jams**: key outlines, the space bar and the paper slot lock red, with a red X at the printing point, until the correct key |
 
 Backspace: allowed in both modes (host can disable it in Continue mode).
 
@@ -170,7 +170,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 ### 6.1 Seat view (POV, 3D)
 - First-person from your desk: your red sleeves bottom corners, the Major centre, rivals across the room.
 - **Telex strip** (top): the text to type, scrolling.
-- **Typewriter** (bottom): your typed sheet + a **detailed virtual keyboard** (round keys with chrome rings, type-bar basket, spools, maker's plate) that animates on each press; wrong keys flash red.
+- **Teleprinter** (bottom): your typed sheet rising from the slot of a **compact teleprinter** (tape reel, maker's plate, rotary dial, a tilted deck of square keys and a space bar) that animates on each press; wrong keys flash red. It is one machine skin behind a stable interface; more skins come later.
 - **Nixie counters** (top right): WPM and place `04 / 30`.
 
 ### 6.2 Race card: "where am I in the race"

@@ -84,7 +84,9 @@ describe("SabotageTray (#560 C4)", () => {
 
   it("the cooldown row pulses with lkPulse; no hint row without a hint", () => {
     const out = html(<SabotageTray card={null} cooldownS={5} hint={null} labels={EN} />);
-    expect(out).toMatch(/data-row="cooldown"[^>]*class="[^"]*pulse/);
+    // the seconds pulse; the muted label holds (a pulsing muted label would dip under 4.5:1)
+    expect(out).toMatch(/data-row="cooldown"[^>]*>[\s\S]*?<dd class="[^"]*_pulse_/);
+    expect(out).not.toMatch(/<dt class="[^"]*_pulse_/);
     const quiet = html(<SabotageTray card="smoke-break" cooldownS={0} hint={null} labels={EN} />);
     expect(rows(quiet)).toEqual([]);
   });

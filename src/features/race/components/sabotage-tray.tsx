@@ -16,8 +16,8 @@ export type SabotageTrayProps = {
 
 /**
  * The Sabotage tray (#560, design bible 7.4, 7.6, spec 10): a 7.4 docket headed `SABOTAGE TRAY` holding
- * the earned catch-up card as a 7.6 file card (name, effect), its play hint and a cooldown row pulsing
- * with `lkPulse`. Empty, it shows the 7.6 dashed empty slot; while cooling without a card, only the
+ * the earned catch-up card as a 7.6 file card (name, effect), its play hint and a cooldown row whose seconds
+ * pulse with `lkPulse`. Empty, it shows the 7.6 dashed empty slot; while cooling without a card, only the
  * cooldown row. It shows what the server awarded and decides nothing (#236 wires the play, ADR 0007).
  */
 export function SabotageTray({ card, cooldownS, hint, labels }: SabotageTrayProps) {
@@ -57,9 +57,11 @@ export function SabotageTray({ card, cooldownS, hint, labels }: SabotageTrayProp
       ) : null}
       {cooling ? (
         <dl className={styles.rows}>
-          <div data-row="cooldown" className={cn(docket.row, docket.pulse)}>
+          <div data-row="cooldown" className={docket.row}>
             <dt className={docket.label}>{labels.cooldown}</dt>
-            <dd className={docket.value}>{fill(labels.seconds, { n: seconds })}</dd>
+            <dd className={cn(docket.value, docket.pulse)}>
+              {fill(labels.seconds, { n: seconds })}
+            </dd>
           </div>
         </dl>
       ) : null}

@@ -48,7 +48,8 @@ describe("RaceNotice (#560 C6)", () => {
   });
 
   it("pulses with lkPulse 1.3s and holds still under reduced motion", () => {
-    expect(css).toMatch(/@keyframes lkPulse \{\s*50% \{\s*opacity: 0\.55;/);
+    // the dip keeps ink text at 4.5:1 (0.75: 6.02 on paper, 4.91 on the light danger-surface)
+    expect(css).toMatch(/@keyframes lkPulse \{\s*50% \{\s*opacity: 0\.75;/);
     expect(css).toMatch(/\.pulse \{\s*animation: lkPulse 1\.3s ease-in-out infinite;/);
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{\s*\.pulse \{\s*animation: none;/,

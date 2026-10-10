@@ -8,9 +8,11 @@
 
 @reference "../../../app/globals.css";
 
+/* the dip stays at 0.75 on text: ink keeps 4.5:1 at its lowest on paper (6.02), on night (6.26) and on the
+   idle warning's danger-surface (4.91 | 5.37); muted labels never pulse (bible 3.3, 7.4 notice row) */
 @keyframes lkPulse {
   50% {
-    opacity: 0.55;
+    opacity: 0.75;
   }
 }
 

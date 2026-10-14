@@ -265,9 +265,15 @@ test.describe("#561 seat view shell", () => {
     }
   });
 
-  test("C5 phones (<= 480 px) see only the notice and never take a desk", async ({ page }) => {
-    const code = await createLobby(page);
-    const lobbyId = await lobbyIdOf(code);
+  test("C5 phones (<= 480 px) see only the notice and never take a desk", async ({
+    page,
+    browser,
+  }) => {
+    // the room lives in the host's context: the page under test only ever visits /race, so every
+    // socket it opens would be the seat view's own
+    const room = await hostRoom(browser);
+    host = room.context;
+    const { lobbyId } = room;
     const sockets: string[] = [];
     page.on("websocket", (ws) => sockets.push(ws.url()));
     for (const width of [375, 480]) {

@@ -28,18 +28,24 @@ export type HostSettingsResult = HostSettingsAck | { ok: false; error: "timeout"
 /** How long `sendHostSettings` waits for the server's acknowledgement. */
 export const HOST_SETTINGS_TIMEOUT_MS = 5_000;
 
-/** The only way the web app talks to a race room; the raw socket is never exposed. */
+/** Removes the one listener an `on*` call registered; calling it again does nothing. */
+export type Off = () => void;
+
+/**
+ * The only way the web app talks to a race room; the raw socket is never exposed. Every `on*` returns
+ * its `Off`, so a binder can unbind exactly what it bound (#561 `bindRaceSocket`).
+ */
 export interface RoomSocket {
-  onWelcome(cb: (payload: RoomEvents["welcome"]) => void): void;
-  onRoster(cb: (payload: RoomEvents["roster"]) => void): void;
+  onWelcome(cb: (payload: RoomEvents["welcome"]) => void): Off;
+  onRoster(cb: (payload: RoomEvents["roster"]) => void): Off;
   /** The room's full settings after each host change. */
-  onSettings(cb: (payload: RoomEvents["settings"]) => void): void;
+  onSettings(cb: (payload: RoomEvents["settings"]) => void): Off;
   /** Host only: asks the server to apply `patch`; never rejects. */
   sendHostSettings(patch: RaceSettingsPatch): Promise<HostSettingsResult>;
-  onProtocolError(cb: (error: ProtocolError) => void): void;
-  onConnectError(cb: (reason: ConnectErrorReason) => void): void;
-  onReconnecting(cb: (attempt: number) => void): void;
-  onReconnected(cb: (attempt: number) => void): void;
+  onProtocolError(cb: (error: ProtocolError) => void): Off;
+  onConnectError(cb: (reason: ConnectErrorReason) => void): Off;
+  onReconnecting(cb: (attempt: number) => void): Off;
+  onReconnected(cb: (attempt: number) => void): Off;
   /** Removes every listener registered here and disconnects. */
   close(): void;
 }
@@ -56,32 +62,44 @@ type RawSocket = Emitter & {
   disconnect(): unknown;
 };
 
+/** The handshake `auth` payload (`handshakeAuthSchema` of the protocol). */
+export type HandshakeAuthPayload = { v: number; token: string; resumeKey?: string };
+
 export type IoFactory = (
   url: string,
-  opts: { auth: { v: number; token: string }; transports: string[]; autoConnect: boolean },
+  opts: { auth: HandshakeAuthPayload; transports: string[]; autoConnect: boolean },
 ) => RawSocket;
 
-export type ConnectOptions = { version?: number; io?: IoFactory };
+/**
+ * `resumeKey`: the desk's key from an earlier `welcome` (ARCHITECTURE 7.4); during a race only a
+ * handshake carrying it gets the line-cut desk back (#561 C11). Empty or absent sends none.
+ */
+export type ConnectOptions = { version?: number; io?: IoFactory; resumeKey?: string | null };
 
 export function connectToRoom(url: string, token: string, opts: ConnectOptions = {}): RoomSocket {
   const io = opts.io ?? (realIo as unknown as IoFactory);
-  // ADR 0009: the token travels in the handshake auth only, never in the URL.
-  const socket = io(url, {
-    auth: { v: opts.version ?? PROTOCOL_VERSION, token },
-    transports: ["websocket", "polling"],
-    autoConnect: true,
-  });
+  // ADR 0009: the token and the resume key travel in the handshake auth only, never in the URL or a query.
+  const auth: HandshakeAuthPayload = { v: opts.version ?? PROTOCOL_VERSION, token };
+  if (opts.resumeKey) auth.resumeKey = opts.resumeKey;
+  const socket = io(url, { auth, transports: ["websocket", "polling"], autoConnect: true });
 
   const registered: [Emitter, string, Listener][] = [];
   const protocolErrorListeners = new Set<(error: ProtocolError) => void>();
 
-  function listen(target: Emitter, event: string, fn: Listener) {
+  function listen(target: Emitter, event: string, fn: Listener): Off {
     target.on(event, fn);
-    registered.push([target, event, fn]);
+    const entry: [Emitter, string, Listener] = [target, event, fn];
+    registered.push(entry);
+    return () => {
+      const i = registered.indexOf(entry);
+      if (i < 0) return;
+      registered.splice(i, 1);
+      target.off(event, fn);
+    };
   }
 
-  function on<K extends keyof RoomEvents>(event: K, cb: (payload: RoomEvents[K]) => void) {
-    listen(socket, event, (raw: unknown) => {
+  function on<K extends keyof RoomEvents>(event: K, cb: (payload: RoomEvents[K]) => void): Off {
+    return listen(socket, event, (raw: unknown) => {
       const result = serverEvents[event].safeParse(raw);
       if (result.success) {
         cb(result.data as RoomEvents[K]);
@@ -126,7 +144,10 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     onSettings: (cb) => on("settings", cb),
     sendHostSettings,
     onProtocolError: (cb) => {
-      protocolErrorListeners.add(cb);
+      // a wrapper per call, so the same callback registered twice is removed once per off
+      const fn = (error: ProtocolError) => cb(error);
+      protocolErrorListeners.add(fn);
+      return () => void protocolErrorListeners.delete(fn);
     },
     onConnectError: (cb) =>
       listen(socket, "connect_error", (err: unknown) => {

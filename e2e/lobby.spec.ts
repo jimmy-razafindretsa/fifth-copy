@@ -1,11 +1,11 @@
-import type { Browser, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { createLobby, joinAsGuest } from "./race/helpers";
 
 // Contract of #107: the waiting room /lobby/[code] (bible 4, 7.3, 7.4, 7.10, 8), live over the race
 // server started by playwright.config.ts. next/font and CSS modules rename families and keyframes,
 // so both are matched by regex; colour roles are resolved to rgb through a probe element.
 
-const LOBBY_PATH = /^\/lobby\/([A-HJ-NP-Z]{3}-[0-9]{4})$/;
 const JWT = /eyJ[\w-]+\.[\w-]+\.[\w-]+/;
 
 /** Computed rgb of a colour role, e.g. `role(page, "--color-fg")`. */
@@ -29,26 +29,6 @@ const liveRegion = (page: Page) => page.locator('main [aria-live="polite"]');
 const typists = (page: Page) => page.locator("dt", { hasText: "TYPISTS" }).locator("+ dd");
 const isLobbyAction = (method: string, url: string, headers: Record<string, string>) =>
   method === "POST" && new URL(url).pathname.startsWith("/lobby/") && !!headers["next-action"];
-
-/** Creates a private race from the landing and returns its code. */
-async function createLobby(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
-  await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
-  return LOBBY_PATH.exec(new URL(page.url()).pathname)![1]!;
-}
-
-/** A different guest (fresh context) joins with the code from the landing. */
-async function joinAsGuest(browser: Browser, code: string) {
-  const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
-  const page = await context.newPage();
-  await page.goto("/");
-  const form = page.getByRole("form", { name: "Join with code" });
-  await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);
-  await form.getByRole("button", { name: "JOIN →", exact: true }).click();
-  await page.waitForURL(`**/lobby/${code}`);
-  return { context, page };
-}
 
 test.describe("lobby waiting room (#107)", () => {
   test("C1 C2 two guests see each other join and leave live", async ({ page, browser }) => {

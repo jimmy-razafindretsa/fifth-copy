@@ -1,0 +1,87 @@
+/*
+ * Seat view parts the layout does not own (#561): the kicker heading (bible 4 kicker), the connecting
+ * skeleton (bible 7.4 skeleton rows) and the lost line (bible 7.4 inline error line) with the way back
+ * (bible 7.1 secondary). Roles from docs/design/tokens.css only; type through the role utilities.
+ */
+
+@reference "../../../app/globals.css";
+
+/* red kicker on the page's only heading; the link role keeps it red on paper and night-ink on Night
+   shift (bible 3.3, 4) */
+.kicker {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+/* skeleton rows: flat newsprint blocks in the 7.4 row grid, no shimmer, no gradient (bible 6) */
+.skeleton {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.block {
+  display: block;
+  height: 14px;
+  background: var(--color-surface);
+}
+
+.blockWide {
+  width: min(160px, 100%);
+}
+
+/* the lost line: one docket row (bible 7.4, #99), red text role, never echoing anything typed */
+.lost {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.errorLine {
+  margin: 0;
+  max-width: 100%;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+  text-wrap: pretty;
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* the way back: the 7.1 secondary label button as a link, 44px tall (bible 18 touch targets) */
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 2px solid var(--color-fg);
+  color: var(--color-fg);
+  text-decoration: none;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.back:hover {
+  background: var(--color-surface);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

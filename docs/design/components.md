@@ -191,6 +191,14 @@ Design bible 7.1 (Abandon), 7.4 (HUD dockets, Sabotage tray, notice row), 7.4a (
 | `RaceNotice` | `kind`, `labels` | a one-row docket `<p role="status">` (7.4 notice row) | `lkPulse` 1.3s dipping to 0.75, still under reduce; `idle-warning` = `data-tone="urgent"` on `danger-surface` |
 Shared: `hud-docket.module.css` (docket, header, tag, mono, rows, notice row, `lkPulse` with both reduce blocks in the descendant form).
 
+## Seat view (race feature, `/race/[raceId]`)
+Design bible 14.3 "Race seat view" (#561). `RaceSeat` (exported through `src/features/race/index.ts`) composes the typing surface and the HUD dockets above in their before-start state inside `RaceStoreProvider` (the one race store, `useRaceStore`); the route passes the seat (`getRaceSeat`), the `race` catalog and the lobby's `mintRaceToken`. Tests: `src/features/race/seat/race-seat.test.tsx`, `src/features/race/client/*.test.ts`, `e2e/race/seat-shell.spec.ts`.
+| Component | Props | Renders | Notes |
+|---|---|---|---|
+| `SeatLayout` | one slot per part (`kicker`, `nixie`, `telex`, `raceCard`, `status`, `sheet`, `machine`, `tray`, `abandon`) and the `phones` string | `[data-seat][data-backdrop="paper"]` (flat themed paper) holding the `[data-hud]` grid and the phones-only notice `[data-phones]` | presentational; >= 1024px gutters `clamp(208px,22vw,300px)` beside the typing surface, 481-1023px the card and the tray share a row above it, <= 480px only the notice; the typing surface is `min(620px,100%)` at the bottom |
+| `RaceSeatLive` (client leaf) | `code`, `lobbyId`, `mint`, `labels` | the status slot: skeleton rows (connecting), `RaceNotice` (waiting, reconnecting), the 7.4 error line plus a 7.1 secondary link back to `/lobby/[code]` (lost) | runs `connectSeat` (mint, lazy socket chunk, stored resume key, `bindRaceSocket`); never connects at phone width; `RaceSeatLiveView` renders one phase without hooks |
+| `SeatKicker`, `SeatNixie`, `SeatRaceCard`, `SeatAbandon` (client leaves) | `labels` | the h1 kicker (`SEAT VIEW · DESK 05` after the welcome), `NixieCounters` (`00 / n` seated), `RaceCard` (a tick per seated typist at the start, no lanes), `AbandonControl` disabled | read the store with `useRaceStore`; ranks, WPM and lanes arrive with #559, #564, Abandon with #233 |
+
 ## Screen states checklist (every `ui` card)
 empty (`EmptyState`), loading (`Skeleton`/`Spinner` inside an `aria-busy` region), error (`Alert tone="error"`), populated. Mobile, tablet, desktop. Light and dark.
 

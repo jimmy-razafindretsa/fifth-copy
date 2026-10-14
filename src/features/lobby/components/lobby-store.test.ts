@@ -49,15 +49,20 @@ function run(...events: LobbyEvent[]) {
 /** A fake `RoomSocket`: collects the callbacks the store binds, so a test can fire them. */
 function fakeSocket() {
   const cbs: Partial<Record<string, (arg: never) => void>> = {};
+  // each on* returns its off (#561); the lobby never unbinds one listener, it closes the socket
+  const bind = (name: string) => (cb: unknown) => {
+    cbs[name] = cb as never;
+    return () => {};
+  };
   const socket: RoomSocket = {
-    onWelcome: (cb) => void (cbs.welcome = cb as never),
-    onRoster: (cb) => void (cbs.roster = cb as never),
-    onSettings: (cb) => void (cbs.settings = cb as never),
+    onWelcome: bind("welcome"),
+    onRoster: bind("roster"),
+    onSettings: bind("settings"),
     sendHostSettings: vi.fn(),
-    onProtocolError: (cb) => void (cbs.protocolError = cb as never),
-    onConnectError: (cb) => void (cbs.connectError = cb as never),
-    onReconnecting: (cb) => void (cbs.reconnecting = cb as never),
-    onReconnected: (cb) => void (cbs.reconnected = cb as never),
+    onProtocolError: bind("protocolError"),
+    onConnectError: bind("connectError"),
+    onReconnecting: bind("reconnecting"),
+    onReconnected: bind("reconnected"),
     close: vi.fn(),
   };
   const fire = (name: string, arg: unknown) => cbs[name]?.(arg as never);

@@ -23,7 +23,7 @@ export async function LobbyScreen({ code }: { code: string }) {
       <h1 id="lobby-heading" className={styles.heading}>
         {t.lobby.heading}
       </h1>
-      <LobbyLive code={lobby.code} labels={t.lobby} errors={t.landing.errors} />
+      <LobbyLive code={lobby.code} lobbyId={lobby.id} labels={t.lobby} errors={t.landing.errors} />
     </section>
   );
 }

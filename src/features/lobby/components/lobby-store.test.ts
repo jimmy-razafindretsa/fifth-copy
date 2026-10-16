@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
   deskIdentity,
@@ -49,16 +49,21 @@ function run(...events: LobbyEvent[]) {
 /** A fake `RoomSocket`: collects the callbacks the store binds, so a test can fire them. */
 function fakeSocket() {
   const cbs: Partial<Record<string, (arg: never) => void>> = {};
-  // each on* returns its off (#561); the lobby never unbinds one listener, it closes the socket
+  // each on* returns its off (#561); the lobby unbinds them all before it parks the socket (#214)
+  const offs: Record<string, Mock<() => void>> = {};
   const bind = (name: string) => (cb: unknown) => {
     cbs[name] = cb as never;
-    return () => {};
+    const off = vi.fn<() => void>();
+    offs[name] = off;
+    return off;
   };
   const socket: RoomSocket = {
     onWelcome: bind("welcome"),
     onRoster: bind("roster"),
     onSettings: bind("settings"),
     sendHostSettings: vi.fn(),
+    onCountdown: bind("countdown"),
+    sendHostStart: vi.fn(),
     onProtocolError: bind("protocolError"),
     onConnectError: bind("connectError"),
     onReconnecting: bind("reconnecting"),
@@ -66,17 +71,29 @@ function fakeSocket() {
     close: vi.fn(),
   };
   const fire = (name: string, arg: unknown) => cbs[name]?.(arg as never);
-  return { socket, cbs, fire };
+  return { socket, cbs, fire, offs };
 }
 
 describe("reduceLobby", () => {
   it("starts loading with no members", () => {
-    expect(initialLobbyState).toEqual({ phase: "loading", error: null, you: null, members: [] });
+    expect(initialLobbyState).toEqual({
+      phase: "loading",
+      error: null,
+      you: null,
+      members: [],
+      raceId: null,
+    });
   });
 
   it("welcome sets the viewer's desk and sorts members by desk", () => {
     const state = run({ type: "welcome", payload: welcome(2, [cyd, bob, ada]) });
-    expect(state).toEqual({ phase: "live", error: null, you: 2, members: [ada, bob, cyd] });
+    expect(state).toEqual({
+      phase: "live",
+      error: null,
+      you: 2,
+      members: [ada, bob, cyd],
+      raceId: null,
+    });
   });
 
   it("roster replaces the list and keeps the viewer's desk", () => {
@@ -138,9 +155,9 @@ describe("bindRoomSocket", () => {
   it("subscribes the socket's events and dispatches them as lobby events", () => {
     const { socket, cbs, fire } = fakeSocket();
     const dispatch = vi.fn();
-    bindRoomSocket(socket, dispatch, fakeReload().deps);
+    bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps });
     expect(Object.keys(cbs).sort()).toEqual(
-      ["connectError", "reconnected", "reconnecting", "roster", "welcome"].sort(),
+      ["connectError", "countdown", "reconnected", "reconnecting", "roster", "welcome"].sort(),
     );
 
     const w = welcome(1, [ada]);
@@ -161,10 +178,18 @@ describe("bindRoomSocket", () => {
   it("feeds a reducer end to end", () => {
     const { socket, fire } = fakeSocket();
     let state = initialLobbyState;
-    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), fakeReload().deps);
+    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), {
+      versionReload: fakeReload().deps,
+    });
     fire("welcome", welcome(2, [bob]));
     fire("roster", { v: PROTOCOL_VERSION, members: [bob, ada] });
-    expect(state).toEqual({ phase: "live", error: null, you: 2, members: [ada, bob] });
+    expect(state).toEqual({
+      phase: "live",
+      error: null,
+      you: 2,
+      members: [ada, bob],
+      raceId: null,
+    });
   });
 });
 
@@ -189,7 +214,9 @@ describe("bindRoomSocket version skew", () => {
     const { socket, fire } = fakeSocket();
     const fake = fakeReload(initial);
     let state = initialLobbyState;
-    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), fake.deps);
+    bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), {
+      versionReload: fake.deps,
+    });
     return { fire, ...fake, state: () => state };
   }
 
@@ -222,8 +249,7 @@ describe("bindRoomSocket version skew", () => {
     const reload = vi.fn();
     let state = initialLobbyState;
     bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), {
-      reload,
-      storage: null,
+      versionReload: { reload, storage: null },
     });
     fire("connectError", "version" satisfies ConnectErrorReason);
     expect(reload).not.toHaveBeenCalled();
@@ -241,5 +267,98 @@ describe("bindRoomSocket version skew", () => {
     expect(reload).not.toHaveBeenCalled();
     expect(store.size).toBe(0);
     expect(state()).toMatchObject({ phase, error });
+  });
+});
+
+// Contract of #214 C2 (the waiting-room side): the store handles `countdown` (one case: phase
+// `starting`, keeping `raceId`, from which `LobbyLive` navigates to `/race/<raceId>`), and
+// `bindRoomSocket(socket, dispatch, { lobbyId })` stores every `welcome.resumeKey` with the race
+// feature's `storeResumeKey` (#561), injected from the lazily loaded race module (card 536: no static
+// value import of `@/features/race` in the lobby's first load).
+describe("countdown and the resume key (#214 C2)", () => {
+  const LOBBY = "cmuvut8r2000106r7wf01vr30";
+  const KEY = "k".repeat(40);
+  const RACE_ID = "3b241101-e2bb-4255-8caf-4136c566a962";
+  const countdown: RoomEvents["countdown"] = {
+    v: PROTOCOL_VERSION,
+    race: {
+      raceId: RACE_ID,
+      text: "Type fast. Type first.",
+      language: "en",
+      wordCount: 4,
+      t0: 1_767_225_603_000,
+      timerS: DEFAULT_RACE_SETTINGS.timerS,
+    },
+  };
+
+  it("countdown: phase starting with the race id; the roll is kept", () => {
+    const state = run(
+      { type: "welcome", payload: welcome(1, [ada, bob]) },
+      { type: "countdown", payload: countdown },
+    );
+    expect(state).toEqual({
+      phase: "starting",
+      error: null,
+      you: 1,
+      members: [ada, bob],
+      raceId: RACE_ID,
+    });
+    // a roster while the page moves keeps it starting
+    const later = reduceLobby(state, {
+      type: "roster",
+      payload: { v: PROTOCOL_VERSION, members: [ada] },
+    });
+    expect(later).toMatchObject({ phase: "starting", raceId: RACE_ID, members: [ada] });
+  });
+
+  it("an error stays terminal: a countdown never revives it", () => {
+    const error = run({ type: "token-error", error: "closed" });
+    expect(reduceLobby(error, { type: "countdown", payload: countdown })).toBe(error);
+  });
+
+  it("binds countdown and dispatches it", () => {
+    const { socket, fire } = fakeSocket();
+    const dispatch = vi.fn();
+    bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps });
+    fire("countdown", countdown);
+    expect(dispatch).toHaveBeenCalledWith({ type: "countdown", payload: countdown });
+  });
+
+  it("stores welcome.resumeKey under the lobby on every welcome", () => {
+    const { socket, fire } = fakeSocket();
+    const storeResumeKey = vi.fn();
+    bindRoomSocket(socket, vi.fn(), {
+      lobbyId: LOBBY,
+      storeResumeKey,
+      versionReload: fakeReload().deps,
+    });
+    fire("welcome", { ...welcome(1, [ada]), resumeKey: KEY });
+    fire("welcome", { ...welcome(1, [ada]), resumeKey: "j".repeat(40) });
+    expect(storeResumeKey.mock.calls).toEqual([
+      [LOBBY, KEY],
+      [LOBBY, "j".repeat(40)],
+    ]);
+    // a welcome without a key stores nothing
+    fire("welcome", welcome(1, [ada]));
+    expect(storeResumeKey).toHaveBeenCalledTimes(2);
+  });
+
+  it("without a lobby id nothing is stored", () => {
+    const { socket, fire } = fakeSocket();
+    const storeResumeKey = vi.fn();
+    bindRoomSocket(socket, vi.fn(), { storeResumeKey, versionReload: fakeReload().deps });
+    fire("welcome", { ...welcome(1, [ada]), resumeKey: KEY });
+    expect(storeResumeKey).not.toHaveBeenCalled();
+  });
+
+  it("returns an unbind that offs every listener it bound", () => {
+    const { socket, offs } = fakeSocket();
+    const unbind = bindRoomSocket(socket, vi.fn(), { versionReload: fakeReload().deps });
+    unbind();
+    unbind();
+    expect(Object.keys(offs).sort()).toEqual(
+      ["connectError", "countdown", "reconnected", "reconnecting", "roster", "welcome"].sort(),
+    );
+    for (const off of Object.values(offs)) expect(off).toHaveBeenCalledTimes(1);
   });
 });

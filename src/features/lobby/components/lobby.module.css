@@ -58,9 +58,17 @@
   background: var(--color-surface);
 }
 
+/* the roll and, for the host, START under it (#214) */
+.side {
+  flex: 2 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 /* the roll: the same docket on paper, so skeleton blocks can be newsprint */
 .roll {
-  flex: 2 1 320px;
   min-width: 0;
   border: 2px solid var(--color-fg);
   border-radius: 0;
@@ -182,6 +190,33 @@
 
 .error {
   padding: 12px;
+}
+
+/* the host's START (#214): the bible 7.1 primary stamp button, its reason line and its 7.4 error line
+   under it, left-aligned under the roll (#498 moves it into the full lobby layout) */
+.start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* not startable yet: the Button primitive's disabled recipe (half strength, no press); while the start
+   is on its way (aria-busy) it keeps full strength, as the landing's pending stamp buttons do */
+.startButton:disabled:not([aria-busy="true"]) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* why it waits: a 7.4 label line (Oswald 600 11px .16em), muted ink */
+.startNote {
+  margin: 0;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
 }
 
 .srOnly {

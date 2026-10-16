@@ -5,6 +5,7 @@ import {
   DEFAULT_RACE_SETTINGS,
   PROTOCOL_VERSION,
   roomCodeSchema,
+  type Countdown,
   type Member,
   type Roster,
   type Welcome,
@@ -384,7 +385,7 @@ describe("countdown and GO (#214 C1)", () => {
     timerS: DEFAULT_RACE_SETTINGS.timerS,
   };
   const code = roomCodeSchema.parse("KGB-4821");
-  const countdown = (race = RACE) => ({ v: PROTOCOL_VERSION, race });
+  const countdown = (race = RACE): Countdown => ({ v: PROTOCOL_VERSION, race });
 
   describe("reduceRace", () => {
     it("waiting -> countdown: stores the race and the room's phase, keeps the rest", () => {

@@ -243,10 +243,24 @@ export const en = {
     you: "YOU",
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
+    /** The host's START (#214, bible 7.1 primary; its layout moves with #498) and its 7.4 lines. */
+    start: {
+      button: "START",
+      pending: "STARTING…",
+      needTwo: "TWO TYPISTS NEEDED",
+      errors: {
+        "too-few": "Two typists are needed to start the race.",
+        "not-waiting": "This race has already started.",
+        "start-failed": "The race could not start. Try again.",
+        timeout: "The room did not answer. Try again.",
+      },
+    },
   },
   race: {
     kicker: { seat: "SEAT VIEW", desk: "SEAT VIEW · DESK {n}" },
     telex: { strip: "Text to type" },
+    /** The 3-2-1 countdown and the Major's dual stamp `НАЧАЛИ · GO` (#214, bible 2, 7.3). */
+    countdown: { major: "НАЧАЛИ", go: "GO" },
     loading: "Taking your seat…",
     notice: {
       "waiting-for-host": "WAITING FOR THE HOST",

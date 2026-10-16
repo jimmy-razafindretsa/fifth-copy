@@ -5,8 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { deskIdentity, type Member } from "@fifth-copy/protocol";
 import { en } from "@/i18n/en";
+import { fr } from "@/i18n/fr";
 import { deskLabel, fill, playersLabel } from "./lobby-labels";
-import { LobbyLiveView } from "./lobby-live";
+import { LobbyLiveView, type StartState } from "./lobby-live";
 import { initialLobbyState, type LobbyState } from "./lobby-store";
 import { PlayerList } from "./player-list";
 
@@ -29,6 +30,7 @@ const live = (members: Member[], you = 1): LobbyState => ({
   error: null,
   you,
   members,
+  raceId: null,
 });
 const view = (state: LobbyState) =>
   renderToStaticMarkup(<LobbyLiveView code={CODE} state={state} labels={labels} errors={errors} />);
@@ -109,6 +111,113 @@ describe("LobbyLiveView states", () => {
     expect(html).toMatch(/role="status"/);
     expect(html.indexOf(labels.reconnecting)).toBeLessThan(html.indexOf("<ul"));
     expect(rows(html)).toBe(2);
+  });
+});
+
+// Contract of #214 C8: the host's START (bible 7.1 primary stamp button) under the roll. Only the host
+// sees it; it is disabled with the line TWO TYPISTS NEEDED below two seated typists and enabled from
+// two; each refusal of the ack renders as a 7.4 inline error line under it, and `not-host` hides it.
+describe("START (#214 C8)", () => {
+  const idle: StartState = { pending: false, error: null, hidden: false };
+  const startView = (state: LobbyState, start: StartState = idle, l = labels) =>
+    renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={state}
+        labels={l}
+        errors={errors}
+        start={start}
+        onStart={() => {}}
+      />,
+    );
+  const button = (html: string) => /<button[^>]*>[^<]*<\/button>/.exec(html)?.[0] ?? null;
+  const host = member(1, true);
+  const guest = member(2);
+
+  it("the host alone: START disabled, the TWO TYPISTS NEEDED line describes it", () => {
+    const html = startView(live([host], 1));
+    const b = button(html)!;
+    expect(b).toContain(`>${labels.start.button}<`);
+    expect(b).toContain('disabled=""');
+    expect(b).toContain('type="button"');
+    expect(html).toContain(labels.start.needTwo);
+    expect(labels.start.needTwo).toBe("TWO TYPISTS NEEDED");
+    const describedBy = /aria-describedby="([^"]+)"/.exec(b)![1]!;
+    expect(html).toMatch(new RegExp(`id="${describedBy}"[^>]*>${labels.start.needTwo}<`));
+  });
+
+  it("the host with two seated: START enabled, no line", () => {
+    const html = startView(live([host, guest], 1));
+    const b = button(html)!;
+    expect(b).not.toContain("disabled");
+    expect(b).not.toContain("aria-busy");
+    expect(html).not.toContain(labels.start.needTwo);
+  });
+
+  it("bots count as seated typists", () => {
+    const html = startView(live([host, { ...member(2), isBot: true }], 1));
+    expect(button(html)).not.toContain("disabled");
+  });
+
+  it("a guest sees no START", () => {
+    expect(button(startView(live([host, guest], 2)))).toBeNull();
+    expect(startView(live([host, guest], 2))).not.toContain(labels.start.needTwo);
+  });
+
+  it("no START before the welcome, on an error or while reconnecting", () => {
+    expect(button(startView(initialLobbyState))).toBeNull();
+    expect(
+      button(startView({ ...initialLobbyState, phase: "error", error: "generic" })),
+    ).toBeNull();
+    expect(button(startView({ ...live([host, guest], 1), phase: "reconnecting" }))).toBeNull();
+  });
+
+  it("pending: STARTING…, disabled and busy; the starting phase keeps it so", () => {
+    for (const html of [
+      startView(live([host, guest], 1), { ...idle, pending: true }),
+      startView({ ...live([host, guest], 1), phase: "starting", raceId: "r" }),
+    ]) {
+      const b = button(html)!;
+      expect(b).toContain(`>${labels.start.pending}<`);
+      expect(b).toContain('disabled=""');
+      expect(b).toContain('aria-busy="true"');
+    }
+  });
+
+  it.each(["too-few", "not-waiting", "start-failed", "timeout"] as const)(
+    "the %s ack: a 7.4 inline line under the button",
+    (error) => {
+      const html = startView(live([host, guest], 1), { ...idle, error });
+      const line = new RegExp(
+        `<p id="([^"]+)" role="alert"[^>]*><span[^>]*>${errors.prefix}</span> ${labels.start.errors[error].replace(".", "\\.")}</p>`,
+      );
+      expect(html).toMatch(line);
+      expect(html.indexOf("<button")).toBeLessThan(html.search(line));
+      const b = button(html)!;
+      expect(b).toContain(`aria-describedby="${line.exec(html)![1]}"`);
+    },
+  );
+
+  it("the not-host ack hides it", () => {
+    const html = startView(live([host, guest], 1), { ...idle, hidden: true });
+    expect(button(html)).toBeNull();
+  });
+
+  it("French: DÉMARRER and IL FAUT DEUX DACTYLOS, nothing English", () => {
+    const html = startView(live([member(1, true)], 1), idle, fr.lobby);
+    expect(button(html)).toContain(">DÉMARRER<");
+    expect(html).toContain("IL FAUT DEUX DACTYLOS");
+    expect(html).not.toContain("START<");
+    expect(html).not.toContain("TWO TYPISTS");
+  });
+
+  it("the catalogs carry every lobby.start string in both languages", () => {
+    expect(Object.keys(fr.lobby.start.errors).sort()).toEqual(
+      Object.keys(en.lobby.start.errors).sort(),
+    );
+    expect(Object.keys(en.lobby.start.errors).sort()).toEqual(
+      ["not-waiting", "start-failed", "timeout", "too-few"].sort(),
+    );
   });
 });
 

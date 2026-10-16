@@ -245,10 +245,22 @@ export const fr = {
     you: "TOI",
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",
+    start: {
+      button: "DÉMARRER",
+      pending: "DÉMARRAGE…",
+      needTwo: "IL FAUT DEUX DACTYLOS",
+      errors: {
+        "too-few": "Il faut deux dactylos pour démarrer la course.",
+        "not-waiting": "Cette course est déjà commencée.",
+        "start-failed": "La course n'a pas pu démarrer. Réessaie.",
+        timeout: "La salle n'a pas répondu. Réessaie.",
+      },
+    },
   },
   race: {
     kicker: { seat: "VUE DE TA PLACE", desk: "VUE DE TA PLACE · BUREAU {n}" },
     telex: { strip: "Texte à taper" },
+    countdown: { major: "НАЧАЛИ", go: "PARTEZ" },
     loading: "On t'installe à ton bureau…",
     notice: {
       "waiting-for-host": "EN ATTENTE DE L'HÔTE",

@@ -2,6 +2,7 @@ export { connectToRoom } from "./client/socket";
 export type {
   ConnectErrorReason,
   HostSettingsResult,
+  HostStartResult,
   Off,
   ProtocolError,
   RoomEvents,
@@ -25,6 +26,8 @@ export type {
 } from "./client/store";
 export { RaceStoreProvider, useRaceStore } from "./client/use-race-store";
 export { readResumeKey, storeResumeKey, clearResumeKey } from "./client/resume-key";
+/** The waiting room -> seat view handover (#214): the lobby parks its socket; `connectSeat` closes it. */
+export { parkSocket } from "./client/handoff";
 /** The typing surface (#558, ADR 0013): pure components that render a TypedView (derived in #559) and the
  * typing machine behind its skin seam (bible 7.7a). */
 export { TelexStrip, type TelexLabels } from "./components/telex-strip";

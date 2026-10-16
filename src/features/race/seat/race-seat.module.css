@@ -17,6 +17,11 @@
   color: var(--color-link);
 }
 
+/* the live leaf's root only carries data-phase (#214): its parts lay out in the status slot itself */
+.live {
+  display: contents;
+}
+
 /* skeleton rows: flat newsprint blocks in the 7.4 row grid, no shimmer, no gradient (bible 6) */
 .skeleton {
   list-style: none;

@@ -5,6 +5,7 @@ import {
   rejectReasonSchema,
   serverEvents,
   type HostSettingsAck,
+  type HostStartAck,
   type RaceSettingsPatch,
   type RejectReason,
 } from "@fifth-copy/protocol";
@@ -28,6 +29,12 @@ export type HostSettingsResult = HostSettingsAck | { ok: false; error: "timeout"
 /** How long `sendHostSettings` waits for the server's acknowledgement. */
 export const HOST_SETTINGS_TIMEOUT_MS = 5_000;
 
+/** The ack of `host:start` (`{ ok: true, raceId }` or a refusal), or `timeout` (#214 C7). */
+export type HostStartResult = HostStartAck | { ok: false; error: "timeout" };
+
+/** How long `sendHostStart` waits for the server's acknowledgement. */
+export const HOST_START_TIMEOUT_MS = 5_000;
+
 /** Removes the one listener an `on*` call registered; calling it again does nothing. */
 export type Off = () => void;
 
@@ -42,6 +49,10 @@ export interface RoomSocket {
   onSettings(cb: (payload: RoomEvents["settings"]) => void): Off;
   /** Host only: asks the server to apply `patch`; never rejects. */
   sendHostSettings(patch: RaceSettingsPatch): Promise<HostSettingsResult>;
+  /** The host pressed START: the race and its GO instant (`race.t0`, server clock). */
+  onCountdown(cb: (payload: RoomEvents["countdown"]) => void): Off;
+  /** Host only: asks the server to start the race (#214); never rejects. */
+  sendHostStart(): Promise<HostStartResult>;
   onProtocolError(cb: (error: ProtocolError) => void): Off;
   onConnectError(cb: (reason: ConnectErrorReason) => void): Off;
   onReconnecting(cb: (attempt: number) => void): Off;
@@ -115,24 +126,30 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     for (const fn of protocolErrorListeners) fn(error);
   }
 
-  function sendHostSettings(patch: RaceSettingsPatch): Promise<HostSettingsResult> {
+  /**
+   * Emits a client event that carries an ack and resolves the parsed ack, or `timeout` when none (or an
+   * invalid one) arrives in time. Never rejects.
+   */
+  function ask<A>(
+    event: keyof typeof clientAcks,
+    payload: unknown,
+    schema: z.ZodType<A>,
+    timeoutMs: number,
+  ): Promise<A | { ok: false; error: "timeout" }> {
     return new Promise((resolve) => {
       let settled = false;
-      const settle = (result: HostSettingsResult) => {
+      const settle = (result: A | { ok: false; error: "timeout" }) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         resolve(result);
       };
-      const timer = setTimeout(
-        () => settle({ ok: false, error: "timeout" }),
-        HOST_SETTINGS_TIMEOUT_MS,
-      );
-      socket.emit("host:settings", { v: PROTOCOL_VERSION, patch }, (raw: unknown) => {
+      const timer = setTimeout(() => settle({ ok: false, error: "timeout" }), timeoutMs);
+      socket.emit(event, payload, (raw: unknown) => {
         if (settled) return;
-        const ack = clientAcks["host:settings"].safeParse(raw);
+        const ack = schema.safeParse(raw);
         if (ack.success) return settle(ack.data);
-        reportProtocolError({ event: "host:settings", issues: ack.error.issues });
+        reportProtocolError({ event, issues: ack.error.issues });
         settle({ ok: false, error: "timeout" });
       });
     });
@@ -142,7 +159,16 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     onWelcome: (cb) => on("welcome", cb),
     onRoster: (cb) => on("roster", cb),
     onSettings: (cb) => on("settings", cb),
-    sendHostSettings,
+    sendHostSettings: (patch) =>
+      ask(
+        "host:settings",
+        { v: PROTOCOL_VERSION, patch },
+        clientAcks["host:settings"],
+        HOST_SETTINGS_TIMEOUT_MS,
+      ),
+    onCountdown: (cb) => on("countdown", cb),
+    sendHostStart: () =>
+      ask("host:start", { v: PROTOCOL_VERSION }, clientAcks["host:start"], HOST_START_TIMEOUT_MS),
     onProtocolError: (cb) => {
       // a wrapper per call, so the same callback registered twice is removed once per off
       const fn = (error: ProtocolError) => cb(error);

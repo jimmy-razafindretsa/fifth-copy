@@ -1,5 +1,5 @@
 import type { Member } from "@fifth-copy/protocol";
-import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
+import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "@/features/race";
 
 /** Desks in a waiting room (spec: thirty desks, one message). */
 export const ROOM_SEATS = 30;
@@ -8,12 +8,15 @@ export const ROOM_SEATS = 30;
 export type LobbyError = "not-found" | "closed" | "generic";
 
 export type LobbyState = {
-  phase: "loading" | "live" | "reconnecting" | "error";
+  /** `starting`: the host pressed START; the page moves to the seat view of `raceId` (#214). */
+  phase: "loading" | "live" | "reconnecting" | "starting" | "error";
   error: LobbyError | null;
   /** The viewer's desk, from `welcome`. */
   you: number | null;
   /** Sorted by desk. */
   members: Member[];
+  /** The started race (`countdown.race.raceId`, the stored `Race.id`), `null` before the start. */
+  raceId: string | null;
 };
 
 /**
@@ -23,6 +26,7 @@ export type LobbyState = {
 export type LobbyEvent =
   | { type: "welcome"; payload: RoomEvents["welcome"] }
   | { type: "roster"; payload: RoomEvents["roster"] }
+  | { type: "countdown"; payload: RoomEvents["countdown"] }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
@@ -33,6 +37,7 @@ export const initialLobbyState: LobbyState = {
   error: null,
   you: null,
   members: [],
+  raceId: null,
 };
 
 const byDesk = (members: Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -64,9 +69,12 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
         error: null,
         you: event.payload.you,
         members: byDesk(event.payload.members),
+        raceId: state.raceId,
       };
     case "roster":
       return { ...state, members: byDesk(event.payload.members) };
+    case "countdown":
+      return { ...state, phase: "starting", raceId: event.payload.race.raceId };
     case "connect-error": {
       const error = connectError(event.reason);
       return error ? { ...state, phase: "error", error } : { ...state, phase: "reconnecting" };
@@ -116,33 +124,53 @@ function tryVersionReload({ reload, storage }: VersionReload): boolean {
   return true;
 }
 
+export type BindRoomSocketOptions = {
+  /** The room's lobby id: each `welcome.resumeKey` is stored under it, for the seat view (#214). */
+  lobbyId?: string;
+  /**
+   * The race feature's `storeResumeKey` (#561), handed in from the lazily loaded race module (card 536:
+   * the lobby never imports a value of `@/features/race` statically).
+   */
+  storeResumeKey?: (lobbyId: string, key: string) => void;
+  versionReload?: VersionReload;
+};
+
 /**
- * Subscribes the room socket's events and turns them into lobby events. A first `version` refusal reloads
- * the page to fetch the bundle of the new `PROTOCOL_VERSION` instead of dispatching an error.
+ * Subscribes the room socket's events and turns them into lobby events; returns the unbind, which offs
+ * every listener bound here (the waiting room unbinds before it parks the socket for the seat view, #214).
+ * Every `welcome` stores its resume key for the lobby. A first `version` refusal reloads the page to fetch
+ * the bundle of the new `PROTOCOL_VERSION` instead of dispatching an error.
  */
 export function bindRoomSocket(
   socket: RoomSocket,
   dispatch: (event: LobbyEvent) => void,
-  versionReload: VersionReload = browserVersionReload(),
-) {
+  { lobbyId, storeResumeKey, versionReload = browserVersionReload() }: BindRoomSocketOptions = {},
+): Off {
   let reloading = false;
-  socket.onWelcome((payload) => {
-    try {
-      versionReload.storage?.removeItem(VERSION_RELOAD_KEY);
-    } catch {
-      // Storage went away: nothing to clear.
-    }
-    dispatch({ type: "welcome", payload });
-  });
-  socket.onRoster((payload) => dispatch({ type: "roster", payload }));
-  socket.onConnectError((reason) => {
-    if (reloading) return;
-    if (reason === "version" && tryVersionReload(versionReload)) {
-      reloading = true;
-      return;
-    }
-    dispatch({ type: "connect-error", reason });
-  });
-  socket.onReconnecting(() => dispatch({ type: "reconnecting" }));
-  socket.onReconnected(() => dispatch({ type: "reconnected" }));
+  const offs: Off[] = [
+    socket.onWelcome((payload) => {
+      try {
+        versionReload.storage?.removeItem(VERSION_RELOAD_KEY);
+      } catch {
+        // Storage went away: nothing to clear.
+      }
+      if (lobbyId && payload.resumeKey) storeResumeKey?.(lobbyId, payload.resumeKey);
+      dispatch({ type: "welcome", payload });
+    }),
+    socket.onRoster((payload) => dispatch({ type: "roster", payload })),
+    socket.onCountdown((payload) => dispatch({ type: "countdown", payload })),
+    socket.onConnectError((reason) => {
+      if (reloading) return;
+      if (reason === "version" && tryVersionReload(versionReload)) {
+        reloading = true;
+        return;
+      }
+      dispatch({ type: "connect-error", reason });
+    }),
+    socket.onReconnecting(() => dispatch({ type: "reconnecting" })),
+    socket.onReconnected(() => dispatch({ type: "reconnected" })),
+  ];
+  return () => {
+    for (const off of offs.splice(0)) off();
+  };
 }

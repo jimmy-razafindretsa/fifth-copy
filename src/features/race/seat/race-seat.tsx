@@ -40,7 +40,12 @@ export function RaceSeat({ seat, labels, mint }: RaceSeatProps) {
             code={seat.code}
             lobbyId={seat.lobbyId}
             mint={mint}
-            labels={{ loading: labels.loading, notice: labels.notice, errors: labels.errors }}
+            labels={{
+              loading: labels.loading,
+              notice: labels.notice,
+              errors: labels.errors,
+              countdown: labels.countdown,
+            }}
           />
         }
         sheet={<TypedSheet view={BEFORE_START_VIEW} />}

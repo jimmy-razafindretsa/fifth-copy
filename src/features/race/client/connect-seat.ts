@@ -1,3 +1,4 @@
+import { releaseParkedSocket } from "./handoff";
 import { readResumeKey } from "./resume-key";
 import type { connectToRoom } from "./socket";
 import type { RoomSocket } from "./socket";
@@ -27,8 +28,10 @@ export type ConnectSeatOptions = {
 /**
  * The seat view's connection (#561 C4, ARCHITECTURE 8.3): mints the race token through the action (ADR
  * 0009: never in a URL, the HTML or a cookie) while the socket chunk downloads, connects with the desk's
- * stored resume key when there is one, and binds the store. Returns the cleanup: a mint still in flight
- * never opens a socket (StrictMode mounts twice in dev); after connecting it unbinds and closes.
+ * stored resume key when there is one, and binds the store. Its first `welcome` closes the waiting
+ * room's socket parked for this lobby (#214 C2: the desk is never line-cut in the handover). Returns the
+ * cleanup: a mint still in flight never opens a socket (StrictMode mounts twice in dev); after
+ * connecting it unbinds and closes (a parked socket is left to the next mount or its own timeout).
  */
 export function connectSeat({
   code,
@@ -47,7 +50,12 @@ export function connectSeat({
       socket = socketModule.connectToRoom(result.url, result.token, {
         resumeKey: readResumeKey(lobbyId),
       });
-      unbind = bindRaceSocket(socket, dispatch, { lobbyId });
+      const offBind = bindRaceSocket(socket, dispatch, { lobbyId });
+      const offHandoff = socket.onWelcome(() => releaseParkedSocket(lobbyId));
+      unbind = () => {
+        offBind();
+        offHandoff();
+      };
     },
     () => {
       if (!aborted) dispatch({ type: "token-error", error: "generic" });

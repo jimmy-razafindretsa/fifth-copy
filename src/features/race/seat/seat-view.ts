@@ -1,4 +1,5 @@
 import type { Member } from "@fifth-copy/protocol";
+import type { CountdownLabels } from "../components/countdown";
 import type { TelexLabels } from "../components/telex-strip";
 import type {
   AbandonLabels,
@@ -19,6 +20,8 @@ export type RaceSeatLabels = {
   /** The page's heading, a kicker: `SEAT VIEW` until the welcome, then `SEAT VIEW · DESK {n}`. */
   kicker: { seat: string; desk: string };
   telex: TelexLabels;
+  /** The 3-2-1 countdown and the Major's `НАЧАЛИ · GO` stamp (#214). */
+  countdown: CountdownLabels;
   /** The connecting skeleton's name. */
   loading: string;
   /** The live notices, plus the phones-only notice (bible 7.4 notice row). */

@@ -15,10 +15,18 @@ export async function createLobby(page: Page): Promise<string> {
   return LOBBY_PATH.exec(new URL(page.url()).pathname)![1]!;
 }
 
-/** A different guest (fresh context) joins with the code from the landing. */
-export async function joinAsGuest(browser: Browser, code: string) {
+/**
+ * A different guest (fresh context) joins with the code from the landing. `before` runs on the new page
+ * before it loads anything (init scripts, socket listeners: #214).
+ */
+export async function joinAsGuest(
+  browser: Browser,
+  code: string,
+  { before }: { before?: (page: Page) => Promise<void> } = {},
+) {
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
   const page = await context.newPage();
+  await before?.(page);
   await page.goto("/");
   const form = page.getByRole("form", { name: "Join with code" });
   await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);

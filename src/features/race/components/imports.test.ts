@@ -10,6 +10,8 @@ import { machineSkinIds } from "./machine/skin";
 import { TypingMachine } from "./machine/typing-machine";
 import { NixieCounters } from "./nixie-counters";
 import { RaceCard } from "./race-card";
+import * as prediction from "../client/prediction";
+import { RaceInput } from "./race-input";
 import { RaceNotice } from "./race-notice";
 import { SabotageTray } from "./sabotage-tray";
 import { TelexStrip } from "./telex-strip";
@@ -148,5 +150,39 @@ describe("typing surface imports (#558 C10)", () => {
       /export type \{[^}]*\bRaceCardView\b[^}]*\} from "\.\/view\/race-card-view"/,
     );
     expect(index).toMatch(/export type \{[^}]*\bHudLabels\b[^}]*\} from "\.\/view\/hud-labels"/);
+  });
+});
+
+// Contract of #559 C8: the engine's reducers reach the race feature through one module, the local
+// prediction (ADR 0007: the client applies the engine's own functions, never a copy); the components stay
+// presentational (no engine, no protocol, no socket client), the typing input included.
+describe("engine reducers only in the prediction (#559 C8)", () => {
+  const feature = path.join(root, "src/features/race");
+  const modules = sources(feature).filter((f) => !isTest(f));
+  const REDUCERS = /\b(applyKeystroke|continueMode|blockMode|backspace|initialState|finishIfDone)\b/;
+
+  it("client/prediction.ts is the only module of src/features/race that imports @fifth-copy/engine", () => {
+    const hits = modules
+      .filter((f) =>
+        specifiers(readFileSync(f, "utf8")).some((s) => /^@fifth-copy\/engine(\/|$)/.test(s)),
+      )
+      .map((f) => path.relative(root, f));
+    expect(hits).toEqual(["src/features/race/client/prediction.ts"]);
+  });
+
+  it("the prediction hands no reducer on (no re-export of an engine function)", () => {
+    const names = Object.keys(prediction);
+    expect(names).toContain("createPrediction");
+    for (const name of names) expect(name, name).not.toMatch(REDUCERS);
+    const source = readFileSync(path.join(feature, "client/prediction.ts"), "utf8");
+    expect(source).not.toMatch(/export\s*\{[^}]*\b(applyKeystroke|continueMode|blockMode)\b[^}]*\}\s*from/);
+  });
+
+  it("covers the typing input: components/race-input.tsx is presentational too", () => {
+    expect(FILES.map((f) => path.relative(components, f))).toContain("race-input.tsx");
+  });
+
+  it("C9 exports RaceInput through the race index", () => {
+    expect(race.RaceInput).toBe(RaceInput);
   });
 });

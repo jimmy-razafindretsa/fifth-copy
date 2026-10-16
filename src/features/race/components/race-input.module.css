@@ -1,0 +1,15 @@
+/* The race's key capture (#559, bible 7.7): an invisible input. Visually hidden, still focusable; 16px so
+   iOS never zooms the page when it takes the focus. */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  font-size: 16px;
+  opacity: 0;
+}

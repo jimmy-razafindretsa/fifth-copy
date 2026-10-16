@@ -97,6 +97,13 @@ export function RaceInput({ disabled, onKey, label }: RaceInputProps) {
     const clear = () => {
       el.value = "";
     };
+    // text that reached the field anyway (an insert with no cancelable beforeinput) is typed, then cleared
+    const onInput = (e: Event) => {
+      if ((e as InputEvent).isComposing) return;
+      const typed = el.value;
+      el.value = "";
+      for (const ch of typed) sink.current(ch);
+    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("copy", onCopy);
     document.addEventListener("cut", onCopy);
@@ -105,7 +112,7 @@ export function RaceInput({ disabled, onKey, label }: RaceInputProps) {
     el.addEventListener("beforeinput", onBeforeInput);
     el.addEventListener("paste", refuse);
     el.addEventListener("compositionend", clear);
-    el.addEventListener("input", clear);
+    el.addEventListener("input", onInput);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("copy", onCopy);
@@ -115,7 +122,7 @@ export function RaceInput({ disabled, onKey, label }: RaceInputProps) {
       el.removeEventListener("beforeinput", onBeforeInput);
       el.removeEventListener("paste", refuse);
       el.removeEventListener("compositionend", clear);
-      el.removeEventListener("input", clear);
+      el.removeEventListener("input", onInput);
     };
   }, []);
 

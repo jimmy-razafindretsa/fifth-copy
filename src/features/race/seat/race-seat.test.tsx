@@ -33,6 +33,11 @@ describe("race catalogs (#561 C6)", () => {
     expect(phones).toMatch(/\S/);
   });
 
+  it("#214 C6: the countdown copy, the Major's word plus one language per catalog", () => {
+    expect(en.race.countdown).toEqual({ major: "НАЧАЛИ", go: "GO" });
+    expect(fr.race.countdown).toEqual({ major: "НАЧАЛИ", go: "PARTEZ" });
+  });
+
   it("the phones notice and the error prefix read in one language each", () => {
     expect(en.race.notice.phones).toBe("PHONES WATCH FROM THE BACK OF THE ROOM");
     expect(fr.race.notice.phones).toBe("LES CELLULAIRES REGARDENT DU FOND DE LA SALLE");
@@ -131,7 +136,7 @@ describe("the status slot, phase by phase (#561 C4)", () => {
   );
 
   it.each(["countdown", "running", "ended"] as const)(
-    "%s: nothing yet (#214, #559, #240)",
+    "%s: the view itself renders nothing (the countdown is RaceSeatLive's, #214; #559, #240)",
     (phase) => {
       expect(view(phase)).toBe("");
     },

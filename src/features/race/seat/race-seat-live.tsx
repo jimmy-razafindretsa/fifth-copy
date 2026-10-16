@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
 import type { RaceLostReason, RacePhase } from "../client/store";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
+import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
 import { RaceNotice } from "../components/race-notice";
 import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
 export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors">;
+
+/** The live leaf's copy: the status slot's, plus the countdown's (#214). */
+export type SeatLiveLabels = SeatStatusLabels & Pick<RaceSeatLabels, "countdown">;
 
 const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "back">> = {
   closed: "closed",
@@ -32,8 +36,8 @@ type ViewProps = {
 /**
  * The seat's live state for one phase (no hooks, so every phase renders in tests): skeleton rows while
  * connecting (bible 7.4), the waiting and line-cut notices (7.4 notice row), the lost line with the way
- * back to the waiting room (7.4 inline error line). Countdown, running and ended belong to #214, #559
- * and #240: nothing here yet.
+ * back to the waiting room (7.4 inline error line). Countdown and the GO stamp are `RaceSeatLive`'s
+ * (#214, they follow the clock); running and ended belong to #559 and #240: nothing here.
  */
 export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
   switch (phase) {
@@ -74,10 +78,39 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
 }
 
 /**
+ * The countdown's step on the corrected clock (#214 C3): `3`, `2`, `1`, the GO stamp, then nothing
+ * `GO_STAMP_MS` after GO. One timeout per step change; the store's GO (`bindRaceSocket`) reads the same
+ * `race.t0` and offset, so the phase turns `running` as the stamp lands.
+ */
+function useCountdownStep(): CountdownStep | null {
+  const phase = useRaceStore((s) => s.phase);
+  const t0 = useRaceStore((s) => s.race?.t0 ?? null);
+  const offset = useRaceStore((s) => s.clockOffset);
+  const live = (phase === "countdown" || phase === "running") && t0 !== null;
+  const [step, setStep] = useState<CountdownStep | null>(null);
+  useEffect(() => {
+    if (!live || t0 === null) return;
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    const tick = () => {
+      const msToGo = t0 - (Date.now() + offset);
+      setStep(countdownStep(msToGo));
+      const next = nextStepIn(msToGo);
+      if (next !== null) handle = setTimeout(tick, next);
+    };
+    handle = setTimeout(tick, 0);
+    return () => clearTimeout(handle);
+  }, [live, t0, offset]);
+  return live ? step : null;
+}
+
+/**
  * The seat view's client leaf (#561 C4, ARCHITECTURE 8.3): after the server rendered the HUD shell, it
  * mints the race token through the lobby action, connects with `connectToRoom` (lazily loaded) and feeds
  * the one race store every HUD leaf reads; it renders the live state. Phones only watch (the layout shows
  * them the notice; spectator mode is #292), so a phone-width page never takes a desk.
+ * Its root carries the store's phase as `data-phase` (`countdown` until GO, `running` from GO: the gate
+ * #559's input reads) and holds the countdown overlay and the polite announcer of 3, 2, 1, GO (#214;
+ * the race announcer of #242 reuses it).
  */
 export function RaceSeatLive({
   code,
@@ -88,11 +121,12 @@ export function RaceSeatLive({
   code: string;
   lobbyId: string;
   mint: MintRaceToken;
-  labels: SeatStatusLabels;
+  labels: SeatLiveLabels;
 }) {
   const store = useRaceStoreApi();
   const phase = useRaceStore((s) => s.phase);
   const lost = useRaceStore((s) => s.lost);
+  const step = useCountdownStep();
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
   // guest cookie, and a cookie set in an action re-renders the page): read the latest one, never reconnect
   // for it.
@@ -111,5 +145,16 @@ export function RaceSeatLive({
     });
   }, [code, lobbyId, store]);
 
-  return <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />;
+  return (
+    <div data-phase={phase} className={styles.live}>
+      <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />
+      {step !== null ? <Countdown step={step} labels={labels.countdown} /> : null}
+      {/* present before the countdown starts, so each change is announced; nothing to say once lost */}
+      {phase !== "lost" ? (
+        <p role="status" aria-atomic="true" data-announcer className={docket.srOnly}>
+          {step === null ? "" : step === "go" ? labels.countdown.go : String(step)}
+        </p>
+      ) : null}
+    </div>
+  );
 }

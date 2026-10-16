@@ -98,6 +98,14 @@
   display: none;
 }
 
+/* the countdown (#214) takes the free space above the typing surface, the scene area, and centres in it */
+.status:has([data-countdown]) {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* the typing surface sits at the bottom: the room (and later the scene) stays visible above it */
 .surface {
   width: min(620px, 100%);

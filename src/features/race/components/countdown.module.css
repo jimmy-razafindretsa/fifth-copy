@@ -1,0 +1,48 @@
+/*
+ * The countdown overlay (#214, design bible 7.3, 4, 8, 14.3): the 3-2-1 digits in the display-lg role
+ * slamming in upright (the bible 8 slam, scale 2.2 -> 0.9 -> 1 on the slam token, no rotation: numerals
+ * read level), then the GO `Stamp` (its own slam). The overlay takes the free space above the typing
+ * surface (the scene area, seat-layout.module.css) and clips the slam, so it never paints over the telex
+ * strip or the typed sheet. Roles from docs/design/tokens.css only.
+ */
+
+@keyframes fcSlam {
+  0% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.countdown {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: clip;
+  pointer-events: none;
+}
+
+.digit {
+  display: inline-block;
+  color: var(--color-fg);
+  animation: fcSlam var(--motion-duration-slam) var(--motion-ease-slam) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .digit {
+    animation: none;
+  }
+}
+
+/* #28: the same stop under any data-motion="reduce" ancestor (tokens.css) */
+[data-motion="reduce"] .digit {
+  animation: none;
+}

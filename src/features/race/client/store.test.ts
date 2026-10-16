@@ -95,6 +95,8 @@ describe("reduceRace (#561 C2)", () => {
       prediction: null,
       desks: [],
       ranks: [],
+      // #220: the last key the engine took from you
+      lastKey: null,
     });
   });
 
@@ -869,5 +871,147 @@ describe("typing and snapshots (#559 C5)", () => {
     const payload: Snapshot = { v: PROTOCOL_VERSION, t: 100, desks: [[5, 1, 1, 0, 0]], ranks: [5] };
     for (const fn of listeners.get("snapshot") ?? []) fn(payload);
     expect(dispatch).toHaveBeenCalledWith({ type: "snapshot", payload });
+  });
+});
+
+// Contract of #220 C1: the host's error mode and backspace rule reach the engine from `welcome.settings`
+// (`engineSettingsOf`); the store records the last key the engine took (`lastKey`, `wrong` exactly when
+// the engine's errors grew) and the typed view shows the engine's jam. No rule here: the engine decides.
+describe("error modes, the jam and lastKey (#220 C1)", () => {
+  const TEXT = "Le reçu";
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "fr" as const,
+    wordCount: 2,
+    t0: 1_767_225_603_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const raceIn = (errorMode: "continue" | "block", backspace = true) =>
+    run(
+      {
+        type: "welcome",
+        payload: welcome({ settings: { ...DEFAULT_RACE_SETTINGS, errorMode, backspace } }),
+      },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      { type: "go" },
+    );
+  const press = (s: RaceState, key: string, t: number) =>
+    reduceRace(s, { type: "key", keystroke: { t, key } });
+  const errorsOf = (s: RaceState) => s.prediction?.state.errors;
+  const states = (s: RaceState) =>
+    selectTypedView(s)
+      .chars.map((c) => c.state[0])
+      .join("");
+
+  it("Block: wrong, wrong, then the right key on the first char: jammed with the cursor held, then released at 1 with 2 errors", () => {
+    let s = raceIn("block");
+    expect(s.prediction?.settings).toEqual({ errorMode: "block", backspace: true });
+    for (const [errors, t] of [
+      [1, 10],
+      [2, 20],
+    ] as const) {
+      s = press(s, "x", t);
+      expect(selectTypedView(s)).toMatchObject({ jammed: true, cursor: 0 });
+      expect(states(s)).toBe("nrrrrrr");
+      expect(errorsOf(s)).toBe(errors);
+      expect(s.lastKey).toEqual({ key: "x", t, wrong: true });
+    }
+    s = press(s, "L", 30);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 1 });
+    expect(states(s)).toBe("dnrrrrr");
+    expect(errorsOf(s)).toBe(2);
+    expect(s.lastKey).toEqual({ key: "L", t: 30, wrong: false });
+  });
+
+  it("Continue: the same keys never jam; each wrong key is a wrong span and the cursor moves on", () => {
+    let s = raceIn("continue");
+    expect(s.prediction?.settings).toEqual({ errorMode: "continue", backspace: true });
+    s = press(s, "x", 10);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 1 });
+    expect(states(s)).toBe("wnrrrrr");
+    s = press(s, "x", 20);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 2 });
+    s = press(s, "L", 30);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 3 });
+    expect(states(s)).toBe("wwwnrrr");
+    expect(errorsOf(s)).toBe(3);
+    expect(s.lastKey).toEqual({ key: "L", t: 30, wrong: true });
+  });
+
+  it("Block: a Backspace after a wrong key releases the jam (an accepted key that is not wrong)", () => {
+    let s = press(press(raceIn("block"), "L", 10), "x", 20);
+    expect(selectTypedView(s)).toMatchObject({ jammed: true, cursor: 1 });
+    s = press(s, "Backspace", 30);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 0 });
+    expect(s.lastKey).toEqual({ key: "Backspace", t: 30, wrong: false });
+    // at the start of the text the engine still takes it (a counted press): the jam releases too
+    s = press(press(raceIn("block"), "x", 10), "Backspace", 20);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 0 });
+    expect(errorsOf(s)).toBe(1);
+  });
+
+  it("lastKey is { key, t, wrong } after each key the engine takes, wrong exactly when its errors grew", () => {
+    let s = raceIn("continue");
+    expect(s.lastKey).toBeNull();
+    const steps: [string, number, boolean][] = [
+      ["L", 10, false],
+      ["x", 20, true],
+      ["Backspace", 30, false], // takes the slip back: errors shrink
+      ["e", 40, false],
+      ["É", 50, true],
+    ];
+    for (const [key, t, wrong] of steps) {
+      const before = errorsOf(s)!;
+      s = press(s, key, t);
+      expect(s.lastKey, key).toEqual({ key, t, wrong });
+      expect(errorsOf(s)! > before, key).toBe(wrong);
+    }
+    // a key the engine refuses (older than the last one) records nothing
+    expect(press(s, "x", 5)).toBe(s);
+    // a new race or a (re)connect starts over
+    const again = reduceRace(s, {
+      type: "countdown",
+      payload: { v: PROTOCOL_VERSION, race: RACE },
+    });
+    expect(again.lastKey).toBeNull();
+    expect(reduceRace(s, { type: "welcome", payload: welcome() }).lastKey).toBeNull();
+    // a snapshot keeps it
+    const snap: RaceEvent = {
+      type: "snapshot",
+      payload: { v: PROTOCOL_VERSION, t: 900, desks: [[1, 2, 2, 0, 0]], ranks: [1] },
+    };
+    expect(reduceRace(s, snap).lastKey).toBe(s.lastKey);
+  });
+
+  it("Continue with backspace off: a Backspace reaches the engine and changes nothing on the copy", () => {
+    let s = press(raceIn("continue", false), "x", 10);
+    expect(s.prediction?.settings).toEqual({ errorMode: "continue", backspace: false });
+    const before = selectTypedView(s);
+    s = press(s, "Backspace", 20);
+    expect(s.prediction?.state.total).toBe(2);
+    expect(s.lastKey).toEqual({ key: "Backspace", t: 20, wrong: false });
+    const after = selectTypedView(s);
+    expect(after.chars).toEqual(before.chars);
+    expect(after.cursor).toBe(1);
+    // nothing was typed: the struck char does not pop again
+    expect(after.lastTypedAt).toBe(before.lastTypedAt);
+  });
+
+  it("only a key that types a char pops: a refused Block key keeps the stamp, a Backspace clears it", () => {
+    let s = press(raceIn("block"), "L", 10);
+    expect(selectTypedView(s).lastTypedAt).toBe(10);
+    s = press(s, "x", 20);
+    expect(selectTypedView(s).lastTypedAt).toBe(10);
+    s = press(s, "Backspace", 30);
+    expect(selectTypedView(s).lastTypedAt).toBeNull();
+    s = press(s, "L", 40);
+    expect(selectTypedView(s).lastTypedAt).toBe(40);
+  });
+
+  it("stays pure with lastKey", () => {
+    const s = freeze(press(raceIn("block"), "x", 10));
+    expect(() => press(s, "L", 20)).not.toThrow();
+    expect(s.lastKey).toEqual({ key: "x", t: 10, wrong: true });
   });
 });

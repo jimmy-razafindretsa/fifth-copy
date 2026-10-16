@@ -155,3 +155,29 @@ describe("typedViewFrom (#559 C3)", () => {
     }
   });
 });
+
+// #220 C1: the jam and the pop stamp come from the prediction (a state alone cannot tell them), so a
+// key the engine refused in Block mode or a Backspace never replays the pop of the char before the cursor.
+describe("typedViewFrom with the prediction's marks (#220 C1)", () => {
+  const TEXT = "Le reçu";
+  const BLOCK: EngineSettings = { errorMode: "block", backspace: true };
+  const view = (p: ReturnType<typeof createPrediction>) =>
+    typedViewFrom(p.state, p.text, { jammed: p.jammed, typedAt: p.typedAt });
+
+  it("takes the pop stamp it is given, null included; without one it reads the last keystroke", () => {
+    const s = applyKeystroke(initialState(), { t: 100, key: "L" }, TEXT, BLOCK);
+    expect(typedViewFrom(s, TEXT).lastTypedAt).toBe(100);
+    expect(typedViewFrom(s, TEXT, { typedAt: 60 }).lastTypedAt).toBe(60);
+    expect(typedViewFrom(s, TEXT, { typedAt: null }).lastTypedAt).toBeNull();
+  });
+
+  it("Block: the refused key jams and keeps the stamp of the char before the cursor; Backspace clears it", () => {
+    const p = createPrediction({ text: TEXT, settings: BLOCK }).push({ t: 100, key: "L" });
+    expect(view(p)).toMatchObject({ cursor: 1, jammed: false, lastTypedAt: 100 });
+    const jammed = p.push({ t: 140, key: "x" });
+    expect(view(jammed)).toMatchObject({ cursor: 1, jammed: true, lastTypedAt: 100 });
+    const back = jammed.push({ t: 180, key: "Backspace" });
+    expect(view(back)).toMatchObject({ cursor: 0, jammed: false, lastTypedAt: null });
+    expect(view(back.push({ t: 220, key: "L" }))).toMatchObject({ cursor: 1, lastTypedAt: 220 });
+  });
+});

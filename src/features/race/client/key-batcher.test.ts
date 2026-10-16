@@ -50,8 +50,7 @@ function setup(start?: number) {
   return { clock, sent, batcher, press };
 }
 
-const valid = (batch: Keystroke[]) =>
-  keysSchema.safeParse({ v: PROTOCOL_VERSION, batch }).success;
+const valid = (batch: Keystroke[]) => keysSchema.safeParse({ v: PROTOCOL_VERSION, batch }).success;
 
 describe("createKeyBatcher (#559 C2)", () => {
   it("defaults to 50 ms batches", () => {

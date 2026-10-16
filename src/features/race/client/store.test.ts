@@ -23,8 +23,14 @@ vi.mock("react", async (importOriginal) => {
 });
 
 const react = await import("react");
-const { bindRaceSocket, createRaceStore, initialRaceState, reduceRace, selectCanType, selectTypedView } =
-  await import("./store");
+const {
+  bindRaceSocket,
+  createRaceStore,
+  initialRaceState,
+  reduceRace,
+  selectCanType,
+  selectTypedView,
+} = await import("./store");
 const { RaceStoreProvider, useRaceStore } = await import("./use-race-store");
 const { connectToRoom } = await import("./socket");
 type RaceEvent = import("./store").RaceEvent;
@@ -633,10 +639,18 @@ describe("typing and snapshots (#559 C5)", () => {
   const code = roomCodeSchema.parse("KGB-4821");
   const countdown = (race = RACE): Countdown => ({ v: PROTOCOL_VERSION, race });
   const running = (w = welcome()) =>
-    run({ type: "welcome", payload: w }, { type: "countdown", payload: countdown() }, { type: "go" });
+    run(
+      { type: "welcome", payload: w },
+      { type: "countdown", payload: countdown() },
+      { type: "go" },
+    );
   const key = (key: string, t: number): RaceEvent => ({ type: "key", keystroke: { t, key } });
   const typing = PLAYER_STATUS_CODES.typing;
-  const snapshot = (desks: Snapshot["desks"], t = 500, ranks = desks.map((d) => d[0])): RaceEvent => ({
+  const snapshot = (
+    desks: Snapshot["desks"],
+    t = 500,
+    ranks = desks.map((d) => d[0]),
+  ): RaceEvent => ({
     type: "snapshot",
     payload: { v: PROTOCOL_VERSION, t, desks, ranks },
   });
@@ -822,7 +836,11 @@ describe("typing and snapshots (#559 C5)", () => {
 
   it("lost stays terminal and the new cases stay pure", () => {
     const lost = run({ type: "connect-error", reason: "closed" });
-    for (const event of [key("L", 1), { type: "sent", count: 1 }, snapshot([])] satisfies RaceEvent[]) {
+    for (const event of [
+      key("L", 1),
+      { type: "sent", count: 1 },
+      snapshot([]),
+    ] satisfies RaceEvent[]) {
       expect(reduceRace(lost, event), event.type).toBe(lost);
     }
     const s = freeze(reduceRace(running(), key("L", 40)));

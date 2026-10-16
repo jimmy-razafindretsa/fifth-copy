@@ -159,7 +159,8 @@ describe("typing surface imports (#558 C10)", () => {
 describe("engine reducers only in the prediction (#559 C8)", () => {
   const feature = path.join(root, "src/features/race");
   const modules = sources(feature).filter((f) => !isTest(f));
-  const REDUCERS = /\b(applyKeystroke|continueMode|blockMode|backspace|initialState|finishIfDone)\b/;
+  const REDUCERS =
+    /\b(applyKeystroke|continueMode|blockMode|backspace|initialState|finishIfDone)\b/;
 
   it("client/prediction.ts is the only module of src/features/race that imports @fifth-copy/engine", () => {
     const hits = modules
@@ -175,7 +176,9 @@ describe("engine reducers only in the prediction (#559 C8)", () => {
     expect(names).toContain("createPrediction");
     for (const name of names) expect(name, name).not.toMatch(REDUCERS);
     const source = readFileSync(path.join(feature, "client/prediction.ts"), "utf8");
-    expect(source).not.toMatch(/export\s*\{[^}]*\b(applyKeystroke|continueMode|blockMode)\b[^}]*\}\s*from/);
+    expect(source).not.toMatch(
+      /export\s*\{[^}]*\b(applyKeystroke|continueMode|blockMode)\b[^}]*\}\s*from/,
+    );
   });
 
   it("covers the typing input: components/race-input.tsx is presentational too", () => {

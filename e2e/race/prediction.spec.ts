@@ -20,7 +20,8 @@ function recorder() {
     document.addEventListener(
       type,
       (e) => {
-        if ((e.target as Element | null)?.matches?.("[data-race-input]")) log.lastKeyAt = Date.now();
+        if ((e.target as Element | null)?.matches?.("[data-race-input]"))
+          log.lastKeyAt = Date.now();
       },
       true,
     );
@@ -67,7 +68,9 @@ test.describe("#559 local prediction", () => {
     await page.goto(`/race/${room.lobbyId}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     const desk = String(
-      Number(/DESK (\d{2})$/.exec((await page.getByRole("heading", { level: 1 }).textContent())!)![1]),
+      Number(
+        /DESK (\d{2})$/.exec((await page.getByRole("heading", { level: 1 }).textContent())!)![1],
+      ),
     );
     await expect(startButton(room.host)).toBeEnabled();
     await warmRace(room.host, room.lobbyId);
@@ -100,9 +103,10 @@ test.describe("#559 local prediction", () => {
       type: "timing",
       description: `sheet ${guest.doneAt! - guest.lastKeyAt} ms, host ${host.progressAt[desk]! - guest.lastKeyAt} ms after the last key`,
     });
-    expect(host.progressAt[desk]! - guest.lastKeyAt, "host after the last key (ms)").toBeLessThanOrEqual(
-      1_000,
-    );
+    expect(
+      host.progressAt[desk]! - guest.lastKeyAt,
+      "host after the last key (ms)",
+    ).toBeLessThanOrEqual(1_000);
     // the guest's own store agrees with its prediction once the server's snapshot lands
     await expect(page.locator(`[data-desks] [data-desk="${desk}"]`)).toHaveAttribute(
       "data-desk-progress",

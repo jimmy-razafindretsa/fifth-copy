@@ -71,9 +71,9 @@ describe("RaceInput (#559 C4)", () => {
     expect(down("v", { ctrlKey: true })).toBeNull();
     expect(down("v", { metaKey: true })).toBeNull();
     expect(down("c", { metaKey: true, altKey: true })).toBeNull();
-    expect(keyOf({ key: "e", ctrlKey: false, metaKey: false, altKey: false, isComposing: true })).toBe(
-      null,
-    );
+    expect(
+      keyOf({ key: "e", ctrlKey: false, metaKey: false, altKey: false, isComposing: true }),
+    ).toBe(null);
   });
 
   it("names the typing surface by its three parts", () => {

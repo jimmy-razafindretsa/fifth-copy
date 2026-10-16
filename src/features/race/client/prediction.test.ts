@@ -47,7 +47,12 @@ describe("createPrediction (#559 C1)", () => {
     const [l, e] = keys("Le");
     const p2 = p0.push(l!).push(e!);
     expect(apply).toHaveBeenCalledTimes(2);
-    expect(apply).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 1 }), e, TEXT, CONTINUE);
+    expect(apply).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 1 }),
+      e,
+      TEXT,
+      CONTINUE,
+    );
     expect(p2.state).toEqual(fold([l!, e!]));
     expect(p2.unacked).toEqual([l, e]);
     expect(p2.base).toEqual(initialState());
@@ -135,7 +140,10 @@ describe("createPrediction (#559 C1)", () => {
     // a key not yet sent cannot be acked: no match falls back to every sent key
     expect(p.ackedBy(progress(fold(ks)))).toBe(3);
     // a net-neutral pair (a key and its Backspace) matches the larger prefix
-    const bs = [{ t: 100, key: "L" }, { t: 150, key: "Backspace" }];
+    const bs = [
+      { t: 100, key: "L" },
+      { t: 150, key: "Backspace" },
+    ];
     const q = bs
       .reduce((x, k) => x.push(k), createPrediction({ text: TEXT, settings: CONTINUE }))
       .markSent(2);
@@ -154,9 +162,9 @@ describe("createPrediction (#559 C1)", () => {
     expect(right.state.cursor).toBe(1);
     expect(right.jammed).toBe(false);
     // Continue mode never jams
-    expect(createPrediction({ text: TEXT, settings: CONTINUE }).push({ t: 1, key: "x" }).jammed).toBe(
-      false,
-    );
+    expect(
+      createPrediction({ text: TEXT, settings: CONTINUE }).push({ t: 1, key: "x" }).jammed,
+    ).toBe(false);
   });
 
   it("starts from a given state (a welcome mid-race)", () => {
@@ -169,8 +177,6 @@ describe("createPrediction (#559 C1)", () => {
 
   it("typedText is the effective text: the base text with the desk's overlay (none when null)", () => {
     expect(typedText("un deux trois", null)).toBe("un deux trois");
-    expect(typedText("un deux trois", { extra: ["quatre"], removed: [1] })).toBe(
-      "un trois quatre",
-    );
+    expect(typedText("un deux trois", { extra: ["quatre"], removed: [1] })).toBe("un trois quatre");
   });
 });

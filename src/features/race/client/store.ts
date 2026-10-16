@@ -181,7 +181,13 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         phase: "countdown",
         race: event.payload.race,
         room: state.room && { ...state.room, phase: "countdown" },
-        prediction: predictionOf(event.payload.race, state.you, state.settings, state.overlay, null),
+        prediction: predictionOf(
+          event.payload.race,
+          state.you,
+          state.settings,
+          state.overlay,
+          null,
+        ),
         desks: [],
         ranks: [],
       };
@@ -207,7 +213,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       const { desks, ranks } = event.payload;
       let prediction = state.prediction;
       const server = prediction && state.you !== null ? serverProgressOf(desks, state.you) : null;
-      if (prediction && server) prediction = prediction.reconcile(server, prediction.ackedBy(server));
+      if (prediction && server)
+        prediction = prediction.reconcile(server, prediction.ackedBy(server));
       return { ...state, desks, ranks, prediction };
     }
     case "connect-error":

@@ -199,15 +199,18 @@ test.describe("#559 race input", () => {
     expect((await seen()).copy).toBe(2);
 
     // drag text from elsewhere onto the strip
-    await page.evaluate((t) => {
-      const source = document.createElement("p");
-      source.id = "drag-source";
-      source.textContent = t;
-      source.style.cssText = "position:fixed;left:8px;top:8px;z-index:99;background:canvas";
-      source.draggable = true;
-      source.addEventListener("dragstart", (e) => e.dataTransfer?.setData("text/plain", t));
-      document.body.append(source);
-    }, text.slice(0, 12));
+    await page.evaluate(
+      (t) => {
+        const source = document.createElement("p");
+        source.id = "drag-source";
+        source.textContent = t;
+        source.style.cssText = "position:fixed;left:8px;top:8px;z-index:99;background:canvas";
+        source.draggable = true;
+        source.addEventListener("dragstart", (e) => e.dataTransfer?.setData("text/plain", t));
+        document.body.append(source);
+      },
+      text.slice(0, 12),
+    );
     await page.locator("#drag-source").dragTo(page.locator("[data-telex]"));
     await page.waitForTimeout(300);
     await expect(sheet(page, "done")).toHaveCount(0);

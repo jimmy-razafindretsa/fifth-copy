@@ -76,7 +76,10 @@ export function typedText(text: string, overlay: TextOverlay | null): string {
 /** The server's numbers equal the predicted ones (the fields a snapshot carries). */
 function sameProgress(a: ServerProgress, b: ServerProgress): boolean {
   return (
-    a.cursor === b.cursor && a.correct === b.correct && a.errors === b.errors && a.status === b.status
+    a.cursor === b.cursor &&
+    a.correct === b.correct &&
+    a.errors === b.errors &&
+    a.status === b.status
   );
 }
 
@@ -106,7 +109,8 @@ export function createPrediction({
   apply = applyKeystroke,
   initial = initialState(),
 }: PredictionInput): Prediction {
-  const step = (state: PlayerState, keystroke: Keystroke) => apply(state, keystroke, text, settings);
+  const step = (state: PlayerState, keystroke: Keystroke) =>
+    apply(state, keystroke, text, settings);
   /** Block mode refused the key: it was counted as an error and the cursor held. */
   const jams = (before: PlayerState, after: PlayerState) =>
     settings.errorMode === "block" && after.errors > before.errors;

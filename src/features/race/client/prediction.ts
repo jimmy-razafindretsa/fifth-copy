@@ -96,9 +96,9 @@ function adopt(from: PlayerState, server: ServerProgress | PlayerState): PlayerS
     from.typed.length >= server.cursor
       ? from.typed.slice(0, server.cursor)
       : [...from.typed, ...Array<null>(server.cursor - from.typed.length).fill(null)];
-  const finishedAt =
-    server.status === "finished" ? (from.finishedAt ?? from.lastT) : from.finishedAt;
-  return { ...from, ...server, typed, finishedAt: server.status === "typing" ? null : finishedAt };
+  // only a finished desk has a finish time (the engine stamps it; the snapshot has none)
+  const finishedAt = server.status === "finished" ? (from.finishedAt ?? from.lastT) : null;
+  return { ...from, ...server, typed, finishedAt };
 }
 
 const clamp = (n: number, max: number) => Math.max(0, Math.min(max, Math.floor(n)));

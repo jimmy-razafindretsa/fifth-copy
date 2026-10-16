@@ -1,7 +1,7 @@
 import { releaseParkedSocket } from "./handoff";
 import { readResumeKey } from "./resume-key";
 import type { connectToRoom } from "./socket";
-import type { RoomSocket } from "./socket";
+import type { Off, RoomSocket } from "./socket";
 import { bindRaceSocket, type RaceEvent } from "./store";
 
 /**
@@ -23,6 +23,8 @@ export type ConnectSeatOptions = {
   dispatch: (event: RaceEvent) => void;
   /** The socket module, loaded lazily so socket.io-client stays out of the first load (ADR 0013). */
   load?: () => Promise<{ connectToRoom: typeof connectToRoom }>;
+  /** Gets the socket once it is open (the typing path of #559 sends through it); its `Off` runs at cleanup. */
+  onSocket?: (socket: RoomSocket) => Off;
 };
 
 /**
@@ -39,6 +41,7 @@ export function connectSeat({
   mint,
   dispatch,
   load = () => import("./socket"),
+  onSocket,
 }: ConnectSeatOptions): () => void {
   let aborted = false;
   let socket: RoomSocket | null = null;
@@ -52,7 +55,9 @@ export function connectSeat({
       });
       const offBind = bindRaceSocket(socket, dispatch, { lobbyId });
       const offHandoff = socket.onWelcome(() => releaseParkedSocket(lobbyId));
+      const offSocket = onSocket?.(socket) ?? (() => {});
       unbind = () => {
+        offSocket();
         offBind();
         offHandoff();
       };

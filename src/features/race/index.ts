@@ -31,6 +31,8 @@ export { parkSocket } from "./client/handoff";
 /** The typing surface (#558, ADR 0013): pure components that render a TypedView (derived in #559) and the
  * typing machine behind its skin seam (bible 7.7a). */
 export { TelexStrip, type TelexLabels } from "./components/telex-strip";
+/** The race's key capture (#559 C4): a visually hidden input the seat view locks and feeds. */
+export { RaceInput, type RaceInputProps } from "./components/race-input";
 export { TypedSheet } from "./components/typed-sheet";
 export { TypingMachine, type TypingMachineProps } from "./components/machine/typing-machine";
 export { machineSkinIds, type MachineSkinId } from "./components/machine/skin";

@@ -64,6 +64,10 @@ function fakeSocket() {
     sendHostSettings: vi.fn(),
     onCountdown: bind("countdown"),
     sendHostStart: vi.fn(),
+    // #559: the seat view's typing (the lobby binds none of them)
+    sendKeys: vi.fn(),
+    onSnapshot: bind("snapshot"),
+    onRejected: bind("rejected"),
     onProtocolError: bind("protocolError"),
     onConnectError: bind("connectError"),
     onReconnecting: bind("reconnecting"),

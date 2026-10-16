@@ -2,13 +2,18 @@ import type { MintRaceToken } from "../client/connect-seat";
 import { RaceStoreProvider } from "../client/use-race-store";
 import { SabotageTray } from "../components/sabotage-tray";
 import { SeatLayout } from "../components/seat-layout";
-import { TelexStrip } from "../components/telex-strip";
-import { TypedSheet } from "../components/typed-sheet";
 import { TypingMachine } from "../components/machine/typing-machine";
 import type { RaceSeatInfo } from "../queries/get-race-seat";
 import { RaceSeatLive } from "./race-seat-live";
-import { SeatAbandon, SeatKicker, SeatNixie, SeatRaceCard } from "./seat-leaves";
-import { BEFORE_START_VIEW, SEAT_ROWS, type RaceSeatLabels } from "./seat-view";
+import {
+  SeatAbandon,
+  SeatKicker,
+  SeatNixie,
+  SeatRaceCard,
+  SeatSheet,
+  SeatTelex,
+} from "./seat-leaves";
+import { SEAT_ROWS, type RaceSeatLabels } from "./seat-view";
 
 export type RaceSeatProps = {
   /** The room behind the page (`getRaceSeat`). */
@@ -33,7 +38,7 @@ export function RaceSeat({ seat, labels, mint }: RaceSeatProps) {
       <SeatLayout
         kicker={<SeatKicker labels={labels.kicker} />}
         nixie={<SeatNixie labels={labels.nixie} />}
-        telex={<TelexStrip view={BEFORE_START_VIEW} labels={labels.telex} />}
+        telex={<SeatTelex labels={labels.telex} />}
         raceCard={<SeatRaceCard labels={labels.raceCard} />}
         status={
           <RaceSeatLive
@@ -45,10 +50,11 @@ export function RaceSeat({ seat, labels, mint }: RaceSeatProps) {
               notice: labels.notice,
               errors: labels.errors,
               countdown: labels.countdown,
+              input: labels.telex.strip,
             }}
           />
         }
-        sheet={<TypedSheet view={BEFORE_START_VIEW} />}
+        sheet={<SeatSheet />}
         machine={<TypingMachine rows={SEAT_ROWS} />}
         tray={<SabotageTray card={null} cooldownS={0} hint={null} labels={labels.sabotageTray} />}
         abandon={<SeatAbandon labels={labels.abandon} />}

@@ -1,6 +1,6 @@
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { Client } from "pg";
-import { test } from "../fixtures";
+import { expect, test } from "../fixtures";
 
 // Room helpers shared by the lobby and race specs (#561 C10; first written for #107 in e2e/lobby.spec.ts).
 // They drive the real landing and the race server started by playwright.config.ts.
@@ -83,4 +83,38 @@ export function roomlessLobbyLike(code: string): Promise<{ id: string; code: str
     );
     return { id, code: fresh };
   });
+}
+
+/** The host's START button in the waiting room (#214). */
+export const startButton = (page: Page) => page.getByRole("button", { name: "START", exact: true });
+
+/** The seat view's store phase (#214: `countdown` until GO, `running` from GO). */
+export const phaseOf = (page: Page) => page.locator("[data-seat-status] [data-phase]");
+
+/**
+ * A host in its own context, waiting in a fresh private room (#214, #559): the page under test then
+ * visits `/race/<lobbyId>` alone, so its sockets and frames are the seat view's only. `opened` collects
+ * the context for the test's cleanup; `before` runs on the host page before it loads anything.
+ */
+export async function hostRoom(
+  browser: Browser,
+  opened: BrowserContext[],
+  { before }: { before?: (page: Page) => Promise<void> } = {},
+) {
+  const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+  opened.push(context);
+  const host = await context.newPage();
+  await before?.(host);
+  const code = await createLobby(host);
+  await expect(host.getByRole("list", { name: "Typists in the room" })).toBeVisible();
+  return { context, host, code, lobbyId: await lobbyIdOf(code) };
+}
+
+/**
+ * `next dev` compiles a route on its first request: warm the seat view and the race server's start
+ * call, so the countdown measures the race, not a compile (no-ops on a production build).
+ */
+export async function warmRace(page: Page, lobbyId: string) {
+  await page.request.get(`/race/${lobbyId}`);
+  await page.request.post("/api/internal/races", { data: {} });
 }

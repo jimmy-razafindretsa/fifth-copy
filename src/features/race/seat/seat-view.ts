@@ -9,7 +9,6 @@ import type {
   SabotageTrayLabels,
 } from "../view/hud-labels";
 import type { RaceCardView } from "../view/race-card-view";
-import type { TypedView } from "../view/typed-view";
 
 /**
  * The seat view's copy (#561 C6): the `race` namespace of both catalogs, one language per page (ADR
@@ -48,14 +47,6 @@ export type SeatErrorLabels = {
 /** Phones watch from the back of the room (spectator mode is #292): the seat view shows only a notice. */
 export const PHONE_MAX_WIDTH_PX = 480;
 export const PHONE_QUERY = `(max-width: ${PHONE_MAX_WIDTH_PX}px)`;
-
-/** The typing surface before the start: no text yet (it arrives with the countdown, #214). */
-export const BEFORE_START_VIEW: TypedView = {
-  chars: [],
-  cursor: 0,
-  jammed: false,
-  lastTypedAt: null,
-};
 
 /**
  * The machine's keys until the player's layout arrives as data (#224): the QWERTY rows of the

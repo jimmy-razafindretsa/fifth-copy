@@ -19,6 +19,7 @@ function fakeRoom() {
     onWelcome: vi.fn(on),
     onRoster: vi.fn(on),
     onCountdown: vi.fn(on),
+    onSnapshot: vi.fn(on),
     onConnectError: vi.fn(on),
     onReconnecting: vi.fn(on),
     onReconnected: vi.fn(on),
@@ -141,8 +142,8 @@ describe("connectSeat (#561 C4)", () => {
     });
     await vi.waitFor(() => expect(room.onWelcome).toHaveBeenCalled());
     stop();
-    // bindRaceSocket's six (#214 adds countdown) and the handoff's own welcome listener
-    expect(offs.length).toBe(7);
+    // bindRaceSocket's seven (#214 adds countdown, #559 snapshot) and the handoff's own welcome listener
+    expect(offs.length).toBe(8);
     for (const off of offs) expect(off).toHaveBeenCalledTimes(1);
     expect(room.close).toHaveBeenCalledTimes(1);
   });
@@ -242,5 +243,43 @@ describe("the parked lobby socket (#214 C2)", () => {
     vi.advanceTimersByTime(HANDOFF_MS);
     expect(b.close).toHaveBeenCalledTimes(1);
     expect(a.close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("connectSeat's socket hook (#559)", () => {
+  it("hands the open socket to onSocket and runs its off at cleanup, before the socket closes", async () => {
+    const { room } = fakeRoom();
+    const order: string[] = [];
+    room.close.mockImplementation(() => void order.push("close"));
+    const onSocket = vi.fn(() => () => void order.push("off"));
+    const stop = connectSeat({
+      code: "KGB-4821",
+      lobbyId: LOBBY,
+      mint: async () => ({ ok: true, token: "t", url: "u" }),
+      dispatch: vi.fn(),
+      load: async () => ({ connectToRoom: () => room }),
+      onSocket,
+    });
+    await vi.waitFor(() => expect(onSocket).toHaveBeenCalledWith(room));
+    stop();
+    expect(order).toEqual(["off", "close"]);
+  });
+
+  it("a cleanup before the socket opens never calls onSocket", async () => {
+    const { room } = fakeRoom();
+    const minted = deferred<{ ok: true; token: string; url: string }>();
+    const onSocket = vi.fn(() => () => {});
+    const stop = connectSeat({
+      code: "KGB-4821",
+      lobbyId: LOBBY,
+      mint: () => minted.promise,
+      dispatch: vi.fn(),
+      load: async () => ({ connectToRoom: () => room }),
+      onSocket,
+    });
+    stop();
+    minted.resolve({ ok: true, token: "t", url: "u" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onSocket).not.toHaveBeenCalled();
   });
 });

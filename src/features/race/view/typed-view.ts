@@ -22,6 +22,46 @@ export type TypedView = {
   lastTypedAt: number | null;
 };
 
+/**
+ * The engine state a view reads (#559): the engine's `PlayerState` fits it. Declared here, structurally,
+ * so this module stays free of the engine (#558 C10): it maps what the engine recorded, never compares a
+ * key with the text (ADR 0007).
+ */
+export type TypedProgress = {
+  readonly cursor: number;
+  /** `typed[i]`: the struck key at `i` (Continue mode), `null` when it was right. */
+  readonly typed: readonly (string | null)[];
+  /** Key presses the engine took; 0 before the first one. */
+  readonly total: number;
+  /** `t` of the last one (ms since GO). */
+  readonly lastT: number;
+};
+
+/** The typing surface with no text yet (before the countdown hands the race text over). */
+export const NO_TEXT_VIEW: TypedView = { chars: [], cursor: 0, jammed: false, lastTypedAt: null };
+
+/**
+ * The view of a desk typing `text` (#559 C3): `done` / `wrong` before the cursor as the engine recorded
+ * them, `next` at it, `remaining` after it; `jammed` from the prediction (Block mode, a refused key: a
+ * state alone cannot tell it); `lastTypedAt` keys the pop of the last typed char.
+ */
+export function typedViewFrom(
+  state: TypedProgress,
+  text: string,
+  { jammed = false }: { jammed?: boolean } = {},
+): TypedView {
+  const chars = Array.from(text, (ch, i): TypedChar => {
+    if (i < state.cursor) return { ch, state: state.typed[i] == null ? "done" : "wrong" };
+    return { ch, state: i === state.cursor ? "next" : "remaining" };
+  });
+  return {
+    chars,
+    cursor: Math.min(state.cursor, chars.length),
+    jammed,
+    lastTypedAt: state.total > 0 ? state.lastT : null,
+  };
+}
+
 /** The fixture text: French, with the accents and guillemets a race text carries (é ç ê « »). */
 const TEXT =
   "« Le reçu du café est prêt. » Le Major le signe à l'aube et classe la cinquième copie.";

@@ -1,5 +1,20 @@
-import type { Member, Phase, Welcome } from "@fifth-copy/protocol";
+import {
+  engineSettingsOf,
+  PLAYER_STATUSES,
+  type Member,
+  type Phase,
+  type Snapshot,
+  type Welcome,
+} from "@fifth-copy/protocol";
+import { NO_TEXT_VIEW, typedViewFrom, type TypedView } from "../view/typed-view";
 import { clockOffset, remainingTo } from "./clock";
+import {
+  createPrediction,
+  typedText,
+  type Keystroke,
+  type PlayerState,
+  type Prediction,
+} from "./prediction";
 import { storeResumeKey } from "./resume-key";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "./socket";
 
@@ -38,10 +53,19 @@ export type RaceState = {
   serverNow: Welcome["serverNow"] | null;
   /** Server time = `Date.now()` + this (#214, `clockOffset` of the last welcome; 0 until one). */
   clockOffset: number;
+  /**
+   * Your desk's typing (#559, ADR 0007): the engine's state predicted from your keys, reconciled with
+   * every snapshot. Built when the race text is known (`countdown`, or a `welcome` with a race); `null`
+   * before, and for a spectator.
+   */
+  prediction: Prediction | null;
+  /** The last snapshot's desks `[desk, cursor, correct, errors, statusCode]` and live order (#559). */
+  desks: Snapshot["desks"];
+  ranks: Snapshot["ranks"];
 };
 
 /**
- * Everything the seat view reacts to. Extension point (countdown #214, snapshot #559, event #232,
+ * Everything the seat view reacts to. Extension point (countdown #214, key and snapshot #559, event #232,
  * ended #240, abandon and idle #233, line-cut #235): one event here, one case in `reduceRace`, one
  * binding in `bindRaceSocket`.
  */
@@ -53,6 +77,12 @@ export type RaceEvent =
   | { type: "countdown"; payload: RoomEvents["countdown"] }
   /** `race.t0` passed on the corrected clock (scheduled by `bindRaceSocket`, #214). */
   | { type: "go" }
+  /** A key typed after GO, `t` in ms since GO on the corrected clock (#559, `createTyping`). */
+  | { type: "key"; keystroke: Keystroke }
+  /** `count` typed keys left for the race server in one `keys` batch (#559). */
+  | { type: "sent"; count: number }
+  /** The 10 Hz full state of every desk (#559): kept, and your prediction reconciled with it. */
+  | { type: "snapshot"; payload: RoomEvents["snapshot"] }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
@@ -72,9 +102,40 @@ export const initialRaceState: RaceState = {
   resumeKey: null,
   serverNow: null,
   clockOffset: 0,
+  prediction: null,
+  desks: [],
+  ranks: [],
 };
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
+
+/**
+ * Your desk's prediction for a race: its text (with your overlay), the host's error mode and backspace
+ * rule (`engineSettingsOf`), from your authoritative state when the server sent one. `null` without a
+ * race, a desk or settings (a spectator types nothing).
+ */
+function predictionOf(
+  race: Welcome["race"],
+  you: Welcome["you"],
+  settings: Welcome["settings"] | null,
+  overlay: Welcome["overlay"],
+  initial: PlayerState | null,
+): Prediction | null {
+  if (!race || you === null || !settings) return null;
+  return createPrediction({
+    text: typedText(race.text, overlay),
+    settings: engineSettingsOf(settings),
+    initial: initial ?? undefined,
+  });
+}
+
+/** Your desk in a snapshot as the four numbers the prediction compares. */
+function serverProgressOf(desks: Snapshot["desks"], you: number) {
+  const mine = desks.find(([desk]) => desk === you);
+  if (!mine) return null;
+  const [, cursor, correct, errors, code] = mine;
+  return { cursor, correct, errors, status: PLAYER_STATUSES[code]! };
+}
 
 const lost = (state: RaceState, reason: RaceLostReason): RaceState => ({
   ...state,
@@ -106,6 +167,10 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
           event.receivedAt === undefined
             ? state.clockOffset
             : clockOffset(w.serverNow, event.receivedAt),
+        // a (re)connect starts over from the server's state of your desk
+        prediction: predictionOf(w.race, w.you, w.settings, w.overlay, w.state),
+        desks: state.desks,
+        ranks: state.ranks,
       };
     }
     case "roster":
@@ -116,6 +181,9 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         phase: "countdown",
         race: event.payload.race,
         room: state.room && { ...state.room, phase: "countdown" },
+        prediction: predictionOf(event.payload.race, state.you, state.settings, state.overlay, null),
+        desks: [],
+        ranks: [],
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -125,6 +193,23 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         phase: state.phase === "countdown" ? "running" : state.phase,
         room: { ...state.room, phase: "running" },
       };
+    case "key": {
+      // typing is locked before GO and after your own finish (the engine refuses a key once you stop)
+      if (state.phase !== "running" || !state.prediction) return state;
+      const prediction = state.prediction.push(event.keystroke);
+      return prediction === state.prediction ? state : { ...state, prediction };
+    }
+    case "sent": {
+      const prediction = state.prediction?.markSent(event.count) ?? null;
+      return prediction === state.prediction ? state : { ...state, prediction };
+    }
+    case "snapshot": {
+      const { desks, ranks } = event.payload;
+      let prediction = state.prediction;
+      const server = prediction && state.you !== null ? serverProgressOf(desks, state.you) : null;
+      if (prediction && server) prediction = prediction.reconcile(server, prediction.ackedBy(server));
+      return { ...state, desks, ranks, prediction };
+    }
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
       return event.reason === "transport"
@@ -138,6 +223,28 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     case "token-error":
       return lost(state, event.error);
   }
+}
+
+/** You may type: the race runs, you have a desk, and you have not stopped (finished, asleep...). */
+export function selectCanType(state: RaceState): boolean {
+  return state.phase === "running" && state.prediction?.state.status === "typing";
+}
+
+const views = new WeakMap<PlayerState, { text: string; jammed: boolean; view: TypedView }>();
+
+/**
+ * The typing surface's view of your desk (#559 C5): `typedViewFrom` memoised per prediction state, so
+ * the strip and the sheet re-render once per keystroke or diverging snapshot, never for a snapshot that
+ * agrees with the prediction or one that only moves a rival.
+ */
+export function selectTypedView(state: RaceState): TypedView {
+  const p = state.prediction;
+  if (!p) return NO_TEXT_VIEW;
+  const hit = views.get(p.state);
+  if (hit && hit.text === p.text && hit.jammed === p.jammed) return hit.view;
+  const view = typedViewFrom(p.state, p.text, { jammed: p.jammed });
+  views.set(p.state, { text: p.text, jammed: p.jammed, view });
+  return view;
 }
 
 export type RaceStore = {
@@ -223,6 +330,7 @@ export function bindRaceSocket(
       else cancelGo();
     }),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
+    socket.onSnapshot((payload) => dispatch({ type: "snapshot", payload })),
     socket.onCountdown((payload) => {
       dispatch({ type: "countdown", payload });
       scheduleGo(payload.race.t0);

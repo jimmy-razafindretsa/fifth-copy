@@ -1,11 +1,13 @@
 import { io as realIo } from "socket.io-client";
 import {
   clientAcks,
+  keysSchema,
   PROTOCOL_VERSION,
   rejectReasonSchema,
   serverEvents,
   type HostSettingsAck,
   type HostStartAck,
+  type Keys,
   type RaceSettingsPatch,
   type RejectReason,
 } from "@fifth-copy/protocol";
@@ -53,6 +55,12 @@ export interface RoomSocket {
   onCountdown(cb: (payload: RoomEvents["countdown"]) => void): Off;
   /** Host only: asks the server to start the race (#214); never rejects. */
   sendHostStart(): Promise<HostStartResult>;
+  /** Your keystrokes since the last batch (#559, <= 50 ms of them); an invalid batch is not sent. */
+  sendKeys(batch: Keys["batch"]): void;
+  /** The 10 Hz full state of every desk while the race runs (#559). */
+  onSnapshot(cb: (payload: RoomEvents["snapshot"]) => void): Off;
+  /** The server refused a `keys`, `abandon` or `bonus:play` (those carry no ack). */
+  onRejected(cb: (payload: RoomEvents["rejected"]) => void): Off;
   onProtocolError(cb: (error: ProtocolError) => void): Off;
   onConnectError(cb: (reason: ConnectErrorReason) => void): Off;
   onReconnecting(cb: (attempt: number) => void): Off;
@@ -69,7 +77,7 @@ type Emitter = {
 /** Untyped view of a socket.io-client socket: payloads stay `unknown` until parsed. */
 type RawSocket = Emitter & {
   io: Emitter;
-  emit(event: string, payload: unknown, ack: (raw: unknown) => void): unknown;
+  emit(event: string, payload: unknown, ack?: (raw: unknown) => void): unknown;
   disconnect(): unknown;
 };
 
@@ -169,6 +177,13 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     onCountdown: (cb) => on("countdown", cb),
     sendHostStart: () =>
       ask("host:start", { v: PROTOCOL_VERSION }, clientAcks["host:start"], HOST_START_TIMEOUT_MS),
+    sendKeys: (batch) => {
+      const keys = keysSchema.safeParse({ v: PROTOCOL_VERSION, batch });
+      if (keys.success) socket.emit("keys", keys.data);
+      else console.warn("[race] dropped an invalid keys batch", keys.error.issues.length);
+    },
+    onSnapshot: (cb) => on("snapshot", cb),
+    onRejected: (cb) => on("rejected", cb),
     onProtocolError: (cb) => {
       // a wrapper per call, so the same callback registered twice is removed once per off
       const fn = (error: ProtocolError) => cb(error);

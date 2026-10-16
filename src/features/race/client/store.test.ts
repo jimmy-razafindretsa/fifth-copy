@@ -3,11 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
+  PLAYER_STATUS_CODES,
   PROTOCOL_VERSION,
   roomCodeSchema,
   type Countdown,
   type Member,
   type Roster,
+  type Snapshot,
   type Welcome,
 } from "@fifth-copy/protocol";
 import type { IoFactory } from "./socket";
@@ -21,7 +23,8 @@ vi.mock("react", async (importOriginal) => {
 });
 
 const react = await import("react");
-const { bindRaceSocket, createRaceStore, initialRaceState, reduceRace } = await import("./store");
+const { bindRaceSocket, createRaceStore, initialRaceState, reduceRace, selectCanType, selectTypedView } =
+  await import("./store");
 const { RaceStoreProvider, useRaceStore } = await import("./use-race-store");
 const { connectToRoom } = await import("./socket");
 type RaceEvent = import("./store").RaceEvent;
@@ -82,6 +85,10 @@ describe("reduceRace (#561 C2)", () => {
       resumeKey: null,
       serverNow: null,
       clockOffset: 0,
+      // #559: the viewer's typing and the last snapshot
+      prediction: null,
+      desks: [],
+      ranks: [],
     });
   });
 
@@ -341,6 +348,7 @@ describe("bindRaceSocket (#561 C3)", () => {
       "connect_error",
       "countdown",
       "roster",
+      "snapshot",
       "welcome",
     ]);
     expect([...fake.io.listeners.keys()].sort()).toEqual(["reconnect", "reconnect_attempt"]);
@@ -605,5 +613,243 @@ describe("countdown and GO (#214 C1)", () => {
     expect(store.getState().phase).toBe("countdown");
     clock.advance(3_000);
     expect(store.getState().phase).toBe("running");
+  });
+});
+
+// Contract of #559 C5: the store's `snapshot` case keeps `desks` and `ranks` and reconciles the viewer's
+// prediction (ARCHITECTURE 7.3); the `key` case applies a keystroke locally; `typedViewFrom` is memoised per
+// prediction state, so the HUD re-renders once per keystroke or diverging snapshot and not at all for a
+// snapshot that agrees.
+describe("typing and snapshots (#559 C5)", () => {
+  const TEXT = "Le reçu";
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "fr" as const,
+    wordCount: 2,
+    t0: 1_767_225_603_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const code = roomCodeSchema.parse("KGB-4821");
+  const countdown = (race = RACE): Countdown => ({ v: PROTOCOL_VERSION, race });
+  const running = (w = welcome()) =>
+    run({ type: "welcome", payload: w }, { type: "countdown", payload: countdown() }, { type: "go" });
+  const key = (key: string, t: number): RaceEvent => ({ type: "key", keystroke: { t, key } });
+  const typing = PLAYER_STATUS_CODES.typing;
+  const snapshot = (desks: Snapshot["desks"], t = 500, ranks = desks.map((d) => d[0])): RaceEvent => ({
+    type: "snapshot",
+    payload: { v: PROTOCOL_VERSION, t, desks, ranks },
+  });
+  const typed = (s: RaceState) =>
+    selectTypedView(s)
+      .chars.map((c) => c.state[0])
+      .join("");
+
+  it("the countdown builds your prediction over the race text; a spectator gets none", () => {
+    const counting = run(
+      { type: "welcome", payload: welcome() },
+      { type: "countdown", payload: countdown() },
+    );
+    expect(counting.prediction?.text).toBe(TEXT);
+    expect(counting.prediction?.settings).toEqual({ errorMode: "continue", backspace: true });
+    expect(counting.prediction?.state.cursor).toBe(0);
+    const spectator = run(
+      { type: "welcome", payload: welcome({ role: "spectator", you: null }) },
+      { type: "countdown", payload: countdown() },
+    );
+    expect(spectator.prediction).toBeNull();
+  });
+
+  it("the host's error mode reaches the engine (engineSettingsOf)", () => {
+    const block = running(
+      welcome({ settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "block", backspace: false } }),
+    );
+    expect(block.prediction?.settings).toEqual({ errorMode: "block", backspace: false });
+    const s = reduceRace(block, key("x", 10));
+    expect(s.prediction?.state).toMatchObject({ cursor: 0, errors: 1 });
+    expect(selectTypedView(s).jammed).toBe(true);
+  });
+
+  it("a welcome mid-race starts the prediction from your authoritative state and overlay", () => {
+    const state = {
+      cursor: 2,
+      correct: 2,
+      errors: 0,
+      total: 2,
+      typed: [null, null],
+      status: "typing" as const,
+      lastT: 900,
+      finishedAt: null,
+    };
+    const s = run({
+      type: "welcome",
+      payload: welcome({
+        room: { code, phase: "running" },
+        race: { ...RACE, text: "un deux trois" },
+        state,
+        overlay: { extra: [], removed: [1] },
+      }),
+    });
+    expect(s.prediction?.text).toBe("un trois");
+    expect(s.prediction?.state).toEqual(state);
+    expect(typed(s).slice(0, 3)).toBe("ddn");
+  });
+
+  it("a key is applied only while running", () => {
+    const counting = run(
+      { type: "welcome", payload: welcome() },
+      { type: "countdown", payload: countdown() },
+    );
+    expect(reduceRace(counting, key("L", 0))).toBe(counting);
+    const s = reduceRace(running(), key("L", 40));
+    expect(s.prediction?.state.cursor).toBe(1);
+    expect(s.prediction?.unacked).toEqual([{ t: 40, key: "L" }]);
+    expect(typed(s).slice(0, 2)).toBe("dn");
+    // a key the engine refuses changes nothing
+    const done = [..."Le reçu"].reduce((x, k, i) => reduceRace(x, key(k, 40 * (i + 1))), running());
+    expect(done.prediction?.state.status).toBe("finished");
+    expect(reduceRace(done, key("x", 1_000))).toBe(done);
+  });
+
+  it("sent counts the keys handed to the server", () => {
+    const s = reduceRace(reduceRace(running(), key("L", 40)), key("e", 80));
+    expect(reduceRace(s, { type: "sent", count: 2 }).prediction?.sent).toBe(2);
+    expect(reduceRace(running(), { type: "sent", count: 1 }).prediction?.sent).toBe(0);
+  });
+
+  it("a snapshot keeps desks and ranks and reconciles your desk's prediction", () => {
+    const s = reduceRace(reduceRace(running(), key("L", 40)), { type: "sent", count: 1 });
+    const reconcile = vi.spyOn(s.prediction!, "reconcile");
+    const desks: Snapshot["desks"] = [
+      [1, 4, 4, 0, typing],
+      [3, 0, 0, 0, typing],
+      [5, 1, 1, 0, typing],
+    ];
+    const next = reduceRace(s, snapshot(desks, 500, [1, 5, 3]));
+    expect(next.desks).toEqual(desks);
+    expect(next.ranks).toEqual([1, 5, 3]);
+    expect(reconcile).toHaveBeenCalledTimes(1);
+    expect(reconcile).toHaveBeenCalledWith(
+      { cursor: 1, correct: 1, errors: 0, status: "typing" },
+      1,
+    );
+    expect(next.prediction?.unacked).toEqual([]);
+    // a snapshot without your desk (a spectator, or before your seat is in it) keeps desks only
+    const other = reduceRace(s, snapshot([[1, 4, 4, 0, typing]]));
+    expect(other.prediction).toBe(s.prediction);
+  });
+
+  it("a diverging snapshot converges: the server's state plus the keys it has not seen", () => {
+    // L, e sent; then ␠ typed and not yet sent
+    let s = reduceRace(reduceRace(running(), key("L", 40)), key("e", 80));
+    s = reduceRace(reduceRace(s, { type: "sent", count: 2 }), key(" ", 120));
+    expect(s.prediction?.state.cursor).toBe(3);
+    // the server counted one of the two sent keys wrong: no prefix of the prediction matches it
+    s = reduceRace(s, snapshot([[5, 2, 1, 1, typing]]));
+    expect(s.prediction?.base).toMatchObject({ cursor: 2, correct: 1, errors: 1 });
+    expect(s.prediction?.unacked).toEqual([{ t: 120, key: " " }]);
+    expect(s.prediction?.state).toMatchObject({ cursor: 3, correct: 2, errors: 1 });
+    // the next snapshot agrees: it settles with nothing left unacked
+    s = reduceRace(reduceRace(s, { type: "sent", count: 1 }), snapshot([[5, 3, 2, 1, typing]]));
+    expect(s.prediction?.unacked).toEqual([]);
+    expect(s.prediction?.state).toMatchObject({ cursor: 3, correct: 2, errors: 1 });
+  });
+
+  it("a status the server decided (asleep) locks typing", () => {
+    const s = reduceRace(running(), snapshot([[5, 0, 0, 0, PLAYER_STATUS_CODES.asleep]]));
+    expect(s.prediction?.state.status).toBe("asleep");
+    expect(selectCanType(s)).toBe(false);
+  });
+
+  it("selectCanType: only while running, with a desk, before your own finish", () => {
+    expect(selectCanType(initialRaceState)).toBe(false);
+    expect(selectCanType(run({ type: "welcome", payload: welcome() }))).toBe(false);
+    const counting = run(
+      { type: "welcome", payload: welcome() },
+      { type: "countdown", payload: countdown() },
+    );
+    expect(selectCanType(counting)).toBe(false);
+    expect(selectCanType(running())).toBe(true);
+    const done = [..."Le reçu"].reduce((x, k, i) => reduceRace(x, key(k, 40 * (i + 1))), running());
+    expect(selectCanType(done)).toBe(false);
+    expect(selectCanType(reduceRace(running(), { type: "reconnecting" }))).toBe(false);
+  });
+
+  it("selectTypedView is memoised per prediction state: the HUD re-renders once per keystroke or diverging snapshot", () => {
+    const store = createRaceStore(running());
+    const views: unknown[] = [];
+    let last = selectTypedView(store.getState());
+    // what useSyncExternalStore does: re-render when the selected value changes
+    store.subscribe(() => {
+      const view = selectTypedView(store.getState());
+      if (view !== last) views.push(view);
+      last = view;
+    });
+    expect(selectTypedView(store.getState())).toBe(last);
+    store.dispatch(key("L", 40));
+    expect(views).toHaveLength(1);
+    store.dispatch({ type: "sent", count: 1 });
+    expect(views).toHaveLength(1);
+    // the server agrees: no new view
+    store.dispatch(snapshot([[5, 1, 1, 0, typing]], 100));
+    store.dispatch(snapshot([[5, 1, 1, 0, typing]], 200));
+    expect(views).toHaveLength(1);
+    store.dispatch(key("e", 80));
+    store.dispatch(key(" ", 120));
+    expect(views).toHaveLength(3);
+    // a rival's progress changes nothing on your sheet
+    store.dispatch(
+      snapshot(
+        [
+          [1, 3, 3, 0, typing],
+          [5, 1, 1, 0, typing],
+        ],
+        300,
+      ),
+    );
+    expect(views).toHaveLength(3);
+    // the server diverges: exactly one new view
+    store.dispatch({ type: "sent", count: 2 });
+    store.dispatch(snapshot([[5, 2, 1, 1, typing]], 400));
+    expect(views).toHaveLength(4);
+  });
+
+  it("before a race the typed view is the empty one, the same object on every read", () => {
+    const view = selectTypedView(initialRaceState);
+    expect(view).toEqual({ chars: [], cursor: 0, jammed: false, lastTypedAt: null });
+    expect(selectTypedView(run({ type: "welcome", payload: welcome() }))).toBe(view);
+  });
+
+  it("lost stays terminal and the new cases stay pure", () => {
+    const lost = run({ type: "connect-error", reason: "closed" });
+    for (const event of [key("L", 1), { type: "sent", count: 1 }, snapshot([])] satisfies RaceEvent[]) {
+      expect(reduceRace(lost, event), event.type).toBe(lost);
+    }
+    const s = freeze(reduceRace(running(), key("L", 40)));
+    const payload = freeze(snapshot([[5, 1, 1, 0, typing]]));
+    expect(() => reduceRace(s, payload)).not.toThrow();
+    expect(() => reduceRace(s, key("e", 80))).not.toThrow();
+  });
+
+  it("bindRaceSocket turns a snapshot into a snapshot event", () => {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const room = connectToRoom("http://localhost:7559", "tok", {
+      io: vi.fn(() => fake) as unknown as IoFactory,
+    });
+    const dispatch = vi.fn();
+    bindRaceSocket(room, dispatch);
+    const payload: Snapshot = { v: PROTOCOL_VERSION, t: 100, desks: [[5, 1, 1, 0, 0]], ranks: [5] };
+    for (const fn of listeners.get("snapshot") ?? []) fn(payload);
+    expect(dispatch).toHaveBeenCalledWith({ type: "snapshot", payload });
   });
 });

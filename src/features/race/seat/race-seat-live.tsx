@@ -1,20 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
-import type { RaceLostReason, RacePhase } from "../client/store";
+import { selectCanType, type RaceLostReason, type RacePhase } from "../client/store";
+import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
 import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
+import { RaceInput } from "../components/race-input";
 import { RaceNotice } from "../components/race-notice";
+import { SeatDesks } from "./seat-leaves";
 import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
 export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors">;
 
-/** The live leaf's copy: the status slot's, plus the countdown's (#214). */
-export type SeatLiveLabels = SeatStatusLabels & Pick<RaceSeatLabels, "countdown">;
+/** The live leaf's copy: the status slot's, the countdown's (#214) and the typing input's name (#559). */
+export type SeatLiveLabels = SeatStatusLabels &
+  Pick<RaceSeatLabels, "countdown"> & {
+    input: string;
+  };
 
 const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "back">> = {
   closed: "closed",
@@ -110,7 +116,8 @@ function useCountdownStep(): CountdownStep | null {
  * them the notice; spectator mode is #292), so a phone-width page never takes a desk.
  * Its root carries the store's phase as `data-phase` (`countdown` until GO, `running` from GO: the gate
  * #559's input reads) and holds the countdown overlay and the polite announcer of 3, 2, 1, GO (#214;
- * the race announcer of #242 reuses it).
+ * the race announcer of #242 reuses it). It owns the typing path too (#559): the hidden `RaceInput`,
+ * unlocked while you may type, feeds `createTyping` over the open socket.
  */
 export function RaceSeatLive({
   code,
@@ -127,6 +134,9 @@ export function RaceSeatLive({
   const phase = useRaceStore((s) => s.phase);
   const lost = useRaceStore((s) => s.lost);
   const step = useCountdownStep();
+  const canType = useRaceStore(selectCanType);
+  const typing = useRef<Typing | null>(null);
+  const press = useCallback((key: string) => typing.current?.press(key), []);
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
   // guest cookie, and a cookie set in an action re-renders the page): read the latest one, never reconnect
   // for it.
@@ -142,6 +152,14 @@ export function RaceSeatLive({
       lobbyId,
       mint: (input) => mintRef.current(input),
       dispatch: store.dispatch,
+      onSocket: (socket) => {
+        const own = createTyping({ store, send: (batch) => socket.sendKeys(batch) });
+        typing.current = own;
+        return () => {
+          own.dispose();
+          if (typing.current === own) typing.current = null;
+        };
+      },
     });
   }, [code, lobbyId, store]);
 
@@ -149,6 +167,8 @@ export function RaceSeatLive({
     <div data-phase={phase} className={styles.live}>
       <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />
       {step !== null ? <Countdown step={step} labels={labels.countdown} /> : null}
+      <RaceInput disabled={!canType} onKey={press} label={labels.input} />
+      <SeatDesks />
       {/* present before the countdown starts, so each change is announced; nothing to say once lost */}
       {phase !== "lost" ? (
         <p role="status" aria-atomic="true" data-announcer className={docket.srOnly}>

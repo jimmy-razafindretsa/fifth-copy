@@ -2,10 +2,13 @@
 
 import { useMemo } from "react";
 import { fill } from "@/i18n/format";
+import { selectTypedView } from "../client/store";
 import { useRaceStore } from "../client/use-race-store";
 import { AbandonControl } from "../components/abandon-control";
 import { NixieCounters } from "../components/nixie-counters";
 import { RaceCard } from "../components/race-card";
+import { TelexStrip, type TelexLabels } from "../components/telex-strip";
+import { TypedSheet } from "../components/typed-sheet";
 import type { AbandonLabels, NixieLabels, RaceCardLabels } from "../view/hud-labels";
 import { beforeStartRaceCard, paperwork, type RaceSeatLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
@@ -13,8 +16,36 @@ import styles from "./race-seat.module.css";
 /**
  * The HUD leaves that read the race store (#561, ADR 0013: one store, the HUD reads it). Each renders
  * the before-start state on the server (the store's server snapshot) and follows the room after the
- * welcome. Snapshots, ranks and WPM arrive with #559 and #564; Abandon wakes up with #233.
+ * welcome. The typing surface follows your prediction (#559); ranks and WPM arrive with #564; Abandon
+ * wakes up with #233.
  */
+
+/** The telex strip over your desk's typed view (#559): empty until the race text arrives. */
+export function SeatTelex({ labels }: { labels: TelexLabels }) {
+  const view = useRaceStore(selectTypedView);
+  return <TelexStrip view={view} labels={labels} />;
+}
+
+/** The typed sheet over the same view. */
+export function SeatSheet() {
+  const view = useRaceStore(selectTypedView);
+  return <TypedSheet view={view} />;
+}
+
+/**
+ * The last snapshot's desks as data, hidden: `data-desk-progress` is each desk's cursor (#559 C6, the
+ * host sees a guest's progress). The race card's lanes carry it once #564 selects them.
+ */
+export function SeatDesks() {
+  const desks = useRaceStore((s) => s.desks);
+  return (
+    <ul hidden data-desks>
+      {desks.map(([desk, cursor]) => (
+        <li key={desk} data-desk={desk} data-desk-progress={cursor} />
+      ))}
+    </ul>
+  );
+}
 
 /** The page heading: `SEAT VIEW`, then `SEAT VIEW · DESK 05` once the room seats you. */
 export function SeatKicker({ labels }: { labels: RaceSeatLabels["kicker"] }) {

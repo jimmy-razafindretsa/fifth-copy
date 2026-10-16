@@ -80,6 +80,7 @@ describe("reduceRace (#561 C2)", () => {
       overlay: null,
       resumeKey: null,
       serverNow: null,
+      clockOffset: 0,
     });
   });
 
@@ -319,7 +320,8 @@ describe("bindRaceSocket (#561 C3)", () => {
     fake.deliver("connect_error", new Error("in-progress"));
     fake.deliver("connect_error", new Error("xhr poll error"));
     expect(dispatch.mock.calls.map(([e]) => e)).toEqual([
-      { type: "welcome", payload: w },
+      // #214: the welcome carries the local time it arrived at, for the clock offset
+      { type: "welcome", payload: w, receivedAt: expect.any(Number) },
       { type: "roster", payload: { v: PROTOCOL_VERSION, members: [member(2, "Crow-274")] } },
       { type: "reconnecting" },
       { type: "reconnected" },
@@ -334,7 +336,12 @@ describe("bindRaceSocket (#561 C3)", () => {
     room.onRoster(own);
     const dispatch = vi.fn();
     const unbind = bindRaceSocket(room, dispatch);
-    expect([...fake.listeners.keys()].sort()).toEqual(["connect_error", "roster", "welcome"]);
+    expect([...fake.listeners.keys()].sort()).toEqual([
+      "connect_error",
+      "countdown",
+      "roster",
+      "welcome",
+    ]);
     expect([...fake.io.listeners.keys()].sort()).toEqual(["reconnect", "reconnect_attempt"]);
     unbind();
     unbind();
@@ -359,5 +366,243 @@ describe("bindRaceSocket (#561 C3)", () => {
     expect(store.getState().phase).toBe("reconnecting");
     fake.deliver("connect_error", new Error("closed"));
     expect(store.getState()).toMatchObject({ phase: "lost", lost: "closed" });
+  });
+});
+
+// Contract of #214 C1 (the store half): `countdown` stores the race and enters the countdown; `go` turns
+// it `running`. `bindRaceSocket` schedules `go` with an injected timer at `race.t0` on the corrected
+// clock (`welcome.serverNow` sets the offset), from a `countdown` event and from a `welcome` that finds
+// the room counting down (the seat view opened from the lobby connects after the broadcast), and its
+// unbind cancels it.
+describe("countdown and GO (#214 C1)", () => {
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "Le reçu du café est prêt.",
+    language: "fr" as const,
+    wordCount: 5,
+    t0: 1_767_225_603_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const code = roomCodeSchema.parse("KGB-4821");
+  const countdown = (race = RACE) => ({ v: PROTOCOL_VERSION, race });
+
+  describe("reduceRace", () => {
+    it("waiting -> countdown: stores the race and the room's phase, keeps the rest", () => {
+      const waiting = run({ type: "welcome", payload: welcome() });
+      const s = reduceRace(waiting, { type: "countdown", payload: countdown() });
+      expect(s.phase).toBe("countdown");
+      expect(s.race).toEqual(RACE);
+      expect(s.race).toMatchObject({ raceId: RACE.raceId, text: RACE.text, t0: RACE.t0 });
+      expect(s.race?.timerS).toBe(RACE.timerS);
+      expect(s.room).toEqual({ code, phase: "countdown" });
+      expect(s.members).toBe(waiting.members);
+      expect(s.you).toBe(5);
+    });
+
+    it("countdown -> running on go; go outside a countdown changes nothing", () => {
+      const counting = run(
+        { type: "welcome", payload: welcome() },
+        { type: "countdown", payload: countdown() },
+      );
+      const s = reduceRace(counting, { type: "go" });
+      expect(s.phase).toBe("running");
+      expect(s.room?.phase).toBe("running");
+      expect(s.race).toBe(counting.race);
+      const waiting = run({ type: "welcome", payload: welcome() });
+      expect(reduceRace(waiting, { type: "go" })).toBe(waiting);
+      expect(reduceRace(s, { type: "go" })).toBe(s);
+    });
+
+    it("go while the line is cut keeps reconnecting; the reconnect lands running", () => {
+      const cut = run(
+        { type: "welcome", payload: welcome() },
+        { type: "countdown", payload: countdown() },
+        { type: "reconnecting" },
+      );
+      const s = reduceRace(cut, { type: "go" });
+      expect(s.phase).toBe("reconnecting");
+      expect(reduceRace(s, { type: "reconnected" }).phase).toBe("running");
+    });
+
+    it("a welcome in a counting-down room enters the countdown with its race", () => {
+      const s = run({
+        type: "welcome",
+        payload: welcome({ room: { code, phase: "countdown" }, race: RACE }),
+      });
+      expect(s.phase).toBe("countdown");
+      expect(s.race).toEqual(RACE);
+    });
+
+    it("a welcome sets the clock offset from serverNow and the local receipt time", () => {
+      const w = welcome({ serverNow: 1_767_225_600_400 });
+      const s = run({ type: "welcome", payload: w, receivedAt: 1_767_225_600_000 });
+      expect(s.clockOffset).toBe(400);
+      // without a receipt time the offset is kept
+      expect(reduceRace(s, { type: "welcome", payload: w }).clockOffset).toBe(400);
+    });
+
+    it("lost stays terminal and the new cases stay pure", () => {
+      const lost = run({ type: "connect-error", reason: "closed" });
+      expect(reduceRace(lost, { type: "countdown", payload: countdown() })).toBe(lost);
+      expect(reduceRace(lost, { type: "go" })).toBe(lost);
+      const waiting = freeze(run({ type: "welcome", payload: welcome() }));
+      const payload = freeze(countdown());
+      expect(() => reduceRace(waiting, { type: "countdown", payload })).not.toThrow();
+      const counting = freeze(reduceRace(waiting, { type: "countdown", payload }));
+      expect(() => reduceRace(counting, { type: "go" })).not.toThrow();
+    });
+  });
+
+  /** A manual timer: `now` is this device's clock; `advance` fires what falls due, in order. */
+  function fakeTimer(start = 1_767_225_600_000) {
+    let now = start;
+    let next = 0;
+    const due = new Map<number, { at: number; fn: () => void }>();
+    return {
+      timer: {
+        now: () => now,
+        setTimeout: (fn: () => void, ms: number) => {
+          due.set(++next, { at: now + ms, fn });
+          return next;
+        },
+        clearTimeout: (handle: unknown) => void due.delete(handle as number),
+      },
+      advance(ms: number) {
+        const until = now + ms;
+        for (;;) {
+          const first = [...due].sort(([, a], [, b]) => a.at - b.at)[0];
+          if (!first || first[1].at > until) break;
+          due.delete(first[0]);
+          now = first[1].at;
+          first[1].fn();
+        }
+        now = until;
+      },
+      pending: () => due.size,
+      get now() {
+        return now;
+      },
+    };
+  }
+
+  /** The real `connectToRoom` over a fake socket.io socket (the events are parsed as in the app). */
+  function makeRoom() {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      listeners,
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      deliver: (event: string, ...args: unknown[]) => {
+        for (const fn of [...(listeners.get(event) ?? [])]) fn(...args);
+      },
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    return { fake, room: connectToRoom("http://localhost:7214", "tok", { io }) };
+  }
+
+  function setup() {
+    const { fake, room } = makeRoom();
+    const clock = fakeTimer();
+    const dispatch = vi.fn();
+    const unbind = bindRaceSocket(room, dispatch, { timer: clock.timer });
+    const gos = () => dispatch.mock.calls.filter(([e]) => e.type === "go").length;
+    return { fake, clock, dispatch, unbind, gos };
+  }
+
+  it("schedules go at t0 on the corrected clock after a countdown event", () => {
+    const { fake, clock, gos, dispatch } = setup();
+    // the server is 500 ms ahead of this device
+    fake.deliver("welcome", welcome({ serverNow: clock.now + 500 }));
+    expect(dispatch.mock.calls[0]![0]).toMatchObject({ type: "welcome", receivedAt: clock.now });
+    clock.advance(100);
+    const t0 = clock.now + 500 + 3_000; // GO 3 s from now, on the server's clock
+    fake.deliver("countdown", countdown({ ...RACE, t0 }));
+    expect(dispatch.mock.calls.at(-1)![0]).toEqual({
+      type: "countdown",
+      payload: countdown({ ...RACE, t0 }),
+    });
+    clock.advance(2_999);
+    expect(gos()).toBe(0);
+    clock.advance(1);
+    expect(gos()).toBe(1);
+    expect(dispatch.mock.calls.at(-1)![0]).toEqual({ type: "go" });
+  });
+
+  it("schedules go from a welcome that finds the room counting down", () => {
+    const { fake, clock, gos } = setup();
+    const serverNow = clock.now - 250; // the device is 250 ms ahead
+    fake.deliver(
+      "welcome",
+      welcome({
+        serverNow,
+        room: { code, phase: "countdown" },
+        race: { ...RACE, t0: serverNow + 1_800 },
+      }),
+    );
+    clock.advance(1_799);
+    expect(gos()).toBe(0);
+    clock.advance(1);
+    expect(gos()).toBe(1);
+  });
+
+  it("a welcome that arrives after t0 goes at once (zero delay, never negative)", () => {
+    const { fake, clock, gos } = setup();
+    fake.deliver(
+      "welcome",
+      welcome({
+        serverNow: clock.now,
+        room: { code, phase: "countdown" },
+        race: { ...RACE, t0: clock.now - 40 },
+      }),
+    );
+    expect(gos()).toBe(0);
+    clock.advance(0);
+    expect(gos()).toBe(1);
+  });
+
+  it("one go per countdown: a repeated countdown or a later welcome reschedules or cancels it", () => {
+    const { fake, clock, gos } = setup();
+    fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
+    fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 2_000 }));
+    expect(clock.pending()).toBe(1);
+    clock.advance(5_000);
+    expect(gos()).toBe(1);
+    // a welcome that no longer counts down (the race was voided) cancels the pending go
+    fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
+    fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    expect(clock.pending()).toBe(0);
+    clock.advance(5_000);
+    expect(gos()).toBe(1);
+  });
+
+  it("the unbind cancels a pending go and offs the countdown listener", () => {
+    const { fake, clock, gos, unbind } = setup();
+    fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
+    unbind();
+    expect(clock.pending()).toBe(0);
+    clock.advance(10_000);
+    expect(gos()).toBe(0);
+    expect(fake.listeners.get("countdown")?.size ?? 0).toBe(0);
+  });
+
+  it("drives a store from waiting to running", () => {
+    const { fake, room } = makeRoom();
+    const store = createRaceStore();
+    const clock = fakeTimer();
+    bindRaceSocket(room, store.dispatch, { timer: clock.timer });
+    fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    expect(store.getState().phase).toBe("waiting");
+    fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
+    expect(store.getState().phase).toBe("countdown");
+    clock.advance(3_000);
+    expect(store.getState().phase).toBe("running");
   });
 });

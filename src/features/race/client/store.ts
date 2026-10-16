@@ -1,4 +1,5 @@
 import type { Member, Phase, Welcome } from "@fifth-copy/protocol";
+import { clockOffset, remainingTo } from "./clock";
 import { storeResumeKey } from "./resume-key";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "./socket";
 
@@ -35,6 +36,8 @@ export type RaceState = {
   resumeKey: Welcome["resumeKey"];
   /** The server clock at the welcome (the first clock offset, #172). */
   serverNow: Welcome["serverNow"] | null;
+  /** Server time = `Date.now()` + this (#214, `clockOffset` of the last welcome; 0 until one). */
+  clockOffset: number;
 };
 
 /**
@@ -43,8 +46,13 @@ export type RaceState = {
  * binding in `bindRaceSocket`.
  */
 export type RaceEvent =
-  | { type: "welcome"; payload: RoomEvents["welcome"] }
+  /** `receivedAt`: this device's clock when it arrived (the binder's timer), for the clock offset. */
+  | { type: "welcome"; payload: RoomEvents["welcome"]; receivedAt?: number }
   | { type: "roster"; payload: RoomEvents["roster"] }
+  /** The host started: the race and its GO instant (#214). */
+  | { type: "countdown"; payload: RoomEvents["countdown"] }
+  /** `race.t0` passed on the corrected clock (scheduled by `bindRaceSocket`, #214). */
+  | { type: "go" }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
@@ -63,6 +71,7 @@ export const initialRaceState: RaceState = {
   overlay: null,
   resumeKey: null,
   serverNow: null,
+  clockOffset: 0,
 };
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -93,10 +102,29 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         overlay: w.overlay,
         resumeKey: w.resumeKey,
         serverNow: w.serverNow,
+        clockOffset:
+          event.receivedAt === undefined
+            ? state.clockOffset
+            : clockOffset(w.serverNow, event.receivedAt),
       };
     }
     case "roster":
       return { ...state, members: byDesk(event.payload.members) };
+    case "countdown":
+      return {
+        ...state,
+        phase: "countdown",
+        race: event.payload.race,
+        room: state.room && { ...state.room, phase: "countdown" },
+      };
+    case "go":
+      // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
+      if (state.room?.phase !== "countdown") return state;
+      return {
+        ...state,
+        phase: state.phase === "countdown" ? "running" : state.phase,
+        room: { ...state.room, phase: "running" },
+      };
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
       return event.reason === "transport"
@@ -138,32 +166,73 @@ export function createRaceStore(initial: RaceState = initialRaceState): RaceStor
   };
 }
 
+/** The device clock and timers `bindRaceSocket` schedules GO with (injected in tests). */
+export type RaceTimer = {
+  now(): number;
+  setTimeout(fn: () => void, ms: number): unknown;
+  clearTimeout(handle: unknown): void;
+};
+
+const deviceTimer: RaceTimer = {
+  now: () => Date.now(),
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
 export type BindRaceSocketOptions = {
   /** The room's lobby id: each `welcome.resumeKey` is stored under it (#561 C11). */
   lobbyId?: string;
+  timer?: RaceTimer;
 };
 
 /**
  * Subscribes the room socket's events and turns them into race events; returns the unbind, which offs
- * every listener bound here (and only those). Every `welcome` stores its resume key for this lobby, so
- * the next page (a reload, the seat view after the lobby) can reclaim the desk.
+ * every listener bound here (and only those) and cancels a pending GO. Every `welcome` stores its resume
+ * key for this lobby, so the next page (a reload, the seat view after the lobby) can reclaim the desk,
+ * and sets the clock offset. GO is scheduled at `race.t0` on the corrected clock from a `countdown`, or
+ * from a `welcome` that finds the room counting down (the seat view connects after the broadcast, #214).
  */
 export function bindRaceSocket(
   socket: RoomSocket,
   dispatch: (event: RaceEvent) => void,
-  { lobbyId }: BindRaceSocketOptions = {},
+  { lobbyId, timer = deviceTimer }: BindRaceSocketOptions = {},
 ): Off {
+  let offset = 0;
+  let pendingGo: unknown = null;
+  const cancelGo = () => {
+    if (pendingGo !== null) timer.clearTimeout(pendingGo);
+    pendingGo = null;
+  };
+  const scheduleGo = (t0: number) => {
+    cancelGo();
+    pendingGo = timer.setTimeout(
+      () => {
+        pendingGo = null;
+        dispatch({ type: "go" });
+      },
+      remainingTo(t0, timer.now() + offset),
+    );
+  };
   const offs: Off[] = [
     socket.onWelcome((payload) => {
+      const receivedAt = timer.now();
+      offset = clockOffset(payload.serverNow, receivedAt);
       if (lobbyId && payload.resumeKey) storeResumeKey(lobbyId, payload.resumeKey);
-      dispatch({ type: "welcome", payload });
+      dispatch({ type: "welcome", payload, receivedAt });
+      if (payload.room.phase === "countdown" && payload.race) scheduleGo(payload.race.t0);
+      else cancelGo();
     }),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
+    socket.onCountdown((payload) => {
+      dispatch({ type: "countdown", payload });
+      scheduleGo(payload.race.t0);
+    }),
     socket.onConnectError((reason) => dispatch({ type: "connect-error", reason })),
     socket.onReconnecting(() => dispatch({ type: "reconnecting" })),
     socket.onReconnected(() => dispatch({ type: "reconnected" })),
   ];
   return () => {
+    cancelGo();
     for (const off of offs.splice(0)) off();
   };
 }

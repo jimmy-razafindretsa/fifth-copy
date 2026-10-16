@@ -97,6 +97,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const socket = {
       onWelcome: (cb: (payload: unknown) => void) => ((onWelcome = cb), off),
       onRoster: () => off,
+      onCountdown: () => off,
       onConnectError: () => off,
       onReconnecting: () => off,
       onReconnected: () => off,
@@ -104,12 +105,19 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const dispatch = vi.fn();
     bindRaceSocket(socket, dispatch, { lobbyId: LOBBY });
     const second = `${KEY.slice(0, 40)}`;
-    onWelcome!({ resumeKey: KEY });
+    // the welcome fields the binder reads besides the key (#214: clock offset, countdown phase)
+    const welcome = (resumeKey: string | null) => ({
+      resumeKey,
+      serverNow: 0,
+      room: { phase: "waiting" },
+      race: null,
+    });
+    onWelcome!(welcome(KEY));
     expect(readResumeKey(LOBBY)).toBe(KEY);
-    onWelcome!({ resumeKey: second });
+    onWelcome!(welcome(second));
     expect(readResumeKey(LOBBY)).toBe(second);
     // a welcome without a key (a spectator) leaves the stored one alone
-    onWelcome!({ resumeKey: null });
+    onWelcome!(welcome(null));
     expect(readResumeKey(LOBBY)).toBe(second);
     expect(dispatch).toHaveBeenCalledTimes(3);
   });
@@ -121,6 +129,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const room = {
       onWelcome: () => () => {},
       onRoster: () => () => {},
+      onCountdown: () => () => {},
       onConnectError: () => () => {},
       onReconnecting: () => () => {},
       onReconnected: () => () => {},

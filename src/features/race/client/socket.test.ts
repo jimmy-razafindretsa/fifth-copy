@@ -10,7 +10,7 @@ import {
   type SettingsEvent,
   type Welcome,
 } from "@fifth-copy/protocol";
-import { connectToRoom, type IoFactory } from "./socket";
+import { connectToRoom, HOST_START_TIMEOUT_MS, type IoFactory } from "./socket";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -329,6 +329,103 @@ describe("settings (#101 C4)", () => {
     await expect(pending).resolves.toEqual({ ok: false, error: "timeout" });
     expect(onProtocolError).toHaveBeenCalledTimes(1);
     expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "host:settings" });
+  });
+});
+
+// Contract of #214 C7: the host's START. `sendHostStart` emits `host:start { v }` and resolves the
+// parsed ack (`{ ok: true, raceId }` or a refusal), or `timeout` after 5 s; it never rejects, and an
+// invalid ack is a protocol error that resolves `timeout`. `onCountdown` delivers the parsed broadcast.
+describe("host start (#214 C7)", () => {
+  const RACE_ID = "3b241101-e2bb-4255-8caf-4136c566a962";
+
+  afterEach(() => vi.useRealTimers());
+
+  function lastAck(fake: ReturnType<typeof makeFakeSocket>) {
+    const call = fake.emit.mock.calls.at(-1)!;
+    return call[2] as (a: unknown) => void;
+  }
+
+  it("emits host:start with the protocol version only and resolves the ok ack", async () => {
+    const { fake, room } = setup();
+    const pending = room.sendHostStart();
+    expect(fake.emit).toHaveBeenCalledTimes(1);
+    expect(fake.emit).toHaveBeenCalledWith(
+      "host:start",
+      { v: PROTOCOL_VERSION },
+      expect.any(Function),
+    );
+    lastAck(fake)({ ok: true, raceId: RACE_ID });
+    await expect(pending).resolves.toEqual({ ok: true, raceId: RACE_ID });
+  });
+
+  it.each(["not-host", "too-few", "not-waiting", "start-failed"] as const)(
+    "passes the %s refusal through",
+    async (error) => {
+      const { fake, room } = setup();
+      const pending = room.sendHostStart();
+      lastAck(fake)({ ok: false, error });
+      await expect(pending).resolves.toEqual({ ok: false, error });
+    },
+  );
+
+  it("resolves timeout after 5 s without an ack, never rejects, ignores a late ack", async () => {
+    vi.useFakeTimers();
+    const { fake, room } = setup();
+    let settled: unknown;
+    const pending = room.sendHostStart().then(
+      (r) => (settled = r),
+      (e: unknown) => (settled = { rejected: e }),
+    );
+    expect(HOST_START_TIMEOUT_MS).toBe(5_000);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(settled).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(settled).toEqual({ ok: false, error: "timeout" });
+    lastAck(fake)({ ok: true, raceId: RACE_ID });
+    await vi.runAllTimersAsync();
+    expect(settled).toEqual({ ok: false, error: "timeout" });
+  });
+
+  it.each([
+    ["an unknown error", { ok: false, error: "teapot" }],
+    ["ok without a race id", { ok: true }],
+    ["a malformed race id", { ok: true, raceId: "KGB-4821" }],
+    ["no payload", undefined],
+  ])("%s resolves timeout and reports a protocol error", async (_, raw) => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    const onProtocolError = vi.fn();
+    room.onProtocolError(onProtocolError);
+    const pending = room.sendHostStart();
+    lastAck(fake)(raw);
+    await expect(pending).resolves.toEqual({ ok: false, error: "timeout" });
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "host:start" });
+  });
+
+  it("onCountdown delivers a parsed countdown and routes an invalid one to onProtocolError", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    const onCountdown = vi.fn();
+    const onProtocolError = vi.fn();
+    room.onCountdown(onCountdown);
+    room.onProtocolError(onProtocolError);
+    const countdown = {
+      v: PROTOCOL_VERSION,
+      race: {
+        raceId: RACE_ID,
+        text: "Type fast. Type first.",
+        language: "en",
+        wordCount: 4,
+        t0: 1_767_225_603_000,
+        timerS: DEFAULT_RACE_SETTINGS.timerS,
+      },
+    };
+    fake.deliver("countdown", countdown);
+    fake.deliver("countdown", { v: PROTOCOL_VERSION });
+    expect(onCountdown.mock.calls).toEqual([[countdown]]);
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "countdown" });
   });
 });
 

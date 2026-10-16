@@ -2,7 +2,7 @@ import type { MintRaceToken } from "../client/connect-seat";
 import { RaceStoreProvider } from "../client/use-race-store";
 import { SabotageTray } from "../components/sabotage-tray";
 import { SeatLayout } from "../components/seat-layout";
-import { TypingMachine } from "../components/machine/typing-machine";
+import { TypingMachineLive } from "../components/machine/typing-machine-live";
 import type { RaceSeatInfo } from "../queries/get-race-seat";
 import { RaceSeatLive } from "./race-seat-live";
 import {
@@ -55,7 +55,7 @@ export function RaceSeat({ seat, labels, mint }: RaceSeatProps) {
           />
         }
         sheet={<SeatSheet />}
-        machine={<TypingMachine rows={SEAT_ROWS} />}
+        machine={<TypingMachineLive rows={SEAT_ROWS} />}
         tray={<SabotageTray card={null} cooldownS={0} hint={null} labels={labels.sabotageTray} />}
         abandon={<SeatAbandon labels={labels.abandon} />}
         phones={labels.notice.phones}

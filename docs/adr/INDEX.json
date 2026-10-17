@@ -267,6 +267,23 @@
       "supersededBy": [],
       "rule": "Nixies, podium, ranking columns, personal bests and ranks show and use clean WPM (base-text characters only); bonus-adjusted WPM is stored and shown only on the personal stats card; finish order and progress are by effective-text completion; bonus effects only change text beyond a desk's high-water mark, and every trace is analysed against the desk's effective text.",
       "file": "docs/adr/0016-shown-wpm-and-bonus-fairness.md"
+    },
+    {
+      "id": "0018",
+      "title": "First-load JS budget raised to 300 kB gzip (amends ADR 0013's bundle clause)",
+      "status": "accepted",
+      "category": "ui",
+      "scope": [
+        "scripts/bundle-budget.ts",
+        "scripts/bundle-budget.test.ts",
+        "src/app/race/**",
+        "src/app/lobby/**",
+        "e2e/perf/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "An App Router route's first-load JS without the 3D chunk stays at or under 300 kB gzip (BUDGET_KB in scripts/bundle-budget.ts, one limit for every route); this replaces only ADR 0013's 250 kB figure, whose other budgets (three only in the race-3d chunk, fps, draw calls, time to race) stay as written.",
+      "file": "docs/adr/0018-first-load-js-budget-300-kb.md"
     }
   ]
 }

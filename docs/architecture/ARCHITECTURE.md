@@ -344,7 +344,7 @@ Data inventory and retention live in `docs/privacy/` (cards #71-#85): user (name
 
 **Observability.** Both processes log JSON through `pino` with redaction; `/api/health` and `/health` (rooms, draining, versions); request ids propagate from web to race server on internal calls. Error reporting tool: later ADR (card #419).
 
-**Performance budgets.** ADR 0013: first-load JS of the race route without 3D <= 250 kB gzip; `three` only in the race-3d chunk; >= 30 fps median at Low preset with 60 bots in CI; <= 60 draw calls; landing-to-race < 60 s. Server: snapshot serialisation < 2 ms for 100 desks (unit benchmark).
+**Performance budgets.** ADR 0013, amended by [ADR 0018](../adr/0018-first-load-js-budget-300-kb.md): first-load JS of every measured route (race, lobby) without 3D <= 300 kB gzip (`scripts/bundle-budget.ts`); `three` only in the race-3d chunk; >= 30 fps median at Low preset with 60 bots in CI; <= 60 draw calls; landing-to-race < 60 s. Server: snapshot serialisation < 2 ms for 100 desks (unit benchmark).
 
 **Accessibility.** Primitives are real elements with visible focus; race state changes are announced through a polite live region (card #242); reduced-motion and flash-safety rules apply to stamps and the bulb (card #28); colour-blind-safe rival markers (R80).
 

@@ -458,6 +458,7 @@ test.describe("landing always starts light (#651)", () => {
 
   test("#651 C2 NIGHT SHIFT under a dark OS switches to night and is remembered", async ({
     page,
+    context,
   }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await ready(page);
@@ -468,6 +469,13 @@ test.describe("landing always starts light (#651)", () => {
       "true",
     );
     expect(await bodyBg(page)).toBe(NIGHT);
+    // data-theme flips at once on the client; reload only once the action has written the cookie
+    await expect
+      .poll(
+        async () => (await context.cookies()).find((c) => c.name === "theme")?.value,
+        AFTER_ACTION,
+      )
+      .toBe("dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     expect(await bodyBg(page)).toBe(NIGHT);

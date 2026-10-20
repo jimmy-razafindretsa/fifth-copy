@@ -68,7 +68,9 @@ const root = decls(
 );
 const media = top.find((b) => /^@media\s*\(prefers-color-scheme:\s*dark\)$/.test(b.selector));
 const mediaDark = decls(
-  media?.children.find((c) => c.selector === ':root:not([data-theme="light"])')?.body ?? "",
+  media?.children.find(
+    (c) => c.selector === ':root:not([data-theme="light"]):not(:has([data-default-theme="light"]))',
+  )?.body ?? "",
 );
 const attrDark = decls(top.find((b) => b.selector === ':root[data-theme="dark"]')?.body ?? "");
 

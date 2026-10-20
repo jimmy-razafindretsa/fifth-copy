@@ -35,7 +35,8 @@ export async function LandingHeader() {
           {t.header.guide}
         </a>
         <LocaleToggle locale={locale} label={t.header.languageLabel} />
-        <ThemeToggle theme={theme} label={t.header.nightShift} />
+        {/* no cookie = paper here, whatever the OS (bible 3.2, #651) */}
+        <ThemeToggle theme={theme ?? "light"} label={t.header.nightShift} />
         {viewer ? (
           <div className={styles.docket}>
             <span>{fill(t.header.honorific, { name: viewer.name })}</span>

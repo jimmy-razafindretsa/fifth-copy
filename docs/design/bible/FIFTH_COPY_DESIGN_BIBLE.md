@@ -101,6 +101,7 @@ It is *not* black. It's a warm, readable grey-brown.
 | `--ink` | `#2A2420` | `#F4ECDC` |
 | `--muted` | `#6F736C` | `#CFC6B3` |
 Reds and gold never change between themes. The tape strip stays `tape-paper` in both. Theme is implemented with CSS variables on the page root, and every style uses `var(--x, <light fallback>)`.
+Extension (#651): the landing always opens on paper. Without a `theme` cookie the other pages follow the OS (`prefers-color-scheme`), but the landing pins light with `data-default-theme="light"` on its root, so a visitor with a dark OS still meets the paper front page, on first paint and with no flash. A visitor who pressed NIGHT SHIFT keeps it: the saved choice always wins, on the landing too.
 
 ### 3.3 Contrast
 Text is 4.5:1 minimum. Never put muted text on red. On red grounds use paper or ink at full opacity.

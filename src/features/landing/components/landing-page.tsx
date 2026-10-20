@@ -22,12 +22,15 @@ type Props = {
   finalAction: React.ReactNode;
 };
 
-/** The landing in the bible's order (14.1): header, hero, ticker, story, clerk, history, how, final, medal, footer. */
+/**
+ * The landing in the bible's order (14.1): header, hero, ticker, story, clerk, history, how, final, medal,
+ * footer. It always opens on paper: `data-default-theme` makes tokens.css ignore a dark OS (bible 3.2, #651).
+ */
 export async function LandingPage({ primary, entries, finalAction }: Props) {
   const [t, viewer] = await Promise.all([getT(), getViewer()]);
   const name = viewer ? fill(t.header.honorific, { name: viewer.name }) : null;
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-default-theme="light">
       <LandingHeader />
       <main className="flex flex-1 flex-col">
         <LandingHero primary={primary} entries={entries} />

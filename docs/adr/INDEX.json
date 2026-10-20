@@ -199,7 +199,9 @@
         "scripts/deploy-smoke.sh"
       ],
       "supersedes": [],
-      "supersededBy": [],
+      "supersededBy": [
+        "0019"
+      ],
       "rule": "Production is docker compose on one VPS behind Caddy (automatic Let's Encrypt TLS; /socket.io/* and /internal/* proxied to race-server, everything else to web); CI builds versioned images for web and race-server, runs prisma migrate deploy, replaces web immediately and race-server only when it reports zero live rooms (or after a hard timeout), then runs deploy-smoke.",
       "file": "docs/adr/0012-hosting-and-deploy.md"
     },
@@ -284,6 +286,26 @@
       "supersededBy": [],
       "rule": "An App Router route's first-load JS without the 3D chunk stays at or under 300 kB gzip (BUDGET_KB in scripts/bundle-budget.ts, one limit for every route); this replaces only ADR 0013's 250 kB figure, whose other budgets (three only in the race-3d chunk, fps, draw calls, time to race) stay as written.",
       "file": "docs/adr/0018-first-load-js-budget-300-kb.md"
+    },
+    {
+      "id": "0019",
+      "title": "Production runs on Railway (web, race-server, Postgres, Redis as Railway services), replacing the single VPS",
+      "status": "proposed",
+      "category": "tooling",
+      "scope": [
+        "railway.json",
+        "railway.toml",
+        ".github/workflows/**",
+        "scripts/deploy-smoke.sh",
+        "src/env.ts",
+        "services/race-server/src/env.ts"
+      ],
+      "supersedes": [
+        "0012"
+      ],
+      "supersededBy": [],
+      "rule": "Production is the Railway project with four services (web = Next.js from the repo root, race-server = the services/race-server workspace, Railway Postgres, Railway Redis); Railway builds from main on push, web runs prisma migrate deploy as its pre-deploy command, secrets live only in Railway variables (generated, never printed or committed), and every new env var is added to the matching Railway service in the same PR.",
+      "file": "docs/adr/0019-railway-hosting.md"
     }
   ]
 }

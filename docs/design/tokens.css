@@ -166,9 +166,12 @@
   --t-finish-paper: var(--brand-paper);
 }
 
-/* Night shift (bible 3.2): the two dark blocks stay identical (selectors fixed for #19). */
+/*
+ * Night shift (bible 3.2): the two dark blocks stay identical (selectors fixed for #19). The OS block
+ * skips a page that pins paper with `data-default-theme="light"` (the landing, #651); a cookie still wins.
+ */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"]):not(:has([data-default-theme="light"])) {
     color-scheme: dark;
     --t-bg: var(--brand-night);
     --t-surface: var(--brand-night-panel);

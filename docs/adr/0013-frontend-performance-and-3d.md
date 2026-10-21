@@ -29,3 +29,6 @@ rule: WebGL code is confined to src/features/race-3d (client-only, next/dynamic 
 - **react-three-fiber:** declarative and nice, but adds a reconciler on the hot path and a dependency; imperative three.js with one `RaceScene` class is enough for one scene. Rejected for now.
 - **Text in WebGL (SDF):** sharp enough, but input latency and accessibility suffer and the spec forbids it. Rejected.
 - **Canvas 2D race view only:** cheapest, but the 3D room is a core part of the approved art direction. Kept as the fallback.
+
+## Amendments
+- 2026-10-16, ADR 0018 (owner decision, card #646): the first-load JS budget is 300 kB gzip, 3D chunk excluded. The rest of this ADR is unchanged.

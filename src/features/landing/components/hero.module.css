@@ -125,10 +125,10 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .onPaper {
+  :root:not([data-theme="light"]):not(:has([data-default-theme="light"])) .onPaper {
     display: none;
   }
-  :root:not([data-theme="light"]) .onInk {
+  :root:not([data-theme="light"]):not(:has([data-default-theme="light"])) .onInk {
     display: block;
   }
 }

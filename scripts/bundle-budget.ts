@@ -1,5 +1,5 @@
 /**
- * First-load JS budget for one App Router route (ADR 0013: 250 kB gzip), card #521.
+ * First-load JS budget for one App Router route (ADR 0018: 300 kB gzip, amending ADR 0013), cards #521, #646.
  * Next 16.3's `next build` no longer prints a size column, so this reads the build output directly:
  *   rootMainFiles      from .next/server/app/<route>/page/build-manifest.json
  *   layout + page      entryJSFiles from .next/server/app/<route>/page_client-reference-manifest.js
@@ -13,7 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import zlib from "node:zlib";
 
-export const BUDGET_KB = 250;
+export const BUDGET_KB = 300;
 
 type Io = { log: (s: string) => void; error: (s: string) => void };
 type Options = { distDir?: string; io?: Io };

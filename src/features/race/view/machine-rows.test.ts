@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { TypingMachine } from "../components/machine/typing-machine";
 
 // Contract of #224 C2: the machine's rows come from one seam, `machineRows({ layout, locale })`: the
 // viewer's saved layout when there is one (#66 fills it), else the request's UI language (ADR 0010:
@@ -29,6 +32,23 @@ describe("machineRows (#224 C2)", () => {
   it("without a saved layout: CSA for a French UI, US QWERTY for an English one", async () => {
     expect(await machineRows({ layout: null, locale: "fr" })).toBe(layouts.CSA);
     expect(await machineRows({ layout: null, locale: "en" })).toBe(layouts.US_QWERTY);
+  });
+
+  it("each of the four layouts renders through TypingMachine: one data-key per key, then the space bar", async () => {
+    for (const id of keyboardLayoutIds) {
+      const rows = await machineRows({ layout: id, locale: "en" });
+      const html = renderToStaticMarkup(createElement(TypingMachine, { rows }));
+      const keys = [...html.matchAll(/data-key="([^"]*)"/g)].map((m) =>
+        m[1]!
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&#x27;/g, "'"),
+      );
+      expect(keys, id).toEqual([...rows.flat(), " "]);
+      expect(html, id).toMatch(
+        /^<div data-machine="true" data-skin="teleprinter" aria-hidden="true">/,
+      );
+    }
   });
 
   it("parses its input (a server function: the race index reaches client graphs as a reference)", async () => {

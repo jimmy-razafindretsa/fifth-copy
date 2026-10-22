@@ -80,3 +80,28 @@ describe("RaceInput (#559 C4)", () => {
     expect(TYPING_SURFACE).toBe("[data-telex], [data-sheet], [data-machine]");
   });
 });
+
+// Contract of #220 C6: the input carries the live error settings and your engine errors as data, so the
+// e2e and later cards read them without a scoring copy.
+describe("RaceInput live attributes (#220 C6)", () => {
+  const live = (props: { mode?: "continue" | "block"; backspace?: boolean; errors?: number }) =>
+    renderToStaticMarkup(<RaceInput disabled onKey={noop} label="Text to type" {...props} />);
+
+  it("data-mode, data-backspace (on | off) and data-errors from its props", () => {
+    const block = live({ mode: "block", backspace: true, errors: 3 });
+    expect(block).toContain('data-mode="block"');
+    expect(block).toContain('data-backspace="on"');
+    expect(block).toContain('data-errors="3"');
+    const off = live({ mode: "continue", backspace: false, errors: 0 });
+    expect(off).toContain('data-mode="continue"');
+    expect(off).toContain('data-backspace="off"');
+    expect(off).toContain('data-errors="0"');
+  });
+
+  it("before the room's settings and your desk are known, none of them", () => {
+    const out = live({});
+    for (const attr of ["data-mode", "data-backspace", "data-errors"]) {
+      expect(out, attr).not.toContain(attr);
+    }
+  });
+});

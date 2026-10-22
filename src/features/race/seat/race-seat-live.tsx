@@ -135,6 +135,9 @@ export function RaceSeatLive({
   const lost = useRaceStore((s) => s.lost);
   const step = useCountdownStep();
   const canType = useRaceStore(selectCanType);
+  const mode = useRaceStore((s) => s.settings?.errorMode);
+  const backspace = useRaceStore((s) => s.settings?.backspace);
+  const errors = useRaceStore((s) => s.prediction?.state.errors);
   const typing = useRef<Typing | null>(null);
   const press = useCallback((key: string) => typing.current?.press(key), []);
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
@@ -167,7 +170,14 @@ export function RaceSeatLive({
     <div data-phase={phase} className={styles.live}>
       <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />
       {step !== null ? <Countdown step={step} labels={labels.countdown} /> : null}
-      <RaceInput disabled={!canType} onKey={press} label={labels.input} />
+      <RaceInput
+        disabled={!canType}
+        onKey={press}
+        label={labels.input}
+        mode={mode}
+        backspace={backspace}
+        errors={errors}
+      />
       <SeatDesks />
       {/* present before the countdown starts, so each change is announced; nothing to say once lost */}
       {phase !== "lost" ? (

@@ -47,8 +47,18 @@ const FILES = [
   // #560 C10: the HUD's view model and copy are data too
   path.join(root, "src/features/race/view/race-card-view.ts"),
   path.join(root, "src/features/race/view/hud-labels.ts"),
+  // #220 C2: the machine's live props are a pure selector too
+  path.join(root, "src/features/race/view/machine-props.ts"),
   ...sources(components).filter((f) => !isTest(f)),
 ];
+
+/**
+ * #220 C2: the one live leaf of the components, the machine wrapper, reads the race store through its
+ * React binding (ADR 0013: the HTML overlays are driven by the store) and nothing else of the client.
+ */
+const STORE_READERS: Record<string, string> = {
+  [path.join(components, "machine/typing-machine-live.tsx")]: "../../client/use-race-store",
+};
 
 describe("typing surface imports (#558 C10)", () => {
   it("covers the strip, the sheet, the frame, the registry and every skin", () => {
@@ -61,6 +71,8 @@ describe("typing surface imports (#558 C10)", () => {
       "machine/typing-machine.tsx",
       "machine/skins/index.ts",
       "machine/skins/teleprinter.tsx",
+      "machine/typing-machine-live.tsx",
+      "../view/machine-props.ts",
     ]) {
       expect(rel, f).toContain(f);
     }
@@ -69,6 +81,7 @@ describe("typing surface imports (#558 C10)", () => {
   for (const file of FILES) {
     it(`${path.relative(root, file)} imports no socket client, engine or protocol`, () => {
       for (const s of specifiers(readFileSync(file, "utf8"))) {
+        if (s === STORE_READERS[file]) continue;
         expect(s, file).not.toMatch(/(^|\/)client(\/|$)/);
         expect(s, file).not.toMatch(/^@fifth-copy\/(engine|protocol)/);
         expect(s, file).not.toMatch(/^socket\.io/);
@@ -187,5 +200,44 @@ describe("engine reducers only in the prediction (#559 C8)", () => {
 
   it("C9 exports RaceInput through the race index", () => {
     expect(race.RaceInput).toBe(RaceInput);
+  });
+});
+
+// Contract of #220 C7: the engine decides right, wrong and the jam (ADR 0007); the store and the view only
+// carry what it decided. Outside the prediction no module of the race feature compares the engine's
+// counters or a key with the text.
+describe("no second comparison (#220 C7)", () => {
+  const feature = path.join(root, "src/features/race");
+  const predictionFile = path.join(feature, "client/prediction.ts");
+  const modules = sources(feature).filter((f) => !isTest(f) && f !== predictionFile);
+  /** A counter compared (`errors >`, `< state.correct`; an arrow `=>` is no comparison) or a char of the text read (`text[i]`). */
+  const COMPARISON =
+    /\b(errors|correct)\s*[<>]=?|(?<!=)[<>]=?\s*[\w.?]*\b(errors|correct)\b|\btext\s*\[|\btext\.(at|charAt|codePointAt)\(/;
+
+  it("covers the store, the views, the seat and the components", () => {
+    const rel = modules.map((f) => path.relative(feature, f));
+    for (const f of [
+      "client/store.ts",
+      "client/typing.ts",
+      "view/typed-view.ts",
+      "view/machine-props.ts",
+      "seat/race-seat-live.tsx",
+      "components/machine/typing-machine-live.tsx",
+    ]) {
+      expect(rel, f).toContain(f);
+    }
+  });
+
+  for (const file of modules) {
+    it(`${path.relative(root, file)} compares no counter and reads no char of the text`, () => {
+      const code = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+      expect(code.match(COMPARISON)?.[0] ?? null, file).toBeNull();
+    });
+  }
+
+  it("the prediction is where the engine's numbers are read (the jam, the struck key, the pop stamp)", () => {
+    expect(readFileSync(predictionFile, "utf8")).toMatch(COMPARISON);
   });
 });

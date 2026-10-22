@@ -6,6 +6,7 @@ import {
   type Snapshot,
   type Welcome,
 } from "@fifth-copy/protocol";
+import type { LastKey } from "../view/machine-props";
 import { NO_TEXT_VIEW, typedViewFrom, type TypedView } from "../view/typed-view";
 import { clockOffset, remainingTo } from "./clock";
 import {
@@ -62,6 +63,11 @@ export type RaceState = {
   /** The last snapshot's desks `[desk, cursor, correct, errors, statusCode]` and live order (#559). */
   desks: Snapshot["desks"];
   ranks: Snapshot["ranks"];
+  /**
+   * The last key your prediction took (#220): the struck cap and, later, the press (#224), the sound
+   * (#243) and the stuck hint (#241) read it. `null` until a key, and again with each new prediction.
+   */
+  lastKey: LastKey | null;
 };
 
 /**
@@ -105,6 +111,7 @@ export const initialRaceState: RaceState = {
   prediction: null,
   desks: [],
   ranks: [],
+  lastKey: null,
 };
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -171,6 +178,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         prediction: predictionOf(w.race, w.you, w.settings, w.overlay, w.state),
         desks: state.desks,
         ranks: state.ranks,
+        lastKey: null,
       };
     }
     case "roster":
@@ -190,6 +198,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         ),
         desks: [],
         ranks: [],
+        lastKey: null,
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -203,7 +212,10 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       // typing is locked before GO and after your own finish (the engine refuses a key once you stop)
       if (state.phase !== "running" || !state.prediction) return state;
       const prediction = state.prediction.push(event.keystroke);
-      return prediction === state.prediction ? state : { ...state, prediction };
+      if (prediction === state.prediction) return state;
+      // the engine's verdict on the key, as the prediction read it (#220): no comparison here
+      const { key, t } = event.keystroke;
+      return { ...state, prediction, lastKey: { key, t, wrong: prediction.wrong } };
     }
     case "sent": {
       const prediction = state.prediction?.markSent(event.count) ?? null;
@@ -237,20 +249,23 @@ export function selectCanType(state: RaceState): boolean {
   return state.phase === "running" && state.prediction?.state.status === "typing";
 }
 
-const views = new WeakMap<PlayerState, { text: string; jammed: boolean; view: TypedView }>();
+type ViewEntry = { text: string; jammed: boolean; typedAt: number | null; view: TypedView };
+const views = new WeakMap<PlayerState, ViewEntry>();
 
 /**
  * The typing surface's view of your desk (#559 C5): `typedViewFrom` memoised per prediction state, so
  * the strip and the sheet re-render once per keystroke or diverging snapshot, never for a snapshot that
- * agrees with the prediction or one that only moves a rival.
+ * agrees with the prediction or one that only moves a rival. The jam and the pop stamp are the
+ * prediction's (#220: a refused Block key or a Backspace pops nothing).
  */
 export function selectTypedView(state: RaceState): TypedView {
   const p = state.prediction;
   if (!p) return NO_TEXT_VIEW;
+  const { text, jammed, typedAt } = p;
   const hit = views.get(p.state);
-  if (hit && hit.text === p.text && hit.jammed === p.jammed) return hit.view;
-  const view = typedViewFrom(p.state, p.text, { jammed: p.jammed });
-  views.set(p.state, { text: p.text, jammed: p.jammed, view });
+  if (hit && hit.text === text && hit.jammed === jammed && hit.typedAt === typedAt) return hit.view;
+  const view = typedViewFrom(p.state, text, { jammed, typedAt });
+  views.set(p.state, { text, jammed, typedAt, view });
   return view;
 }
 

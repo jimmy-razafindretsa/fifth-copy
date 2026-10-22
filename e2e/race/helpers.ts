@@ -1,5 +1,7 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { Client } from "pg";
+import { io } from "socket.io-client";
+import { PROTOCOL_VERSION, type RaceSettings, type RaceSettingsPatch } from "@fifth-copy/protocol";
 import { expect, test } from "../fixtures";
 
 // Room helpers shared by the lobby and race specs (#561 C10; first written for #107 in e2e/lobby.spec.ts).
@@ -117,4 +119,73 @@ export async function hostRoom(
 export async function warmRace(page: Page, lobbyId: string) {
   await page.request.get(`/race/${lobbyId}`);
   await page.request.post("/api/internal/races", { data: {} });
+}
+
+const JWT = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
+const raceTokens = new WeakMap<Page, { tokens: string[]; seated: boolean }>();
+
+/**
+ * Records the race tokens the page's lobby actions answer (`mintRaceToken`, the `e2e/lobby.spec.ts` C4
+ * pattern: read through the route, the body is gone once Chromium cancels the request) and whether its
+ * own room socket got its `welcome`. Call it before the page loads the waiting room (`hostRoom`'s
+ * `before`).
+ */
+export async function recordRaceTokens(page: Page) {
+  const record = { tokens: [] as string[], seated: false };
+  const { tokens } = record;
+  raceTokens.set(page, record);
+  page.on("websocket", (ws) =>
+    ws.on("framereceived", ({ payload }) => {
+      if (String(payload).startsWith('42["welcome"')) record.seated = true;
+    }),
+  );
+  await page.route("**/lobby/**", async (route) => {
+    const r = route.request();
+    if (r.method() !== "POST" || !r.headers()["next-action"]) return route.continue();
+    const response = await route.fetch();
+    const body = await response.text();
+    tokens.push(...(body.match(JWT) ?? []));
+    await route.fulfill({ response, body });
+  });
+}
+
+/**
+ * The host changes the room's settings before START (#220; no lobby form sends `host:settings` until
+ * #110): a Node-side socket with the host's race token emits `host:settings` and waits for `{ ok: true }`.
+ * It waits for the host page's own socket to be seated first, so the host's desk stays seated when this
+ * one closes (another socket of the user is still open, `presence.ts`). Pages that connect afterwards get
+ * the new settings in their `welcome`.
+ */
+export async function setHostSettings(host: Page, patch: RaceSettingsPatch): Promise<RaceSettings> {
+  const record = raceTokens.get(host);
+  if (!record) throw new Error("setHostSettings: call recordRaceTokens(host) before it loads");
+  await expect
+    .poll(() => record.seated && record.tokens.length > 0, {
+      message: "the host's race token and its seated room socket",
+    })
+    .toBe(true);
+  const token = record.tokens.at(-1)!;
+  const url =
+    process.env.NEXT_PUBLIC_RACE_SERVER_URL ??
+    `http://localhost:${process.env.RACE_SERVER_PORT ?? 4000}`;
+  const socket = io(url, {
+    auth: { v: PROTOCOL_VERSION, token },
+    transports: ["websocket"],
+    reconnection: false,
+    forceNew: true,
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once("welcome", () => resolve());
+      socket.once("connect_error", reject);
+    });
+    const ack = (await socket
+      .timeout(5_000)
+      .emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch })) as
+      { ok: true; settings: RaceSettings } | { ok: false; error: string };
+    expect(ack, "host:settings").toMatchObject({ ok: true });
+    return (ack as { settings: RaceSettings }).settings;
+  } finally {
+    socket.disconnect();
+  }
 }

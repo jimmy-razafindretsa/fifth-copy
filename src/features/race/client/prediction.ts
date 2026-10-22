@@ -30,8 +30,15 @@ export type Prediction = {
   readonly unacked: readonly Keystroke[];
   readonly sent: number;
   readonly state: PlayerState;
+  /** The engine counted the last key it took as an error (its `errors` grew; never a Backspace). */
+  readonly wrong: boolean;
   /** Block mode refused the last key the engine took (the machine jams until the right key). */
   readonly jammed: boolean;
+  /**
+   * `t` of the key that typed the char before the cursor (it keys that char's pop); `null` when unknown:
+   * before the first key, after a Backspace, from a server state. A key that types nothing keeps it.
+   */
+  readonly typedAt: number | null;
   /** Applies a key locally and queues it; the same prediction when the engine refuses it. */
   push(keystroke: Keystroke): Prediction;
   /** `count` more keys left for the server (a batch went out). */
@@ -103,6 +110,20 @@ function adopt(from: PlayerState, server: ServerProgress | PlayerState): PlayerS
 
 const clamp = (n: number, max: number) => Math.max(0, Math.min(max, Math.floor(n)));
 
+/** What the engine's numbers say about the last key it took (#220): struck, and the pop stamp. */
+type Mark = { readonly wrong: boolean; readonly typedAt: number | null };
+const NO_MARK: Mark = { wrong: false, typedAt: null };
+
+/**
+ * The mark of a key the engine took (`before` -> `after`): wrong when it counted an error; the pop stamp
+ * moves to the key when the cursor advanced, clears when it went back, and stays when it held.
+ */
+function markOf(before: PlayerState, after: PlayerState, t: number, prev: Mark): Mark {
+  const typedAt =
+    after.cursor > before.cursor ? t : after.cursor < before.cursor ? null : prev.typedAt;
+  return { wrong: after.errors > before.errors, typedAt };
+}
+
 export function createPrediction({
   text,
   settings,
@@ -111,16 +132,13 @@ export function createPrediction({
 }: PredictionInput): Prediction {
   const step = (state: PlayerState, keystroke: Keystroke) =>
     apply(state, keystroke, text, settings);
-  /** Block mode refused the key: it was counted as an error and the cursor held. */
-  const jams = (before: PlayerState, after: PlayerState) =>
-    settings.errorMode === "block" && after.errors > before.errors;
 
   function make(
     base: PlayerState,
     unacked: readonly Keystroke[],
     sent: number,
     state: PlayerState,
-    jammed: boolean,
+    mark: Mark,
   ): Prediction {
     const self: Prediction = {
       text,
@@ -129,15 +147,24 @@ export function createPrediction({
       unacked,
       sent,
       state,
-      jammed,
+      wrong: mark.wrong,
+      // Block mode refused the key: it was counted as an error and the cursor held
+      jammed: settings.errorMode === "block" && mark.wrong,
+      typedAt: mark.typedAt,
       push(keystroke) {
         const next = step(state, keystroke);
         if (next === state) return self;
-        return make(base, [...unacked, keystroke], sent, next, jams(state, next));
+        return make(
+          base,
+          [...unacked, keystroke],
+          sent,
+          next,
+          markOf(state, next, keystroke.t, mark),
+        );
       },
       markSent(count) {
         const n = clamp(sent + count, unacked.length);
-        return n === sent ? self : make(base, unacked, n, state, jammed);
+        return n === sent ? self : make(base, unacked, n, state, mark);
       },
       ackedBy(server) {
         let s = base;
@@ -155,21 +182,22 @@ export function createPrediction({
         const sentLeft = Math.max(0, sent - n);
         if (sameProgress(predicted, server)) {
           // the server agrees: the shown state stands (same object, nothing re-renders)
-          return n === 0 ? self : make(predicted, rest, sentLeft, state, jammed);
+          return n === 0 ? self : make(predicted, rest, sentLeft, state, mark);
         }
+        // the server's state stands: no char of it was just typed, so nothing pops for it
         const authority = adopt(predicted, server);
         let next = authority;
-        let jam = jammed;
+        let m: Mark = { wrong: mark.wrong, typedAt: null };
         for (const keystroke of rest) {
           const after = step(next, keystroke);
-          if (after !== next) jam = jams(next, after);
+          if (after !== next) m = markOf(next, after, keystroke.t, m);
           next = after;
         }
-        return make(authority, rest, sentLeft, next, jam);
+        return make(authority, rest, sentLeft, next, m);
       },
     };
     return self;
   }
 
-  return make(initial, [], 0, initial, false);
+  return make(initial, [], 0, initial, NO_MARK);
 }

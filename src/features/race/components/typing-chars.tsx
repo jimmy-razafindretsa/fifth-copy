@@ -7,8 +7,9 @@ const BREAKING_SPACE = /[^\S\u00A0\u202F\u2007]/;
 
 /**
  * The one char renderer of the typing surface (#558, bible 7.7): a `<span data-state>` per char, in order,
- * and nothing else as text. The span at `last` carries `data-last` (the pop); its React key includes
- * `stamp` (the view's `lastTypedAt`), so a retype at the same index remounts it and pops again.
+ * and nothing else as text. The span at `last` carries `data-last` (the pop) while `stamp` (the view's
+ * `lastTypedAt`) is known; its React key includes `stamp`, so a retype at the same index remounts it and
+ * pops again, and a key that typed nothing (`stamp` kept or `null`, #220) pops nothing.
  * `words` wraps each word and its trailing spaces in a no-wrap box, so a multi-line sheet breaks between
  * words.
  */
@@ -23,12 +24,13 @@ export function TypingChars({
   stamp: number | null;
   words?: boolean;
 }) {
+  const pop = stamp === null ? -1 : last;
   const span = (c: TypedChar, i: number) => (
     <span
-      key={i === last ? `${i}-${stamp ?? "none"}` : i}
+      key={i === pop ? `${i}-${stamp}` : i}
       className={styles.char}
       data-state={c.state}
-      data-last={i === last ? "true" : undefined}
+      data-last={i === pop ? "true" : undefined}
     >
       {c.ch}
     </span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { REDUCED_MOTION_QUERY } from "@/components/ui";
 import { useRaceStore } from "../../client/use-race-store";
 import { selectMachineProps, type MachineProps } from "../../view/machine-props";
 import type { MachineSkinId, MachineSkinProps } from "./skin";
@@ -46,21 +47,39 @@ export function TypingMachineLive({
   const { pressed, wrong, jammed, finished } = props;
   const root = useRef<HTMLDivElement>(null);
 
-  // The press: the keystroke's props until its hold ends (`released` names the keystroke let go). The hold
-  // is read from the root on mount and on every keystroke (a motion setting can change mid-race); `null`
-  // until the first read, as in a static render.
+  // The press: shown from the keystroke until its hold ends (`released` names the keystroke let go). The
+  // hold is read from the root on mount and again whenever the motion setting changes (the media query or
+  // `<html data-motion>`, which the settings screen #66 sets mid-session), letting go of the key down then;
+  // `null` until the first read, as in a static render. With no hold (reduced motion) no press shows.
   const [holdMs, setHoldMs] = useState<number | null>(null);
   const [released, setReleased] = useState<MachineProps | null>(null);
+  const latest = useRef(props);
   useLayoutEffect(() => {
-    const hold = holdOf(root.current);
-    setHoldMs(hold);
-    if (hold === 0 || pressed === null) {
-      setReleased(props);
-      return;
-    }
-    const timer = setTimeout(() => setReleased(props), hold);
+    latest.current = props;
+  });
+  useLayoutEffect(() => {
+    const read = () => {
+      setHoldMs(holdOf(root.current));
+      setReleased(latest.current);
+    };
+    read();
+    const media = window.matchMedia(REDUCED_MOTION_QUERY);
+    media.addEventListener("change", read);
+    const observer = new MutationObserver(read);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-motion"],
+    });
+    return () => {
+      media.removeEventListener("change", read);
+      observer.disconnect();
+    };
+  }, []);
+  useEffect(() => {
+    if (pressed === null || !holdMs) return;
+    const timer = setTimeout(() => setReleased(props), holdMs);
     return () => clearTimeout(timer);
-  }, [props, pressed]);
+  }, [props, pressed, holdMs]);
   const motion = holdMs !== 0;
 
   // The replay: a new keystroke striking the same key wrong again drops `wrong` for one frame (CSS cannot

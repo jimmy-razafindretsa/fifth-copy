@@ -67,9 +67,11 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
       // A welcome after START (a reload or a reconnect during the countdown, #659) carries the race:
       // the same state a `countdown` would give, so the page still moves to the seat view.
       const { room, race } = event.payload;
-      const started = race !== null && (room.phase === "countdown" || room.phase === "running");
+      const underway = room.phase === "countdown" || room.phase === "running";
+      const started = underway && race !== null;
       return {
-        phase: started ? "starting" : "live",
+        // A START racing the join can leave `race` out: a page already starting stays starting.
+        phase: started || (underway && state.phase === "starting") ? "starting" : "live",
         error: null,
         you: event.payload.you,
         members: byDesk(event.payload.members),

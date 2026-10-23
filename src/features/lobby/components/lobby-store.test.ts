@@ -427,4 +427,23 @@ describe("welcome during the countdown (#659)", () => {
     );
     expect(state).toMatchObject({ phase: "starting", raceId: RACE_ID, you: 1 });
   });
+
+  it("an ended welcome that still names the last race stays live (no redirect)", () => {
+    const ended = {
+      ...started("running"),
+      room: { code: "KGB-4821" as never, phase: "ended" as const },
+    };
+    expect(run({ type: "welcome", payload: ended })).toMatchObject({ phase: "live", raceId: null });
+  });
+
+  it("a countdown welcome without the race keeps a starting page starting", () => {
+    const countdown: RoomEvents["countdown"] = { v: PROTOCOL_VERSION, race };
+    const bare = { ...started("countdown"), race: null };
+    const state = run(
+      { type: "welcome", payload: welcome(2, [ada, bob]) },
+      { type: "countdown", payload: countdown },
+      { type: "welcome", payload: bare },
+    );
+    expect(state).toMatchObject({ phase: "starting", raceId: RACE_ID });
+  });
 });

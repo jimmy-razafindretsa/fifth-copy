@@ -2,7 +2,7 @@ import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Redis } from "ioredis";
 import type { Rng } from "@fifth-copy/engine";
-import type { RaceEvent } from "@fifth-copy/protocol";
+import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
 import type { Clock, Scheduler, TimerHandle } from "./clock";
 import type { RaceServerEnv } from "./env";
 import { createInternalHandler } from "./http/internal";
@@ -11,6 +11,7 @@ import { createOutbox, type Outbox } from "./persist/outbox";
 import { buildResults, sendResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
 import { createIdle } from "./players/idle";
+import { releaseDropped, type LeaveDeps } from "./players/leave";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
 import { createBonuses } from "./rooms/bonus-step";
@@ -153,6 +154,14 @@ export function createRaceServer({
   };
   outbox.drain().catch((err: unknown) => log("outbox drain failed", { err: String(err) }));
 
+  const leaveDeps: LeaveDeps = {
+    registry,
+    presence,
+    onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
+    announce: (lobbyId, members) =>
+      void to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members }),
+  };
+
   const raceHooks = {
     deskStates: async (lobbyId: string) => desksState.states(lobbyId),
     onEnding: (lobbyId: string) => {
@@ -195,6 +204,13 @@ export function createRaceServer({
         onRaceEnded?.(ended);
       } finally {
         desksState.release(ended.lobbyId);
+        // Queued behind the ending, which still holds the room (#658). A void keeps its members:
+        // they reconnect to read `ended { void }` (#204).
+        if (ended.reason !== "void") {
+          releaseDropped(leaveDeps, ended.lobbyId).catch((err: unknown) =>
+            log("release dropped failed", { lobby: ended.lobbyId, err: String(err) }),
+          );
+        }
       }
     },
   };

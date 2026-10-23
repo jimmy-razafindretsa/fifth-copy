@@ -18,6 +18,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import type { AbandonResult } from "../players/idle";
+import { leaveRoom, type LeaveDeps } from "../players/leave";
 import type { BonusPlayResult } from "../rooms/bonus-step";
 import type { Presence } from "../players/presence";
 import type { IngestResult } from "../rooms/ingest";
@@ -73,6 +74,13 @@ export function attachSocketServer(
   },
 ): RaceIo {
   const { registry, lifecycle, race, presence } = deps;
+  const leaveDeps: LeaveDeps = {
+    registry,
+    presence,
+    onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
+    announce: (lobbyId, members) =>
+      void io.to(audience(lobbyId)).emit("roster", { v: PROTOCOL_VERSION, members }),
+  };
   const io: RaceIo = new Server(httpServer, {
     cors: { origin: deps.origin, credentials: false },
     transports: ["websocket", "polling"],
@@ -249,12 +257,7 @@ export function attachSocketServer(
         .then(async (closed) => {
           // A new socket of the user queued its join meanwhile: it keeps the desk.
           if (closed !== "leave" || presence.sockets(lobby, sub) > 0) return;
-          const { members, closed: roomClosed } = await registry.leave(lobby, sub);
-          if (roomClosed) lifecycle.onRoomClosed(lobby);
-          else {
-            await presence.left(lobby, sub);
-            io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members });
-          }
+          const { members, closed: roomClosed } = await leaveRoom(leaveDeps, lobby, sub);
           log("left", { lobby, members: members.length, closed: roomClosed });
         })
         .catch(() => log("leave failed", { lobby }));

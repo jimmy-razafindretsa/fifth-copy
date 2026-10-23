@@ -252,8 +252,11 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
     async flush(lobbyId, { probe = false } = {}) {
       const runtime = rooms.get(lobbyId);
       if (!runtime) return { lost: false };
+      // The probe refreshes the room too, so a race with no key for a while keeps it alive (#657).
       const probeOnly = async () =>
-        probe ? { lost: (await redis.exists(roomKey(lobbyId))) === 0 } : { lost: false };
+        probe
+          ? { lost: (await redis.expire(roomKey(lobbyId), ROOM_TTL_S)) === 0 }
+          : { lost: false };
       if (runtime.dirty.size === 0) return probeOnly();
       const desks = [...runtime.dirty];
       runtime.dirty.clear();

@@ -287,4 +287,15 @@ describe("room TTL across a whole race (#657)", () => {
     const expired = sent.filter(([name]) => name === "expire").map((c) => c[1]);
     expect(expired).toEqual(expect.arrayContaining([roomKey(id), membersKey(id)]));
   });
+
+  it("a probe with no desk changed also refreshes the room hash", async () => {
+    const state = createDesksState({ redis });
+    const id = lobby();
+    await redis.hset(roomKey(id), { phase: "running" });
+    state.open(id, { race, settings: DEFAULT_RACE_SETTINGS, desks: deskList(1) });
+    await state.flush(id);
+    await redis.expire(roomKey(id), 5);
+    expect(await state.flush(id, { probe: true })).toEqual({ lost: false });
+    expect(await redis.ttl(roomKey(id))).toBeGreaterThan(ROOM_TTL_S - 5);
+  });
 });

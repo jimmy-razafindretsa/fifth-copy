@@ -20,7 +20,7 @@ Spec section 16.2 puts room state, presence, reconnection tokens, host transfer 
 |---|---|---|---|
 | Lobby record (code, type, host, settings, status) | Postgres `lobby.prisma` | web `features/lobby` | until closed, then 24 h cleanup |
 | Invite tokens (single-use) | Redis `invite:<token>` -> lobby id, consumed with an atomic `GETDEL` | race server via web action | 24 h TTL |
-| Live room: members, desks, host, phase, clock, per-player progress, overlays, bonuses, cooldowns | Redis hash per room + in-process cache on the owning race server | race server | room TTL refreshed every tick; 1 h after last activity |
+| Live room: members, desks, host, phase, clock, per-player progress, overlays, bonuses, cooldowns | Redis hash per room + in-process cache on the owning race server | race server | room TTL refreshed every tick; 2 h after last activity, so it outlives the 1 h longest race (#657) |
 | Presence and resume keys | Redis `presence:<room>:<player>`, `resume:<key>` | race server | grace period (2 min) |
 | Rate limits | Redis counters | race server and web (shared limiter, card #207) | window TTL |
 | Race (text snapshot, settings, times), race results, raw keystrokes, char stats, achievements, texts, users | Postgres | web app features | durable |

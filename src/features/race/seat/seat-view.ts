@@ -48,17 +48,6 @@ export type SeatErrorLabels = {
 export const PHONE_MAX_WIDTH_PX = 480;
 export const PHONE_QUERY = `(max-width: ${PHONE_MAX_WIDTH_PX}px)`;
 
-/**
- * The machine's keys until the player's layout arrives as data (#224): the QWERTY rows of the
- * `/design` specimens, number row first.
- */
-export const SEAT_ROWS: readonly (readonly string[])[] = [
-  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-  ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-  ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";"],
-  ["z", "x", "c", "v", "b", "n", "m", ",", ".", "/"],
-];
-
 /** Paperwork numbers: two digits at least (`DESK 05`, bible 2). */
 export const paperwork = (n: number) => String(n).padStart(2, "0");
 

@@ -1,9 +1,12 @@
+import type { Ref } from "react";
 import type { MachineSkin, MachineSkinId, MachineSkinProps } from "./skin";
 import { machineSkins } from "./skins";
 
 export type TypingMachineProps = MachineSkinProps & {
   /** Which machine to draw (a registered skin id); the teleprinter by default. */
   skin?: MachineSkinId;
+  /** The root element (the live wrapper reads its motion token there, #224). */
+  ref?: Ref<HTMLDivElement>;
 };
 
 /**
@@ -21,10 +24,15 @@ export function TypingMachine({ skin = "teleprinter", ...props }: TypingMachineP
  * `data-machine`, `data-skin`, `data-jammed` (only while jammed) and `aria-hidden` (the whole machine is
  * decoration; the text and its states reach assistive tech through the race HUD).
  */
-export function MachineFrame({ skin, ...props }: MachineSkinProps & { skin: MachineSkin<string> }) {
+export function MachineFrame({
+  skin,
+  ref,
+  ...props
+}: MachineSkinProps & { skin: MachineSkin<string>; ref?: Ref<HTMLDivElement> }) {
   const { Machine } = skin;
   return (
     <div
+      ref={ref}
       data-machine="true"
       data-skin={skin.id}
       data-jammed={props.jammed ? "true" : undefined}

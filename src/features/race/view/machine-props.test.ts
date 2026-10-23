@@ -11,7 +11,7 @@ import { selectMachineProps } from "./machine-props";
 
 // Contract of #220 C2: the machine's live props come from one pure, memoised selector over the race
 // store. `wrong` is the last key the engine counted as an error, lower-cased to match `data-key`;
-// `jammed` is the typed view's jam; `pressed` waits for #224.
+// `jammed` is the typed view's jam; `pressed` (#224 C3) is the last key, lower-cased the same way.
 const TEXT = "Le reçu";
 const RACE = {
   raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
@@ -57,7 +57,7 @@ describe("selectMachineProps (#220 C2)", () => {
   it("Block: the refused key reads wrong and the machine jams (the typed view's jam); the right key clears both", () => {
     const jammed = press(raceIn("block"), "x", 10);
     expect(selectMachineProps(jammed)).toEqual({
-      pressed: null,
+      pressed: "x",
       wrong: "x",
       jammed: true,
       finished: false,
@@ -79,6 +79,28 @@ describe("selectMachineProps (#220 C2)", () => {
     expect(selectMachineProps(press(raceIn("block"), "É", 10)).wrong).toBe("é");
     expect(selectMachineProps(press(raceIn("block"), "X", 10)).wrong).toBe("x");
     expect(selectMachineProps(press(raceIn("block"), " ", 10)).wrong).toBe(" ");
+  });
+
+  it("#224 C3 pressed: the last key the engine took, folded to lower case like data-key", () => {
+    const block = raceIn("block");
+    expect(selectMachineProps(press(block, "L", 10)).pressed).toBe("l");
+    expect(selectMachineProps(press(block, "É", 10)).pressed).toBe("é");
+    expect(selectMachineProps(press(block, " ", 10)).pressed).toBe(" ");
+    // a refused Block key is pressed too (the cap goes down, the machine jams)
+    expect(selectMachineProps(press(block, "x", 10))).toMatchObject({ pressed: "x", jammed: true });
+    // Backspace is a key the engine took: it presses nothing on a machine without function keys
+    const back = press(press(raceIn("continue"), "x", 10), "Backspace", 20);
+    expect(selectMachineProps(back).pressed).toBe("backspace");
+    // no key yet, and a key before GO the store refused: nothing pressed
+    expect(selectMachineProps(raceIn("block")).pressed).toBeNull();
+  });
+
+  it("#224 C3 pressed is memoised with the other fields: one object per keystroke", () => {
+    const s = press(raceIn("continue"), "L", 10);
+    expect(selectMachineProps(s)).toBe(selectMachineProps(s));
+    const again = press(s, "e", 20);
+    expect(selectMachineProps(again).pressed).toBe("e");
+    expect(selectMachineProps(again)).not.toBe(selectMachineProps(s));
   });
 
   it("finished once your desk typed the whole text", () => {

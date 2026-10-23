@@ -85,13 +85,14 @@ describe("TypingMachineLive (#220 C2)", () => {
     expect(getSnapshot()).toBe(selectMachineProps(store.getState()));
   });
 
-  it("Block jammed: data-jammed on the root, data-wrong on the refused key, no key disabled or pressed", () => {
+  it("Block jammed: data-jammed on the root, data-wrong (and the press, #224) on the refused key, no key disabled", () => {
     const out = live(storeIn("block", ["X"]));
     expect(out).toMatch(/^<div data-machine="true" data-skin="teleprinter" data-jammed="true"/);
     expect(out.match(/data-wrong="true"/g)).toHaveLength(1);
     expect(out).toMatch(/data-key="x"[^>]*data-wrong="true"/);
     expect(out).not.toContain("data-disabled");
-    expect(out).not.toContain("data-pressed");
+    expect(out.match(/data-pressed="true"/g)).toHaveLength(1);
+    expect(out).toMatch(/data-key="x" data-pressed="true"/);
     expect(out).toContain('data-part="jam"');
   });
 
@@ -106,12 +107,12 @@ describe("TypingMachineLive (#220 C2)", () => {
     for (const keys of [[], ["x"], ["L", "x"], ["L", "e"]]) {
       for (const mode of ["continue", "block"] as const) {
         const store = storeIn(mode, keys);
-        const { wrong, jammed } = selectMachineProps(store.getState());
+        const { pressed, wrong, jammed } = selectMachineProps(store.getState());
         expect(live(store), `${mode} ${keys.join("")}`).toBe(
           renderToStaticMarkup(
             <TypingMachine
               rows={ROWS}
-              pressed={null}
+              pressed={pressed}
               wrong={wrong}
               jammed={jammed}
               disabledKeys={[]}
@@ -121,6 +122,50 @@ describe("TypingMachineLive (#220 C2)", () => {
       }
     }
     expect(live(storeIn("block"), "teleprinter")).toBe(live(storeIn("block")));
+  });
+
+  it("#224 C3 a keystroke presses its key, folded to lower case; the space bar too", () => {
+    const shifted = live(storeIn("continue", ["L"]));
+    expect(shifted.match(/data-pressed="true"/g)).toHaveLength(1);
+    expect(shifted).toMatch(/data-key="l" data-pressed="true"/);
+    const space = live(storeIn("continue", ["L", "e", " "]));
+    expect(space.match(/data-pressed="true"/g)).toHaveLength(1);
+    expect(space).toMatch(/data-key=" " data-pressed="true"/);
+  });
+
+  it("#224 C3 Backspace and a character the rows lack press nothing", () => {
+    expect(live(storeIn("continue", ["x", "Backspace"]))).not.toContain("data-pressed");
+    // "r" is the race text's next char, absent from ROWS
+    expect(live(storeIn("continue", ["L", "e", " ", "r"]))).not.toContain("data-pressed");
+  });
+
+  it("#224 C3 finished: every key and the space bar disabled, nothing pressed or struck", () => {
+    // rows holding the text's last key, so a press would show if the wrapper let it
+    const rows = [
+      ["l", "e", "r", "ç", "u"],
+      ["q", "x"],
+    ];
+    const store = storeIn("continue", Array.from(TEXT));
+    expect(store.getState().prediction?.state.status).toBe("finished");
+    expect(selectMachineProps(store.getState())).toMatchObject({ finished: true, pressed: "u" });
+    const out = renderToStaticMarkup(
+      <RaceStoreProvider store={store}>
+        <TypingMachineLive rows={rows} />
+      </RaceStoreProvider>,
+    );
+    expect(out).toBe(
+      renderToStaticMarkup(
+        <TypingMachine
+          rows={rows}
+          pressed={null}
+          wrong={null}
+          jammed={false}
+          disabledKeys={[...rows.flat(), " "]}
+        />,
+      ),
+    );
+    expect(out.match(/data-disabled="true"/g)).toHaveLength(rows.flat().length + 1);
+    expect(out).not.toContain("data-pressed");
   });
 
   it("is a client leaf that reaches the machine only through the skin seam", () => {

@@ -166,6 +166,63 @@ describe("typing surface imports (#558 C10)", () => {
   });
 });
 
+// Contract of #224 C8: the keyboard layouts are identity's data (ARCHITECTURE 8.2). The race reaches them
+// through `@/features/identity` only, from one module, `view/machine-rows.ts`, a server function the race
+// page calls: the identity barrel is server-only at runtime, so no component, no selector and no other race
+// module imports it (a client module of the race would pull it into the browser).
+describe("the layouts reach the race through one server module (#224 C8)", () => {
+  const feature = path.join(root, "src/features/race");
+  const modules = sources(feature).filter((f) => !isTest(f));
+  const rows = path.join(feature, "view/machine-rows.ts");
+
+  it("view/machine-rows.ts is the only race module that imports @/features/identity", () => {
+    const hits = modules
+      .filter((f) =>
+        specifiers(readFileSync(f, "utf8")).some((s) => /^@\/features\/identity(\/|$)/.test(s)),
+      )
+      .map((f) => path.relative(root, f));
+    expect(hits).toEqual(["src/features/race/view/machine-rows.ts"]);
+    for (const s of specifiers(readFileSync(rows, "utf8")).filter((x) => x.includes("identity"))) {
+      expect(s, "through the index only").toBe("@/features/identity");
+    }
+  });
+
+  it("the components and the machine selector import nothing from @/features/identity", () => {
+    const client = [
+      ...sources(components).filter((f) => !isTest(f)),
+      path.join(feature, "view/machine-props.ts"),
+    ];
+    for (const file of client) {
+      for (const s of specifiers(readFileSync(file, "utf8"))) {
+        expect(s, path.relative(root, file)).not.toMatch(/features\/identity|(^|\/)identity(\/|$)/);
+      }
+    }
+  });
+
+  it("machine-rows is a server module reached only through the race index", () => {
+    expect(readFileSync(rows, "utf8")).toMatch(/^"use server";/);
+    const importers = sources(path.join(root, "src"))
+      .filter((f) => !isTest(f))
+      .filter((f) => specifiers(readFileSync(f, "utf8")).some((s) => /view\/machine-rows$/.test(s)))
+      .map((f) => path.relative(root, f));
+    expect(importers).toEqual(["src/features/race/index.ts"]);
+    expect(race.machineRows).toBeTypeOf("function");
+  });
+
+  it("the machine modules import no skin outside the registry and no engine or protocol", () => {
+    const machine = sources(path.join(components, "machine")).filter((f) => !isTest(f));
+    expect(machine.length).toBeGreaterThan(3);
+    for (const file of machine) {
+      for (const s of specifiers(readFileSync(file, "utf8"))) {
+        expect(s, path.relative(root, file)).not.toMatch(/^@fifth-copy\/(engine|protocol)/);
+        if (!file.endsWith(path.join("machine", "skins", "index.ts"))) {
+          expect(s, path.relative(root, file)).not.toMatch(/(^|\/)skins\/(?!index$)[\w-]+$/);
+        }
+      }
+    }
+  });
+});
+
 // Contract of #559 C8: the engine's reducers reach the race feature through one module, the local
 // prediction (ADR 0007: the client applies the engine's own functions, never a copy); the components stay
 // presentational (no engine, no protocol, no socket client), the typing input included.

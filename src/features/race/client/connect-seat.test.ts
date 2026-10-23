@@ -56,8 +56,8 @@ describe("connectSeat (#561 C4)", () => {
     await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalledTimes(1));
     expect(mint).toHaveBeenCalledWith({ code: "KGB-4821" });
     expect(connectToRoom.mock.calls[0]!.slice(0, 2)).toEqual(["http://r", "tok"]);
-    // the store's binding, plus the handoff's own (#214 C2)
-    expect(room.onWelcome).toHaveBeenCalledTimes(2);
+    // the store's binding, the handoff's own (#214 C2) and the issued-key memory (#656)
+    expect(room.onWelcome).toHaveBeenCalledTimes(3);
     expect(room.onCountdown).toHaveBeenCalledTimes(1);
     expect(room.onConnectError).toHaveBeenCalledTimes(1);
     expect(dispatch).not.toHaveBeenCalled();
@@ -142,8 +142,9 @@ describe("connectSeat (#561 C4)", () => {
     });
     await vi.waitFor(() => expect(room.onWelcome).toHaveBeenCalled());
     stop();
-    // bindRaceSocket's seven (#214 adds countdown, #559 snapshot) and the handoff's own welcome listener
-    expect(offs.length).toBe(8);
+    // bindRaceSocket's seven (#214 adds countdown, #559 snapshot), the handoff's own welcome listener
+    // and the issued-key memory's (#656)
+    expect(offs.length).toBe(9);
     for (const off of offs) expect(off).toHaveBeenCalledTimes(1);
     expect(room.close).toHaveBeenCalledTimes(1);
   });

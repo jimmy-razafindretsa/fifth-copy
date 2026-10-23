@@ -5,11 +5,34 @@
  * same unit unless a long layout needs a smaller pitch to fit the bed (at most 560 units wide).
  * Colours are private --_ properties mapped from the invariant machine-* roles, the tape and the error red.
  * Printed look (bible 6, 7.4, 17): 2px ink rules, a hard 6px offset under the deck, square keys with no
- * radius anywhere. States come from attributes only, and none animates here (the press and the wrong-key
- * motion are #224).
+ * radius anywhere. States come from attributes only (bible 7.7a). Motion (#224, bible 8): a pressed cap
+ * drops onto its stem on the fast token, the wrong cap shakes once with lkShake (0.4s, the Locker's
+ * keyframe on `translate`, so it composes with the press); both stop under reduced motion, where the
+ * colour and outline states stay.
  */
 
 @reference "../../../../../app/globals.css";
+
+/* bible 8: 0.4s horizontal shake for a denied action (the Locker's lkShake), in key units; the cap keeps
+   its press drop (--_drop) while it shakes */
+@keyframes lkShake {
+  0%,
+  100% {
+    translate: 0 var(--_drop);
+  }
+  20% {
+    translate: calc(-6 * var(--_k)) var(--_drop);
+  }
+  40% {
+    translate: calc(6 * var(--_k)) var(--_drop);
+  }
+  60% {
+    translate: calc(-4 * var(--_k)) var(--_drop);
+  }
+  80% {
+    translate: calc(3 * var(--_k)) var(--_drop);
+  }
+}
 
 .machine {
   --_paper: var(--color-machine-paper);
@@ -198,19 +221,31 @@
   box-shadow: 0 calc(3 * var(--_k)) 0 var(--_metal);
 }
 
+/* the press moves the cap by translate only, the stem (its shadow) shrinking with it (#224) */
+.key,
+.space {
+  --_drop: 0;
+  transition-property: translate, box-shadow;
+  transition-duration: var(--motion-duration-fast);
+  transition-timing-function: var(--motion-ease-out);
+}
+
 /* pressed: the cap one step down onto its stem */
 .key[data-pressed="true"],
 .space[data-pressed="true"] {
-  translate: 0 calc(2 * var(--_k));
+  --_drop: calc(2 * var(--_k));
+  translate: 0 var(--_drop);
   box-shadow: 0 calc(1 * var(--_k)) 0 var(--_metal);
 }
 
-/* wrong: that one cap red with a paper legend (one cell, never the deck: bible 8) */
+/* wrong: that one cap red with a paper legend (one cell, never the deck: bible 8), shaken once; it stays
+   red after the shake, until the next key */
 .key[data-wrong="true"],
 .space[data-wrong="true"] {
   background: var(--_error);
   border-color: var(--_error);
   color: var(--_paper);
+  animation: lkShake 0.4s ease-in-out;
 }
 
 /* disabled: a dashed metal outline with the deck showing through, a muted legend */
@@ -232,4 +267,29 @@
 [data-machine][data-jammed="true"] .slot {
   background: var(--_error);
   border-color: var(--_error);
+}
+
+/* Reduced motion (bible 8): no press travel, no shake; wrong, disabled and the jam keep their colours and
+   outlines. The media query, then <html data-motion="reduce"> or a scoped specimen (one class above the
+   rules it stops, so it wins whatever the order) */
+@media (prefers-reduced-motion: reduce) {
+  .key,
+  .space {
+    transition: none;
+  }
+
+  .key[data-wrong="true"],
+  .space[data-wrong="true"] {
+    animation: none;
+  }
+}
+
+[data-motion="reduce"] .key,
+[data-motion="reduce"] .space {
+  transition: none;
+}
+
+[data-motion="reduce"] .key[data-wrong="true"],
+[data-motion="reduce"] .space[data-wrong="true"] {
+  animation: none;
 }

@@ -13,6 +13,8 @@ export type {
  * importable from client modules (the lobby loads it lazily). */
 export { getRaceSeat, type RaceSeatInfo } from "./queries/get-race-seat";
 export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
+/** The machine's keys for a viewer (#224): a server function, so identity never reaches a client graph. */
+export { machineRows } from "./view/machine-rows";
 export type { RaceSeatLabels, SeatErrorLabels } from "./seat/seat-view";
 export type { MintRaceToken } from "./client/connect-seat";
 export { bindRaceSocket, createRaceStore, initialRaceState, reduceRace } from "./client/store";

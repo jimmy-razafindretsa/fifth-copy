@@ -46,12 +46,17 @@ export function connectSeat({
   let aborted = false;
   let socket: RoomSocket | null = null;
   let unbind = () => {};
+  // The last key a `welcome` issued, for reconnects when sessionStorage is blocked (#656).
+  let issued: string | null = null;
   Promise.all([mint({ code }), load()]).then(
     ([result, socketModule]) => {
       if (aborted) return;
       if (!result.ok) return dispatch({ type: "token-error", error: result.error });
       socket = socketModule.connectToRoom(result.url, result.token, {
-        resumeKey: () => readResumeKey(lobbyId),
+        resumeKey: () => readResumeKey(lobbyId) ?? issued,
+      });
+      const offIssued = socket.onWelcome((welcome) => {
+        if (welcome.resumeKey) issued = welcome.resumeKey;
       });
       const offBind = bindRaceSocket(socket, dispatch, { lobbyId });
       const offHandoff = socket.onWelcome(() => releaseParkedSocket(lobbyId));
@@ -60,6 +65,7 @@ export function connectSeat({
         offSocket();
         offBind();
         offHandoff();
+        offIssued();
       };
     },
     () => {

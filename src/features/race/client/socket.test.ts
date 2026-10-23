@@ -74,7 +74,11 @@ const roster: Roster = { v: PROTOCOL_VERSION, members: [member] };
 
 afterEach(() => vi.restoreAllMocks());
 
-/** The payload the socket would send on its next handshake: socket.io calls `auth` each time. */
+/**
+ * The payload the socket would send on its next handshake. socket.io-client calls a function `auth`
+ * in `Socket.onopen` before every CONNECT packet, reconnects included, so calling it twice here
+ * stands for a connect and a reconnect.
+ */
 function handshake(io: IoFactory, call = 0): unknown {
   const [, opts] = (io as unknown as ReturnType<typeof vi.fn>).mock.calls[call] as [
     string,

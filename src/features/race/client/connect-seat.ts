@@ -51,7 +51,7 @@ export function connectSeat({
       if (aborted) return;
       if (!result.ok) return dispatch({ type: "token-error", error: result.error });
       socket = socketModule.connectToRoom(result.url, result.token, {
-        resumeKey: readResumeKey(lobbyId),
+        resumeKey: () => readResumeKey(lobbyId),
       });
       const offBind = bindRaceSocket(socket, dispatch, { lobbyId });
       const offHandoff = socket.onWelcome(() => releaseParkedSocket(lobbyId));

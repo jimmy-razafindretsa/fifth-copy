@@ -366,3 +366,65 @@ describe("countdown and the resume key (#214 C2)", () => {
     for (const off of Object.values(offs)) expect(off).toHaveBeenCalledTimes(1);
   });
 });
+
+// Contract of #659: a welcome after START carries the room's phase and race; the store treats it like
+// the countdown it may have missed, so a reload or a reconnect during the countdown still redirects.
+describe("welcome during the countdown (#659)", () => {
+  const RACE_ID = "6f9619ff-8b86-4011-b42d-00c04fc964ff";
+  const race = {
+    raceId: RACE_ID,
+    text: "Type fast. Type first.",
+    language: "en" as const,
+    wordCount: 4,
+    t0: 1_767_225_603_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const started = (phase: "countdown" | "running"): RoomEvents["welcome"] => ({
+    ...welcome(2, [ada, bob]),
+    room: { code: "KGB-4821" as never, phase },
+    race,
+  });
+
+  it.each(["countdown", "running"] as const)(
+    "C1: a %s welcome with the race gives the state a countdown would",
+    (phase) => {
+      expect(run({ type: "welcome", payload: started(phase) })).toEqual({
+        phase: "starting",
+        error: null,
+        you: 2,
+        members: [ada, bob],
+        raceId: RACE_ID,
+      });
+    },
+  );
+
+  it("C1: a reconnect that missed the countdown broadcast still reaches the race", () => {
+    const state = run(
+      { type: "welcome", payload: welcome(2, [ada, bob]) },
+      { type: "reconnecting" },
+      { type: "reconnected" },
+      { type: "welcome", payload: started("countdown") },
+    );
+    expect(state).toMatchObject({ phase: "starting", raceId: RACE_ID });
+  });
+
+  it("C2: a waiting welcome keeps today's behaviour", () => {
+    expect(run({ type: "welcome", payload: welcome(2, [bob, ada]) })).toEqual({
+      phase: "live",
+      error: null,
+      you: 2,
+      members: [ada, bob],
+      raceId: null,
+    });
+  });
+
+  it("C3: a welcome while starting does not go back to live when the room is counting down", () => {
+    const countdown: RoomEvents["countdown"] = { v: PROTOCOL_VERSION, race };
+    const state = run(
+      { type: "welcome", payload: welcome(1, [ada, bob]) },
+      { type: "countdown", payload: countdown },
+      { type: "welcome", payload: { ...started("countdown"), you: 1, role: "host" } },
+    );
+    expect(state).toMatchObject({ phase: "starting", raceId: RACE_ID, you: 1 });
+  });
+});

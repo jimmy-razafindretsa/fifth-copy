@@ -1,5 +1,9 @@
-/** Redis layout of a room (ADR 0008). Every key carries ROOM_TTL_S, refreshed on activity. */
-export const ROOM_TTL_S = 3600;
+/**
+ * Redis layout of a room (ADR 0008). Every key carries ROOM_TTL_S, refreshed on activity. Two hours,
+ * so a room outlives its longest race (`MAX_RACE_MS`, one hour, plus the countdown and the results)
+ * even with no write between GO and the end (#657); each desks flush refreshes it while the race runs.
+ */
+export const ROOM_TTL_S = 2 * 3600;
 
 /**
  * Hash: `code`, `hostUserId`, `phase` (protocol `Phase`), `openedAt`, `settings` (JSON

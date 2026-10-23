@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Command, Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { DEFAULT_RACE_SETTINGS, type RaceInfo } from "@fifth-copy/protocol";
+import { DEFAULT_RACE_SETTINGS, MAX_RACE_MS, type RaceInfo } from "@fifth-copy/protocol";
 import { createFakeClock } from "../clock";
 import { connectRedis } from "../testing/harness";
 import { createDesksState, playerStateOf } from "./desks-state";
+import { durationsFor } from "./durations";
 import { desksKey, membersKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
 import { createRoomRegistry } from "./registry";
 
@@ -239,5 +240,51 @@ describe("desks state", () => {
     await registry.leave(id, "b");
     expect(await redis.exists(desksKey(id))).toBe(0);
     expect(await redis.exists(traceKey(id, 1), traceKey(id, 2))).toBe(0);
+  });
+});
+
+describe("room TTL across a whole race (#657)", () => {
+  /** Results screen and the end-of-race writes after the timer, with room to spare. */
+  const END_MARGIN_MS = 10 * 60_000;
+
+  it("C1: ROOM_TTL_S outlives the longest race plus the countdown and the results", () => {
+    const { COUNTDOWN_MS } = durationsFor({ RACE_FAST_CLOCK: "0" });
+    expect(ROOM_TTL_S * 1000).toBeGreaterThan(MAX_RACE_MS + COUNTDOWN_MS + END_MARGIN_MS);
+  });
+
+  it("C2: a flush refreshes the room hash and the members hash while the race runs", async () => {
+    const state = createDesksState({ redis });
+    const id = lobby();
+    await redis.hset(roomKey(id), { phase: "running" });
+    await redis.hset(membersKey(id), { a: "{}" });
+    // nearly expired, as an untimed race close to its hour would find them
+    await redis.expire(roomKey(id), 5);
+    await redis.expire(membersKey(id), 5);
+    state.open(id, { race, settings: DEFAULT_RACE_SETTINGS, desks: deskList(2) });
+
+    expect(await state.flush(id)).toEqual({ lost: false });
+    for (const key of [roomKey(id), membersKey(id)])
+      expect(await redis.ttl(key), key).toBeGreaterThan(ROOM_TTL_S - 5);
+  });
+
+  it("C2: a flush still reports a room whose hash is gone as lost, without recreating it", async () => {
+    const state = createDesksState({ redis });
+    const id = lobby();
+    state.open(id, { race, settings: DEFAULT_RACE_SETTINGS, desks: deskList(1) });
+    expect(await state.flush(id)).toEqual({ lost: true });
+    expect(await redis.exists(roomKey(id), membersKey(id))).toBe(0);
+  });
+
+  it("C3: every key the flush writes or refreshes carries the room TTL", async () => {
+    const state = createDesksState({ redis });
+    const id = lobby();
+    await redis.hset(roomKey(id), { phase: "running" });
+    state.open(id, { race, settings: DEFAULT_RACE_SETTINGS, desks: deskList(2) });
+    state.states(id).get(1)!.trace.push({ t: 10, key: "L" });
+    const sent = spyExec();
+    await state.flush(id);
+    expectEveryWriteHasTtl(sent);
+    const expired = sent.filter(([name]) => name === "expire").map((c) => c[1]);
+    expect(expired).toEqual(expect.arrayContaining([roomKey(id), membersKey(id)]));
   });
 });

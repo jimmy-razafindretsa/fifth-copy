@@ -10,7 +10,7 @@ import {
   type SettingsEvent,
   type Welcome,
 } from "@fifth-copy/protocol";
-import { connectToRoom, HOST_START_TIMEOUT_MS, type IoFactory } from "./socket";
+import { connectToRoom, HOST_START_TIMEOUT_MS, type HandshakeAuth, type IoFactory } from "./socket";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -74,15 +74,31 @@ const roster: Roster = { v: PROTOCOL_VERSION, members: [member] };
 
 afterEach(() => vi.restoreAllMocks());
 
+/**
+ * The payload the socket would send on its next handshake. socket.io-client calls a function `auth`
+ * in `Socket.onopen` before every CONNECT packet, reconnects included, so calling it twice here
+ * stands for a connect and a reconnect.
+ */
+function handshake(io: IoFactory, call = 0): unknown {
+  const [, opts] = (io as unknown as ReturnType<typeof vi.fn>).mock.calls[call] as [
+    string,
+    { auth: HandshakeAuth },
+  ];
+  let payload: unknown;
+  opts.auth((p) => (payload = p));
+  return payload;
+}
+
 describe("connectToRoom (C1)", () => {
   it("creates the socket with the token in the handshake auth only", () => {
     const { io } = setup("secret-token");
     expect(io).toHaveBeenCalledTimes(1);
     expect(io).toHaveBeenCalledWith("http://localhost:7495", {
-      auth: { v: PROTOCOL_VERSION, token: "secret-token" },
+      auth: expect.any(Function),
       transports: ["websocket", "polling"],
       autoConnect: true,
     });
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "secret-token" });
     const [url] = (io as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
     expect(url).not.toContain("secret-token");
   });
@@ -91,10 +107,7 @@ describe("connectToRoom (C1)", () => {
     const fake = makeFakeSocket();
     const io = vi.fn(() => fake) as unknown as IoFactory;
     connectToRoom("http://x", "t", { version: 99, io });
-    expect(io).toHaveBeenCalledWith(
-      "http://x",
-      expect.objectContaining({ auth: { v: 99, token: "t" } }),
-    );
+    expect(handshake(io)).toEqual({ v: 99, token: "t" });
   });
 });
 
@@ -108,24 +121,45 @@ describe("resume key in the handshake (#561 C11)", () => {
     expect(io).toHaveBeenCalledTimes(1);
     const [url, opts] = io.mock.calls[0] as [string, Record<string, unknown>];
     expect(opts).toEqual({
-      auth: { v: PROTOCOL_VERSION, token: "tok", resumeKey: KEY },
+      auth: expect.any(Function),
       transports: ["websocket", "polling"],
       autoConnect: true,
     });
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "tok", resumeKey: KEY });
     // not the URL, not a query: only the auth payload carries it
     expect(url).toBe("http://localhost:7561");
     expect(opts).not.toHaveProperty("query");
-    const { auth, ...rest } = opts;
-    expect(JSON.stringify(rest)).not.toContain(KEY);
-    expect(auth).toHaveProperty("resumeKey", KEY);
+    expect(JSON.stringify({ ...opts, auth: undefined })).not.toContain(KEY);
+  });
+
+  it("reads a key given as a function again before every handshake (#656 C1)", () => {
+    const fake = makeFakeSocket();
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    let stored: string | null = null;
+    connectToRoom("http://x", "t", { io, resumeKey: () => stored });
+    // first connect: the page had no stored key
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "t" });
+    // the first welcome stored one; the automatic reconnect asks for auth again and carries it
+    stored = KEY;
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "t", resumeKey: KEY });
+    expect(io).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the token and version on every reconnect handshake (#656 C2)", () => {
+    const fake = makeFakeSocket();
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    let stored: string | null = KEY;
+    connectToRoom("http://x", "tok", { io, version: 7, resumeKey: () => stored });
+    expect(handshake(io)).toEqual({ v: 7, token: "tok", resumeKey: KEY });
+    stored = null;
+    expect(handshake(io)).toEqual({ v: 7, token: "tok" });
   });
 
   it.each([undefined, null, ""])("sends no resumeKey field when the key is %j", (resumeKey) => {
     const fake = makeFakeSocket();
     const io = vi.fn(() => fake) as unknown as IoFactory & ReturnType<typeof vi.fn>;
     connectToRoom("http://x", "t", { io, resumeKey });
-    const [, opts] = io.mock.calls[0] as [string, { auth: Record<string, unknown> }];
-    expect(opts.auth).toEqual({ v: PROTOCOL_VERSION, token: "t" });
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "t" });
   });
 });
 

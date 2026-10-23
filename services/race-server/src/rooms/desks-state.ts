@@ -13,7 +13,7 @@ import {
   type TextOverlay,
 } from "@fifth-copy/engine";
 import { engineSettingsOf, type RaceInfo, type RaceSettings } from "@fifth-copy/protocol";
-import { desksKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
+import { desksKey, membersKey, ROOM_TTL_S, roomKey, traceKey } from "./keys";
 import type { RaceDesk } from "./registry";
 
 /**
@@ -252,8 +252,11 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
     async flush(lobbyId, { probe = false } = {}) {
       const runtime = rooms.get(lobbyId);
       if (!runtime) return { lost: false };
+      // The probe refreshes the room too, so a race with no key for a while keeps it alive (#657).
       const probeOnly = async () =>
-        probe ? { lost: (await redis.exists(roomKey(lobbyId))) === 0 } : { lost: false };
+        probe
+          ? { lost: (await redis.expire(roomKey(lobbyId), ROOM_TTL_S)) === 0 }
+          : { lost: false };
       if (runtime.dirty.size === 0) return probeOnly();
       const desks = [...runtime.dirty];
       runtime.dirty.clear();
@@ -286,8 +289,10 @@ export function createDesksState({ redis }: { redis: Redis }): DesksState {
       }
       for (const desk of stale)
         tx.del(traceKey(lobbyId, desk)).expire(traceKey(lobbyId, desk), ROOM_TTL_S);
-      // Last, read-only: a deleted room hash does not fail the writes above (#204).
-      tx.exists(roomKey(lobbyId));
+      // A running race keeps its room alive (#657). The room's EXPIRE comes last and doubles as the
+      // existence probe: it answers 0 for a deleted room hash without failing the writes above (#204).
+      tx.expire(membersKey(lobbyId), ROOM_TTL_S);
+      tx.expire(roomKey(lobbyId), ROOM_TTL_S);
       try {
         const results = await tx.exec();
         if (!results) throw new Error(`room ${lobbyId}: desks transaction aborted`);

@@ -84,22 +84,38 @@ type RawSocket = Emitter & {
 /** The handshake `auth` payload (`handshakeAuthSchema` of the protocol). */
 export type HandshakeAuthPayload = { v: number; token: string; resumeKey?: string };
 
+/**
+ * socket.io calls `auth` before every handshake, the automatic reconnects included, so each one
+ * carries the values current at that moment rather than the ones of the first connect.
+ */
+export type HandshakeAuth = (cb: (payload: HandshakeAuthPayload) => void) => void;
+
 export type IoFactory = (
   url: string,
-  opts: { auth: HandshakeAuthPayload; transports: string[]; autoConnect: boolean },
+  opts: { auth: HandshakeAuth; transports: string[]; autoConnect: boolean },
 ) => RawSocket;
 
 /**
  * `resumeKey`: the desk's key from an earlier `welcome` (ARCHITECTURE 7.4); during a race only a
- * handshake carrying it gets the line-cut desk back (#561 C11). Empty or absent sends none.
+ * handshake carrying it gets the line-cut desk back (#561 C11). Empty or absent sends none. A
+ * function is read again before every handshake (#656): a key the first `welcome` stored reaches
+ * the reconnects of the same socket.
  */
-export type ConnectOptions = { version?: number; io?: IoFactory; resumeKey?: string | null };
+export type ConnectOptions = {
+  version?: number;
+  io?: IoFactory;
+  resumeKey?: string | null | (() => string | null);
+};
 
 export function connectToRoom(url: string, token: string, opts: ConnectOptions = {}): RoomSocket {
   const io = opts.io ?? (realIo as unknown as IoFactory);
   // ADR 0009: the token and the resume key travel in the handshake auth only, never in the URL or a query.
-  const auth: HandshakeAuthPayload = { v: opts.version ?? PROTOCOL_VERSION, token };
-  if (opts.resumeKey) auth.resumeKey = opts.resumeKey;
+  const v = opts.version ?? PROTOCOL_VERSION;
+  const { resumeKey } = opts;
+  const auth: HandshakeAuth = (cb) => {
+    const key = typeof resumeKey === "function" ? resumeKey() : resumeKey;
+    cb(key ? { v, token, resumeKey: key } : { v, token });
+  };
   const socket = io(url, { auth, transports: ["websocket", "polling"], autoConnect: true });
 
   const registered: [Emitter, string, Listener][] = [];

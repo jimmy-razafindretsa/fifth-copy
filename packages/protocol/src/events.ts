@@ -27,7 +27,11 @@ import { versionSchema } from "./version";
 export const countdownSchema = z.object({ v: versionSchema, race: raceInfoSchema });
 export type Countdown = z.infer<typeof countdownSchema>;
 
-/** One desk in a snapshot: `[desk, cursor, correct, errors, statusCode]` (`PLAYER_STATUSES[code]`). */
+/**
+ * One desk in a snapshot: `[desk, cursor, correct, errors, statusCode, total]` (`PLAYER_STATUSES[code]`;
+ * `total` = the engine's accepted presses, Backspace included, never decreasing: the exact ack of the
+ * keys the server applied, #645).
+ */
 const count = z.int().min(0);
 export const snapshotDeskSchema = z.tuple([
   deskSchema,
@@ -38,6 +42,7 @@ export const snapshotDeskSchema = z.tuple([
     .int()
     .min(0)
     .max(PLAYER_STATUSES.length - 1),
+  count,
 ]);
 
 /** 10 Hz full state of every desk (compact tuples, ARCHITECTURE 7.9); `t` is ms since GO. */
@@ -123,6 +128,11 @@ export const hostStartAckSchema = z.discriminatedUnion("ok", [
   }),
 ]);
 export type HostStartAck = z.infer<typeof hostStartAckSchema>;
+
+/** How far behind the server clock a keystroke's `t` may be (ARCHITECTURE 7.3). */
+export const MAX_LAG_MS = 2_000;
+/** How far ahead of the server clock a keystroke's `t` may be. */
+export const MAX_LEAD_MS = 200;
 
 /** <= 50 ms of keys per batch on the client; the wire accepts up to 64. */
 export const MAX_KEYS_PER_BATCH = 64;

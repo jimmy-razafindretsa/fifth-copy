@@ -79,6 +79,8 @@ export type RaceEvent =
   /** `receivedAt`: this device's clock when it arrived (the binder's timer), for the clock offset. */
   | { type: "welcome"; payload: RoomEvents["welcome"]; receivedAt?: number }
   | { type: "roster"; payload: RoomEvents["roster"] }
+  /** The host changed the room's settings while waiting (#654): the next countdown predicts with them. */
+  | { type: "settings"; payload: RoomEvents["settings"] }
   /** The host started: the race and its GO instant (#214). */
   | { type: "countdown"; payload: RoomEvents["countdown"] }
   /** `race.t0` passed on the corrected clock (scheduled by `bindRaceSocket`, #214). */
@@ -183,6 +185,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     }
     case "roster":
       return { ...state, members: byDesk(event.payload.members) };
+    case "settings":
+      return { ...state, settings: event.payload.settings };
     case "countdown":
       return {
         ...state,
@@ -352,6 +356,7 @@ export function bindRaceSocket(
       else cancelGo();
     }),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
+    socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onSnapshot((payload) => dispatch({ type: "snapshot", payload })),
     socket.onCountdown((payload) => {
       dispatch({ type: "countdown", payload });

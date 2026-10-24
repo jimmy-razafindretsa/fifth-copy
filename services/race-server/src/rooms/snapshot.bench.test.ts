@@ -91,7 +91,7 @@ const fastest = (xs: number[]) => Math.min(...xs);
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
 
 describe("snapshot budget (C6)", () => {
-  it("builds and stringifies a 100-desk late-race snapshot in < 2 ms (minimum of 50) and < 2 600 bytes", () => {
+  it("builds and stringifies a 100-desk late-race snapshot in < 2 ms (minimum of 50) and < 3 000 bytes (2 600 before the 6th tuple slot `total`, #645)", () => {
     const { runtime } = lateRoom();
     for (let i = 0; i < 10; i++) JSON.stringify(collectSnapshot(runtime, 420_000).snapshot);
     const times: number[] = [];
@@ -106,7 +106,7 @@ describe("snapshot budget (C6)", () => {
     expect(Math.min(...snapshot.desks.map(([, cursor]) => cursor))).toBeGreaterThanOrEqual(2_000);
     expect(Math.min(...snapshot.desks.map(([, , , errors]) => errors))).toBeGreaterThanOrEqual(40);
     expect(fastest(times)).toBeLessThan(2);
-    expect(Buffer.byteLength(json)).toBeLessThan(2_600);
+    expect(Buffer.byteLength(json)).toBeLessThan(3_000);
     console.log(
       JSON.stringify({
         bench: "snapshot",

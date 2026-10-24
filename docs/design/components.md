@@ -161,7 +161,7 @@ Rules: the patterns are background layers over the element's own ground (they ne
 | `Monogram` | `brand/monogram.tsx` | `variant` paper, red, ink (its own tile); `size` 16-512 px, square (default 32); `title`; `clearSpace` (default true; `false` for icon ladders) | none (vector) | n/a | inline `<svg role="img">` named by its `<title>`; rules: [`logo.md`](logo.md) |
 | `useNearViewport` / `useInViewport` | `use-near-viewport.ts` | `(ref, margin = NEAR_VIEWPORT 320px)` -> boolean, latched; `(ref)` -> on screen now | none (hook) | n/a | shared by `EmbedFrame` and `LazyVideo` |
 | `MotionSafe` / `useReducedMotion` | `motion.tsx` | `fallback`, children; hook -> boolean ("Motion" below) | none | motion on, reduced | SSR renders children (hook false on the server), then the live value; no hydration warning |
-| `useEmbedBridge` | `use-embed-bridge.ts` | `(schema?, onMessage?)` -> `{ ref, post }`: same-origin postMessage to and from that iframe (bible 15) | none (hook) | n/a | parses every incoming message with the zod schema |
+| `useEmbedBridge` | `use-embed-bridge.ts` | `(parse?, onMessage?)` -> `{ ref, post }`: same-origin postMessage to and from that iframe (bible 15) | none (hook) | n/a | passes every incoming message through `parse` (a plain guard, `null` drops it; no zod in first loads, #626) |
 
 ## Motion
 Design bible 8 (durations, reduced motion) and WCAG 2.3.1 / 2.3.3. Tokens: `docs/design/tokens.css` (#28).

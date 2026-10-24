@@ -243,8 +243,16 @@ test.describe("#224 machine keys, live", () => {
     expect(space, "a space in the text").toBeGreaterThan(0);
     for (const ch of chars.slice(0, space + 1)) {
       const key = ch.toLowerCase();
-      // a repeated letter presses again only once the cap is back up
+      // a repeated letter presses again only once the cap is back up: released, and its return transition
+      // over (a press that reverses a running transition gets a shortened duration: CSS Transitions, faster reversing of interrupted transitions)
       await expect(machine(page).locator("[data-pressed]")).toHaveCount(0);
+      if (layout.has(key)) {
+        await expect
+          .poll(() => keyCap(page, key).evaluate((el) => el.getAnimations().length), {
+            message: `${JSON.stringify(ch)} at rest`,
+          })
+          .toBe(0);
+      }
       // read the cap's running transitions on the next frame after the press: translate (down only, no
       // transform) and the stem's box-shadow, each on the fast token; the observer is in place before the
       // key goes down

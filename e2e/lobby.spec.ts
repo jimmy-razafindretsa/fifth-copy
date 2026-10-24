@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
 import { createLobby, joinAsGuest } from "./race/helpers";
@@ -164,6 +165,35 @@ test.describe("lobby waiting room (#107)", () => {
     await expect(rows(page)).toHaveCount(1);
     const animation = await notice.evaluate((el) => getComputedStyle(el).animationName);
     expect(animation).toMatch(/lkPulse$/);
+
+    // #639 C2: still lkPulse 1.3s; held at its dip (50%), the text keeps 4.5:1 in light and Night shift
+    expect(await notice.evaluate((el) => getComputedStyle(el).animationDuration)).toBe("1.3s");
+    await notice.evaluate((el) => {
+      for (const a of el.getAnimations()) {
+        a.pause();
+        a.currentTime = 650;
+      }
+    });
+    expect(await notice.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.75");
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const { violations } = await new AxeBuilder({ page })
+        .withRules(["color-contrast"])
+        .exclude("iframe")
+        .analyze();
+      expect(
+        violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
+        `${scheme}: color-contrast at the dip`,
+      ).toEqual([]);
+    }
+
+    // under reduced motion it holds still
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const still = await notice.evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { name: c.animationName, opacity: c.opacity };
+    });
+    expect(still).toEqual({ name: "none", opacity: "1" });
   });
 
   test("C7 bible components through tokens", async ({ page }) => {

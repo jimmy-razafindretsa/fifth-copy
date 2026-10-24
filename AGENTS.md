@@ -21,6 +21,8 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - check (lint, types, boundaries, unit; prints <=20 lines): `scripts/check.sh`
   (unit step needs Redis: `npm run db:up` and `REDIS_URL` loaded from `.env`; race-server room tests fail without it)
 - e2e: `npx playwright test [path]`
+  (`E2E_TIMEOUT_SCALE=<n>` multiplies e2e test waits via `e2e/timeouts.ts`, default 1; use 2-3 on a loaded machine)
+  (`PW_WORKERS=<n>` caps Playwright workers when parallel worktrees share the machine; unset = Playwright default)
 - prisma validate: `npx prisma validate`
 - prisma migrate (DEV DB only): `npx prisma migrate dev --name <slug>`
 - prisma apply (CI/prod only): `npx prisma migrate deploy`

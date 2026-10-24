@@ -37,6 +37,8 @@ export type Presence = {
   socketClosed(lobbyId: string, userId: string): Promise<Closed>;
   /** Open sockets of the user on this process. */
   sockets(lobbyId: string, userId: string): number;
+  /** Users seated through a socket on this process that now have none (#658: released at race end). */
+  dropped(lobbyId: string): string[];
   /** Whether the desk's user has an open socket (#183 reads it: idle is decided only while connected). */
   isConnected(lobbyId: string, desk: number): boolean;
   /** The user left the room (desk freed): the resume key goes. */
@@ -199,6 +201,9 @@ export function createPresence({
     },
 
     sockets,
+
+    dropped: (lobbyId) =>
+      [...(seats.get(lobbyId)?.keys() ?? [])].filter((userId) => sockets(lobbyId, userId) === 0),
 
     isConnected(lobbyId, desk) {
       for (const [userId, seat] of seats.get(lobbyId) ?? []) {

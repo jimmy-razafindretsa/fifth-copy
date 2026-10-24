@@ -60,13 +60,25 @@ test.describe("#220 error modes, live", () => {
 
   /**
    * A fresh room in `settings`: the host sets them, the page takes a desk at `/race/<lobbyId>`, the host
-   * starts; resolves at GO with the race text (the strip's) and the focused input.
+   * starts; resolves at GO with the race text (the strip's) and the focused input. `settingsAfterSeat`
+   * (#654): the host sets them only once the page is seated, so they reach it as a `settings` broadcast.
    */
-  async function race(page: Page, browser: Browser, settings: RaceSettingsPatch) {
+  async function race(
+    page: Page,
+    browser: Browser,
+    settings: RaceSettingsPatch,
+    { settingsAfterSeat = false } = {},
+  ) {
     const room = await hostRoom(browser, opened, { before: recordRaceTokens });
-    await setHostSettings(room.host, settings);
+    if (!settingsAfterSeat) await setHostSettings(room.host, settings);
     await page.goto(`/race/${room.lobbyId}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
+    if (settingsAfterSeat) {
+      await setHostSettings(room.host, settings);
+      if (settings.errorMode) {
+        await expect(input(page)).toHaveAttribute("data-mode", settings.errorMode);
+      }
+    }
     await expect(startButton(room.host)).toBeEnabled();
     await warmRace(room.host, room.lobbyId);
     await startButton(room.host).click();
@@ -208,5 +220,21 @@ test.describe("#220 error modes, live", () => {
     await page.keyboard.press(wrongFor(second));
     await expect(machine(page)).toHaveAttribute("data-jammed", "true");
     await expect(page.locator('[data-sheet] [data-probe="kept"][data-last="true"]')).toHaveCount(1);
+  });
+
+  // Contract of #654 C3: the guest was seated (its welcome carried Continue) before the host switched to
+  // Block; the `settings` broadcast reaches its store, so the input and the engine race under Block.
+  test("#654 C3 settings changed after the guest sat: Block applies", async ({ page, browser }) => {
+    const { first } = await race(
+      page,
+      browser,
+      { errorMode: "block" },
+      { settingsAfterSeat: true },
+    );
+    await expect(input(page)).toHaveAttribute("data-mode", "block");
+    await page.keyboard.press(wrongFor(first));
+    await expect(machine(page)).toHaveAttribute("data-jammed", "true");
+    expect(await readCopy(sheetChars(page))).toMatchObject({ next: 0 });
+    expect(await readCopy(stripChars(page))).toMatchObject({ next: 0 });
   });
 });

@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "./timeouts";
 
 // Contract of #497 (with #489, #373): the whole landing of bible 14.1, ported from
 // docs/design/bible/Fifth Copy Landing.dc.html. next/font renames families, so they are matched by
@@ -47,7 +48,7 @@ async function useScheme(page: Page, context: BrowserContext, scheme: "light" | 
 }
 
 /** Server-action re-renders on a loaded dev server take a few seconds. */
-const AFTER_ACTION = { timeout: 20_000 };
+const AFTER_ACTION = { timeout: ACTION_WAIT };
 
 /** The live feed's recorded loop (#552). */
 const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']");
@@ -59,7 +60,7 @@ const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']"
 async function ready(page: Page) {
   await page.goto("/");
   await expect(feedVideo(page)).toHaveAttribute("data-feed", /^(armed|near)$/, {
-    timeout: 30_000,
+    timeout: HYDRATION_WAIT,
   });
 }
 
@@ -284,7 +285,7 @@ test.describe("landing page (#497)", () => {
       () => !!document.createElement("canvas").getContext("webgl2"),
     );
     test.skip(!webgl, "no WebGL in this browser");
-    test.setTimeout(120_000);
+    test.setTimeout(scaled(120_000));
     const rows = page.locator("[aria-labelledby='clerk-title'] dd");
     await expect(rows).toHaveCount(5);
     await expect(rows.first()).toHaveText("…");
@@ -293,7 +294,7 @@ test.describe("landing page (#497)", () => {
       "true",
     );
     await rows.first().scrollIntoViewIfNeeded();
-    await expect(rows.first()).not.toHaveText("…", { timeout: 20_000 });
+    await expect(rows.first()).not.toHaveText("…", { timeout: ACTION_WAIT });
     const values = await rows.allTextContents();
     expect(values.every((v) => v.length > 1 && v !== "…")).toBe(true);
     await expect(page.getByText("UNASSIGNED", { exact: true })).toBeVisible();

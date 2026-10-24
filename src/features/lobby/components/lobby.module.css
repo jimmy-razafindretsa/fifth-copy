@@ -6,9 +6,11 @@
 
 @reference "../../../app/globals.css";
 
+/* the dip stays at 0.75 on text: ink keeps 4.5:1 at its lowest on paper (6.02) and on night (6.26)
+   (bible 3.3, 7.4 notice row, extension #560; #639) */
 @keyframes lkPulse {
   50% {
-    opacity: 0.55;
+    opacity: 0.75;
   }
 }
 

@@ -225,7 +225,12 @@ test.describe("#220 error modes, live", () => {
   // Contract of #654 C3: the guest was seated (its welcome carried Continue) before the host switched to
   // Block; the `settings` broadcast reaches its store, so the input and the engine race under Block.
   test("#654 C3 settings changed after the guest sat: Block applies", async ({ page, browser }) => {
-    const { first } = await race(page, browser, { errorMode: "block" }, { settingsAfterSeat: true });
+    const { first } = await race(
+      page,
+      browser,
+      { errorMode: "block" },
+      { settingsAfterSeat: true },
+    );
     await expect(input(page)).toHaveAttribute("data-mode", "block");
     await page.keyboard.press(wrongFor(first));
     await expect(machine(page)).toHaveAttribute("data-jammed", "true");

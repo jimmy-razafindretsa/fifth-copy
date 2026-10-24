@@ -358,3 +358,44 @@ describe("waiting room and tabs (C5)", () => {
     expect((await b.server.registry.members(lobby))?.map((m) => m.desk)).toEqual([1]);
   });
 });
+
+// #658: a member kept through the race for a line cut is released once it ends, so the room can close.
+describe("members who dropped during the race leave at its end (#658)", () => {
+  it("C1: a line-cut member with no socket at the end leaves the room; the others get the roster", async () => {
+    const {
+      booted: b,
+      lobby,
+      host,
+      player,
+    } = await cutRace({
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+    });
+    await advance(b, 60_000);
+    await until(() => host.seen.ended.length === 1, WAIT_MS, "ended");
+    await until(() => host.seen.roster?.length === 1, WAIT_MS, "roster without the dropped desk");
+    expect((await b.server.registry.members(lobby))?.map((m) => m.desk)).toEqual([host.desk]);
+    expect(b.server.presence.sockets(lobby, player.sub)).toBe(0);
+  });
+
+  it("C3: a member who resumed before the end keeps the desk after it", async () => {
+    const {
+      booted: b,
+      lobby,
+      host,
+      player,
+      key,
+    } = await cutRace({
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+    });
+    const back = b.connect({ v: PROTOCOL_VERSION, token: player.token, resumeKey: key });
+    const again = watchRace(back);
+    await until(() => !!again.welcome, WAIT_MS, "welcome after resume");
+    await advance(b, 60_000, { who: host, lobby });
+    await until(() => host.seen.ended.length === 1, WAIT_MS, "ended");
+    const entry = host.seen.ended[0]!.ranking.find((r) => r.desk === player.desk);
+    expect(entry?.status).not.toBe("expired");
+    // the release runs after the end: give it the same chance it had in C1
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await b.server.registry.members(lobby))?.map((m) => m.desk)).toEqual([1, 2]);
+  });
+});

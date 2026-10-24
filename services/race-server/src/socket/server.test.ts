@@ -8,7 +8,17 @@ import {
   type RaceSettings,
   welcomeSchema,
 } from "@fifth-copy/protocol";
-import { boot, connectError, SECRET, track, until, type Booted } from "../testing/harness";
+import {
+  boot,
+  connectError,
+  SECRET,
+  startedRace,
+  track,
+  until,
+  WAIT_MS,
+  type Booted,
+  type Racer,
+} from "../testing/harness";
 
 let t: Booted | undefined;
 afterEach(async () => {
@@ -229,5 +239,33 @@ describe("health and shutdown (C6)", () => {
     const booted = t;
     t = undefined;
     await booted.stop().catch(() => undefined);
+  });
+});
+
+describe("a room whose racer dropped for good still closes (#658 C2)", () => {
+  it("one racer drops mid-race, the race ends, the other leaves: room closed, state released", async () => {
+    const race = await startedRace(process.env.REDIS_URL, {
+      players: 2,
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+    });
+    t = race.booted;
+    const { lobby } = race;
+    const [host, player] = race.racers as [Racer, Racer];
+    player.client.disconnect();
+    await until(() => host.seen.events.some((e) => e.kind === "line-cut"), WAIT_MS, "line-cut");
+    // the host keeps typing nothing; the timer ends the race (idle warn/kick may fire, harmless)
+    for (let left = 60_000; left > 0; left -= 1_000) {
+      t.clock.advance(1_000);
+      await new Promise((r) => setImmediate(r));
+    }
+    await until(() => host.seen.ended.length === 1, WAIT_MS, "ended");
+    await until(() => host.seen.roster?.length === 1, WAIT_MS, "dropped racer released");
+
+    host.client.disconnect();
+    await expect
+      .poll(() => t!.server.registry.room(lobby), { timeout: WAIT_MS, interval: 20 })
+      .toBeNull();
+    expect(t.server.desks.get(lobby)).toBeUndefined();
+    expect(t.server.presence.sockets(lobby, host.sub)).toBe(0);
   });
 });

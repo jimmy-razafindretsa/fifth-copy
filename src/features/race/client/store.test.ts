@@ -331,6 +331,8 @@ describe("bindRaceSocket (#561 C3)", () => {
     const w = welcome();
     fake.deliver("welcome", w);
     fake.deliver("roster", { v: PROTOCOL_VERSION, members: [member(2, "Crow-274")] });
+    const settings = { ...DEFAULT_RACE_SETTINGS, errorMode: "block" as const };
+    fake.deliver("settings", { v: PROTOCOL_VERSION, settings }); // #654 C2
     fake.io.deliver("reconnect_attempt", 1);
     fake.io.deliver("reconnect", 1);
     fake.deliver("connect_error", new Error("in-progress"));
@@ -339,6 +341,7 @@ describe("bindRaceSocket (#561 C3)", () => {
       // #214: the welcome carries the local time it arrived at, for the clock offset
       { type: "welcome", payload: w, receivedAt: expect.any(Number) },
       { type: "roster", payload: { v: PROTOCOL_VERSION, members: [member(2, "Crow-274")] } },
+      { type: "settings", payload: { v: PROTOCOL_VERSION, settings } },
       { type: "reconnecting" },
       { type: "reconnected" },
       { type: "connect-error", reason: "in-progress" },
@@ -356,6 +359,7 @@ describe("bindRaceSocket (#561 C3)", () => {
       "connect_error",
       "countdown",
       "roster",
+      "settings",
       "snapshot",
       "welcome",
     ]);
@@ -1013,5 +1017,36 @@ describe("error modes, the jam and lastKey (#220 C1)", () => {
     const s = freeze(press(raceIn("block"), "x", 10));
     expect(() => press(s, "L", 20)).not.toThrow();
     expect(s.lastKey).toEqual({ key: "x", t: 10, wrong: true });
+  });
+
+  // Contract of #654 C1: the room's `settings` broadcast after the welcome replaces the settings, and the
+  // next countdown builds the prediction from them.
+  const BLOCK = { ...DEFAULT_RACE_SETTINGS, errorMode: "block" as const, backspace: true };
+  const settingsEvent: RaceEvent = {
+    type: "settings",
+    payload: { v: PROTOCOL_VERSION, settings: BLOCK },
+  };
+
+  it("a settings event replaces settings and nothing else (#654 C1)", () => {
+    const waiting = run({
+      type: "welcome",
+      payload: welcome({ settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "continue" } }),
+    });
+    expect(reduceRace(waiting, settingsEvent)).toEqual({ ...waiting, settings: BLOCK });
+  });
+
+  it("settings after the welcome: Block applies at the countdown (#654 C1)", () => {
+    let s = run(
+      {
+        type: "welcome",
+        payload: welcome({ settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "continue" } }),
+      },
+      settingsEvent,
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      { type: "go" },
+    );
+    expect(s.prediction?.settings).toEqual({ errorMode: "block", backspace: true });
+    s = press(s, "x", 10);
+    expect(selectTypedView(s)).toMatchObject({ jammed: true, cursor: 0 });
   });
 });

@@ -97,6 +97,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const socket = {
       onWelcome: (cb: (payload: unknown) => void) => ((onWelcome = cb), off),
       onRoster: () => off,
+      onSettings: () => off,
       onCountdown: () => off,
       onSnapshot: () => off,
       onConnectError: () => off,
@@ -130,6 +131,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const room = {
       onWelcome: () => () => {},
       onRoster: () => () => {},
+      onSettings: () => () => {},
       onCountdown: () => () => {},
       onSnapshot: () => () => {},
       onConnectError: () => () => {},
@@ -180,6 +182,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
         return () => {};
       },
       onRoster: () => () => {},
+      onSettings: () => () => {},
       onCountdown: () => () => {},
       onSnapshot: () => () => {},
       onConnectError: () => () => {},

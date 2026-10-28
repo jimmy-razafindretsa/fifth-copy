@@ -18,7 +18,6 @@ import docket from "../components/hud-docket.module.css";
 import { RaceInput } from "../components/race-input";
 import { RaceNotice } from "../components/race-notice";
 import { StampRow } from "../components/stamp-row";
-import { SeatDesks } from "./seat-leaves";
 import { paperwork, PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
@@ -199,7 +198,6 @@ export function RaceSeatLive({
         backspace={backspace}
         errors={errors}
       />
-      <SeatDesks />
       {/* present before the countdown starts, so each change is announced; nothing to say once lost */}
       {phase !== "lost" ? (
         <p role="status" aria-atomic="true" data-announcer className={docket.srOnly}>

@@ -1,4 +1,3 @@
-import type { Member } from "@fifth-copy/protocol";
 import type { CountdownLabels } from "../components/countdown";
 import type { StampRowLabels } from "../components/stamp-row";
 import type { TelexLabels } from "../components/telex-strip";
@@ -9,7 +8,6 @@ import type {
   RaceNoticeLabels,
   SabotageTrayLabels,
 } from "../view/hud-labels";
-import type { RaceCardView } from "../view/race-card-view";
 
 /**
  * The seat view's copy (#561 C6): the `race` namespace of both catalogs, one language per page (ADR
@@ -56,17 +54,9 @@ export type SeatErrorLabels = {
 export const PHONE_MAX_WIDTH_PX = 480;
 export const PHONE_QUERY = `(max-width: ${PHONE_MAX_WIDTH_PX}px)`;
 
+/** Tablets and small laptops get the compact race card (bible 7.4a): below 1280px. */
+export const COMPACT_MAX_WIDTH_PX = 1279;
+export const COMPACT_QUERY = `(max-width: ${COMPACT_MAX_WIDTH_PX}px)`;
+
 /** Paperwork numbers: two digits at least (`DESK 05`, bible 2). */
 export const paperwork = (n: number) => String(n).padStart(2, "0");
-
-/**
- * The race card before the start: one tick per seated typist on the full-field line, all at the start
- * (yours marked), and no lanes yet: ranks only exist once the race runs (#564 selects the lanes from the
- * snapshots). A projection of the roster, no race rule (ADR 0007).
- */
-export function beforeStartRaceCard(members: readonly Member[], you: number | null): RaceCardView {
-  return {
-    field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === you })),
-    lanes: [],
-  };
-}

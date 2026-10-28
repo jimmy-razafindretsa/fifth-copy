@@ -60,6 +60,18 @@ const STORE_READERS: Record<string, string> = {
   [path.join(components, "machine/typing-machine-live.tsx")]: "../../client/use-race-store",
 };
 
+/**
+ * #564 C7: the race card's view model projects the snapshot with the engine's own `progress` (ADR 0007)
+ * and reads the protocol's status codes; it still imports no client (the store reaches it structurally)
+ * and no reducer (#559 C8 below). Every other module of FILES stays free of both packages.
+ */
+const PURE_IMPORTS: Record<string, string[]> = {
+  [path.join(root, "src/features/race/view/race-card-view.ts")]: [
+    "@fifth-copy/engine",
+    "@fifth-copy/protocol",
+  ],
+};
+
 describe("typing surface imports (#558 C10)", () => {
   it("covers the strip, the sheet, the frame, the registry and every skin", () => {
     const rel = FILES.map((f) => path.relative(components, f));
@@ -79,12 +91,15 @@ describe("typing surface imports (#558 C10)", () => {
   });
 
   for (const file of FILES) {
-    it(`${path.relative(root, file)} imports no socket client, engine or protocol`, () => {
+    const pure = PURE_IMPORTS[file] ?? [];
+    const what = pure.length ? "socket client" : "socket client, engine or protocol";
+    it(`${path.relative(root, file)} imports no ${what}`, () => {
       for (const s of specifiers(readFileSync(file, "utf8"))) {
         if (s === STORE_READERS[file]) continue;
         expect(s, file).not.toMatch(/(^|\/)client(\/|$)/);
-        expect(s, file).not.toMatch(/^@fifth-copy\/(engine|protocol)/);
         expect(s, file).not.toMatch(/^socket\.io/);
+        if (pure.includes(s)) continue;
+        expect(s, file).not.toMatch(/^@fifth-copy\/(engine|protocol)/);
       }
     });
   }
@@ -232,13 +247,44 @@ describe("engine reducers only in the prediction (#559 C8)", () => {
   const REDUCERS =
     /\b(applyKeystroke|continueMode|blockMode|backspace|initialState|finishIfDone)\b/;
 
-  it("client/prediction.ts is the only module of src/features/race that imports @fifth-copy/engine", () => {
+  /** The engine import statements of a source file (named, namespace or side effect). */
+  const engineImports = (source: string) =>
+    [
+      ...source.matchAll(
+        /(?:import|export)\s+(type\s+)?([^"';]*?)\s*from\s*["']@fifth-copy\/engine(?:\/[^"']*)?["']/g,
+      ),
+    ].map((m) => ({ typeOnly: !!m[1], clause: m[2]! }));
+  const predictionFile = path.join(feature, "client/prediction.ts");
+  const view = path.join(feature, "view");
+
+  // #564 C7: the view models may read the engine's pure functions (`progress`); nothing else may
+  it("no engine import outside view/ and client/prediction.ts", () => {
     const hits = modules
+      .filter((f) => f !== predictionFile && !f.startsWith(view + path.sep))
       .filter((f) =>
         specifiers(readFileSync(f, "utf8")).some((s) => /^@fifth-copy\/engine(\/|$)/.test(s)),
       )
       .map((f) => path.relative(root, f));
-    expect(hits).toEqual(["src/features/race/client/prediction.ts"]);
+    expect(hits).toEqual([]);
+  });
+
+  it("client/prediction.ts is the only module of src/features/race that imports an engine reducer", () => {
+    const hits = modules
+      .filter((f) => f !== predictionFile)
+      .filter((f) =>
+        engineImports(readFileSync(f, "utf8")).some(
+          // a namespace import (`* as engine`) would reach every reducer
+          ({ clause }) => REDUCERS.test(clause) || /\*/.test(clause),
+        ),
+      )
+      .map((f) => path.relative(root, f));
+    expect(hits).toEqual([]);
+    expect(
+      engineImports(readFileSync(predictionFile, "utf8")).some((i) => REDUCERS.test(i.clause)),
+    ).toBe(true);
+    // the check sees the view's real import (so a reducer added to it would fail above)
+    const card = engineImports(readFileSync(path.join(view, "race-card-view.ts"), "utf8"));
+    expect(card.map((i) => i.clause).join(" ")).toMatch(/\bprogress\b/);
   });
 
   it("the prediction hands no reducer on (no re-export of an engine function)", () => {

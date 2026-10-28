@@ -297,7 +297,7 @@ Projector and phones join the room on the `spectator` channel with a `role: spec
 - `lobby`: `createLobby`, `joinByCode`, `consumeInvite`, `createInvite`, `updateSettings` (host only), `mintRaceToken`, `openRoom`/`closeRoom` (internal calls), `recordHostTransfer`.
 - `texts`: `generateRaceText(settings)` (exact word count, accents, practice letters, numbers/symbols/punctuation, difficulty), `importCorpus`, `isClean(text)`.
 - `race` (client): `RaceClient`, `useRaceStore`, HUD components (telex, sheet, keyboard, nixie counters, race card, stamps, sabotage tray, abandon), spectator views.
-- `race-3d` (client, lazy): `RaceScene`, `OverviewScene`, `benchmarkGpu`.
+- `race-3d` (client, lazy): `RaceScene` (mounts `/3d/seat.html` in an `EmbedFrame`, driven by `fc-race-*` messages, [ADR 0017](../adr/0017-seat-scene-delivery.md)), `OverviewScene`, `benchmarkGpu` (inside the embed); the scene reads only `selectSceneView` from `@/features/race`.
 - `results`: internal `persistRaceResults`, `getDawnReport(raceId, viewer)`, podium/ranking/personal card components.
 - `stats`: `getProfile`, `getSeries`, `getHeatmap(layout)`, `getBests`, `getCallouts`, jobs `rollupCharStats`, `purgeKeystrokes`.
 - `guide`: static content per layout and OS.

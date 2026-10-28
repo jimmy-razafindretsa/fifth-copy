@@ -269,6 +269,21 @@
       "file": "docs/adr/0016-shown-wpm-and-bonus-fairness.md"
     },
     {
+      "id": "0017",
+      "title": "How the 3D seat scene reaches the race route (embed page or in-bundle module) and the store -> scene interface",
+      "status": "proposed",
+      "category": "ui",
+      "scope": [
+        "src/features/race-3d/**",
+        "public/3d/**",
+        "scripts/embeds.ts"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Pending the owner's choice (card",
+      "file": "docs/adr/0017-seat-scene-delivery.md"
+    },
+    {
       "id": "0018",
       "title": "First-load JS budget raised to 300 kB gzip (amends ADR 0013's bundle clause)",
       "status": "accepted",

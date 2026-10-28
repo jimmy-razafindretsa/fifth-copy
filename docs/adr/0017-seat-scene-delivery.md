@@ -1,0 +1,127 @@
+---
+id: "0017"
+title: How the 3D seat scene reaches the race route (embed page or in-bundle module) and the store -> scene interface
+status: proposed
+category: ui
+scope: ["src/features/race-3d/**", "public/3d/**", "scripts/embeds.ts"]
+supersedes: []
+rule: Pending the owner's choice (card #562 C3); until then build no seat-scene delivery. Under either option the scene reads one `SceneView` derived from the race store, never owns race state, renders no text in WebGL, and reports fps and draw calls for the ADR 0013 budgets.
+---
+
+# 0017. How the 3D seat scene reaches the race route (embed page or in-bundle module) and the store -> scene interface
+
+## Context
+Two accepted sources of truth disagree on how the race route gets its 3D scene:
+
+- **ADR 0013** (rule): "WebGL code is confined to `src/features/race-3d` (client-only, `next/dynamic` with `ssr:false`, imported only by the race route after the HUD mounts) ... the scene reads the store and never owns state". Its decision names a `RaceScene` class, a bundle check that `three` sits only in the race-3d chunk, and CI budgets in `e2e/perf/`. ARCHITECTURE 8.2 lists `race-3d` as `RaceScene`, `OverviewScene`, `benchmarkGpu`.
+- **Design bible 9**: "Plain `<script type="module">` pages, embedded via `<iframe>` in UI pages"; **bible 16**: `Fifth Copy Full Lobby.html` is the "reference 3D scene and perf architecture", deployed verbatim by `scripts/embeds.ts` and drift-checked by `scripts/embeds.test.ts`; **bible 15**: the postMessage protocol (`fc-setview`, `fc-view`, `fc-look`, ...). AGENTS.md makes the bible the source of truth for every 3D decision and asks to match its reference files 1:1.
+
+Facts on `main` (2026-10-28):
+
+- `three` 0.184.0 is a runtime dependency; `scripts/embeds.ts` copies its build to `/3d/vendor/` (`three.module.min.js` 86 kB gzip + `three.core.min.js` 101 kB gzip, about 187 kB) and writes `public/3d/{lobby,clerk,medal,major}.html` from the bible and `docs/design/embeds/`.
+- `EmbedFrame` (`src/components/ui/embed-frame.tsx`: lazy mount near the viewport, `data-embed`) and `useEmbedBridge` (`src/components/ui/use-embed-bridge.ts`: same-origin `post`, listener filtered by origin and source window, a `parse` guard) already drive three embeds in production: the landing clerk (`fc-look`, `fc-clerk`), the medal and the not-found Major (#397).
+- The reference scene already has the seat camera of bible 11.3 (`setView('pov')`: eye `(0, 1.02, R_CHAIR - 0.05)`, FOV 62) and listens to `fc-setview`; it computes `renderer.info.render.calls` and fps for its stats line; it uses `BatchedMesh` and `InstancedMesh` (bible 12 "batch everything"). Its clerks type at random: nothing in it reads race state yet.
+- #552 replaced the landing's live `lobby.html` embed with a recorded video because "no WebGL scene keeps rendering on the landing (school Chromebooks first)". The lesson is about **when** a scene renders (only where it is the point of the screen, stopped when hidden), not about how it is delivered: it applies to both options below.
+- The race route already ships zod through `@fifth-copy/protocol`; the landing avoids zod in its first load (#626), which is why its embed guards are hand-written (`src/features/landing/embed-messages.ts`).
+- The race store (`src/features/race/client/store.ts`) is `{ getState, subscribe, dispatch }` and notifies on every predicted key, so any scene must select and diff, never redraw per notification. Snapshots arrive at 10 Hz (ARCHITECTURE 7.2).
+- `src/features/race/no-three.test.ts` (#561) already asserts that the race feature and route never import `three` or `race-3d` statically and that no first-load chunk of `/race/[raceId]` carries three.js. `src/features/race-3d/` does not exist yet; #563 creates it.
+- A same-origin iframe runs in the parent's renderer process and on its main thread in Chromium, so neither option isolates the HUD's input from the scene's frame time: input latency is protected by ADR 0013's HTML-only text and by the frame budget, not by the delivery.
+
+### The shared core (both options)
+Whatever the delivery, the scene reads one plain value, `SceneView`, exported by the race feature (`selectSceneView(state)` in `@/features/race`), so the scene never sees the raw store state and the two options differ only in transport:
+
+```ts
+type SceneDesk = { desk: number; tint: string; status: PlayerStatus; // @fifth-copy/protocol PLAYER_STATUSES
+  rank: number | null; progress: number }; // progress 0..1
+type SceneView = {
+  self: number | null;          // your desk: its clerk and paper are hidden (bible 11.3); null = spectator
+  desks: SceneDesk[];           // sorted by desk; from the roster and the last snapshot
+  lamp: number | null;          // the Major's lamp target desk (#267)
+  phase: "waiting" | "countdown" | "running" | "ended";
+};
+type ScenePreset = "low" | "medium" | "high";   // bible 12; chosen by the 2 s benchmark unless forced
+type SceneMotion = "full" | "reduce";            // prefers-reduced-motion or <html data-motion="reduce"> (#28)
+type SceneTelemetry = { fps: number; calls: number; triangles: number; preset: ScenePreset; capped: boolean };
+```
+
+Later cards add **fields, not channels** (ring layout #254, typists and lamp #267, bulb #272, projector camera #287). No names or numbers are drawn in WebGL: plaques and desk numbers are HTML (ADR 0013, bible 9).
+
+## Options
+
+### A. Reference page `/3d/seat.html`, mounted in `EmbedFrame`, driven over postMessage
+- **Source:** an app-authored page `docs/design/embeds/Fifth Copy Seat.html` built from `Fifth Copy Full Lobby.html` (the same way `Fifth Copy The Major.html` was: verbatim geometry, colours, lights, post layer), with its random typing replaced by the message handlers below. `scripts/embeds.ts` gains one `EMBEDS` row (`target: "seat.html"`); `scripts/embeds.test.ts` drift-checks it. `three` is loaded by the page from `/3d/vendor/`, never bundled by Next.
+- **Mount:** `src/features/race-3d/index.ts` exports `RaceScene`, a client leaf that renders `EmbedFrame src="/3d/seat.html?embed=1&preset=..."` with `pointer-events: none` and `tabIndex={-1}` (the seat POV takes no input, so focus can never leave the race input for the iframe), and pairs it with `useEmbedBridge`. The route still loads `RaceScene` through `next/dynamic(..., { ssr: false })` after the HUD mounts, so ADR 0013's loading order and fallback stay as written.
+- **Interface (`src/features/race-3d/messages.ts`, zod, every message carries `v: SCENE_PROTOCOL`, starting at 1; bump on any shape change):**
+
+  | Message | Direction | Payload | When |
+  |---|---|---|---|
+  | `fc-race-init` | page -> scene | `{ v, view: SceneView, preset: ScenePreset \| "auto", motion: SceneMotion, camera: "pov" \| "over" }` | once, on the scene's `fc-scene-hello` |
+  | `fc-race-state` | page -> scene | `{ v, view: SceneView }` | when `selectSceneView` changes, coalesced to at most one per animation frame |
+  | `fc-race-motion` | page -> scene | `{ v, motion }` | when the OS setting or `data-motion` changes |
+  | `fc-race-preset` | page -> scene | `{ v, preset }` | when the user or a test forces a preset |
+  | `fc-setview` | page -> scene | `{ view: "pov" \| "over" }` | bible 15, unchanged (projector #287) |
+  | `fc-scene-hello` | scene -> page | `{ v }` | the page script has loaded |
+  | `fc-scene-ready` | scene -> page | `{ v, preset, fov, desks }` | after the first rendered frame (ends the loading card, #563 C2) |
+  | `fc-scene-telemetry` | scene -> page | `{ v, ...SceneTelemetry }` | every second while rendering |
+  | `fc-scene-fallback` | scene -> page | `{ v, reason: "no-webgl2" \| "benchmark-low" \| "context-lost" }` | the page shows the paper view (ADR 0013 fallback) |
+
+  The page parses every scene -> page message with these zod schemas (the race route already ships zod); the embed checks `type` and `v` with plain guards (it has no bundler) and ignores anything else. Both sides post to and accept only the page's own origin (bible 15 "lock the origin in prod"; `useEmbedBridge` already does on the page side).
+- **For:** the scene is the bible's reference by construction (bible 0 "match pixel-for-pixel", 9, 16) and the drift test keeps it so; the established pattern of four shipped embeds, with `EmbedFrame`, `useEmbedBridge`, the vendor copy and the drift check all existing; `three` is in **no** Next chunk at all, and the vendor copy is the one the landing's clerk and medal already cached, so a player coming from the landing downloads no three.js again; the message boundary makes "the scene never owns state" structural (it holds a copy it cannot write back); a script error or a lost GL context in the scene cannot throw into the React tree.
+- **Against:** the scene's growing logic (#254, #258, #267, #272, #287) is plain JavaScript in an HTML page: outside TypeScript strict, ESLint and dependency-cruiser, testable only end to end (Playwright reaches the same-origin frame); a second document and JS realm (a few MB of memory); one structured clone per frame of a 60-desk `SceneView` (small: about 60 x 5 numbers); the message set is a second wire protocol to version; projected HTML plaques must live inside the embed page (with their strings passed in, so i18n stays on the page) or need a coordinates message back.
+
+### B. In-bundle three.js module in `src/features/race-3d`, loaded with `next/dynamic`, subscribing to the store
+- **Source:** TypeScript modules in `src/features/race-3d/scene/*` ported from `Fifth Copy Full Lobby.html` (room, clerks, Major, props, lights, cameras, presets), importing `three` from node_modules.
+- **Mount:** the route loads `@/features/race-3d` through `next/dynamic(..., { ssr: false })` after the HUD mounts (ADR 0013 as written). `RaceScene` is a client leaf owning a container `div`; its effect calls the imperative mount.
+- **Interface (`src/features/race-3d/index.ts`):**
+
+  ```ts
+  type SceneStore = { getState(): RaceState; subscribe(listener: () => void): () => void }; // RaceStore satisfies it
+  type MountOptions = { preset: ScenePreset | "auto"; motion: SceneMotion; camera: "pov" | "over";
+    onReady(info: { preset: ScenePreset; fov: number; desks: number }): void;
+    onTelemetry(t: SceneTelemetry): void;                       // every second while rendering
+    onFallback(reason: "no-webgl2" | "benchmark-low" | "context-lost"): void };
+  type SceneHandle = { setMotion(m: SceneMotion): void; setPreset(p: ScenePreset): void;
+    setCamera(c: "pov" | "over"): void; dispose(): void };       // dispose frees GL resources and unsubscribes
+  function mount(container: HTMLElement, store: SceneStore, options: MountOptions): SceneHandle;
+  ```
+
+  `mount` subscribes once; on each notification it computes `selectSceneView(store.getState())`, compares it with the last one, and applies a change at the next frame only. The scene never calls `dispatch` (the type does not offer it).
+- **For:** ADR 0013 and ARCHITECTURE 8.2 as written; one language and toolchain (TypeScript strict, ESLint, dependency-cruiser, Vitest unit tests on layout, presets and the `SceneView` diff); no serialization and no second protocol; projected HTML plaques in the same document (CSS2D-style, ADR 0013); one document for focus and accessibility.
+- **Against:** the room is ported, not served: the bible's reference and the TypeScript copy are two implementations that drift with no automatic check (only visual baselines and review catch it), against AGENTS.md "match its reference files 1:1"; bible 9's iframe rule needs an extension; `three` (about 187 kB gzip) is bundled a second time in a hashed async chunk, so a player who saw the landing's clerk or medal downloads it again; the boundary "the scene never owns state" holds by type and review, not by construction.
+
+## Budgets (ADR 0013, ADR 0018) under each option
+| Budget | A (embed page) | B (in-bundle module) |
+|---|---|---|
+| >= 30 fps median at Low, 60 bots, 10 s | `e2e/perf/` opens a 60-bot room with `?preset=low` passed to the iframe `src`; reads `fc-scene-telemetry` on the page (or `frame.evaluate` on the same-origin frame) and takes the median over 10 s | same room with `?preset=low`; `onTelemetry` mirrors the values on the container (`data-scene-fps`, `data-scene-calls`) where Playwright reads them |
+| <= 60 draw calls | `calls` in `fc-scene-telemetry` from `renderer.info.render.calls` (the reference's own stats line) | `calls` from `onTelemetry`, same source |
+| Bundle | `three` in no Next chunk (every route, first load and async; the no-three test extends from `/race/[raceId]` to all routes); the route's first load stays <= 300 kB (`scripts/bundle-budget.ts`, ADR 0018); the embed's own weight (seat page + `/3d/vendor/`) is checked separately against a stated cap | `three` only in the race-3d async chunk (ADR 0013 bundle check, `e2e/perf/bundle.spec.ts`); first load <= 300 kB without that chunk (ADR 0018) |
+| Time to race < 60 s | measured from the landing to a started bot race, unchanged: the HUD never waits for the scene; the vendor copy is often already cached | the same measurement; the async chunk is always a fresh download on the first race |
+
+Under both, the scene stops rendering when the tab is hidden or the scene is replaced by the paper fallback (#552's lesson), and a browser 30 fps cap is reported as `capped: true`, not as a GPU failure (bible 12).
+
+## Decision
+**Pending owner choice (#562 C3); recommended: A**, the reference page `/3d/seat.html` in an `EmbedFrame`, driven by the `fc-race-*` messages above.
+
+Reasons for the recommendation:
+1. **Design fidelity by construction.** The bible is the source of truth for every 3D decision and names the Full Lobby page as the reference scene and perf architecture; A serves a page built from it under the existing drift check, B maintains a second implementation that can only be compared by eye.
+2. **It reuses what already ships.** `scripts/embeds.ts`, the vendor copy, `EmbedFrame`, `useEmbedBridge` and the bible 15 protocol drive four embeds today; the reference scene already has the seat camera and `fc-setview`. A adds one `EMBEDS` row and a message set; B first ports the 827-line reference page (room, clerks, Major, props, cameras) into TypeScript.
+3. **Simpler, stronger budgets.** With A, `three` is in no Next chunk at all and its cached vendor copy is shared with the landing embeds; the fps and draw-call telemetry is the reference's own counter. The cost is the plain-JavaScript scene and a second, small versioned protocol, which `SCENE_PROTOCOL` and the zod schemas on the page side contain.
+
+The owner may choose B; the shared `SceneView` core, the budgets table and the reconciliation lines below are written so either choice is a one-line change to this section.
+
+## Consequences
+- Either way: `selectSceneView` lives in `@/features/race` (index export) and is the only thing the scene reads; `race-3d` imports only `@/features/race` (index) and `@/components/ui`, and only `src/app/race` imports `race-3d` (#563 C7); the route keeps HUD-first loading and the paper fallback (ADR 0013, bible 14.3 "Race seat view").
+- With A: `docs/design/embeds/Fifth Copy Seat.html` holds the scene, bible 16's list of served pages gains `seat.html`, and scene cards (#254, #258, #267, #272, #287) edit that page and the message schemas; their checks are e2e and the drift test.
+- With B: scene cards edit `src/features/race-3d/scene/*` with unit tests; the bible's reference and the port are kept aligned by visual baselines.
+- #563's contract already reads "per ADR 0017" and keeps both branches (C2 `fc-scene-ready` or `onReady`, C6 bundle, C8 option A only); it needs no rewrite after the choice.
+
+### Reconciliation (C2), applies once the owner confirms
+Until the choice, ADR 0013's Amendments, bible 9 and ARCHITECTURE 8.2 each carry a dated line saying the delivery is pending this ADR. On acceptance, Deliver replaces those lines in the card's PR:
+
+- **If A (recommended):** ADR 0013 Amendments: "2026-10-28, ADR 0017 (owner decision, card #562): the seat scene is the reference page `/3d/seat.html` (generated by `scripts/embeds.ts`) mounted by `src/features/race-3d` in an `EmbedFrame` and driven over postMessage (`fc-race-*`, `fc-scene-*`); `race-3d` is still loaded with `next/dynamic` after the HUD, and `three` is in no Next chunk. The rest of this ADR is unchanged." Bible 9: the pending line is removed (bible 9 stands). ARCHITECTURE 8.2: "`race-3d` (client, lazy): `RaceScene` (mounts `/3d/seat.html` in an `EmbedFrame`, ADR 0017), `OverviewScene`, `benchmarkGpu` (inside the embed)".
+- **If B:** ADR 0013 Amendments: the pending line is removed (ADR 0013 stands). Bible 9 gains "Extension (#562, ADR 0017): the race seat and projector scenes are in-bundle three.js modules in `src/features/race-3d`, ported from `Fifth Copy Full Lobby.html`; the other 3D pages stay iframe embeds." ARCHITECTURE 8.2: "`race-3d` (client, lazy): `RaceScene.mount(container, store)` (ADR 0017), `OverviewScene`, `benchmarkGpu`".
+
+## Alternatives considered
+- **A or B (above):** both viable; the choice is the owner's (PROTOCOL 5a item 1: it amends ADR 0013 or the bible's 3D rule).
+- **Hybrid: B's module running in a worker on an `OffscreenCanvas`:** would isolate the scene from the HUD's main thread, which neither A nor B does; but three.js in a worker needs its own message protocol anyway (A's cost) plus a port (B's cost), and `OffscreenCanvas` WebGL2 support on managed Chromebooks is unverified. Rejected for now; revisit if the fps gate (#275) shows input lag on Low.
+- **react-three-fiber:** already rejected by ADR 0013 (a reconciler on the hot path and a dependency).

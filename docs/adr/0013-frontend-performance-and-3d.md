@@ -32,3 +32,4 @@ rule: WebGL code is confined to src/features/race-3d (client-only, next/dynamic 
 
 ## Amendments
 - 2026-10-16, ADR 0018 (owner decision, card #646): the first-load JS budget is 300 kB gzip, 3D chunk excluded. The rest of this ADR is unchanged.
+- 2026-10-28, [ADR 0017](0017-seat-scene-delivery.md) (proposed, card #562, pending the owner's choice): how the seat scene reaches the race route (this ADR's in-bundle `next/dynamic` module, or bible 9's iframe embed page `/3d/seat.html`) and the store -> scene interface are decided there; build no seat-scene delivery until it is accepted.

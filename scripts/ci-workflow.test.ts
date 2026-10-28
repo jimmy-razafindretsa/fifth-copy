@@ -7,7 +7,15 @@ import { parse as parseYaml } from "yaml";
 // Card #453 / ADR 0003: CI prepares the test DB with scripts/test-db.sh, and only jobs with a
 // Postgres service see a DATABASE_URL. Rules are written over "jobs with services.postgres" so the
 // next database job inherits them; only `migrations` is named (it exercises the deploy path, ADR 0012).
-type Step = { name?: string; run?: string; uses?: string; if?: string };
+type Step = {
+  name?: string;
+  id?: string;
+  run?: string;
+  uses?: string;
+  if?: string;
+  with?: Record<string, string>;
+  "timeout-minutes"?: number;
+};
 type Job = { services?: Record<string, unknown>; env?: Record<string, string>; steps: Step[] };
 type Workflow = { env?: Record<string, string>; jobs: Record<string, Job> };
 
@@ -218,5 +226,49 @@ describe("CI concurrency never cancels a main run (card #543)", () => {
   it("C1 no job overrides the workflow-level concurrency", () => {
     for (const [id, job] of jobs)
       expect((job as Job & { concurrency?: unknown }).concurrency, id).toBeUndefined();
+  });
+});
+
+// Card #602: the e2e shards restore Chromium from an actions/cache entry keyed by the installed
+// @playwright/test version (read from the package, never a hand-copied literal), so a stalled browser
+// download costs at most one run per Playwright version. The install step stays: on a hit Playwright
+// skips the browser and only installs the OS packages. The contract's other arm (the pinned container
+// image of `visual`) was not chosen: it moves a bigger pull into the same job (#602 BRIEF).
+describe("CI e2e shards install Chromium from a cache (card #602)", () => {
+  type ShardJob = Job & { strategy?: { matrix?: { shard?: unknown } } };
+  const shard = Object.values(workflow.jobs).find(
+    (job) => (job as ShardJob).strategy?.matrix?.shard,
+  );
+  const steps = shard?.steps ?? [];
+  const at = (s: Step | undefined) => (s ? steps.indexOf(s) : -1);
+  const version = steps.find((s) => s.run?.includes("@playwright/test/package.json"));
+  const cache = steps.find((s) => s.uses?.startsWith("actions/cache@"));
+  const install = steps.find((s) => s.run === "npx playwright install --with-deps chromium");
+
+  it("C1 a step with an id writes the installed @playwright/test version to $GITHUB_OUTPUT", () => {
+    expect(version?.id).toBeTruthy();
+    expect(version?.run).toMatch(
+      /version=.*require\(['"]@playwright\/test\/package\.json['"]\)\.version/,
+    );
+    expect(version?.run).toContain("$GITHUB_OUTPUT");
+    expect(at(steps.find((s) => s.run === "npm ci"))).toBeLessThan(at(version));
+  });
+
+  it("C1 an actions/cache step on ~/.cache/ms-playwright is keyed by that version", () => {
+    expect(cache?.with?.path).toContain("~/.cache/ms-playwright");
+    expect(cache?.with?.key).toContain("playwright");
+    expect(cache?.with?.key).toContain(`steps.${version?.id}.outputs.version`);
+  });
+
+  it("C1 the cache is restored after the version step and before the unchanged install step", () => {
+    expect(install).toBeDefined();
+    expect(at(version)).toBeGreaterThanOrEqual(0);
+    expect(at(version)).toBeLessThan(at(cache));
+    expect(at(cache)).toBeLessThan(at(install));
+  });
+
+  it("C1 a stalled install fails fast instead of eating the shard's time budget", () => {
+    expect(install?.["timeout-minutes"]).toBeGreaterThan(0);
+    expect(install?.["timeout-minutes"]).toBeLessThanOrEqual(5);
   });
 });

@@ -32,12 +32,12 @@ export function stampFromEvent(
   payload: RoomEvents["event"],
   you: number | null,
 ): { kind: StampKind; other: number } | null {
-  if (you === null || payload.desk !== you) return null;
+  if (you === null) return null;
   switch (payload.kind) {
     case "overtake":
-      return { kind: "overtake", other: payload.passed };
+      return payload.desk === you ? { kind: "overtake", other: payload.passed } : null;
     case "passed":
-      return { kind: "passed", other: payload.by };
+      return payload.desk === you ? { kind: "passed", other: payload.by } : null;
     default:
       return null;
   }

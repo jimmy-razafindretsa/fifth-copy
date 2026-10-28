@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { LandingHeader } from "@/features/landing";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { filingLabels, podiumLabels } from "../view/report-labels";
@@ -47,7 +46,8 @@ export function DawnReportLayout({
  * then the report: the filing notice (the one client leaf that polls) or the podium.
  */
 export async function DawnReportScreen({ report }: { report: DawnReport }) {
-  const t = await getT();
+  // loaded at render: the internal result routes import this index too, and must not evaluate the header
+  const [{ LandingHeader }, t] = await Promise.all([import("@/features/landing"), getT()]);
   const r = t.results;
   return (
     <>

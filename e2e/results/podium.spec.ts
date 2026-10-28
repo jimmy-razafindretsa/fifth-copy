@@ -19,7 +19,6 @@ import { HYDRATION_WAIT, scaled } from "../timeouts";
 // `${timestamp}.${rawBody}`), rebuilt here because that module is server-only.
 
 function signed(rawBody: string): Record<string, string> {
-  // eslint-disable-next-line no-restricted-properties -- e2e runs outside the app (src/env.ts)
   const secret = process.env.RACE_TOKEN_SECRET;
   if (!secret) throw new Error("RACE_TOKEN_SECRET missing (load the worktree .env)");
   const timestamp = String(Math.floor(Date.now() / 1000));
@@ -39,7 +38,6 @@ async function postSigned(request: APIRequestContext, path: string, body: unknow
 
 /** The guest behind the page: the host of the lobby it just created (its desk gets the YOU tag). */
 async function hostOf(code: string): Promise<string> {
-  // eslint-disable-next-line no-restricted-properties -- the card's dev database (worktree .env)
   const db = new Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
   try {

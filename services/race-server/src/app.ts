@@ -23,6 +23,11 @@ import { createRoomRegistry, RECONCILE_MS, type RoomRegistry } from "./rooms/reg
 import { createTicker } from "./rooms/tick";
 import { audience, deskRoom, spectatorRoom } from "./socket/rooms";
 import { attachSocketServer, type RacePort, type RaceIo } from "./socket/server";
+import {
+  createSpectatorSlots,
+  MAX_SPECTATORS_PER_ROOM,
+  type SpectatorSlots,
+} from "./socket/spectator-slots";
 
 export type RaceServer = {
   httpServer: HttpServer;
@@ -35,6 +40,8 @@ export type RaceServer = {
   outbox: Outbox;
   /** Socket presence, line cuts and resumes (#178). */
   presence: Presence;
+  /** Spectator admission slots per room (#616). */
+  spectators: SpectatorSlots;
   /**
    * Rehydrates the rooms of the previous process (#204) before it binds, then starts the count
    * reconciliation; resolves with the bound port (pass 0 for an ephemeral one in tests).
@@ -57,6 +64,7 @@ export function createRaceServer({
   onRaceEnded,
   recovery = true,
   rng = Math.random,
+  maxSpectatorsPerRoom = MAX_SPECTATORS_PER_ROOM,
 }: {
   env: Pick<RaceServerEnv, "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK">;
   redis: Redis;
@@ -72,8 +80,11 @@ export function createRaceServer({
   recovery?: boolean;
   /** Randomness of the bonus effects (#190: Extra Paperwork's words); tests seed it. */
   rng?: Rng;
+  /** Spectator sockets one room admits on this process (#616); tests lower it. */
+  maxSpectatorsPerRoom?: number;
 }): RaceServer {
   const registry = createRoomRegistry({ redis, clock });
+  const spectators = createSpectatorSlots(maxSpectatorsPerRoom);
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
   const sockets: { io?: RaceIo } = {};
   // Socket.IO cannot narrow a generic event name to its payload; the callers type the pair.
@@ -253,6 +264,7 @@ export function createRaceServer({
     race,
     presence,
     resumeKeys,
+    spectators,
   });
   sockets.io = io;
 
@@ -264,6 +276,7 @@ export function createRaceServer({
     desks: desksState,
     outbox,
     presence,
+    spectators,
     listen: async (port, host) => {
       if (recovery) {
         const { kept, voided, gone } = await registry.rehydrate();

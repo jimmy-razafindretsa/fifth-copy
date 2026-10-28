@@ -87,6 +87,7 @@ describe("socket schemas", () => {
     ["handshake oversize token", handshakeAuthSchema, { v, token: "a".repeat(4097) }, false],
     ["reject example", rejectReasonSchema, "bad-token", true],
     ["reject in-progress", rejectReasonSchema, "in-progress", true],
+    ["reject room-full", rejectReasonSchema, "room-full", true],
     ["reject wrong enum", rejectReasonSchema, "banned", false],
     ["member example", memberSchema, member, true],
     ["member desk 0", memberSchema, { ...member, desk: 0 }, false],

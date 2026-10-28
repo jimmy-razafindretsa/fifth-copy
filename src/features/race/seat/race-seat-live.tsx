@@ -29,6 +29,8 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
   "not-found": "notFound",
   "bad-token": "generic",
   version: "generic",
+  // A spectator past the room's cap (#616): no dedicated copy yet.
+  "room-full": "generic",
   generic: "generic",
 };
 

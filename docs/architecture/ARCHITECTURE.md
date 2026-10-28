@@ -248,7 +248,7 @@ Player states inside `running`: `typing -> finished`, `typing -> abandoned` (but
 
 ### 7.2 Protocol (`@fifth-copy/protocol`)
 Client -> server: `join {token}`, `keys {batch: Keystroke[]}` (<= 50 ms of keys, `t` relative to GO), `abandon`, `host:start`, `host:kick {desk}`, `host:settings {patch}` (also persisted by web), `ping {sent}`.
-Server -> client: `welcome {room, you: desk, text, overlay, settings, t0, serverNow}`, `snapshot {t, desks: [desk, cursor, correct, errors, status][], ranks}` at 10 Hz, `event {kind: overtake|passed|new-host|line-cut|resumed|asleep|bonus-sent|bonus-hit|kicked, ...}`, `countdown {goAt}`, `ended {raceId, ranking}`, `rejected {reason}`.
+Server -> client: `welcome {room, you: desk, text, overlay, settings, t0, serverNow}`, `snapshot {t, desks: [desk, cursor, correct, errors, status, total][], ranks}` at 10 Hz (`total`: the engine's accepted presses, the client's exact ack of its sent keys, #645), `event {kind: overtake|passed|new-host|line-cut|resumed|asleep|bonus-sent|bonus-hit|kicked, ...}`, `countdown {goAt}`, `ended {raceId, ranking}`, `rejected {reason}`.
 Internal HTTP (HMAC): see ADR 0006 point 6. All payloads carry `v: PROTOCOL_VERSION`.
 
 ### 7.3 One keystroke, end to end
@@ -264,7 +264,7 @@ sequenceDiagram
   S->>S: validate t vs server clock, rate limit, applyKeystroke(authoritative)
   S->>R: HSET room:<id> desk:<n> state (tick)
   S-->>C: snapshot {desks:[...], ranks} (10 Hz, full state)
-  C->>C: reconcile: if server(you) != predicted base, re-apply unacked keys on server state
+  C->>C: ack = server total - base total (or every sent key older than MAX_LAG_MS), then reconcile: if server(you) != predicted base, re-apply unacked keys on server state
   S-->>C: event overtake (+1) if rank improved past someone
 ```
 Clock: `welcome` carries `serverNow`; the client keeps an offset from `ping/pong` (card #172); keystroke `t` outside `[serverElapsed - 2 s, serverElapsed + 0.2 s]` is clamped and counted as a timing anomaly.
@@ -285,7 +285,7 @@ Client: paste blocked, text rendered as individual spans with `user-select: none
 Projector and phones join the room on the `spectator` channel with a `role: spectator` token (no desk, no `keys`). They receive snapshots and events; the projector view uses the overview camera; phones get the HUD in spectator mode and never mount the typing surface (R36, card #293).
 
 ### 7.9 Capacity
-100 players x 20 keys/s worst case = 2000 keystrokes/s in <= 50 ms batches = <= 2000 small messages/s in; 10 snapshots/s x 100 clients x ~1.5 kB = 1.5 MB/s out. One Node process on a 2-vCPU VPS handles this with headroom; the engine step is microseconds. Beyond that: Socket.IO Redis adapter plus room-sticky routing (additive, no protocol change).
+100 players x 20 keys/s worst case = 2000 keystrokes/s in <= 50 ms batches = <= 2000 small messages/s in; 10 snapshots/s x 100 clients x <= 3 kB (100 late-race desks, benchmarked) = <= 3 MB/s out. One Node process on a 2-vCPU VPS handles this with headroom; the engine step is microseconds. Beyond that: Socket.IO Redis adapter plus room-sticky routing (additive, no protocol change).
 
 ## 8. Web app design
 

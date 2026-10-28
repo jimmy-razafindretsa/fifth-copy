@@ -229,6 +229,7 @@ describe("abandon (C4)", () => {
       3,
       0,
       PLAYER_STATUS_CODES.abandoned,
+      3,
     ]);
 
     // Later keys change nothing; a second abandon is refused.

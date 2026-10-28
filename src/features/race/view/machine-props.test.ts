@@ -116,7 +116,7 @@ describe("selectMachineProps (#220 C2)", () => {
     // a rival desk's snapshot (your desk unchanged) re-renders nothing
     const rival = reduceRace(s, {
       type: "snapshot",
-      payload: { v: PROTOCOL_VERSION, t: 500, desks: [[1, 3, 3, 0, 0]], ranks: [1] },
+      payload: { v: PROTOCOL_VERSION, t: 500, desks: [[1, 3, 3, 0, 0, 3]], ranks: [1] },
     });
     expect(rival).not.toBe(s);
     expect(selectMachineProps(rival)).toBe(props);

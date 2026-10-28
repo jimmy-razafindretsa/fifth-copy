@@ -15,7 +15,8 @@ export function raceElapsed(runtime: Pick<RoomRuntime, "t0">, now: number): numb
 
 /**
  * The 10 Hz full state of every desk (ADR 0006 point 4, ARCHITECTURE 7.9): integer tuples
- * `[desk, cursor, correct, errors, statusCode]` by desk, and `ranks` in live order through the one
+ * `[desk, cursor, correct, errors, statusCode, total]` by desk (`total`: the engine's accepted
+ * presses, the client's exact ack, #645), and `ranks` in live order through the one
  * ranking mapper (`rankingFor`: engine `rank` and scoring only). The ranking is returned too, for
  * the events of the same tick.
  */
@@ -33,6 +34,7 @@ export function collectSnapshot(
       state.correct,
       state.errors,
       PLAYER_STATUS_CODES[state.status],
+      state.total,
     ]);
   }
   const ranking = rankingFor(runtime.desks, runtime.states, runtime.textLength, elapsed);

@@ -740,22 +740,23 @@ describe("typing and snapshots (#559 C5)", () => {
   it("a snapshot keeps desks and ranks and reconciles your desk's prediction", () => {
     const s = reduceRace(reduceRace(running(), key("L", 40)), { type: "sent", count: 1 });
     const reconcile = vi.spyOn(s.prediction!, "reconcile");
+    const ackedBy = vi.spyOn(s.prediction!, "ackedBy");
     const desks: Snapshot["desks"] = [
-      [1, 4, 4, 0, typing],
-      [3, 0, 0, 0, typing],
-      [5, 1, 1, 0, typing],
+      [1, 4, 4, 0, typing, 4],
+      [3, 0, 0, 0, typing, 0],
+      [5, 1, 1, 0, typing, 1],
     ];
     const next = reduceRace(s, snapshot(desks, 500, [1, 5, 3]));
     expect(next.desks).toEqual(desks);
     expect(next.ranks).toEqual([1, 5, 3]);
     expect(reconcile).toHaveBeenCalledTimes(1);
-    expect(reconcile).toHaveBeenCalledWith(
-      { cursor: 1, correct: 1, errors: 0, status: "typing" },
-      1,
-    );
+    // the server's total and the snapshot's time reach the ack (#645)
+    const server = { cursor: 1, correct: 1, errors: 0, status: "typing", total: 1 };
+    expect(ackedBy).toHaveBeenCalledWith(server, 500);
+    expect(reconcile).toHaveBeenCalledWith(server, 1);
     expect(next.prediction?.unacked).toEqual([]);
     // a snapshot without your desk (a spectator, or before your seat is in it) keeps desks only
-    const other = reduceRace(s, snapshot([[1, 4, 4, 0, typing]]));
+    const other = reduceRace(s, snapshot([[1, 4, 4, 0, typing, 4]]));
     expect(other.prediction).toBe(s.prediction);
   });
 
@@ -765,18 +766,18 @@ describe("typing and snapshots (#559 C5)", () => {
     s = reduceRace(reduceRace(s, { type: "sent", count: 2 }), key(" ", 120));
     expect(s.prediction?.state.cursor).toBe(3);
     // the server counted one of the two sent keys wrong: no prefix of the prediction matches it
-    s = reduceRace(s, snapshot([[5, 2, 1, 1, typing]]));
+    s = reduceRace(s, snapshot([[5, 2, 1, 1, typing, 2]]));
     expect(s.prediction?.base).toMatchObject({ cursor: 2, correct: 1, errors: 1 });
     expect(s.prediction?.unacked).toEqual([{ t: 120, key: " " }]);
     expect(s.prediction?.state).toMatchObject({ cursor: 3, correct: 2, errors: 1 });
     // the next snapshot agrees: it settles with nothing left unacked
-    s = reduceRace(reduceRace(s, { type: "sent", count: 1 }), snapshot([[5, 3, 2, 1, typing]]));
+    s = reduceRace(reduceRace(s, { type: "sent", count: 1 }), snapshot([[5, 3, 2, 1, typing, 3]]));
     expect(s.prediction?.unacked).toEqual([]);
     expect(s.prediction?.state).toMatchObject({ cursor: 3, correct: 2, errors: 1 });
   });
 
   it("a status the server decided (asleep) locks typing", () => {
-    const s = reduceRace(running(), snapshot([[5, 0, 0, 0, PLAYER_STATUS_CODES.asleep]]));
+    const s = reduceRace(running(), snapshot([[5, 0, 0, 0, PLAYER_STATUS_CODES.asleep, 0]]));
     expect(s.prediction?.state.status).toBe("asleep");
     expect(selectCanType(s)).toBe(false);
   });
@@ -811,8 +812,8 @@ describe("typing and snapshots (#559 C5)", () => {
     store.dispatch({ type: "sent", count: 1 });
     expect(views).toHaveLength(1);
     // the server agrees: no new view
-    store.dispatch(snapshot([[5, 1, 1, 0, typing]], 100));
-    store.dispatch(snapshot([[5, 1, 1, 0, typing]], 200));
+    store.dispatch(snapshot([[5, 1, 1, 0, typing, 1]], 100));
+    store.dispatch(snapshot([[5, 1, 1, 0, typing, 1]], 200));
     expect(views).toHaveLength(1);
     store.dispatch(key("e", 80));
     store.dispatch(key(" ", 120));
@@ -821,8 +822,8 @@ describe("typing and snapshots (#559 C5)", () => {
     store.dispatch(
       snapshot(
         [
-          [1, 3, 3, 0, typing],
-          [5, 1, 1, 0, typing],
+          [1, 3, 3, 0, typing, 3],
+          [5, 1, 1, 0, typing, 1],
         ],
         300,
       ),
@@ -830,7 +831,7 @@ describe("typing and snapshots (#559 C5)", () => {
     expect(views).toHaveLength(3);
     // the server diverges: exactly one new view
     store.dispatch({ type: "sent", count: 2 });
-    store.dispatch(snapshot([[5, 2, 1, 1, typing]], 400));
+    store.dispatch(snapshot([[5, 2, 1, 1, typing, 2]], 400));
     expect(views).toHaveLength(4);
   });
 
@@ -850,7 +851,7 @@ describe("typing and snapshots (#559 C5)", () => {
       expect(reduceRace(lost, event), event.type).toBe(lost);
     }
     const s = freeze(reduceRace(running(), key("L", 40)));
-    const payload = freeze(snapshot([[5, 1, 1, 0, typing]]));
+    const payload = freeze(snapshot([[5, 1, 1, 0, typing, 1]]));
     expect(() => reduceRace(s, payload)).not.toThrow();
     expect(() => reduceRace(s, key("e", 80))).not.toThrow();
   });
@@ -872,7 +873,12 @@ describe("typing and snapshots (#559 C5)", () => {
     });
     const dispatch = vi.fn();
     bindRaceSocket(room, dispatch);
-    const payload: Snapshot = { v: PROTOCOL_VERSION, t: 100, desks: [[5, 1, 1, 0, 0]], ranks: [5] };
+    const payload: Snapshot = {
+      v: PROTOCOL_VERSION,
+      t: 100,
+      desks: [[5, 1, 1, 0, 0, 1]],
+      ranks: [5],
+    };
     for (const fn of listeners.get("snapshot") ?? []) fn(payload);
     expect(dispatch).toHaveBeenCalledWith({ type: "snapshot", payload });
   });
@@ -983,7 +989,7 @@ describe("error modes, the jam and lastKey (#220 C1)", () => {
     // a snapshot keeps it
     const snap: RaceEvent = {
       type: "snapshot",
-      payload: { v: PROTOCOL_VERSION, t: 900, desks: [[1, 2, 2, 0, 0]], ranks: [1] },
+      payload: { v: PROTOCOL_VERSION, t: 900, desks: [[1, 2, 2, 0, 0, 2]], ranks: [1] },
     };
     expect(reduceRace(s, snap).lastKey).toBe(s.lastKey);
   });

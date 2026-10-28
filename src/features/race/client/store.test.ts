@@ -30,6 +30,8 @@ const {
   reduceRace,
   selectCanType,
   selectTypedView,
+  selectVisibleStamp,
+  watchStampExpiry,
 } = await import("./store");
 const { RaceStoreProvider, useRaceStore } = await import("./use-race-store");
 const { connectToRoom } = await import("./socket");
@@ -97,6 +99,9 @@ describe("reduceRace (#561 C2)", () => {
       ranks: [],
       // #220: the last key the engine took from you
       lastKey: null,
+      // #232: the overtake stamps
+      stamps: [],
+      stampSeq: 0,
     });
   });
 
@@ -358,6 +363,7 @@ describe("bindRaceSocket (#561 C3)", () => {
     expect([...fake.listeners.keys()].sort()).toEqual([
       "connect_error",
       "countdown",
+      "event",
       "roster",
       "settings",
       "snapshot",
@@ -1054,5 +1060,190 @@ describe("error modes, the jam and lastKey (#220 C1)", () => {
     expect(s.prediction?.settings).toEqual({ errorMode: "block", backspace: true });
     s = press(s, "x", 10);
     expect(selectTypedView(s)).toMatchObject({ jammed: true, cursor: 0 });
+  });
+});
+
+// Contract of #232 C1: the store's `event` case queues overtake stamps, one visible plus one pending;
+// same-kind events within 300 ms collapse; a stamp expires 1.4 s after it shows (injected clock).
+describe("#232 overtake stamps", () => {
+  const T = 1_767_225_600_000;
+  const overtake = (passed = 3, desk = 5) =>
+    ({ v: PROTOCOL_VERSION, kind: "overtake", desk, passed }) as const;
+  const passedBy = (by = 1, desk = 5) =>
+    ({ v: PROTOCOL_VERSION, kind: "passed", desk, by }) as const;
+  const ev = (
+    payload: Extract<RaceEvent, { type: "event" }>["payload"],
+    at: number,
+  ): RaceEvent => ({
+    type: "event",
+    payload,
+    at,
+  });
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "Le reçu du café est prêt.",
+    language: "fr" as const,
+    wordCount: 5,
+    t0: T + 3_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const seated = () => run({ type: "welcome", payload: welcome() });
+  const view = (s: RaceState) =>
+    s.stamps.map(({ id, kind, at, other }) => ({ id, kind, at, other }));
+
+  /** A manual clock: `advance` fires what falls due, in order. */
+  function clock(start = T) {
+    let now = start;
+    let next = 0;
+    const due = new Map<number, { at: number; fn: () => void }>();
+    return {
+      timer: {
+        now: () => now,
+        setTimeout: (fn: () => void, ms: number) => {
+          due.set(++next, { at: now + ms, fn });
+          return next;
+        },
+        clearTimeout: (handle: unknown) => void due.delete(handle as number),
+      },
+      advance(ms: number) {
+        const until = now + ms;
+        for (;;) {
+          const first = [...due].sort(([, a], [, b]) => a.at - b.at)[0];
+          if (!first || first[1].at > until) break;
+          due.delete(first[0]);
+          now = first[1].at;
+          first[1].fn();
+        }
+        now = until;
+      },
+      pending: () => due.size,
+    };
+  }
+
+  it("an overtake or a passed of your desk queues { id, kind, at }; other desks and kinds do not", () => {
+    let s = reduceRace(seated(), ev(overtake(3), T));
+    expect(view(s)).toEqual([{ id: 1, kind: "overtake", at: T, other: 3 }]);
+    expect(s.stamps[0]!.shownAt).toBe(T);
+    s = reduceRace(s, ev(passedBy(1), T + 500));
+    expect(view(s)).toEqual([
+      { id: 1, kind: "overtake", at: T, other: 3 },
+      { id: 2, kind: "passed", at: T + 500, other: 1 },
+    ]);
+    // the pending one shows when the visible one expires
+    expect(s.stamps[1]!.shownAt).toBe(T + 1_400);
+    // a spectator's copy of another desk's event, and kinds without a stamp, change nothing
+    expect(reduceRace(s, ev(overtake(1, 3), T + 600))).toBe(s);
+    const leader: RaceEvent = {
+      type: "event",
+      payload: { v: PROTOCOL_VERSION, kind: "new-leader", desk: 5 },
+      at: T + 600,
+    };
+    expect(reduceRace(s, leader)).toBe(s);
+    // a spectator (no desk) never stamps
+    const spectator = run({ type: "welcome", payload: welcome({ role: "spectator", you: null }) });
+    expect(reduceRace(spectator, ev(overtake(3), T))).toBe(spectator);
+  });
+
+  it("same-kind events within 300 ms collapse; 300 ms apart they queue", () => {
+    const one = reduceRace(seated(), ev(overtake(3), T));
+    expect(reduceRace(one, ev(overtake(1), T + 299))).toBe(one);
+    const two = reduceRace(one, ev(overtake(1), T + 300));
+    expect(view(two).map((x) => x.other)).toEqual([3, 1]);
+    // another kind never collapses
+    expect(view(reduceRace(one, ev(passedBy(1), T + 10))).map((x) => x.kind)).toEqual([
+      "overtake",
+      "passed",
+    ]);
+  });
+
+  it("caps the queue at one visible plus one pending: the latest replaces the pending", () => {
+    let s = seated();
+    s = reduceRace(s, ev(overtake(3), T));
+    s = reduceRace(s, ev(passedBy(3), T + 100));
+    s = reduceRace(s, ev(overtake(1), T + 200));
+    expect(view(s)).toEqual([
+      { id: 1, kind: "overtake", at: T, other: 3 },
+      { id: 3, kind: "overtake", at: T + 200, other: 1 },
+    ]);
+    // collapse compares with the newest queued stamp (the pending one)
+    expect(reduceRace(s, ev(overtake(3), T + 350))).toBe(s);
+  });
+
+  it("a stamp expires 1.4 s after it shows; the pending one then shows for its own 1.4 s", () => {
+    const c = clock();
+    const store = createRaceStore(seated());
+    const stop = watchStampExpiry(store, c.timer);
+    store.dispatch(ev(overtake(3), T));
+    c.advance(200);
+    store.dispatch(ev(passedBy(1), T + 200));
+    c.advance(1_199);
+    expect(view(store.getState()).map((x) => x.id)).toEqual([1, 2]);
+    c.advance(1);
+    expect(view(store.getState()).map((x) => x.id)).toEqual([2]);
+    expect(store.getState().stamps[0]!.shownAt).toBe(T + 1_400);
+    c.advance(1_399);
+    expect(store.getState().stamps).toHaveLength(1);
+    c.advance(1);
+    expect(store.getState().stamps).toEqual([]);
+    expect(c.pending()).toBe(0);
+    // after a quiet spell a new stamp shows at once and expires 1.4 s later
+    c.advance(5_000);
+    store.dispatch(ev(overtake(1), T + 7_800));
+    expect(store.getState().stamps[0]!.shownAt).toBe(T + 7_800);
+    stop();
+    expect(c.pending()).toBe(0);
+  });
+
+  it("an expired visible stamp is dropped when the next event arrives, even before its timer", () => {
+    let s = reduceRace(seated(), ev(overtake(3), T));
+    s = reduceRace(s, ev(passedBy(1), T + 1_400));
+    expect(view(s)).toEqual([{ id: 2, kind: "passed", at: T + 1_400, other: 1 }]);
+    expect(s.stamps[0]!.shownAt).toBe(T + 1_400);
+    // a stale expiry (not the visible stamp) changes nothing
+    expect(reduceRace(s, { type: "stamp-expired", id: 1, at: T + 1_500 })).toBe(s);
+  });
+
+  it("welcome, countdown and a lost line clear the queue; ids stay unique", () => {
+    const s = reduceRace(seated(), ev(overtake(3), T));
+    const again = reduceRace(s, { type: "welcome", payload: welcome() });
+    expect(again.stamps).toEqual([]);
+    expect(reduceRace(again, ev(overtake(3), T + 10)).stamps[0]!.id).toBe(2);
+    expect(
+      reduceRace(s, { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } }).stamps,
+    ).toEqual([]);
+    expect(reduceRace(s, { type: "token-error", error: "closed" }).stamps).toEqual([]);
+  });
+
+  it("selectVisibleStamp returns the store's own object", () => {
+    const s = reduceRace(seated(), ev(overtake(3), T));
+    expect(selectVisibleStamp(s)).toBe(s.stamps[0]);
+    expect(selectVisibleStamp(seated())).toBeNull();
+  });
+
+  it("bindRaceSocket turns a parsed `event` into a race event stamped with the device clock", () => {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    const room = connectToRoom("http://localhost:7232", "tok", { io });
+    const c = clock();
+    const dispatch = vi.fn();
+    bindRaceSocket(room, dispatch, { timer: c.timer });
+    c.advance(42);
+    for (const fn of listeners.get("event") ?? []) fn(overtake(3));
+    // an invalid payload is dropped at the edge
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const fn of listeners.get("event") ?? []) fn({ v: PROTOCOL_VERSION, kind: "overtake" });
+    expect(dispatch.mock.calls.map(([e]) => e)).toEqual([
+      { type: "event", payload: overtake(3), at: T + 42 },
+    ]);
   });
 });

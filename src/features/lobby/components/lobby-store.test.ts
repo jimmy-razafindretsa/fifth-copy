@@ -67,6 +67,7 @@ function fakeSocket() {
     // #559: the seat view's typing (the lobby binds none of them)
     sendKeys: vi.fn(),
     onSnapshot: bind("snapshot"),
+    onEvent: bind("event"),
     onRejected: bind("rejected"),
     onProtocolError: bind("protocolError"),
     onConnectError: bind("connectError"),

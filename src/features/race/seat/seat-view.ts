@@ -1,5 +1,6 @@
 import type { Member } from "@fifth-copy/protocol";
 import type { CountdownLabels } from "../components/countdown";
+import type { StampRowLabels } from "../components/stamp-row";
 import type { TelexLabels } from "../components/telex-strip";
 import type {
   AbandonLabels,
@@ -21,6 +22,10 @@ export type RaceSeatLabels = {
   telex: TelexLabels;
   /** The 3-2-1 countdown and the Major's `НАЧАЛИ · GO` stamp (#214). */
   countdown: CountdownLabels;
+  /** The overtake stamps (#232): `ОБГОН! · OVERTAKE +1`, `ОБОГНАЛИ · PASSED −1`. */
+  stamps: StampRowLabels;
+  /** The race announcer (#232 C4): `{desk}` is the other desk as paperwork (`07`). */
+  announce: SeatAnnounceLabels;
   /** The connecting skeleton's name. */
   loading: string;
   /** The live notices, plus the phones-only notice (bible 7.4 notice row). */
@@ -31,6 +36,9 @@ export type RaceSeatLabels = {
   raceCard: RaceCardLabels;
   sabotageTray: SabotageTrayLabels;
 };
+
+/** The polite status region's race lines (#232 C4; #242 adds the rest). */
+export type SeatAnnounceLabels = { overtake: string; passed: string };
 
 /** The lost line (bible 7.4 inline error line): the prefix, one sentence per reason, the way back. */
 export type SeatErrorLabels = {

@@ -55,6 +55,8 @@ function connectError(reason: ConnectErrorReason): LobbyError | null {
     case "version":
     // No lobby copy for a race already under way yet (#210 adds it).
     case "in-progress":
+    // A spectator past the room's cap (#616); a seated player is never refused with it.
+    case "room-full":
       return "generic";
   }
 }

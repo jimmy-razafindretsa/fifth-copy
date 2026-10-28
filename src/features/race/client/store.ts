@@ -18,6 +18,7 @@ import {
 } from "./prediction";
 import { storeResumeKey } from "./resume-key";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "./socket";
+import { expireStamp, pushStamp, STAMP_SHOW_MS, stampFromEvent, type RaceStamp } from "./stamps";
 
 /**
  * The race store (#561, ADR 0013 "two features, one store"): everything the seat view knows about its
@@ -68,6 +69,13 @@ export type RaceState = {
    * (#243) and the stuck hint (#241) read it. `null` until a key, and again with each new prediction.
    */
   lastKey: LastKey | null;
+  /**
+   * The overtake stamps (#232, `stamps.ts`): `[0]` is visible, `[1]` pending; empty when none. Reset by
+   * every `welcome` and `countdown`.
+   */
+  stamps: readonly RaceStamp[];
+  /** The last stamp id handed out (ids stay unique across resets, so each stamp remounts and slams). */
+  stampSeq: number;
 };
 
 /**
@@ -91,6 +99,10 @@ export type RaceEvent =
   | { type: "sent"; count: number }
   /** The 10 Hz full state of every desk (#559): kept, and your prediction reconciled with it. */
   | { type: "snapshot"; payload: RoomEvents["snapshot"] }
+  /** A discrete race happening (#232): `overtake` / `passed` of your desk queue a stamp; `at` = device clock. */
+  | { type: "event"; payload: RoomEvents["event"]; at: number }
+  /** The visible stamp's time is up (scheduled by `watchStampExpiry`). */
+  | { type: "stamp-expired"; id: number; at: number }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
@@ -114,6 +126,8 @@ export const initialRaceState: RaceState = {
   desks: [],
   ranks: [],
   lastKey: null,
+  stamps: [],
+  stampSeq: 0,
 };
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -150,6 +164,7 @@ const lost = (state: RaceState, reason: RaceLostReason): RaceState => ({
   ...state,
   phase: "lost",
   lost: reason,
+  stamps: [],
 });
 
 export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
@@ -181,6 +196,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         desks: state.desks,
         ranks: state.ranks,
         lastKey: null,
+        stamps: [],
+        stampSeq: state.stampSeq,
       };
     }
     case "roster":
@@ -203,6 +220,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         desks: [],
         ranks: [],
         lastKey: null,
+        stamps: [],
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -232,6 +250,18 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       if (prediction && server)
         prediction = prediction.reconcile(server, prediction.ackedBy(server, t));
       return { ...state, desks, ranks, prediction };
+    }
+    case "event": {
+      const stamp = stampFromEvent(event.payload, state.you);
+      if (!stamp) return state;
+      const id = state.stampSeq + 1;
+      const stamps = pushStamp(state.stamps, { id, ...stamp, at: event.at });
+      if (stamps === state.stamps) return state;
+      return { ...state, stamps, stampSeq: stamps.some((s) => s.id === id) ? id : state.stampSeq };
+    }
+    case "stamp-expired": {
+      const stamps = expireStamp(state.stamps, event.id, event.at);
+      return stamps === state.stamps ? state : { ...state, stamps };
     }
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
@@ -271,6 +301,11 @@ export function selectTypedView(state: RaceState): TypedView {
   const view = typedViewFrom(p.state, text, { jammed, typedAt });
   views.set(p.state, { text, jammed, typedAt, view });
   return view;
+}
+
+/** The stamp the seat view shows (#232), or `null`: the store's own object, stable between changes. */
+export function selectVisibleStamp(state: RaceState): RaceStamp | null {
+  return state.stamps[0] ?? null;
 }
 
 export type RaceStore = {
@@ -358,6 +393,7 @@ export function bindRaceSocket(
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onSnapshot((payload) => dispatch({ type: "snapshot", payload })),
+    socket.onEvent((payload) => dispatch({ type: "event", payload, at: timer.now() })),
     socket.onCountdown((payload) => {
       dispatch({ type: "countdown", payload });
       scheduleGo(payload.race.t0);
@@ -369,5 +405,40 @@ export function bindRaceSocket(
   return () => {
     cancelGo();
     for (const off of offs.splice(0)) off();
+  };
+}
+
+/**
+ * Expires the visible stamp `STAMP_SHOW_MS` after it shows (#232 C1): on each store change that brings
+ * a new visible stamp, one timeout on the injected clock dispatches `stamp-expired`. Returns the stop,
+ * which cancels a pending expiry.
+ */
+export function watchStampExpiry(store: RaceStore, timer: RaceTimer = deviceTimer): Off {
+  let shown: number | null = null;
+  let pending: unknown = null;
+  const cancel = () => {
+    if (pending !== null) timer.clearTimeout(pending);
+    pending = null;
+  };
+  const check = () => {
+    const visible = selectVisibleStamp(store.getState());
+    if ((visible?.id ?? null) === shown) return;
+    cancel();
+    shown = visible?.id ?? null;
+    if (!visible) return;
+    const { id } = visible;
+    pending = timer.setTimeout(
+      () => {
+        pending = null;
+        store.dispatch({ type: "stamp-expired", id, at: timer.now() });
+      },
+      Math.max(0, visible.shownAt + STAMP_SHOW_MS - timer.now()),
+    );
+  };
+  const off = store.subscribe(check);
+  check();
+  return () => {
+    off();
+    cancel();
   };
 }

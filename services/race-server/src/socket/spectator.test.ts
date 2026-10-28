@@ -8,6 +8,7 @@ import {
 import {
   ackResults,
   boot,
+  connectError,
   HOST_SUB,
   reachGo,
   textWebApi,
@@ -32,9 +33,10 @@ const settle = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 type Seat = { client: Client; seen: RaceSeen; token: string };
 
 /** A waiting room with the host (desk 1) and `players - 1` players seated; results recorded. */
-async function room(players = 2, text = "bonjour") {
+async function room(players = 2, text = "bonjour", maxSpectatorsPerRoom?: number) {
   const results: RaceResultsRequest[] = [];
   t = await boot(process.env.REDIS_URL, {
+    maxSpectatorsPerRoom,
     webApi: textWebApi(text, (request) => {
       results.push(request);
       return ackResults(request);
@@ -294,4 +296,104 @@ describe("disconnect and scale (C5)", () => {
     expect(reference.desks).toHaveLength(30);
     expect(await r.booted.server.registry.members(r.lobby)).toHaveLength(30);
   }, 30_000);
+});
+
+describe("spectator cap (#616)", () => {
+  const spectatorToken = (r: Awaited<ReturnType<typeof room>>, lobby = r.lobby) =>
+    r.booted.token({ lobby, sub: `usr_watch_${Math.random()}`, role: "spectator" });
+
+  it("C1: the N+1th spectator of a room gets connect_error room-full; another room's spectator and a new player still connect", async () => {
+    const r = await room(2, "bonjour", 2);
+    const [host, player] = r.seats;
+    await r.spectate();
+    await r.spectate();
+    const third = r.booted.connect({ v: PROTOCOL_VERSION, token: await spectatorToken(r) });
+    expect(await connectError(third)).toBe("room-full");
+    expect(r.booted.server.spectators.count(r.lobby)).toBe(2);
+
+    // Another room has its own slots.
+    const other = await r.booted.openRoom();
+    const elsewhere = r.booted.connect({
+      v: PROTOCOL_VERSION,
+      token: await spectatorToken(r, other),
+    });
+    const seenElsewhere = watchRace(elsewhere);
+    await until(() => !!seenElsewhere.welcome, 5_000, "other room's spectator");
+
+    // A seated player of the full room is never counted nor refused.
+    const late = await r.seat(`usr_late_${r.lobby}`, "player");
+    expect(late.seen.welcome?.you).toBe(3);
+    await until(() => host!.seen.roster?.length === 3, 5_000, "roster 3");
+    expect(player!.seen.roster).toHaveLength(3);
+    expect(await r.booted.server.registry.members(r.lobby)).toHaveLength(3);
+  }, 15_000);
+
+  it("C2: a spectator disconnecting frees its slot for the next one", async () => {
+    const r = await room(2, "bonjour", 1);
+    const first = await r.spectate();
+    const refused = r.booted.connect({ v: PROTOCOL_VERSION, token: await spectatorToken(r) });
+    expect(await connectError(refused)).toBe("room-full");
+    first.client.disconnect();
+    await until(() => r.booted.server.spectators.count(r.lobby) === 0, 5_000, "slot freed");
+    const next = await r.spectate();
+    expect(next.seen.welcome?.role).toBe("spectator");
+    expect(r.booted.server.spectators.count(r.lobby)).toBe(1);
+  }, 15_000);
+
+  it("4 spectator handshakes in the same tick with a cap of 2: exactly 2 welcomes, 2 room-full", async () => {
+    const r = await room(2, "bonjour", 2);
+    const tokens = await Promise.all([0, 1, 2, 3].map(() => spectatorToken(r)));
+    const outcomes = await Promise.all(
+      tokens.map(
+        (token) =>
+          new Promise<string>((resolve) => {
+            const client = r.booted.connect({ v: PROTOCOL_VERSION, token });
+            client.once("welcome", () => resolve("welcome"));
+            client.once("connect_error", (err) => resolve(err.message));
+          }),
+      ),
+    );
+    expect(outcomes.filter((o) => o === "welcome")).toHaveLength(2);
+    expect(outcomes.filter((o) => o === "room-full")).toHaveLength(2);
+    expect(r.booted.server.spectators.count(r.lobby)).toBe(2);
+  }, 15_000);
+
+  it("a spectator closing mid-handshake leaks no slot", async () => {
+    const r = await room(2, "bonjour", 1);
+    // Hold the middleware's room read until the clients are gone.
+    const registry = r.booted.server.registry;
+    const read = registry.room.bind(registry);
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let held = 0;
+    registry.room = async (lobbyId) => {
+      held += 1;
+      await gate;
+      return read(lobbyId);
+    };
+    const tokens = await Promise.all([0, 1, 2].map(() => spectatorToken(r)));
+    const clients = tokens.map((token) => r.booted.connect({ v: PROTOCOL_VERSION, token }));
+    await until(() => held === 3, 5_000, "3 handshakes in the middleware");
+    for (const c of clients) c.disconnect();
+    await settle(200);
+    open();
+    registry.room = read;
+    await settle(200);
+    expect(r.booted.server.spectators.count(r.lobby)).toBe(0);
+    const next = await r.spectate();
+    expect(next.seen.welcome?.role).toBe("spectator");
+  }, 15_000);
+
+  it("a disconnect releases its own slot once, never another spectator's", async () => {
+    const r = await room(2, "bonjour", 2);
+    const a = await r.spectate();
+    await r.spectate();
+    a.client.disconnect();
+    await until(() => r.booted.server.spectators.count(r.lobby) < 2, 5_000, "a released");
+    await settle(200);
+    expect(r.booted.server.spectators.count(r.lobby)).toBe(1);
+    await r.spectate();
+    const over = r.booted.connect({ v: PROTOCOL_VERSION, token: await spectatorToken(r) });
+    expect(await connectError(over)).toBe("room-full");
+  }, 15_000);
 });

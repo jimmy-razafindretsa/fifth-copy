@@ -1,17 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fill } from "@/i18n/format";
 import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
-import { selectCanType, type RaceLostReason, type RacePhase } from "../client/store";
+import {
+  selectCanType,
+  selectVisibleStamp,
+  watchStampExpiry,
+  type RaceLostReason,
+  type RacePhase,
+} from "../client/store";
 import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
 import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
 import { RaceInput } from "../components/race-input";
 import { RaceNotice } from "../components/race-notice";
+import { StampRow } from "../components/stamp-row";
 import { SeatDesks } from "./seat-leaves";
-import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
+import { paperwork, PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
 export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors">;
@@ -29,6 +37,8 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
   "not-found": "notFound",
   "bad-token": "generic",
   version: "generic",
+  // A spectator past the room's cap (#616): no dedicated copy yet.
+  "room-full": "generic",
   generic: "generic",
 };
 
@@ -109,6 +119,9 @@ function useCountdownStep(): CountdownStep | null {
   return live ? step : null;
 }
 
+/** The overtake stamps' copy and the announcer's race lines (#232). */
+export type SeatStampLabels = Pick<RaceSeatLabels, "stamps" | "announce">;
+
 /**
  * The seat view's client leaf (#561 C4, ARCHITECTURE 8.3): after the server rendered the HUD shell, it
  * mints the race token through the lobby action, connects with `connectToRoom` (lazily loaded) and feeds
@@ -128,12 +141,13 @@ export function RaceSeatLive({
   code: string;
   lobbyId: string;
   mint: MintRaceToken;
-  labels: SeatLiveLabels;
+  labels: SeatLiveLabels & SeatStampLabels;
 }) {
   const store = useRaceStoreApi();
   const phase = useRaceStore((s) => s.phase);
   const lost = useRaceStore((s) => s.lost);
   const step = useCountdownStep();
+  const stamp = useRaceStore(selectVisibleStamp);
   const canType = useRaceStore(selectCanType);
   const mode = useRaceStore((s) => s.settings?.errorMode);
   const backspace = useRaceStore((s) => s.settings?.backspace);
@@ -165,11 +179,18 @@ export function RaceSeatLive({
       },
     });
   }, [code, lobbyId, store]);
+  // #232: the visible overtake stamp leaves 1.4 s after it shows
+  useEffect(() => watchStampExpiry(store), [store]);
 
   return (
     <div data-phase={phase} className={styles.live}>
       <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />
-      {step !== null ? <Countdown step={step} labels={labels.countdown} /> : null}
+      {/* bible 8: one stamp at a time; the countdown and GO first, then the overtake stamps (#232) */}
+      {step !== null ? (
+        <Countdown step={step} labels={labels.countdown} />
+      ) : (
+        <StampRow stamp={stamp} labels={labels.stamps} />
+      )}
       <RaceInput
         disabled={!canType}
         onKey={press}
@@ -182,7 +203,13 @@ export function RaceSeatLive({
       {/* present before the countdown starts, so each change is announced; nothing to say once lost */}
       {phase !== "lost" ? (
         <p role="status" aria-atomic="true" data-announcer className={docket.srOnly}>
-          {step === null ? "" : step === "go" ? labels.countdown.go : String(step)}
+          {step !== null
+            ? step === "go"
+              ? labels.countdown.go
+              : String(step)
+            : stamp
+              ? fill(labels.announce[stamp.kind], { desk: paperwork(stamp.other) })
+              : ""}
         </p>
       ) : null}
     </div>

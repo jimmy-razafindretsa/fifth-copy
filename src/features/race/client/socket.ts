@@ -59,6 +59,8 @@ export interface RoomSocket {
   sendKeys(batch: Keys["batch"]): void;
   /** The 10 Hz full state of every desk while the race runs (#559). */
   onSnapshot(cb: (payload: RoomEvents["snapshot"]) => void): Off;
+  /** A discrete race happening (`overtake`, `passed`, `finished`...: #232, #240), decided by the server. */
+  onEvent(cb: (payload: RoomEvents["event"]) => void): Off;
   /** The server refused a `keys`, `abandon` or `bonus:play` (those carry no ack). */
   onRejected(cb: (payload: RoomEvents["rejected"]) => void): Off;
   onProtocolError(cb: (error: ProtocolError) => void): Off;
@@ -199,6 +201,7 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
       else console.warn("[race] dropped an invalid keys batch", keys.error.issues.length);
     },
     onSnapshot: (cb) => on("snapshot", cb),
+    onEvent: (cb) => on("event", cb),
     onRejected: (cb) => on("rejected", cb),
     onProtocolError: (cb) => {
       // a wrapper per call, so the same callback registered twice is removed once per off

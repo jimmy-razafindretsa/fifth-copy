@@ -98,8 +98,9 @@
   display: none;
 }
 
-/* the countdown (#214) takes the free space above the typing surface, the scene area, and centres in it */
-.status:has([data-countdown]) {
+/* the countdown (#214) and the overtake stamps (#232) take the free space above the typing surface, the
+   scene area, and centre in it */
+.status:has([data-countdown], [data-stamps]) {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;

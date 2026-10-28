@@ -30,7 +30,8 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * broadcast (`audience`) and the desks' events. Every inbound payload is parsed first (a malformed
  * one is dropped, as on the seated edge); `keys`, `abandon` and `bonus:play` are `rejected
  * { spectator }`, `host:*` are acked `not-host`. `ping` is registered by the caller for every
- * socket. Disconnect leaves no trace: nothing to release.
+ * socket. Disconnect leaves no trace in the room; the spectator's admission slot (#616) is released
+ * by the handshake middleware that took it.
  */
 export function attachSpectator(
   socket: SpectatorSocket,

@@ -261,6 +261,16 @@ export const fr = {
     kicker: { seat: "VUE DE TA PLACE", desk: "VUE DE TA PLACE · BUREAU {n}" },
     telex: { strip: "Texte à taper" },
     countdown: { major: "НАЧАЛИ", go: "PARTEZ" },
+    /** The overtake stamps (#232, bible 2, 7.3): the dual in-world headline, Russian then this language. */
+    stamps: {
+      overtake: { ru: "ОБГОН!", text: "DÉPASSEMENT +1" },
+      passed: { ru: "ОБОГНАЛИ", text: "DÉPASSÉ −1" },
+    },
+    /** The race announcer (#232 C4; #242 adds the rest). */
+    announce: {
+      overtake: "Tu as dépassé le bureau {desk}",
+      passed: "Le bureau {desk} t'a dépassé",
+    },
     loading: "On t'installe à ton bureau…",
     notice: {
       "waiting-for-host": "EN ATTENTE DE L'HÔTE",

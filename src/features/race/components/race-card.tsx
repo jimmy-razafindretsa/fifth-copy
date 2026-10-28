@@ -59,6 +59,7 @@ function LaneRow({
     <li
       data-lane
       data-desk={lane.desk}
+      data-desk-progress={lane.cursor}
       data-status={lane.status}
       data-you={lane.you || undefined}
       data-ink={lane.you ? undefined : lane.marker.colour}

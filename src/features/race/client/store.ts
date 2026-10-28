@@ -7,6 +7,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import type { LastKey } from "../view/machine-props";
+import { raceCardViewFrom, type RaceCardView } from "../view/race-card-view";
 import { NO_TEXT_VIEW, typedViewFrom, type TypedView } from "../view/typed-view";
 import { clockOffset, remainingTo } from "./clock";
 import {
@@ -301,6 +302,14 @@ export function selectTypedView(state: RaceState): TypedView {
   const view = typedViewFrom(p.state, text, { jammed, typedAt });
   views.set(p.state, { text, jammed, typedAt, view });
   return view;
+}
+
+/**
+ * The race card's view (#564 C3): members joined with the last snapshot, the lanes selected, memoised
+ * per snapshot (`raceCardViewFrom`), so a keystroke or a `sent` re-renders no card.
+ */
+export function selectRaceCardView(state: RaceState): RaceCardView {
+  return raceCardViewFrom(state);
 }
 
 /** The stamp the seat view shows (#232), or `null`: the store's own object, stable between changes. */

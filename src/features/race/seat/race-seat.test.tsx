@@ -6,7 +6,7 @@ import type { RaceLostReason, RacePhase } from "../client/store";
 import { hudLabelFixtures } from "../view/hud-labels";
 import { RaceSeat } from "./race-seat";
 import { RaceSeatLiveView } from "./race-seat-live";
-import { beforeStartRaceCard, PHONE_QUERY } from "./seat-view";
+import { COMPACT_QUERY, PHONE_QUERY } from "./seat-view";
 
 // #561 C4 and C6 at unit level: the shell the server renders (before-start HUD, kicker, phones notice),
 // every live state of the status slot, and the `race` catalogs (one language per block, the HUD copy of
@@ -154,24 +154,18 @@ describe("the status slot, phase by phase (#561 C4)", () => {
   );
 });
 
-describe("beforeStartRaceCard", () => {
-  it("puts every seated typist at the start, yours marked, and no lanes", () => {
-    const m = (desk: number) => ({
-      desk,
-      name: `Clerk-${desk}`,
-      isHost: false,
-      isBot: false,
-      color: desk - 1,
-      marker: "circle" as const,
-    });
-    expect(beforeStartRaceCard([m(1), m(4), m(7)], 4)).toEqual({
-      field: [
-        { desk: 1, progress: 0, you: false },
-        { desk: 4, progress: 0, you: true },
-        { desk: 7, progress: 0, you: false },
-      ],
-      lanes: [],
-    });
-    expect(beforeStartRaceCard([], null)).toEqual({ field: [], lanes: [] });
+describe("the race card on the seat (#564)", () => {
+  it("server-renders full (compact follows the viewport after hydration) with no lanes and no hidden desks list", () => {
+    const html = renderToStaticMarkup(
+      <RaceSeat seat={seat} labels={en.race} mint={mint} rows={ROWS} />,
+    );
+    const card = /<section[^>]*data-race-card[^>]*>/.exec(html)![0];
+    expect(card).not.toContain("data-compact");
+    expect(html).not.toContain("data-lane");
+    expect(html).not.toContain("data-desks");
+  });
+
+  it("is compact below 1280px (bible 7.4a: tablets and small laptops)", () => {
+    expect(COMPACT_QUERY).toBe("(max-width: 1279px)");
   });
 });

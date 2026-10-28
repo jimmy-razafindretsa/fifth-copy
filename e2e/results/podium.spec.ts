@@ -147,6 +147,21 @@ const six = (host: string): Desk[] => [
   { desk: 6, name: "Crow-559", place: 6, wpm: 29.5, suspicious: true },
 ];
 
+/** No WebGL in the page or its frames (the medal slots fall back to the gold stamp, C4). */
+async function withoutWebGL(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      id: string,
+      ...rest: unknown[]
+    ) {
+      if (id === "webgl2" || id === "webgl") return null;
+      return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
+    } as typeof original;
+  });
+}
+
 const plinths = (page: Page) => page.locator("[data-podium] > [data-plinth]");
 const plinth = (page: Page, place: number) => page.locator(`[data-plinth="${place}"]`);
 
@@ -157,6 +172,10 @@ test.describe("Dawn report podium (#300)", () => {
     page,
     request,
   }, info) => {
+    // The timing under test is the data path (filing -> podium). Three medals booting software WebGL
+    // (headless CI, no GPU) block the page's thread for ~9 s right after the swap, so this test draws the
+    // medal slots as their stamp; the live medals are proven by the C4 tests below.
+    await withoutWebGL(page);
     const lobby = await seedLobby(page);
     const desks = six(lobby.hostUserId);
     const raceId = await startRace(request, lobby, desks);
@@ -248,17 +267,7 @@ test.describe("Dawn report podium (#300)", () => {
     page,
     request,
   }) => {
-    await page.addInitScript(() => {
-      const original = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = function (
-        this: HTMLCanvasElement,
-        id: string,
-        ...rest: unknown[]
-      ) {
-        if (id === "webgl2" || id === "webgl") return null;
-        return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
-      } as typeof original;
-    });
+    await withoutWebGL(page);
     const lobby = await seedLobby(page);
     const desks = six(lobby.hostUserId).slice(0, 3);
     const raceId = await startRace(request, lobby, desks);

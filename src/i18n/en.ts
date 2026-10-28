@@ -261,6 +261,13 @@ export const en = {
     telex: { strip: "Text to type" },
     /** The 3-2-1 countdown and the Major's dual stamp `НАЧАЛИ · GO` (#214, bible 2, 7.3). */
     countdown: { major: "НАЧАЛИ", go: "GO" },
+    /** The overtake stamps (#232, bible 2, 7.3): the dual in-world headline, Russian then this language. */
+    stamps: {
+      overtake: { ru: "ОБГОН!", text: "OVERTAKE +1" },
+      passed: { ru: "ОБОГНАЛИ", text: "PASSED −1" },
+    },
+    /** The race announcer (#232 C4; #242 adds the rest). */
+    announce: { overtake: "You passed desk {desk}", passed: "Desk {desk} passed you" },
     loading: "Taking your seat…",
     notice: {
       "waiting-for-host": "WAITING FOR THE HOST",

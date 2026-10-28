@@ -21,6 +21,7 @@ function fakeRoom() {
     onSettings: vi.fn(on),
     onCountdown: vi.fn(on),
     onSnapshot: vi.fn(on),
+    onEvent: vi.fn(on),
     onConnectError: vi.fn(on),
     onReconnecting: vi.fn(on),
     onReconnected: vi.fn(on),
@@ -143,9 +144,9 @@ describe("connectSeat (#561 C4)", () => {
     });
     await vi.waitFor(() => expect(room.onWelcome).toHaveBeenCalled());
     stop();
-    // bindRaceSocket's eight (#214 adds countdown, #559 snapshot, #654 settings), the handoff's own
+    // bindRaceSocket's nine (#214 adds countdown, #559 snapshot, #654 settings, #232 event), the handoff's own
     // welcome listener and the issued-key memory's (#656)
-    expect(offs.length).toBe(10);
+    expect(offs.length).toBe(11);
     for (const off of offs) expect(off).toHaveBeenCalledTimes(1);
     expect(room.close).toHaveBeenCalledTimes(1);
   });

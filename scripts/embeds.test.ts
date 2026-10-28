@@ -63,3 +63,27 @@ describe("public/3d", () => {
     }
   });
 });
+
+// #300 C4: the podium medals are variants of the one medal page (bible 13, 15). The served page is
+// generated from the reference (drift-checked above), so the reference carries the protocol.
+describe("medal page protocol (#300 C4)", () => {
+  const medal = fs.readFileSync(path.join(EMBED_DIR, "medal.html"), "utf8");
+
+  it("knows the three metals and reads ?variant= and ?embed=1", () => {
+    for (const v of ["gold", "silver", "bronze"]) expect(medal).toMatch(new RegExp(`\\b${v}: \\{ base:`));
+    expect(medal).toContain("flags.get('variant')");
+    expect(medal).toContain("flags.get('embed') === '1' ? 1 :");
+  });
+
+  it("guards fc-medal-variant and fc-motion by origin, type and value", () => {
+    expect(medal).toContain("if (e.origin !== location.origin) return;");
+    expect(medal).toContain("d.type === 'fc-medal-variant' && isVariant(d.variant)");
+    expect(medal).toContain("d.type === 'fc-motion' && typeof d.reduce === 'boolean'");
+  });
+
+  it("under reduced motion (media query or fc-motion) neither turns on idle nor bobs", () => {
+    expect(medal).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
+    expect(medal).toContain("if (!reduced() && idle > 1.5");
+    expect(medal).toContain("(reduced() ? 0 : Math.sin(now / 900) * 0.015)");
+  });
+});

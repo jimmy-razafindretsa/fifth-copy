@@ -326,6 +326,44 @@ export const en = {
       seconds: "{n} S",
     },
   },
+  /** The Dawn report (#300, bible 14.4): kicker, heading, the filing notice and the podium. */
+  results: {
+    kicker: "DAWN REPORT · FORM 5-R",
+    heading: "RACE OVER",
+    filing: {
+      notice: "FILING THE REPORT · ONE MOMENT",
+      prefix: "RETURNED ·",
+      late: "The report did not reach the office.",
+      lobby: "BACK TO THE WAITING ROOM →",
+      home: "BACK TO THE FRONT DESK →",
+    },
+    podium: {
+      title: "Podium",
+      place: "№ {n}",
+      desk: "DESK {n}",
+      bot: "BOT",
+      you: "YOU",
+      wpm: "WPM",
+      accuracy: "ACCURACY",
+      unfilled: "UNFILLED",
+      tied: "TIED",
+      underReview: "UNDER REVIEW",
+      medal: "HERO OF PAPERWORK",
+      medalTitle: {
+        gold: "The gold medal, in 3D, drag to spin",
+        silver: "The silver medal, in 3D, drag to spin",
+        bronze: "The bronze medal, in 3D, drag to spin",
+      },
+    },
+    status: {
+      FINISHED: "FILED",
+      TIMED_OUT: "TIMED OUT",
+      REASSIGNED: "REASSIGNED",
+      ASLEEP: "ASLEEP AT DESK",
+      LINE_CUT: "LINE CUT",
+      EXPIRED: "EXPIRED",
+    },
+  },
   settings: {
     avatar: {
       moderation: {

@@ -45,6 +45,14 @@
   border-color: var(--color-fg);
 }
 
+/* gold (#300): bible 7.3 "3px double gold on dark", on the ink band in both themes (gold text lives only
+   on band, 7.77:1; components.md colour usage rules); the rewards' stamp, e.g. HERO OF PAPERWORK */
+.gold {
+  color: var(--color-reward);
+  border: 3px double var(--color-reward);
+  background: var(--color-band);
+}
+
 /* padding by size: sm = the HOST badge (7.3 #107), md = FILE NOT FOUND, lg extends the same step */
 .sm {
   padding: 2px 8px;

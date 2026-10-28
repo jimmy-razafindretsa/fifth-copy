@@ -1,0 +1,246 @@
+/*
+ * The Dawn report podium (#300, bible 14.4): composed from bible 7.4 (multi-cell grid, ink tags, roll
+ * rows, one-row docket), 7.3 (the gold stamp), 4 (type roles) and 13 (the medals). Each plinth is one 7.4
+ * grid (gap 2px on ink, never per-cell borders): an ink medal slot (the band: gold is legal only on ink),
+ * a paper stat cell and a newsprint base block whose height ranks the plinths (1 / .82 / .7). Colours are
+ * roles only, faces the type roles (#531).
+ */
+
+@reference "../../../app/globals.css";
+
+.podium {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* phones: the plinths stack in place order (1, 2, 3), each medal above its cell */
+.plinth {
+  --_medal: 160px;
+  --_base: 120px;
+  min-width: 0;
+}
+
+.plinth[data-plinth="2"] {
+  --_medal: 128px;
+  --_base: 98px;
+}
+
+.plinth[data-plinth="3"] {
+  --_medal: 112px;
+  --_base: 84px;
+}
+
+/* from 768px: 2 | 1 | 3 on one floor line, the first in the centre and tallest */
+@media (min-width: 768px) {
+  .podium {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+    gap: 12px;
+  }
+
+  .plinth[data-plinth="1"] {
+    order: 2;
+  }
+
+  .plinth[data-plinth="2"] {
+    order: 1;
+  }
+
+  .plinth[data-plinth="3"] {
+    order: 3;
+  }
+}
+
+/* bible 7.4 multi-cell grid: the ink shows only in the 2px gaps and the outer rule */
+.grid {
+  display: grid;
+  gap: 2px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the ink medal slot: the band ground in both themes */
+.slot {
+  display: flex;
+  justify-content: center;
+  padding: 16px 12px;
+  background: var(--color-band);
+  color: var(--color-band-fg);
+}
+
+.frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(var(--_medal), 100%);
+  aspect-ratio: 3 / 4;
+}
+
+/* UNDER REVIEW: a one-row 7.4 docket (paper ground, ink rule) where the medal would hang */
+.review {
+  margin: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  text-align: center;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* the paper stat cell */
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* the ink tag (bible 7.4 roll rows: Oswald 600 10px .16em, ink ground, paper text) */
+.tag {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* a status other than filed: the 7.4a status label (Oswald 10px .16em in a 1px muted hairline) */
+.status {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+  border: 1px solid var(--color-fg-muted);
+  padding: 0 5px;
+  white-space: nowrap;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* tied rows: dashed separators (bible 7.4) */
+.entry + .entry {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+}
+
+/* the roll-row desk label (bible 7.4: Oswald 600 11px .2em, muted) */
+.desk {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+.name {
+  @apply type-typing;
+  font-size: 18px;
+  line-height: normal;
+  overflow-wrap: anywhere;
+}
+
+/* your name in the red text role (bible 7.4a; night-ink on Night shift, 3.3) */
+.nameYou {
+  color: var(--color-link);
+}
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+}
+
+/* the clean WPM, the plinth's big figure (IBM Plex Mono 500) */
+.wpm {
+  @apply type-typing;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.accuracy {
+  margin-left: 8px;
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+}
+
+.unfilled {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+/* the base block: newsprint, its height ranks the plinth; hidden on phones (they stack) */
+.base {
+  display: none;
+  background: var(--color-surface);
+  color: var(--color-fg-muted);
+  @apply type-display-lg;
+  line-height: 1;
+}
+
+@media (min-width: 768px) {
+  .base {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--_base);
+  }
+}

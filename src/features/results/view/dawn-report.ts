@@ -151,7 +151,12 @@ const report = (
   id: string,
   entries: ReportEntry[],
   viewerDesk: number | null = null,
-): Extract<DawnReport, { kind: "report" }> => ({ kind: "report", race: race(id), entries, viewerDesk });
+): Extract<DawnReport, { kind: "report" }> => ({
+  kind: "report",
+  race: race(id),
+  entries,
+  viewerDesk,
+});
 
 /** `/design#results` and the tests: one fixture per podium state (C6). */
 export const dawnReportFixtures = {

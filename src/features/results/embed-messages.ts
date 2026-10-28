@@ -40,5 +40,4 @@ export function parseMotionMessage(data: unknown): MotionMessage | null {
  * The embed's URL for a variant: `?variant=` gives the right metal on the first frame (the message only
  * arrives once the frame has loaded), `?embed=1` caps the pixel ratio at 1 (three medals on one phone).
  */
-export const medalEmbedSrc = (variant: MedalVariant) =>
-  `${MEDAL_EMBED}?embed=1&variant=${variant}`;
+export const medalEmbedSrc = (variant: MedalVariant) => `${MEDAL_EMBED}?embed=1&variant=${variant}`;

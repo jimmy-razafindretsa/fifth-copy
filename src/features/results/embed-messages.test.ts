@@ -19,7 +19,12 @@ describe("medal messages (#300 C4, bible 15)", () => {
       type: "fc-medal-variant",
       variant: "gold",
     });
-    for (const bad of [null, "fc-medal-variant", [], { type: "fc-medal-variant", variant: "tin" }]) {
+    for (const bad of [
+      null,
+      "fc-medal-variant",
+      [],
+      { type: "fc-medal-variant", variant: "tin" },
+    ]) {
       expect(parseMedalVariantMessage(bad)).toBeNull();
     }
     expect(parseMotionMessage({ type: "fc-motion", reduce: false })).toEqual(motionMessage(false));

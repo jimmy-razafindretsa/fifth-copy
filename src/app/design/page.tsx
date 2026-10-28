@@ -35,6 +35,14 @@ import {
   TypingMachine,
   type TypingMachineProps,
 } from "@/features/race";
+import {
+  dawnReportFixtures,
+  type DawnReportFixture,
+  filingLabels,
+  FilingNoticeView,
+  Podium,
+  podiumLabels,
+} from "@/features/results";
 import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
 import demo from "./motion-demo.module.css";
@@ -313,6 +321,26 @@ const CARD_STATES: { id: RaceCardViewFixture; title: string; caption: string }[]
     caption: "Thirty ticks; lanes for the top 3, the two ahead, you and the two behind.",
   },
 ];
+
+// Dawn report (#300, bible 14.4): the podium in each state. The medal slots show the gold fallback stamp
+// (a WebGL frame spinning on rAF has no stable baseline); the live medals are on /results/<raceId>.
+const PODIUM_STATES: { id: DawnReportFixture; title: string; caption: string; reduce?: boolean }[] =
+  [
+    {
+      id: "full",
+      title: "Full",
+      caption: "Six desks; a bot on the podium; 2 | 1 | 3 from tablets up.",
+    },
+    { id: "two-finishers", title: "Two finishers", caption: "The third plinth stays unfilled." },
+    { id: "tie", title: "Tie", caption: "Two desks share first; second is unfilled." },
+    {
+      id: "under-review",
+      title: "Under review",
+      caption: "The docket hangs where the medal would.",
+    },
+    { id: "viewer", title: "Viewer on the podium", caption: "Your desk carries the YOU tag." },
+    { id: "full", title: "Reduced motion", caption: "Nothing spins, bobs or slams.", reduce: true },
+  ];
 
 /** Living inventory of src/components/ui (see docs/design/components.md). Used by e2e + visual tests. */
 export default async function DesignPage() {
@@ -916,6 +944,44 @@ export default async function DesignPage() {
             ]}
           />
           <Stamp role={null} rotation="auto" seed="accepted-48" lines={["ACCEPTED · 48 WPM"]} />
+        </div>
+      </section>
+
+      <section id="results" aria-labelledby="results-heading" className="flex flex-col gap-6">
+        <h2 id="results-heading" className="type-display-md">
+          Dawn report
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The podium of the results screen: first in the centre and tallest, second left, third
+          right, each plinth a paper cell under an ink medal slot. Phones stack them in place order.
+        </p>
+        {PODIUM_STATES.map((state) => (
+          <HudSpecimen
+            key={`${state.id}-${state.reduce ? "reduce" : "motion"}`}
+            id={`podium-${state.reduce ? "reduced-motion" : state.id}`}
+            title={state.title}
+            caption={state.caption}
+            reduce={state.reduce}
+          >
+            <Podium
+              entries={dawnReportFixtures[state.id].entries}
+              viewerDesk={dawnReportFixtures[state.id].viewerDesk}
+              labels={podiumLabels(t.results)}
+              medals="still"
+            />
+          </HudSpecimen>
+        ))}
+        <div className="grid gap-6 md:grid-cols-2">
+          <HudSpecimen
+            id="filing"
+            title="Filing"
+            caption="The results are on their way; the page re-reads every 2 s."
+          >
+            <FilingNoticeView {...filingLabels(t.results, "KGB-4821")} late={false} />
+          </HudSpecimen>
+          <HudSpecimen id="filing-late" title="Filing, late" caption="After 60 s: the way back.">
+            <FilingNoticeView {...filingLabels(t.results, "KGB-4821")} late />
+          </HudSpecimen>
         </div>
       </section>
     </main>

@@ -70,7 +70,8 @@ describe("medal page protocol (#300 C4)", () => {
   const medal = fs.readFileSync(path.join(EMBED_DIR, "medal.html"), "utf8");
 
   it("knows the three metals and reads ?variant= and ?embed=1", () => {
-    for (const v of ["gold", "silver", "bronze"]) expect(medal).toMatch(new RegExp(`\\b${v}: \\{ base:`));
+    for (const v of ["gold", "silver", "bronze"])
+      expect(medal).toMatch(new RegExp(`\\b${v}: \\{ base:`));
     expect(medal).toContain("flags.get('variant')");
     expect(medal).toContain("flags.get('embed') === '1' ? 1 :");
   });

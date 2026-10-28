@@ -1,5 +1,8 @@
 import {
   DEFAULT_RACE_SETTINGS,
+  keystrokeSchema,
+  MAX_LAG_MS,
+  PLAYER_STATUS_CODES,
   PROTOCOL_VERSION,
   roomCodeSchema,
   type Welcome,
@@ -159,5 +162,65 @@ describe("createTyping (#559)", () => {
     typing.press("e");
     advance(1_000);
     expect(sent).toHaveLength(1);
+  });
+});
+
+// #645 C3: the finish shown by the prediction is not final until the server agrees; when a snapshot
+// brings the desk back to typing, the typing path takes and sends keys again.
+// #645 C4: every key the typing path applies is a key the wire accepts (`keystrokeSchema`).
+describe("createTyping after a reconcile, and wire-valid keys only (#645)", () => {
+  it("C3: the prediction showed finished, a snapshot brings the desk back to typing: a key is applied and sent", () => {
+    const { store, typing, sent, advance, go } = setup();
+    go();
+    for (const k of TEXT) {
+      typing.press(k);
+      advance(30);
+    }
+    expect(store.getState().prediction?.state.status).toBe("finished");
+    const lastT = sent.flat().at(-1)!.t;
+    // the server dropped the finishing key: its desk is one key short and still typing
+    advance(MAX_LAG_MS + 100);
+    store.dispatch({
+      type: "snapshot",
+      payload: {
+        v: PROTOCOL_VERSION,
+        t: lastT + MAX_LAG_MS + 100,
+        desks: [[2, 6, 6, 0, PLAYER_STATUS_CODES.typing, 6]],
+        ranks: [2],
+      },
+    });
+    expect(store.getState().prediction?.state).toMatchObject({ cursor: 6, status: "typing" });
+    const before = sent.flat().length;
+    typing.press(TEXT.at(-1)!);
+    expect(store.getState().prediction?.state.status).toBe("finished");
+    advance(50);
+    expect(
+      sent
+        .flat()
+        .slice(before)
+        .map((k) => k.key),
+    ).toEqual([TEXT.at(-1)]);
+  });
+
+  it.each([
+    ["a tab", "\t"],
+    ["a line separator (U+2028)", " "],
+    ["a byte order mark (U+FEFF)", "﻿"],
+  ])("C4: %s the wire refuses is neither applied nor sent", (_, key) => {
+    const { store, typing, sent, advance, go } = setup();
+    expect(keystrokeSchema.safeParse({ t: 0, key }).success).toBe(false);
+    go();
+    typing.press("L");
+    typing.press("e");
+    advance(100);
+    const prediction = store.getState().prediction;
+    typing.press(key); // at the space of "Le reçu": the engine would take it as one
+    advance(100);
+    expect(store.getState().prediction).toBe(prediction);
+    expect(sent.flat().map((k) => k.key)).toEqual(["L", "e"]);
+    typing.press(" ");
+    advance(100);
+    expect(store.getState().prediction?.state.cursor).toBe(3);
+    expect(sent.flat().map((k) => k.key)).toEqual(["L", "e", " "]);
   });
 });

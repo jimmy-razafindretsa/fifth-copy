@@ -220,7 +220,7 @@ describe("grace expiry (C3)", () => {
     await advance(b, 1_000);
     await until(() => statusOf(b, lobby, cut.desk) === "expired", WAIT_MS, "expired");
     await tick(b, host);
-    expect(lastRow(host, cut.desk)).toEqual([cut.desk, 3, 3, 0, PLAYER_STATUS_CODES.expired]);
+    expect(lastRow(host, cut.desk)).toEqual([cut.desk, 3, 3, 0, PLAYER_STATUS_CODES.expired, 3]);
     // The resume-key drop lands after the in-memory state the wait above saw (#600).
     await expect
       .poll(() => redis.exists(resumeKey(key)), { timeout: WAIT_MS, interval: 20 })

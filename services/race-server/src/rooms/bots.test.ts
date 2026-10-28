@@ -318,6 +318,7 @@ describe("race with a bot (C3)", () => {
       0,
       0,
       PLAYER_STATUS_CODES.typing,
+      0,
     ]);
 
     for (let left = 60_000; left > 0; left -= 1_000) {

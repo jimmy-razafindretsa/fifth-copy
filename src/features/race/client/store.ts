@@ -60,7 +60,7 @@ export type RaceState = {
    * before, and for a spectator.
    */
   prediction: Prediction | null;
-  /** The last snapshot's desks `[desk, cursor, correct, errors, statusCode]` and live order (#559). */
+  /** The last snapshot's desks `[desk, cursor, correct, errors, statusCode, total]` and live order (#559). */
   desks: Snapshot["desks"];
   ranks: Snapshot["ranks"];
   /**
@@ -138,12 +138,12 @@ function predictionOf(
   });
 }
 
-/** Your desk in a snapshot as the four numbers the prediction compares. */
+/** Your desk in a snapshot as the numbers the prediction compares (`total` is its exact ack, #645). */
 function serverProgressOf(desks: Snapshot["desks"], you: number) {
   const mine = desks.find(([desk]) => desk === you);
   if (!mine) return null;
-  const [, cursor, correct, errors, code] = mine;
-  return { cursor, correct, errors, status: PLAYER_STATUSES[code]! };
+  const [, cursor, correct, errors, code, total] = mine;
+  return { cursor, correct, errors, status: PLAYER_STATUSES[code]!, total };
 }
 
 const lost = (state: RaceState, reason: RaceLostReason): RaceState => ({
@@ -226,11 +226,11 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       return prediction === state.prediction ? state : { ...state, prediction };
     }
     case "snapshot": {
-      const { desks, ranks } = event.payload;
+      const { desks, ranks, t } = event.payload;
       let prediction = state.prediction;
       const server = prediction && state.you !== null ? serverProgressOf(desks, state.you) : null;
       if (prediction && server)
-        prediction = prediction.reconcile(server, prediction.ackedBy(server));
+        prediction = prediction.reconcile(server, prediction.ackedBy(server, t));
       return { ...state, desks, ranks, prediction };
     }
     case "connect-error":

@@ -1,11 +1,9 @@
 import { applyKeystroke, type Keystroke } from "@fifth-copy/engine";
-import { MAX_RACE_MS, type Rejected } from "@fifth-copy/protocol";
+import { MAX_LAG_MS, MAX_LEAD_MS, MAX_RACE_MS, type Rejected } from "@fifth-copy/protocol";
 import { textOf, traceCapOf, type RoomRuntime } from "./desks-state";
 
-/** How far behind the server clock a keystroke's `t` may be (ARCHITECTURE 7.3). */
-export const MAX_LAG_MS = 2_000;
-/** How far ahead of the server clock a keystroke's `t` may be. */
-export const MAX_LEAD_MS = 200;
+/** The clock clamp bounds (ARCHITECTURE 7.3) live in the protocol: the client's ack reads them too. */
+export { MAX_LAG_MS, MAX_LEAD_MS };
 /**
  * Sustained keystrokes per second a desk may send: 40/s is ~480 WPM, about twice the fastest
  * recorded human bursts, so a fast typist with corrections is never refused.

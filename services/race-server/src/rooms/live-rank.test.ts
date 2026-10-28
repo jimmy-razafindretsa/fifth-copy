@@ -62,7 +62,7 @@ describe("collectSnapshot", () => {
   };
   const desks = [1, 2, 3].map((desk) => ({ desk, userId: `u${desk}`, name: "D", isBot: false }));
 
-  it("lists every desk once as integer tuples and ranks them by progress", () => {
+  it("lists every desk once as integer tuples with the engine's total and ranks them by progress", () => {
     const state = createDesksState({ redis: {} as Redis });
     const rt = state.open("lob", { race, settings: DEFAULT_RACE_SETTINGS, desks });
     ingest(
@@ -72,14 +72,24 @@ describe("collectSnapshot", () => {
       1_200,
     );
     ingest(rt, 2, [{ t: 100, key: "x" }], 1_200);
+    // a wrong key then Backspace: the same four numbers as no key, but two presses (#645)
+    ingest(
+      rt,
+      1,
+      [
+        { t: 100, key: "x" },
+        { t: 101, key: "Backspace" },
+      ],
+      1_200,
+    );
     const { snapshot, ranking } = collectSnapshot(rt, raceElapsed(rt, 1_300));
     expect(snapshotSchema.parse(snapshot)).toEqual({
       v: PROTOCOL_VERSION,
       t: 300,
       desks: [
-        [1, 0, 0, 0, PLAYER_STATUS_CODES.typing],
-        [2, 1, 0, 1, PLAYER_STATUS_CODES.typing],
-        [3, 3, 3, 0, PLAYER_STATUS_CODES.typing],
+        [1, 0, 0, 0, PLAYER_STATUS_CODES.typing, 2],
+        [2, 1, 0, 1, PLAYER_STATUS_CODES.typing, 1],
+        [3, 3, 3, 0, PLAYER_STATUS_CODES.typing, 3],
       ],
       ranks: [3, 2, 1],
     });

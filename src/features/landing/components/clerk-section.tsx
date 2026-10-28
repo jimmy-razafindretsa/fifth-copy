@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { EmbedFrame, Star, useEmbedBridge } from "@/components/ui";
 import {
-  clerkMessageSchema,
   lookMessage,
   OUTFIT_CATEGORIES,
+  parseClerkMessage,
   reissueMessage,
   type Outfit,
   type OutfitCategory,
@@ -48,7 +48,7 @@ const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 export function ClerkSection({ labels, name, lockerHref }: Props) {
   const [outfit, setOutfit] = useState<Outfit | null>(null);
   const onMessage = useCallback((message: { cfg: Outfit }) => setOutfit(message.cfg), []);
-  const { ref, post } = useEmbedBridge(clerkMessageSchema, onMessage);
+  const { ref, post } = useEmbedBridge(parseClerkMessage, onMessage);
 
   useEffect(() => {
     let frame = 0;

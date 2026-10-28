@@ -2,7 +2,7 @@
 
 import { useActionState, useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatRoomCode, parseRoomCode } from "@fifth-copy/protocol";
+import { formatRoomCode, parseRoomCode } from "../room-code-input";
 import { joinByCode } from "../actions/join-by-code";
 import { InlineError } from "./inline-error";
 import styles from "./lobby-entry.module.css";

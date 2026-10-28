@@ -18,7 +18,7 @@ npm run build:race   # esbuild -> services/race-server/dist/main.js
 - Tests under `src/rooms/`, `src/socket/` and `src/http/internal.test.ts` run against a real Redis at `REDIS_URL` (worktree `.env`; CI `check` job service) and fail when it is unreachable. They delete only their own keys: never `FLUSHDB` (card worktrees may share a db index).
 
 ## Waiting room (#165)
-- Handshake: `io(url, { auth: { v: PROTOCOL_VERSION, token } })`. Refusals are `connect_error` with message `version`, `bad-token` or `no-room`; the room is always the token's `lobby` claim.
+- Handshake: `io(url, { auth: { v: PROTOCOL_VERSION, token } })`. Refusals are `connect_error` with message `version`, `bad-token` or `no-room`; the room is always the token's `lobby` claim. A `spectator` token past `MAX_SPECTATORS_PER_ROOM` (`socket/spectator-slots.ts`, 100 per room on this process, `createRaceServer({ maxSpectatorsPerRoom })`) is refused `room-full` (#616); seated roles never take a slot. The slot is taken in the handshake middleware and released once, on `disconnect` or on the connection's `close` (a client gone mid-handshake takes none).
 - On connect: `welcome` to the socket, `roster` to `lobby:<id>`; on the user's last disconnect: `roster` to the rest.
 - `POST /internal/rooms` (web -> race server): HMAC over `${timestamp}.${rawBody}`, verified before the body is parsed; 401 `bad-signature`/`stale-timestamp`, 400 `bad-body` (also bodies over 64 kB), 426 `version`.
 - Playwright starts this server as its first `webServer` with `WEB_ORIGIN` = the Playwright base URL. A reused local `npm run dev:race` keeps its own `WEB_ORIGIN`: stop it if browser sockets are refused in e2e.

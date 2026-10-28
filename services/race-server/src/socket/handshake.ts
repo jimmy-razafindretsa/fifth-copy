@@ -9,6 +9,7 @@ import type { Clock } from "../clock";
 import type { ResumeKeys } from "../players/resume-keys";
 import type { RoomRegistry } from "../rooms/registry";
 import { verifyRaceToken } from "./race-token";
+import type { SpectatorSlots } from "./spectator-slots";
 
 export type HandshakeDeps = {
   secret: string;
@@ -16,6 +17,8 @@ export type HandshakeDeps = {
   clock: Clock;
   /** Resume key resolution (#178); without it no handshake resumes. */
   resumeKeys?: Pick<ResumeKeys, "lookup">;
+  /** Per-room spectator admission (#616); without it spectators are not capped. */
+  spectators?: SpectatorSlots;
 };
 /**
  * `resume`: the handshake carried the user's own resume key for this room while a race is on
@@ -68,16 +71,49 @@ export async function authenticateHandshake(
   return { ok: true, claims: verified.claims, resume };
 }
 
-/** Socket.IO middleware: refusal is `connect_error` with the reason as its message. */
+const refused = (reason: RejectReason) =>
+  console.log(JSON.stringify({ level: "info", msg: "handshake refused", reason }));
+
+/**
+ * Takes a spectator slot of the socket's room (#616), the write `authenticateHandshake` never does.
+ * Runs synchronously after the middleware's awaits: a client gone meanwhile reserves nothing, since
+ * Socket.IO then fires neither `connection` nor `disconnect` for it (4.8 `Namespace._add`). A
+ * held slot is released once, on the socket's `disconnect` or its connection's `close`, whichever
+ * comes first (a client may open several sockets on one connection, or close mid-connect).
+ */
+function reserveSpectator(socket: Socket, lobbyId: string, slots: SpectatorSlots): boolean {
+  if (socket.conn.readyState !== "open") return true;
+  if (!slots.reserve(lobbyId)) return false;
+  const release = () => {
+    socket.off("disconnect", release);
+    socket.conn.off("close", release);
+    slots.release(lobbyId);
+  };
+  socket.once("disconnect", release);
+  socket.conn.once("close", release);
+  return true;
+}
+
+/**
+ * Socket.IO middleware: refusal is `connect_error` with the reason as its message. A `spectator`
+ * past the room's cap is refused `room-full` (#616); seated roles never take a slot.
+ */
 export function createHandshakeMiddleware(deps: HandshakeDeps) {
   return (socket: Socket, next: (err?: ExtendedError) => void) => {
     authenticateHandshake(socket.handshake.auth, deps).then(
       (result) => {
         if (!result.ok) {
-          console.log(
-            JSON.stringify({ level: "info", msg: "handshake refused", reason: result.reason }),
-          );
+          refused(result.reason);
           return next(new Error(result.reason));
+        }
+        const { spectators } = deps;
+        if (
+          result.claims.role === "spectator" &&
+          spectators &&
+          !reserveSpectator(socket, result.claims.lobby, spectators)
+        ) {
+          refused("room-full");
+          return next(new Error("room-full" satisfies RejectReason));
         }
         socket.data.claims = result.claims;
         socket.data.resume = result.resume;

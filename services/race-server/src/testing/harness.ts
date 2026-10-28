@@ -135,6 +135,8 @@ export async function boot(
     carry?: { now: number; lobbies: string[] };
     /** The bonus effects' randomness (#190); the server's default otherwise. */
     rng?: Rng;
+    /** Spectator cap per room (#616); the server's default otherwise. */
+    maxSpectatorsPerRoom?: number;
   } = {},
 ): Promise<Booted> {
   const clock = createFakeClock(options.carry?.now ?? Date.now());
@@ -148,6 +150,7 @@ export async function boot(
     onRaceEnded: options.onRaceEnded,
     recovery: options.recovery ?? false,
     rng: options.rng,
+    maxSpectatorsPerRoom: options.maxSpectatorsPerRoom,
   });
   const port = await server.listen(0, "127.0.0.1");
   const url = `http://127.0.0.1:${port}`;

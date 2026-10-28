@@ -1,11 +1,12 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
+import { scaled } from "../timeouts";
 import { hostRoom, phaseOf, startButton, warmRace } from "./helpers";
 
 // Contract of #559 C6: a key never waits for the server. Host and one guest in a room, the host starts;
 // after GO the guest types the first 12 characters of the strip: its sheet shows 12 `done` spans within
 // 100 ms of the last key, and within 1 s the host's store holds progress 12 for the guest's desk
-// (`data-desk-progress`, the last snapshot's cursor). Times are taken in the pages, where they happen
+// (`data-desk-progress` on the guest's race card lane, the last snapshot's cursor, #564). Times are taken in the pages, where they happen
 // (an init script records the guest's last key and the sheet's 12th `done`, the host's 12): both pages
 // share this machine's clock.
 
@@ -29,7 +30,7 @@ function recorder() {
   new MutationObserver(() => {
     const done = document.querySelectorAll('[data-sheet] [data-state="done"]').length;
     if (log.doneAt === null && done >= 12) log.doneAt = Date.now();
-    for (const li of document.querySelectorAll("[data-desks] [data-desk]")) {
+    for (const li of document.querySelectorAll("[data-race-card] [data-lane][data-desk]")) {
       const desk = li.getAttribute("data-desk")!;
       if (li.getAttribute("data-desk-progress") === "12" && !(desk in log.progressAt)) {
         log.progressAt[desk] = Date.now();
@@ -79,7 +80,9 @@ test.describe("#559 local prediction", () => {
     await startButton(room.host).click();
     await expect(room.host).toHaveURL(/\/race\/[0-9a-f-]{36}$/);
     await expect(phaseOf(room.host)).toHaveAttribute("data-phase", /countdown|running/);
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
     await expect(page.getByRole("textbox", { name: "Text to type" })).toBeFocused();
 
     const text = (await page.locator("[data-telex] [data-state]").allTextContents()).join("");
@@ -95,8 +98,8 @@ test.describe("#559 local prediction", () => {
       100,
     );
 
-    const progress = room.host.locator(`[data-desks] [data-desk="${desk}"]`);
-    await expect(progress).toHaveAttribute("data-desk-progress", "12", { timeout: 2_000 });
+    const progress = room.host.locator(`[data-race-card] [data-lane][data-desk="${desk}"]`);
+    await expect(progress).toHaveAttribute("data-desk-progress", "12", { timeout: scaled(2_000) });
     const host = await logOf(room.host);
     expect(host.progressAt[desk], "the host's store").toBeDefined();
     test.info().annotations.push({
@@ -108,7 +111,7 @@ test.describe("#559 local prediction", () => {
       "host after the last key (ms)",
     ).toBeLessThanOrEqual(1_000);
     // the guest's own store agrees with its prediction once the server's snapshot lands
-    await expect(page.locator(`[data-desks] [data-desk="${desk}"]`)).toHaveAttribute(
+    await expect(page.locator(`[data-race-card] [data-lane][data-desk="${desk}"]`)).toHaveAttribute(
       "data-desk-progress",
       "12",
     );

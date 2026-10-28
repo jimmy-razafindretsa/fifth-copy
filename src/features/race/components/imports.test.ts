@@ -279,9 +279,9 @@ describe("engine reducers only in the prediction (#559 C8)", () => {
       )
       .map((f) => path.relative(root, f));
     expect(hits).toEqual([]);
-    expect(engineImports(readFileSync(predictionFile, "utf8")).some((i) => REDUCERS.test(i.clause))).toBe(
-      true,
-    );
+    expect(
+      engineImports(readFileSync(predictionFile, "utf8")).some((i) => REDUCERS.test(i.clause)),
+    ).toBe(true);
     // the check sees the view's real import (so a reducer added to it would fail above)
     const card = engineImports(readFileSync(path.join(view, "race-card-view.ts"), "utf8"));
     expect(card.map((i) => i.clause).join(" ")).toMatch(/\bprogress\b/);

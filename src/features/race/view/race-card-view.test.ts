@@ -32,7 +32,14 @@ import {
 
 type Desk = Snapshot["desks"][number];
 const { typing, finished, asleep, abandoned, expired } = PLAYER_STATUS_CODES;
-const desk = (n: number, cursor = 0, code: number = typing): Desk => [n, cursor, cursor, 0, code, cursor];
+const desk = (n: number, cursor = 0, code: number = typing): Desk => [
+  n,
+  cursor,
+  cursor,
+  0,
+  code,
+  cursor,
+];
 
 /** `n` desks in desk order, ranked by a fixed permutation (rank never equals desk order). */
 function field(n: number) {
@@ -239,11 +246,16 @@ describe("raceCardViewFrom (#564 C3)", () => {
       source({ members: many, desks, ranks: desks.map((d) => d[0]).reverse(), you: 7 }),
     );
     expect(view.lanes.length).toBeGreaterThan(0);
-    for (const lane of view.lanes) expect(lane.marker).toEqual({ shape: "circle", colour: "rival" });
+    for (const lane of view.lanes)
+      expect(lane.marker).toEqual({ shape: "circle", colour: "rival" });
   });
 
   it("the statuses map from the snapshot code; an expired desk shows no label", () => {
-    const desks = [desk(1, 2, PLAYER_STATUS_CODES["line-cut"]), desk(3, 1, abandoned), desk(5, 3, expired)];
+    const desks = [
+      desk(1, 2, PLAYER_STATUS_CODES["line-cut"]),
+      desk(3, 1, abandoned),
+      desk(5, 3, expired),
+    ];
     const view = raceCardViewFrom(source({ desks, ranks: [5, 1, 3] }));
     expect(view.lanes.map((l) => [l.desk, l.status])).toEqual([
       [5, "typing"],
@@ -253,7 +265,10 @@ describe("raceCardViewFrom (#564 C3)", () => {
   });
 
   it("before the race (or before its first snapshot): every member at the start, yours marked, no lanes", () => {
-    const empty = { field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === 5 })), lanes: [] };
+    const empty = {
+      field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === 5 })),
+      lanes: [],
+    };
     expect(raceCardViewFrom(source({ race: null, desks: [], ranks: [] }))).toEqual(empty);
     expect(raceCardViewFrom(source({ desks: [], ranks: [] }))).toEqual(empty);
     expect(raceCardViewFrom(source({ members: [], you: null, race: null, desks: [] }))).toEqual({

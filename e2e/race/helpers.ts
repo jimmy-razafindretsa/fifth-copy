@@ -1,8 +1,20 @@
+import { randomUUID } from "node:crypto";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
+import { SignJWT } from "jose";
 import { Client } from "pg";
-import { io } from "socket.io-client";
-import { PROTOCOL_VERSION, type RaceSettings, type RaceSettingsPatch } from "@fifth-copy/protocol";
+import { io, type Socket } from "socket.io-client";
+import { charsOf, normalizeTypeable } from "@fifth-copy/engine";
+import {
+  MAX_KEYS_PER_BATCH,
+  PROTOCOL_VERSION,
+  RACE_TOKEN_TTL_S,
+  type Countdown,
+  type RaceSettings,
+  type RaceSettingsPatch,
+  type Welcome,
+} from "@fifth-copy/protocol";
 import { expect, test } from "../fixtures";
+import { scaled } from "../timeouts";
 
 // Room helpers shared by the lobby and race specs (#561 C10; first written for #107 in e2e/lobby.spec.ts).
 // They drive the real landing and the race server started by playwright.config.ts.
@@ -149,6 +161,11 @@ export async function recordRaceTokens(page: Page) {
   });
 }
 
+/** The race server playwright.config.ts starts (the card worktree's port). */
+const raceServerUrl = () =>
+  process.env.NEXT_PUBLIC_RACE_SERVER_URL ??
+  `http://localhost:${process.env.RACE_SERVER_PORT ?? 4000}`;
+
 /**
  * The host changes the room's settings before START (#220; no lobby form sends `host:settings` until
  * #110): a Node-side socket with the host's race token emits `host:settings` and waits for `{ ok: true }`.
@@ -165,10 +182,7 @@ export async function setHostSettings(host: Page, patch: RaceSettingsPatch): Pro
     })
     .toBe(true);
   const token = record.tokens.at(-1)!;
-  const url =
-    process.env.NEXT_PUBLIC_RACE_SERVER_URL ??
-    `http://localhost:${process.env.RACE_SERVER_PORT ?? 4000}`;
-  const socket = io(url, {
+  const socket = io(raceServerUrl(), {
     auth: { v: PROTOCOL_VERSION, token },
     transports: ["websocket"],
     reconnection: false,
@@ -188,4 +202,103 @@ export async function setHostSettings(host: Page, patch: RaceSettingsPatch): Pro
   } finally {
     socket.disconnect();
   }
+}
+
+/** A Node-side player of a room (#564): its desk, and its keys after GO. */
+export type SimulatedPlayer = {
+  readonly desk: number;
+  readonly name: string;
+  /** Keys this player sent so far (all correct: the next characters of the race text). */
+  readonly typed: number;
+  /**
+   * Sends the next `count` characters of the race text as `keys` batches (at most 64 keys each),
+   * stamped with the race time on the server clock. Resolves once sent, with this machine's clock
+   * (`Date.now()`) at the last emit.
+   */
+  type(count: number): Promise<number>;
+  close(): void;
+};
+
+/** An HS256 race token for a fresh player of `lobbyId`, signed like the web's mint (ADR 0009). */
+function playerToken(lobbyId: string, name: string): Promise<string> {
+  const secret = process.env.RACE_TOKEN_SECRET;
+  if (!secret) throw new Error("simulatedPlayers: RACE_TOKEN_SECRET is not set (load the .env)");
+  const iat = Math.floor(Date.now() / 1000);
+  return new SignJWT({
+    v: PROTOCOL_VERSION,
+    sub: `usr_sim_${randomUUID()}`,
+    name,
+    lobby: lobbyId,
+    role: "player",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt(iat)
+    .setExpirationTime(iat + RACE_TOKEN_TTL_S)
+    .sign(new TextEncoder().encode(secret));
+}
+
+/**
+ * `n` simulated players join the waiting room of `lobbyId` (#564; the technique of #165's 30-player
+ * proof, `services/race-server/src/testing/harness.ts`): each is a Node `socket.io-client` with its own
+ * race token, signed here with the local `RACE_TOKEN_SECRET` (the web app's mint stays the product
+ * path). Resolves once every one is seated (its `welcome`), in join order. Each keeps the clock offset
+ * of its welcome and the race of its `countdown`, so `type()` works after GO. `close()` every player
+ * in the test's cleanup.
+ */
+export async function simulatedPlayers(
+  n: number,
+  lobbyId: string,
+  { names }: { names?: readonly string[] } = {},
+): Promise<SimulatedPlayer[]> {
+  const players: SimulatedPlayer[] = [];
+  // one at a time: desks follow the join order
+  for (let i = 0; i < n; i++) {
+    const name = names?.[i] ?? `Sim-${String(i + 1).padStart(3, "0")}`;
+    const socket: Socket = io(raceServerUrl(), {
+      auth: { v: PROTOCOL_VERSION, token: await playerToken(lobbyId, name) },
+      transports: ["websocket"],
+      reconnection: false,
+      forceNew: true,
+    });
+    let offset = 0;
+    let race: Countdown["race"] | null = null;
+    socket.on("countdown", (payload: Countdown) => {
+      race = payload.race;
+    });
+    const welcome = await new Promise<Welcome>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${name}: no welcome`)), scaled(10_000));
+      socket.once("welcome", (w: Welcome) => {
+        clearTimeout(timer);
+        offset = w.serverNow - Date.now();
+        resolve(w);
+      });
+      socket.once("connect_error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+    let typed = 0;
+    players.push({
+      desk: welcome.you!,
+      name,
+      get typed() {
+        return typed;
+      },
+      async type(count) {
+        if (!race) throw new Error(`${name}: no race yet`);
+        const chars = charsOf(normalizeTypeable(race.text)).slice(typed, typed + count);
+        let at = Date.now();
+        for (let k = 0; k < chars.length; k += MAX_KEYS_PER_BATCH) {
+          at = Date.now();
+          const t = Math.max(0, Math.round(at + offset - race.t0));
+          const batch = chars.slice(k, k + MAX_KEYS_PER_BATCH).map((key) => ({ t, key }));
+          socket.emit("keys", { v: PROTOCOL_VERSION, batch });
+        }
+        typed += chars.length;
+        return at;
+      },
+      close: () => void socket.disconnect(),
+    });
+  }
+  return players;
 }

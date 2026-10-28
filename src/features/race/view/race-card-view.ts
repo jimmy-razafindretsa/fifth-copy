@@ -121,7 +121,10 @@ const memo = new WeakMap<object, Memo>();
 
 function viewFrom({ members, you, desks, ranks, race }: RaceCardSource): RaceCardView {
   if (!race || desks.length === 0) {
-    return { field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === you })), lanes: [] };
+    return {
+      field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === you })),
+      lanes: [],
+    };
   }
   const field = selectField(desks, charsOf(normalizeTypeable(race.text)).length, you);
   const names = new Map(members.map((m) => [m.desk, m.name]));

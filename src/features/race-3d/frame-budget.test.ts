@@ -27,7 +27,7 @@ function run(seconds: SceneTelemetry[]): FrameBudget[] {
   return out;
 }
 const verdicts = (seconds: SceneTelemetry[]) => run(seconds).map((s) => s.verdict);
-const repeat = (n: number, s: SceneTelemetry) => Array.from({ length: n }, () => s);
+const repeat = <T>(n: number, s: T): T[] => Array.from({ length: n }, () => s);
 
 describe("frameBudget (#695 C1)", () => {
   it("states the thresholds once: bible 12's Low floor and three strikes", () => {
@@ -36,7 +36,7 @@ describe("frameBudget (#695 C1)", () => {
     expect(FRAME_BUDGET_START).toEqual({ strikes: 0, verdict: "keep" });
   });
 
-  it.each([
+  const table: [string, SceneTelemetry[], FrameBudget["verdict"][]][] = [
     ["steady 60", repeat(10, second(60)), repeat(10, "keep")],
     ["steady 12", repeat(4, second(12)), ["keep", "keep", "fallback", "fallback"]],
     [
@@ -46,7 +46,8 @@ describe("frameBudget (#695 C1)", () => {
     ],
     ["capped 30 forever", repeat(20, second(30, true)), repeat(20, "keep")],
     ["12-capped-12", [second(12), second(12, true), second(12)], ["keep", "keep", "keep"]],
-  ])("%s", (_name, seconds, expected) => {
+  ];
+  it.each(table)("%s", (_name, seconds, expected) => {
     expect(verdicts(seconds)).toEqual(expected);
   });
 

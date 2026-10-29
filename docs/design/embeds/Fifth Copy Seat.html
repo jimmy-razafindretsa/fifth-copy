@@ -827,8 +827,8 @@ function applyView(view) {
 }
 function applyPreset(p) { PRESET = p; renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); Clerks.seat(DESKS, PRESETS[p].near); }
 
-// bible 12: `auto` renders 2 s at MEDIUM (0.5 s warm-up, then 1.5 s measured) and picks the preset;
-// below Low the page falls back to paper. A flat ~30 fps with idle frames is a browser cap, not the GPU.
+// bible 12: `auto` renders 2 s at MEDIUM (0.5 s warm-up, then 1.5 s measured on the wall clock, #695) and
+// picks the preset; below Low the page falls back to paper. A flat ~30 fps with idle frames is a browser cap, not the GPU.
 const bench = { on: false, t: 0, frames: 0, cpu: 0 };
 let READY = false, INIT = false, pendingReady = false;
 const ready = () => { if (READY || LOST) return; READY = true; send({ type: 'fc-scene-ready', preset: PRESET, fov: camera.fov, desks: PLACED }); };
@@ -870,7 +870,8 @@ let fr = 0, ft = 0;
 function loop(now) {
   if (LOST) return;
   requestAnimationFrame(loop);
-  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  // wall: the real frame time (benchmark and telemetry, #695); dt: clamped, for the animation only
+  const wall = Math.max(0, (now - last) / 1000), dt = Math.min(0.05, wall); last = now; t += dt;
   const c0 = performance.now();
   if (TURN) platG.rotation.y += dt * 0.06;
   // Major: slow breathing, head scans the ring and stops to stare; he stands still under reduced motion
@@ -889,9 +890,13 @@ function loop(now) {
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over') { orbitA += reduced() ? 0 : dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
-  if (bench.on) { bench.t += dt; if (bench.t > 0) { bench.frames++; bench.cpu += performance.now() - c0; } if (bench.t >= 1.5) benchDone(); }
+  // the measured window starts when the 0.5 s warm-up ends (a long first frame of shader compiles is warm-up)
+  if (bench.on) {
+    if (bench.t < 0) bench.t = Math.min(0, bench.t + wall);
+    else { bench.t += wall; bench.frames++; bench.cpu += performance.now() - c0; if (bench.t >= 1.5) benchDone(); }
+  }
   if (pendingReady) { pendingReady = false; ready(); }
-  fr++; ft += dt;
+  fr++; ft += wall;
   if (ft >= 1) { const i = renderer.info.render; send({ type: 'fc-scene-telemetry', fps: Math.round(fr / ft), calls: i.calls, triangles: i.triangles, preset: PRESET, capped: CAPPED }); fr = 0; ft = 0; }
 }
 requestAnimationFrame(loop);

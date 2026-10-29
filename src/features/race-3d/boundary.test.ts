@@ -36,7 +36,8 @@ describe("race-3d public face (#563 C1)", () => {
     expect(leaf).toMatch(/^"use client";/);
     expect(leaf).toContain('import dynamic from "next/dynamic";');
     expect(leaf).toMatch(
-      /dynamic\(\s*\(\)\s*=>\s*import\("@\/features\/race-3d"\)(\.then\(\(\w+\) => \w+\.RaceScene\))?\s*,\s*\{\s*ssr:\s*false,?\s*\}\s*\)/,
+      // the `.then` may also keep the chunk's frame-budget policy (#695 C2) before it returns RaceScene
+      /dynamic\(\s*\(\)\s*=>\s*import\("@\/features\/race-3d"\)(\.then\(\((\w+)\) => (\2\.RaceScene|\{[\s\S]*?return \2\.RaceScene;\s*\})\))?\s*,\s*\{\s*ssr:\s*false,?\s*\},?\s*\)/,
     );
     // no other mention of race-3d in the route: no static import, no second dynamic one
     const files = readdirSync(path.join(root, "src/app/race/[raceId]")).filter((f) =>

@@ -15,6 +15,9 @@ export const TRUSTED_PROXY_HOPS = 1;
 /** The subject of a request whose address is missing or not an IP literal. */
 export const UNKNOWN_IP_SUBJECT = "ip:unknown";
 
+/** Whether `subject` (from `requestSubject()`) is a guest from a valid guest cookie. */
+export const isGuestSubject = (subject: string): boolean => subject.startsWith("guest:");
+
 /** `value` as an IP literal (v4 or v6, lower case), else null. */
 function ipLiteral(value: string | null | undefined): string | null {
   const ip = value?.trim().toLowerCase();

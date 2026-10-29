@@ -24,4 +24,5 @@ export {
   rotationFromSeed,
 } from "./stamp";
 export { useEmbedBridge } from "./use-embed-bridge";
+export { hasWebGL2, type WebGLCanvas } from "./webgl";
 export { NEAR_VIEWPORT, useInViewport, useNearViewport } from "./use-near-viewport";

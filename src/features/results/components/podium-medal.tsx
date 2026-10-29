@@ -1,21 +1,10 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { EmbedFrame, Stamp, useEmbedBridge, useReducedMotion } from "@/components/ui";
+import { EmbedFrame, hasWebGL2, Stamp, useEmbedBridge, useReducedMotion } from "@/components/ui";
 import { medalEmbedSrc, medalVariantMessage, motionMessage } from "../embed-messages";
 import type { MedalVariant } from "../view/dawn-report";
 import styles from "./podium-medal.module.css";
-
-type Canvas = { getContext(id: "webgl2"): unknown };
-
-/** True when the browser can draw the medal (WebGL2, bible 9); any failure counts as no. */
-export function hasWebGL2(make: () => Canvas = () => document.createElement("canvas")): boolean {
-  try {
-    return !!make().getContext("webgl2");
-  } catch {
-    return false;
-  }
-}
 
 /** What the slot shows: the live embed, or the gold stamp (no WebGL, or a still specimen). */
 export function medalView({ still, webgl }: { still: boolean; webgl: boolean | null }) {

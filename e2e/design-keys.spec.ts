@@ -52,11 +52,12 @@ test.describe("/design/keys dead-key recorder (#566)", () => {
 
     await expect(recorder).toHaveAttribute("data-state", "recording");
     await expect(page.locator("[data-committed]")).toHaveText("aé");
-    const types = await page.locator("[data-log] tbody tr").evaluateAll((rows) =>
-      rows.map((r) => r.getAttribute("data-event")),
-    );
+    const types = await page
+      .locator("[data-log] tbody tr")
+      .evaluateAll((rows) => rows.map((r) => r.getAttribute("data-event")));
     expect(types.slice(0, 3)).toEqual(["keydown", "beforeinput", "input"]);
-    for (const t of ["compositionstart", "compositionupdate", "compositionend"]) expect(types).toContain(t);
+    for (const t of ["compositionstart", "compositionupdate", "compositionend"])
+      expect(types).toContain(t);
     const keydown = page.locator('[data-log] tr[data-event="keydown"]').first();
     await expect(keydown.locator('[data-field="key"]')).toHaveText('"a"');
     await expect(keydown.locator('[data-field="code"]')).toHaveText('"KeyA"');
@@ -65,9 +66,9 @@ test.describe("/design/keys dead-key recorder (#566)", () => {
     const beforeinput = page.locator('[data-log] tr[data-event="beforeinput"]').first();
     await expect(beforeinput.locator('[data-field="inputType"]')).toHaveText('"insertText"');
     await expect(beforeinput.locator('[data-field="data"]')).toHaveText('"a"');
-    await expect(page.locator('[data-log] tr[data-event="compositionend"] [data-field="data"]')).toHaveText(
-      '"é"',
-    );
+    await expect(
+      page.locator('[data-log] tr[data-event="compositionend"] [data-field="data"]'),
+    ).toHaveText('"é"');
     await expect(page.locator("[data-count]")).toHaveText(`${types.length} EVENTS`);
     await expectNoA11yViolations(page);
 

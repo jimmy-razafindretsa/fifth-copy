@@ -28,8 +28,22 @@ const specimen: KeyEventFixture = {
   layout: "csa",
   case: "circumflex-e",
   events: [
-    { type: "keydown", key: "Dead", code: "BracketLeft", isComposing: false, data: null, inputType: null },
-    { type: "compositionend", key: null, code: null, isComposing: null, data: "ê", inputType: null },
+    {
+      type: "keydown",
+      key: "Dead",
+      code: "BracketLeft",
+      isComposing: false,
+      data: null,
+      inputType: null,
+    },
+    {
+      type: "compositionend",
+      key: null,
+      code: null,
+      isComposing: null,
+      data: "ê",
+      inputType: null,
+    },
   ],
   expected: "ê",
 };
@@ -48,7 +62,8 @@ describe("keyEventFixtureSchema (#566 C2)", () => {
       { ...specimen, expected: "" },
       { ...specimen, events: [{ ...specimen.events[0], type: "keyup" }] },
     ];
-    for (const b of bad) expect(keyEventFixtureSchema.safeParse(b).success, JSON.stringify(b)).toBe(false);
+    for (const b of bad)
+      expect(keyEventFixtureSchema.safeParse(b).success, JSON.stringify(b)).toBe(false);
   });
 
   it("names the minimum set: 7 cases x 3 layouts x Windows and macOS, plus macOS US Option combos", () => {
@@ -75,14 +90,18 @@ describe("recordKeyEvent", () => {
   });
 
   it("guesses the machine from the user agent", () => {
-    expect(guessMachine("Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/120.0 Safari/537.36")).toEqual({
+    expect(
+      guessMachine("Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/120.0 Safari/537.36"),
+    ).toEqual({
       os: "chromeos",
       browser: "chrome",
     });
-    expect(guessMachine("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/17.0 Safari/605.1.15")).toEqual(
-      { os: "macos", browser: "safari" },
-    );
-    expect(guessMachine("Mozilla/5.0 (Windows NT 10.0) Chrome/120.0 Safari/537.36 Edg/120.0")).toEqual({
+    expect(
+      guessMachine("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/17.0 Safari/605.1.15"),
+    ).toEqual({ os: "macos", browser: "safari" });
+    expect(
+      guessMachine("Mozilla/5.0 (Windows NT 10.0) Chrome/120.0 Safari/537.36 Edg/120.0"),
+    ).toEqual({
       os: "windows",
       browser: "edge",
     });
@@ -90,12 +109,17 @@ describe("recordKeyEvent", () => {
 });
 
 describe("recorded fixtures (#566 C2, recorded in C3)", () => {
-  it.each(files.length ? files : ["(none yet)"])("%s parses and is named after its fields", (file) => {
-    if (!files.length) return;
-    const parsed = keyEventFixtureSchema.safeParse(JSON.parse(readFileSync(path.join(dir, file), "utf8")));
-    expect(parsed.error?.issues ?? [], file).toEqual([]);
-    expect(file).toBe(fixtureFileName(parsed.data!));
-  });
+  it.each(files.length ? files : ["(none yet)"])(
+    "%s parses and is named after its fields",
+    (file) => {
+      if (!files.length) return;
+      const parsed = keyEventFixtureSchema.safeParse(
+        JSON.parse(readFileSync(path.join(dir, file), "utf8")),
+      );
+      expect(parsed.error?.issues ?? [], file).toEqual([]);
+      expect(file).toBe(fixtureFileName(parsed.data!));
+    },
+  );
 
   it("holds the minimum set", () => {
     const missing = MINIMUM_FIXTURE_SET.filter((f) => !files.includes(f));

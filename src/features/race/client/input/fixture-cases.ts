@@ -122,7 +122,11 @@ export function fixtureJson(f: KeyEventFixture): string {
 
 /** A best guess of the recording machine from the user agent; the owner corrects it in the selects. */
 export function guessMachine(ua: string): { os: FixtureOs; browser: FixtureBrowser } {
-  const os: FixtureOs = /CrOS/.test(ua) ? "chromeos" : /Mac OS X|Macintosh/.test(ua) ? "macos" : "windows";
+  const os: FixtureOs = /CrOS/.test(ua)
+    ? "chromeos"
+    : /Mac OS X|Macintosh/.test(ua)
+      ? "macos"
+      : "windows";
   const browser: FixtureBrowser = /Edg\//.test(ua)
     ? "edge"
     : /Firefox\//.test(ua)

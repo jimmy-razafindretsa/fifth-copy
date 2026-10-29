@@ -137,7 +137,14 @@ export function KeyRecorder({ labels: l }: { labels: KeyRecorderLabels }) {
           <span className={s.mono}>{file}</span>
         </div>
         {select("os", l.os, os, FIXTURE_OSES, (v) => FIXTURE_OS_NAMES[v], setOs)}
-        {select("browser", l.browser, browser, FIXTURE_BROWSERS, (v) => FIXTURE_BROWSER_NAMES[v], setBrowser)}
+        {select(
+          "browser",
+          l.browser,
+          browser,
+          FIXTURE_BROWSERS,
+          (v) => FIXTURE_BROWSER_NAMES[v],
+          setBrowser,
+        )}
         {select("layout", l.layout, layout, FIXTURE_LAYOUTS, (v) => l.layouts[v], setLayout)}
         {select("case", l.case, kase, FIXTURE_CASE_IDS, (v) => l.cases[v], setCase)}
       </section>

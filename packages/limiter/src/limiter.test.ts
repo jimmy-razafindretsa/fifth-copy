@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createLimiter, type Limiter } from "./index";
+import { createLimiter, type WindowLimiter } from "./index";
 
 // #207 C1: the limiter against real Redis (the worktree's REDIS_URL). Fails, never skips, without it.
 // Every test uses keys of its own under a fresh prefix, deleted at the end (shared db index).
 
 let redis: Redis;
-let limiter: Limiter;
+let limiter: WindowLimiter;
 const prefix = `t207:${randomUUID()}`;
 const T0 = 1_800_000_000_000;
 

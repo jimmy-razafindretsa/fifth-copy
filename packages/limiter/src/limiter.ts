@@ -21,6 +21,15 @@ export type Limiter = {
   limit(key: string, rule: LimitRule, now?: number): Promise<LimitResult>;
 };
 
+/** What `createLimiter` returns: `limit`, plus a read-only count (#699). */
+export type WindowLimiter = Limiter & {
+  /**
+   * The calls of `key` counted in the `windowMs` span ending at `now`, as `limit` would count them,
+   * without counting one and without writing anything. Rejects when Redis fails.
+   */
+  count(key: string, windowMs: number, now?: number): Promise<number>;
+};
+
 /**
  * KEYS[1] = `${prefix}:rl:${key}` (sorted set: one member per allowed call, scored by its time).
  * ARGV = now, windowMs, max, member. Atomic: concurrent calls on one key never over-allow.
@@ -49,14 +58,34 @@ redis.call('PEXPIRE', key, window)
 return { allowed, max - count, retry }
 `;
 
+/**
+ * KEYS[1] as above; ARGV = now, windowMs. Read-only: the calls scored after `now - windowMs` (the
+ * ones `SLIDING_WINDOW_LUA` keeps). A missing key counts 0.
+ */
+export const WINDOW_COUNT_LUA = `
+return redis.call('ZCOUNT', KEYS[1], '(' .. (tonumber(ARGV[1]) - tonumber(ARGV[2])), '+inf')
+`;
+
 const isPositiveInt = (n: number) => Number.isSafeInteger(n) && n > 0;
 
-export function createLimiter(redis: EvalClient, opts: { prefix: string }): Limiter {
+export function createLimiter(redis: EvalClient, opts: { prefix: string }): WindowLimiter {
   if (!opts.prefix) throw new RangeError("limiter prefix must not be empty");
   // Members must be unique per call: two calls in the same millisecond are two calls.
   let seq = 0;
   const tag = Math.random().toString(36).slice(2, 10);
   return {
+    async count(key, windowMs, now = Date.now()) {
+      if (!key) throw new RangeError("limiter key must not be empty");
+      if (!isPositiveInt(windowMs)) throw new RangeError("limiter windowMs must be an integer >= 1");
+      const reply = await redis.eval(
+        WINDOW_COUNT_LUA,
+        1,
+        `${opts.prefix}:rl:${key}`,
+        Math.floor(now),
+        windowMs,
+      );
+      return Number(reply);
+    },
     async limit(key, rule, now = Date.now()) {
       if (!key) throw new RangeError("limiter key must not be empty");
       if (!isPositiveInt(rule.max) || !isPositiveInt(rule.windowMs)) {

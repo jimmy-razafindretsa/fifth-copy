@@ -12,7 +12,6 @@ const prefix = `t207:${randomUUID()}`;
 const T0 = 1_800_000_000_000;
 
 beforeAll(async () => {
-  // eslint-disable-next-line no-restricted-properties
   const url = process.env.REDIS_URL;
   if (!url) throw new Error("REDIS_URL is not set: load the worktree .env (set -a; . ./.env)");
   redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });

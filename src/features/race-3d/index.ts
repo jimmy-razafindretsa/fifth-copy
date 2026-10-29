@@ -15,3 +15,10 @@ export {
   type ScenePresetChoice,
   type SceneTelemetry,
 } from "./messages";
+export {
+  FRAME_BUDGET_START,
+  frameBudget,
+  SCENE_BUDGET_STRIKES,
+  SCENE_MIN_FPS,
+  type FrameBudget,
+} from "./frame-budget";

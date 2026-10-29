@@ -299,6 +299,21 @@
       "supersededBy": [],
       "rule": "An App Router route's first-load JS without the 3D chunk stays at or under 300 kB gzip (BUDGET_KB in scripts/bundle-budget.ts, one limit for every route); this replaces only ADR 0013's 250 kB figure, whose other budgets (three only in the race-3d chunk, fps, draw calls, time to race) stay as written.",
       "file": "docs/adr/0018-first-load-js-budget-300-kb.md"
+    },
+    {
+      "id": "0020",
+      "title": "One shared Redis sliding-window rate limiter package for the web app and the race server",
+      "status": "accepted",
+      "category": "security",
+      "scope": [
+        "packages/limiter/**",
+        "src/server/limiter/**",
+        "services/race-server/src/socket/rate-limit.ts"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Rate limits go through `@fifth-copy/limiter` (one Lua sliding window, keys `${prefix}:rl:${key}` with a TTL <= the window, prefixes `web` and `race`); the package imports nothing (the Redis client is injected); the web app reaches it only through `src/server/limiter` (`limit(action, subject)`, fails open) and the race server only through `socket/rate-limit.ts` (per-identity buckets before any handler, a socket cap per identity, fails closed); each process keeps its own `LIMITS` table.",
+      "file": "docs/adr/0020-shared-rate-limiter.md"
     }
   ]
 }

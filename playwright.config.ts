@@ -64,6 +64,10 @@ export default defineConfig({
         {
           command: process.env.CI ? `npm run start -- -p ${PORT}` : `npm run dev -- -p ${PORT}`,
           url: `${baseURL}/api/health`,
+          // The web rate limiter (#207, ADR 0020) is off here: every browser context of the suite is
+          // one client IP, so cookie-less joins and mints would share one bucket across tests. Its
+          // behaviour is covered by src/server/limiter and src/features/lobby/actions tests.
+          env: { REDIS_URL: "" },
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
         },

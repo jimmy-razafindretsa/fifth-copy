@@ -21,7 +21,8 @@ export function makeJoinAction(navigate: (href: string) => void) {
     if (!code) return { error: "invalid-format" };
     try {
       const result = await joinByCode({ code });
-      if (!result.ok) return { error: result.error };
+      // A throttled join (#207) shows the generic line until #120 gives it its own state.
+      if (!result.ok) return { error: result.error === "rate-limited" ? "generic" : result.error };
       navigate(`/lobby/${result.code}`);
       return { error: null };
     } catch {

@@ -11,7 +11,8 @@ import { bindRaceSocket, type RaceEvent } from "./store";
 export type MintRaceToken = (input: {
   code: string;
 }) => Promise<
-  { ok: true; token: string; url: string } | { ok: false; error: "not-found" | "closed" }
+  | { ok: true; token: string; url: string }
+  | { ok: false; error: "not-found" | "closed" | "rate-limited" }
 >;
 
 export type ConnectSeatOptions = {
@@ -51,7 +52,11 @@ export function connectSeat({
   Promise.all([mint({ code }), load()]).then(
     ([result, socketModule]) => {
       if (aborted) return;
-      if (!result.ok) return dispatch({ type: "token-error", error: result.error });
+      if (!result.ok) {
+        // A throttled mint (#207) is the generic error, as a failed load is.
+        const error = result.error === "rate-limited" ? "generic" : result.error;
+        return dispatch({ type: "token-error", error });
+      }
       socket = socketModule.connectToRoom(result.url, result.token, {
         resumeKey: () => readResumeKey(lobbyId) ?? issued,
       });

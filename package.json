@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "typecheck:workspaces": "tsc --noEmit -p packages/engine && tsc --noEmit -p packages/protocol && tsc --noEmit -p services/race-server",
+    "typecheck:workspaces": "tsc --noEmit -p packages/engine && tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/limiter && tsc --noEmit -p services/race-server",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "boundaries": "depcruise src packages services --config .dependency-cruiser.cjs --output-type err",
@@ -31,6 +31,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "ioredis": "^5.11.1",
     "jose": "^6.2.12",
     "next": "16.3.8",
     "pg": "^8.23.1",

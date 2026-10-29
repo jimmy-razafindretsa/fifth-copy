@@ -195,7 +195,8 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 │   └── proxy.ts                   locale cookie default, optimistic redirects only
 ├── packages/
 │   ├── engine/                    @fifth-copy/engine (ADR 0007)
-│   └── protocol/                  @fifth-copy/protocol (ADR 0006)
+│   ├── protocol/                  @fifth-copy/protocol (ADR 0006)
+│   └── limiter/                   @fifth-copy/limiter: Redis sliding-window rate limiter, web + race server (ADR 0020)
 ├── services/
 │   └── race-server/               @fifth-copy/race-server (ADR 0006, 0008): main, env, http/, socket/, rooms/, players/, bots/, redis/, persist/
 ├── prisma/schema/                 identity, lobby, race, texts, stats, jobs (.prisma, one per feature)
@@ -208,7 +209,7 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 Boundary rules (all enforced by `scripts/check.sh`: dependency-cruiser over `src packages services`, ESLint):
 - `app -> features -> server/lib`; a feature imports another only through its `index.ts`; `components/ui` imports no features or server code.
 - Prisma client only in `src/server/**`, `src/features/*/{queries,actions,jobs}/**` and `src/worker/**`.
-- `packages/engine` imports nothing outside itself. `packages/protocol` imports only zod and the engine.
+- `packages/engine` imports nothing outside itself. `packages/protocol` imports only zod and the engine. `packages/limiter` imports nothing outside itself; only `src/server/limiter` and `services/race-server` use it (ADR 0020).
 - `services/race-server` never imports `src/`, Next, React or Prisma. `src/` never imports `services/`. Workspace packages are imported by name (`@fifth-copy/engine`), never by path.
 - `process.env` only in `src/env.ts` and `services/race-server/src/env.ts`.
 
@@ -382,7 +383,7 @@ Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis
 | Name | Process | Purpose |
 |---|---|---|
 | `DATABASE_URL`, `TEST_DATABASE_URL` | web, worker | Postgres (ADR 0002, 0003) |
-| `REDIS_URL` | race-server | live state |
+| `REDIS_URL` | race-server, web | live state; web: shared rate limiter, optional, fails open (ADR 0020) |
 | `RACE_SERVER_PORT` | race-server | listen port |
 | `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (same host in production, through Caddy) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |

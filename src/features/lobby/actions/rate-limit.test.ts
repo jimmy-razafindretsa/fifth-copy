@@ -1,12 +1,12 @@
 import "dotenv/config";
 import { randomInt, randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPrismaClient } from "@/server/db-client";
 
 // #207 C3: the lobby actions behind the web limiter, over the test database and real Redis.
-// ADR 0003: DB-backed tests target the test database. Each run uses its own IP subject and lobby.
+// ADR 0003: DB-backed tests target the test database. Each run uses its own IP subjects, whose
+// limiter keys expire on their own within the 60 s window (no Redis client here: ADR 0020).
 
 // eslint-disable-next-line no-restricted-properties
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -70,19 +70,14 @@ describe.skipIf(!testDatabaseUrl)(
   { timeout: 30_000 },
   () => {
     let db: ReturnType<typeof createPrismaClient>;
-    let redis: Redis;
-    const ips: string[] = [];
     const ip = () => {
       const value = freshIp();
-      ips.push(value);
       state.headers = new Headers({ "x-forwarded-for": value });
       return value;
     };
 
     beforeAll(async () => {
       if (!redisUrl) throw new Error("REDIS_URL is not set: load the worktree .env");
-      redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
-      await redis.connect();
       db = createPrismaClient(testDatabaseUrl!);
       await db.$connect();
       await db.lobby.deleteMany({ where: { code: CODE } });
@@ -96,11 +91,6 @@ describe.skipIf(!testDatabaseUrl)(
     });
     afterEach(() => void vi.restoreAllMocks());
     afterAll(async () => {
-      for (const value of ips) {
-        const keys = await redis.keys(`web:rl:*:ip:${value}`);
-        if (keys.length) await redis.del(...keys);
-      }
-      redis.disconnect();
       if (state.issued.length) await db.user.deleteMany({ where: { id: { in: state.issued } } });
       await db.user.deleteMany({ where: { typistName: { startsWith: PREFIX } } }); // cascades
       await db.$disconnect();

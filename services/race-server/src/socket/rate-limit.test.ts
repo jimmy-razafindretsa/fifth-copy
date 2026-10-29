@@ -25,7 +25,7 @@ const TEXT = "abcdefghijklmnopqrstuvwxyzabcdefghij"; // 36 characters: room for 
 const settle = () => new Promise((r) => setTimeout(r, 200));
 
 /** Log lines the server printed (JSON on console.log) with this `msg`. */
-function logLines(spy: ReturnType<typeof vi.spyOn>, msg: string) {
+function logLines(spy: { mock: { calls: unknown[][] } }, msg: string) {
   return spy.mock.calls
     .map(([line]) => {
       try {

@@ -26,6 +26,9 @@ ADR 0008 lists rate limits as a Redis key family "shared by race server and web"
 - The web app gains `ioredis` and `REDIS_URL` (ARCHITECTURE 11.2); a Redis outage silently lifts web limits (logged), while it stops race-server traffic, which needs Redis anyway.
 - Cookie-less clients behind one NAT share an IP bucket, and cookie-less requests without a readable client IP share the `ip:unknown` bucket. The e2e web server runs with the limiter off for the same reason (one IP for the whole suite).
 
+## Amendments
+- 2026-10-29, #699: a class shares one public address, so the lobby code actions count per (subject, room code) instead of per subject. `join-by-code` is 120 per 60 s per (subject, code); `mint-race-token` stays 10 per 60 s per guest, and a mint without a guest cookie counts against `mint-race-token-new-guest`, 120 per 60 s per (IP subject, code). Both also spend the subject's `lobby-codes` budget, 20 distinct codes per 60 s, once per code new to the subject in the window (an unparsable input spends one each time; a code refused by the budget is not admitted, so retrying it is refused again); the admission marker is `lobby-code-admitted:<subject:code>` (max 1, same window). The web reaches this through `limitCode(action, subject, code)` next to `limit(action, subject)` in `src/server/limiter`, still fails open, and every key keeps its window TTL and the `subjectKey` normalisation. The package gains a read-only `count(key, windowMs, now)` (`ZCOUNT` over the window) so the admission can be read without counting a call. The rest of this ADR is unchanged.
+
 ## Alternatives considered
 - Two thin adapters over a documented Lua script, the web on Postgres advisory counters: no new dependency, but two implementations of one rule and Postgres load per request (the card's fallback, declined by the owner).
 - In-process token buckets: no Redis, but per-process counts (the web may run several instances) and no shared key family, against ADR 0008.

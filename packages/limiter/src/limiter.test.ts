@@ -130,6 +130,24 @@ describe("createLimiter (C1, real Redis)", () => {
     expect(() => createLimiter(redis, { prefix: "" })).toThrow(RangeError);
   });
 
+  it("count reads the calls counted in the window without counting one (#699)", async () => {
+    const rule = { max: 2, windowMs: 1_000 };
+    expect(await limiter.count("peek", rule.windowMs, T0)).toBe(0);
+    // Reading a key that holds nothing creates nothing.
+    expect(await redis.exists(`${prefix}:rl:peek`)).toBe(0);
+    await limiter.limit("peek", rule, T0);
+    expect(await limiter.count("peek", rule.windowMs, T0 + 10)).toBe(1);
+    expect(await limiter.count("peek", rule.windowMs, T0 + 20)).toBe(1);
+    await limiter.limit("peek", rule, T0 + 500);
+    await limiter.limit("peek", rule, T0 + 600); // refused: not counted
+    expect(await limiter.count("peek", rule.windowMs, T0 + 700)).toBe(2);
+    // T0 leaves the window at T0 + 1000, exactly as `limit` drops it.
+    expect(await limiter.count("peek", rule.windowMs, T0 + 1_000)).toBe(1);
+    expect((await limiter.limit("peek", rule, T0 + 1_000)).ok).toBe(true);
+    await expect(limiter.count("", 1_000, T0)).rejects.toThrow(RangeError);
+    await expect(limiter.count("peek", 0, T0)).rejects.toThrow(RangeError);
+  });
+
   it("surfaces a Redis failure to the caller (each process picks its own policy)", async () => {
     const broken = createLimiter(
       { eval: () => Promise.reject(new Error("connection refused")) },

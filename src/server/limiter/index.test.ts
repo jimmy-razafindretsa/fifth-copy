@@ -58,19 +58,19 @@ describe("createWebLimit (C3, real Redis)", () => {
     return l;
   };
 
-  it("join-by-code: 20 per 60 s per subject, the 21st refused; another subject unaffected", async () => {
+  it("lobby-codes: 20 per 60 s per subject, the 21st refused; another subject unaffected", async () => {
     const limit = make({ url: redisUrl, nodeEnv: "test" });
-    for (let i = 0; i < LIMITS["join-by-code"].max; i++) {
-      expect((await limit("join-by-code", subject("a"))).ok).toBe(true);
+    for (let i = 0; i < LIMITS["lobby-codes"].max; i++) {
+      expect((await limit("lobby-codes", subject("a"))).ok).toBe(true);
     }
-    const refused = await limit("join-by-code", subject("a"));
+    const refused = await limit("lobby-codes", subject("a"));
     expect(refused.ok).toBe(false);
     expect(refused.retryAfterMs).toBeGreaterThan(0);
     expect(refused.retryAfterMs).toBeLessThanOrEqual(60_000);
-    expect((await limit("join-by-code", subject("b"))).ok).toBe(true);
+    expect((await limit("lobby-codes", subject("b"))).ok).toBe(true);
     // Actions are separate buckets of one subject.
     expect((await limit("mint-race-token", subject("a"))).ok).toBe(true);
-    const ttl = await redis.pttl(`${WEB_LIMITER_PREFIX}:rl:join-by-code:${subject("a")}`);
+    const ttl = await redis.pttl(`${WEB_LIMITER_PREFIX}:rl:lobby-codes:${subject("a")}`);
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(60_000);
   });
@@ -82,16 +82,20 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(verdicts).toEqual([...Array<boolean>(10).fill(true), false]);
   });
 
-  it("defines the rules #90, #120 and #121 will wire", () => {
+  it("defines the lobby rules (#699) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
       "invite",
       "join-by-code",
+      "lobby-codes",
       "mint-race-token",
+      "mint-race-token-new-guest",
       "recovery",
       "sign-in",
     ]);
-    expect(LIMITS["join-by-code"]).toEqual({ max: 20, windowMs: 60_000 });
+    expect(LIMITS["join-by-code"]).toEqual({ max: 120, windowMs: 60_000 });
     expect(LIMITS["mint-race-token"]).toEqual({ max: 10, windowMs: 60_000 });
+    expect(LIMITS["mint-race-token-new-guest"]).toEqual({ max: 120, windowMs: 60_000 });
+    expect(LIMITS["lobby-codes"]).toEqual({ max: 20, windowMs: 60_000 });
   });
 
   it("fails open on a closed port with one warning, never the URL", async () => {
@@ -190,5 +194,79 @@ describe("subjectKey", () => {
       expect(subjectKey(subject)).toMatch(/^h:[0-9a-f]{64}$/);
     }
     expect(subjectKey(long)).not.toBe(subjectKey(`${long}b`));
+  });
+});
+
+describe("createWebLimit.code: room-code attempts (#699, real Redis)", () => {
+  const limits: { close(): void }[] = [];
+  afterEach(() => limits.splice(0).forEach((l) => l.close()));
+  const make = (opts: Parameters<typeof createWebLimit>[0]) => {
+    const l = createWebLimit(opts);
+    limits.push(l);
+    return l;
+  };
+  const codeBudget = (s: string) => redis.zcard(`${WEB_LIMITER_PREFIX}:rl:lobby-codes:${s}`);
+  const otherCode = (i: number) => `ZQX-${String(i).padStart(4, "0")}`;
+
+  it("one (subject, code) pair gets 120 calls per 60 s and charges the code budget once", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const s = subject("class");
+    for (let i = 0; i < 120; i++) {
+      expect((await limit.code("join-by-code", s, "KGB-4821")).ok).toBe(true);
+    }
+    const refused = await limit.code("join-by-code", s, "KGB-4821");
+    expect(refused.ok).toBe(false);
+    expect(refused.retryAfterMs).toBeGreaterThan(0);
+    expect(await codeBudget(s)).toBe(1);
+    // The other action keeps its own pair bucket and finds the code already admitted.
+    expect((await limit.code("mint-race-token-new-guest", s, "KGB-4821")).ok).toBe(true);
+    expect(await codeBudget(s)).toBe(1);
+    for (const key of await redis.keys(`${WEB_LIMITER_PREFIX}:rl:*:${s}*`)) {
+      const ttl = await redis.pttl(key);
+      expect(ttl).toBeGreaterThan(0);
+      expect(ttl).toBeLessThanOrEqual(60_000);
+    }
+  });
+
+  it("a subject trying many codes is refused once 20 distinct codes are counted", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const s = subject("cycle");
+    for (let i = 0; i < 20; i++) {
+      expect((await limit.code("join-by-code", s, otherCode(i))).ok).toBe(true);
+    }
+    expect((await limit.code("join-by-code", s, otherCode(20))).ok).toBe(false);
+    // A refused code stays refused on retry, by either action.
+    expect((await limit.code("join-by-code", s, otherCode(20))).ok).toBe(false);
+    expect((await limit.code("mint-race-token-new-guest", s, otherCode(20))).ok).toBe(false);
+    expect((await limit.code("mint-race-token-new-guest", s, otherCode(21))).ok).toBe(false);
+    // A code admitted earlier in the window still passes.
+    expect((await limit.code("join-by-code", s, otherCode(3))).ok).toBe(true);
+    // Another subject is unaffected.
+    expect((await limit.code("join-by-code", subject("cycle-2"), otherCode(20))).ok).toBe(true);
+  });
+
+  it("an unparsable code (null) counts against the code budget on every call", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const s = subject("garbage");
+    for (let i = 0; i < 20; i++) expect((await limit.code("join-by-code", s, null)).ok).toBe(true);
+    expect((await limit.code("join-by-code", s, null)).ok).toBe(false);
+    expect((await limit.code("join-by-code", s, otherCode(1))).ok).toBe(false);
+  });
+
+  it("fails open on a closed port with one warning", async () => {
+    const warn = vi.fn();
+    const limit = make({ url: `redis://127.0.0.1:${await closedPort()}/0`, nodeEnv: "test", warn });
+    for (let i = 0; i < 3; i++) {
+      expect((await limit.code("join-by-code", subject("down"), otherCode(i))).ok).toBe(true);
+      expect((await limit.code("join-by-code", subject("down"), null)).ok).toBe(true);
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("without a URL every call is allowed", async () => {
+    const limit = make({ url: undefined, nodeEnv: "test" });
+    for (let i = 0; i < 30; i++) {
+      expect((await limit.code("join-by-code", subject("off"), otherCode(i))).ok).toBe(true);
+    }
   });
 });

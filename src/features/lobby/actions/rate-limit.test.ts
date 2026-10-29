@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPrismaClient } from "@/server/db-client";
 
-// #207 C3: the lobby actions behind the web limiter, over the test database and real Redis.
+// #207 C3, #699 C1-C2: the lobby actions behind the web limiter, over the test database and real Redis.
 // ADR 0003: DB-backed tests target the test database. Each run uses its own IP subjects, whose
 // limiter keys expire on their own within the 60 s window (no Redis client here: ADR 0020).
 
@@ -53,7 +53,6 @@ const PREFIX = `test-rl-${randomUUID().slice(0, 8)}-`;
 // A code no other test file uses (they run in parallel on the same database).
 const CODE = "RLT-7207";
 
-/** A fresh client IP per call site, so reruns within 60 s never share a bucket. */
 /** A fresh IPv6 literal from the documentation range: one bucket per call. */
 const freshIp = () => {
   const hex = randomUUID().replaceAll("-", "");
@@ -99,31 +98,72 @@ describe.skipIf(!testDatabaseUrl)(
       await db.$disconnect();
     });
 
-    it("the 21st joinByCode from one subject within 60 s is rate-limited and inserts nothing", async () => {
+    /** A well-formed code no lobby uses. */
+    const otherCode = (i: number) => `ZQX-${String(i).padStart(4, "0")}`;
+
+    it("C1: 100 cookie-less joinByCode from one IP for one open lobby within 60 s all succeed", async () => {
       ip();
-      for (let i = 0; i < 20; i++) {
+      const start = Date.now();
+      for (let i = 0; i < 100; i++) {
         await expect(joinByCode({ code: CODE })).resolves.toEqual({ ok: true, code: CODE });
+      }
+      expect(Date.now() - start).toBeLessThan(60_000);
+      expect(state.jar.size).toBe(0);
+    });
+
+    it("C1: one subject cycling through codes is refused once it has tried 20 distinct codes", async () => {
+      ip();
+      await expect(joinByCode({ code: CODE })).resolves.toEqual({ ok: true, code: CODE });
+      for (let i = 1; i < 20; i++) {
+        await expect(joinByCode({ code: otherCode(i) })).resolves.toEqual({
+          ok: false,
+          error: "not-found",
+        });
       }
       const users = await db.user.count();
       const lobbies = await db.lobby.count();
-      await expect(joinByCode({ code: CODE })).resolves.toEqual({
+      await expect(joinByCode({ code: otherCode(20) })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
       });
-      // Wrong codes are attempts too: guessing does not get around the bucket.
-      await expect(joinByCode({ code: "ZZZ-0000" })).resolves.toEqual({
+      // Retrying a refused code, or asking the token action, does not get around the budget.
+      await expect(joinByCode({ code: otherCode(20) })).resolves.toEqual({
+        ok: false,
+        error: "rate-limited",
+      });
+      await expect(mintRaceToken({ code: otherCode(21) })).resolves.toEqual({
+        ok: false,
+        error: "rate-limited",
+      });
+      // Unparsable input counts too.
+      await expect(joinByCode({ code: "nope" })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
       });
       expect(await db.user.count()).toBe(users);
       expect(await db.lobby.count()).toBe(lobbies);
       expect(state.jar.size).toBe(0);
-      // Another client is not throttled.
-      ip();
+      // The code this subject already found still works; another client is not throttled.
       await expect(joinByCode({ code: CODE })).resolves.toEqual({ ok: true, code: CODE });
+      ip();
+      await expect(joinByCode({ code: otherCode(20) })).resolves.toEqual({
+        ok: false,
+        error: "not-found",
+      });
     });
 
-    it("the 11th mintRaceToken from one subject within 60 s is rate-limited and inserts nothing", async () => {
+    it("C2: 100 first-time mintRaceToken (no guest cookie) from one IP within 60 s all succeed", async () => {
+      ip();
+      const start = Date.now();
+      for (let i = 0; i < 100; i++) {
+        state.jar.clear(); // a new student: no guest cookie yet
+        const result = await mintRaceToken({ code: CODE });
+        expect(result.ok).toBe(true);
+      }
+      expect(Date.now() - start).toBeLessThan(60_000);
+    });
+
+    it("C2: repeated mints by one guest are still limited: the 11th within 60 s is refused", async () => {
       ip();
       // The subject is the guest from its cookie: one browser, one bucket.
       await ensureGuest();
@@ -137,15 +177,19 @@ describe.skipIf(!testDatabaseUrl)(
         error: "rate-limited",
       });
       expect(await db.user.count()).toBe(users);
-      // A cookie-less client of a fresh IP is refused before any guest is created once its IP
-      // bucket is spent.
-      state.jar.clear();
+    });
+
+    it("C2: a cookie-less client cycling codes is refused before any guest is created", async () => {
       ip();
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 20; i++) {
         state.jar.clear();
-        await mintRaceToken({ code: "ZZZ-0000" }); // not-found: no guest
+        await expect(mintRaceToken({ code: otherCode(i) })).resolves.toEqual({
+          ok: false,
+          error: "not-found",
+        });
       }
       const before = await db.user.count();
+      // A 21st distinct code is refused before the lookup, even one of an open lobby.
       await expect(mintRaceToken({ code: CODE })).resolves.toEqual({
         ok: false,
         error: "rate-limited",

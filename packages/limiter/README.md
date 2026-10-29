@@ -5,7 +5,7 @@ Governing ADR: `docs/adr/0020-shared-rate-limiter.md` (with 0005 and 0008). Arch
 One Redis-backed sliding-window rate limiter, shared by the web app (`src/server/limiter`) and the race server (`services/race-server/src/socket/rate-limit.ts`). Single responsibility: count calls per key per window.
 
 ## API
-`createLimiter(redis, { prefix })` -> `{ limit(key, { max, windowMs }, now = Date.now()) }` -> `{ ok, remaining, retryAfterMs }`.
+`createLimiter(redis, { prefix })` -> `{ limit(key, { max, windowMs }, now = Date.now()) }` -> `{ ok, remaining, retryAfterMs }`, and `count(key, windowMs, now)` -> the calls `limit` would count in that window, read-only (`WINDOW_COUNT_LUA`, `ZCOUNT`; #699: the web app checks whether a room code was already admitted without counting a call).
 - `redis` is any client with `eval(script, numKeys, ...args)`; both processes pass ioredis. The package never imports a Redis client.
 - One Lua script (`SLIDING_WINDOW_LUA`), atomic: sorted set per key, `ZREMRANGEBYSCORE` drops calls older than the window, `ZCARD` counts, `ZADD` records an allowed call (a refused call is not recorded), `PEXPIRE windowMs`.
 - Key: `${prefix}:rl:${key}`. Every key carries a TTL <= `windowMs`.

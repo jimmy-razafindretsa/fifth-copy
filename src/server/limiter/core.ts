@@ -6,15 +6,31 @@ import { createLimiter, type LimitRule } from "@fifth-copy/limiter";
 // The web app's side of the shared limiter (ADR 0020): one table of actions, one lazy Redis client,
 // fail open. Pure of `env`: `index.ts` wires it to `env.REDIS_URL`; tests build their own.
 
-export type LimitAction = "join-by-code" | "mint-race-token" | "sign-in" | "recovery" | "invite";
+export type LimitAction =
+  | "join-by-code"
+  | "mint-race-token"
+  | "mint-race-token-new-guest"
+  | "lobby-codes"
+  | "sign-in"
+  | "recovery"
+  | "invite";
+
+/** Actions counted per (subject, room code) by `limit.code` (#699). */
+export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
 
 /**
- * One rule per web action, counted per subject (`requestSubject()`: guest or IP). `sign-in`,
- * `recovery` and `invite` are defined for #90, #120 and #121, which wire them.
+ * One rule per web action, counted per subject (`requestSubject()`: guest or IP). The room-code
+ * actions (#699, ADR 0020 amendment) let a class behind one address share one code:
+ * `join-by-code` and `mint-race-token-new-guest` (a mint without a guest cookie) count per
+ * (subject, code), sized above a class of 100; `lobby-codes` counts the distinct codes a subject
+ * tries, so guessing stays slow; `mint-race-token` counts per guest. `sign-in`, `recovery` and
+ * `invite` are defined for #90, #120 and #121, which wire them.
  */
 export const LIMITS = {
-  "join-by-code": { max: 20, windowMs: 60_000 },
+  "join-by-code": { max: 120, windowMs: 60_000 },
   "mint-race-token": { max: 10, windowMs: 60_000 },
+  "mint-race-token-new-guest": { max: 120, windowMs: 60_000 },
+  "lobby-codes": { max: 20, windowMs: 60_000 },
   "sign-in": { max: 10, windowMs: 10 * 60_000 },
   recovery: { max: 5, windowMs: 60 * 60_000 },
   invite: { max: 20, windowMs: 60_000 },
@@ -36,8 +52,19 @@ export function subjectKey(subject: string): string {
   return `h:${createHash("sha256").update(subject).digest("hex")}`;
 }
 
+/** Marker key of a (subject, code) pair the `lobby-codes` budget admitted in the window. */
+const CODE_ADMITTED = "lobby-code-admitted";
+
 export type LimitVerdict = { ok: boolean; retryAfterMs: number };
-export type WebLimit = (action: LimitAction, subject: string) => Promise<LimitVerdict>;
+export type WebLimit = ((action: LimitAction, subject: string) => Promise<LimitVerdict>) & {
+  /**
+   * One attempt of `subject` at room code `code` (`null`: unparsable) for `action`. A code new to
+   * the subject in the window spends one `lobby-codes` call first (a refused one is not admitted,
+   * so retrying it is refused again); `null` spends one on every call. Then the call counts
+   * against `action` per (subject, code). Fails open like `limit`.
+   */
+  code(action: CodeAction, subject: string, code: string | null): Promise<LimitVerdict>;
+};
 type Warn = (msg: string, fields: Record<string, unknown>) => void;
 
 const ALLOW: LimitVerdict = { ok: true, retryAfterMs: 0 };
@@ -71,7 +98,7 @@ export function createWebLimit({
       }
       return ALLOW;
     };
-    return Object.assign(disabled, { close: () => {} });
+    return Object.assign(disabled, { code: disabled, close: () => {} });
   }
 
   let redis: Redis | undefined;
@@ -98,25 +125,64 @@ export function createWebLimit({
     return limiter;
   };
 
-  const limit = async (action: LimitAction, subject: string): Promise<LimitVerdict> => {
-    const key = `${action}:${subjectKey(subject)}`;
+  /** Runs one Redis call with the timeout; `undefined` when it failed open. */
+  const guarded = async <T>(call: () => Promise<T>): Promise<T | undefined> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<"timeout">((resolve) => {
       timer = setTimeout(() => resolve("timeout"), timeoutMs);
     });
-    const call = client().limit(key, LIMITS[action]);
-    // A call that loses the race must not surface as an unhandled rejection later.
-    call.catch(() => undefined);
+    let pending: Promise<T>;
     try {
-      const verdict = await Promise.race([call, timeout]);
-      if (verdict === "timeout") return failOpen("timeout");
-      down = false;
-      return { ok: verdict.ok, retryAfterMs: verdict.retryAfterMs };
+      pending = call();
     } catch (err) {
-      return failOpen((err as NodeJS.ErrnoException).code ?? "error");
+      failOpen((err as NodeJS.ErrnoException).code ?? "error");
+      return undefined;
+    }
+    // A call that loses the race must not surface as an unhandled rejection later.
+    pending.catch(() => undefined);
+    try {
+      const result = await Promise.race([pending, timeout]);
+      if (result === "timeout") {
+        failOpen("timeout");
+        return undefined;
+      }
+      down = false;
+      return result;
+    } catch (err) {
+      failOpen((err as NodeJS.ErrnoException).code ?? "error");
+      return undefined;
     } finally {
       clearTimeout(timer);
     }
   };
-  return Object.assign(limit, { close: () => redis?.disconnect() });
+
+  const count = async (key: string, rule: LimitRule): Promise<LimitVerdict | undefined> => {
+    const verdict = await guarded(() => client().limit(key, rule));
+    return verdict && { ok: verdict.ok, retryAfterMs: verdict.retryAfterMs };
+  };
+
+  const limit = async (action: LimitAction, subject: string): Promise<LimitVerdict> =>
+    (await count(`${action}:${subjectKey(subject)}`, LIMITS[action])) ?? ALLOW;
+
+  const code = async (
+    action: CodeAction,
+    subject: string,
+    roomCode: string | null,
+  ): Promise<LimitVerdict> => {
+    if (roomCode === null) return limit("lobby-codes", subject);
+    const pair = subjectKey(`${subject}:${roomCode}`);
+    const window = LIMITS["lobby-codes"].windowMs;
+    const admittedKey = `${CODE_ADMITTED}:${pair}`;
+    const admitted = await guarded(() => client().count(admittedKey, window));
+    if (admitted === undefined) return ALLOW;
+    if (admitted === 0) {
+      const budget = await count(`lobby-codes:${subjectKey(subject)}`, LIMITS["lobby-codes"]);
+      if (!budget) return ALLOW;
+      if (!budget.ok) return budget;
+      if (!(await count(admittedKey, { max: 1, windowMs: window }))) return ALLOW;
+    }
+    return (await count(`${action}:${pair}`, LIMITS[action])) ?? ALLOW;
+  };
+
+  return Object.assign(limit, { code, close: () => redis?.disconnect() });
 }

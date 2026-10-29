@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { Redis } from "ioredis";
 import { createLimiter, type LimitRule } from "@fifth-copy/limiter";
 
@@ -19,12 +20,21 @@ export const LIMITS = {
   invite: { max: 20, windowMs: 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
-/** Prefix of the web app's limiter keys: `web:rl:<action>:<subject>`. */
+/** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */
 export const WEB_LIMITER_PREFIX = "web";
 /** A limiter call slower than this is treated as Redis being unavailable (fail open). */
 export const LIMIT_TIMEOUT_MS = 250;
-/** Subjects are bounded before they reach a Redis key. */
-const MAX_SUBJECT_LENGTH = 128;
+/** A subject kept as is in its Redis key: short and of a safe charset (guest ids, IP literals). */
+const SAFE_SUBJECT = /^[A-Za-z0-9:._-]{1,64}$/;
+
+/**
+ * The key part of `subject`: itself when it is short and of a safe charset, else `h:` and its
+ * SHA-256 (hex), so no subject can shape the key and two long subjects never collide.
+ */
+export function subjectKey(subject: string): string {
+  if (SAFE_SUBJECT.test(subject)) return subject;
+  return `h:${createHash("sha256").update(subject).digest("hex")}`;
+}
 
 export type LimitVerdict = { ok: boolean; retryAfterMs: number };
 export type WebLimit = (action: LimitAction, subject: string) => Promise<LimitVerdict>;
@@ -89,7 +99,7 @@ export function createWebLimit({
   };
 
   const limit = async (action: LimitAction, subject: string): Promise<LimitVerdict> => {
-    const key = `${action}:${subject.slice(0, MAX_SUBJECT_LENGTH) || "unknown"}`;
+    const key = `${action}:${subjectKey(subject)}`;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<"timeout">((resolve) => {
       timer = setTimeout(() => resolve("timeout"), timeoutMs);

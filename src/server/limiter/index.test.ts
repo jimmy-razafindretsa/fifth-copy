@@ -4,7 +4,8 @@ import { createServer, type Server } from "node:net";
 import { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { signGuestCookie } from "../auth/guest-cookie";
-import { createWebLimit, LIMITS, WEB_LIMITER_PREFIX } from "./core";
+import { createWebLimit, LIMITS, subjectKey, WEB_LIMITER_PREFIX } from "./core";
+import { TRUSTED_PROXY_HOPS, UNKNOWN_IP_SUBJECT } from "./subject";
 
 // #207 C3: the web adapter over real Redis (the worktree's REDIS_URL), and its fail-open policy.
 // Subjects are fresh per run; their keys are deleted at the end (shared db index).
@@ -152,5 +153,42 @@ describe("requestSubject", () => {
     expect(await (await load())()).toBe("ip:198.51.100.8");
     state.headers = new Headers();
     expect(await (await load())()).toBe("ip:unknown");
+  });
+
+  it("takes the hop TRUSTED_PROXY_HOPS from the end, IP literals only (v6 lower-cased)", async () => {
+    expect(TRUSTED_PROXY_HOPS).toBe(1);
+    state.headers = new Headers({ "x-forwarded-for": "203.0.113.1, 2001:DB8::7 " });
+    expect(await (await load())()).toBe("ip:2001:db8::7");
+  });
+
+  it.each([
+    ["garbage", "not-an-ip"],
+    ["a key-shaped value", "1.2.3.4:rl:join-by-code:x"],
+    ["an empty last hop", "198.51.100.7, "],
+    ["a host name", "proxy.example"],
+    ["an over-long value", "9".repeat(5_000)],
+  ])("is ip:unknown for %s in the last hop", async (_label, value) => {
+    state.headers = new Headers({ "x-forwarded-for": value });
+    expect(await (await load())()).toBe(UNKNOWN_IP_SUBJECT);
+  });
+
+  it("is ip:unknown for a non-IP x-real-ip", async () => {
+    state.headers = new Headers({ "x-real-ip": "web:rl:*" });
+    expect(await (await load())()).toBe(UNKNOWN_IP_SUBJECT);
+  });
+});
+
+describe("subjectKey", () => {
+  it("keeps short subjects of the safe charset", () => {
+    expect(subjectKey("guest:usr_abc")).toBe("guest:usr_abc");
+    expect(subjectKey("ip:2001:db8::7")).toBe("ip:2001:db8::7");
+  });
+
+  it("hashes anything else, so a subject never shapes the key and long ones never collide", () => {
+    const long = "guest:" + "a".repeat(100);
+    for (const subject of ["", "a b", "x\nweb:rl:*", "ip:{1}", long, `${long}b`]) {
+      expect(subjectKey(subject)).toMatch(/^h:[0-9a-f]{64}$/);
+    }
+    expect(subjectKey(long)).not.toBe(subjectKey(`${long}b`));
   });
 });

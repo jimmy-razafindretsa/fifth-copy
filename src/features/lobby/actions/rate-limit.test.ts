@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { randomInt, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPrismaClient } from "@/server/db-client";
@@ -54,8 +54,11 @@ const PREFIX = `test-rl-${randomUUID().slice(0, 8)}-`;
 const CODE = "RLT-7207";
 
 /** A fresh client IP per call site, so reruns within 60 s never share a bucket. */
-const freshIp = () =>
-  `198.51.${randomInt(0, 255)}.${randomInt(1, 254)}-${randomUUID().slice(0, 6)}`;
+/** A fresh IPv6 literal from the documentation range: one bucket per call. */
+const freshIp = () => {
+  const hex = randomUUID().replaceAll("-", "");
+  return `2001:db8:${hex.slice(0, 4)}:${hex.slice(4, 8)}:${hex.slice(8, 12)}:${hex.slice(12, 16)}::1`;
+};
 
 async function closedPort(): Promise<number> {
   const server = createServer();

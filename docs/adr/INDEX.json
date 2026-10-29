@@ -312,7 +312,7 @@
       ],
       "supersedes": [],
       "supersededBy": [],
-      "rule": "Rate limits go through `@fifth-copy/limiter` (one Lua sliding window, keys `${prefix}:rl:${key}` with a TTL <= the window, prefixes `web` and `race`); the package imports nothing (the Redis client is injected); the web app reaches it only through `src/server/limiter` (`limit(action, subject)`, fails open) and the race server only through `socket/rate-limit.ts` (per-socket buckets before any handler, fails closed); each process keeps its own `LIMITS` table.",
+      "rule": "Rate limits go through `@fifth-copy/limiter` (one Lua sliding window, keys `${prefix}:rl:${key}` with a TTL <= the window, prefixes `web` and `race`); the package imports nothing (the Redis client is injected); the web app reaches it only through `src/server/limiter` (`limit(action, subject)`, fails open) and the race server only through `socket/rate-limit.ts` (per-identity buckets before any handler, a socket cap per identity, fails closed); each process keeps its own `LIMITS` table.",
       "file": "docs/adr/0020-shared-rate-limiter.md"
     }
   ]

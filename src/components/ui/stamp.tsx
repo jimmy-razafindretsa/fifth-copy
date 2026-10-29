@@ -43,12 +43,13 @@ export function stampAngle(rotation: StampRotation, seed: string | number | unde
   return rotation === "auto" ? rotationFromSeed(seed ?? "") : clampRotation(rotation);
 }
 
-export type StampTone = "red" | "ink";
+export type StampTone = "red" | "ink" | "gold";
 export type StampSize = "sm" | "md" | "lg";
 
 const TONE: Record<StampTone, string> = {
   red: styles.red!,
   ink: styles.ink!,
+  gold: styles.gold!,
 };
 
 // Literal class strings: Tailwind 4 only emits utilities it finds as complete strings.
@@ -61,7 +62,10 @@ const SIZE: Record<StampSize, { line: string; box: string }> = {
 export type StampProps = {
   /** The headline, then an optional second line (bilingual stamps: `ОБГОН! · OVERTAKE` / `DÉPASSEMENT`). */
   lines: readonly [ReactNode, ReactNode?];
-  /** `red` (default): link-role text on a primary rule; `ink`: fg text and rule. */
+  /**
+   * `red` (default): link-role text on a primary rule; `ink`: fg text and rule; `gold`: reward text in a
+   * 3px double reward rule on the ink band (bible 7.3 "3px double gold on dark"; legal only on ink grounds).
+   */
   tone?: StampTone;
   size?: StampSize;
   /** Degrees clamped to -6..6 (default -6), or `"auto"`: a deterministic angle from `seed`. */

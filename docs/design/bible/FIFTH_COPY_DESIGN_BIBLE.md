@@ -204,6 +204,7 @@ Textures are opt-in, never on the page body (14 paints a flat paper body). Under
 - Examples: `ACCEPTED · 48 WPM`, `FILED`, `ISSUED`, `ROOM 457 / 30 SEATS` (bobbing), `BUILT BY / AEGIS CORP.`
 - Extension (#107): on UI screens the stamp text uses the link role (red on paper, night-ink on Night shift: agit-red on the night ground is 1.76:1, 3.3); the `4px double` border stays red in both themes. Ground `color-mix(in srgb, var(--color-bg) 90%, transparent)`. The `HOST` stamp is the `Stamp` primitive at `sm` (Stardos 700 1.5rem `.06em`, `padding:2px 8px`), a fixed −6°, slamming in with `fcSlam` 0.35s from −14°; none under reduced motion. No local stamp class remains (#614).
 - Extension (#26): every UI stamp is the `Stamp` primitive (`src/components/ui/stamp.tsx`; the lobby HOST and FILE NOT FOUND stamps move to it in #614). **Two lines**: the headline in Stardos (the display role), then an optional second line in Oswald 600 caps (the label role); a bilingual in-world stamp puts its dual headline on line one and the other language on line two (`ОБГОН! · OVERTAKE` / `DÉPASSEMENT`), the Cyrillic tagged `lang="ru"`. **Sizes** sm / md / lg = the display role at 1.5 / 2.25 / 3.5rem with `padding` 2px 8px (the HOST badge), 8px 14px (FILE NOT FOUND), 12px 20px; the lg stamp wraps inside a 375px phone. **Angle** −6° to +6° (R29, inside the range above); an event stamp takes an angle seeded by its event, so the same event always lands at the same angle, never closer than 2° to level. **The ink tone**: for neutral paperwork (`PASSED`, a merge confirmation) the stamp is ink, text and `4px double` rule both in the `fg` role (press-ink on paper, night-ink on Night shift); red stays for you, urgency and authority (0). The slam is `fcSlam` on `--motion-duration-slam` 350ms (8).
+- Extension (#300): **the gold tone**, the rewards' stamp (`HERO OF PAPERWORK` / `HÉROS DE LA PAPERASSE`, the medal slot without WebGL): text in the reward role, `3px double` reward rule, on the ink band ground (`band`) in both themes. Gold is legal only there (3, gold text never sits on paper); the paper-ish ground of the red and ink tones does not apply. Same sizes, angles and slam as the other tones.
 
 ### 7.4 Dockets / file cards
 - Paper or newsprint, `2px solid ink`, no radius. Header row with mono name plus Oswald tag. Rows are a grid `120px | 1fr` with dashed separators `1px dashed rgba(42,36,32,.3)`.
@@ -443,6 +444,8 @@ Hard rules: batch everything (BatchedMesh / InstancedMesh). Build outfits once p
 - Studio reflections from a locally built PMREM scene (no external env files). ACES tone mapping, exposure 1.05.
 - Interaction: **horizontal spin only**. Drag sets velocity, inertia decays (rate 1.6). After 1.5s idle it eases into a 0.6 rad/s turn and bobs ±1.5cm. Transparent background.
 - Podium medals: gold / silver / bronze variants of the same model. Profile medals are enamel pins (spec §13.4).
+- Variants (#300): one model, the metal pair swapped: gold `#E2B23A` / dark `#B8862A` (engraving `#7A5A16`), silver `#C9CCD1` / `#8E9298` (engraving `#4E5257`), bronze `#B87333` / `#7A4A21` (engraving `#4A2A10`); the faces repaint in the variant's metal, the red enamel star and the ribbon never change (they are the medal's identity). 3D-only colours, like the scene palettes of 9 (3's "no new colours" is for UI). The variant arrives as `?variant=` for the first frame and `fc-medal-variant` after (15).
+- Reduced motion (#300, 8): under `prefers-reduced-motion` or the page's `fc-motion {reduce:true}` the medal neither turns on idle nor bobs; a drag still spins it, then inertia settles it.
 
 ---
 
@@ -488,6 +491,15 @@ Overtake stamps (extension, #232; spec 6.3, R41, R83, R84): the server's `overta
 
 Lobby, MVP (#107): kicker `WAITING ROOM · PRIVATE RACE`, H1 `REPORT TO YOUR DESK` (Stardos 700, section H2 scale), then the room docket (7.4: header `KGB-4821` mono 500 18px `.08em` + `ROOM CODE` tag, rows `TYPISTS | n / 30`, `STATUS | WAITING`) beside the roll (7.4 roll rows), wrapping under each other (`flex-wrap`, docket max 420px). Paper ground, gutters `clamp(16px,4vw,48px)`. The seat ring, host settings and invite docket come with #498 and #108; the host's START (7.1, #214) sits under the roll until #498 places it.
 
+### 14.4 Dawn report (`/results/[raceId]`, #300; #301 ranking, #302 personal card)
+Composed from 7.3, 7.4, 4, 2 and 13; no new colour or face.
+- **Page:** the site header stays (as the lobby); paper ground, gutters `clamp(16px,4vw,48px)`. Kicker `DAWN REPORT · FORM 5-R` / `RAPPORT DE L'AUBE · FORMULAIRE 5-R` (red Oswald 13px `.24em`, link role on Night shift), H1 `RACE OVER` / `COURSE TERMINÉE` (Stardos 700, `clamp(36px,4.4vw,60px)`). Under it the podium, then two slots: from 1024px `minmax(0,1fr) | minmax(280px,400px)` = the **ranking docket** (#301, 7.4 roll rows of every desk in place order) beside the **personal stats card** (#302), stacked below 1024px (ranking first).
+- **Podium arrangement:** the plinths are an `ol` in place order 1, 2, 3 (reading order is the rank). From 768px they stand on one floor line as `2 | 1 | 3`, the first in the centre and tallest; each base block is newsprint carrying its place number in display-lg muted, heights 120 / 98 / 84px (1 / .82 / .7). Under 768px they stack 1, 2, 3 with no base block, each medal above its cell.
+- **Plinth:** one 7.4 multi-cell grid (`gap:2px` on ink, never per-cell borders): an **ink medal slot** (the `band` ground in both themes: gold is legal only on ink) holding the medal at `aspect-ratio 3/4`, 160 / 128 / 112px wide for places 1 / 2 / 3; then the paper **stat cell**: the ink `№ 1` tag (language-neutral), `DESK 07` (roll-row desk label) and the name (IBM Plex Mono 18px; your name in the link role) with the `BOT` and `YOU` ink tags; a status other than filed as the 7.4a hairline label (`LINE CUT`…); then the **clean WPM** (ADR 0016) as the big figure, IBM Plex Mono 500 `clamp(28px,4vw,44px)` tabular, with the `WPM` / `MPM` Oswald 11px muted unit, and the accuracy `97 %` (U+00A0) in Plex Mono 14px muted.
+- **Medals:** gold for place 1, silver 2, bronze 3 (13), lazily mounted `EmbedFrame`s (`/3d/medal.html?embed=1&variant=…`) only near the viewport. Without WebGL2 the slot shows the gold `Stamp` `HERO OF PAPERWORK` at `sm` (7.3 gold tone) instead of an empty frame; the page is complete either way. `/design#results` always shows the stamp (a spinning WebGL frame has no stable visual baseline).
+- **Special plinths:** `UNFILLED` / `NON POURVU` = an empty ink slot and a stat cell holding only that muted Oswald 13px label (fewer than three finishers). Entries sharing a place share one plinth: one medal of that place, the entries as rows with dashed separators under one `TIED` / `EX AEQUO` tag; the next place is then `UNFILLED` (places 1, 1, 3 = plinth 1 tied, plinth 2 unfilled, plinth 3 filled). A suspicious entry (7.7) keeps its figures but its slot holds the one-row 7.4 docket `UNDER REVIEW` / `EN VÉRIFICATION` (paper ground, 2px ink rule, Oswald 11px `.16em`) in place of the medal.
+- **Filing:** while the race server's results are on their way the page shows the 7.4 notice row `FILING THE REPORT · ONE MOMENT` / `DÉPÔT DU RAPPORT · UN INSTANT` (`role="status"`, `lkPulse`; still under reduced motion) and refreshes every 2 s; after 60 s it becomes the 7.4 inline error line `RETURNED ·` + `The report did not reach the office.` with a 7.1 secondary link (44px) `BACK TO THE WAITING ROOM →` (to `/lobby/[code]`) or, with no lobby on file, `BACK TO THE FRONT DESK →` (to `/`).
+
 ---
 
 ## 15. Embedding protocols (postMessage, `'*'` origin in dev; lock the origin in prod)
@@ -500,8 +512,10 @@ Lobby, MVP (#107): kicker `WAITING ROOM · PRIVATE RACE`, H1 `REPORT TO YOUR DES
 | `fc-clerk` | clerk → page | `{cfg}` | page updates the personnel file |
 | `fc-setview` | page → lobby | `{view:'over'\|'pov'\|'auto'}` | force the camera mode |
 | `fc-view` | lobby → page | `{view}` | the page reflects the current view |
+| `fc-medal-variant` | page → medal | `{variant:'gold'\|'silver'\|'bronze'}` | repaints the medal in that metal (13, #300) |
+| `fc-motion` | page → medal | `{reduce:boolean}` | the page's motion setting (`data-motion`, 8): under reduce no idle turn, no bob (#300) |
 
-URL flags: lobby `?embed=1` (pixelRatio 1), lobby `?orbit=<seconds>` (one full overview orbit in that many seconds instead of 0.05 rad/s; the live feed recorder, 7.8), clerk `?locker=1` (starts in the default outfit, click = wave).
+URL flags: lobby `?embed=1` (pixelRatio 1), lobby `?orbit=<seconds>` (one full overview orbit in that many seconds instead of 0.05 rad/s; the live feed recorder, 7.8), clerk `?locker=1` (starts in the default outfit, click = wave). Medal `?embed=1` (pixelRatio 1: up to three medals on one phone), medal `?variant=gold|silver|bronze` (the first frame's metal, default gold; #300). The medal ignores messages from another origin.
 
 ---
 

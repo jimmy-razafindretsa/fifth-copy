@@ -88,6 +88,16 @@ describe("Stamp markup (#26 C1)", () => {
     expect(ink).toContain("color: var(--color-fg)");
     expect(ink).toContain("border-color: var(--color-fg)");
   });
+
+  it("#300 tone gold = reward text in a 3px double reward rule on the ink band (bible 7.3)", () => {
+    expect(html(<Stamp tone="gold" lines={["HERO OF PAPERWORK"]} />)).toContain(
+      'data-stamp-tone="gold"',
+    );
+    const gold = block(".gold");
+    expect(gold).toContain("color: var(--color-reward)");
+    expect(gold).toContain("border: 3px double var(--color-reward)");
+    expect(gold).toContain("background: var(--color-band)");
+  });
 });
 
 describe("Stamp rotation (#26 C2)", () => {

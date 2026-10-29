@@ -1,0 +1,134 @@
+/*
+ * The Dawn report page (#300, bible 14.4): paper ground, fluid gutters (7.10), the kicker pattern and the
+ * lobby H1 scale (4), the podium, then the ranking docket and the personal card side by side from 1024px
+ * (#301, #302). The filing state is the 7.4 one-row notice (lkPulse, 8) and, late, the 7.4 inline error
+ * line with a 7.1 secondary link. Colours are roles, faces the type roles (#531).
+ */
+
+@reference "../../../app/globals.css";
+
+/* the dip stays at 0.75 on text: ink keeps 4.5:1 at its lowest (bible 7.4 notice row, #560) */
+@keyframes lkPulse {
+  50% {
+    opacity: 0.75;
+  }
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: clamp(32px, 6vw, 80px) clamp(16px, 4vw, 48px);
+}
+
+.kicker {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+.heading {
+  margin: 0 0 16px;
+  @apply type-display-lg;
+  font-size: clamp(36px, 4.4vw, 60px);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* podium, then the ranking docket | the personal card (stacked under 1024px) */
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.slots {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+@media (min-width: 1024px) {
+  .slots {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
+    align-items: start;
+  }
+}
+
+.filing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 560px;
+}
+
+/* the one-row notice docket (bible 7.4 notice row, #560): 2px ink rule, paper ground */
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  animation: lkPulse 1.3s ease-in-out infinite;
+}
+
+/* bible 7.4 inline error line: newsprint, red text role, RETURNED · prefix */
+.errorLine {
+  margin: 0;
+  max-width: 100%;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+  text-wrap: pretty;
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* the way back: the 7.1 secondary label button as a link, 44px tall (bible 18) */
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 2px solid var(--color-fg);
+  color: var(--color-fg);
+  text-decoration: none;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.secondary:hover {
+  background: var(--color-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice {
+    animation: none;
+  }
+}
+
+/* <html data-motion="reduce"> or a scoped /design specimen: the pulse holds still */
+[data-motion="reduce"] .notice {
+  animation: none;
+}

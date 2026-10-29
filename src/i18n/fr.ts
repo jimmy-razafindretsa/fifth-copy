@@ -329,6 +329,44 @@ export const fr = {
       seconds: "{n} S",
     },
   },
+  /** Le rapport de l'aube (#300, bible 14.4). */
+  results: {
+    kicker: "RAPPORT DE L'AUBE · FORMULAIRE 5-R",
+    heading: "COURSE TERMINÉE",
+    filing: {
+      notice: "DÉPÔT DU RAPPORT · UN INSTANT",
+      prefix: "RETOURNÉ ·",
+      late: "Le rapport n'est pas arrivé au bureau.",
+      lobby: "RETOUR À LA SALLE D'ATTENTE →",
+      home: "RETOUR À L'ACCUEIL →",
+    },
+    podium: {
+      title: "Podium",
+      place: "№ {n}",
+      desk: "BUREAU {n}",
+      bot: "BOT",
+      you: "TOI",
+      wpm: "MPM",
+      accuracy: "PRÉCISION",
+      unfilled: "NON POURVU",
+      tied: "EX AEQUO",
+      underReview: "EN VÉRIFICATION",
+      medal: "HÉROS DE LA PAPERASSE",
+      medalTitle: {
+        gold: "La médaille d'or, en 3D, glisse pour la tourner",
+        silver: "La médaille d'argent, en 3D, glisse pour la tourner",
+        bronze: "La médaille de bronze, en 3D, glisse pour la tourner",
+      },
+    },
+    status: {
+      FINISHED: "CLASSÉ",
+      TIMED_OUT: "TEMPS ÉCOULÉ",
+      REASSIGNED: "RÉAFFECTÉ",
+      ASLEEP: "ENDORMI AU BUREAU",
+      LINE_CUT: "LIGNE COUPÉE",
+      EXPIRED: "EXPIRÉ",
+    },
+  },
   settings: {
     avatar: {
       moderation: {

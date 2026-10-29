@@ -92,7 +92,8 @@ module.exports = {
     },
     {
       name: "race-3d-only-from-race-route",
-      comment: "Only the race route loads the seat scene, lazily after the HUD (#563 C7, ADR 0013, 0017).",
+      comment:
+        "Only the race route loads the seat scene, lazily after the HUD (#563 C7, ADR 0013, 0017).",
       severity: "error",
       from: { pathNot: ["^src/features/race-3d/", "^src/app/race/"] },
       to: { path: "^src/features/race-3d/" },

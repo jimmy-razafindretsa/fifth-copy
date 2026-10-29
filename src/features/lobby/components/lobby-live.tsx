@@ -129,7 +129,11 @@ export function LobbyLive({
     Promise.all([mintRaceToken({ code }), import("@/features/race")]).then(
       ([result, race]) => {
         if (aborted) return;
-        if (!result.ok) return dispatch({ type: "token-error", error: result.error });
+        if (!result.ok) {
+          // A throttled mint (#207) is the generic error: callers own their throttled state.
+          const error = result.error === "rate-limited" ? "generic" : result.error;
+          return dispatch({ type: "token-error", error });
+        }
         socket = race.connectToRoom(result.url, result.token);
         socketRef.current = socket;
         park = race.parkSocket;

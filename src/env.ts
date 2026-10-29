@@ -17,6 +17,14 @@ const server = z.object({
   AVATAR_DIR: z.string().min(1).default(".data/avatars"),
   /** Avatar moderator (ADR 0015): the local heuristic, or the colour-driven fake for tests (never in production). */
   AVATAR_MODERATOR: z.enum(["heuristic", "fake"]).default("heuristic"),
+  /**
+   * The shared rate limiter's Redis (ADR 0020, `src/server/limiter`). Optional: absent (or empty)
+   * disables the web limiter, with one warning in production; unreachable fails open.
+   */
+  REDIS_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.url({ protocol: /^rediss?$/ }).optional(),
+  ),
 });
 
 const client = z.object({
@@ -44,6 +52,7 @@ function parse() {
     RACE_SERVER_INTERNAL_URL: process.env.RACE_SERVER_INTERNAL_URL,
     AVATAR_DIR: process.env.AVATAR_DIR,
     AVATAR_MODERATOR: process.env.AVATAR_MODERATOR,
+    REDIS_URL: process.env.REDIS_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_RACE_SERVER_URL: process.env.NEXT_PUBLIC_RACE_SERVER_URL,
   });

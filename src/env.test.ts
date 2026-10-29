@@ -51,6 +51,17 @@ describe("env", () => {
     expect(String(error)).not.toMatch(/short-secret-value/);
   });
 
+  it("REDIS_URL is an optional redis url (#207): absent or empty disables the limiter", async () => {
+    expect((await loadEnv({ REDIS_URL: "redis://localhost:6379/3" })).REDIS_URL).toBe(
+      "redis://localhost:6379/3",
+    );
+    expect((await loadEnv({ REDIS_URL: undefined })).REDIS_URL).toBeUndefined();
+    expect((await loadEnv({ REDIS_URL: "" })).REDIS_URL).toBeUndefined();
+    const error = await loadEnv({ REDIS_URL: "http://secret-host:6379" }).catch((e: Error) => e);
+    expect(String(error)).toMatch(/REDIS_URL/);
+    expect(String(error)).not.toMatch(/secret-host/);
+  });
+
   it.each(["RACE_SERVER_INTERNAL_URL", "NEXT_PUBLIC_RACE_SERVER_URL"])(
     "rejects a non-url %s",
     async (name) => {

@@ -21,6 +21,8 @@ vi.mock("next/headers", () => ({
     set: (name: string, value: string) => void state.jar.set(name, { value }),
     delete: (name: string) => void state.jar.delete(name),
   }),
+  // No forwarding headers: the limiter's subject is the guest or `ip:unknown` (#207).
+  headers: async () => new Headers(),
 }));
 vi.mock("@/env", () => ({
   env: { NODE_ENV: "test", AUTH_SECRET: "a".repeat(32), RACE_TOKEN_SECRET: "r".repeat(32) },

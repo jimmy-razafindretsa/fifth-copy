@@ -375,6 +375,48 @@ export const fr = {
       EXPIRED: "EXPIRÉ",
     },
   },
+  design: {
+    keys: {
+      title: "ENREGISTREUR DE TOUCHES MORTES",
+      devOnly: "DEV SEULEMENT",
+      intro:
+        "Choisis la machine, la disposition et le cas, puis tape le cas dans la case. Chaque événement s'inscrit au journal, et COPIER L'ENREGISTREMENT classe toute la séquence en JSON pour la saisie de course.",
+      machine: "MACHINE",
+      os: "SYSTÈME",
+      browser: "NAVIGATEUR",
+      layout: "DISPOSITION",
+      case: "CAS",
+      layouts: {
+        csa: "CANADIEN MULTILINGUE (CSA)",
+        "fr-ca": "FRANÇAIS CANADIEN",
+        azerty: "FRANÇAIS AZERTY",
+        us: "QWERTY AMÉRICAIN",
+      },
+      cases: {
+        "circumflex-e": "E CIRCONFLEXE",
+        "c-cedilla": "C CÉDILLE",
+        "e-acute": "E AIGU",
+        "e-grave": "E GRAVE",
+        "u-grave": "U GRAVE",
+        "oe-ligature": "E DANS L'O",
+        guillemets: "GUILLEMETS",
+        "option-combos": "COMBINAISONS OPTION (US, MACOS)",
+      },
+      input: "TAPE ICI",
+      target: "TAPE {text}",
+      committed: "TEXTE SAISI",
+      log: "JOURNAL DES ÉVÉNEMENTS",
+      count: "{n} ÉVÉNEMENTS",
+      empty: "Aucune touche pour l'instant. Tape le cas dans la case.",
+      copy: "COPIER L'ENREGISTREMENT",
+      copied: "COPIÉ",
+      copiedStatus: "Enregistrement copié. Sauvegarde-le sous {file}.",
+      copyFailed: "Le presse-papiers a refusé. Sélectionne le JSON ci-dessous et copie-le à la main.",
+      returned: "RETOURNÉ ·",
+      clear: "EFFACER",
+      fixture: "ENREGISTREMENT",
+    },
+  },
   settings: {
     avatar: {
       moderation: {

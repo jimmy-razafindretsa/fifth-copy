@@ -79,3 +79,28 @@ export type { SceneDesk, ScenePhase, SceneView } from "./view/scene-view";
 /** The scene's loading card (#563 C2) and the phone query the scene leaf skips (phones watch, #292). */
 export { LoadingCard, type LoadingCardProps, type SceneLabels } from "./components/loading-card";
 export { PHONE_QUERY } from "./seat/seat-view";
+/** The dead-key recorder's fixture format (#566, spec 15): zod-free so the recorder page stays light (#626);
+ * the zod schema (`client/input/fixture.ts`) is for tests and server code. */
+export {
+  FIXTURE_BROWSER_NAMES,
+  FIXTURE_BROWSERS,
+  FIXTURE_CASE_IDS,
+  FIXTURE_CASES,
+  FIXTURE_LAYOUTS,
+  FIXTURE_OS_NAMES,
+  FIXTURE_OSES,
+  fixtureFileName,
+  fixtureJson,
+  guessMachine,
+  KEY_EVENT_TYPES,
+  recordKeyEvent,
+} from "./client/input/fixture-cases";
+export type {
+  FixtureBrowser,
+  FixtureCase,
+  FixtureLayout,
+  FixtureOs,
+  KeyEventFixture,
+  KeyEventType,
+  RecordedKeyEvent,
+} from "./client/input/fixture-cases";

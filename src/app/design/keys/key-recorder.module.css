@@ -1,0 +1,185 @@
+/*
+ * The dead-key recorder (#566, design bible 7.2, 7.4, extension "Recorder dockets"): dockets with a 2px ink
+ * rule, no radius, a header row with the ink tag and a mono value, `120px | 1fr` rows with dashed
+ * separators; the event log is the same docket holding a table (dashed row rules, Oswald heads, mono cells);
+ * the type box and the selects take the 7.2 input recipe (2px ink rule, IBM Plex Mono, 2px ink focus ring).
+ */
+
+@reference "../../globals.css";
+
+.docket {
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.newsprint {
+  background: var(--color-surface);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+/* the ink tag (bible 7.4 roll rows `YOU` tag): Oswald 600 10px .16em, ink ground, paper text */
+.tag {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.mono {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 12px;
+  padding: 8px 12px;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.label {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.value {
+  @apply type-typing;
+  font-size: 16px;
+  line-height: normal;
+  overflow-wrap: anywhere;
+}
+
+/* bible 7.2: IBM Plex Mono 500 18px .08em inside a 2px ink rule; focus = 2px ink outline */
+.input,
+.select {
+  @apply type-typing;
+  min-width: 0;
+  width: 100%;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.input {
+  font-size: 18px;
+  padding: 10px 12px;
+}
+
+.select {
+  font-size: 14px;
+  padding: 6px 8px;
+}
+
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+.scroll {
+  overflow-x: auto;
+  max-height: 60vh;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+  text-align: left;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.table td {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  padding: 6px 12px;
+  white-space: nowrap;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.null {
+  color: var(--color-fg-muted);
+}
+
+.empty {
+  margin: 0;
+  padding: 12px;
+  @apply type-body;
+  font-size: 15px;
+  color: var(--color-fg-muted);
+}
+
+/* bible 7.4 inline error line: newsprint, 2px ink rule, Courier Prime 15px in the red text role */
+.error {
+  margin: 0;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  color: var(--color-link);
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+
+.status {
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+}
+
+.json {
+  margin: 0;
+  padding: 12px;
+  @apply type-typing;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  max-height: 40vh;
+}

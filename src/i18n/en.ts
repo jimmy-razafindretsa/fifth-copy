@@ -269,6 +269,14 @@ export const en = {
     /** The race announcer (#232 C4; #242 adds the rest). */
     announce: { overtake: "You passed desk {desk}", passed: "Desk {desk} passed you" },
     loading: "Taking your seat…",
+    /** The 3D scene's loading card (#563, bible 7.4 extension): the stamp, the frame's name, the tip tag. */
+    scene: {
+      loading: "LOADING THE RING ROOM",
+      title: "The ring room, from your desk",
+      didYouKnow: "DID YOU KNOW?",
+    },
+    /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
+    didYouKnow: [] as string[],
     notice: {
       "waiting-for-host": "WAITING FOR THE HOST",
       reconnecting: "LINE CUT · RECONNECTING",

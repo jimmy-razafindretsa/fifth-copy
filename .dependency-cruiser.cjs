@@ -76,6 +76,28 @@ module.exports = {
       },
     },
     {
+      name: "race-3d-imports",
+      comment:
+        "The seat scene reads only the race feature's index and the UI primitives; three.js stays in the embed page, never in a Next chunk (#563 C7, ADR 0017).",
+      severity: "error",
+      from: { path: "^src/features/race-3d/" },
+      to: {
+        path: ["^src/", "node_modules/three/"],
+        pathNot: [
+          "^src/features/race-3d/",
+          "^src/features/race/index\\.tsx?$",
+          "^src/components/ui/",
+        ],
+      },
+    },
+    {
+      name: "race-3d-only-from-race-route",
+      comment: "Only the race route loads the seat scene, lazily after the HUD (#563 C7, ADR 0013, 0017).",
+      severity: "error",
+      from: { pathNot: ["^src/features/race-3d/", "^src/app/race/"] },
+      to: { path: "^src/features/race-3d/" },
+    },
+    {
       name: "engine-is-pure",
       comment: "The race engine is deterministic and dependency-free (ADR 0007).",
       severity: "error",

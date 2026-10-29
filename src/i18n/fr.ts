@@ -272,6 +272,14 @@ export const fr = {
       passed: "Le bureau {desk} t'a dépassé",
     },
     loading: "On t'installe à ton bureau…",
+    /** The 3D scene's loading card (#563, bible 7.4 extension): the stamp, the frame's name, the tip tag. */
+    scene: {
+      loading: "CHARGEMENT DE LA SALLE",
+      title: "La salle, vue de ton bureau",
+      didYouKnow: "LE SAVAIS-TU ?",
+    },
+    /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
+    didYouKnow: [],
     notice: {
       "waiting-for-host": "EN ATTENTE DE L'HÔTE",
       reconnecting: "LIGNE COUPÉE · RECONNEXION",

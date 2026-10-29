@@ -65,8 +65,22 @@ describe("parseSceneMessage", () => {
     ["unknown type", { type: "fc-race-init", v }],
     ["bad preset", { type: "fc-scene-ready", v, preset: "ultra", fov: 62, desks: 3 }],
     ["negative desks", { type: "fc-scene-ready", v, preset: "low", fov: 62, desks: -1 }],
-    ["NaN fps", { type: "fc-scene-telemetry", v, fps: NaN, calls: 1, triangles: 1, preset: "low", capped: false }],
-    ["capped not boolean", { type: "fc-scene-telemetry", v, fps: 1, calls: 1, triangles: 1, preset: "low", capped: 1 }],
+    [
+      "NaN fps",
+      {
+        type: "fc-scene-telemetry",
+        v,
+        fps: NaN,
+        calls: 1,
+        triangles: 1,
+        preset: "low",
+        capped: false,
+      },
+    ],
+    [
+      "capped not boolean",
+      { type: "fc-scene-telemetry", v, fps: 1, calls: 1, triangles: 1, preset: "low", capped: 1 },
+    ],
     ["unknown reason", { type: "fc-scene-fallback", v, reason: "bored" }],
   ])("rejects %s", (_, data) => {
     expect(parseSceneMessage(data)).toBeNull();

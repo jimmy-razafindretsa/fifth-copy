@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { MintRaceToken } from "../client/connect-seat";
 import { RaceStoreProvider } from "../client/use-race-store";
 import { SabotageTray } from "../components/sabotage-tray";
@@ -25,6 +26,8 @@ export type RaceSeatProps = {
   mint: MintRaceToken;
   /** The machine's keys: the viewer's keyboard layout, chosen by the route (#224, `machineRows`). */
   rows: MachineSkinProps["rows"];
+  /** The 3D seat scene (#563): the route's client leaf, which loads race-3d lazily after the HUD. */
+  scene?: ReactNode;
 };
 
 /**
@@ -35,7 +38,7 @@ export type RaceSeatProps = {
  * import: the race feature's index stays importable from client modules; the route reads the seat and
  * the catalog and passes the lobby's action down.
  */
-export function RaceSeat({ seat, labels, mint, rows }: RaceSeatProps) {
+export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
   return (
     <RaceStoreProvider>
       <SeatLayout
@@ -43,6 +46,7 @@ export function RaceSeat({ seat, labels, mint, rows }: RaceSeatProps) {
         nixie={<SeatNixie labels={labels.nixie} />}
         telex={<SeatTelex labels={labels.telex} />}
         raceCard={<SeatRaceCard labels={labels.raceCard} />}
+        scene={scene}
         status={
           <RaceSeatLive
             code={seat.code}

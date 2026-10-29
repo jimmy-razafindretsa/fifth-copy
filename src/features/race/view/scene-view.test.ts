@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { deskIdentity, PLAYER_STATUS_CODES, type Member, type Snapshot } from "@fifth-copy/protocol";
+import {
+  deskIdentity,
+  PLAYER_STATUS_CODES,
+  type Member,
+  type Snapshot,
+} from "@fifth-copy/protocol";
 import { selectSceneView, type SceneSource } from "./scene-view";
 
 // #563 (ADR 0017 shared core): the one value the seat scene reads, derived from the race store.

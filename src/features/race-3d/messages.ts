@@ -83,10 +83,7 @@ export type SceneFallbackMessage = {
   reason: SceneFallbackReason;
 };
 export type SceneMessage =
-  | SceneHelloMessage
-  | SceneReadyMessage
-  | SceneTelemetryMessage
-  | SceneFallbackMessage;
+  SceneHelloMessage | SceneReadyMessage | SceneTelemetryMessage | SceneFallbackMessage;
 
 const isRecord = (x: unknown): x is Record<string, unknown> =>
   typeof x === "object" && x !== null && !Array.isArray(x);
@@ -121,7 +118,9 @@ export function parseSceneMessage(data: unknown): SceneMessage | null {
           }
         : null;
     case "fc-scene-fallback":
-      return oneOf(SCENE_FALLBACKS, data.reason) ? { type: data.type, v, reason: data.reason } : null;
+      return oneOf(SCENE_FALLBACKS, data.reason)
+        ? { type: data.type, v, reason: data.reason }
+        : null;
     default:
       return null;
   }

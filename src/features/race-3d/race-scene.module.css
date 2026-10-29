@@ -1,0 +1,21 @@
+/*
+ * The seat scene layer (#563, design bible 14.3 seat view, 11, 9; ADR 0017): the room fills the screen
+ * behind the HUD (the seat's own stacking context puts it over the paper ground and under every docket).
+ * It takes no input: the race input keeps the focus. Hidden until the scene's first frame (or its
+ * benchmark) is in, so the paper backdrop stays until then and on every fallback.
+ */
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.scene[data-scene="ready"] {
+  opacity: 1;
+}
+
+.scene iframe {
+  pointer-events: none;
+}

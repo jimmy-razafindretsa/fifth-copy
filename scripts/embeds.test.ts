@@ -118,7 +118,12 @@ describe("seat page (#563)", () => {
     expect(seat).not.toContain("'*')");
     for (const type of ["fc-race-init", "fc-race-state", "fc-race-motion", "fc-race-preset"])
       expect(seat).toContain(`d.type === '${type}'`);
-    for (const type of ["fc-scene-hello", "fc-scene-ready", "fc-scene-telemetry", "fc-scene-fallback"])
+    for (const type of [
+      "fc-scene-hello",
+      "fc-scene-ready",
+      "fc-scene-telemetry",
+      "fc-scene-fallback",
+    ])
       expect(seat).toContain(`type: '${type}'`);
   });
 

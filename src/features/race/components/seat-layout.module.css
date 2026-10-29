@@ -9,6 +9,8 @@
 @reference "../../../app/globals.css";
 
 .seat {
+  /* its own stacking context: the scene layer (#563, z-index -1) paints over this paper, under the HUD */
+  isolation: isolate;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -92,6 +94,16 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* the scene's loading card or no-scene notice (#563): its layer is fixed behind the HUD */
+.scene {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene:empty {
+  display: none;
 }
 
 .status:empty {

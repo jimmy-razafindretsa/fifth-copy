@@ -411,7 +411,8 @@ export const fr = {
       copy: "COPIER L'ENREGISTREMENT",
       copied: "COPIÉ",
       copiedStatus: "Enregistrement copié. Sauvegarde-le sous {file}.",
-      copyFailed: "Le presse-papiers a refusé. Sélectionne le JSON ci-dessous et copie-le à la main.",
+      copyFailed:
+        "Le presse-papiers a refusé. Sélectionne le JSON ci-dessous et copie-le à la main.",
       returned: "RETOURNÉ ·",
       clear: "EFFACER",
       fixture: "ENREGISTREMENT",

@@ -123,10 +123,65 @@ export function watchPage(page: Page): { errors: string[]; settle: () => Promise
 }
 
 /**
+ * The race route's 3D seat scene (#563) stays off unless a test carries the `@scene` tag
+ * (e2e/race/scene.spec.ts): every other race spec runs on the paper
+ * fallback (#563 C3), so headless software WebGL (#690) never loads two or three scenes per test, and the
+ * scene's same-origin frame never re-runs a spec's `addInitScript`. The probe answers `null` for `webgl2`
+ * in the top frame of `/race/*` only (checked at call time: client navigations from the lobby count);
+ * other routes and every embed frame keep WebGL.
+ */
+function noRaceScene() {
+  const original = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (
+    this: HTMLCanvasElement,
+    id: string,
+    ...rest: unknown[]
+  ) {
+    if (id === "webgl2" && window.top === window && location.pathname.startsWith("/race/"))
+      return null;
+    return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
+  } as typeof original;
+}
+
+/** True when the running test carries the `@scene` tag (outside a test: false). */
+function sceneWanted(): boolean {
+  try {
+    return base.info().tags.includes("@scene");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Shared fixture: every test fails on console errors or failed requests (UI role rule:
  * zero console errors, zero failed requests). Use `expectNoA11yViolations` for axe.
  */
-export const test = base.extend<{ pageErrors: string[] }>({
+export const test = base.extend<
+  { pageErrors: string[]; raceSceneGate: void },
+  { raceSceneContexts: void }
+>({
+  // contexts the specs open themselves (`browser.newContext`: hosts, guests)
+  raceSceneContexts: [
+    async ({ browser }, use) => {
+      const newContext = browser.newContext.bind(browser);
+      browser.newContext = async (...args) => {
+        const context = await newContext(...args);
+        if (!sceneWanted()) await context.addInitScript(noRaceScene);
+        return context;
+      };
+      await use();
+      browser.newContext = newContext;
+    },
+    { scope: "worker", auto: true },
+  ],
+  // the test's own context
+  raceSceneGate: [
+    async ({ context }, use) => {
+      if (!sceneWanted()) await context.addInitScript(noRaceScene);
+      await use();
+    },
+    { auto: true },
+  ],
   pageErrors: [
     async ({ page }, use) => {
       const { errors, settle } = watchPage(page);

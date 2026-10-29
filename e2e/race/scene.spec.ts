@@ -22,7 +22,7 @@ async function seatFrame(page: Page): Promise<Frame> {
   return page.frames().find((f) => f.url().includes("/3d/seat.html"))!;
 }
 
-test.describe("#563 seat scene", () => {
+test.describe("#563 seat scene", { tag: "@scene" }, () => {
   test.skip(({ viewport }) => viewport?.width !== 1280, "desktop project only (software WebGL)");
   test.slow();
 

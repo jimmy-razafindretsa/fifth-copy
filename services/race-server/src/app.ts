@@ -267,7 +267,7 @@ export function createRaceServer({
     presence,
     resumeKeys,
     spectators,
-    // Per-socket buckets (#207): fails closed, a message Redis cannot count is dropped.
+    // Per-identity buckets (#207): fails closed, a message Redis cannot count is dropped.
     limiter: createLimiter(redis, { prefix: RACE_LIMITER_PREFIX }),
   });
   sockets.io = io;

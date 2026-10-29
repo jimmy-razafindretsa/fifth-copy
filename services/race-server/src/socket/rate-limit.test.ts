@@ -2,13 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { keysSchema, pingSchema, PROTOCOL_VERSION, type Rejected } from "@fifth-copy/protocol";
 import type { Limiter } from "@fifth-copy/limiter";
 import { createFakeClock } from "../clock";
-import { startedRace, until, type Booted } from "../testing/harness";
+import { boot, HOST_SUB, startedRace, until, watchRace, type Booted } from "../testing/harness";
 import {
-  attachRateLimit,
+  createSocketGuard,
   exceedsBytes,
   MAX_PAYLOAD_BYTES,
+  MAX_SOCKETS_PER_USER,
+  REFUSAL_WINDOW_MS,
   SOCKET_LIMITS,
   type GuardedSocket,
+  type RateLimitDeps,
 } from "./rate-limit";
 
 // #207 C2: per-socket rate limits and the payload cap on the race server's client events, over
@@ -147,13 +150,92 @@ describe("race server rate limits (C2, real Redis)", () => {
   });
 });
 
+describe("one budget per token identity (real Redis)", () => {
+  /** A waiting room and `n` sockets of one player token, each welcomed. */
+  async function sameToken(n: number) {
+    booted = await boot(process.env.REDIS_URL);
+    const lobby = await booted.openRoom();
+    // The host stays connected: the room outlives the player's reconnections.
+    const host = booted.connect({
+      v: PROTOCOL_VERSION,
+      token: await booted.token({ lobby, sub: HOST_SUB, role: "host" }),
+    });
+    const hostSeen = watchRace(host);
+    await until(() => !!hostSeen.welcome, undefined, "host welcomed");
+    const token = await booted.token({ lobby, sub: "usr_tabs", role: "player" });
+    const tabs = Array.from({ length: n }, () => {
+      const client = booted!.connect({ v: PROTOCOL_VERSION, token });
+      return { client, seen: watchRace(client) };
+    });
+    await until(() => tabs.every((t) => !!t.seen.welcome), undefined, "every tab welcomed");
+    return { lobby, token, tabs };
+  }
+  const settingsCall = { v: PROTOCOL_VERSION, patch: { timerS: 90 } } as const;
+
+  it(`${MAX_SOCKETS_PER_USER} sockets of one token share one host:settings budget; the excess never reaches the room queue`, async () => {
+    const { tabs } = await sameToken(MAX_SOCKETS_PER_USER);
+    const update = vi.spyOn(booted!.server.registry, "updateSettings");
+    const acks: unknown[] = [];
+    for (const { client } of tabs) {
+      for (let i = 0; i < 2; i++) client.emit("host:settings", settingsCall, (a) => acks.push(a));
+    }
+    await until(
+      () => tabs.every((t) => t.client.disconnected),
+      undefined,
+      "every tab of the flooding identity cut",
+    );
+    await settle();
+    // 2 x 4 calls, one budget of 5: 5 reach the registry (and are refused `not-host`), 3 are refused.
+    expect(update).toHaveBeenCalledTimes(SOCKET_LIMITS["host:settings"].max);
+    expect(acks.length).toBeLessThanOrEqual(SOCKET_LIMITS["host:settings"].max);
+    expect(tabs.flatMap((t) => t.seen.rejected)).toHaveLength(3);
+  });
+
+  it("a reconnection does not refill the bucket", async () => {
+    const { tabs, token } = await sameToken(1);
+    const acks: unknown[] = [];
+    for (let i = 0; i < SOCKET_LIMITS["host:settings"].max; i++) {
+      tabs[0]!.client.emit("host:settings", settingsCall, (a) => acks.push(a));
+    }
+    await until(() => acks.length === SOCKET_LIMITS["host:settings"].max, undefined, "5 acks");
+    tabs[0]!.client.disconnect();
+    const again = booted!.connect({ v: PROTOCOL_VERSION, token });
+    const seen = watchRace(again);
+    await until(() => !!seen.welcome, undefined, "reconnected");
+    again.emit("host:settings", settingsCall, (a) => acks.push(a));
+    await until(() => seen.rejected.length === 1, undefined, "refused after the reconnection");
+    await settle();
+    expect(acks).toHaveLength(SOCKET_LIMITS["host:settings"].max);
+    expect(seen.rejected[0]!.reason).toBe("rate-limit");
+  });
+
+  it(`the socket past ${MAX_SOCKETS_PER_USER} of one token is refused and closed; the others stay seated`, async () => {
+    const { tabs, token } = await sameToken(MAX_SOCKETS_PER_USER);
+    const extra = booted!.connect({ v: PROTOCOL_VERSION, token });
+    const seen = watchRace(extra);
+    await until(() => extra.disconnected && seen.rejected.length === 1, undefined, "extra refused");
+    expect(seen.rejected[0]!.reason).toBe("rate-limit");
+    expect(seen.welcome).toBeUndefined();
+    await settle();
+    expect(tabs.every((t) => t.client.connected)).toBe(true);
+    // A second-tab handoff still works: one tab closes, a new one is welcomed at the same desk.
+    tabs[0]!.client.disconnect();
+    await settle();
+    const handoff = booted!.connect({ v: PROTOCOL_VERSION, token });
+    const handoffSeen = watchRace(handoff);
+    await until(() => !!handoffSeen.welcome, undefined, "handoff welcomed");
+    expect(handoffSeen.welcome!.you).toBe(tabs[1]!.seen.welcome!.you);
+  });
+});
+
 /** A fake socket around the guard: `next` records the events that reached the handlers. */
-function fakeSocket() {
+function fakeSocket(id = "sock_1") {
   let middleware: ((packet: unknown[], next: (err?: Error) => void) => void) | undefined;
+  let onDisconnect: (() => void) | undefined;
   const emitted: unknown[] = [];
   const passed: string[] = [];
   const socket: GuardedSocket & { cut: boolean } = {
-    id: "sock_1",
+    id,
     cut: false,
     get disconnected() {
       return this.cut;
@@ -161,24 +243,34 @@ function fakeSocket() {
     use: (fn) => (middleware = fn),
     emit: (_e, payload) => emitted.push(payload),
     disconnect() {
+      if (this.cut) return;
       this.cut = true;
+      onDisconnect?.();
     },
+    once: (_e, fn) => (onDisconnect = fn),
   };
   const send = (...packet: unknown[]) =>
     middleware!(packet, () => void passed.push(String(packet[0])));
   return { socket, emitted, passed, send };
 }
 
-describe("attachRateLimit (unit)", () => {
+const allow = () =>
+  vi.fn<Limiter["limit"]>(async () => ({ ok: true, remaining: 1, retryAfterMs: 0 }));
+const guardOf = (limit: Limiter["limit"], extra: Partial<RateLimitDeps> = {}) =>
+  createSocketGuard({ limiter: { limit }, clock: createFakeClock(0), log: () => {}, ...extra });
+const ID = { lobby: "lob_1", sub: "usr_1", role: "player" };
+const oversized = "x".repeat(MAX_PAYLOAD_BYTES + 1);
+
+describe("createSocketGuard (unit)", () => {
   it("fails closed: a message Redis cannot count is dropped, logged once, never counted as a refusal", async () => {
     const limiter: Limiter = { limit: () => Promise.reject(new Error("ECONNREFUSED")) };
     const lines: unknown[] = [];
     const { socket, emitted, passed, send } = fakeSocket();
-    attachRateLimit(socket, "lob_1", {
+    createSocketGuard({
       limiter,
       clock: createFakeClock(0),
-      log: (msg, fields) => lines.push({ msg, ...fields }),
-    });
+      log: (msg: string, fields: Record<string, unknown>) => lines.push({ msg, ...fields }),
+    }).admit(socket, ID);
     for (let i = 0; i < 5; i++) send("keys", { v: PROTOCOL_VERSION, batch: [] });
     await settle();
     expect(passed).toEqual([]);
@@ -188,24 +280,127 @@ describe("attachRateLimit (unit)", () => {
   });
 
   it("lets unknown and prototype event names through to Socket.IO (no handler) under the payload cap only", async () => {
-    const limit = vi.fn<Limiter["limit"]>(async () => ({
-      ok: true,
-      remaining: 1,
-      retryAfterMs: 0,
-    }));
+    const limit = allow();
     const { socket, passed, emitted, send } = fakeSocket();
-    attachRateLimit(socket, "lob_1", {
-      limiter: { limit },
-      clock: createFakeClock(0),
-      log: () => {},
-    });
+    guardOf(limit).admit(socket, ID);
     send("constructor", {});
     send("__proto__", {});
-    send("nope", "x".repeat(MAX_PAYLOAD_BYTES + 1));
+    send("nope", oversized);
     await settle();
     expect(passed).toEqual(["constructor", "__proto__"]);
     expect(emitted).toEqual([{ v: PROTOCOL_VERSION, reason: "rate-limit" }]);
     expect(limit).not.toHaveBeenCalled();
+  });
+
+  it("keys the shared bucket on the token identity, never on the socket id", async () => {
+    const limit = allow();
+    const guard = guardOf(limit);
+    const a = fakeSocket("sock_a");
+    const b = fakeSocket("sock_b");
+    guard.admit(a.socket, ID);
+    guard.admit(b.socket, ID);
+    a.send("ping", { v: PROTOCOL_VERSION, sent: 1 });
+    b.send("ping", { v: PROTOCOL_VERSION, sent: 2 });
+    await settle();
+    const keys = limit.mock.calls.map(([key]) => key);
+    expect(keys).toEqual(["lob_1:seat:usr_1:ping", "lob_1:seat:usr_1:ping"]);
+    expect(keys.join()).not.toContain("sock_");
+  });
+
+  it("a burst past the bucket is refused locally: Redis counts at most `max` calls of the window", async () => {
+    const limit = allow();
+    const { socket, passed, emitted, send } = fakeSocket();
+    guardOf(limit).admit(socket, ID);
+    for (let i = 0; i < 40; i++) send("keys", { v: PROTOCOL_VERSION, batch: [] });
+    await settle();
+    expect(limit).toHaveBeenCalledTimes(SOCKET_LIMITS.keys.max);
+    // The admitted batches still reach their handlers; the 3 local refusals cut the socket after.
+    expect(passed).toHaveLength(SOCKET_LIMITS.keys.max);
+    expect(emitted).toHaveLength(3);
+    expect(socket.disconnected).toBe(true);
+  });
+
+  it("once a socket is cut, its later messages never touch Redis or the size walk", async () => {
+    const limit = allow();
+    const { socket, passed, send } = fakeSocket();
+    guardOf(limit).admit(socket, ID);
+    for (let i = 0; i < 3; i++) send("ping", oversized);
+    // Still open until the next tick: a pipelined burst arrives meanwhile.
+    for (let i = 0; i < 100; i++) send("keys", { v: PROTOCOL_VERSION, batch: [] });
+    await settle();
+    expect(limit).not.toHaveBeenCalled();
+    expect(passed).toEqual([]);
+    expect(socket.disconnected).toBe(true);
+  });
+
+  it("refusals of one identity add up across its sockets and survive a reconnection", async () => {
+    const limit = allow();
+    const lines: unknown[] = [];
+    const guard = guardOf(limit, { log: (msg, f) => lines.push({ msg, ...f }) });
+    const a = fakeSocket("sock_a");
+    const b = fakeSocket("sock_b");
+    guard.admit(a.socket, ID);
+    guard.admit(b.socket, ID);
+    a.send("ping", oversized);
+    a.socket.disconnect(true); // reconnection: a fresh socket of the same identity
+    const c = fakeSocket("sock_c");
+    guard.admit(c.socket, ID);
+    b.send("ping", oversized);
+    expect(b.socket.disconnected).toBe(false);
+    c.send("ping", oversized);
+    await settle();
+    // The 3rd refusal of the identity cuts every socket it holds.
+    expect(b.socket.disconnected).toBe(true);
+    expect(c.socket.disconnected).toBe(true);
+    expect(lines).toEqual([
+      { msg: "rate-limit disconnect", socket: "sock_c", lobby: "lob_1", count: 3 },
+    ]);
+  });
+
+  it("a spectator token is its own identity: it never spends the seat's budget", async () => {
+    const limit = allow();
+    const guard = guardOf(limit);
+    const seat = fakeSocket("sock_seat");
+    const projector = fakeSocket("sock_projector");
+    guard.admit(seat.socket, { ...ID, role: "host" });
+    guard.admit(projector.socket, { ...ID, role: "spectator" });
+    seat.send("ping", { v: PROTOCOL_VERSION, sent: 1 });
+    projector.send("ping", { v: PROTOCOL_VERSION, sent: 1 });
+    await settle();
+    expect(limit.mock.calls.map(([key]) => key)).toEqual([
+      "lob_1:seat:usr_1:ping",
+      "lob_1:spectator:usr_1:ping",
+    ]);
+  });
+
+  it(`refuses the identity's socket past ${MAX_SOCKETS_PER_USER}; a slot frees when one closes`, () => {
+    const guard = guardOf(allow());
+    const open = Array.from({ length: MAX_SOCKETS_PER_USER }, (_, i) => fakeSocket(`sock_${i}`));
+    for (const s of open) expect(guard.admit(s.socket, ID)).toBe(true);
+    const extra = fakeSocket("sock_extra");
+    expect(guard.admit(extra.socket, ID)).toBe(false);
+    expect(extra.emitted).toEqual([{ v: PROTOCOL_VERSION, reason: "rate-limit" }]);
+    expect(extra.socket.disconnected).toBe(true);
+    // Another user of the room is not affected.
+    expect(guard.admit(fakeSocket("sock_other").socket, { ...ID, sub: "usr_2" })).toBe(true);
+    open[0]!.socket.disconnect(true);
+    expect(guard.admit(fakeSocket("sock_again").socket, ID)).toBe(true);
+  });
+
+  it("forgets an identity once its sockets are closed and its refusals are older than the window", async () => {
+    const clock = createFakeClock(0);
+    const guard = guardOf(allow(), { clock });
+    const a = fakeSocket();
+    guard.admit(a.socket, ID);
+    a.send("ping", oversized);
+    a.socket.disconnect(true);
+    // A refusal in the window is remembered after the socket closed.
+    expect(guard.size()).toBe(1);
+    clock.advance(REFUSAL_WINDOW_MS + 1);
+    const b = fakeSocket("sock_b");
+    guard.admit(b.socket, ID);
+    b.socket.disconnect(true);
+    expect(guard.size()).toBe(0);
   });
 });
 

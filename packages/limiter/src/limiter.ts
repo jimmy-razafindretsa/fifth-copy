@@ -76,7 +76,8 @@ export function createLimiter(redis: EvalClient, opts: { prefix: string }): Wind
   return {
     async count(key, windowMs, now = Date.now()) {
       if (!key) throw new RangeError("limiter key must not be empty");
-      if (!isPositiveInt(windowMs)) throw new RangeError("limiter windowMs must be an integer >= 1");
+      if (!isPositiveInt(windowMs))
+        throw new RangeError("limiter windowMs must be an integer >= 1");
       const reply = await redis.eval(
         WINDOW_COUNT_LUA,
         1,

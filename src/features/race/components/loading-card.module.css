@@ -1,0 +1,30 @@
+/*
+ * The scene's loading card (#563, design bible 7.3, 7.4 extension): a 7.4 docket (2px ink rule, paper
+ * ground) holding the slammed ink stamp; the slam is clipped by the card, so it never paints over the
+ * telex strip or the typed sheet. The optional tip is a 7.4 row (`120px | 1fr`, dashed separator).
+ */
+
+@reference "../../../app/globals.css";
+
+.card {
+  overflow: hidden;
+  align-self: center;
+  width: min(420px, 100%);
+}
+
+.stamp {
+  display: flex;
+  justify-content: center;
+  padding: 20px 12px;
+}
+
+.tip {
+  margin: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.line {
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.4;
+}

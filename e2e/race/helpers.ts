@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Browser, BrowserContext, Page } from "@playwright/test";
+import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { SignJWT } from "jose";
 import { Client } from "pg";
 import { io, type Socket } from "socket.io-client";
@@ -301,4 +301,68 @@ export async function simulatedPlayers(
     });
   }
   return players;
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+const boxOf = async (locator: Locator): Promise<Box> => (await locator.boundingBox())!;
+export const disjoint = (a: Box, b: Box) =>
+  a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+
+/** The seat view's HUD parts (#561 C5): the ones that must stay on screen at every layout. */
+export const SEAT_HUD = {
+  kicker: (p: Page) => p.getByRole("heading", { level: 1 }),
+  telex: (p: Page) => p.locator("[data-telex]"),
+  nixie: (p: Page) => p.locator('[data-device="nixie"]'),
+  raceCard: (p: Page) => p.locator("[data-race-card]"),
+  notice: (p: Page) => p.locator("[data-seat-status] [data-notice]"),
+  sheet: (p: Page) => p.locator("[data-sheet]"),
+  machine: (p: Page) => p.locator("[data-machine]"),
+  tray: (p: Page) => p.locator("[data-sabotage-tray]"),
+  abandon: (p: Page) => p.locator("[data-abandon]"),
+};
+
+/**
+ * #561 C5's layout check, for the scene's modes (#563 C3: the seat shell holds with the scene off): at
+ * 1280, 1024 and 768 the race card never meets the machine, every HUD part stays on screen and nothing
+ * scrolls sideways. `seat-shell.spec.ts` keeps its own copy (its contract runs unchanged).
+ */
+export async function expectSeatShellLayout(page: Page) {
+  for (const size of [
+    { width: 1280, height: 800 },
+    { width: 1024, height: 768 },
+    { width: 768, height: 1024 },
+  ]) {
+    await page.setViewportSize(size);
+    await expect(page.locator("[data-phones]")).toBeHidden();
+    const card = await boxOf(SEAT_HUD.raceCard(page));
+    const machine = await boxOf(SEAT_HUD.machine(page));
+    expect(disjoint(card, machine), `${size.width}: race card vs machine`).toBe(true);
+    for (const [name, locate] of Object.entries(SEAT_HUD)) {
+      const b = await boxOf(locate(page));
+      const at = `${size.width}x${size.height} ${name}`;
+      expect(b.x, at).toBeGreaterThanOrEqual(0);
+      expect(b.y, at).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width, at).toBeLessThanOrEqual(size.width + 0.5);
+      expect(b.y + b.height, at).toBeLessThanOrEqual(size.height + 0.5);
+    }
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow, `${size.width}: horizontal scroll`).toBeLessThanOrEqual(0);
+  }
+}
+
+/** No WebGL in the page or its frames (#563 C3, the #300 podium pattern): `getContext` answers `null`. */
+export async function withoutWebGL(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      id: string,
+      ...rest: unknown[]
+    ) {
+      if (id === "webgl2" || id === "webgl") return null;
+      return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
+    } as typeof original;
+  });
 }

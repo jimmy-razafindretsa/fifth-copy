@@ -95,6 +95,7 @@ export function run(
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+// run as a script (not when imported: e2e/perf/bundle.spec.ts loads it as CommonJS, without import.meta)
+if (process.argv[1] && /[\\/]bundle-budget\.ts$/.test(process.argv[1])) {
   process.exit(run(process.argv.slice(2)));
 }

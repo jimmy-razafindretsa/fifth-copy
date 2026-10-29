@@ -13,6 +13,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 
 export const BIBLE_DIR = "docs/design/bible";
 export const APP_EMBED_DIR = "docs/design/embeds";
@@ -26,7 +27,11 @@ export const EMBEDS = [
   { source: `${BIBLE_DIR}/Fifth Copy Your Clerk.html`, target: "clerk.html" },
   { source: `${BIBLE_DIR}/Fifth Copy Medal.html`, target: "medal.html" },
   { source: `${APP_EMBED_DIR}/Fifth Copy The Major.html`, target: "major.html" },
+  { source: `${APP_EMBED_DIR}/Fifth Copy Seat.html`, target: "seat.html" },
 ] as const;
+
+/** The seat scene's own weight cap (ADR 0017 Consequences, #563 C6): the page plus the vendor files it loads. */
+export const SEAT_EMBED_BUDGET_KB = 220;
 
 /** three.js r184 files served from `/3d/vendor/` (bible 9: pinned engine). */
 export const VENDOR_FILES = [
@@ -73,6 +78,40 @@ export function expectedEmbeds(root = process.cwd()): { target: string; html: st
     target,
     html: transformEmbed(fs.readFileSync(path.join(root, source), "utf8"), source),
   }));
+}
+
+/**
+ * The files a served embed loads: the page, the importmap's `/3d/vendor/` targets and the relative
+ * modules they import in turn (three.module -> three.core). Paths relative to `root`.
+ */
+export function embedFiles(target: string, root = process.cwd()): string[] {
+  const page = path.join(EMBED_DIR, target);
+  const html = fs.readFileSync(path.join(root, page), "utf8");
+  const map = JSON.parse(IMPORTMAP_RE.exec(html)![1]!) as { imports: Record<string, string> };
+  const modules = new Set<string>();
+  const used = Object.entries(map.imports).filter(([specifier]) =>
+    new RegExp(`from\\s*['"]${specifier.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}['"]`).test(html),
+  );
+  const queue = used.map(([, served]) => path.join("public", served));
+  while (queue.length) {
+    const file = queue.shift()!;
+    if (modules.has(file)) continue;
+    modules.add(file);
+    const js = fs.readFileSync(path.join(root, file), "utf8");
+    for (const m of js.matchAll(/(?:from|import)\s*["'](\.\.?\/[^"']+)["']/g))
+      queue.push(path.join(path.dirname(file), m[1]!));
+  }
+  return [page, ...modules];
+}
+
+/** Gzip (level 9) size of those files, in decimal kB. */
+export function embedWeightKb(target: string, root = process.cwd()): number {
+  return (
+    embedFiles(target, root).reduce(
+      (sum, f) => sum + zlib.gzipSync(fs.readFileSync(path.join(root, f)), { level: 9 }).length,
+      0,
+    ) / 1000
+  );
 }
 
 function vendor(root: string) {

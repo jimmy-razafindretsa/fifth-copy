@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { hasWebGL2, medalView, PodiumMedal } from "./podium-medal";
+import { hasWebGL2 } from "@/components/ui";
+import { medalView, PodiumMedal } from "./podium-medal";
 
 // Contract of #300 C4: the medal mounts through EmbedFrame only near the viewport (the server markup is
 // an idle frame with no src), takes its variant from the URL flag and the bridge, and without WebGL2 the

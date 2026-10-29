@@ -73,3 +73,9 @@ export type {
   SabotageCard,
   SabotageTrayLabels,
 } from "./view/hud-labels";
+/** The 3D seat scene's one input (#563, ADR 0017): a memoised view of the store; race-3d reads nothing else. */
+export { selectSceneView } from "./view/scene-view";
+export type { SceneDesk, ScenePhase, SceneView } from "./view/scene-view";
+/** The scene's loading card (#563 C2) and the phone query the scene leaf skips (phones watch, #292). */
+export { LoadingCard, type LoadingCardProps, type SceneLabels } from "./components/loading-card";
+export { PHONE_QUERY } from "./seat/seat-view";

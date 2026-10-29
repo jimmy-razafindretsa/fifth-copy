@@ -65,14 +65,16 @@ describe("the race route ships no three.js (#561 C7, C9)", () => {
     });
   }
 
-  it("src/app/race composes only @/features/race and @/features/lobby, through their index", () => {
+  it("src/app/race composes only @/features/race and @/features/lobby (and race-3d lazily, #563), through their index", () => {
     const features = ROUTE_FILES.flatMap((f) =>
-      specifiers(readFileSync(f, "utf8"))
-        .map((s) => s.spec)
-        .filter((s) => s.startsWith("@/features/")),
+      specifiers(readFileSync(f, "utf8")).filter((s) => s.spec.startsWith("@/features/")),
     );
     expect(features.length).toBeGreaterThan(0);
-    for (const s of features) expect(["@/features/race", "@/features/lobby"]).toContain(s);
+    for (const { spec, dynamic } of features) {
+      if (spec === "@/features/race-3d")
+        expect(dynamic, "race-3d only through import()").toBe(true);
+      else expect(["@/features/race", "@/features/lobby"]).toContain(spec);
+    }
   });
 
   it("nothing in src imports src/features/race-3d statically", () => {

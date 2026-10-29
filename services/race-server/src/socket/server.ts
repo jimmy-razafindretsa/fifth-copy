@@ -1,6 +1,7 @@
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import type { Keystroke } from "@fifth-copy/engine";
+import type { Limiter } from "@fifth-copy/limiter";
 import {
   abandonSchema,
   bonusPlaySchema,
@@ -24,6 +25,7 @@ import type { Presence } from "../players/presence";
 import type { IngestResult } from "../rooms/ingest";
 import type { Lifecycle } from "../rooms/lifecycle";
 import { createHandshakeMiddleware, type HandshakeDeps } from "./handshake";
+import { attachRateLimit } from "./rate-limit";
 import { audience, deskRoom, lobbyRoom } from "./rooms";
 import { attachSpectator } from "./spectator";
 
@@ -71,6 +73,8 @@ export function attachSocketServer(
     lifecycle: Lifecycle;
     race: RacePort;
     presence: Presence;
+    /** The shared Redis limiter behind the per-socket buckets (#207, `rate-limit.ts`). */
+    limiter: Limiter;
   },
 ): RaceIo {
   const { registry, lifecycle, race, presence } = deps;
@@ -91,6 +95,8 @@ export function attachSocketServer(
     const { lobby, sub, name, role } = socket.data.claims;
     const room = lobbyRoom(lobby);
     const everyone = audience(lobby);
+    // Rate limits and payload cap (#207) run before every handler below, spectators included.
+    attachRateLimit(socket, lobby, { limiter: deps.limiter, clock: deps.clock, log });
 
     // Clock sync (#172): to the sender only, in any phase and any role. A malformed ping is dropped.
     socket.on("ping", (raw: unknown) => {
@@ -201,7 +207,7 @@ export function attachSocketServer(
 
     // Keystrokes (#173, ADR 0006 point 3): parsed here, applied by the runtime only. A malformed
     // batch or a socket not yet seated is dropped silently (spectators are refused by their own
-    // edge, #187); a refusal by phase is `rejected` to the sender. No per-socket rate limit (#207).
+    // edge, #187); a refusal by phase is `rejected` to the sender. Rate limited per socket (#207).
     socket.on("keys", (raw: unknown) => {
       const parsed = keysSchema.safeParse(raw);
       const { desk } = socket.data;
@@ -219,7 +225,7 @@ export function attachSocketServer(
 
     // Abandon (#183, ADR 0006): the desk is the socket's seat, never the payload. Dropped like
     // `keys` when malformed or unseated; refused (`not-running`) outside a running race
-    // or once the desk stopped typing, so a replay changes nothing. No per-socket rate limit (#207).
+    // or once the desk stopped typing, so a replay changes nothing. Rate limited per socket (#207).
     socket.on("abandon", (raw: unknown) => {
       const { desk } = socket.data;
       if (!abandonSchema.safeParse(raw).success || desk === undefined) return;
@@ -236,7 +242,7 @@ export function attachSocketServer(
     // Bonus play (#190, ADR 0006, 0016): the desk is the socket's seat, the card the one the server
     // dealt it, the targets the engine's; the payload carries nothing else. Dropped when malformed
     // or unseated; every refusal (phase, bonuses off, no card, cooldown, nothing to hit) is one
-    // `rejected` to the sender and nothing broadcast. No per-socket rate limit (#207).
+    // `rejected` to the sender and nothing broadcast. Rate limited per socket (#207).
     socket.on("bonus:play", (raw: unknown) => {
       const { desk } = socket.data;
       if (!bonusPlaySchema.safeParse(raw).success || desk === undefined) return;

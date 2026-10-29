@@ -2,6 +2,7 @@ import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Redis } from "ioredis";
 import type { Rng } from "@fifth-copy/engine";
+import { createLimiter } from "@fifth-copy/limiter";
 import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
 import type { Clock, Scheduler, TimerHandle } from "./clock";
 import type { RaceServerEnv } from "./env";
@@ -22,6 +23,7 @@ import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecyc
 import { createRoomRegistry, RECONCILE_MS, type RoomRegistry } from "./rooms/registry";
 import { createTicker } from "./rooms/tick";
 import { audience, deskRoom, spectatorRoom } from "./socket/rooms";
+import { RACE_LIMITER_PREFIX } from "./socket/rate-limit";
 import { attachSocketServer, type RacePort, type RaceIo } from "./socket/server";
 import {
   createSpectatorSlots,
@@ -265,6 +267,8 @@ export function createRaceServer({
     presence,
     resumeKeys,
     spectators,
+    // Per-socket buckets (#207): fails closed, a message Redis cannot count is dropped.
+    limiter: createLimiter(redis, { prefix: RACE_LIMITER_PREFIX }),
   });
   sockets.io = io;
 

@@ -64,7 +64,8 @@ describe("createLimiter (C1, real Redis)", () => {
   it("refused calls do not count against the window", async () => {
     const rule = { max: 1, windowMs: 1_000 };
     expect((await limiter.limit("c", rule, T0)).ok).toBe(true);
-    for (let i = 1; i < 10; i++) expect((await limiter.limit("c", rule, T0 + i * 50)).ok).toBe(false);
+    for (let i = 1; i < 10; i++)
+      expect((await limiter.limit("c", rule, T0 + i * 50)).ok).toBe(false);
     expect((await limiter.limit("c", rule, T0 + 1_000)).ok).toBe(true);
   });
 

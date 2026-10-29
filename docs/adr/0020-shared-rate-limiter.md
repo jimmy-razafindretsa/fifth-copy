@@ -1,7 +1,7 @@
 ---
 id: "0020"
 title: One shared Redis sliding-window rate limiter package for the web app and the race server
-status: proposed
+status: accepted
 category: security
 scope: ["packages/limiter/**", "src/server/limiter/**", "services/race-server/src/socket/rate-limit.ts"]
 supersedes: []

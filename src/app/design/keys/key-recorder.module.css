@@ -118,11 +118,12 @@
   border-collapse: collapse;
 }
 
+/* the heads are the fixture's field names, kept as written (mono, muted): code identifiers, not labels */
 .table th {
-  @apply type-label;
-  font-size: 11px;
+  @apply type-typing;
+  font-size: 12px;
+  font-weight: 500;
   line-height: normal;
-  letter-spacing: 0.16em;
   color: var(--color-fg-muted);
   text-align: left;
   padding: 6px 12px;

@@ -16,7 +16,7 @@ How to read it: sections 1-2 are the reasoning (read once). Sections 3-11 are th
 | School networks may block WebSocket upgrades | cards #442, #443 | polling fallback |
 | Required stack: Next.js App Router + TS, Tailwind, PostgreSQL, Prisma (ADR 0002), three.js, Auth.js, separate Node real-time server, Redis | spec 16.1, 16.2 | fixed choices; architecture decides how they fit together |
 | Minors, no email, Law 25 | spec 12 (R152, R165) | minimal data, guest identity, deletion, retention, no third-party data flows |
-| Own domain, HTTPS, CI/CD on merge, no deploy may kill a live class race | spec 16.5, board critic | one VPS, reverse proxy, draining |
+| Own domain, HTTPS, CI/CD on merge, no deploy may kill a live class race | spec 16.5, board critic | managed hosting (Railway, ADR 0019); race-server drain on deploy is open (#704) |
 | Built by agents one small card at a time (<= ~400 changed lines), fresh context each | `AGENTS.md`, `agents/PROTOCOL.md` | boundaries must be machine-checked; every container has a README, an ADR and a verify command |
 | Lots of statistics, fast profile pages | spec 13 (R168-R183) | raw keystrokes rolled up into daily per-character stats |
 
@@ -24,7 +24,7 @@ Quality attributes with numbers: 10 Hz snapshots; <= 50 ms keystroke batching; 6
 
 ## 2. Architectures considered
 
-The problem has ten independent decisions. For each, the options were scored against: **F** fits the required stack and spec, **R** real-time needs (100 players, authority, instant feedback, school networks), **A** agent-kit fit (small cards, enforceable boundaries, fresh-context readability), **O** operational simplicity for a student team on one VPS, **T** testability. Scale 1-5; the chosen option is bold.
+The problem has ten independent decisions. For each, the options were scored against: **F** fits the required stack and spec, **R** real-time needs (100 players, authority, instant feedback, school networks), **A** agent-kit fit (small cards, enforceable boundaries, fresh-context readability), **O** operational simplicity for a student team with no server to run, **T** testability. Scale 1-5; the chosen option is bold.
 
 ### 2.1 Process topology
 | Option | F | R | A | O | T | Verdict |
@@ -82,7 +82,8 @@ The problem has ten independent decisions. For each, the options were scored aga
 ### 2.8 Hosting
 | Option | Verdict |
 |---|---|
-| **One VPS, Docker Compose, Caddy, CI-built images, deploy-when-idle for the race server** (ADR 0012) | Smallest operable production that meets HTTPS, own domain, CD and "never kill a live race" |
+| **Railway: web, race-server, Postgres, Redis as four services, built from `main` on push** (ADR 0019) | No server to run or patch; TLS, restarts and deploys handled; race-server deploy-when-idle is the open gap (#704) |
+| One VPS, Docker Compose, Caddy, CI-built images, deploy-when-idle for the race server (ADR 0012, superseded by 0019) | Full control, but someone has to run the server; the free VPS could not be created |
 | Vercel web + VPS sockets | Two hosts, cross-origin cookies, data on a third party |
 | Kubernetes | Too much surface |
 | Bare `pm2` on the VPS | No image immutability, harder rollback |
@@ -103,7 +104,7 @@ The problem has ten independent decisions. For each, the options were scored aga
 ### 2.11 The composite
 The chosen architecture stitches the bold rows together:
 
-> **A feature-sliced Next.js modular monolith** (web + worker entry points) that owns identity, lobbies, texts, results, statistics and all persistence, **plus one server-authoritative Socket.IO race service** that owns live rooms in Redis, **both running the same pure race engine** from a shared workspace package and speaking a **single zod-declared protocol**, deployed as **Docker Compose behind Caddy on one VPS** with CI-built images and race-server draining.
+> **A feature-sliced Next.js modular monolith** (web + worker entry points) that owns identity, lobbies, texts, results, statistics and all persistence, **plus one server-authoritative Socket.IO race service** that owns live rooms in Redis, **both running the same pure race engine** from a shared workspace package and speaking a **single zod-declared protocol**, deployed as **four Railway services** (web, race-server, Postgres, Redis; ADR 0019) built from `main` on push.
 
 It is the best fit because every force in section 1 maps to exactly one mechanism, no mechanism exists without a force, and each container can be built and verified by an agent in isolation: the engine by unit tests, the race server by bot rooms, the web app by Playwright, the deploy by the smoke script.
 
@@ -119,7 +120,7 @@ flowchart LR
   FC -->|OAuth: id, login, avatar only| gh["GitHub"]
   FC -->|OAuth: id, login, avatar only| dc["Discord"]
   FC -->|seed corpus, offline| pd["Public-domain texts<br/>(Gutenberg, BAnQ/Gallica)"]
-  ci["GitHub Actions"] -->|images + migrate deploy over SSH| FC
+  ci["GitHub Actions"] -->|checks; Railway builds main on push| FC
 ```
 
 ### 3.2 Containers
@@ -133,19 +134,16 @@ flowchart TB
     ui --- scene
   end
 
-  subgraph vps["VPS: docker compose"]
-    caddy["Caddy<br/>TLS, reverse proxy"]
+  subgraph vps["Railway project (ADR 0019)"]
     web["web: Next.js 16<br/>routes, server actions, Auth.js, Prisma<br/>internal API /api/internal/*"]
     race["race-server: Node + Socket.IO<br/>rooms, authority (@fifth-copy/engine),<br/>bots, bonuses, presence, anti-cheat"]
-    worker["worker: src/worker<br/>rollups, purges, expiry"]
+    worker["worker: src/worker (planned, no Railway service yet)<br/>rollups, purges, expiry"]
     pg[("PostgreSQL 17<br/>system of record")]
     redis[("Redis 7<br/>live rooms, presence,<br/>resume keys, invites, limits")]
   end
 
-  browser -->|HTTPS pages, server actions| caddy
-  browser -->|"wss /socket.io (polling fallback)"| caddy
-  caddy --> web
-  caddy -->|"/socket.io/*, /internal/*"| race
+  browser -->|"HTTPS pages, server actions (Railway domain, TLS)"| web
+  browser -->|"wss /socket.io (polling fallback), own domain, CORS WEB_ORIGIN"| race
   web -->|Prisma| pg
   worker -->|Prisma| pg
   race -->|ioredis| redis
@@ -165,7 +163,7 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 | **worker** (`src/worker`) | Node 24 (web image) | daily char-stat rollup, keystroke purge, lobby expiry, guest retention, deletion follow-ups | serve HTTP; hold sockets |
 | **postgres** | PostgreSQL 17 | all durable data (`prisma/schema/*.prisma`) | live state |
 | **redis** | Redis 7, no persistence | rooms, presence, resume keys, invite tokens, rate limits, result outbox; every key has a TTL | anything that must survive a restart |
-| **caddy** | Caddy 2 | TLS (Let's Encrypt), routing, WebSocket upgrade | auth, CSP (web sets headers) |
+| Railway edge | Railway (ADR 0019) | TLS and one public domain per app (no reverse proxy of ours) | auth, CSP (web sets headers) |
 | `@fifth-copy/engine` | pure TS | race rules (ADR 0007) | IO, clocks, randomness |
 | `@fifth-copy/protocol` | zod | wire shapes, race settings schema, token claims, versions | logic |
 
@@ -200,7 +198,6 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 ├── services/
 │   └── race-server/               @fifth-copy/race-server (ADR 0006, 0008): main, env, http/, socket/, rooms/, players/, bots/, redis/, persist/
 ├── prisma/schema/                 identity, lobby, race, texts, stats, jobs (.prisma, one per feature)
-├── deploy/                        docker-compose.prod.yml, Caddyfile, deploy.sh (ADR 0012)
 ├── e2e/                           Playwright: functional, a11y, visual, perf/, multi-context race specs
 ├── docs/{spec,adr,design,architecture}/   what, decisions, tokens, how
 └── scripts/, agents/, work/       kit
@@ -286,7 +283,7 @@ Client: paste blocked, text rendered as individual spans with `user-select: none
 Projector and phones join the room on the `spectator` channel with a `role: spectator` token (no desk, no `keys`). They receive snapshots and events; the projector view uses the overview camera; phones get the HUD in spectator mode and never mount the typing surface (R36, card #293).
 
 ### 7.9 Capacity
-100 players x 20 keys/s worst case = 2000 keystrokes/s in <= 50 ms batches = <= 2000 small messages/s in; 10 snapshots/s x 100 clients x <= 3 kB (100 late-race desks, benchmarked) = <= 3 MB/s out. One Node process on a 2-vCPU VPS handles this with headroom; the engine step is microseconds. Beyond that: Socket.IO Redis adapter plus room-sticky routing (additive, no protocol change).
+100 players x 20 keys/s worst case = 2000 keystrokes/s in <= 50 ms batches = <= 2000 small messages/s in; 10 snapshots/s x 100 clients x <= 3 kB (100 late-race desks, benchmarked) = <= 3 MB/s out. One Node process with 2 vCPU handles this with headroom; the engine step is microseconds. Beyond that: Socket.IO Redis adapter plus room-sticky routing (additive, no protocol change).
 
 ## 8. Web app design
 
@@ -365,19 +362,17 @@ Data inventory and retention live in `docs/privacy/` (cards #71-#85): user (name
 ```mermaid
 flowchart LR
   dev["Developer / agent PR"] --> ci["GitHub Actions<br/>check, migrations, e2e, visual, perf"]
-  ci -->|on merge to main| build["Build images<br/>fifth-copy-web:sha, fifth-copy-race:sha"]
-  build --> ghcr["GHCR"]
-  ghcr --> deploy["deploy.sh over SSH"]
-  subgraph vps["VPS"]
-    caddy["caddy :443"] --> web["web :3000"]
-    caddy --> race["race-server :4000"]
-    web --> pg[("postgres")]
-    worker["worker"] --> pg
-    race --> redis[("redis")]
+  ci -->|merge to main| railway["Railway: build per service<br/>when its watch paths change"]
+  subgraph rw["Railway project (ADR 0019)"]
+    web["web :8080<br/>pre-deploy: prisma migrate deploy"]
+    race["race-server :4000"]
+    web --> pg[("Postgres")]
+    race --> redis[("Redis")]
+    web -->|private network| race
   end
-  deploy -->|"pull, migrate deploy, up web+worker,<br/>wait rooms==0, up race-server, smoke"| vps
+  railway --> rw
 ```
-Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis), CI (service containers), production (one VPS). A preview/staging host is optional and uses the same compose file with another `.env`.
+Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis), CI (service containers), production (Railway project, ADR 0019). A preview/staging environment is optional (another Railway environment).
 
 ### 11.2 Environment variables (names only)
 | Name | Process | Purpose |
@@ -385,7 +380,7 @@ Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis
 | `DATABASE_URL`, `TEST_DATABASE_URL` | web, worker | Postgres (ADR 0002, 0003) |
 | `REDIS_URL` | race-server, web | live state; web: shared rate limiter, optional, fails open (ADR 0020) |
 | `RACE_SERVER_PORT` | race-server | listen port |
-| `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (same host in production, through Caddy) |
+| `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (the race-server's own Railway domain in production, ADR 0019) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |
 | `RACE_TOKEN_SECRET` | web, race-server | race tokens and internal HMAC |
 | `AUTH_SECRET`, `AUTH_GITHUB_ID/SECRET`, `AUTH_DISCORD_ID/SECRET` | web | Auth.js |
@@ -417,11 +412,11 @@ Suggested order for Iteration 1 technical cards, by dependency:
 |---|---|---|
 | Auth.js adapter assumes an `email` column | Verify in card #38; custom adapter wrapper if needed (ADR 0009 consequence) | builder of #38 |
 | School network blocks WebSocket | Socket.IO polling fallback on; card #443 verifies on a real school network | #442, #443 |
-| Deploy waits for an idle race server during a class | Deploy-when-idle with a 60-minute cap; blue/green is the upgrade path (ADR 0012) | #412 |
+| A deploy cuts a live race during a class | Railway redeploys race-server on every matching push (ADR 0019); until #704 lands, merge race-server or `packages/**` changes outside class time | #704 |
 | Text-changing bonuses vs fairness | Overlay model and clean/adjusted WPM (ADR 0007); teacher confirms values (open question 14) | #198, #445 |
 | Chromebook 3D performance | Quality presets, LODs, HTML text, 2D fallback, CI fps gate (ADR 0013) | #273-#279 |
-| Redis loss during a race | Rooms void, nothing durable lost (ADR 0008); Redis is local to the VPS | #204-#206 |
-| Hosting provider unknown | Compose runs on any Docker host; decide with the teacher (Q4) | #445 |
+| Redis loss during a race | Rooms void, nothing durable lost (ADR 0008); Redis is a Railway service on the private network (ADR 0019) | #204-#206 |
+| Hosting region outside Québec (Railway `sfo`), backups | Owner chose Railway (ADR 0019); PIA s. 17 update #706, backups and restore drill #705 | #705, #706 |
 
 ## 14. Glossary
 **Room**: the live, in-memory and Redis representation of a lobby on the race server. **Lobby**: the durable record (code, host, settings). **Desk**: a player's seat number and identity in a room (humans and bots). **Snapshot**: the full 10 Hz state message. **Overlay**: per-player text modifications caused by bonuses. **Race token**: short-lived JWT minted by web, verified by the race server. **Outbox**: Redis list of results awaiting acknowledgement by the web app. **Drain**: the race server refusing new rooms while live ones finish. **Rollup**: the daily aggregation of raw keystrokes into per-character stats.

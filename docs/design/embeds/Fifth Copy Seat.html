@@ -840,18 +840,19 @@ function applyPreset(p) {
 }
 
 // bible 12 (#695): `auto` starts at LOW on the drawn canvas and climbs one preset at a time. Each step drops
-// its first frame (shader compiles), then measures a window of >= 0.5 s on the wall clock (`performance.now()`,
-// never the clamped animation `dt`): under 18 fps at LOW, the paper fallback; >= 55 fps with a preset left,
+// its first frame (shader compiles), then draws back to back (no rest) and measures a window of >= 0.5 s on
+// the wall clock (frame timestamps, so each frame's commit counts; never the clamped animation `dt`): under
+// 18 fps at LOW, the paper fallback, decided before another frame is drawn; >= 55 fps with a preset left,
 // one up; a browser cap (flat ~30 fps, low CPU ms, not the GPU), MEDIUM; under 18 above LOW, one down;
 // otherwise it settles there. The windows total at most 2 s (ADR 0013). `data-bench` logs the ladder.
 const LADDER = ['low', 'medium', 'high'], WINDOW = 0.5, BENCH_MAX = 2;
-const bench = { on: false, skip: true, start: 0, frames: 0, cpu: 0, total: 0, log: [] };
+const bench = { on: false, skip: true, start: -1, frames: 0, cpu: 0, drawn: 0, total: 0, log: [] };
 let READY = false, INIT = false, pendingReady = false;
 const ready = () => { if (READY || LOST) return; READY = true; send({ type: 'fc-scene-ready', preset: PRESET, fov: camera.fov, desks: PLACED }); };
-function benchStep(p) { applyPreset(p); Object.assign(bench, { on: true, skip: true, frames: 0, cpu: 0 }); }
+function benchStep(p) { applyPreset(p); Object.assign(bench, { on: true, skip: true, start: -1, frames: 0, cpu: 0, drawn: 0 }); }
 function benchWindow(t) {
   bench.on = false; bench.total += t;
-  const fps = bench.frames / t, cpu = bench.cpu / bench.frames, at = LADDER.indexOf(PRESET);
+  const fps = bench.frames / t, cpu = bench.cpu / Math.max(1, bench.drawn), at = LADDER.indexOf(PRESET);
   bench.log.push(PRESET + ':' + Math.round(fps)); document.documentElement.dataset.bench = bench.log.join(' ');
   CAPPED = fps >= 27 && fps <= 33 && cpu < 12;
   if (fps < 18 && at === 0) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' }); return; }
@@ -886,14 +887,21 @@ addEventListener('message', e => {
 
 // #695: the scene shares the race page's main thread (ADR 0017). A drawn frame slower than the Low floor
 // (1/18 s: software WebGL, a starved CPU) is followed by as long a rest with nothing drawn, so the page's
-// keys and timers keep at least half the thread; a scene at or above 18 fps never rests.
+// keys and timers keep at least half the thread; a scene at or above 18 fps never rests. Nothing is drawn
+// before the page's `fc-race-init`: the first frame is the benchmark's (or the forced preset's).
 const SLOW_FRAME_MS = 1000 / 18;
 let fr = 0, ft = 0, drawnAt = -1, rest = 0;
 function loop(now) {
   if (LOST) return;
   requestAnimationFrame(loop);
+  if (!INIT) { last = now; return; }
   if (drawnAt >= 0) { const cost = now - drawnAt; drawnAt = -1; if (cost > SLOW_FRAME_MS) rest = now + cost; }
-  if (now < rest) return;
+  // a step's window runs from the frame after its first (that one compiles the shaders) to this callback
+  if (bench.on && !bench.skip) {
+    if (bench.start < 0) bench.start = now;
+    else if ((bench.frames++, now - bench.start >= WINDOW * 1000)) { benchWindow((now - bench.start) / 1000); if (LOST) return; }
+  }
+  if (!bench.on && now < rest) return;
   drawnAt = now;
   // wall: the real frame time (benchmark and telemetry, #695); dt: clamped, for the animation only
   const wall = Math.max(0, (now - last) / 1000), dt = Math.min(0.05, wall); last = now; t += dt;
@@ -915,12 +923,7 @@ function loop(now) {
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over') { orbitA += reduced() ? 0 : dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
-  // a step's window starts after its first frame is drawn (that frame compiles the shaders)
-  if (bench.on) {
-    const c1 = performance.now();
-    if (bench.skip) { bench.skip = false; bench.start = c1; }
-    else { bench.frames++; bench.cpu += c1 - c0; if (c1 - bench.start >= WINDOW * 1000) benchWindow((c1 - bench.start) / 1000); }
-  }
+  if (bench.on) { if (bench.skip) bench.skip = false; else { bench.drawn++; bench.cpu += performance.now() - c0; } }
   if (pendingReady) { pendingReady = false; ready(); }
   fr++; ft += wall;
   if (ft >= 1) { const i = renderer.info.render; send({ type: 'fc-scene-telemetry', fps: Math.round(fr / ft), calls: i.calls, triangles: i.triangles, preset: PRESET, capped: CAPPED }); fr = 0; ft = 0; }

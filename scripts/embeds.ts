@@ -28,6 +28,7 @@ export const EMBEDS = [
   { source: `${BIBLE_DIR}/Fifth Copy Medal.html`, target: "medal.html" },
   { source: `${APP_EMBED_DIR}/Fifth Copy The Major.html`, target: "major.html" },
   { source: `${APP_EMBED_DIR}/Fifth Copy Seat.html`, target: "seat.html" },
+  { source: `${APP_EMBED_DIR}/Fifth Copy Podium Clerk.html`, target: "podium-clerk.html" },
 ] as const;
 
 /** The seat scene's own weight cap (ADR 0017 Consequences, #563 C6): the page plus the vendor files it loads. */

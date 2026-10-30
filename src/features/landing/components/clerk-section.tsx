@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { SaveClerkOutfit } from "@/features/identity";
 import { cn } from "@/lib/cn";
 import { EmbedFrame, Star, useEmbedBridge } from "@/components/ui";
 import {
@@ -11,7 +12,8 @@ import {
   type Outfit,
   type OutfitCategory,
 } from "../embed-messages";
-import { EMBEDS } from "../links";
+import { outfitSaver } from "../clerk-outfit-saver";
+import { clerkEmbedSrc } from "../links";
 import shared from "./landing.module.css";
 import styles from "./sections.module.css";
 
@@ -36,6 +38,10 @@ type Props = {
   /** The viewer's typist name with its honorific, or null before a guest exists. */
   name: string | null;
   lockerHref: string;
+  /** The viewer's saved outfit (identity `getClerkOutfit`), or null: the embed then issues a random one. */
+  savedOutfit: Outfit | null;
+  /** identity's `saveClerkOutfit`, passed by the server page; null for a visitor without identity. */
+  save: SaveClerkOutfit | null;
 };
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
@@ -43,11 +49,19 @@ const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 /**
  * Your clerk (bible 14.1 item 5, 10.2, 15): the clerk embed follows the cursor anywhere on the page
  * (`fc-look`, throttled with rAF), a click or REISSUE UNIFORM hops into a new uniform (`fc-reissue`),
- * and every `fc-clerk` message fills the personnel file's issued-uniform rows.
+ * and every `fc-clerk` message fills the personnel file's issued-uniform rows. A viewer's outfit is saved
+ * whenever the clerk reports one that differs from the last saved (#687); the saved one opens the embed.
  */
-export function ClerkSection({ labels, name, lockerHref }: Props) {
+export function ClerkSection({ labels, name, lockerHref, savedOutfit, save }: Props) {
   const [outfit, setOutfit] = useState<Outfit | null>(null);
-  const onMessage = useCallback((message: { cfg: Outfit }) => setOutfit(message.cfg), []);
+  const [saveIfChanged] = useState(() => outfitSaver(save, savedOutfit));
+  const onMessage = useCallback(
+    (message: { cfg: Outfit }) => {
+      setOutfit(message.cfg);
+      saveIfChanged(message.cfg);
+    },
+    [saveIfChanged],
+  );
   const { ref, post } = useEmbedBridge(parseClerkMessage, onMessage);
 
   useEffect(() => {
@@ -89,7 +103,7 @@ export function ClerkSection({ labels, name, lockerHref }: Props) {
         <Star size={54} tone="faintInk" spin={70} at={{ left: 24, bottom: 28, zIndex: 0 }} />
         <EmbedFrame
           ref={ref}
-          src={EMBEDS.clerk}
+          src={clerkEmbedSrc(savedOutfit)}
           title={labels.stageTitle}
           className={styles.stageEmbed}
         />

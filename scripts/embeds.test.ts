@@ -157,3 +157,118 @@ describe("seat page (#563)", () => {
     expect(embedWeightKb("seat.html")).toBeLessThanOrEqual(SEAT_EMBED_BUDGET_KB);
   });
 });
+
+// #687 C6: the clerk page reads the saved outfit from `?cfg=` for its first frame. The function is run from
+// the served page's own source against a fake `location`, so the test exercises exactly what ships.
+describe("clerk page ?cfg= (#687)", () => {
+  const clerk = fs.readFileSync(path.join(EMBED_DIR, "clerk.html"), "utf8");
+  const source = (re: RegExp) => {
+    const m = re.exec(clerk);
+    if (!m) throw new Error(`not found: ${re}`);
+    return m[0];
+  };
+  const cats = source(/const CATS = \{[\s\S]*?\n\};/);
+  const hairCol = source(/const HAIRCOL = \[[^\]]*\];/);
+  const cfgFlag = source(/function cfgFlag\(\) \{[\s\S]*?\n\}/);
+  const run = (search: string) =>
+    new Function("location", `${cats}\n${hairCol}\n${cfgFlag}\nreturn cfgFlag();`)({
+      search,
+    }) as unknown;
+  const saved = {
+    hair: "quiff",
+    glasses: "monocle",
+    hat: "beret",
+    clothes: "braces",
+    face: "beard",
+    hairCol: "#C9A465",
+  };
+  const flag = (v: unknown) => `?cfg=${encodeURIComponent(JSON.stringify(v))}`;
+
+  it("issues a valid saved outfit on load instead of a random one, locker first", () => {
+    expect(clerk).toContain(
+      "issue(LOCKER ? { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: HAIRCOL[0] } : cfgFlag());",
+    );
+    expect(run(flag(saved))).toEqual(saved);
+  });
+
+  it("keeps only the six known keys", () => {
+    expect(run(flag({ ...saved, onload: "x", __proto__: { a: 1 } }))).toEqual(saved);
+  });
+
+  it.each([
+    ["absent", ""],
+    ["not JSON", "?cfg=%7Bnope"],
+    ["null", flag(null)],
+    ["an array", flag([saved])],
+    ["an unknown id", flag({ ...saved, hat: "crown" })],
+    ["a markup id", flag({ ...saved, hair: "<img src=x onerror=alert(1)>" })],
+    ["an unknown colour", flag({ ...saved, hairCol: "#FFFFFF" })],
+    ["a missing slot", flag({ ...saved, face: undefined })],
+    ["a non-string id", flag({ ...saved, hair: ["side"] })],
+  ])("falls back to a random issue when the flag is %s", (_name, search) => {
+    expect(run(search)).toBeUndefined();
+  });
+});
+
+// #687: the clerk page acts on `fc-setcfg` / `fc-reissue` / `fc-look` only from its embedding page at its
+// own origin (bible 15). The listener is run from the served page's own source with stubbed globals.
+describe("clerk page messages (#687)", () => {
+  const clerk = fs.readFileSync(path.join(EMBED_DIR, "clerk.html"), "utf8");
+  const listener = /addEventListener\('message', [^\n]*/.exec(clerk)?.[0];
+  const origin = "https://fifth-copy.test";
+  const page = {};
+  const cfg = {
+    hair: "quiff",
+    glasses: "monocle",
+    hat: "beret",
+    clothes: "braces",
+    face: "beard",
+    hairCol: "#C9A465",
+  };
+
+  function mount() {
+    let handler: ((e: unknown) => void) | undefined;
+    const calls: unknown[][] = [];
+    const run = new Function(
+      "addEventListener",
+      "location",
+      "parent",
+      "issue",
+      "play",
+      "click",
+      `let mx = 0, my = 0;\n${listener}\nreturn () => [mx, my];`,
+    );
+    const look = run(
+      (type: string, fn: (e: unknown) => void) => type === "message" && (handler = fn),
+      { origin },
+      page,
+      (c: unknown) => calls.push(["issue", c]),
+      (n: unknown) => calls.push(["play", n]),
+      () => calls.push(["click"]),
+    ) as () => [number, number];
+    return { send: (e: unknown) => handler!(e), calls, look };
+  }
+
+  it("applies fc-setcfg and fc-reissue from its parent at its own origin", () => {
+    expect(listener).toBeDefined();
+    const { send, calls, look } = mount();
+    send({ origin, source: page, data: { type: "fc-setcfg", cfg } });
+    send({ origin, source: page, data: { type: "fc-reissue" } });
+    send({ origin, source: page, data: { type: "fc-look", x: 0.5, y: -0.5 } });
+    expect(calls).toEqual([["issue", cfg], ["play", "tryon"], ["click"]]);
+    expect(look()).toEqual([0.5, -0.5]);
+  });
+
+  it.each([
+    ["another origin", { origin: "https://elsewhere.test", source: page }],
+    ["the opaque origin", { origin: "null", source: page }],
+    ["another window at its own origin", { origin, source: {} }],
+  ])("ignores every message from %s", (_name, from) => {
+    const { send, calls, look } = mount();
+    send({ ...from, data: { type: "fc-setcfg", cfg } });
+    send({ ...from, data: { type: "fc-reissue" } });
+    send({ ...from, data: { type: "fc-look", x: 1, y: 1 } });
+    expect(calls).toEqual([]);
+    expect(look()).toEqual([0, 0]);
+  });
+});

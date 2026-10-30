@@ -82,8 +82,9 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(verdicts).toEqual([...Array<boolean>(10).fill(true), false]);
   });
 
-  it("defines the lobby rules (#699) and the rules #90, #120 and #121 will wire", () => {
+  it("defines the lobby rules (#699), the clerk outfit rule (#687) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
+      "clerk-outfit",
       "invite",
       "join-by-code",
       "lobby-codes",
@@ -96,6 +97,7 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(LIMITS["mint-race-token"]).toEqual({ max: 10, windowMs: 60_000 });
     expect(LIMITS["mint-race-token-new-guest"]).toEqual({ max: 120, windowMs: 60_000 });
     expect(LIMITS["lobby-codes"]).toEqual({ max: 20, windowMs: 60_000 });
+    expect(LIMITS["clerk-outfit"]).toEqual({ max: 30, windowMs: 60_000 });
   });
 
   it("fails open on a closed port with one warning, never the URL", async () => {

@@ -1,9 +1,41 @@
-import { describe, expect, it } from "vitest";
-import { parseClerkMessage, parseViewMessage } from "./embed-messages";
+import { describe, expect, it, vi } from "vitest";
+import {
+  OUTFIT_CATEGORIES,
+  parseClerkMessage,
+  parseViewMessage,
+  sameOutfit,
+} from "./embed-messages";
+
+// The identity barrel is server code: importing it validates the env, which this test does not need.
+vi.mock("@/env", () => ({ env: {} }));
+const { OUTFIT_CATEGORIES: IDENTITY_CATEGORIES } = await import("@/features/identity");
 
 // #626: the embed messages are parsed by hand-written guards (no zod in the landing first load);
 // they accept and reject exactly what the former zod schemas did.
-const cfg = { hair: "bob", glasses: "none", hat: "cap", clothes: "suit", face: "calm" };
+// Shape only: ids are the server's business (outfitSchema); hairCol is required since #687.
+const cfg = {
+  hair: "bob",
+  glasses: "none",
+  hat: "cap",
+  clothes: "suit",
+  face: "calm",
+  hairCol: "#000",
+};
+
+describe("OUTFIT_CATEGORIES (#687 C7)", () => {
+  it("equals identity's list (no third list can drift)", () => {
+    expect(OUTFIT_CATEGORIES).toEqual(IDENTITY_CATEGORIES);
+  });
+});
+
+describe("sameOutfit (#687 C7)", () => {
+  it("compares the six slots", () => {
+    expect(sameOutfit(cfg, { ...cfg })).toBe(true);
+    expect(sameOutfit(cfg, null)).toBe(false);
+    expect(sameOutfit(cfg, { ...cfg, hairCol: "#111" })).toBe(false);
+    expect(sameOutfit(cfg, { ...cfg, face: "beard" })).toBe(false);
+  });
+});
 
 describe("parseClerkMessage", () => {
   it("accepts an fc-clerk message and returns only the outfit fields", () => {
@@ -11,12 +43,10 @@ describe("parseClerkMessage", () => {
       type: "fc-clerk",
       cfg,
     });
-    expect(parseClerkMessage({ type: "fc-clerk", cfg: { ...cfg, hairCol: "#000", x: 1 } })).toEqual(
-      {
-        type: "fc-clerk",
-        cfg: { ...cfg, hairCol: "#000" },
-      },
-    );
+    expect(parseClerkMessage({ type: "fc-clerk", cfg: { ...cfg, x: 1 } })).toEqual({
+      type: "fc-clerk",
+      cfg,
+    });
   });
 
   it.each([
@@ -28,6 +58,7 @@ describe("parseClerkMessage", () => {
     ["a missing slot", { type: "fc-clerk", cfg: { ...cfg, hat: undefined } }],
     ["a non-string slot", { type: "fc-clerk", cfg: { ...cfg, face: 3 } }],
     ["a non-string hair colour", { type: "fc-clerk", cfg: { ...cfg, hairCol: 0 } }],
+    ["no hair colour", { type: "fc-clerk", cfg: { ...cfg, hairCol: undefined } }],
   ])("rejects %s", (_name, data) => {
     expect(parseClerkMessage(data)).toBeNull();
   });

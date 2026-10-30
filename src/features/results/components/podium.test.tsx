@@ -1,10 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
-import { dawnReportFixtures, placeSlots, type ReportEntry } from "../view/dawn-report";
+import { placeSlots, type ReportEntry } from "../view/dawn-report";
+import { dawnReportFixtures } from "../view/dawn-report-fixtures";
 import { podiumLabels } from "../view/report-labels";
 import { Podium } from "./podium";
+
+// The fixtures read identity's barrel (outfitForDesk), server code that validates the env on import.
+vi.mock("@/env", () => ({ env: {} }));
 
 // Contract of #300 C3: the podium renders at most three plinths from places 1-3 (DOM in place order,
 // CSS 2 | 1 | 3), each with the medal slot, `DESK nn · name`, clean WPM and `97 %`; UNFILLED, TIED,

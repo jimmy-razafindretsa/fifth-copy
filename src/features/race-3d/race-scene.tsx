@@ -31,7 +31,7 @@ export type RaceSceneProps = {
   scene?: string | null;
   /** The frame's name (catalog `race.scene.title`); the frame is decorative all the same. */
   title: string;
-  /** The preset is settled (benchmark done, or the forced preset's first frame): the loading card goes. */
+  /** The room's first frame at the settled (probed or forced) preset, #695: the loading card goes. */
   onReady?: () => void;
   /**
    * The scene cannot run, or (`frame-budget`, #695) can no longer hold its frame budget: the page drops

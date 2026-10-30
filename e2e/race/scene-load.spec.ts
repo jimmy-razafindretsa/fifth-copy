@@ -11,11 +11,12 @@ import {
 } from "./helpers";
 
 // Contract of #695 C2, C4, C5, C8 (ADR 0013 fallback below Low, ADR 0017 shared main thread, bible 12,
-// 7.4, 14.3): the seat scene never costs the player the race. The `auto` benchmark runs on a drawn canvas
-// (never transparent or hidden while loading, behind the loading card), starts at LOW and, on software
-// WebGL (SwiftShader draws LOW at ~4 fps at 1280x800), falls back to paper before it is ever ready, also
-// under CPU throttling (CDP `Emulation.setCPUThrottlingRate`, SCENE_E2E_THROTTLE, default 8), where GO
-// and the keystroke batches stay on time. A forced `?preset=low` scene blows its frame budget at runtime;
+// 7.4, 14.3): the seat scene never costs the player the race. The `auto` benchmark is a fixed probe drawn
+// before any of the room exists (owner DECISION "Benchmark avant la salle"), on the visible layer (never
+// transparent or hidden while loading, behind the loading card); on software WebGL (SwiftShader) it reads
+// under PROBE_MIN_FPS and falls back to paper without the room ever being built (`data-room` stays `none`),
+// also under CPU throttling (CDP `Emulation.setCPUThrottlingRate`, SCENE_E2E_THROTTLE, default 8), where
+// the notice is up within 5 s of GO and GO and the keystroke batches stay on time. A forced `?preset=low` scene blows its frame budget at runtime;
 // the `?scene=pin` control (C9) keeps it and input stays on time. `@scene` (e2e/fixtures.ts keeps the
 // scene off elsewhere), desktop project only, every test wait through e2e/timeouts.ts (the 1500 ms input
 // limits are the contract's, not test waits).
@@ -52,7 +53,12 @@ type Seen = {
   presets: string[];
   /** Computed styles of a loading layer that was not drawn, or a loading layer without its card. */
   hidden: string[];
+  /** The frame's `data-bench` (`probe:<fps>`, then the settled preset on a passing device). */
   bench: string | null;
+  /** Every value the frame's `data-room` took (`none`, `building`, `ready`), in order. */
+  rooms: string[];
+  /** `Date.now()` when the page first showed paper: one slot notice, none in the status, no scene layer. */
+  paperAt: number | null;
   /**
    * State changes since the page's first script (scene, preset, phase, notices) and every main-thread
    * frame longer than 300 ms (a drawn scene frame, a build slice, the page's own work), for failure output.
@@ -72,7 +78,13 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
   test.afterEach(async ({ page }, info) => {
     if (info.status !== info.expectedStatus) {
       const log = await seen(page)
-        .then((x) => [...x.log, `bench ${x.bench}`, `keys frames ${keysSent || "-"}`].join("\n"))
+        .then((x) =>
+          [
+            ...x.log,
+            `bench ${x.bench} room ${x.rooms.join(">")}`,
+            `keys frames ${keysSent || "-"}`,
+          ].join("\n"),
+        )
         .catch(() => "no timeline");
       keysSent = "";
       await info.attach("scene timeline", { body: log, contentType: "text/plain" });
@@ -91,12 +103,18 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     await page.addInitScript(() => {
       type W = { __seen?: Seen };
       if (window !== window.top) {
-        // the seat frame (same origin): hand its `data-bench` ladder to the page as it grows
+        // the seat frame (same origin): hand its `data-bench` and every `data-room` to the page
         new MutationObserver(() => {
-          const bench = document.documentElement?.dataset.bench;
-          const top = window.top as unknown as W | null;
-          if (bench && top?.__seen) top.__seen.bench = bench;
-        }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-bench"] });
+          const { bench, room } = document.documentElement?.dataset ?? {};
+          const top = (window.top as unknown as W | null)?.__seen;
+          if (!top) return;
+          if (bench) top.bench = bench;
+          if (room && top.rooms.at(-1) !== room) top.rooms.push(room);
+        }).observe(document, {
+          subtree: true,
+          attributes: true,
+          attributeFilter: ["data-bench", "data-room"],
+        });
         return;
       }
       const s: Seen = {
@@ -107,6 +125,8 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
         presets: [],
         hidden: [],
         bench: null,
+        rooms: [],
+        paperAt: null,
         log: [],
       };
       const t0 = Date.now();
@@ -120,6 +140,12 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
         const notices = document.querySelectorAll('[data-notice="no-scene"]').length;
         const now = `scene=${layer?.dataset.scene ?? "none"} preset=${layer?.dataset.scenePreset ?? "-"} phase=${phase ?? "-"} notices=${notices}`;
         if (now !== last) s.log.push(`+${Date.now() - t0}ms ${(last = now)}`);
+        const slot = document.querySelectorAll('[data-seat-scene] [data-notice="no-scene"]').length;
+        const status = document.querySelectorAll(
+          '[data-seat-status] [data-notice="no-scene"]',
+        ).length;
+        if (s.paperAt === null && !layer && slot === 1 && notices === 1 && status === 0)
+          s.paperAt = Date.now();
         if (!layer) return;
         const preset = layer.dataset.scenePreset;
         if (preset && !s.presets.includes(preset)) s.presets.push(preset);
@@ -154,7 +180,13 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
         subtree: true,
         childList: true,
         attributes: true,
-        attributeFilter: ["data-scene", "data-scene-preset", "data-scene-budget", "data-phase"],
+        attributeFilter: [
+          "data-scene",
+          "data-scene-preset",
+          "data-scene-budget",
+          "data-phase",
+          "data-notice",
+        ],
       });
     });
   });
@@ -247,20 +279,21 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     expect(hasSeatFrame(page), "the /3d/seat.html frame is gone").toBe(false);
   }
 
-  /** C8 on software WebGL: drawn while loading, never ready, never above LOW, the ladder logged from LOW. */
-  async function benchmarkFellBack(page: Page) {
+  /**
+   * C8 on software WebGL: the layer drawn while loading, never ready, one probe reading in `data-bench`
+   * and no preset settled, the room never built (`data-room` only ever `none`).
+   */
+  async function probeFellBack(page: Page) {
     const s = await seen(page);
     expect(s.loading, "the loading layer was seen").toBe(true);
     expect(s.hidden, "the loading layer is drawn (opacity 1, visible) under its card").toEqual([]);
     expect(s.ready, 'a [data-scene="ready"] was seen').toBe(false);
-    expect(
-      s.presets.filter((p) => p !== "low"),
-      "a data-scene-preset above low",
-    ).toEqual([]);
-    if (s.bench !== null) expect(s.bench, "the data-bench ladder").toMatch(/^low:\d+/);
+    expect(s.presets, "a data-scene-preset was reported").toEqual([]);
+    expect(s.bench, "data-bench: exactly one probe reading").toMatch(/^probe:\d+$/);
+    expect(s.rooms, "data-room never left none").toEqual(["none"]);
   }
 
-  test("C4 (a) C8 throttled auto: GO and input on time, the benchmark falls back to paper, never ready", async ({
+  test("C4 (a) C8 throttled auto: the probe sends the page to paper before the room exists; GO and input on time", async ({
     page,
     browser,
   }) => {
@@ -268,15 +301,24 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     await throttle(page);
     const room = await seat(page, browser, "");
     const goAt = await go(page, room.host);
+    // the notice within 5 s of GO (the observer saw it as it happened: typing starts at GO meanwhile)
+    const paper = (async () => {
+      await onPaper(page, goAt + scaled(5_000) - Date.now());
+      return (await seen(page)).paperAt;
+    })();
+    paper.catch(() => {}); // awaited below; a miss fails there, after the typing
     await inputOnTime(page, room.sent);
+    const paperAt = await paper;
+    expect(paperAt, "paper (one slot notice, no scene) was seen").not.toBeNull();
+    expect(paperAt! - goAt, "paper after GO (ms)").toBeLessThanOrEqual(scaled(5_000));
 
-    await onPaper(page, goAt + scaled(20_000) - Date.now());
+    await onPaper(page, 1);
     await page.waitForTimeout(2_000);
     await expect(anyNotice(page)).toHaveCount(1);
-    await benchmarkFellBack(page);
+    await probeFellBack(page);
   });
 
-  test("C8 unthrottled auto: the LOW benchmark is drawn under the loading card and falls back, never ready", async ({
+  test("C8 unthrottled auto: the probe is drawn under the loading card and falls back, the room never built", async ({
     page,
     browser,
   }) => {
@@ -285,8 +327,7 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     await onPaper(page, scaled(60_000));
     await page.waitForTimeout(2_000);
     await expect(anyNotice(page)).toHaveCount(1);
-    await benchmarkFellBack(page);
-    expect((await seen(page)).bench, "the embed logged its ladder").toMatch(/^low:\d+/);
+    await probeFellBack(page);
   });
 
   test("C4 (b) C2 runtime budget: a forced ?preset=low scene under 18 fps falls back within 15 s of ready, the race goes on", async ({
@@ -297,8 +338,9 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     const room = await seat(page, browser, "?preset=low");
     // ready first (the fallback may follow within seconds: the init script saw it as it happened)
     await expect.poll(async () => (await seen(page)).ready, { timeout: scaled(60_000) }).toBe(true);
-    const { readyAt, budget } = await seen(page);
+    const { readyAt, budget, bench } = await seen(page);
     expect(budget, "data-scene-budget").toBe("on");
+    expect(bench, "a forced preset runs no probe (data-bench empty)").toBeNull();
     await go(page, room.host);
     const chars = (await raceText(page)).slice(0, TYPED);
 

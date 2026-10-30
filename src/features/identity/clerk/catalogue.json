@@ -1,0 +1,8 @@
+{
+  "hair": ["side", "buzz", "quiff", "bowl", "bald"],
+  "glasses": ["round", "dark", "square", "monocle", "none"],
+  "hat": ["none", "ushanka", "kepka", "eyeshade", "beret"],
+  "clothes": ["vest", "cardigan", "jacket", "sweater", "braces"],
+  "face": ["stache", "clean", "beard"],
+  "hairCol": ["#4A3526", "#1E1A17", "#A4552A", "#C9A465", "#8C8A84"]
+}

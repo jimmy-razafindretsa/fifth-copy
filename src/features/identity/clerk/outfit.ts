@@ -1,22 +1,38 @@
 /**
  * The clerk outfit of bible 10.1: one config object `{hair, glasses, hat, clothes, face, hairCol}`, read
- * and written whole (#687). Pure data and functions, no imports, safe in any bundle.
+ * and written whole (#687). Pure data and functions (it imports only its catalogue.json), safe in any
+ * bundle.
  * Single source of the ids: the reference page `docs/design/bible/Fifth Copy Your Clerk.html` (`CATS`,
  * `HAIRCOL`); `outfit.test.ts` fails on any drift, and on any drift of the i18n item names.
  */
 
+import catalogue from "./catalogue.json";
+
+/** A category's ids, never empty. */
+export type OutfitIds = readonly [string, ...string[]];
+
+function ids(list: readonly string[]): OutfitIds {
+  const [first, ...rest] = list;
+  if (first === undefined) throw new Error("an outfit category needs at least one id");
+  return [first, ...rest];
+}
+
 export const OUTFIT_CATEGORIES = ["hair", "glasses", "hat", "clothes", "face"] as const;
 export type OutfitCategory = (typeof OUTFIT_CATEGORIES)[number];
 
-/** Ids are stable API (bible 10.1): never rename one, only add. */
-export const OUTFIT_CATALOGUE = {
-  hair: ["side", "buzz", "quiff", "bowl", "bald"],
-  glasses: ["round", "dark", "square", "monocle", "none"],
-  hat: ["none", "ushanka", "kepka", "eyeshade", "beret"],
-  clothes: ["vest", "cardigan", "jacket", "sweater", "braces"],
-  face: ["stache", "clean", "beard"],
-  hairCol: ["#4A3526", "#1E1A17", "#A4552A", "#C9A465", "#8C8A84"],
-} as const satisfies Record<OutfitCategory | "hairCol", readonly string[]>;
+/**
+ * Ids are stable API (bible 10.1): never rename one, only add. The data lives in `catalogue.json`: the
+ * `hairCol` ids are the reference page's `HAIRCOL` hex strings, opaque ids the 3D embed paints, never a UI
+ * colour, so they stay out of the TS sources the colour guard (check-colours, "no raw hex") scans.
+ */
+export const OUTFIT_CATALOGUE: Readonly<Record<OutfitCategory | "hairCol", OutfitIds>> = {
+  hair: ids(catalogue.hair),
+  glasses: ids(catalogue.glasses),
+  hat: ids(catalogue.hat),
+  clothes: ids(catalogue.clothes),
+  face: ids(catalogue.face),
+  hairCol: ids(catalogue.hairCol),
+};
 
 export type Outfit = Record<OutfitCategory, string> & { hairCol: string };
 

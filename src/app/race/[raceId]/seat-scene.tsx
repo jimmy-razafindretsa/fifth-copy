@@ -51,13 +51,12 @@ export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
   useEffect(() => {
     if (decided.current || window.matchMedia(PHONE_QUERY).matches) return;
     decided.current = true;
-    /* eslint-disable react-hooks/set-state-in-effect -- the HUD-first gate: browser-only facts, read once after mount */
+    // the HUD-first gate: browser-only facts, read once after mount
     const search = new URLSearchParams(window.location.search);
     setPreset(search.get("preset"));
     setScene(search.get("scene"));
     setTip(tips.length ? tips[Math.floor(Math.random() * tips.length)]! : null);
     setMode(hasWebGL2() ? "loading" : "fallback");
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [tips]);
 
   if (mode === "off") return null;

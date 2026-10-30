@@ -24,6 +24,8 @@ const SLOW_FILES = [
   "services/race-server/src/rooms/lifecycle.test.ts",
   "services/race-server/src/players/presence.test.ts",
   "services/race-server/src/rooms/snapshot.bench.test.ts",
+  // 20 timed 10,000-name batches (#647): over the 5 s default when the machine is loaded.
+  "src/features/texts/profanity/is-clean.test.ts",
 ];
 const SLOW_TEST_TIMEOUT_MS = 60_000;
 

@@ -1,4 +1,4 @@
-import { getViewer } from "@/features/identity";
+import { getClerkOutfit, getViewer, saveClerkOutfit } from "@/features/identity";
 import { fill, getT } from "@/i18n";
 import { LINKS } from "../links";
 import { ClerkSection } from "./clerk-section";
@@ -29,6 +29,8 @@ type Props = {
 export async function LandingPage({ primary, entries, finalAction }: Props) {
   const [t, viewer] = await Promise.all([getT(), getViewer()]);
   const name = viewer ? fill(t.header.honorific, { name: viewer.name }) : null;
+  // The saved clerk outfit (#687): read and saved only for a viewer; an anonymous visitor gets neither.
+  const savedOutfit = viewer ? await getClerkOutfit(viewer.id) : null;
   return (
     <div className={styles.page} data-default-theme="light">
       <LandingHeader />
@@ -36,7 +38,13 @@ export async function LandingPage({ primary, entries, finalAction }: Props) {
         <LandingHero primary={primary} entries={entries} />
         <TickerBand />
         <StorySection />
-        <ClerkSection labels={t.landing.clerk} name={name} lockerHref={LINKS.locker} />
+        <ClerkSection
+          labels={t.landing.clerk}
+          name={name}
+          lockerHref={LINKS.locker}
+          savedOutfit={savedOutfit}
+          save={viewer ? saveClerkOutfit : null}
+        />
         <HistorySection />
         <HowSection />
         <FinalCall action={finalAction} />

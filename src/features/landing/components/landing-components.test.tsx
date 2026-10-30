@@ -43,7 +43,13 @@ describe("LiveFeed", () => {
 describe("ClerkSection", () => {
   it("renders the pending personnel file for an unassigned visitor and the rank ladder", () => {
     const html = renderToStaticMarkup(
-      <ClerkSection labels={en.landing.clerk} name={null} lockerHref="/locker" />,
+      <ClerkSection
+        labels={en.landing.clerk}
+        name={null}
+        lockerHref="/locker"
+        savedOutfit={null}
+        save={null}
+      />,
     );
     expect(html).toContain("UNASSIGNED");
     expect(html.match(/<dd>…<\/dd>/g)).toHaveLength(5);
@@ -55,7 +61,13 @@ describe("ClerkSection", () => {
 
   it("files the viewer's name when there is one", () => {
     const html = renderToStaticMarkup(
-      <ClerkSection labels={en.landing.clerk} name="Comrade Sparrow-482" lockerHref="/locker" />,
+      <ClerkSection
+        labels={en.landing.clerk}
+        name="Comrade Sparrow-482"
+        lockerHref="/locker"
+        savedOutfit={null}
+        save={null}
+      />,
     );
     expect(html).toContain("Comrade Sparrow-482");
     expect(html).not.toContain("UNASSIGNED");

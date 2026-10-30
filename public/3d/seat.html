@@ -881,10 +881,17 @@ addEventListener('message', e => {
   if (d.type === 'fc-race-preset' && PRESETS[d.preset]) applyPreset(d.preset);
 });
 
-let fr = 0, ft = 0;
+// #695: the scene shares the race page's main thread (ADR 0017). A drawn frame slower than the Low floor
+// (1/18 s: software WebGL, a starved CPU) is followed by as long a rest with nothing drawn, so the page's
+// keys and timers keep at least half the thread; a scene at or above 18 fps never rests.
+const SLOW_FRAME_MS = 1000 / 18;
+let fr = 0, ft = 0, drawnAt = -1, rest = 0;
 function loop(now) {
   if (LOST) return;
   requestAnimationFrame(loop);
+  if (drawnAt >= 0) { const cost = now - drawnAt; drawnAt = -1; if (cost > SLOW_FRAME_MS) rest = now + cost; }
+  if (now < rest) return;
+  drawnAt = now;
   // wall: the real frame time (benchmark and telemetry, #695); dt: clamped, for the animation only
   const wall = Math.max(0, (now - last) / 1000), dt = Math.min(0.05, wall); last = now; t += dt;
   const c0 = performance.now();

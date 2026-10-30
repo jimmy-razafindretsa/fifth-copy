@@ -53,7 +53,10 @@ type Seen = {
   /** Computed styles of a loading layer that was not drawn, or a loading layer without its card. */
   hidden: string[];
   bench: string | null;
-  /** State changes since the page's first script (scene, preset, phase, notices), for failure output. */
+  /**
+   * State changes since the page's first script (scene, preset, phase, notices) and every main-thread
+   * frame longer than 300 ms (a drawn scene frame, a build slice, the page's own work), for failure output.
+   */
   log: string[];
 };
 const seen = (page: Page) => page.evaluate(() => (window as unknown as { __seen: Seen }).__seen);
@@ -64,11 +67,14 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
 
   const opened: BrowserContext[] = [];
   let players: SimulatedPlayer[] = [];
+  /** `keys` frames sent while typing, ms after the first press (failure output). */
+  let keysSent = "";
   test.afterEach(async ({ page }, info) => {
     if (info.status !== info.expectedStatus) {
       const log = await seen(page)
-        .then((x) => [...x.log, `bench ${x.bench}`].join("\n"))
+        .then((x) => [...x.log, `bench ${x.bench}`, `keys frames ${keysSent || "-"}`].join("\n"))
         .catch(() => "no timeline");
+      keysSent = "";
       await info.attach("scene timeline", { body: log, contentType: "text/plain" });
       console.log(`[${info.title}] scene timeline\n${log}`);
     }
@@ -131,6 +137,19 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
         const box = card?.getBoundingClientRect();
         if (!card || !box || box.width === 0 || box.height === 0) s.hidden.push("no loading card");
       };
+      // long main-thread frames (the scene's and the page's: one thread, ADR 0017), as they happen
+      try {
+        new PerformanceObserver((list) => {
+          for (const e of list.getEntries() as (PerformanceEntry & { renderStart: number })[]) {
+            if (e.duration < 300) continue;
+            const at = Math.round(performance.timeOrigin + e.startTime - t0);
+            const render = e.renderStart ? Math.round(e.startTime + e.duration - e.renderStart) : 0;
+            s.log.push(`+${at}ms long frame ${Math.round(e.duration)}ms (render ${render}ms)`);
+          }
+        }).observe({ type: "long-animation-frame", buffered: true });
+      } catch {
+        // no Long Animation Frames API: the timeline keeps the state changes only
+      }
       new MutationObserver(look).observe(document, {
         subtree: true,
         childList: true,
@@ -201,6 +220,7 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
       .toBe(TYPED);
 
     const frames = keysFrames(sent);
+    keysSent = frames.map((f) => f.t - firstPressAt).join(" ");
     expect(frames[0]!.t - firstPressAt, "first keys frame after the first press (ms)").toBeLessThan(
       FIRST_FRAME_MS + 1,
     );

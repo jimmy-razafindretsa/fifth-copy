@@ -62,6 +62,14 @@ const PRESETS = {
 const FORCED = PRESETS[Q.get('preset')] ? Q.get('preset') : null;
 let PRESET = FORCED || 'low'; // `auto` draws LOW from its first frame (#695)
 const send = msg => { if (parent !== window) parent.postMessage({ v: SCENE_PROTOCOL, ...msg }, location.origin); };
+// #695: the room is built in slices of about 50 ms of work (a desk, a part of a clerk, a mesh, rows of the grime
+// texture, the shader programs), each its own task, so on a slow CPU the race page sharing this main thread
+// (ADR 0017) runs its countdown, GO and keys between them; a fast CPU never waits. `fc-scene-hello` follows the last.
+let sliceAt = performance.now();
+const slice = async () => {
+  if (performance.now() - sliceAt < 50) return;
+  await new Promise(go => setTimeout(go, 0)); sliceAt = performance.now();
+};
 
 // ---------- palette (Art Direction: backroom grey, only red = flags) ----------
 const COL = {
@@ -77,11 +85,14 @@ const hash = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x
 const part = (g, geo, col, x, y, z) => { const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); g.add(m); return m; };
 
 function flip(g) { const i = g.index.array; for (let k = 0; k < i.length; k += 3) { const t = i[k]; i[k] = i[k + 2]; i[k + 2] = t; } const n = g.attributes.normal.array; for (let k = 0; k < n.length; k++) n[k] *= -1; }
-function merge(root) {
+// one step per mesh: `merge` runs them at once, `mergeSliced` (the room, the largest) slices between them (#695)
+function merge(root) { const it = mergeSteps(root); let r; while (!(r = it.next()).done); return r.value; }
+async function mergeSliced(root) { const it = mergeSteps(root); let r; while (!(r = it.next()).done) await slice(); return r.value; }
+function* mergeSteps(root) {
   root.updateMatrixWorld(true);
-  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color();
-  root.traverse(o => {
-    if (!o.isMesh) return;
+  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color(), meshes = [];
+  root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  for (const o of meshes) {
     const g = o.geometry.clone();
     if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
     if (g.type === 'LatheGeometry') { const p = g.attributes.position, n = g.attributes.normal, i = Math.floor(p.count / 2); if (p.getX(i) * n.getX(i) + p.getZ(i) * n.getZ(i) < 0) flip(g); }
@@ -93,7 +104,8 @@ function merge(root) {
     for (let i = 0; i < p.length / 3; i++) col.push(c.r, c.g, c.b);
     for (const i of g.index.array) idx.push(base + i);
     g.dispose(); o.geometry.dispose();
-  });
+    yield;
+  }
   const out = new THREE.BufferGeometry();
   out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
@@ -162,6 +174,7 @@ function samovarTable(g) {
   [0.25, -0.25].forEach(x => { part(g, C(0.03, 0.026, 0.08, 8), COL.glass, x, 0.81, 0.4); part(g, C(0.034, 0.03, 0.05, 8), COL.brass, x, 0.795, 0.4); });
 }
 
+await slice();
 // ---------- build the static room ----------
 const room = new THREE.Group();
 part(room, C(WALL_R, WALL_R, 0.1, 64), COL.floor, 0, -0.05, 0);
@@ -180,6 +193,7 @@ Object.entries(WALL_SLOTS).forEach(([k, fn]) => {
 });
 for (let i = 0; i < N; i++) {
   const a = i / N * Math.PI * 2, g = desk(i); g.position.set(Math.sin(a) * R_CHAIR, 0, Math.cos(a) * R_CHAIR); g.rotation.y = a + Math.PI; room.add(g);
+  await slice();
 }
 // litter: paper scraps, dockets and cigarette butts on the floor
 for (let k = 0; k < 45; k++) {
@@ -193,6 +207,7 @@ part(room, C(0.12, 0.55, 0.32, 16, true), COL.enamel, 0, 3.4, 0);
 part(room, C(0.115, 0.545, 0.31, 16, true), 0xD8D2C0, 0, 3.4, 0).userData.flip = true;
 part(room, C(0.13, 0.13, 0.04, 10), COL.enamel, 0, 3.57, 0);
 
+await slice();
 // ---------- the Major's turning platform ----------
 const plat = new THREE.Group();
 part(plat, C(1.5, 1.6, 0.3, 32), COL.steelD, 0, 0.15, 0);
@@ -214,10 +229,12 @@ part(plat, B(0.38, 0.32, 0.34), COL.beige, -0.75, TOP + 0.61, -0.45);
 part(plat, B(0.42, 0.3, 0.32), 0x8A7B5C, 0.7, TOP + 0.15, -0.6);
 part(plat, B(0.36, 0.06, 0.26), COL.paper, 0.7, TOP + 0.33, -0.6);
 
+await slice();
 // film grain tile (CSS overlay, no GPU cost in the 3D pass)
 { const c = document.createElement('canvas'); c.width = c.height = 160; const g = c.getContext('2d'), d = g.createImageData(160, 160);
   for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
   g.putImageData(d, 0, 0); document.getElementById('grain').style.background = 'url(' + c.toDataURL() + ')'; }
+await slice();
 // ---------- renderer, lights, materials ----------
 const EMBED = Q.get('embed') === '1';
 const pixelRatio = () => EMBED ? 1 : PRESETS[PRESET].pr;
@@ -236,13 +253,14 @@ function makeRenderer(aa) {
 }
 try { if (!document.createElement('canvas').getContext('webgl2')) throw new Error('no webgl2'); makeRenderer(PRESETS[PRESET].aa); }
 catch { send({ type: 'fc-scene-fallback', reason: 'no-webgl2' }); throw new Error('fc-seat: no WebGL2'); }
+await slice();
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x4A4C47); scene.fog = new THREE.Fog(0x4A4C47, 20, 42);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 60);
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 const mat = new THREE.MeshLambertMaterial({ vertexColors: true }); mat.name = 'room_vertex_colour';
 // ---- age & grime: one tileable noise texture, triplanar in the room shader (no extra draw calls) ----
-const grimeTex = (() => {
+const grimeTex = await (async () => {
   const N2 = 256, cv = document.createElement('canvas'); cv.width = cv.height = N2; const g = cv.getContext('2d'), img = g.createImageData(N2, N2);
   const grid = (n, seed) => { const a = []; for (let i = 0; i < n * n; i++) a.push(hash(i * 1.37 + seed)); return a; };
   const vn = (a, n, x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, s = t => t * t * (3 - 2 * t);
@@ -255,6 +273,7 @@ const grimeTex = (() => {
     const gr = vn(oct[4][1], 64, x / N2 * 64, y / N2 * 64);
     const sb = vn(st, 48, x / N2 * 48, y / N2 * 3);
     const i = (y * N2 + x) * 4; img.data[i] = r * 255 / 0.94; img.data[i + 1] = gr * 255; img.data[i + 2] = sb * 255; img.data[i + 3] = 255;
+    if (x === N2 - 1) await slice();
   }
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; return t;
@@ -278,13 +297,16 @@ function dirty(m, amt) {
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum) * vec3(1.06, 1.0, 0.84), 0.28 * uAmt);`);
   };
 }
+await slice();
 dirty(mat, 0.55);
-const roomMesh = new THREE.Mesh(merge(room), mat); roomMesh.receiveShadow = true; roomMesh.castShadow = true; scene.add(roomMesh);
+const roomMesh = new THREE.Mesh(await mergeSliced(room), mat); roomMesh.receiveShadow = true; roomMesh.castShadow = true; scene.add(roomMesh);
+await slice();
 const platMesh = new THREE.Mesh(merge(plat), mat); platMesh.castShadow = platMesh.receiveShadow = true;
 const platG = new THREE.Group(); platG.add(platMesh); scene.add(platG);
 const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.22), new THREE.MeshBasicMaterial({ color: 0x3FA66B }));
 screen.position.set(-0.75, TOP + 0.62, -0.279); platG.add(screen);
 
+await slice();
 // ---------- the Major (stands on the footplate, hands behind back, watching) ----------
 const MAJ = { olive: 0x5B5E3C, oliveD: 0x3F4229, gold: COL.gold, boot: 0x161514, skin: 0xEBC09C, grey: 0x9A978E, belt: 0x3A2A1C };
 const LATHE = (pts, s = 14) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), s);
@@ -346,6 +368,7 @@ const majBodyMesh = new THREE.Mesh(merge(majBody), mat), majHeadMesh = new THREE
 majBodyMesh.castShadow = majHeadMesh.castShadow = true; majHeadMesh.position.set(0, 1.13, 0.02);
 major.add(majBodyMesh, majHeadMesh); platG.add(major);
 
+await slice();
 // ---- Major props + idle actions (smoke / pour a shot & drink) ----
 const MS = 1.12, MY = TOP + 0.012, toLocal = (x, y, z) => new THREE.Vector3(x / MS, (y - MY) / MS, z / MS);
 const ARM = 0.3, SH = { '-1': new THREE.Vector3(-0.29, 0.8, 0), '1': new THREE.Vector3(0.29, 0.8, 0) };
@@ -425,6 +448,7 @@ function majorUpdate(t, dt) {
   majHeadMesh.rotation.set(look.p + Math.sin(t * 0.5) * 0.015, look.y, 0);
 }
 
+await slice();
 const hemi = new THREE.HemisphereLight(0xD8DEE0, 0x8A8270, 4.2); scene.add(hemi);
 scene.add(new THREE.AmbientLight(0xE4E0D4, 1.0));
 const fill = new THREE.DirectionalLight(0xEEF2F4, 2.2); fill.position.set(3, 8, -4); scene.add(fill);
@@ -666,13 +690,14 @@ function randCfg(i) {
   const c = {}; Object.entries(CATS).forEach(([k, o], j) => c[k] = o.opts[Math.floor(hash(i * 7.3 + j) * o.opts.length)][0]);
   c.hairCol = HAIRCOL[Math.floor(hash(i * 3.1) * HAIRCOL.length)]; return c;
 }
-function makeClerk(i) {
+async function makeClerk(i) {
   const root = build(randCfg(i));
+  await slice();
   const hd = root.getObjectByName('head'), aL = root.getObjectByName('armL'), aR = root.getObjectByName('armR'), piv = {};
   [hd, aL, aR].forEach(g => { piv[g.name] = g.position.clone(); root.remove(g); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); });
   const ey = hd.getObjectByName('eyes'), ld = hd.getObjectByName('lids'); hd.remove(ey); hd.remove(ld);
   const src = { body: root, head: hd, armL: aL, armR: aR, eyes: ey, lids: ld }, geos = {};
-  PARTS.forEach(p => { const lo = p === 'eyes' || p === 'lids' ? null : merge(src[p], true); geos[p] = { g0: merge(src[p]), g1: lo }; });
+  for (const p of PARTS) { const lo = p === 'eyes' || p === 'lids' ? null : merge(src[p], true); geos[p] = { g0: merge(src[p]), g1: lo }; await slice(); }
   return { geos, piv, speed: 0.75 + hash(i * 1.7) * 0.7, t: hash(i * 9.1) * 20, seed: i * 31, curLod: 0, acc: 0,
     head: { x: 0.28, y: 0, tx: 0.28, ty: 0, next: hash(i) * 3, back: 0 }, eye: { x: 0, y: 0, jx: 0, jy: 0, sacc: 0, blink: hash(i * 2) * 4, bt: -1 } };
 }
@@ -751,16 +776,18 @@ function updateLod() {
 }
 
 
-function init(n, RC) {
-  for (let i = 0; i < n; i++) { pool.push(makeClerk(i)); OCC.push(true); TYPING.push(true); SHOWN.push(true); } active = pool;
+async function init(n, RC) {
+  for (let i = 0; i < n; i++) { pool.push(await makeClerk(i)); OCC.push(true); TYPING.push(true); SHOWN.push(true); await slice(); } active = pool;
   for (let i = 0; i < n; i++) {
     const a = i / n * Math.PI * 2, p = new THREE.Vector3(Math.sin(a) * RC, 0, Math.cos(a) * RC);
     deskM.push(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a + Math.PI), new THREE.Vector3(1, 1, 1))); L.desks.push(p);
   }
+  await slice();
   carrIM = new THREE.InstancedMesh(merge(carriage()), cmat, n); paperIM = new THREE.InstancedMesh(new THREE.BoxGeometry(0.26, 0.24, 0.003), pmat, n);
   carrIM.frustumCulled = paperIM.frustumCulled = false;
   let v = 0, ix = 0, cnt = 0;
   active.forEach(c => PARTS.forEach(p => { [c.geos[p].g0, c.geos[p].g1].forEach(g => { if (g) { v += g.attributes.position.count; ix += g.index.count; } }); cnt++; }));
+  await slice();
   bm = new THREE.BatchedMesh(cnt, v, ix, cmat); bm.frustumCulled = false;
   active.forEach(c => { c.ids = {}; c.inst = {}; c.curLod = 0; PARTS.forEach(p => { const g = c.geos[p]; const i0 = bm.addGeometry(g.g0), i1 = g.g1 ? bm.addGeometry(g.g1) : -1; c.ids[p] = [i0, i1]; c.inst[p] = bm.addInstance(i0); }); });
   scene.add(bm, carrIM, paperIM);
@@ -781,8 +808,9 @@ function seat(slots, near) { slots.forEach((s, i) => { OCC[i] = s.occ; TYPING[i]
 const setBob = on => { BOB = on ? 1 : 0; };
 return { init, update, seat, setBob };
 })();
-Clerks.init(N, R_CHAIR);
+await Clerks.init(N, R_CHAIR);
 
+await slice();
 // ---------- dust motes drifting in the bulb light ----------
 const DUST = 220, dustPos = new Float32Array(DUST * 3), dustSeed = [];
 for (let i = 0; i < DUST; i++) { const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * 3.2; dustSeed.push([a, r, 0.4 + Math.random() * 2.8, Math.random() * 6.283]); }
@@ -795,6 +823,7 @@ function dustUpdate(t) {
   dustGeo.attributes.position.needsUpdate = true;
 }
 
+await slice();
 // ---------- behaviour (the race page drives the scene, #563) ----------
 let FORCE = 'pov', LOST = false;
 let VIEW = 'over', TURN = true, STUTTER = true, t = 0, last = performance.now(), nextStutter = 4, stutterT = -1, orbitA = 0.6;
@@ -840,7 +869,7 @@ function applyPreset(p) {
 }
 
 // bible 12 (#695): `auto` starts at LOW on the drawn canvas and climbs one preset at a time. Each step drops
-// its first frame (shader compiles), then draws back to back (no rest) and measures a window of >= 0.5 s on
+// its first frame (shader compiles; rested after when slow), then draws back to back and measures a window of >= 0.5 s on
 // the wall clock (frame timestamps, so each frame's commit counts; never the clamped animation `dt`): under
 // 18 fps at LOW, the paper fallback, decided before another frame is drawn; >= 55 fps with a preset left,
 // one up; a browser cap (flat ~30 fps, low CPU ms, not the GPU), MEDIUM; under 18 above LOW, one down;
@@ -890,18 +919,22 @@ addEventListener('message', e => {
 // keys and timers keep at least half the thread; a scene at or above 18 fps never rests. Nothing is drawn
 // before the page's `fc-race-init`: the first frame is the benchmark's (or the forced preset's).
 const SLOW_FRAME_MS = 1000 / 18;
-let fr = 0, ft = 0, drawnAt = -1, rest = 0;
+// A benchmark step's dropped first frame is drawn into a drawing buffer 1/8 the size (it is not measured; the
+// geometry uploads, while the commit of a full software-rendered buffer stays out of it).
+const DROPPED_SCALE = 1 / 8;
+let fr = 0, ft = 0, drawnAt = -1, rest = 0, small = false;
 function loop(now) {
   if (LOST) return;
   requestAnimationFrame(loop);
   if (!INIT) { last = now; return; }
   if (drawnAt >= 0) { const cost = now - drawnAt; drawnAt = -1; if (cost > SLOW_FRAME_MS) rest = now + cost; }
-  // a step's window runs from the frame after its first (that one compiles the shaders) to this callback
+  // a step's window runs from the frame after its first (dropped: shader compiles) to this callback; a slow
+  // dropped frame rests like any other before the window opens, the window itself draws back to back
+  if (now < rest && !(bench.on && bench.start >= 0)) return;
   if (bench.on && !bench.skip) {
     if (bench.start < 0) bench.start = now;
     else if ((bench.frames++, now - bench.start >= WINDOW * 1000)) { benchWindow((now - bench.start) / 1000); if (LOST) return; }
   }
-  if (!bench.on && now < rest) return;
   drawnAt = now;
   // wall: the real frame time (benchmark and telemetry, #695); dt: clamped, for the animation only
   const wall = Math.max(0, (now - last) / 1000), dt = Math.min(0.05, wall); last = now; t += dt;
@@ -922,11 +955,25 @@ function loop(now) {
   if (FORCE !== VIEW) setView(FORCE);
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over') { orbitA += reduced() ? 0 : dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
+  const dropped = bench.on && bench.skip;
+  if (dropped !== small) { small = dropped; renderer.setPixelRatio(pixelRatio() * (small ? DROPPED_SCALE : 1)); }
   renderer.render(scene, camera);
   if (bench.on) { if (bench.skip) bench.skip = false; else { bench.drawn++; bench.cpu += performance.now() - c0; } }
   if (pendingReady) { pendingReady = false; ready(); }
   fr++; ft += wall;
   if (ft >= 1) { const i = renderer.info.render; send({ type: 'fc-scene-telemetry', fps: Math.round(fr / ft), calls: i.calls, triangles: i.triangles, preset: PRESET, capped: CAPPED }); fr = 0; ft = 0; }
+}
+// #695: the first frame does none of the setup on a slow CPU: each part of the room has its shader programs
+// compiled and its buffers uploaded (drawn alone, under the room's lights, into a 1x1 target, nothing on the
+// canvas) in a slice of its own.
+{
+  const warm = new THREE.WebGLRenderTarget(1, 1), parts = scene.children.filter(o => !o.isLight), shown = parts.map(o => o.visible);
+  for (const o of parts) {
+    await slice(); renderer.compile(o, camera, scene);
+    await slice(); parts.forEach(p => { p.visible = p === o; }); renderer.setRenderTarget(warm); renderer.render(scene, camera);
+    renderer.setRenderTarget(null); parts.forEach((p, i) => { p.visible = shown[i]; });
+  }
+  warm.dispose(); await slice();
 }
 requestAnimationFrame(loop);
 send({ type: 'fc-scene-hello' });

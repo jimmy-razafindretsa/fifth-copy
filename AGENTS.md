@@ -108,7 +108,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Colours: follow `docs/design/components.md` "Colour usage rules" (no raw hex, no `--brand-*`, ink grounds carry paper text, gold and device colours only where owned); `scripts/check-colours.ts` (check.sh `colours`) enforces them.
 
 ## Architecture map
-One VPS runs three processes plus Postgres and Redis behind Caddy: **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: rollups, purges). Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.
+Production is a Railway project (ADR 0019): **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: rollups, purges; planned), plus Railway Postgres and Redis. Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.
 ```
 src/app/                         routes, thin (compose features); api/internal/* = HMAC routes for the race server
 src/features/<feature>/          components/ actions/ queries/ jobs/ schema.ts index.ts
@@ -123,7 +123,6 @@ packages/engine/                 @fifth-copy/engine: pure race rules, shared (AD
 packages/protocol/               @fifth-copy/protocol: zod wire schemas, race settings, tokens (ADR 0006)
 services/race-server/            separate Node process; never imports src/ or Prisma (ADR 0006, 0008)
 prisma/schema/                   data model, one .prisma per feature
-deploy/                          compose, Caddyfile, deploy script (ADR 0012)
 e2e/                             Playwright, derived from card contracts
 docs/{spec,adr,design,architecture}/  work/log/  scripts/  agents/
 ```

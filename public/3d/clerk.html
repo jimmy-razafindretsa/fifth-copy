@@ -217,7 +217,17 @@ function issue(given) {
   parent.postMessage({ type: 'fc-clerk', cfg: c }, '*');
 }
 const LOCKER = location.search.includes('locker');
-issue(LOCKER ? { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: HAIRCOL[0] } : undefined);
+// ?cfg=<URL-encoded JSON>: the player's saved outfit for the first frame (#687). Every id is checked against
+// CATS and HAIRCOL and only those six keys are kept; anything else falls back to a random issue.
+function cfgFlag() {
+  let v; try { v = JSON.parse(new URLSearchParams(location.search).get('cfg')); } catch { return undefined; }
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const c = {};
+  for (const [k, o] of Object.entries(CATS)) { if (!o.opts.some(x => x[0] === v[k])) return undefined; c[k] = v[k]; }
+  if (!HAIRCOL.includes(v.hairCol)) return undefined;
+  c.hairCol = v.hairCol; return c;
+}
+issue(LOCKER ? { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: HAIRCOL[0] } : cfgFlag());
 
 // ---- gestures: idle every few seconds; click = hop, swap uniform mid-air, salute ----
 const ARM = 0.2, DOWN = new THREE.Vector3(0, -1, 0), _v = new THREE.Vector3(), tgt = { '-1': new THREE.Vector3(), '1': new THREE.Vector3() };

@@ -157,3 +157,55 @@ describe("seat page (#563)", () => {
     expect(embedWeightKb("seat.html")).toBeLessThanOrEqual(SEAT_EMBED_BUDGET_KB);
   });
 });
+
+// #687 C6: the clerk page reads the saved outfit from `?cfg=` for its first frame. The function is run from
+// the served page's own source against a fake `location`, so the test exercises exactly what ships.
+describe("clerk page ?cfg= (#687)", () => {
+  const clerk = fs.readFileSync(path.join(EMBED_DIR, "clerk.html"), "utf8");
+  const source = (re: RegExp) => {
+    const m = re.exec(clerk);
+    if (!m) throw new Error(`not found: ${re}`);
+    return m[0];
+  };
+  const cats = source(/const CATS = \{[\s\S]*?\n\};/);
+  const hairCol = source(/const HAIRCOL = \[[^\]]*\];/);
+  const cfgFlag = source(/function cfgFlag\(\) \{[\s\S]*?\n\}/);
+  const run = (search: string) =>
+    new Function("location", `${cats}\n${hairCol}\n${cfgFlag}\nreturn cfgFlag();`)({
+      search,
+    }) as unknown;
+  const saved = {
+    hair: "quiff",
+    glasses: "monocle",
+    hat: "beret",
+    clothes: "braces",
+    face: "beard",
+    hairCol: "#C9A465",
+  };
+  const flag = (v: unknown) => `?cfg=${encodeURIComponent(JSON.stringify(v))}`;
+
+  it("issues a valid saved outfit on load instead of a random one, locker first", () => {
+    expect(clerk).toContain(
+      "issue(LOCKER ? { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: HAIRCOL[0] } : cfgFlag());",
+    );
+    expect(run(flag(saved))).toEqual(saved);
+  });
+
+  it("keeps only the six known keys", () => {
+    expect(run(flag({ ...saved, onload: "x", __proto__: { a: 1 } }))).toEqual(saved);
+  });
+
+  it.each([
+    ["absent", ""],
+    ["not JSON", "?cfg=%7Bnope"],
+    ["null", flag(null)],
+    ["an array", flag([saved])],
+    ["an unknown id", flag({ ...saved, hat: "crown" })],
+    ["a markup id", flag({ ...saved, hair: "<img src=x onerror=alert(1)>" })],
+    ["an unknown colour", flag({ ...saved, hairCol: "#FFFFFF" })],
+    ["a missing slot", flag({ ...saved, face: undefined })],
+    ["a non-string id", flag({ ...saved, hair: ["side"] })],
+  ])("falls back to a random issue when the flag is %s", (_name, search) => {
+    expect(run(search)).toBeUndefined();
+  });
+});

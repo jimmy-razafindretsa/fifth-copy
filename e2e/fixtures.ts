@@ -32,6 +32,24 @@ export function isBenignFlightAbort(f: FailedRequest): boolean {
 }
 
 /**
+ * A not-found page's own server action (#647): on a document the server answered 404 (#397), a
+ * server action (the header's locale toggle) is answered 404 `text/x-component`, and Next then
+ * reloads the page itself; that reload can cancel the action's body while it is still streaming,
+ * which Chromium reports as `net::ERR_ABORTED`. Tolerated only for a `next-action` POST to a path
+ * whose main document answered 404 (`notFoundPaths`), so every other page keeps the strict guard.
+ */
+export function isNotFoundActionAbort(f: FailedRequest, notFoundPaths: Set<string>): boolean {
+  return (
+    f.errorText === "net::ERR_ABORTED" &&
+    f.method === "POST" &&
+    !!f.nextAction &&
+    f.status === 404 &&
+    !!f.contentType?.startsWith("text/x-component") &&
+    notFoundPaths.has(f.path)
+  );
+}
+
+/**
  * The landing's 3D embeds (#497) load three.js from `/3d/`; leaving the page mid-load (a lobby
  * navigation) aborts those fetches, which Chromium reports as failures. Nothing else is tolerated.
  */
@@ -108,7 +126,12 @@ export function watchPage(page: Page): { errors: string[]; settle: () => Promise
   page.on("requestfailed", (r) =>
     pending.push(
       describeFailure(r).then((f) => {
-        if (!isBenignFlightAbort(f) && !isBenignEmbedAbort(f) && !isBenignMediaAbort(f)) {
+        if (
+          !isBenignFlightAbort(f) &&
+          !isBenignEmbedAbort(f) &&
+          !isBenignMediaAbort(f) &&
+          !isNotFoundActionAbort(f, notFoundPaths)
+        ) {
           errors.push(`requestfailed: ${r.method()} ${r.url()} ${f.errorText ?? ""}`.trimEnd());
         }
       }),

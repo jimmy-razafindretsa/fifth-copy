@@ -1,10 +1,37 @@
-import type { Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import type { Page, Request } from "@playwright/test";
+import {
+  expect,
+  expectNoA11yViolations,
+  isNotFoundActionAbort,
+  test,
+  type FailedRequest,
+} from "./fixtures";
+import { ACTION_WAIT } from "./timeouts";
 
 // Card 397 (not-found part): the in-world form 404 with the Major in 3D (bible 10.3, 14.3).
 const TITLE = "ARE YOU LOST, KID?";
 const TITLE_FR = "T'ES PERDU, LE JEUNE ?";
 const MISSING = "/no-such-desk";
+
+const isLocaleAction = (r: Request) =>
+  r.method() === "POST" && new URL(r.url()).pathname === MISSING && !!r.headers()["next-action"];
+
+/**
+ * Clicks a locale toggle and waits until its `setLocale` server action (a POST to the page's own
+ * path) has settled (#647): finished, or cancelled by the reload Next does after an action on a 404
+ * document (`response.finished()` never resolves then, so the request's own events are awaited).
+ * Clicking again while the previous action is still in flight, or closing the page with one in
+ * flight, would abort it for a reason of the test's own.
+ */
+async function switchLocale(page: Page, name: "FR" | "EN") {
+  const settled = Promise.race(
+    (["requestfinished", "requestfailed"] as const).map((event) =>
+      page.waitForEvent(event, { predicate: isLocaleAction, timeout: ACTION_WAIT }),
+    ),
+  );
+  await page.getByRole("button", { name, exact: true }).click();
+  await settled;
+}
 
 const overflow = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -64,14 +91,14 @@ test.describe("not found (#397)", () => {
     await expect(page.locator("iframe")).toHaveAttribute("data-embed", "mounted", {
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "FR", exact: true }).click();
+    await switchLocale(page, "FR");
     await expect(page.getByRole("heading", { level: 1, name: TITLE_FR })).toBeVisible({
-      timeout: 20_000,
+      timeout: ACTION_WAIT,
     });
     await expect(page.getByRole("status").filter({ hasText: "DOSSIER INTROUVABLE" })).toBeVisible();
-    await page.getByRole("button", { name: "EN", exact: true }).click();
+    await switchLocale(page, "EN");
     await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible({
-      timeout: 20_000,
+      timeout: ACTION_WAIT,
     });
   });
 
@@ -128,4 +155,36 @@ test.describe("not-found sun-ray stage (#610)", () => {
       "none",
     );
   });
+});
+
+// #647: the guard's one exemption for this page, an action POST cut short by the page's own reload.
+test.describe("not-found action abort guard (#647)", () => {
+  const abort: FailedRequest = {
+    errorText: "net::ERR_ABORTED",
+    path: MISSING,
+    method: "POST",
+    nextAction: "40f143d35ac9bd65d8d1bd0c057d77cab0e90fc8bb",
+    rsc: null,
+    status: 404,
+    contentType: "text/x-component",
+  };
+  const notFound = new Set([MISSING]);
+
+  test("exempts an aborted action POST answered 404 text/x-component on a 404 document", () => {
+    expect(isNotFoundActionAbort(abort, notFound)).toBe(true);
+  });
+
+  for (const [name, change] of [
+    ["a page that did not answer 404", { path: "/lobby/ABCD" }],
+    ["another network error", { errorText: "net::ERR_CONNECTION_REFUSED" }],
+    ["a POST without next-action", { nextAction: null }],
+    ["a GET", { method: "GET" }],
+    ["no response", { status: null, contentType: null }],
+    ["a 500 response", { status: 500 }],
+    ["an HTML response", { contentType: "text/html; charset=utf-8" }],
+  ] as const) {
+    test(`flags ${name}`, () => {
+      expect(isNotFoundActionAbort({ ...abort, ...change }, notFound)).toBe(false);
+    });
+  }
 });

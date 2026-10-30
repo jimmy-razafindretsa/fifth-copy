@@ -45,8 +45,8 @@ html[data-motion="reduce"] .grain{animation:none}
 // `-fallback` out (src/features/race-3d/messages.ts, `v` = SCENE_PROTOCOL). Both directions are locked to
 // this page's origin. The reference's random typing is replaced by the room's desks: your desk sits at the
 // camera's slot, rivals at theirs, a clerk types while the race runs and its desk is typing; empty desks
-// have no clerk. Presets (12): `?preset=low|medium|high` forces one, `auto` runs a 2 s benchmark (below Low:
-// the paper fallback). Reduced motion (8): the bulb burns steady, nothing turns or bobs.
+// have no clerk. Presets (12): `?preset=low|medium|high` forces one, `auto` runs the LOW-first benchmark
+// ladder on the drawn canvas (below Low: the paper fallback; #695). Reduced motion (8): the bulb burns steady, nothing turns or bobs.
 import * as THREE from 'three';
 
 const SCENE_PROTOCOL = 1;
@@ -57,7 +57,7 @@ const PRESETS = {
   high: { pr: Math.min(devicePixelRatio, 2), near: 30, aa: true },
 };
 const FORCED = PRESETS[Q.get('preset')] ? Q.get('preset') : null;
-let PRESET = FORCED || 'medium';
+let PRESET = FORCED || 'low'; // `auto` draws LOW from its first frame (#695)
 const send = msg => { if (parent !== window) parent.postMessage({ v: SCENE_PROTOCOL, ...msg }, location.origin); };
 
 // ---------- palette (Art Direction: backroom grey, only red = flags) ----------
@@ -216,15 +216,23 @@ part(plat, B(0.36, 0.06, 0.26), COL.paper, 0.7, TOP + 0.33, -0.6);
   for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
   g.putImageData(d, 0, 0); document.getElementById('grain').style.background = 'url(' + c.toDataURL() + ')'; }
 // ---------- renderer, lights, materials ----------
-let renderer;
-try { if (!document.createElement('canvas').getContext('webgl2')) throw new Error('no webgl2'); renderer = new THREE.WebGLRenderer({ antialias: PRESETS[PRESET].aa, powerPreference: 'high-performance' }); }
-catch { send({ type: 'fc-scene-fallback', reason: 'no-webgl2' }); throw new Error('fc-seat: no WebGL2'); }
 const EMBED = Q.get('embed') === '1';
 const pixelRatio = () => EMBED ? 1 : PRESETS[PRESET].pr;
-renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight);
-renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); LOST = true; send({ type: 'fc-scene-fallback', reason: 'context-lost' }); });
-renderer.shadowMap.type = THREE.PCFShadowMap;
-document.body.prepend(renderer.domElement);
+const onLost = e => { e.preventDefault(); LOST = true; send({ type: 'fc-scene-fallback', reason: 'context-lost' }); };
+// AA is a context attribute: a preset with another AA (12) gets a fresh renderer on a fresh canvas (#695 ladder)
+let renderer, AA;
+function makeRenderer(aa) {
+  const r = new THREE.WebGLRenderer({ antialias: aa, powerPreference: 'high-performance' });
+  r.setPixelRatio(pixelRatio()); r.setSize(innerWidth, innerHeight); r.shadowMap.type = THREE.PCFShadowMap;
+  r.domElement.addEventListener('webglcontextlost', onLost);
+  if (renderer) {
+    renderer.domElement.removeEventListener('webglcontextlost', onLost);
+    renderer.domElement.replaceWith(r.domElement); renderer.dispose(); renderer.forceContextLoss();
+  } else document.body.prepend(r.domElement);
+  renderer = r; AA = aa;
+}
+try { if (!document.createElement('canvas').getContext('webgl2')) throw new Error('no webgl2'); makeRenderer(PRESETS[PRESET].aa); }
+catch { send({ type: 'fc-scene-fallback', reason: 'no-webgl2' }); throw new Error('fc-seat: no WebGL2'); }
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x4A4C47); scene.fog = new THREE.Fog(0x4A4C47, 20, 42);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 60);
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
@@ -822,21 +830,31 @@ function applyView(view) {
   DESKS = slots; PLACED = slots.filter(s => s.occ).length;
   Clerks.seat(DESKS, PRESETS[PRESET].near);
 }
-function applyPreset(p) { PRESET = p; renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); Clerks.seat(DESKS, PRESETS[p].near); }
+function applyPreset(p) {
+  PRESET = p;
+  if (PRESETS[p].aa !== AA) makeRenderer(PRESETS[p].aa); else { renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); }
+  Clerks.seat(DESKS, PRESETS[p].near);
+}
 
-// bible 12: `auto` renders 2 s at MEDIUM (0.5 s warm-up, then 1.5 s measured on the wall clock, #695) and
-// picks the preset; below Low the page falls back to paper. A flat ~30 fps with idle frames is a browser cap, not the GPU.
-const bench = { on: false, t: 0, frames: 0, cpu: 0 };
+// bible 12 (#695): `auto` starts at LOW on the drawn canvas and climbs one preset at a time. Each step drops
+// its first frame (shader compiles), then measures a window of >= 0.5 s on the wall clock (`performance.now()`,
+// never the clamped animation `dt`): under 18 fps at LOW, the paper fallback; >= 55 fps with a preset left,
+// one up; a browser cap (flat ~30 fps, low CPU ms, not the GPU), MEDIUM; under 18 above LOW, one down;
+// otherwise it settles there. The windows total at most 2 s (ADR 0013). `data-bench` logs the ladder.
+const LADDER = ['low', 'medium', 'high'], WINDOW = 0.5, BENCH_MAX = 2;
+const bench = { on: false, skip: true, start: 0, frames: 0, cpu: 0, total: 0, log: [] };
 let READY = false, INIT = false, pendingReady = false;
 const ready = () => { if (READY || LOST) return; READY = true; send({ type: 'fc-scene-ready', preset: PRESET, fov: camera.fov, desks: PLACED }); };
-function benchDone() {
-  bench.on = false;
-  const fps = bench.frames / Math.max(0.001, bench.t), cpu = bench.cpu / Math.max(1, bench.frames);
+function benchStep(p) { applyPreset(p); Object.assign(bench, { on: true, skip: true, frames: 0, cpu: 0 }); }
+function benchWindow(t) {
+  bench.on = false; bench.total += t;
+  const fps = bench.frames / t, cpu = bench.cpu / bench.frames, at = LADDER.indexOf(PRESET);
+  bench.log.push(PRESET + ':' + Math.round(fps)); document.documentElement.dataset.bench = bench.log.join(' ');
   CAPPED = fps >= 27 && fps <= 33 && cpu < 12;
-  if (fps >= 55) applyPreset('high');
-  else if (fps >= 28 || CAPPED) applyPreset('medium');
-  else if (fps >= 18) applyPreset('low');
-  else { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' }); return; }
+  if (fps < 18 && at === 0) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' }); return; }
+  if (CAPPED) applyPreset('medium');
+  else if (fps >= 55 && at < LADDER.length - 1 && bench.total + WINDOW <= BENCH_MAX) return benchStep(LADDER[at + 1]);
+  else if (fps < 18) applyPreset(LADDER[at - 1]);
   ready();
 }
 let CAPPED = false;
@@ -855,7 +873,7 @@ addEventListener('message', e => {
       INIT = true;
       if (PRESETS[d.preset]) applyPreset(d.preset);
       if (FORCED || PRESETS[d.preset]) pendingReady = true;
-      else { bench.on = true; bench.t = -0.5; bench.frames = 0; bench.cpu = 0; }
+      else benchStep('low');
     }
   }
   if (d.type === 'fc-race-state' && d.view && typeof d.view === 'object') applyView(d.view);
@@ -887,10 +905,11 @@ function loop(now) {
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over') { orbitA += reduced() ? 0 : dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
-  // the measured window starts when the 0.5 s warm-up ends (a long first frame of shader compiles is warm-up)
+  // a step's window starts after its first frame is drawn (that frame compiles the shaders)
   if (bench.on) {
-    if (bench.t < 0) bench.t = Math.min(0, bench.t + wall);
-    else { bench.t += wall; bench.frames++; bench.cpu += performance.now() - c0; if (bench.t >= 1.5) benchDone(); }
+    const c1 = performance.now();
+    if (bench.skip) { bench.skip = false; bench.start = c1; }
+    else { bench.frames++; bench.cpu += c1 - c0; if (c1 - bench.start >= WINDOW * 1000) benchWindow((c1 - bench.start) / 1000); }
   }
   if (pendingReady) { pendingReady = false; ready(); }
   fr++; ft += wall;

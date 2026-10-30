@@ -3,6 +3,7 @@ import type { SceneView } from "@/features/race";
 import {
   parseSceneMessage,
   presetChoice,
+  sceneSettings,
   raceInitMessage,
   raceMotionMessage,
   racePresetMessage,
@@ -93,5 +94,26 @@ describe("preset choice", () => {
     expect(presetChoice("ultra")).toBe("auto");
     expect(presetChoice(null)).toBe("auto");
     expect(seatEmbedSrc("low")).toBe("/3d/seat.html?preset=low");
+  });
+});
+
+// #695 C9: `?scene=pin` (tests only) pins the scene at LOW with the frame budget off; nothing else does.
+describe("scene settings", () => {
+  it("`scene=pin` forces low and turns the frame budget off, whatever `?preset=` says", () => {
+    expect(sceneSettings(null, "pin")).toEqual({ preset: "low", budget: "off" });
+    expect(sceneSettings("high", "pin")).toEqual({ preset: "low", budget: "off" });
+  });
+
+  it.each([null, undefined, "", "PIN", "pinned", "1", "off"])(
+    "`scene=%s` does not pin: the benchmark runs, the budget is on",
+    (scene) => {
+      expect(sceneSettings(null, scene)).toEqual({ preset: "auto", budget: "on" });
+    },
+  );
+
+  it("`?preset=` alone forces its preset but keeps the frame budget on", () => {
+    expect(sceneSettings("low", null)).toEqual({ preset: "low", budget: "on" });
+    expect(sceneSettings("medium", "nope")).toEqual({ preset: "medium", budget: "on" });
+    expect(sceneSettings("ultra", null)).toEqual({ preset: "auto", budget: "on" });
   });
 });

@@ -4,14 +4,24 @@
  * loads it from `/3d/vendor/`). Imported only by `src/app/race`, lazily (`next/dynamic`, `ssr: false`,
  * after the HUD mounted); it imports only `@/features/race` (index) and `@/components/ui`.
  */
-export { RaceScene, type RaceSceneProps } from "./race-scene";
+export { RaceScene, type RaceSceneFallback, type RaceSceneProps } from "./race-scene";
 export { detectWebGL2 } from "./detect-webgl";
 export {
   presetChoice,
+  sceneSettings,
   SCENE_PRESETS,
+  type SceneBudget,
   type SceneFallbackReason,
   type SceneMotion,
   type ScenePreset,
   type ScenePresetChoice,
+  type SceneSettings,
   type SceneTelemetry,
 } from "./messages";
+export {
+  FRAME_BUDGET_START,
+  frameBudget,
+  SCENE_BUDGET_STRIKES,
+  SCENE_MIN_FPS,
+  type FrameBudget,
+} from "./frame-budget";

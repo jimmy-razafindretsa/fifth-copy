@@ -130,5 +130,23 @@ export function parseSceneMessage(data: unknown): SceneMessage | null {
 export const presetChoice = (raw: string | null | undefined): ScenePresetChoice =>
   oneOf(SCENE_PRESETS, raw) ? raw : "auto";
 
+/** Whether the running scene's frame budget (#695, `frame-budget.ts`) may replace it with paper. */
+export type SceneBudget = "on" | "off";
+export type SceneSettings = { preset: ScenePresetChoice; budget: SceneBudget };
+
+/**
+ * The page's scene settings from its `?preset=` and `?scene=` values (bible 12): `?scene=pin` is the
+ * test-only pin of the `@scene` e2e specs (#695 C9; software WebGL draws LOW under the budget's floor):
+ * LOW forced, no benchmark, frame budget off (`no-webgl2` and `context-lost` still fall back). Without
+ * it, `?preset=` forces a preset or `auto` runs the benchmark, and the budget is on.
+ */
+export const sceneSettings = (
+  preset: string | null | undefined,
+  scene: string | null | undefined,
+): SceneSettings =>
+  scene === "pin"
+    ? { preset: "low", budget: "off" }
+    : { preset: presetChoice(preset), budget: "on" };
+
 /** The embed's URL: the preset rides along so the first frame already uses it. */
 export const seatEmbedSrc = (preset: ScenePresetChoice) => `${SEAT_EMBED}?preset=${preset}`;

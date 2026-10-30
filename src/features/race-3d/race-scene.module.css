@@ -1,19 +1,16 @@
 /*
- * The seat scene layer (#563, design bible 14.3 seat view, 11, 9; ADR 0017): the room fills the screen
+ * The seat scene layer (#563, design bible 14.3 seat view, 11, 9, 12; ADR 0017): the room fills the screen
  * behind the HUD (the seat's own stacking context puts it over the paper ground and under every docket).
- * It takes no input: the race input keeps the focus. Hidden until the scene's first frame (or its
- * benchmark) is in, so the paper backdrop stays until then and on every fallback.
+ * It takes no input: the race input keeps the focus. Behind the loading card the embed first draws its
+ * probe on a flat ground, then the room (#695): the probe must measure frames the browser really
+ * rasterizes (a transparent or hidden layer is skipped, and its fps lies), so the layer is never made
+ * transparent or hidden while mounted; on every fallback it is unmounted and the paper backdrop shows.
  */
 .scene {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0;
-}
-
-.scene[data-scene="ready"] {
-  opacity: 1;
 }
 
 .scene iframe {

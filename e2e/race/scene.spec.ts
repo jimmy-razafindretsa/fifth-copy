@@ -5,7 +5,8 @@ import { disjoint, hostRoom, simulatedPlayers, type SimulatedPlayer } from "./he
 
 // Contract of #563 C2, C4, C5 (ADR 0017 option A, bible 11.3, 12, 7.3, 7.4, 8): the seat view loads the
 // 3D seat scene after the HUD, behind a stamped loading card, and the scene reports its seat POV. Headless
-// CI renders WebGL in software (#690): every test forces `?preset=low` (no benchmark), runs on the desktop
+// CI renders WebGL in software (#690): every test pins `?scene=pin` (LOW, no benchmark, no frame budget:
+// SwiftShader draws LOW under the 18 fps floor, #695 C9), runs on the desktop
 // project only, mounts one scene at a time and waits with scaled deadlines.
 
 const SCENE_WAIT = scaled(60_000);
@@ -52,7 +53,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
       await gate;
       await route.continue();
     });
-    await page.goto(`/race/${room.lobbyId}?preset=low`);
+    await page.goto(`/race/${room.lobbyId}?scene=pin`);
 
     const card = loadingCard(page);
     await expect(card).toBeVisible({ timeout: scaled(20_000) });
@@ -81,7 +82,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
   }) => {
     const room = await hostRoom(browser, opened);
     players = await simulatedPlayers(1, room.lobbyId);
-    await page.goto(`/race/${room.lobbyId}?preset=low`);
+    await page.goto(`/race/${room.lobbyId}?scene=pin`);
     const view = scene(page);
     await expect(view).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
     await expect(view).toHaveAttribute("data-scene-fov", "62");
@@ -105,7 +106,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
     browser,
   }) => {
     const room = await hostRoom(browser, opened);
-    await page.goto(`/race/${room.lobbyId}?preset=low`);
+    await page.goto(`/race/${room.lobbyId}?scene=pin`);
     await expect(scene(page)).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
     await expect(scene(page)).toHaveAttribute("data-scene-motion", "full");
     const seat = await seatFrame(page);
@@ -141,7 +142,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
     });
     opened.push(context);
     const page = await context.newPage();
-    await page.goto(`/race/${room.lobbyId}?preset=low`);
+    await page.goto(`/race/${room.lobbyId}?scene=pin`);
     await expect(scene(page)).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
     await expect(scene(page)).toHaveAttribute("data-scene-motion", "reduce");
     const seat = await seatFrame(page);

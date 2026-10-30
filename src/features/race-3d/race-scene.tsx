@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EmbedFrame, useEmbedBridge, useReducedMotion } from "@/components/ui";
 import type { SceneView } from "@/features/race";
 import { detectWebGL2 } from "./detect-webgl";
+import { FRAME_BUDGET_START, frameBudget } from "./frame-budget";
 import {
   parseSceneMessage,
-  presetChoice,
   raceInitMessage,
   raceMotionMessage,
   raceStateMessage,
+  sceneSettings,
   seatEmbedSrc,
   type SceneFallbackReason,
   type SceneMessage,
@@ -23,18 +24,26 @@ export type RaceSceneProps = {
   view: SceneView;
   /**
    * The page's `?preset=` value: `low`, `medium` or `high` forces that preset (tests force `low`, bible
-   * 12); anything else (or nothing) lets the scene's 2 s benchmark choose.
+   * 12); anything else (or nothing) lets the scene's benchmark choose.
    */
   preset?: string | null;
+  /** The page's `?scene=` value: `pin` (tests only, #695 C9) forces `low` and turns the frame budget off. */
+  scene?: string | null;
   /** The frame's name (catalog `race.scene.title`); the frame is decorative all the same. */
   title: string;
-  /** The first frame is in (C2: the loading card goes). */
+  /** The room's first frame at the settled (probed or forced) preset, #695: the loading card goes. */
   onReady?: () => void;
-  /** The scene cannot run: the page stays on paper with the `no-scene` notice (C3). */
-  onFallback?: (reason: SceneFallbackReason) => void;
+  /**
+   * The scene cannot run, or (`frame-budget`, #695) can no longer hold its frame budget: the page drops
+   * it for paper with the `no-scene` notice (C3). Called at most once for a blown budget.
+   */
+  onFallback?: (reason: RaceSceneFallback) => void;
   /** Every second while rendering (ADR 0013 budgets, #275). */
   onTelemetry?: (telemetry: SceneTelemetry) => void;
 };
+
+/** The scene's own fallbacks (`fc-scene-fallback`) and the page-side frame budget's (#695). */
+export type RaceSceneFallback = SceneFallbackReason | "frame-budget";
 
 type Ready = { preset: ScenePreset; fov: number; desks: number };
 
@@ -43,18 +52,22 @@ type Ready = { preset: ScenePreset; fov: number; desks: number };
  * pointer) behind the HUD. On the scene's `fc-scene-hello` it posts `fc-race-init` (the view, the preset,
  * the page's motion setting, the seat camera); view changes follow as `fc-race-state`, at most one per
  * animation frame, and motion changes as `fc-race-motion`. The scene answers `fc-scene-ready` (the
- * container then reports `data-scene-fov|desks|preset|self`), telemetry and fallbacks. It never writes
- * race state: nothing here reaches the store.
+ * container then reports `data-scene-fov|desks|preset|self`), telemetry and fallbacks. Every telemetry
+ * second goes through `frameBudget` (#695, ADR 0013's Low floor on a running scene): a blown budget is
+ * `onFallback("frame-budget")`, once; under `?scene=pin` (`data-scene-budget="off"`) verdicts are ignored.
+ * It never writes race state: nothing here reaches the store.
  */
 export function RaceScene({
   view,
   preset: requested,
+  scene: pin,
   title,
   onReady,
   onFallback,
   onTelemetry,
 }: RaceSceneProps) {
-  const preset = presetChoice(requested);
+  const { preset, budget } = sceneSettings(requested, pin);
+  const health = useRef(FRAME_BUDGET_START);
   const reduce = useReducedMotion();
   const [ready, setReady] = useState<Ready | null>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -86,7 +99,11 @@ export function RaceScene({
             node.dataset.sceneFps = String(fps);
             node.dataset.sceneCalls = String(calls);
           }
-          now.onTelemetry?.({ fps, calls, triangles, preset: drawn, capped });
+          const telemetry = { fps, calls, triangles, preset: drawn, capped };
+          now.onTelemetry?.(telemetry);
+          if (budget === "off" || health.current.verdict === "fallback") return;
+          health.current = frameBudget(health.current, telemetry);
+          if (health.current.verdict === "fallback") now.onFallback?.("frame-budget");
           return;
         }
         case "fc-scene-fallback":
@@ -94,7 +111,7 @@ export function RaceScene({
           return;
       }
     },
-    [preset],
+    [preset, budget],
   );
   const { ref, post } = useEmbedBridge(parseSceneMessage, onMessage);
   useEffect(() => {
@@ -126,6 +143,7 @@ export function RaceScene({
       data-scene-preset={ready?.preset}
       data-scene-self={ready ? "hidden" : undefined}
       data-scene-motion={reduce ? "reduce" : "full"}
+      data-scene-budget={budget}
       className={styles.scene}
     >
       <EmbedFrame ref={ref} src={seatEmbedSrc(preset)} title={title} decorative />

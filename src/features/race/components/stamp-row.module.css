@@ -1,0 +1,15 @@
+/*
+ * The overtake stamps' row (#232, design bible 7.3, 8, 14.3): like the countdown overlay it takes the
+ * free space above the typing surface (the scene area, seat-layout.module.css), centres the stamp and
+ * clips its slam, so it never paints over the telex strip or the typed sheet.
+ */
+
+.row {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: clip;
+  pointer-events: none;
+}

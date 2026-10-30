@@ -68,10 +68,11 @@ describe("typing surface modules use tokens only (#558 C8)", () => {
       }
     });
 
-    it(`${file}: the only literal durations are the bible 8 keyframe seconds (1.05s, 0.18s, 1.3s)`, () => {
+    it(`${file}: the only literal durations are the bible 8 keyframe seconds (1.05s, 0.18s, 0.4s, 1.3s)`, () => {
       const durations = [...css.matchAll(/(?<![\w.-])(\d*\.?\d+)(m?s)\b/g)].map((m) => m[0]);
-      // fcCaret 1.05s, fcPop 0.18s (#558); lkPulse 1.3s, inside bible 8's 1.2-1.4s (#560 notice rows)
-      for (const d of durations) expect(["1.05s", "0.18s", "1.3s"], d).toContain(d);
+      // fcCaret 1.05s, fcPop 0.18s (#558); lkShake 0.4s (#224 wrong key); lkPulse 1.3s, inside bible
+      // 8's 1.2-1.4s (#560 notice rows)
+      for (const d of durations) expect(["1.05s", "0.18s", "0.4s", "1.3s"], d).toContain(d);
       expect(css).not.toMatch(/transition(-duration)?\s*:[^;]*\d/);
     });
   }
@@ -81,7 +82,10 @@ describe("typing surface modules use tokens only (#558 C8)", () => {
       const css = strip(read(file));
       const used = [...css.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]!);
       for (const name of used) {
-        expect(name).toMatch(/^--(_[\w-]+|color-(machine-[\w-]+|tape|typing-error))$/);
+        // its motion reads the UI motion tokens (#224: the press on --motion-duration-fast), never paint
+        expect(name).toMatch(
+          /^--(_[\w-]+|color-(machine-[\w-]+|tape|typing-error)|motion-(duration|ease)-[\w-]+)$/,
+        );
       }
       // the roles are mapped to private properties once, on the skin root; parts read only --_
       const rules = css.split("}").filter((r) => /var\(--color-/.test(r));
@@ -89,6 +93,48 @@ describe("typing surface modules use tokens only (#558 C8)", () => {
       expect(css).not.toMatch(/color-mix\(/);
     });
   }
+
+  // Contract of #224 C5, C6: the teleprinter turns the key attributes into motion in its own module. The
+  // press is a `translate` (and the stem's shadow) on the fast token; the wrong key runs lkShake once, 0.4s
+  // (bible 8, the Locker's keyframe); both stop under the media query and any `data-motion="reduce"`.
+  describe("the teleprinter's key motion (#224 C5, C6)", () => {
+    const css = strip(read("machine/skins/teleprinter.module.css"));
+    const rule = (selector: RegExp) =>
+      [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((m) => selector.test(m[1]!))
+        .map((m) => m[2]!)
+        .join("\n");
+
+    it("the keys move by translate on --motion-duration-fast, the stem with them", () => {
+      const keys = rule(/^\s*\.key,\s*\.space\s*$/);
+      expect(keys).toMatch(/transition-property:\s*translate,\s*box-shadow;/);
+      expect(keys).toMatch(/transition-duration:\s*var\(--motion-duration-fast\);/);
+      const pressed = rule(/\.key\[data-pressed="true"\]/);
+      expect(pressed).toMatch(/\btranslate:/);
+      // translate only: no key rule moves a cap with transform (the bed's tilt is the deck's)
+      expect(keys + pressed + rule(/\.key\[data-wrong="true"\]/)).not.toMatch(/\btransform\s*:/);
+    });
+
+    it("the wrong key runs lkShake 0.4s once, a horizontal translate", () => {
+      expect(rule(/\.key\[data-wrong="true"\]/)).toMatch(/animation:\s*lkShake 0\.4s ease-in-out;/);
+      const frames = /@keyframes lkShake\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+      expect(frames.match(/translate:/g)).toHaveLength(5);
+      expect(frames).not.toMatch(/\btransform\s*:/);
+      expect(frames).toMatch(/20%\s*\{\s*translate:\s*calc\(-6 \* var\(--_k\)\)/);
+    });
+
+    it('stops under prefers-reduced-motion and under data-motion="reduce" (no !important)', () => {
+      const media =
+        /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+      expect(media).toMatch(/\.key,\s*\.space\s*\{\s*transition:\s*none;/);
+      expect(media).toMatch(/\.key\[data-wrong="true"\][^{]*\{\s*animation:\s*none;/);
+      expect(rule(/\[data-motion="reduce"\] \.key,/)).toMatch(/transition:\s*none;/);
+      expect(rule(/\[data-motion="reduce"\] \.key\[data-wrong="true"\]/)).toMatch(
+        /animation:\s*none;/,
+      );
+      expect(css).not.toContain("!important");
+    });
+  });
 
   it("the components set no colour, face or duration inline", () => {
     expect(tsx).not.toMatch(/#[0-9a-fA-F]{3,8}\b(?!-)/);

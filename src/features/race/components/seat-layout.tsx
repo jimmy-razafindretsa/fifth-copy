@@ -12,6 +12,11 @@ export type SeatLayoutProps = {
   raceCard: ReactNode;
   /** The live state above the typing surface: skeleton, notices, the lost line. */
   status: ReactNode;
+  /**
+   * The 3D scene (#563): its layer fills the screen behind the HUD; its loading card or `no-scene` notice
+   * sits at the top of the middle column, above the live state, never over the strip or the sheet.
+   */
+  scene?: ReactNode;
   /** The typed sheet, rising out of the machine's slot (bible 7.7a). */
   sheet: ReactNode;
   /** The typing machine at the bottom (bible 7.7a). */
@@ -26,7 +31,7 @@ export type SeatLayoutProps = {
 
 /**
  * The seat view's HTML layer (#561, design bible 14.3, 7.10): the HUD over the flat paper backdrop, which
- * is also the race view when there is no 3D scene (ADR 0013 fallback; the scene mounts behind the HUD in
+ * is also the race view when there is no 3D scene (ADR 0013 fallback; the scene mounts behind the HUD,
  * #563). Desktop and laptop: the race card in the left gutter, the typing surface in the middle column at
  * the bottom, the tray and Abandon in the right gutter, the telex across the top and the nixie counters top
  * right. Tablets: the card and the tray share a row above the typing surface. Phones: only the notice.
@@ -41,6 +46,11 @@ export function SeatLayout(props: SeatLayoutProps) {
         <div className={styles.telex}>{props.telex}</div>
         <div className={styles.left}>{props.raceCard}</div>
         <div className={styles.center}>
+          {props.scene ? (
+            <div data-seat-scene className={styles.scene}>
+              {props.scene}
+            </div>
+          ) : null}
           <div data-seat-status className={styles.status}>
             {props.status}
           </div>

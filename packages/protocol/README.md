@@ -11,13 +11,13 @@ Every message that crosses a process boundary is declared here once, as a zod sc
 - Keep snapshots compact: arrays of numbers keyed by desk id, not objects per player (10 Hz x 100 players).
 
 ## Modules
-`version.ts` (`PROTOCOL_VERSION`, now 4) · `room-code.ts` (`ROOM_CODE_RE`, `formatRoomCode`, `parseRoomCode`) · `race-token.ts` (claims, `RACE_TOKEN_TTL_S`) · `race.ts` (race value schemas) · `events.ts` (race events) · `socket.ts` (handshake, welcome/roster, event maps) · `internal.ts` (web <-> race-server HTTP) · `settings.ts` (race settings).
+`version.ts` (`PROTOCOL_VERSION`, now 6) · `room-code.ts` (`ROOM_CODE_RE`, `formatRoomCode`, `parseRoomCode`) · `race-token.ts` (claims, `RACE_TOKEN_TTL_S`) · `race.ts` (race value schemas) · `events.ts` (race events) · `socket.ts` (handshake, welcome/roster, event maps) · `internal.ts` (web <-> race-server HTTP) · `settings.ts` (race settings).
 
 Bounds: every string and array is capped (`MAX_DESKS` 256, `MAX_NAME_LENGTH` 64, `MAX_TEXT_LENGTH` 20 000, `MAX_OVERLAY_WORDS` 500, ids 128, token 4096, `MAX_KEYS_PER_BATCH` 64, `MAX_RESULTS_PER_REQUEST` 25, `MAX_TRACE_BASE64_LENGTH` 256 KiB). Times are integer ms: `t`, `lastT`, `kickAt`, `blurUntil`, `finishedAt`, `durationMs` since GO, capped at `MAX_RACE_MS` (1 h: the timer stops at 600 s, an untimed 500-word text at 10 WPM takes 50 min); `t0`, `serverNow`, `startedAt`, `endedAt` server epoch. Names and keys are printable: no control, format (bidi), surrogate, private-use or line-separator code points (names keep ZWJ/ZWNJ).
 
 ## Socket handshake and events
 - Client connects with `auth: { v, token, resumeKey? }` (`handshakeAuthSchema`); `token` is the race token (HS256 JWT, `jose`, claims `{ v, sub, name, lobby, role: host|player|spectator }` + `iat`/`exp`, 300 s), fetched by a server action, never put in a URL. `resumeKey` (32-64 URL-safe chars, from a previous `welcome`) reclaims a desk after a line cut (ARCHITECTURE 7.4, #178).
-- Refusal: Socket.IO `connect_error` whose message is a `rejectReasonSchema` value: `version`, `bad-token`, `no-room`, `closed`, `in-progress` (room past `waiting`, no resume key).
+- Refusal: Socket.IO `connect_error` whose message is a `rejectReasonSchema` value: `version`, `bad-token`, `no-room`, `closed`, `in-progress` (room past `waiting`, no resume key), `room-full` (a spectator handshake past the room's spectator cap, #616).
 - Temporary refusal: a valid `spectator` token is refused as `bad-token` until the spectator channel lands (#187).
 - `Member = { desk, name, isHost, isBot, color: 0..11, marker }`; `color`/`marker` are always `deskIdentity(desk)` (colour `(desk - 1) % 12`, marker `circle|square|triangle|diamond` every 12 desks), a pure function both sides call.
 
@@ -25,7 +25,7 @@ Bounds: every string and array is capped (`MAX_DESKS` 256, `MAX_NAME_LENGTH` 64,
 - `welcome { v, role, you: desk | null (spectator), room: { code, phase }, members, settings, race: RaceInfo | null, state: PlayerState | null, overlay: TextOverlay | null, resumeKey | null, serverNow }` once after the handshake (and after a resume). `phase`: `waiting|countdown|running|ended`. `RaceInfo = { raceId, text, language, wordCount, t0, timerS }`.
 - `roster { v, members }` on every membership change; `settings { v, settings }` (full `RaceSettings`) after a host change.
 - `countdown { v, race: RaceInfo }` when the host starts.
-- `snapshot { v, t, desks: [desk, cursor, correct, errors, statusCode][], ranks: desk[] }` at 10 Hz; `statusCode` indexes `PLAYER_STATUSES` (engine order, `PLAYER_STATUS_CODES` is the reverse map).
+- `snapshot { v, t, desks: [desk, cursor, correct, errors, statusCode, total][], ranks: desk[] }` at 10 Hz; `statusCode` indexes `PLAYER_STATUSES` (engine order, `PLAYER_STATUS_CODES` is the reverse map); `total` is the engine's accepted presses (Backspace included), the client's exact ack (#645). `MAX_LAG_MS`/`MAX_LEAD_MS`: the server's clock clamp on keystroke `t`, read by the client's ack too.
 - `event { v, kind, ... }` (`eventSchema`, discriminated on `kind`): `finished {desk, place}`, `overtake {desk, passed}`, `passed {desk, by}`, `new-leader {desk}`, `new-host {desk}`, `line-cut {desk}`, `resumed {desk}`, `idle-warning {desk, kickAt}`, `asleep {desk}`, `abandoned {desk}`, `kicked {desk}`, `bonus-earned {desk, bonus}`, `bonus-sent {from, to: desk[], bonus}`, `bonus-hit {desk, bonus, overlay | null, blurUntil | null}`. `bonus`: `extra-paperwork|exemption|smoke-break`. `TextOverlay = { extra: words appended, removed: base word indexes }` (ADR 0007).
 - `ended { v, raceId, reason: all-finished|timer|void, ranking: RankingEntry[] }`, `RankingEntry = { place, desk, name, isBot, status, wpm, rawWpm, accuracy, progress, finishedAt | null }`.
 - `rejected { v, reason: before-go|not-running|spectator|rate-limit|no-bonus }`: refusal of an ack-less event.

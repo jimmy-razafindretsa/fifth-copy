@@ -1,5 +1,6 @@
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "./timeouts";
 
 // Contract of #497 (with #489, #373): the whole landing of bible 14.1, ported from
 // docs/design/bible/Fifth Copy Landing.dc.html. next/font renames families, so they are matched by
@@ -34,8 +35,20 @@ const tapeStamp = (page: Page) => page.locator("[data-tape] output");
 const overflow = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 
+/**
+ * Night shift on the landing needs the saved choice: the landing opens on paper whatever the OS
+ * (bible 3.2, #651), so a dark run also sets the `theme` cookie NIGHT SHIFT writes.
+ */
+async function useScheme(page: Page, context: BrowserContext, scheme: "light" | "dark") {
+  await page.emulateMedia({ colorScheme: scheme });
+  if (scheme === "light") return;
+  const url = test.info().project.use.baseURL;
+  if (!url) throw new Error("no baseURL");
+  await context.addCookies([{ name: "theme", value: "dark", url }]);
+}
+
 /** Server-action re-renders on a loaded dev server take a few seconds. */
-const AFTER_ACTION = { timeout: 20_000 };
+const AFTER_ACTION = { timeout: ACTION_WAIT };
 
 /** The live feed's recorded loop (#552). */
 const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']");
@@ -47,7 +60,7 @@ const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']"
 async function ready(page: Page) {
   await page.goto("/");
   await expect(feedVideo(page)).toHaveAttribute("data-feed", /^(armed|near)$/, {
-    timeout: 30_000,
+    timeout: HYDRATION_WAIT,
   });
 }
 
@@ -272,7 +285,7 @@ test.describe("landing page (#497)", () => {
       () => !!document.createElement("canvas").getContext("webgl2"),
     );
     test.skip(!webgl, "no WebGL in this browser");
-    test.setTimeout(120_000);
+    test.setTimeout(scaled(120_000));
     const rows = page.locator("[aria-labelledby='clerk-title'] dd");
     await expect(rows).toHaveCount(5);
     await expect(rows.first()).toHaveText("…");
@@ -281,7 +294,7 @@ test.describe("landing page (#497)", () => {
       "true",
     );
     await rows.first().scrollIntoViewIfNeeded();
-    await expect(rows.first()).not.toHaveText("…", { timeout: 20_000 });
+    await expect(rows.first()).not.toHaveText("…", { timeout: ACTION_WAIT });
     const values = await rows.allTextContents();
     expect(values.every((v) => v.length > 1 && v !== "…")).toBe(true);
     await expect(page.getByText("UNASSIGNED", { exact: true })).toBeVisible();
@@ -387,8 +400,11 @@ test.describe("landing page (#497)", () => {
   });
 
   for (const scheme of ["light", "dark"] as const) {
-    test(`C12 ${scheme}: accessible, no horizontal scroll, in both languages`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+    test(`C12 ${scheme}: accessible, no horizontal scroll, in both languages`, async ({
+      page,
+      context,
+    }) => {
+      await useScheme(page, context, scheme);
       await ready(page);
       await expect(page.getByRole("heading", { level: 1, name: "Fifth Copy" })).toBeVisible();
       await expectNoA11yViolations(page);
@@ -401,6 +417,70 @@ test.describe("landing page (#497)", () => {
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
   }
+});
+
+// Contract of #651 (bible 3.2): the landing always opens on paper, even under a dark OS, on first
+// paint (no script); the NIGHT SHIFT cookie still wins.
+const PAPER = "rgb(241, 232, 214)"; // bible 3.1 paper #F1E8D6
+const NIGHT = "rgb(62, 57, 52)"; // bible 3.2 night #3E3934
+const bodyBg = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+test.describe("landing always starts light (#651)", () => {
+  test.beforeEach(() => test.slow());
+
+  test("#651 C1 a dark OS without a cookie gets paper, NIGHT SHIFT off", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await ready(page);
+    await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+    expect(await bodyBg(page)).toBe(PAPER);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(
+      "light",
+    );
+    await expect(page.getByRole("button", { name: "NIGHT SHIFT" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  test("#651 C1 first paint is paper under a dark OS with scripts off", async ({ browser }) => {
+    const context = await browser.newContext({
+      baseURL: test.info().project.use.baseURL,
+      colorScheme: "dark",
+      javaScriptEnabled: false,
+    });
+    const page = await context.newPage();
+    await page.goto("/");
+    expect(await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)).toBe(
+      true,
+    );
+    expect(await bodyBg(page)).toBe(PAPER);
+    await context.close();
+  });
+
+  test("#651 C2 NIGHT SHIFT under a dark OS switches to night and is remembered", async ({
+    page,
+    context,
+  }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await ready(page);
+    await page.getByRole("button", { name: "NIGHT SHIFT" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark", AFTER_ACTION);
+    await expect(page.getByRole("button", { name: "NIGHT SHIFT" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(await bodyBg(page)).toBe(NIGHT);
+    // data-theme flips at once on the client; reload only once the action has written the cookie
+    await expect
+      .poll(
+        async () => (await context.cookies()).find((c) => c.name === "theme")?.value,
+        AFTER_ACTION,
+      )
+      .toBe("dark");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    expect(await bodyBg(page)).toBe(NIGHT);
+  });
 });
 
 // Contract of #610: the clerk stage paints the shared `sun-rays` utility of #25 (bible 6), the same
@@ -417,8 +497,11 @@ test.describe("landing sun-ray stage (#610)", () => {
   test.beforeEach(() => test.slow());
 
   for (const scheme of ["light", "dark"] as const) {
-    test(`C2 ${scheme}: the clerk stage paints the /design sun-rays plate`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+    test(`C2 ${scheme}: the clerk stage paints the /design sun-rays plate`, async ({
+      page,
+      context,
+    }) => {
+      await useScheme(page, context, scheme);
       await page.goto("/design");
       const plate = await backgroundOf(page, '[data-plate="sun-rays"]');
       expect(plate).toContain("repeating-conic-gradient");
@@ -758,8 +841,9 @@ test.describe("landing lobby entries (#99)", () => {
   for (const scheme of ["light", "dark"] as const) {
     test(`C8 ${scheme}: entries and error line are accessible, no horizontal scroll`, async ({
       page,
+      context,
     }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      await useScheme(page, context, scheme);
       await page.goto("/");
       await codeField(page).pressSequentially("KG");
       await joinButton(page).click();

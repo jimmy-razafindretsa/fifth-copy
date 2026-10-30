@@ -1,0 +1,104 @@
+# Runs scripts/board.ts on a GitHub runner, for sessions whose GitHub proxy blocks GraphQL (Claude Code on
+# the web: Projects v2 has no REST route). Needs BOARD_TOKEN, a classic PAT with scopes `repo` and `project`
+# (the Actions GITHUB_TOKEN cannot reach a user-owned Project), stored as a secret of the `board` environment
+# whose deployment branches are limited to `main`, never as a repo secret: a dispatch on any other branch runs
+# that branch's code, so the token must only reach runs of `main`.
+#
+# Dispatch: inputs `op` (a board.ts op, e.g. get) and `args` (JSON array of strings, e.g. ["12","--comments","5"]).
+# `body` is optional text written to a file; use the literal argument "@BODY@" where board.ts wants a path
+# (e.g. ["12","--body-file","@BODY@"] for `comment`). `request_id` is echoed in the run name so the caller can
+# find its run; the output is in the job summary, the log, and the artifact `board-<request_id>`.
+# Dispatching needs write access to the repo. Inputs and output are visible in the public run log.
+name: Board
+
+run-name: board ${{ inputs.op }} ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      op:
+        description: "board.ts op (e.g. get, next, gate, move)"
+        type: string
+        required: true
+      args:
+        description: 'JSON array of arguments, e.g. ["12","--comments","5"]'
+        type: string
+        default: "[]"
+      body:
+        description: "Optional text written to a file; pass the argument @BODY@ where a path is expected"
+        type: string
+        default: ""
+      request_id:
+        description: "Caller-chosen id, echoed in the run name"
+        type: string
+        default: ""
+
+# One board writer at a time: Status moves and gates are not safe to interleave.
+concurrency:
+  group: board
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  board:
+    name: board
+    # BOARD_TOKEN lives in this environment; its deployment branch rule (main only) gates the secret
+    environment: board
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run board.ts
+        env:
+          # Never interpolate inputs into the script: they arrive as env and are validated here.
+          GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
+          OP: ${{ inputs.op }}
+          ARGS: ${{ inputs.args }}
+          BODY: ${{ inputs.body }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          set -uo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "BOARD_TOKEN is not set in the board environment (classic PAT, scopes repo + project; deployment branches: main)." >&2
+            exit 2
+          fi
+          if [[ ! "$OP" =~ ^[a-z_][a-z_-]*$ ]]; then
+            echo "invalid op: $OP" >&2
+            exit 2
+          fi
+          printf '%s' "$BODY" > "$RUNNER_TEMP/body.md"
+          mapfile -t argv < <(node -e '
+            const a = JSON.parse(process.env.ARGS || "[]");
+            if (!Array.isArray(a) || !a.every((x) => typeof x === "string")) process.exit(3);
+            for (const x of a) console.log(x === "@BODY@" ? process.env.RUNNER_TEMP + "/body.md" : x);
+          ') || { echo "args must be a JSON array of strings" >&2; exit 2; }
+          mkdir -p out
+          set +e
+          npx tsx scripts/board.ts "$OP" "${argv[@]}" 2>&1 | tee out/output.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### board $OP ${REQUEST_ID:+($REQUEST_ID)} — exit $status"
+            echo '```'
+            cat out/output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$status" > out/exit-code.txt
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: board-${{ inputs.request_id || github.run_id }}
+          path: out/
+          if-no-files-found: ignore
+          retention-days: 7

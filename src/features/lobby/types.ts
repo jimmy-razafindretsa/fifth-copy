@@ -5,7 +5,9 @@ export type CreateLobbyResult =
   | { ok: false; error: "race-server-unavailable" | "invalid-settings" };
 
 export type JoinByCodeResult =
-  { ok: true; code: RoomCode } | { ok: false; error: "invalid-format" | "not-found" | "closed" };
+  | { ok: true; code: RoomCode }
+  | { ok: false; error: "invalid-format" | "not-found" | "closed" | "rate-limited" };
 
 export type RaceTokenResult =
-  { ok: true; token: string; url: string } | { ok: false; error: "not-found" | "closed" };
+  | { ok: true; token: string; url: string }
+  | { ok: false; error: "not-found" | "closed" | "rate-limited" };

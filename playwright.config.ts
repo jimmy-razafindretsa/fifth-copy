@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { config as loadEnv } from "dotenv";
+import { scaled } from "./e2e/timeouts";
 
 // Card worktrees carry their own ports and DB in .env (scripts/worktree.sh); a set variable still wins.
 loadEnv({ path: [".env.local", ".env"], quiet: true });
@@ -12,6 +13,10 @@ loadEnv({ path: [".env.local", ".env"], quiet: true });
 const PORT = Number(process.env.PW_PORT ?? 3100);
 const baseURL = process.env.PW_BASE_URL ?? `http://localhost:${PORT}`;
 const RACE_PORT = Number(process.env.RACE_SERVER_PORT ?? 4000);
+/** PW_WORKERS (integer >= 1) caps workers on a loaded machine (#629); unset keeps the Playwright default. */
+const WORKERS = /^[1-9]\d*$/.test(process.env.PW_WORKERS ?? "")
+  ? Number(process.env.PW_WORKERS)
+  : undefined;
 
 export const VIEWPORTS = {
   mobile: { width: 375, height: 812 },
@@ -22,12 +27,16 @@ export const VIEWPORTS = {
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
+  workers: WORKERS,
+  // test and assertion deadlines follow E2E_TIMEOUT_SCALE (e2e/timeouts.ts); default 1 = Playwright defaults
+  timeout: scaled(30_000),
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : [["line"]],
   grepInvert: process.env.PW_VISUAL ? undefined : /@visual/,
   snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}{ext}",
   expect: {
+    timeout: scaled(5_000),
     toHaveScreenshot: { animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.01 },
   },
   use: {
@@ -55,6 +64,10 @@ export default defineConfig({
         {
           command: process.env.CI ? `npm run start -- -p ${PORT}` : `npm run dev -- -p ${PORT}`,
           url: `${baseURL}/api/health`,
+          // The web rate limiter (#207, ADR 0020) is off here: every browser context of the suite is
+          // one client IP, so cookie-less joins and mints would share one bucket across tests. Its
+          // behaviour is covered by src/server/limiter and src/features/lobby/actions tests.
+          env: { REDIS_URL: "" },
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
         },

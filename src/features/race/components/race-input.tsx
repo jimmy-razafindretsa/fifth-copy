@@ -36,6 +36,12 @@ export type RaceInputProps = {
   onKey: (key: string) => void;
   /** Its accessible name (the strip's: the glyphs are hidden from assistive tech). */
   label: string;
+  /** The host's error mode (#220), as `data-mode`; absent until the room's settings arrive. */
+  mode?: "continue" | "block";
+  /** Backspace allowed this race (#220), as `data-backspace="on" | "off"`. */
+  backspace?: boolean;
+  /** Your desk's errors as the engine counted them (#220), as `data-errors`; absent without a desk. */
+  errors?: number;
 };
 
 /**
@@ -45,9 +51,10 @@ export type RaceInputProps = {
  * inside the typing surface. Printable characters and `Backspace` reach `onKey`, from `keydown` or, where
  * a virtual keyboard sends no key (`Unidentified`), from `beforeinput`; nothing is ever written into the
  * field. Paste, drop, and copying from the surface give nothing. Presentational: the seat view hands it
- * the lock and the key sink (the store, the engine and the socket stay out of components).
+ * the lock and the key sink (the store, the engine and the socket stay out of components), and the live
+ * error settings and errors it carries as data for tests and later cards (#220 C6).
  */
-export function RaceInput({ disabled, onKey, label }: RaceInputProps) {
+export function RaceInput({ disabled, onKey, label, mode, backspace, errors }: RaceInputProps) {
   const input = useRef<HTMLInputElement>(null);
   const sink = useRef(onKey);
   useEffect(() => {
@@ -151,6 +158,9 @@ export function RaceInput({ disabled, onKey, label }: RaceInputProps) {
       autoCapitalize="off"
       spellCheck={false}
       inputMode="text"
+      data-mode={mode}
+      data-backspace={backspace === undefined ? undefined : backspace ? "on" : "off"}
+      data-errors={errors}
       disabled={disabled}
       onKeyDown={onKeyDown}
     />

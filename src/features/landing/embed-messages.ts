@@ -1,30 +1,52 @@
-import { z } from "zod";
-
 /**
  * The embedding protocol (bible 15) as parsed at the edge. The clerk and lobby pages post with `'*'`;
  * the page only listens to its own origin and its own iframes (use-embed-bridge.ts).
+ * The guards are hand-written, not zod: zod classic costs ~91 kB gzip in the landing first load (#626).
  */
 export const OUTFIT_CATEGORIES = ["hair", "glasses", "hat", "clothes", "face"] as const;
 export type OutfitCategory = (typeof OUTFIT_CATEGORIES)[number];
 
-export const outfitSchema = z.object({
-  hair: z.string(),
-  glasses: z.string(),
-  hat: z.string(),
-  clothes: z.string(),
-  face: z.string(),
-  hairCol: z.string().optional(),
-});
-export type Outfit = z.infer<typeof outfitSchema>;
+export type Outfit = Record<OutfitCategory, string> & { hairCol?: string };
+
+export const VIEWS = ["over", "pov"] as const;
+export type View = (typeof VIEWS)[number];
 
 /** clerk -> page: the outfit the clerk is wearing now. */
-export const clerkMessageSchema = z.object({ type: z.literal("fc-clerk"), cfg: outfitSchema });
-
+export type ClerkMessage = { type: "fc-clerk"; cfg: Outfit };
 /** lobby -> page: the camera the lobby is showing. */
-export const viewMessageSchema = z.object({
-  type: z.literal("fc-view"),
-  view: z.enum(["over", "pov"]),
-});
+export type ViewMessage = { type: "fc-view"; view: View };
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+function parseOutfit(v: unknown): Outfit | null {
+  if (!isRecord(v)) return null;
+  const outfit = {} as Outfit;
+  for (const key of OUTFIT_CATEGORIES) {
+    const slot = v[key];
+    if (typeof slot !== "string") return null;
+    outfit[key] = slot;
+  }
+  if (v.hairCol !== undefined) {
+    if (typeof v.hairCol !== "string") return null;
+    outfit.hairCol = v.hairCol;
+  }
+  return outfit;
+}
+
+/** An `fc-clerk` message with only its known fields, or `null`. */
+export function parseClerkMessage(data: unknown): ClerkMessage | null {
+  if (!isRecord(data) || data.type !== "fc-clerk") return null;
+  const cfg = parseOutfit(data.cfg);
+  return cfg ? { type: "fc-clerk", cfg } : null;
+}
+
+/** An `fc-view` message, or `null`. */
+export function parseViewMessage(data: unknown): ViewMessage | null {
+  if (!isRecord(data) || data.type !== "fc-view") return null;
+  const view = VIEWS.find((v) => v === data.view);
+  return view ? { type: "fc-view", view } : null;
+}
 
 export const FEED_VIEWS = ["over", "pov", "auto"] as const;
 export type FeedView = (typeof FEED_VIEWS)[number];

@@ -148,3 +148,70 @@ describe("createKeyBatcher (#559 C2)", () => {
     expect(send).toHaveBeenCalledWith([{ t: 1_000, key: "L" }]);
   });
 });
+
+// Contract of #695 C3: the embed shares the page's main thread (ADR 0017), so a heavy scene frame can hold
+// the flush timer for hundreds of ms or more. `clock.set` moves time on without firing a timer: a starved
+// timer queue. The next keystroke then sends what waits, at once.
+describe("createKeyBatcher under a starved timer (#695 C3)", () => {
+  it("a key whose flush is overdue leaves with the next keystroke, synchronously in push", () => {
+    const { clock, sent, press } = setup();
+    press("L");
+    clock.set(1_600); // the 0 ms timer never ran
+    expect(sent).toEqual([]);
+    press("e");
+    expect(sent).toEqual([
+      {
+        at: 1_600,
+        batch: [
+          { t: 1_000, key: "L" },
+          { t: 1_600, key: "e" },
+        ],
+      },
+    ]);
+    // the stale timer is gone: nothing leaves twice
+    clock.advance(1_000);
+    expect(sent).toHaveLength(1);
+    expect(clock.pending()).toBe(0);
+  });
+
+  it("keys within flushMs of the last flush still wait for the timer (at most one batch per flushMs)", () => {
+    const { clock, sent, press } = setup();
+    press("a");
+    clock.set(1_600);
+    press("b"); // overdue: leaves now (flush at 1600)
+    clock.set(1_620);
+    press("c"); // 20 ms after the flush: waits
+    clock.set(1_640);
+    press("d");
+    expect(sent).toHaveLength(1);
+    clock.advance(100);
+    expect(sent.map((s) => [s.at, s.batch.map((k) => k.key).join("")])).toEqual([
+      [1_600, "ab"],
+      [1_650, "cd"],
+    ]);
+  });
+
+  it("40 keys at 8 a second with a timer that never fires: no key waits past the next keystroke", () => {
+    const { clock, sent, press } = setup();
+    for (let i = 0; i < 40; i++) {
+      press(String.fromCharCode(97 + (i % 26)));
+      // every earlier key is out by now
+      expect(sent.flatMap((s) => s.batch).length).toBeGreaterThanOrEqual(i);
+      clock.set(clock.now() + 125);
+    }
+    const at = sent.map((s) => s.at);
+    for (let i = 1; i < at.length; i++) expect(at[i]! - at[i - 1]!).toBeGreaterThanOrEqual(50);
+    expect(sent.flatMap((s) => s.batch)).toHaveLength(40);
+    for (const { batch } of sent) expect(valid(batch)).toBe(true);
+  });
+
+  it("a timer on time keeps the #559 cadence: one burst is one batch on the next task", () => {
+    const { clock, sent, press } = setup();
+    press("a");
+    press("b");
+    press("c");
+    expect(sent).toEqual([]);
+    clock.advance(0);
+    expect(sent).toHaveLength(1);
+  });
+});

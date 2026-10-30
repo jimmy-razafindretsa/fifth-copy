@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { EMBED_DIR, EMBEDS, expectedEmbeds, transformEmbed } from "./embeds";
+import {
+  EMBED_DIR,
+  EMBEDS,
+  embedFiles,
+  embedWeightKb,
+  expectedEmbeds,
+  SEAT_EMBED_BUDGET_KB,
+  transformEmbed,
+} from "./embeds";
 
 const SAMPLE = `<!doctype html>
 <html lang="en">
@@ -61,5 +69,91 @@ describe("public/3d", () => {
       const file = url.replace(/^url\(["']?|["']?\)$/g, "");
       expect(fs.existsSync(path.join(EMBED_DIR, "fonts", file)), file).toBe(true);
     }
+  });
+});
+
+// #300 C4: the podium medals are variants of the one medal page (bible 13, 15). The served page is
+// generated from the reference (drift-checked above), so the reference carries the protocol.
+describe("medal page protocol (#300 C4)", () => {
+  const medal = fs.readFileSync(path.join(EMBED_DIR, "medal.html"), "utf8");
+
+  it("knows the three metals and reads ?variant= and ?embed=1", () => {
+    for (const v of ["gold", "silver", "bronze"])
+      expect(medal).toMatch(new RegExp(`\\b${v}: \\{ base:`));
+    expect(medal).toContain("flags.get('variant')");
+    expect(medal).toContain("flags.get('embed') === '1' ? 1 :");
+  });
+
+  it("guards fc-medal-variant and fc-motion by origin, type and value", () => {
+    expect(medal).toContain("if (e.origin !== location.origin) return;");
+    expect(medal).toContain("d.type === 'fc-medal-variant' && isVariant(d.variant)");
+    expect(medal).toContain("d.type === 'fc-motion' && typeof d.reduce === 'boolean'");
+  });
+
+  it("under reduced motion (media query or fc-motion) neither turns on idle nor bobs", () => {
+    expect(medal).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
+    expect(medal).toContain("if (!reduced() && idle > 1.5");
+    expect(medal).toContain("(reduced() ? 0 : Math.sin(now / 900) * 0.015)");
+  });
+});
+
+// #563 C6, C8 (ADR 0017 option A): the seat scene is generated from `docs/design/embeds/Fifth Copy Seat.html`
+// (drift-checked above with the other pages), speaks the versioned fc-race-* / fc-scene-* protocol locked
+// to its origin, and stays under its own weight cap.
+describe("seat page (#563)", () => {
+  const seat = fs.readFileSync(path.join(EMBED_DIR, "seat.html"), "utf8");
+
+  it("is generated from its reference by scripts/embeds.ts", () => {
+    expect(EMBEDS).toContainEqual({
+      source: "docs/design/embeds/Fifth Copy Seat.html",
+      target: "seat.html",
+    });
+    expect(seat.split("\n")[1]).toContain("Fifth Copy Seat.html; do not edit");
+  });
+
+  it("accepts only its page's messages and answers only to its page's origin", () => {
+    expect(seat).toContain("if (e.origin !== location.origin || e.source !== parent) return;");
+    expect(seat).toContain("if (d.v !== SCENE_PROTOCOL) return;");
+    expect(seat).toContain("parent.postMessage({ v: SCENE_PROTOCOL, ...msg }, location.origin)");
+    expect(seat).not.toContain("'*')");
+    for (const type of ["fc-race-init", "fc-race-state", "fc-race-motion", "fc-race-preset"])
+      expect(seat).toContain(`d.type === '${type}'`);
+    for (const type of [
+      "fc-scene-hello",
+      "fc-scene-ready",
+      "fc-scene-telemetry",
+      "fc-scene-fallback",
+    ])
+      expect(seat).toContain(`type: '${type}'`);
+  });
+
+  it("shows the seat POV (bible 11.3) and hides your clerk and paper", () => {
+    expect(seat).toContain("camera.fov = 62; camera.position.set(0, 1.02, R_CHAIR - 0.05)");
+    expect(seat).toContain("let FORCE = 'pov'");
+    expect(seat).toContain("Clerks.update(dt, VIEW === 'pov')");
+    expect(seat).toContain("if ((i === 0 && HIDE0) || !OCC[i]) _w.scale(ZERO)");
+  });
+
+  it("knows the bible 12 presets, a forced ?preset= and the fallbacks", () => {
+    expect(seat).toContain("low: { pr: 1, near: 6, aa: false }");
+    expect(seat).toContain("PRESETS[Q.get('preset')]");
+    for (const reason of ["no-webgl2", "benchmark-low", "context-lost"])
+      expect(seat).toContain(`reason: '${reason}'`);
+  });
+
+  it("under reduced motion the bulb burns steady and nothing turns or bobs (bible 8)", () => {
+    expect(seat).toContain("STUTTER = !r; TURN = !r; Clerks.setBob(!r);");
+    expect(seat).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
+    expect(seat).toContain('html[data-motion="reduce"] .grain{animation:none}');
+  });
+
+  it(`loads at most ${SEAT_EMBED_BUDGET_KB} kB gzip: the page and the vendor files it imports (C6)`, () => {
+    const files = embedFiles("seat.html");
+    expect(files).toEqual([
+      "public/3d/seat.html",
+      "public/3d/vendor/three.module.min.js",
+      "public/3d/vendor/three.core.min.js",
+    ]);
+    expect(embedWeightKb("seat.html")).toBeLessThanOrEqual(SEAT_EMBED_BUDGET_KB);
   });
 });

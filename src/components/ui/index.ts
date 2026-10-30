@@ -9,7 +9,7 @@ export { EmbedFrame } from "./embed-frame";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { Field, type FieldProps } from "./field";
 export { LazyVideo, type VideoSource } from "./lazy-video";
-export { MotionSafe, useReducedMotion } from "./motion";
+export { MotionSafe, REDUCED_MOTION_QUERY, useReducedMotion } from "./motion";
 export { Skeleton } from "./skeleton";
 export { Spinner, type SpinnerProps } from "./spinner";
 export { Star, type StarTone } from "./star";
@@ -24,4 +24,5 @@ export {
   rotationFromSeed,
 } from "./stamp";
 export { useEmbedBridge } from "./use-embed-bridge";
+export { hasWebGL2, type WebGLCanvas } from "./webgl";
 export { NEAR_VIEWPORT, useInViewport, useNearViewport } from "./use-near-viewport";

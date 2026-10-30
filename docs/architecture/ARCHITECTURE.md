@@ -195,7 +195,8 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 │   └── proxy.ts                   locale cookie default, optimistic redirects only
 ├── packages/
 │   ├── engine/                    @fifth-copy/engine (ADR 0007)
-│   └── protocol/                  @fifth-copy/protocol (ADR 0006)
+│   ├── protocol/                  @fifth-copy/protocol (ADR 0006)
+│   └── limiter/                   @fifth-copy/limiter: Redis sliding-window rate limiter, web + race server (ADR 0020)
 ├── services/
 │   └── race-server/               @fifth-copy/race-server (ADR 0006, 0008): main, env, http/, socket/, rooms/, players/, bots/, redis/, persist/
 ├── prisma/schema/                 identity, lobby, race, texts, stats, jobs (.prisma, one per feature)
@@ -208,7 +209,7 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 Boundary rules (all enforced by `scripts/check.sh`: dependency-cruiser over `src packages services`, ESLint):
 - `app -> features -> server/lib`; a feature imports another only through its `index.ts`; `components/ui` imports no features or server code.
 - Prisma client only in `src/server/**`, `src/features/*/{queries,actions,jobs}/**` and `src/worker/**`.
-- `packages/engine` imports nothing outside itself. `packages/protocol` imports only zod and the engine.
+- `packages/engine` imports nothing outside itself. `packages/protocol` imports only zod and the engine. `packages/limiter` imports nothing outside itself; only `src/server/limiter` and `services/race-server` use it (ADR 0020).
 - `services/race-server` never imports `src/`, Next, React or Prisma. `src/` never imports `services/`. Workspace packages are imported by name (`@fifth-copy/engine`), never by path.
 - `process.env` only in `src/env.ts` and `services/race-server/src/env.ts`.
 
@@ -248,7 +249,7 @@ Player states inside `running`: `typing -> finished`, `typing -> abandoned` (but
 
 ### 7.2 Protocol (`@fifth-copy/protocol`)
 Client -> server: `join {token}`, `keys {batch: Keystroke[]}` (<= 50 ms of keys, `t` relative to GO), `abandon`, `host:start`, `host:kick {desk}`, `host:settings {patch}` (also persisted by web), `ping {sent}`.
-Server -> client: `welcome {room, you: desk, text, overlay, settings, t0, serverNow}`, `snapshot {t, desks: [desk, cursor, correct, errors, status][], ranks}` at 10 Hz, `event {kind: overtake|passed|new-host|line-cut|resumed|asleep|bonus-sent|bonus-hit|kicked, ...}`, `countdown {goAt}`, `ended {raceId, ranking}`, `rejected {reason}`.
+Server -> client: `welcome {room, you: desk, text, overlay, settings, t0, serverNow}`, `snapshot {t, desks: [desk, cursor, correct, errors, status, total][], ranks}` at 10 Hz (`total`: the engine's accepted presses, the client's exact ack of its sent keys, #645), `event {kind: overtake|passed|new-host|line-cut|resumed|asleep|bonus-sent|bonus-hit|kicked, ...}`, `countdown {goAt}`, `ended {raceId, ranking}`, `rejected {reason}`.
 Internal HTTP (HMAC): see ADR 0006 point 6. All payloads carry `v: PROTOCOL_VERSION`.
 
 ### 7.3 One keystroke, end to end
@@ -264,7 +265,7 @@ sequenceDiagram
   S->>S: validate t vs server clock, rate limit, applyKeystroke(authoritative)
   S->>R: HSET room:<id> desk:<n> state (tick)
   S-->>C: snapshot {desks:[...], ranks} (10 Hz, full state)
-  C->>C: reconcile: if server(you) != predicted base, re-apply unacked keys on server state
+  C->>C: ack = server total - base total (or every sent key older than MAX_LAG_MS), then reconcile: if server(you) != predicted base, re-apply unacked keys on server state
   S-->>C: event overtake (+1) if rank improved past someone
 ```
 Clock: `welcome` carries `serverNow`; the client keeps an offset from `ping/pong` (card #172); keystroke `t` outside `[serverElapsed - 2 s, serverElapsed + 0.2 s]` is clamped and counted as a timing anomaly.
@@ -285,7 +286,7 @@ Client: paste blocked, text rendered as individual spans with `user-select: none
 Projector and phones join the room on the `spectator` channel with a `role: spectator` token (no desk, no `keys`). They receive snapshots and events; the projector view uses the overview camera; phones get the HUD in spectator mode and never mount the typing surface (R36, card #293).
 
 ### 7.9 Capacity
-100 players x 20 keys/s worst case = 2000 keystrokes/s in <= 50 ms batches = <= 2000 small messages/s in; 10 snapshots/s x 100 clients x ~1.5 kB = 1.5 MB/s out. One Node process on a 2-vCPU VPS handles this with headroom; the engine step is microseconds. Beyond that: Socket.IO Redis adapter plus room-sticky routing (additive, no protocol change).
+100 players x 20 keys/s worst case = 2000 keystrokes/s in <= 50 ms batches = <= 2000 small messages/s in; 10 snapshots/s x 100 clients x <= 3 kB (100 late-race desks, benchmarked) = <= 3 MB/s out. One Node process on a 2-vCPU VPS handles this with headroom; the engine step is microseconds. Beyond that: Socket.IO Redis adapter plus room-sticky routing (additive, no protocol change).
 
 ## 8. Web app design
 
@@ -297,7 +298,7 @@ Projector and phones join the room on the `spectator` channel with a `role: spec
 - `lobby`: `createLobby`, `joinByCode`, `consumeInvite`, `createInvite`, `updateSettings` (host only), `mintRaceToken`, `openRoom`/`closeRoom` (internal calls), `recordHostTransfer`.
 - `texts`: `generateRaceText(settings)` (exact word count, accents, practice letters, numbers/symbols/punctuation, difficulty), `importCorpus`, `isClean(text)`.
 - `race` (client): `RaceClient`, `useRaceStore`, HUD components (telex, sheet, keyboard, nixie counters, race card, stamps, sabotage tray, abandon), spectator views.
-- `race-3d` (client, lazy): `RaceScene`, `OverviewScene`, `benchmarkGpu`.
+- `race-3d` (client, lazy): `RaceScene` (mounts `/3d/seat.html` in an `EmbedFrame`, driven by `fc-race-*` messages, [ADR 0017](../adr/0017-seat-scene-delivery.md)), `OverviewScene`, `benchmarkGpu` (inside the embed); the scene reads only `selectSceneView` from `@/features/race`.
 - `results`: internal `persistRaceResults`, `getDawnReport(raceId, viewer)`, podium/ranking/personal card components.
 - `stats`: `getProfile`, `getSeries`, `getHeatmap(layout)`, `getBests`, `getCallouts`, jobs `rollupCharStats`, `purgeKeystrokes`.
 - `guide`: static content per layout and OS.
@@ -382,7 +383,7 @@ Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis
 | Name | Process | Purpose |
 |---|---|---|
 | `DATABASE_URL`, `TEST_DATABASE_URL` | web, worker | Postgres (ADR 0002, 0003) |
-| `REDIS_URL` | race-server | live state |
+| `REDIS_URL` | race-server, web | live state; web: shared rate limiter, optional, fails open (ADR 0020) |
 | `RACE_SERVER_PORT` | race-server | listen port |
 | `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (same host in production, through Caddy) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |

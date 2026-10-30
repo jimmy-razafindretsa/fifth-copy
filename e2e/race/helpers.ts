@@ -1,6 +1,20 @@
-import type { Browser, BrowserContext, Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
+import { SignJWT } from "jose";
 import { Client } from "pg";
+import { io, type Socket } from "socket.io-client";
+import { charsOf, normalizeTypeable } from "@fifth-copy/engine";
+import {
+  MAX_KEYS_PER_BATCH,
+  PROTOCOL_VERSION,
+  RACE_TOKEN_TTL_S,
+  type Countdown,
+  type RaceSettings,
+  type RaceSettingsPatch,
+  type Welcome,
+} from "@fifth-copy/protocol";
 import { expect, test } from "../fixtures";
+import { scaled } from "../timeouts";
 
 // Room helpers shared by the lobby and race specs (#561 C10; first written for #107 in e2e/lobby.spec.ts).
 // They drive the real landing and the race server started by playwright.config.ts.
@@ -117,4 +131,238 @@ export async function hostRoom(
 export async function warmRace(page: Page, lobbyId: string) {
   await page.request.get(`/race/${lobbyId}`);
   await page.request.post("/api/internal/races", { data: {} });
+}
+
+const JWT = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
+const raceTokens = new WeakMap<Page, { tokens: string[]; seated: boolean }>();
+
+/**
+ * Records the race tokens the page's lobby actions answer (`mintRaceToken`, the `e2e/lobby.spec.ts` C4
+ * pattern: read through the route, the body is gone once Chromium cancels the request) and whether its
+ * own room socket got its `welcome`. Call it before the page loads the waiting room (`hostRoom`'s
+ * `before`).
+ */
+export async function recordRaceTokens(page: Page) {
+  const record = { tokens: [] as string[], seated: false };
+  const { tokens } = record;
+  raceTokens.set(page, record);
+  page.on("websocket", (ws) =>
+    ws.on("framereceived", ({ payload }) => {
+      if (String(payload).startsWith('42["welcome"')) record.seated = true;
+    }),
+  );
+  await page.route("**/lobby/**", async (route) => {
+    const r = route.request();
+    if (r.method() !== "POST" || !r.headers()["next-action"]) return route.continue();
+    const response = await route.fetch();
+    const body = await response.text();
+    tokens.push(...(body.match(JWT) ?? []));
+    await route.fulfill({ response, body });
+  });
+}
+
+/** The race server playwright.config.ts starts (the card worktree's port). */
+const raceServerUrl = () =>
+  process.env.NEXT_PUBLIC_RACE_SERVER_URL ??
+  `http://localhost:${process.env.RACE_SERVER_PORT ?? 4000}`;
+
+/**
+ * The host changes the room's settings before START (#220; no lobby form sends `host:settings` until
+ * #110): a Node-side socket with the host's race token emits `host:settings` and waits for `{ ok: true }`.
+ * It waits for the host page's own socket to be seated first, so the host's desk stays seated when this
+ * one closes (another socket of the user is still open, `presence.ts`). Pages that connect afterwards get
+ * the new settings in their `welcome`.
+ */
+export async function setHostSettings(host: Page, patch: RaceSettingsPatch): Promise<RaceSettings> {
+  const record = raceTokens.get(host);
+  if (!record) throw new Error("setHostSettings: call recordRaceTokens(host) before it loads");
+  await expect
+    .poll(() => record.seated && record.tokens.length > 0, {
+      message: "the host's race token and its seated room socket",
+    })
+    .toBe(true);
+  const token = record.tokens.at(-1)!;
+  const socket = io(raceServerUrl(), {
+    auth: { v: PROTOCOL_VERSION, token },
+    transports: ["websocket"],
+    reconnection: false,
+    forceNew: true,
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once("welcome", () => resolve());
+      socket.once("connect_error", reject);
+    });
+    const ack = (await socket
+      .timeout(5_000)
+      .emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch })) as
+      { ok: true; settings: RaceSettings } | { ok: false; error: string };
+    expect(ack, "host:settings").toMatchObject({ ok: true });
+    return (ack as { settings: RaceSettings }).settings;
+  } finally {
+    socket.disconnect();
+  }
+}
+
+/** A Node-side player of a room (#564): its desk, and its keys after GO. */
+export type SimulatedPlayer = {
+  readonly desk: number;
+  readonly name: string;
+  /** Keys this player sent so far (all correct: the next characters of the race text). */
+  readonly typed: number;
+  /**
+   * Sends the next `count` characters of the race text as `keys` batches (at most 64 keys each),
+   * stamped with the race time on the server clock. Resolves once sent, with this machine's clock
+   * (`Date.now()`) at the last emit.
+   */
+  type(count: number): Promise<number>;
+  close(): void;
+};
+
+/** An HS256 race token for a fresh player of `lobbyId`, signed like the web's mint (ADR 0009). */
+function playerToken(lobbyId: string, name: string): Promise<string> {
+  const secret = process.env.RACE_TOKEN_SECRET;
+  if (!secret) throw new Error("simulatedPlayers: RACE_TOKEN_SECRET is not set (load the .env)");
+  const iat = Math.floor(Date.now() / 1000);
+  return new SignJWT({
+    v: PROTOCOL_VERSION,
+    sub: `usr_sim_${randomUUID()}`,
+    name,
+    lobby: lobbyId,
+    role: "player",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt(iat)
+    .setExpirationTime(iat + RACE_TOKEN_TTL_S)
+    .sign(new TextEncoder().encode(secret));
+}
+
+/**
+ * `n` simulated players join the waiting room of `lobbyId` (#564; the technique of #165's 30-player
+ * proof, `services/race-server/src/testing/harness.ts`): each is a Node `socket.io-client` with its own
+ * race token, signed here with the local `RACE_TOKEN_SECRET` (the web app's mint stays the product
+ * path). Resolves once every one is seated (its `welcome`), in join order. Each keeps the clock offset
+ * of its welcome and the race of its `countdown`, so `type()` works after GO. `close()` every player
+ * in the test's cleanup.
+ */
+export async function simulatedPlayers(
+  n: number,
+  lobbyId: string,
+  { names }: { names?: readonly string[] } = {},
+): Promise<SimulatedPlayer[]> {
+  const players: SimulatedPlayer[] = [];
+  // one at a time: desks follow the join order
+  for (let i = 0; i < n; i++) {
+    const name = names?.[i] ?? `Sim-${String(i + 1).padStart(3, "0")}`;
+    const socket: Socket = io(raceServerUrl(), {
+      auth: { v: PROTOCOL_VERSION, token: await playerToken(lobbyId, name) },
+      transports: ["websocket"],
+      reconnection: false,
+      forceNew: true,
+    });
+    let offset = 0;
+    let race: Countdown["race"] | null = null;
+    socket.on("countdown", (payload: Countdown) => {
+      race = payload.race;
+    });
+    const welcome = await new Promise<Welcome>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${name}: no welcome`)), scaled(10_000));
+      socket.once("welcome", (w: Welcome) => {
+        clearTimeout(timer);
+        offset = w.serverNow - Date.now();
+        resolve(w);
+      });
+      socket.once("connect_error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+    let typed = 0;
+    players.push({
+      desk: welcome.you!,
+      name,
+      get typed() {
+        return typed;
+      },
+      async type(count) {
+        if (!race) throw new Error(`${name}: no race yet`);
+        const chars = charsOf(normalizeTypeable(race.text)).slice(typed, typed + count);
+        let at = Date.now();
+        for (let k = 0; k < chars.length; k += MAX_KEYS_PER_BATCH) {
+          at = Date.now();
+          const t = Math.max(0, Math.round(at + offset - race.t0));
+          const batch = chars.slice(k, k + MAX_KEYS_PER_BATCH).map((key) => ({ t, key }));
+          socket.emit("keys", { v: PROTOCOL_VERSION, batch });
+        }
+        typed += chars.length;
+        return at;
+      },
+      close: () => void socket.disconnect(),
+    });
+  }
+  return players;
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+const boxOf = async (locator: Locator): Promise<Box> => (await locator.boundingBox())!;
+export const disjoint = (a: Box, b: Box) =>
+  a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+
+/** The seat view's HUD parts (#561 C5): the ones that must stay on screen at every layout. */
+export const SEAT_HUD = {
+  kicker: (p: Page) => p.getByRole("heading", { level: 1 }),
+  telex: (p: Page) => p.locator("[data-telex]"),
+  nixie: (p: Page) => p.locator('[data-device="nixie"]'),
+  raceCard: (p: Page) => p.locator("[data-race-card]"),
+  notice: (p: Page) => p.locator("[data-seat-status] [data-notice]"),
+  sheet: (p: Page) => p.locator("[data-sheet]"),
+  machine: (p: Page) => p.locator("[data-machine]"),
+  tray: (p: Page) => p.locator("[data-sabotage-tray]"),
+  abandon: (p: Page) => p.locator("[data-abandon]"),
+};
+
+/**
+ * #561 C5's layout check, for the scene's modes (#563 C3: the seat shell holds with the scene off): at
+ * 1280, 1024 and 768 the race card never meets the machine, every HUD part stays on screen and nothing
+ * scrolls sideways. `seat-shell.spec.ts` keeps its own copy (its contract runs unchanged).
+ */
+export async function expectSeatShellLayout(page: Page) {
+  for (const size of [
+    { width: 1280, height: 800 },
+    { width: 1024, height: 768 },
+    { width: 768, height: 1024 },
+  ]) {
+    await page.setViewportSize(size);
+    await expect(page.locator("[data-phones]")).toBeHidden();
+    const card = await boxOf(SEAT_HUD.raceCard(page));
+    const machine = await boxOf(SEAT_HUD.machine(page));
+    expect(disjoint(card, machine), `${size.width}: race card vs machine`).toBe(true);
+    for (const [name, locate] of Object.entries(SEAT_HUD)) {
+      const b = await boxOf(locate(page));
+      const at = `${size.width}x${size.height} ${name}`;
+      expect(b.x, at).toBeGreaterThanOrEqual(0);
+      expect(b.y, at).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width, at).toBeLessThanOrEqual(size.width + 0.5);
+      expect(b.y + b.height, at).toBeLessThanOrEqual(size.height + 0.5);
+    }
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow, `${size.width}: horizontal scroll`).toBeLessThanOrEqual(0);
+  }
+}
+
+/** No WebGL in the page or its frames (#563 C3, the #300 podium pattern): `getContext` answers `null`. */
+export async function withoutWebGL(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      id: string,
+      ...rest: unknown[]
+    ) {
+      if (id === "webgl2" || id === "webgl") return null;
+      return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
+    } as typeof original;
+  });
 }

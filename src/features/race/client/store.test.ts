@@ -30,6 +30,8 @@ const {
   reduceRace,
   selectCanType,
   selectTypedView,
+  selectVisibleStamp,
+  watchStampExpiry,
 } = await import("./store");
 const { RaceStoreProvider, useRaceStore } = await import("./use-race-store");
 const { connectToRoom } = await import("./socket");
@@ -95,6 +97,11 @@ describe("reduceRace (#561 C2)", () => {
       prediction: null,
       desks: [],
       ranks: [],
+      // #220: the last key the engine took from you
+      lastKey: null,
+      // #232: the overtake stamps
+      stamps: [],
+      stampSeq: 0,
     });
   });
 
@@ -329,6 +336,8 @@ describe("bindRaceSocket (#561 C3)", () => {
     const w = welcome();
     fake.deliver("welcome", w);
     fake.deliver("roster", { v: PROTOCOL_VERSION, members: [member(2, "Crow-274")] });
+    const settings = { ...DEFAULT_RACE_SETTINGS, errorMode: "block" as const };
+    fake.deliver("settings", { v: PROTOCOL_VERSION, settings }); // #654 C2
     fake.io.deliver("reconnect_attempt", 1);
     fake.io.deliver("reconnect", 1);
     fake.deliver("connect_error", new Error("in-progress"));
@@ -337,6 +346,7 @@ describe("bindRaceSocket (#561 C3)", () => {
       // #214: the welcome carries the local time it arrived at, for the clock offset
       { type: "welcome", payload: w, receivedAt: expect.any(Number) },
       { type: "roster", payload: { v: PROTOCOL_VERSION, members: [member(2, "Crow-274")] } },
+      { type: "settings", payload: { v: PROTOCOL_VERSION, settings } },
       { type: "reconnecting" },
       { type: "reconnected" },
       { type: "connect-error", reason: "in-progress" },
@@ -353,7 +363,9 @@ describe("bindRaceSocket (#561 C3)", () => {
     expect([...fake.listeners.keys()].sort()).toEqual([
       "connect_error",
       "countdown",
+      "event",
       "roster",
+      "settings",
       "snapshot",
       "welcome",
     ]);
@@ -734,22 +746,23 @@ describe("typing and snapshots (#559 C5)", () => {
   it("a snapshot keeps desks and ranks and reconciles your desk's prediction", () => {
     const s = reduceRace(reduceRace(running(), key("L", 40)), { type: "sent", count: 1 });
     const reconcile = vi.spyOn(s.prediction!, "reconcile");
+    const ackedBy = vi.spyOn(s.prediction!, "ackedBy");
     const desks: Snapshot["desks"] = [
-      [1, 4, 4, 0, typing],
-      [3, 0, 0, 0, typing],
-      [5, 1, 1, 0, typing],
+      [1, 4, 4, 0, typing, 4],
+      [3, 0, 0, 0, typing, 0],
+      [5, 1, 1, 0, typing, 1],
     ];
     const next = reduceRace(s, snapshot(desks, 500, [1, 5, 3]));
     expect(next.desks).toEqual(desks);
     expect(next.ranks).toEqual([1, 5, 3]);
     expect(reconcile).toHaveBeenCalledTimes(1);
-    expect(reconcile).toHaveBeenCalledWith(
-      { cursor: 1, correct: 1, errors: 0, status: "typing" },
-      1,
-    );
+    // the server's total and the snapshot's time reach the ack (#645)
+    const server = { cursor: 1, correct: 1, errors: 0, status: "typing", total: 1 };
+    expect(ackedBy).toHaveBeenCalledWith(server, 500);
+    expect(reconcile).toHaveBeenCalledWith(server, 1);
     expect(next.prediction?.unacked).toEqual([]);
     // a snapshot without your desk (a spectator, or before your seat is in it) keeps desks only
-    const other = reduceRace(s, snapshot([[1, 4, 4, 0, typing]]));
+    const other = reduceRace(s, snapshot([[1, 4, 4, 0, typing, 4]]));
     expect(other.prediction).toBe(s.prediction);
   });
 
@@ -759,18 +772,18 @@ describe("typing and snapshots (#559 C5)", () => {
     s = reduceRace(reduceRace(s, { type: "sent", count: 2 }), key(" ", 120));
     expect(s.prediction?.state.cursor).toBe(3);
     // the server counted one of the two sent keys wrong: no prefix of the prediction matches it
-    s = reduceRace(s, snapshot([[5, 2, 1, 1, typing]]));
+    s = reduceRace(s, snapshot([[5, 2, 1, 1, typing, 2]]));
     expect(s.prediction?.base).toMatchObject({ cursor: 2, correct: 1, errors: 1 });
     expect(s.prediction?.unacked).toEqual([{ t: 120, key: " " }]);
     expect(s.prediction?.state).toMatchObject({ cursor: 3, correct: 2, errors: 1 });
     // the next snapshot agrees: it settles with nothing left unacked
-    s = reduceRace(reduceRace(s, { type: "sent", count: 1 }), snapshot([[5, 3, 2, 1, typing]]));
+    s = reduceRace(reduceRace(s, { type: "sent", count: 1 }), snapshot([[5, 3, 2, 1, typing, 3]]));
     expect(s.prediction?.unacked).toEqual([]);
     expect(s.prediction?.state).toMatchObject({ cursor: 3, correct: 2, errors: 1 });
   });
 
   it("a status the server decided (asleep) locks typing", () => {
-    const s = reduceRace(running(), snapshot([[5, 0, 0, 0, PLAYER_STATUS_CODES.asleep]]));
+    const s = reduceRace(running(), snapshot([[5, 0, 0, 0, PLAYER_STATUS_CODES.asleep, 0]]));
     expect(s.prediction?.state.status).toBe("asleep");
     expect(selectCanType(s)).toBe(false);
   });
@@ -805,8 +818,8 @@ describe("typing and snapshots (#559 C5)", () => {
     store.dispatch({ type: "sent", count: 1 });
     expect(views).toHaveLength(1);
     // the server agrees: no new view
-    store.dispatch(snapshot([[5, 1, 1, 0, typing]], 100));
-    store.dispatch(snapshot([[5, 1, 1, 0, typing]], 200));
+    store.dispatch(snapshot([[5, 1, 1, 0, typing, 1]], 100));
+    store.dispatch(snapshot([[5, 1, 1, 0, typing, 1]], 200));
     expect(views).toHaveLength(1);
     store.dispatch(key("e", 80));
     store.dispatch(key(" ", 120));
@@ -815,8 +828,8 @@ describe("typing and snapshots (#559 C5)", () => {
     store.dispatch(
       snapshot(
         [
-          [1, 3, 3, 0, typing],
-          [5, 1, 1, 0, typing],
+          [1, 3, 3, 0, typing, 3],
+          [5, 1, 1, 0, typing, 1],
         ],
         300,
       ),
@@ -824,7 +837,7 @@ describe("typing and snapshots (#559 C5)", () => {
     expect(views).toHaveLength(3);
     // the server diverges: exactly one new view
     store.dispatch({ type: "sent", count: 2 });
-    store.dispatch(snapshot([[5, 2, 1, 1, typing]], 400));
+    store.dispatch(snapshot([[5, 2, 1, 1, typing, 2]], 400));
     expect(views).toHaveLength(4);
   });
 
@@ -844,7 +857,7 @@ describe("typing and snapshots (#559 C5)", () => {
       expect(reduceRace(lost, event), event.type).toBe(lost);
     }
     const s = freeze(reduceRace(running(), key("L", 40)));
-    const payload = freeze(snapshot([[5, 1, 1, 0, typing]]));
+    const payload = freeze(snapshot([[5, 1, 1, 0, typing, 1]]));
     expect(() => reduceRace(s, payload)).not.toThrow();
     expect(() => reduceRace(s, key("e", 80))).not.toThrow();
   });
@@ -866,8 +879,371 @@ describe("typing and snapshots (#559 C5)", () => {
     });
     const dispatch = vi.fn();
     bindRaceSocket(room, dispatch);
-    const payload: Snapshot = { v: PROTOCOL_VERSION, t: 100, desks: [[5, 1, 1, 0, 0]], ranks: [5] };
+    const payload: Snapshot = {
+      v: PROTOCOL_VERSION,
+      t: 100,
+      desks: [[5, 1, 1, 0, 0, 1]],
+      ranks: [5],
+    };
     for (const fn of listeners.get("snapshot") ?? []) fn(payload);
     expect(dispatch).toHaveBeenCalledWith({ type: "snapshot", payload });
+  });
+});
+
+// Contract of #220 C1: the host's error mode and backspace rule reach the engine from `welcome.settings`
+// (`engineSettingsOf`); the store records the last key the engine took (`lastKey`, `wrong` exactly when
+// the engine's errors grew) and the typed view shows the engine's jam. No rule here: the engine decides.
+describe("error modes, the jam and lastKey (#220 C1)", () => {
+  const TEXT = "Le reçu";
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "fr" as const,
+    wordCount: 2,
+    t0: 1_767_225_603_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const raceIn = (errorMode: "continue" | "block", backspace = true) =>
+    run(
+      {
+        type: "welcome",
+        payload: welcome({ settings: { ...DEFAULT_RACE_SETTINGS, errorMode, backspace } }),
+      },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      { type: "go" },
+    );
+  const press = (s: RaceState, key: string, t: number) =>
+    reduceRace(s, { type: "key", keystroke: { t, key } });
+  const errorsOf = (s: RaceState) => s.prediction?.state.errors;
+  const states = (s: RaceState) =>
+    selectTypedView(s)
+      .chars.map((c) => c.state[0])
+      .join("");
+
+  it("Block: wrong, wrong, then the right key on the first char: jammed with the cursor held, then released at 1 with 2 errors", () => {
+    let s = raceIn("block");
+    expect(s.prediction?.settings).toEqual({ errorMode: "block", backspace: true });
+    for (const [errors, t] of [
+      [1, 10],
+      [2, 20],
+    ] as const) {
+      s = press(s, "x", t);
+      expect(selectTypedView(s)).toMatchObject({ jammed: true, cursor: 0 });
+      expect(states(s)).toBe("nrrrrrr");
+      expect(errorsOf(s)).toBe(errors);
+      expect(s.lastKey).toEqual({ key: "x", t, wrong: true });
+    }
+    s = press(s, "L", 30);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 1 });
+    expect(states(s)).toBe("dnrrrrr");
+    expect(errorsOf(s)).toBe(2);
+    expect(s.lastKey).toEqual({ key: "L", t: 30, wrong: false });
+  });
+
+  it("Continue: the same keys never jam; each wrong key is a wrong span and the cursor moves on", () => {
+    let s = raceIn("continue");
+    expect(s.prediction?.settings).toEqual({ errorMode: "continue", backspace: true });
+    s = press(s, "x", 10);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 1 });
+    expect(states(s)).toBe("wnrrrrr");
+    s = press(s, "x", 20);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 2 });
+    s = press(s, "L", 30);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 3 });
+    expect(states(s)).toBe("wwwnrrr");
+    expect(errorsOf(s)).toBe(3);
+    expect(s.lastKey).toEqual({ key: "L", t: 30, wrong: true });
+  });
+
+  it("Block: a Backspace after a wrong key releases the jam (an accepted key that is not wrong)", () => {
+    let s = press(press(raceIn("block"), "L", 10), "x", 20);
+    expect(selectTypedView(s)).toMatchObject({ jammed: true, cursor: 1 });
+    s = press(s, "Backspace", 30);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 0 });
+    expect(s.lastKey).toEqual({ key: "Backspace", t: 30, wrong: false });
+    // at the start of the text the engine still takes it (a counted press): the jam releases too
+    s = press(press(raceIn("block"), "x", 10), "Backspace", 20);
+    expect(selectTypedView(s)).toMatchObject({ jammed: false, cursor: 0 });
+    expect(errorsOf(s)).toBe(1);
+  });
+
+  it("lastKey is { key, t, wrong } after each key the engine takes, wrong exactly when its errors grew", () => {
+    let s = raceIn("continue");
+    expect(s.lastKey).toBeNull();
+    const steps: [string, number, boolean][] = [
+      ["L", 10, false],
+      ["x", 20, true],
+      ["Backspace", 30, false], // takes the slip back: errors shrink
+      ["e", 40, false],
+      ["É", 50, true],
+    ];
+    for (const [key, t, wrong] of steps) {
+      const before = errorsOf(s)!;
+      s = press(s, key, t);
+      expect(s.lastKey, key).toEqual({ key, t, wrong });
+      expect(errorsOf(s)! > before, key).toBe(wrong);
+    }
+    // a key the engine refuses (older than the last one) records nothing
+    expect(press(s, "x", 5)).toBe(s);
+    // a new race or a (re)connect starts over
+    const again = reduceRace(s, {
+      type: "countdown",
+      payload: { v: PROTOCOL_VERSION, race: RACE },
+    });
+    expect(again.lastKey).toBeNull();
+    expect(reduceRace(s, { type: "welcome", payload: welcome() }).lastKey).toBeNull();
+    // a snapshot keeps it
+    const snap: RaceEvent = {
+      type: "snapshot",
+      payload: { v: PROTOCOL_VERSION, t: 900, desks: [[1, 2, 2, 0, 0, 2]], ranks: [1] },
+    };
+    expect(reduceRace(s, snap).lastKey).toBe(s.lastKey);
+  });
+
+  it("Continue with backspace off: a Backspace reaches the engine and changes nothing on the copy", () => {
+    let s = press(raceIn("continue", false), "x", 10);
+    expect(s.prediction?.settings).toEqual({ errorMode: "continue", backspace: false });
+    const before = selectTypedView(s);
+    s = press(s, "Backspace", 20);
+    expect(s.prediction?.state.total).toBe(2);
+    expect(s.lastKey).toEqual({ key: "Backspace", t: 20, wrong: false });
+    const after = selectTypedView(s);
+    expect(after.chars).toEqual(before.chars);
+    expect(after.cursor).toBe(1);
+    // nothing was typed: the struck char does not pop again
+    expect(after.lastTypedAt).toBe(before.lastTypedAt);
+  });
+
+  it("only a key that types a char pops: a refused Block key keeps the stamp, a Backspace clears it", () => {
+    let s = press(raceIn("block"), "L", 10);
+    expect(selectTypedView(s).lastTypedAt).toBe(10);
+    s = press(s, "x", 20);
+    expect(selectTypedView(s).lastTypedAt).toBe(10);
+    s = press(s, "Backspace", 30);
+    expect(selectTypedView(s).lastTypedAt).toBeNull();
+    s = press(s, "L", 40);
+    expect(selectTypedView(s).lastTypedAt).toBe(40);
+  });
+
+  it("stays pure with lastKey", () => {
+    const s = freeze(press(raceIn("block"), "x", 10));
+    expect(() => press(s, "L", 20)).not.toThrow();
+    expect(s.lastKey).toEqual({ key: "x", t: 10, wrong: true });
+  });
+
+  // Contract of #654 C1: the room's `settings` broadcast after the welcome replaces the settings, and the
+  // next countdown builds the prediction from them.
+  const BLOCK = { ...DEFAULT_RACE_SETTINGS, errorMode: "block" as const, backspace: true };
+  const settingsEvent: RaceEvent = {
+    type: "settings",
+    payload: { v: PROTOCOL_VERSION, settings: BLOCK },
+  };
+
+  it("a settings event replaces settings and nothing else (#654 C1)", () => {
+    const waiting = run({
+      type: "welcome",
+      payload: welcome({ settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "continue" } }),
+    });
+    expect(reduceRace(waiting, settingsEvent)).toEqual({ ...waiting, settings: BLOCK });
+  });
+
+  it("settings after the welcome: Block applies at the countdown (#654 C1)", () => {
+    let s = run(
+      {
+        type: "welcome",
+        payload: welcome({ settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "continue" } }),
+      },
+      settingsEvent,
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      { type: "go" },
+    );
+    expect(s.prediction?.settings).toEqual({ errorMode: "block", backspace: true });
+    s = press(s, "x", 10);
+    expect(selectTypedView(s)).toMatchObject({ jammed: true, cursor: 0 });
+  });
+});
+
+// Contract of #232 C1: the store's `event` case queues overtake stamps, one visible plus one pending;
+// same-kind events within 300 ms collapse; a stamp expires 1.4 s after it shows (injected clock).
+describe("#232 overtake stamps", () => {
+  const T = 1_767_225_600_000;
+  const overtake = (passed = 3, desk = 5) =>
+    ({ v: PROTOCOL_VERSION, kind: "overtake", desk, passed }) as const;
+  const passedBy = (by = 1, desk = 5) =>
+    ({ v: PROTOCOL_VERSION, kind: "passed", desk, by }) as const;
+  const ev = (
+    payload: Extract<RaceEvent, { type: "event" }>["payload"],
+    at: number,
+  ): RaceEvent => ({
+    type: "event",
+    payload,
+    at,
+  });
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "Le reçu du café est prêt.",
+    language: "fr" as const,
+    wordCount: 5,
+    t0: T + 3_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const seated = () => run({ type: "welcome", payload: welcome() });
+  const view = (s: RaceState) =>
+    s.stamps.map(({ id, kind, at, other }) => ({ id, kind, at, other }));
+
+  /** A manual clock: `advance` fires what falls due, in order. */
+  function clock(start = T) {
+    let now = start;
+    let next = 0;
+    const due = new Map<number, { at: number; fn: () => void }>();
+    return {
+      timer: {
+        now: () => now,
+        setTimeout: (fn: () => void, ms: number) => {
+          due.set(++next, { at: now + ms, fn });
+          return next;
+        },
+        clearTimeout: (handle: unknown) => void due.delete(handle as number),
+      },
+      advance(ms: number) {
+        const until = now + ms;
+        for (;;) {
+          const first = [...due].sort(([, a], [, b]) => a.at - b.at)[0];
+          if (!first || first[1].at > until) break;
+          due.delete(first[0]);
+          now = first[1].at;
+          first[1].fn();
+        }
+        now = until;
+      },
+      pending: () => due.size,
+    };
+  }
+
+  it("an overtake or a passed of your desk queues { id, kind, at }; other desks and kinds do not", () => {
+    let s = reduceRace(seated(), ev(overtake(3), T));
+    expect(view(s)).toEqual([{ id: 1, kind: "overtake", at: T, other: 3 }]);
+    expect(s.stamps[0]!.shownAt).toBe(T);
+    s = reduceRace(s, ev(passedBy(1), T + 500));
+    expect(view(s)).toEqual([
+      { id: 1, kind: "overtake", at: T, other: 3 },
+      { id: 2, kind: "passed", at: T + 500, other: 1 },
+    ]);
+    // the pending one shows when the visible one expires
+    expect(s.stamps[1]!.shownAt).toBe(T + 1_400);
+    // a spectator's copy of another desk's event, and kinds without a stamp, change nothing
+    expect(reduceRace(s, ev(overtake(1, 3), T + 600))).toBe(s);
+    const leader: RaceEvent = {
+      type: "event",
+      payload: { v: PROTOCOL_VERSION, kind: "new-leader", desk: 5 },
+      at: T + 600,
+    };
+    expect(reduceRace(s, leader)).toBe(s);
+    // a spectator (no desk) never stamps
+    const spectator = run({ type: "welcome", payload: welcome({ role: "spectator", you: null }) });
+    expect(reduceRace(spectator, ev(overtake(3), T))).toBe(spectator);
+  });
+
+  it("same-kind events within 300 ms collapse; 300 ms apart they queue", () => {
+    const one = reduceRace(seated(), ev(overtake(3), T));
+    expect(reduceRace(one, ev(overtake(1), T + 299))).toBe(one);
+    const two = reduceRace(one, ev(overtake(1), T + 300));
+    expect(view(two).map((x) => x.other)).toEqual([3, 1]);
+    // another kind never collapses
+    expect(view(reduceRace(one, ev(passedBy(1), T + 10))).map((x) => x.kind)).toEqual([
+      "overtake",
+      "passed",
+    ]);
+  });
+
+  it("caps the queue at one visible plus one pending: the latest replaces the pending", () => {
+    let s = seated();
+    s = reduceRace(s, ev(overtake(3), T));
+    s = reduceRace(s, ev(passedBy(3), T + 100));
+    s = reduceRace(s, ev(overtake(1), T + 200));
+    expect(view(s)).toEqual([
+      { id: 1, kind: "overtake", at: T, other: 3 },
+      { id: 3, kind: "overtake", at: T + 200, other: 1 },
+    ]);
+    // collapse compares with the newest queued stamp (the pending one)
+    expect(reduceRace(s, ev(overtake(3), T + 350))).toBe(s);
+  });
+
+  it("a stamp expires 1.4 s after it shows; the pending one then shows for its own 1.4 s", () => {
+    const c = clock();
+    const store = createRaceStore(seated());
+    const stop = watchStampExpiry(store, c.timer);
+    store.dispatch(ev(overtake(3), T));
+    c.advance(200);
+    store.dispatch(ev(passedBy(1), T + 200));
+    c.advance(1_199);
+    expect(view(store.getState()).map((x) => x.id)).toEqual([1, 2]);
+    c.advance(1);
+    expect(view(store.getState()).map((x) => x.id)).toEqual([2]);
+    expect(store.getState().stamps[0]!.shownAt).toBe(T + 1_400);
+    c.advance(1_399);
+    expect(store.getState().stamps).toHaveLength(1);
+    c.advance(1);
+    expect(store.getState().stamps).toEqual([]);
+    expect(c.pending()).toBe(0);
+    // after a quiet spell a new stamp shows at once and expires 1.4 s later
+    c.advance(5_000);
+    store.dispatch(ev(overtake(1), T + 7_800));
+    expect(store.getState().stamps[0]!.shownAt).toBe(T + 7_800);
+    stop();
+    expect(c.pending()).toBe(0);
+  });
+
+  it("an expired visible stamp is dropped when the next event arrives, even before its timer", () => {
+    let s = reduceRace(seated(), ev(overtake(3), T));
+    s = reduceRace(s, ev(passedBy(1), T + 1_400));
+    expect(view(s)).toEqual([{ id: 2, kind: "passed", at: T + 1_400, other: 1 }]);
+    expect(s.stamps[0]!.shownAt).toBe(T + 1_400);
+    // a stale expiry (not the visible stamp) changes nothing
+    expect(reduceRace(s, { type: "stamp-expired", id: 1, at: T + 1_500 })).toBe(s);
+  });
+
+  it("welcome, countdown and a lost line clear the queue; ids stay unique", () => {
+    const s = reduceRace(seated(), ev(overtake(3), T));
+    const again = reduceRace(s, { type: "welcome", payload: welcome() });
+    expect(again.stamps).toEqual([]);
+    expect(reduceRace(again, ev(overtake(3), T + 10)).stamps[0]!.id).toBe(2);
+    expect(
+      reduceRace(s, { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } }).stamps,
+    ).toEqual([]);
+    expect(reduceRace(s, { type: "token-error", error: "closed" }).stamps).toEqual([]);
+  });
+
+  it("selectVisibleStamp returns the store's own object", () => {
+    const s = reduceRace(seated(), ev(overtake(3), T));
+    expect(selectVisibleStamp(s)).toBe(s.stamps[0]);
+    expect(selectVisibleStamp(seated())).toBeNull();
+  });
+
+  it("bindRaceSocket turns a parsed `event` into a race event stamped with the device clock", () => {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    const room = connectToRoom("http://localhost:7232", "tok", { io });
+    const c = clock();
+    const dispatch = vi.fn();
+    bindRaceSocket(room, dispatch, { timer: c.timer });
+    c.advance(42);
+    for (const fn of listeners.get("event") ?? []) fn(overtake(3));
+    // an invalid payload is dropped at the edge
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const fn of listeners.get("event") ?? []) fn({ v: PROTOCOL_VERSION, kind: "overtake" });
+    expect(dispatch.mock.calls.map(([e]) => e)).toEqual([
+      { type: "event", payload: overtake(3), at: T + 42 },
+    ]);
   });
 });

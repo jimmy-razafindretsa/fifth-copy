@@ -1,0 +1,21 @@
+/*
+ * A podium medal's box (#300, bible 13, 14.4): fills the plinth's ink medal slot; the embed (absolute,
+ * embed-frame.module.css) or the gold fallback stamp sits inside it, centred.
+ */
+
+@reference "../../../app/globals.css";
+
+.medal {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* the stamp's display headline resized so HERO OF / PAPERWORK fits the bronze slot (112px) */
+.stamp > span:first-child {
+  font-size: 14px;
+  line-height: 1.1;
+}

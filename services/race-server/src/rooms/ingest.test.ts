@@ -239,7 +239,7 @@ describe("keys over the wire (C1)", () => {
     await ticks(r.booted, 3);
 
     const last = snapshotSchema.parse(me!.seen.snapshots.at(-1));
-    expect(last.desks).toContainEqual([me!.desk, 7, 7, 0, PLAYER_STATUS_CODES.finished]);
+    expect(last.desks).toContainEqual([me!.desk, 7, 7, 0, PLAYER_STATUS_CODES.finished, 7]);
     expect(last.ranks[0]).toBe(me!.desk);
     await until(
       () => r.racers[0]!.seen.events.some((e) => e.kind === "finished"),
@@ -306,7 +306,7 @@ describe("keys over the wire: authority (C2)", () => {
     await settle();
     await ticks(r.booted, 1);
     const last = snapshotSchema.parse(me!.seen.snapshots.at(-1));
-    expect(last.desks).toContainEqual([me!.desk, 1, 1, 0, PLAYER_STATUS_CODES.typing]);
+    expect(last.desks).toContainEqual([me!.desk, 1, 1, 0, PLAYER_STATUS_CODES.typing, 1]);
     expect(me!.seen.rejected).toEqual([]);
     expect(r.booted.server.desks.states(r.lobby).get(me!.desk)?.trace).toHaveLength(1);
   });

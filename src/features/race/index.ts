@@ -13,6 +13,8 @@ export type {
  * importable from client modules (the lobby loads it lazily). */
 export { getRaceSeat, type RaceSeatInfo } from "./queries/get-race-seat";
 export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
+/** The machine's keys for a viewer (#224): a server function, so identity never reaches a client graph. */
+export { machineRows } from "./view/machine-rows";
 export type { RaceSeatLabels, SeatErrorLabels } from "./seat/seat-view";
 export type { MintRaceToken } from "./client/connect-seat";
 export { bindRaceSocket, createRaceStore, initialRaceState, reduceRace } from "./client/store";
@@ -71,3 +73,9 @@ export type {
   SabotageCard,
   SabotageTrayLabels,
 } from "./view/hud-labels";
+/** The 3D seat scene's one input (#563, ADR 0017): a memoised view of the store; race-3d reads nothing else. */
+export { selectSceneView } from "./view/scene-view";
+export type { SceneDesk, ScenePhase, SceneView } from "./view/scene-view";
+/** The scene's loading card (#563 C2) and the phone query the scene leaf skips (phones watch, #292). */
+export { LoadingCard, type LoadingCardProps, type SceneLabels } from "./components/loading-card";
+export { PHONE_QUERY } from "./seat/seat-view";

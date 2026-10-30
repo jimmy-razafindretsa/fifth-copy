@@ -1,0 +1,17 @@
+{
+  "name": "@fifth-copy/limiter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One Redis-backed sliding-window rate limiter shared by the web app and the race server (ADR 0020): one Lua script, one key scheme, every key with a TTL.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "sideEffects": false,
+  "devDependencies": {
+    "ioredis": "^5.11.1"
+  }
+}

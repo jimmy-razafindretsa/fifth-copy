@@ -163,7 +163,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Chromium from a cache keyed by the installed @playwright/test version (#602): uncached downloads
+      # sometimes stalled until the shard timeout. On a hit the install step only installs OS packages.
+      - id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: npx playwright install --with-deps chromium
+        timeout-minutes: 5
       - run: scripts/test-db.sh
       - run: npm run build
       - run: npm run build:race

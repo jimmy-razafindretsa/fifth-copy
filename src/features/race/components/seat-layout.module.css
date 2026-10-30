@@ -9,6 +9,8 @@
 @reference "../../../app/globals.css";
 
 .seat {
+  /* its own stacking context: the scene layer (#563, z-index -1) paints over this paper, under the HUD */
+  isolation: isolate;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -94,12 +96,23 @@
   gap: 16px;
 }
 
+/* the scene's loading card or no-scene notice (#563): its layer is fixed behind the HUD */
+.scene {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene:empty {
+  display: none;
+}
+
 .status:empty {
   display: none;
 }
 
-/* the countdown (#214) takes the free space above the typing surface, the scene area, and centres in it */
-.status:has([data-countdown]) {
+/* the countdown (#214) and the overtake stamps (#232) take the free space above the typing surface, the
+   scene area, and centre in it */
+.status:has([data-countdown], [data-stamps]) {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -138,5 +151,39 @@
 
   .phones {
     display: block;
+  }
+}
+
+/*
+ * Over the scene (#563, bible 14.3 extension; drawn from its first frame, #695): the room behind the HUD
+ * is darker than paper, so text without a docket of its own takes the paper ground: the kicker and the
+ * countdown digits a paper chip, Abandon's secondary button a paper ground. A pulsing notice keeps its docket ground opaque and dips its text only (the
+ * same 0.75 as lkPulse on paper, bible 7.4 #560), so the room never shows through it.
+ */
+.seat:has([data-scene]) .kicker {
+  justify-self: start;
+  width: fit-content;
+  padding: 2px 8px;
+  background: var(--color-bg);
+}
+
+.seat:has([data-scene]) [data-digit] {
+  padding: 0 16px;
+  background: var(--color-bg);
+}
+
+.seat:has([data-scene]) .abandon [aria-expanded]:not(:enabled:hover) {
+  background: var(--color-bg);
+}
+
+@keyframes lkPulseText {
+  50% {
+    color: color-mix(in srgb, var(--color-fg) 75%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) .seat:has([data-scene]) [data-notice] {
+    animation-name: lkPulseText;
   }
 }

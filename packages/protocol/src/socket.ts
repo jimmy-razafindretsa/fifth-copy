@@ -42,7 +42,8 @@ export type HandshakeAuth = z.infer<typeof handshakeAuthSchema>;
 
 /**
  * Sent as the Socket.IO `connect_error` message when the handshake is refused. `in-progress`: the
- * room is past `waiting` and the client has no resume key.
+ * room is past `waiting` and the client has no resume key. `room-full`: a spectator handshake past the
+ * room's spectator cap (#616); seated players are never refused with it.
  */
 export const rejectReasonSchema = z.enum([
   "version",
@@ -50,6 +51,7 @@ export const rejectReasonSchema = z.enum([
   "no-room",
   "closed",
   "in-progress",
+  "room-full",
 ]);
 export type RejectReason = z.infer<typeof rejectReasonSchema>;
 

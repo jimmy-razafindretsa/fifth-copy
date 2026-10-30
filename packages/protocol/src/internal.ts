@@ -181,10 +181,10 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   secret: "test-secret-for-internal-hmac-vector-0123456789",
   timestamp: "1767225600",
   body:
-    '{"v":4,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":6,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
-  signature: "a26389c21e37ff097cb3903faf25aa90d3489d5504c050adb3b6fe1888e8dfda",
+  signature: "3b5d209bf89f3ab2686f5b0d869306ea40ad57a302ea20fe6a845e4629b1969e",
 } as const;

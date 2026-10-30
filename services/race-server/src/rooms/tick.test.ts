@@ -110,7 +110,7 @@ describe("tick loop (C3)", () => {
     expect(snapshots.at(-1)!.t).toBe(2_000);
     const stopped = snapshots.slice(10).map((s) => s.desks.find(([d]) => d === 3));
     expect(new Set(stopped.map((tuple) => JSON.stringify(tuple))).size).toBe(1);
-    expect(stopped[0]).toEqual([3, 20, 20, 0, 0]);
+    expect(stopped[0]).toEqual([3, 20, 20, 0, 0, 20]);
     // One mirror write per tick that had changes (the GO write is the first).
     expect(counts.exec).toBe(20);
   });

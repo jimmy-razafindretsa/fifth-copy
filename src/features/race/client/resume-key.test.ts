@@ -97,8 +97,10 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const socket = {
       onWelcome: (cb: (payload: unknown) => void) => ((onWelcome = cb), off),
       onRoster: () => off,
+      onSettings: () => off,
       onCountdown: () => off,
       onSnapshot: () => off,
+      onEvent: () => off,
       onConnectError: () => off,
       onReconnecting: () => off,
       onReconnected: () => off,
@@ -123,15 +125,17 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     expect(dispatch).toHaveBeenCalledTimes(3);
   });
 
-  it("connectSeat connects with the stored key, and without one when none is stored", async () => {
+  it("connectSeat reads the stored key at each handshake, so a key stored later reaches reconnects", async () => {
     const storage = memoryStorage();
     vi.stubGlobal("window", { sessionStorage: storage });
     const { connectSeat } = await import("./connect-seat");
     const room = {
       onWelcome: () => () => {},
       onRoster: () => () => {},
+      onSettings: () => () => {},
       onCountdown: () => () => {},
       onSnapshot: () => () => {},
+      onEvent: () => () => {},
       onConnectError: () => () => {},
       onReconnecting: () => () => {},
       onReconnected: () => () => {},
@@ -149,12 +153,64 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       });
       await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalled());
       stop();
-      return connectToRoom.mock.calls.at(-1) as unknown[];
+      const [url, token, opts] = connectToRoom.mock.calls.at(-1) as unknown as [
+        string,
+        string,
+        { resumeKey: () => string | null },
+      ];
+      return { url, token, key: opts.resumeKey };
     };
 
-    expect(await open()).toEqual(["http://race.test", "tok", { resumeKey: null }]);
-    connectToRoom.mockClear();
+    const first = await open();
+    expect(first.url).toBe("http://race.test");
+    expect(first.token).toBe("tok");
+    expect(first.key()).toBeNull();
+    // a welcome stores the key after the socket was created: its reconnects read it
     storeResumeKey(LOBBY, KEY);
-    expect(await open()).toEqual(["http://race.test", "tok", { resumeKey: KEY }]);
+    expect(first.key()).toBe(KEY);
+  });
+
+  it("connectSeat falls back to the key the last welcome issued when sessionStorage is blocked", async () => {
+    vi.stubGlobal("window", {
+      get sessionStorage(): Storage {
+        throw new Error("blocked");
+      },
+    });
+    const { connectSeat } = await import("./connect-seat");
+    let onWelcome: ((w: { resumeKey: string | null }) => void) | undefined;
+    const room = {
+      onWelcome: (cb: typeof onWelcome) => {
+        onWelcome ??= cb;
+        return () => {};
+      },
+      onRoster: () => () => {},
+      onSettings: () => () => {},
+      onCountdown: () => () => {},
+      onSnapshot: () => () => {},
+      onEvent: () => () => {},
+      onConnectError: () => () => {},
+      onReconnecting: () => () => {},
+      onReconnected: () => () => {},
+      close: vi.fn(),
+    };
+    const connectToRoom = vi.fn(() => room as unknown as import("./socket").RoomSocket);
+    const mint = vi.fn(async () => ({ ok: true as const, token: "tok", url: "http://race.test" }));
+    const stop = connectSeat({
+      code: "KGB-4821",
+      lobbyId: LOBBY,
+      mint,
+      dispatch: vi.fn(),
+      load: async () => ({ connectToRoom }),
+    });
+    await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalled());
+    const [, , opts] = connectToRoom.mock.calls[0] as unknown as [
+      string,
+      string,
+      { resumeKey: () => string | null },
+    ];
+    expect(opts.resumeKey()).toBeNull();
+    onWelcome?.({ resumeKey: KEY });
+    expect(opts.resumeKey()).toBe(KEY);
+    stop();
   });
 });

@@ -2,7 +2,8 @@ import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Redis } from "ioredis";
 import type { Rng } from "@fifth-copy/engine";
-import type { RaceEvent } from "@fifth-copy/protocol";
+import { createLimiter } from "@fifth-copy/limiter";
+import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
 import type { Clock, Scheduler, TimerHandle } from "./clock";
 import type { RaceServerEnv } from "./env";
 import { createInternalHandler } from "./http/internal";
@@ -11,6 +12,7 @@ import { createOutbox, type Outbox } from "./persist/outbox";
 import { buildResults, sendResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
 import { createIdle } from "./players/idle";
+import { releaseDropped, type LeaveDeps } from "./players/leave";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
 import { createBonuses } from "./rooms/bonus-step";
@@ -21,7 +23,13 @@ import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecyc
 import { createRoomRegistry, RECONCILE_MS, type RoomRegistry } from "./rooms/registry";
 import { createTicker } from "./rooms/tick";
 import { audience, deskRoom, spectatorRoom } from "./socket/rooms";
+import { RACE_LIMITER_PREFIX } from "./socket/rate-limit";
 import { attachSocketServer, type RacePort, type RaceIo } from "./socket/server";
+import {
+  createSpectatorSlots,
+  MAX_SPECTATORS_PER_ROOM,
+  type SpectatorSlots,
+} from "./socket/spectator-slots";
 
 export type RaceServer = {
   httpServer: HttpServer;
@@ -34,6 +42,8 @@ export type RaceServer = {
   outbox: Outbox;
   /** Socket presence, line cuts and resumes (#178). */
   presence: Presence;
+  /** Spectator admission slots per room (#616). */
+  spectators: SpectatorSlots;
   /**
    * Rehydrates the rooms of the previous process (#204) before it binds, then starts the count
    * reconciliation; resolves with the bound port (pass 0 for an ephemeral one in tests).
@@ -56,6 +66,7 @@ export function createRaceServer({
   onRaceEnded,
   recovery = true,
   rng = Math.random,
+  maxSpectatorsPerRoom = MAX_SPECTATORS_PER_ROOM,
 }: {
   env: Pick<RaceServerEnv, "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK">;
   redis: Redis;
@@ -71,8 +82,11 @@ export function createRaceServer({
   recovery?: boolean;
   /** Randomness of the bonus effects (#190: Extra Paperwork's words); tests seed it. */
   rng?: Rng;
+  /** Spectator sockets one room admits on this process (#616); tests lower it. */
+  maxSpectatorsPerRoom?: number;
 }): RaceServer {
   const registry = createRoomRegistry({ redis, clock });
+  const spectators = createSpectatorSlots(maxSpectatorsPerRoom);
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
   const sockets: { io?: RaceIo } = {};
   // Socket.IO cannot narrow a generic event name to its payload; the callers type the pair.
@@ -153,6 +167,14 @@ export function createRaceServer({
   };
   outbox.drain().catch((err: unknown) => log("outbox drain failed", { err: String(err) }));
 
+  const leaveDeps: LeaveDeps = {
+    registry,
+    presence,
+    onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
+    announce: (lobbyId, members) =>
+      void to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members }),
+  };
+
   const raceHooks = {
     deskStates: async (lobbyId: string) => desksState.states(lobbyId),
     onEnding: (lobbyId: string) => {
@@ -195,6 +217,13 @@ export function createRaceServer({
         onRaceEnded?.(ended);
       } finally {
         desksState.release(ended.lobbyId);
+        // Queued behind the ending, which still holds the room (#658). A void keeps its members:
+        // they reconnect to read `ended { void }` (#204).
+        if (ended.reason !== "void") {
+          releaseDropped(leaveDeps, ended.lobbyId).catch((err: unknown) =>
+            log("release dropped failed", { lobby: ended.lobbyId, err: String(err) }),
+          );
+        }
       }
     },
   };
@@ -237,6 +266,9 @@ export function createRaceServer({
     race,
     presence,
     resumeKeys,
+    spectators,
+    // Per-identity buckets (#207): fails closed, a message Redis cannot count is dropped.
+    limiter: createLimiter(redis, { prefix: RACE_LIMITER_PREFIX }),
   });
   sockets.io = io;
 
@@ -248,6 +280,7 @@ export function createRaceServer({
     desks: desksState,
     outbox,
     presence,
+    spectators,
     listen: async (port, host) => {
       if (recovery) {
         const { kept, voided, gone } = await registry.rehydrate();

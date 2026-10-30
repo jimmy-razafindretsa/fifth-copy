@@ -129,6 +129,7 @@ describe("teleprinter module (#558 C5)", () => {
     for (const r of roles)
       expect(r).toMatch(/^--color-(machine-(paper|deck|ink|metal|muted)|tape|typing-error)$/);
     const vars = [...css.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]!);
-    for (const v of vars) expect(v.startsWith("--_") || v.startsWith("--color-"), v).toBe(true);
+    // besides paint, its key motion reads the UI motion tokens (#224: the press on the fast duration)
+    for (const v of vars) expect(/^--(_|color-|motion-(duration|ease)-)/.test(v), v).toBe(true);
   });
 });

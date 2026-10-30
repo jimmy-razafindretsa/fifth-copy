@@ -12,8 +12,9 @@ export type TypedChar = { ch: string; state: CharState };
 /**
  * `chars`: the race text, one grapheme each, in order. `cursor`: the index of the `next` char
  * (`chars.length` once finished). `jammed`: Block mode refused the last key (the machine jams).
- * `lastTypedAt`: the time of the last accepted keystroke, `null` before the first one; it keys the pop of
- * the char at `cursor - 1`, so a retype at the same index pops again.
+ * `lastTypedAt`: the time the char at `cursor - 1` was typed, `null` before the first one or when unknown
+ * (after a Backspace); it keys that char's pop, so a retype at the same index pops again and a key that
+ * types nothing (a refused Block key, a Backspace) pops nothing (#220).
  */
 export type TypedView = {
   chars: TypedChar[];
@@ -42,13 +43,14 @@ export const NO_TEXT_VIEW: TypedView = { chars: [], cursor: 0, jammed: false, la
 
 /**
  * The view of a desk typing `text` (#559 C3): `done` / `wrong` before the cursor as the engine recorded
- * them, `next` at it, `remaining` after it; `jammed` from the prediction (Block mode, a refused key: a
- * state alone cannot tell it); `lastTypedAt` keys the pop of the last typed char.
+ * them, `next` at it, `remaining` after it; `jammed` and the pop stamp `typedAt` from the prediction
+ * (#220: a state alone cannot tell a refused key or a Backspace); without `typedAt`, the last keystroke's
+ * time keys the pop of the last typed char.
  */
 export function typedViewFrom(
   state: TypedProgress,
   text: string,
-  { jammed = false }: { jammed?: boolean } = {},
+  { jammed = false, typedAt }: { jammed?: boolean; typedAt?: number | null } = {},
 ): TypedView {
   const chars = Array.from(text, (ch, i): TypedChar => {
     if (i < state.cursor) return { ch, state: state.typed[i] == null ? "done" : "wrong" };
@@ -58,7 +60,7 @@ export function typedViewFrom(
     chars,
     cursor: Math.min(state.cursor, chars.length),
     jammed,
-    lastTypedAt: state.total > 0 ? state.lastT : null,
+    lastTypedAt: typedAt !== undefined ? typedAt : state.total > 0 ? state.lastT : null,
   };
 }
 

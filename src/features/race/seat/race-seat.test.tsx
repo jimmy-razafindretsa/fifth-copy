@@ -6,7 +6,7 @@ import type { RaceLostReason, RacePhase } from "../client/store";
 import { hudLabelFixtures } from "../view/hud-labels";
 import { RaceSeat } from "./race-seat";
 import { RaceSeatLiveView } from "./race-seat-live";
-import { beforeStartRaceCard, PHONE_QUERY, SEAT_ROWS } from "./seat-view";
+import { COMPACT_QUERY, PHONE_QUERY } from "./seat-view";
 
 // #561 C4 and C6 at unit level: the shell the server renders (before-start HUD, kicker, phones notice),
 // every live state of the status slot, and the `race` catalogs (one language per block, the HUD copy of
@@ -18,6 +18,11 @@ const decode = (html: string) =>
     .replace(/&quot;/g, '"');
 const seat = { lobbyId: "cmuvut8r2000106r7wf01vr30", code: "KGB-4821" };
 const mint = async () => ({ ok: false as const, error: "closed" as const });
+/** The route hands the machine its rows (#224, `machineRows`); any rows do here. */
+const ROWS = [
+  ["q", "w", "e"],
+  ["a", "s", "d"],
+];
 
 describe("race catalogs (#561 C6)", () => {
   it.each([
@@ -47,7 +52,9 @@ describe("race catalogs (#561 C6)", () => {
 });
 
 describe("the seat shell on the server (#561 C4)", () => {
-  const html = decode(renderToStaticMarkup(<RaceSeat seat={seat} labels={en.race} mint={mint} />));
+  const html = decode(
+    renderToStaticMarkup(<RaceSeat seat={seat} labels={en.race} mint={mint} rows={ROWS} />),
+  );
 
   it("renders every HUD part in its before-start state, over the paper backdrop", () => {
     expect(html).toContain('data-backdrop="paper"');
@@ -55,7 +62,11 @@ describe("the seat shell on the server (#561 C4)", () => {
     expect(html).toContain('role="group" aria-label="Text to type"');
     expect(html).toContain("data-sheet");
     expect(html).toMatch(/data-machine="true" data-skin="teleprinter"/);
-    expect((html.match(/data-key="/g) ?? []).length).toBe(SEAT_ROWS.flat().length + 1);
+    // the machine draws the rows the route chose, plus its space bar
+    expect([...html.matchAll(/data-key="([^"]*)"/g)].map((m) => m[1])).toEqual([
+      ...ROWS.flat(),
+      " ",
+    ]);
     expect(html).toContain('data-device="nixie"');
     expect(html).toContain("00 / 00");
     expect(html).toContain("data-race-card");
@@ -79,7 +90,7 @@ describe("the seat shell on the server (#561 C4)", () => {
 
   it("French renders French only", () => {
     const frHtml = decode(
-      renderToStaticMarkup(<RaceSeat seat={seat} labels={fr.race} mint={mint} />),
+      renderToStaticMarkup(<RaceSeat seat={seat} labels={fr.race} mint={mint} rows={ROWS} />),
     );
     expect(frHtml).toMatch(/<h1[^>]*>VUE DE TA PLACE<\/h1>/);
     expect(frHtml).toContain("ABANDONNER");
@@ -143,24 +154,18 @@ describe("the status slot, phase by phase (#561 C4)", () => {
   );
 });
 
-describe("beforeStartRaceCard", () => {
-  it("puts every seated typist at the start, yours marked, and no lanes", () => {
-    const m = (desk: number) => ({
-      desk,
-      name: `Clerk-${desk}`,
-      isHost: false,
-      isBot: false,
-      color: desk - 1,
-      marker: "circle" as const,
-    });
-    expect(beforeStartRaceCard([m(1), m(4), m(7)], 4)).toEqual({
-      field: [
-        { desk: 1, progress: 0, you: false },
-        { desk: 4, progress: 0, you: true },
-        { desk: 7, progress: 0, you: false },
-      ],
-      lanes: [],
-    });
-    expect(beforeStartRaceCard([], null)).toEqual({ field: [], lanes: [] });
+describe("the race card on the seat (#564)", () => {
+  it("server-renders full (compact follows the viewport after hydration) with no lanes and no hidden desks list", () => {
+    const html = renderToStaticMarkup(
+      <RaceSeat seat={seat} labels={en.race} mint={mint} rows={ROWS} />,
+    );
+    const card = /<section[^>]*data-race-card[^>]*>/.exec(html)![0];
+    expect(card).not.toContain("data-compact");
+    expect(html).not.toContain("data-lane");
+    expect(html).not.toContain("data-desks");
+  });
+
+  it("is compact below 1280px (bible 7.4a: tablets and small laptops)", () => {
+    expect(COMPACT_QUERY).toBe("(max-width: 1279px)");
   });
 });

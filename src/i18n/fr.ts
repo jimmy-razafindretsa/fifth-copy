@@ -261,7 +261,25 @@ export const fr = {
     kicker: { seat: "VUE DE TA PLACE", desk: "VUE DE TA PLACE · BUREAU {n}" },
     telex: { strip: "Texte à taper" },
     countdown: { major: "НАЧАЛИ", go: "PARTEZ" },
+    /** The overtake stamps (#232, bible 2, 7.3): the dual in-world headline, Russian then this language. */
+    stamps: {
+      overtake: { ru: "ОБГОН!", text: "DÉPASSEMENT +1" },
+      passed: { ru: "ОБОГНАЛИ", text: "DÉPASSÉ −1" },
+    },
+    /** The race announcer (#232 C4; #242 adds the rest). */
+    announce: {
+      overtake: "Tu as dépassé le bureau {desk}",
+      passed: "Le bureau {desk} t'a dépassé",
+    },
     loading: "On t'installe à ton bureau…",
+    /** The 3D scene's loading card (#563, bible 7.4 extension): the stamp, the frame's name, the tip tag. */
+    scene: {
+      loading: "CHARGEMENT DE LA SALLE",
+      title: "La salle, vue de ton bureau",
+      didYouKnow: "LE SAVAIS-TU ?",
+    },
+    /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
+    didYouKnow: [],
     notice: {
       "waiting-for-host": "EN ATTENTE DE L'HÔTE",
       reconnecting: "LIGNE COUPÉE · RECONNEXION",
@@ -317,6 +335,44 @@ export const fr = {
       play: "JOUER",
       cooldown: "RECHARGE",
       seconds: "{n} S",
+    },
+  },
+  /** Le rapport de l'aube (#300, bible 14.4). */
+  results: {
+    kicker: "RAPPORT DE L'AUBE · FORMULAIRE 5-R",
+    heading: "COURSE TERMINÉE",
+    filing: {
+      notice: "DÉPÔT DU RAPPORT · UN INSTANT",
+      prefix: "RETOURNÉ ·",
+      late: "Le rapport n'est pas arrivé au bureau.",
+      lobby: "RETOUR À LA SALLE D'ATTENTE →",
+      home: "RETOUR À L'ACCUEIL →",
+    },
+    podium: {
+      title: "Podium",
+      place: "№ {n}",
+      desk: "BUREAU {n}",
+      bot: "BOT",
+      you: "TOI",
+      wpm: "MPM",
+      accuracy: "PRÉCISION",
+      unfilled: "NON POURVU",
+      tied: "EX AEQUO",
+      underReview: "EN VÉRIFICATION",
+      medal: "HÉROS DE LA PAPERASSE",
+      medalTitle: {
+        gold: "La médaille d'or, en 3D, glisse pour la tourner",
+        silver: "La médaille d'argent, en 3D, glisse pour la tourner",
+        bronze: "La médaille de bronze, en 3D, glisse pour la tourner",
+      },
+    },
+    status: {
+      FINISHED: "CLASSÉ",
+      TIMED_OUT: "TEMPS ÉCOULÉ",
+      REASSIGNED: "RÉAFFECTÉ",
+      ASLEEP: "ENDORMI AU BUREAU",
+      LINE_CUT: "LIGNE COUPÉE",
+      EXPIRED: "EXPIRÉ",
     },
   },
   settings: {

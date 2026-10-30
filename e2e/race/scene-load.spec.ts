@@ -10,18 +10,23 @@ import {
   type SimulatedPlayer,
 } from "./helpers";
 
-// Contract of #695 C4 and C5 (ADR 0013 fallback below Low, ADR 0017 shared main thread, bible 12): on a
-// CPU-starved browser (CDP `Emulation.setCPUThrottlingRate`, SCENE_E2E_THROTTLE, default 8) the seat
-// scene must never cost the player the race: keystroke batches leave on time while the scene is up, the
-// scene falls back to the paper backdrop with the `no-scene` notice once its frame budget is blown (C2),
-// and the `auto` benchmark falls back before the scene is ever ready (C5). Control: unthrottled, `low`
-// keeps the scene. `@scene` (e2e/fixtures.ts keeps the scene off elsewhere), desktop project only,
-// software WebGL as in scene.spec.ts, every deadline through e2e/timeouts.ts.
+// Contract of #695 C2, C4, C5, C8 (ADR 0013 fallback below Low, ADR 0017 shared main thread, bible 12,
+// 7.4, 14.3): the seat scene never costs the player the race. The `auto` benchmark runs on a drawn canvas
+// (never transparent or hidden while loading, behind the loading card), starts at LOW and, on software
+// WebGL (SwiftShader draws LOW at ~4 fps at 1280x800), falls back to paper before it is ever ready, also
+// under CPU throttling (CDP `Emulation.setCPUThrottlingRate`, SCENE_E2E_THROTTLE, default 8), where GO
+// and the keystroke batches stay on time. A forced `?preset=low` scene blows its frame budget at runtime;
+// the `?scene=pin` control (C9) keeps it and input stays on time. `@scene` (e2e/fixtures.ts keeps the
+// scene off elsewhere), desktop project only, every test wait through e2e/timeouts.ts (the 1500 ms input
+// limits are the contract's, not test waits).
 
 const THROTTLE = Number(process.env.SCENE_E2E_THROTTLE ?? 8) || 8;
 const TYPED = 40;
 /** 8 keys a second. */
 const KEY_GAP_MS = 125;
+/** The contract's input limits: first `keys` frame after the first press, largest gap while typing. */
+const FIRST_FRAME_MS = 1_500;
+const MAX_GAP_MS = 1_500;
 
 type Frame = { t: number; payload: string };
 const keysFrames = (frames: Frame[]) => frames.filter((f) => f.payload.startsWith('42["keys",'));
@@ -29,10 +34,29 @@ const batchOf = (f: Frame) =>
   (JSON.parse(f.payload.slice(2)) as [string, { batch: { t: number; key: string }[] }])[1].batch;
 const keyName = (ch: string) => (ch === " " ? "Space" : ch);
 
-const notice = (page: Page) => page.locator('[data-seat-scene] [data-notice="no-scene"]');
+const slotNotice = (page: Page) => page.locator('[data-seat-scene] [data-notice="no-scene"]');
+const anyNotice = (page: Page) => page.locator('[data-notice="no-scene"]');
+const statusNotice = (page: Page) => page.locator('[data-seat-status] [data-notice="no-scene"]');
 const scene = (page: Page) => page.locator("[data-scene]");
 const done = (page: Page) => page.locator('[data-sheet] [data-state="done"]');
 const asleep = (page: Page) => page.locator('[data-race-card] [data-you][data-status="asleep"]');
+const hasSeatFrame = (page: Page) => page.frames().some((f) => f.url().includes("/3d/seat.html"));
+
+/** What the init script saw of the scene layer, from the first paint on. */
+type Seen = {
+  loading: boolean;
+  ready: boolean;
+  /** `Date.now()` when the layer first read `ready` (same machine clock as the test). */
+  readyAt: number | null;
+  budget: string | null;
+  presets: string[];
+  /** Computed styles of a loading layer that was not drawn, or a loading layer without its card. */
+  hidden: string[];
+  bench: string | null;
+  /** State changes since the page's first script (scene, preset, phase, notices), for failure output. */
+  log: string[];
+};
+const seen = (page: Page) => page.evaluate(() => (window as unknown as { __seen: Seen }).__seen);
 
 test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () => {
   test.skip(({ viewport }) => viewport?.width !== 1280, "desktop project only (software WebGL)");
@@ -40,7 +64,14 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
 
   const opened: BrowserContext[] = [];
   let players: SimulatedPlayer[] = [];
-  test.afterEach(async () => {
+  test.afterEach(async ({ page }, info) => {
+    if (info.status !== info.expectedStatus) {
+      const log = await seen(page)
+        .then((x) => [...x.log, `bench ${x.bench}`].join("\n"))
+        .catch(() => "no timeline");
+      await info.attach("scene timeline", { body: log, contentType: "text/plain" });
+      console.log(`[${info.title}] scene timeline\n${log}`);
+    }
     for (const p of players.splice(0)) p.close();
     for (const context of opened.splice(0)) await context.close();
   });
@@ -50,12 +81,62 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
       () => !!document.createElement("canvas").getContext("webgl2"),
     );
     test.skip(!webgl, "no WebGL2 in this browser (fallback.spec.ts covers that path)");
-    // `[data-scene="ready"]` seen at any time, for the "never ready" checks
+    // C8: every state of the scene layer, seen as it happens (the page) and the embed's ladder (the frame)
     await page.addInitScript(() => {
-      const w = window as unknown as { __sceneReady?: boolean };
-      new MutationObserver(() => {
-        if (document.querySelector('[data-scene="ready"]')) w.__sceneReady = true;
-      }).observe(document, { subtree: true, childList: true, attributes: true });
+      type W = { __seen?: Seen };
+      if (window !== window.top) {
+        // the seat frame (same origin): hand its `data-bench` ladder to the page as it grows
+        new MutationObserver(() => {
+          const bench = document.documentElement?.dataset.bench;
+          const top = window.top as unknown as W | null;
+          if (bench && top?.__seen) top.__seen.bench = bench;
+        }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-bench"] });
+        return;
+      }
+      const s: Seen = {
+        loading: false,
+        ready: false,
+        readyAt: null,
+        budget: null,
+        presets: [],
+        hidden: [],
+        bench: null,
+        log: [],
+      };
+      const t0 = Date.now();
+      let last = "";
+      (window as unknown as W).__seen = s;
+      const look = () => {
+        const layer = document.querySelector<HTMLElement>("[data-scene]");
+        const phase = document
+          .querySelector("[data-seat-status] [data-phase]")
+          ?.getAttribute("data-phase");
+        const notices = document.querySelectorAll('[data-notice="no-scene"]').length;
+        const now = `scene=${layer?.dataset.scene ?? "none"} preset=${layer?.dataset.scenePreset ?? "-"} phase=${phase ?? "-"} notices=${notices}`;
+        if (now !== last) s.log.push(`+${Date.now() - t0}ms ${(last = now)}`);
+        if (!layer) return;
+        const preset = layer.dataset.scenePreset;
+        if (preset && !s.presets.includes(preset)) s.presets.push(preset);
+        s.budget ??= layer.dataset.sceneBudget ?? null;
+        if (layer.dataset.scene === "ready" && !s.ready) {
+          s.ready = true;
+          s.readyAt = Date.now();
+        }
+        if (layer.dataset.scene !== "loading") return;
+        s.loading = true;
+        const { opacity, visibility } = getComputedStyle(layer);
+        if (opacity !== "1" || visibility !== "visible")
+          s.hidden.push(`opacity ${opacity}, visibility ${visibility}`);
+        const card = document.querySelector<HTMLElement>("[data-loading-card]");
+        const box = card?.getBoundingClientRect();
+        if (!card || !box || box.width === 0 || box.height === 0) s.hidden.push("no loading card");
+      };
+      new MutationObserver(look).observe(document, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ["data-scene", "data-scene-preset", "data-scene-budget", "data-phase"],
+      });
     });
   });
 
@@ -82,11 +163,11 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     return { ...room, sent };
   }
 
-  /** START on the host; resolves at GO on the page (its `running` phase), with this machine's clock. */
+  /** START on the host; resolves at GO on the page (its `running` phase) within scaled(10 s). */
   async function go(page: Page, host: Page): Promise<number> {
     await startButton(host).click();
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
-      timeout: scaled(30_000),
+      timeout: scaled(10_000),
     });
     return Date.now();
   }
@@ -95,134 +176,143 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     return Array.from((await page.locator("[data-telex] [data-state]").allTextContents()).join(""));
   }
 
-  test("C4 under CPU throttling: keys leave on time, the blown frame budget falls back to paper, the desk never sleeps", async ({
-    page,
-    browser,
-  }) => {
-    test.setTimeout(scaled(300_000));
-    await throttle(page);
-    const room = await seat(page, browser, "?preset=high");
-    const goAt = await go(page, room.host);
+  /**
+   * "Input on time" (C4): 40 characters of the text from GO at 8 keys a second with `keyboard.press`;
+   * every key in a `keys` frame, in order; the first frame within 1500 ms of the first press; no two
+   * consecutive frames more than 1500 ms apart while typing; 40 `done` cells; the desk never asleep.
+   */
+  async function inputOnTime(page: Page, sent: Frame[], onKey?: () => Promise<void>) {
     const chars = (await raceText(page)).slice(0, TYPED);
     expect(chars).toHaveLength(TYPED);
-
-    // (a) 40 characters at 8 keys a second; the desk is watched all along
     let firstPressAt = 0;
-    let sleptAt: number | null = null;
+    let slept = false;
     for (const [i, ch] of chars.entries()) {
       const before = Date.now();
       if (i === 0) firstPressAt = before;
       await page.keyboard.press(keyName(ch));
-      if (sleptAt === null && (await asleep(page).count()) > 0) sleptAt = Date.now() - goAt;
+      if (!slept && (await asleep(page).count()) > 0) slept = true;
+      await onKey?.();
       const rest = KEY_GAP_MS - (Date.now() - before);
       if (rest > 0) await page.waitForTimeout(rest);
     }
     const typingEnd = Date.now();
-    // the sheet follows every key (all correct)
-    await expect(done(page)).toHaveCount(TYPED, { timeout: scaled(15_000) });
     await expect
-      .poll(() => keysFrames(room.sent).flatMap(batchOf).length, { timeout: scaled(10_000) })
+      .poll(() => keysFrames(sent).flatMap(batchOf).length, { timeout: scaled(10_000) })
       .toBe(TYPED);
 
-    const frames = keysFrames(room.sent);
-    expect(
-      frames[0]!.t - firstPressAt,
-      "first keys frame after the first press (ms)",
-    ).toBeLessThanOrEqual(1_000);
-    const gaps = frames
-      .filter((f) => f.t <= typingEnd)
-      .map((f, i, all) => (i === 0 ? 0 : f.t - all[i - 1]!.t));
-    expect(
-      Math.max(...gaps),
-      "largest gap between keys frames while typing (ms)",
-    ).toBeLessThanOrEqual(1_500);
+    const frames = keysFrames(sent);
+    expect(frames[0]!.t - firstPressAt, "first keys frame after the first press (ms)").toBeLessThan(
+      FIRST_FRAME_MS + 1,
+    );
+    const typing = frames.filter((f) => f.t <= typingEnd);
+    const gaps = typing.slice(1).map((f, i) => f.t - typing[i]!.t);
+    expect(Math.max(0, ...gaps), "largest gap between keys frames while typing (ms)").toBeLessThan(
+      MAX_GAP_MS + 1,
+    );
     expect(
       frames.flatMap(batchOf).map((k) => k.key),
       "every typed key in a keys frame, in order",
     ).toEqual(chars);
-    expect(sleptAt, "the desk shows ASLEEP").toBeNull();
+    await expect(done(page)).toHaveCount(TYPED, { timeout: scaled(15_000) });
+    expect(slept, "the desk showed ASLEEP").toBe(false);
     await expect(asleep(page)).toHaveCount(0);
+  }
 
-    // (b) the scene fell back by 15 s after GO: one notice in the scene slot, none in the live status
-    await expect(notice(page)).toHaveCount(1, { timeout: Math.max(1, goAt + 15_000 - Date.now()) });
+  /** The paper fallback: one notice, in the scene slot, never in the live status; no scene, no frame. */
+  async function onPaper(page: Page, timeout: number) {
+    await expect(slotNotice(page)).toHaveCount(1, { timeout: Math.max(1, timeout) });
+    await expect(anyNotice(page)).toHaveCount(1);
+    await expect(statusNotice(page)).toHaveCount(0);
     await expect(scene(page)).toHaveCount(0);
-    await expect(page.locator('[data-notice="no-scene"]')).toHaveCount(1);
-    await expect(page.locator('[data-seat-status] [data-notice="no-scene"]')).toHaveCount(0);
-    expect(
-      page.frames().some((f) => f.url().includes("/3d/seat.html")),
-      "the frame is gone",
-    ).toBe(false);
-  });
+    expect(hasSeatFrame(page), "the /3d/seat.html frame is gone").toBe(false);
+  }
 
-  test("C4 (b) the fallback lands within 15 s of GO while the sheet keeps following the keys", async ({
+  /** C8 on software WebGL: drawn while loading, never ready, never above LOW, the ladder logged from LOW. */
+  async function benchmarkFellBack(page: Page) {
+    const s = await seen(page);
+    expect(s.loading, "the loading layer was seen").toBe(true);
+    expect(s.hidden, "the loading layer is drawn (opacity 1, visible) under its card").toEqual([]);
+    expect(s.ready, 'a [data-scene="ready"] was seen').toBe(false);
+    expect(
+      s.presets.filter((p) => p !== "low"),
+      "a data-scene-preset above low",
+    ).toEqual([]);
+    if (s.bench !== null) expect(s.bench, "the data-bench ladder").toMatch(/^low:\d+/);
+  }
+
+  test("C4 (a) C8 throttled auto: GO and input on time, the benchmark falls back to paper, never ready", async ({
     page,
     browser,
   }) => {
     test.setTimeout(scaled(300_000));
     await throttle(page);
-    const room = await seat(page, browser, "?preset=high");
+    const room = await seat(page, browser, "");
     const goAt = await go(page, room.host);
-    const chars = (await raceText(page)).slice(0, TYPED);
-    let typed = 0;
-    let fallbackAt: number | null = null;
-    while (Date.now() - goAt < 15_000 && typed < TYPED) {
-      const before = Date.now();
-      await page.keyboard.press(keyName(chars[typed]!));
-      typed++;
-      if (
-        fallbackAt === null &&
-        (await notice(page).count()) === 1 &&
-        (await scene(page).count()) === 0
-      ) {
-        fallbackAt = Date.now() - goAt;
-      }
-      const rest = KEY_GAP_MS - (Date.now() - before);
-      if (rest > 0) await page.waitForTimeout(rest);
-    }
-    if (fallbackAt === null) {
-      await expect(notice(page)).toHaveCount(1, {
-        timeout: Math.max(1, goAt + 15_000 - Date.now()),
-      });
-      await expect(scene(page)).toHaveCount(0, { timeout: 1 });
-      fallbackAt = Date.now() - goAt;
-    }
-    expect(fallbackAt, "ms from GO to the paper fallback").toBeLessThanOrEqual(15_000);
-    await expect(done(page)).toHaveCount(typed, { timeout: scaled(10_000) });
-    // a later telemetry or fallback never brings a second notice
+    await inputOnTime(page, room.sent);
+
+    await onPaper(page, goAt + scaled(20_000) - Date.now());
     await page.waitForTimeout(2_000);
-    await expect(notice(page)).toHaveCount(1);
-    await expect(page.locator('[data-notice="no-scene"]')).toHaveCount(1);
+    await expect(anyNotice(page)).toHaveCount(1);
+    await benchmarkFellBack(page);
   });
 
-  test("C4 (c) control: unthrottled with ?preset=low the scene stays ready, no notice for 10 s after GO", async ({
+  test("C8 unthrottled auto: the LOW benchmark is drawn under the loading card and falls back, never ready", async ({
     page,
     browser,
   }) => {
     test.setTimeout(scaled(180_000));
-    const room = await seat(page, browser, "?preset=low");
-    await expect(scene(page)).toHaveAttribute("data-scene", "ready", { timeout: scaled(60_000) });
-    const goAt = await go(page, room.host);
-    while (Date.now() - goAt < 10_000) {
-      await expect(scene(page)).toHaveAttribute("data-scene", "ready");
-      await expect(page.locator('[data-notice="no-scene"]')).toHaveCount(0);
-      await page.waitForTimeout(500);
-    }
+    await seat(page, browser, "");
+    await onPaper(page, scaled(60_000));
+    await page.waitForTimeout(2_000);
+    await expect(anyNotice(page)).toHaveCount(1);
+    await benchmarkFellBack(page);
+    expect((await seen(page)).bench, "the embed logged its ladder").toMatch(/^low:\d+/);
   });
 
-  test("C5 the auto benchmark under throttling falls back before the scene is ever ready", async ({
+  test("C4 (b) C2 runtime budget: a forced ?preset=low scene under 18 fps falls back within 15 s of ready, the race goes on", async ({
     page,
     browser,
   }) => {
     test.setTimeout(scaled(240_000));
-    await throttle(page);
-    await seat(page, browser, "");
-    await expect(notice(page)).toHaveCount(1, { timeout: scaled(90_000) });
-    await expect(scene(page)).toHaveCount(0);
-    expect(
-      await page.evaluate(
-        () => (window as unknown as { __sceneReady?: boolean }).__sceneReady ?? false,
-      ),
-      "a [data-scene=ready] was seen",
-    ).toBe(false);
+    const room = await seat(page, browser, "?preset=low");
+    // ready first (the fallback may follow within seconds: the init script saw it as it happened)
+    await expect.poll(async () => (await seen(page)).ready, { timeout: scaled(60_000) }).toBe(true);
+    const { readyAt, budget } = await seen(page);
+    expect(budget, "data-scene-budget").toBe("on");
+    await go(page, room.host);
+    const chars = (await raceText(page)).slice(0, TYPED);
+
+    // keys pressed meanwhile: until the fallback (or 15 s after ready), and at least eight after GO
+    let typed = 0;
+    const scenePending = async () =>
+      (await scene(page).count()) > 0 && Date.now() - readyAt! < scaled(15_000);
+    while (typed < TYPED && (typed < 8 || (await scenePending()))) {
+      const before = Date.now();
+      await page.keyboard.press(keyName(chars[typed]!));
+      typed++;
+      const rest = KEY_GAP_MS - (Date.now() - before);
+      if (rest > 0) await page.waitForTimeout(rest);
+    }
+    await onPaper(page, readyAt! + scaled(15_000) - Date.now());
+    await expect(page.locator("[data-race-card]")).toBeVisible();
+    await expect(done(page)).toHaveCount(typed, { timeout: scaled(10_000) });
+    // a later telemetry or fallback never brings a second notice
+    await page.waitForTimeout(2_000);
+    await expect(anyNotice(page)).toHaveCount(1);
+    await expect(statusNotice(page)).toHaveCount(0);
+  });
+
+  test("C4 (c) C9 control: ?scene=pin keeps the scene at LOW with the budget off; GO and input on time", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(scaled(240_000));
+    const room = await seat(page, browser, "?scene=pin");
+    await expect(scene(page)).toHaveAttribute("data-scene", "ready", { timeout: scaled(60_000) });
+    await expect(scene(page)).toHaveAttribute("data-scene-preset", "low");
+    await expect(scene(page)).toHaveAttribute("data-scene-budget", "off");
+    await go(page, room.host);
+    await expect(scene(page), "the scene is mounted when typing starts").toHaveCount(1);
+    await inputOnTime(page, room.sent);
   });
 });

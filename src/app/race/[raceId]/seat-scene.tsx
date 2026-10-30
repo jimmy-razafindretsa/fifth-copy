@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hasWebGL2 } from "@/components/ui";
 import {
   LoadingCard,
@@ -45,9 +45,12 @@ export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
   const [tip, setTip] = useState<string | null>(null);
   const [scene, setScene] = useState<string | null>(null);
   const view = useRaceStore(selectSceneView);
+  // decided once per mount: a re-render with new `tips` must never bring a fallen-back scene back (#695 C2)
+  const decided = useRef(false);
 
   useEffect(() => {
-    if (window.matchMedia(PHONE_QUERY).matches) return;
+    if (decided.current || window.matchMedia(PHONE_QUERY).matches) return;
+    decided.current = true;
     /* eslint-disable react-hooks/set-state-in-effect -- the HUD-first gate: browser-only facts, read once after mount */
     const search = new URLSearchParams(window.location.search);
     setPreset(search.get("preset"));

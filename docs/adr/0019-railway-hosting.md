@@ -1,7 +1,7 @@
 ---
 id: "0019"
 title: Production runs on Railway (web, race-server, Postgres, Redis as Railway services), replacing the single VPS
-status: proposed
+status: accepted
 category: tooling
 scope: ["railway.json", "railway.toml", ".github/workflows/**", "scripts/deploy-smoke.sh", "src/env.ts", "services/race-server/src/env.ts"]
 supersedes: ["0012"]

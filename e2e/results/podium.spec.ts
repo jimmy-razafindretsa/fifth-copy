@@ -9,11 +9,12 @@ import {
   PROTOCOL_VERSION,
   type InternalRaceResult,
 } from "@fifth-copy/protocol";
+import { outfitForDesk, type Outfit } from "../../src/features/identity/clerk/outfit";
 import { expect, test } from "../fixtures";
 import { createLobby, lobbyIdOf } from "../race/helpers";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
 
-// Contract of #300 C2, C4, C5: races seeded through the signed internal routes the race server calls
+// Contract of #300 C2, C4, C5 and #688 C2, C5, C6: races seeded through the signed internal routes the race server calls
 // (POST /api/internal/races, then /results), read back on /results/<raceId>. The signature is the
 // internal-api one (src/server/internal-api/sign.ts `internalHeaders`: HMAC-SHA256 over
 // `${timestamp}.${rawBody}`), rebuilt here because that module is server-only.
@@ -50,6 +51,30 @@ async function hostOf(code: string): Promise<string> {
     await db.end();
   }
 }
+
+/** #688 C5: the guest's saved outfit, written straight into the test database (as #687's save would). */
+async function saveOutfit(userId: string, outfit: Outfit): Promise<void> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query(`UPDATE "User" SET outfit = $1::jsonb WHERE id = $2`, [
+      JSON.stringify(outfit),
+      userId,
+    ]);
+  } finally {
+    await db.end();
+  }
+}
+
+/** A saved outfit no desk would draw by itself: beret, monocle, full beard. */
+const SAVED: Outfit = {
+  hair: "quiff",
+  glasses: "monocle",
+  hat: "beret",
+  clothes: "jacket",
+  face: "beard",
+  hairCol: "#A4552A",
+};
 
 type Desk = {
   desk: number;
@@ -147,7 +172,7 @@ const six = (host: string): Desk[] => [
   { desk: 6, name: "Crow-559", place: 6, wpm: 29.5, suspicious: true },
 ];
 
-/** No WebGL in the page or its frames (the medal slots fall back to the gold stamp, C4). */
+/** No WebGL in the page or its frames (the clerk slots fall back to the gold stamp, C4). */
 async function withoutWebGL(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
@@ -164,6 +189,25 @@ async function withoutWebGL(page: Page): Promise<void> {
 
 const plinths = (page: Page) => page.locator("[data-podium] > [data-plinth]");
 const plinth = (page: Page, place: number) => page.locator(`[data-plinth="${place}"]`);
+const clerkDoc = (page: Page, place: number) =>
+  page.frameLocator(`[data-plinth="${place}"] iframe`).locator("html");
+
+/** Each plinth frame: mounted or idle, and its document's `data-ready` (same origin, read in the page). */
+const frameStates = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLIFrameElement>("[data-plinth] iframe")].map((f) => ({
+      mounted: f.dataset.embed === "mounted",
+      ready: f.contentDocument?.documentElement.dataset.ready === "1",
+    })),
+  );
+
+const hasWebGL2 = (page: Page) =>
+  page.evaluate(() => !!document.createElement("canvas").getContext("webgl2"));
+
+/** Bring every plinth near the viewport once (the near-viewport mount latches), then back to the top. */
+async function visitPlinths(page: Page) {
+  for (const n of [3, 2, 1]) await plinth(page, n).scrollIntoViewIfNeeded();
+}
 
 test.describe("Dawn report podium (#300)", () => {
   test.setTimeout(scaled(120_000));
@@ -235,7 +279,63 @@ test.describe("Dawn report podium (#300)", () => {
     await expect(plinth(page, 1)).toContainText("Marmot-233");
   });
 
-  test("C4 the medals: variant per place, mounted near the viewport, still under reduce", async ({
+  test("C5 podium clerk: the host's saved outfit, the bot's desk outfit, mounted one at a time", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await saveOutfit(lobby.hostUserId, SAVED);
+    const desks = six(lobby.hostUserId);
+    const raceId = await startRace(request, lobby, desks);
+    await postResults(request, raceId, desks);
+    await page.goto(`/results/${raceId}`);
+    test.skip(
+      !(await hasWebGL2(page)),
+      "no WebGL2 in this browser (the no-WebGL path has its own test)",
+    );
+    await expect(plinths(page)).toHaveCount(3, { timeout: HYDRATION_WAIT });
+    await visitPlinths(page);
+
+    // the stagger (C4): until all three are drawn, never more than one mounted frame still booting
+    const deadline = Date.now() + scaled(30_000);
+    let states = await frameStates(page);
+    while (!(states.length === 3 && states.every((f) => f.mounted && f.ready))) {
+      expect(
+        states.filter((f) => f.mounted && !f.ready).length,
+        JSON.stringify(states),
+      ).toBeLessThanOrEqual(1);
+      expect(Date.now(), `frames ${JSON.stringify(states)}`).toBeLessThan(deadline);
+      await page.waitForTimeout(100);
+      states = await frameStates(page);
+    }
+
+    // the host (desk 7, first) wears the saved outfit and the gold medal
+    await expect(plinth(page, 1).locator("iframe")).toHaveAttribute(
+      "src",
+      /^\/3d\/podium-clerk\.html\?embed=1&variant=gold&cfg=/,
+    );
+    const host = clerkDoc(page, 1);
+    await expect(host).toHaveAttribute("data-ready", "1");
+    await expect(host).toHaveAttribute("data-variant", "gold");
+    for (const [key, id] of Object.entries(SAVED).filter(([k]) => k !== "hairCol")) {
+      await expect(host).toHaveAttribute(`data-${key}`, id);
+    }
+    // the bot (desk 3, second) wears its desk's fixed outfit and the silver medal
+    const bot = clerkDoc(page, 2);
+    await expect(bot).toHaveAttribute("data-variant", "silver");
+    const desk3 = outfitForDesk(3);
+    for (const key of ["hair", "glasses", "hat", "clothes", "face"] as const) {
+      await expect(bot).toHaveAttribute(`data-${key}`, desk3[key]);
+    }
+    // desk 12 saved nothing: its desk's outfit, the bronze medal
+    await expect(clerkDoc(page, 3)).toHaveAttribute("data-variant", "bronze");
+    await expect(clerkDoc(page, 3)).toHaveAttribute("data-hat", outfitForDesk(12).hat);
+    // the frames keep the catalog titles (no new strings)
+    await expect(plinth(page, 1).locator("iframe")).toHaveAttribute("title", /gold medal/i);
+    await expect(clerkDoc(page, 1)).toHaveAttribute("data-motion", "full");
+  });
+
+  test("C6 podium clerk under reduced motion: fc-motion crosses the frame, same layout", async ({
     page,
     request,
   }) => {
@@ -244,23 +344,36 @@ test.describe("Dawn report podium (#300)", () => {
     const raceId = await startRace(request, lobby, desks);
     await postResults(request, raceId, desks);
     await page.goto(`/results/${raceId}`);
-    const webgl = await page.evaluate(
-      () => !!document.createElement("canvas").getContext("webgl2"),
+    test.skip(
+      !(await hasWebGL2(page)),
+      "no WebGL2 in this browser (the no-WebGL path has its own test)",
     );
-    test.skip(!webgl, "no WebGL2 in this browser (the no-WebGL path has its own test)");
-    const frame = plinth(page, 2).locator("iframe");
-    await frame.scrollIntoViewIfNeeded();
-    await expect(frame).toHaveAttribute("src", "/3d/medal.html?embed=1&variant=silver", {
-      timeout: HYDRATION_WAIT,
-    });
-    await expect(plinth(page, 1).locator("iframe")).toHaveAttribute("src", /variant=gold$/);
-    await expect(plinth(page, 3).locator("iframe")).toHaveAttribute("src", /variant=bronze$/);
-    const medal = page.frameLocator('[data-plinth="2"] iframe').locator("html");
-    await expect(medal).toHaveAttribute("data-variant", "silver", { timeout: scaled(30_000) });
-    await expect(medal).toHaveAttribute("data-motion", "full");
-    // the page's motion setting crosses the iframe over the bridge (fc-motion, bible 8, 15)
+    await plinth(page, 1).scrollIntoViewIfNeeded();
+    const doc = clerkDoc(page, 1);
+    await expect(doc).toHaveAttribute("data-ready", "1", { timeout: scaled(30_000) });
+    await expect(doc).toHaveAttribute("data-motion", "full");
+    const layout = () =>
+      page.evaluate(() =>
+        [
+          ...document.querySelectorAll("[data-plinth], [data-medal-slot], [data-plinth] iframe"),
+        ].map((e) => {
+          const r = e.getBoundingClientRect();
+          return [
+            e.tagName,
+            Math.round(r.x),
+            Math.round(r.y),
+            Math.round(r.width),
+            Math.round(r.height),
+          ];
+        }),
+      );
+    const before = await layout();
+    const html = await page.locator("[data-podium]").innerHTML();
+    // the not-found pattern: the page's own motion setting, read by the bridge (bible 8, 15)
     await page.evaluate(() => document.documentElement.setAttribute("data-motion", "reduce"));
-    await expect(medal).toHaveAttribute("data-motion", "reduce");
+    await expect(doc).toHaveAttribute("data-motion", "reduce");
+    expect(await layout()).toEqual(before);
+    expect(await page.locator("[data-podium]").innerHTML()).toBe(html);
   });
 
   test("C4 without WebGL2 the slots show the gold HERO OF PAPERWORK stamp", async ({
@@ -281,6 +394,10 @@ test.describe("Dawn report podium (#300)", () => {
       await expect(slot).toContainText("HERO OF PAPERWORK");
       await expect(slot.locator("iframe")).toHaveCount(0);
     }
+    // the stat cells name the players the clerks would have shown (#688 C5)
+    await expect(plinth(page, 1)).toContainText("Lynx-785");
+    await expect(plinth(page, 2)).toContainText("Typist Bot");
+    await expect(plinth(page, 3)).toContainText("Heron-302");
     await expect(page.getByRole("heading", { level: 1, name: "RACE OVER" })).toBeVisible();
   });
 

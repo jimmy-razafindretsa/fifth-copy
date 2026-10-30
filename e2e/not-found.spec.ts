@@ -24,11 +24,11 @@ const isLocaleAction = (r: Request) =>
  * flight, would abort it for a reason of the test's own.
  */
 async function switchLocale(page: Page, name: "FR" | "EN") {
-  const settled = Promise.race(
-    (["requestfinished", "requestfailed"] as const).map((event) =>
-      page.waitForEvent(event, { predicate: isLocaleAction, timeout: ACTION_WAIT }),
-    ),
-  );
+  const wait = { predicate: isLocaleAction, timeout: ACTION_WAIT };
+  const settled = Promise.race([
+    page.waitForEvent("requestfinished", wait),
+    page.waitForEvent("requestfailed", wait),
+  ]);
   await page.getByRole("button", { name, exact: true }).click();
   await settled;
 }

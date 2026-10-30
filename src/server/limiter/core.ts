@@ -13,7 +13,8 @@ export type LimitAction =
   | "lobby-codes"
   | "sign-in"
   | "recovery"
-  | "invite";
+  | "invite"
+  | "clerk-outfit";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -24,7 +25,9 @@ export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
  * `join-by-code` and `mint-race-token-new-guest` (a mint without a guest cookie) count per
  * (subject, code), sized above a class of 100; `lobby-codes` counts the distinct codes a subject
  * tries, so guessing stays slow; `mint-race-token` counts per guest. `sign-in`, `recovery` and
- * `invite` are defined for #90, #120 and #121, which wire them.
+ * `invite` are defined for #90, #120 and #121, which wire them. `clerk-outfit` (#687) counts the
+ * clerk outfit saves of one viewer (`user:<id>`): one per REISSUE UNIFORM, 30 a minute is a click
+ * every two seconds for a whole minute, well above a person trying uniforms on.
  */
 export const LIMITS = {
   "join-by-code": { max: 120, windowMs: 60_000 },
@@ -34,6 +37,7 @@ export const LIMITS = {
   "sign-in": { max: 10, windowMs: 10 * 60_000 },
   recovery: { max: 5, windowMs: 60 * 60_000 },
   invite: { max: 20, windowMs: 60_000 },
+  "clerk-outfit": { max: 30, windowMs: 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */

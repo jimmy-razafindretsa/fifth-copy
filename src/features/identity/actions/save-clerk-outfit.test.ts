@@ -13,6 +13,9 @@ const SECRET = "f".repeat(32);
 const state = vi.hoisted(() => ({
   jar: new Map<string, { value: string; options?: Record<string, unknown> }>(),
   db: null as unknown,
+  // The limiter's verdict for the next calls (the limiter itself is tested on real Redis).
+  limited: false,
+  limitCalls: [] as [string, string][],
 }));
 
 vi.mock("next/headers", () => ({
@@ -29,6 +32,13 @@ vi.mock("next/headers", () => ({
 vi.mock("@/env", () => ({ env: { AUTH_SECRET: "f".repeat(32), NODE_ENV: "test" } }));
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
+}));
+
+vi.mock("@/server/limiter", () => ({
+  limit: async (action: string, subject: string) => {
+    state.limitCalls.push([action, subject]);
+    return { ok: !state.limited, retryAfterMs: state.limited ? 1_000 : 0 };
+  },
 }));
 
 const { saveClerkOutfit } = await import("../index");
@@ -80,6 +90,8 @@ describe("saveClerkOutfit (unit, fake DB)", () => {
   const findUnique = vi.fn();
   beforeEach(() => {
     state.jar.clear();
+    state.limited = false;
+    state.limitCalls = [];
     update.mockReset();
     findUnique.mockReset();
     state.db = { user: { update, findUnique, create: vi.fn(), upsert: vi.fn() } };
@@ -102,6 +114,30 @@ describe("saveClerkOutfit (unit, fake DB)", () => {
     await expect(saveClerkOutfit(OUTFIT)).resolves.toEqual({ saved: false, reason: "no-viewer" });
     expect(update).not.toHaveBeenCalled();
     expect(state.jar.size).toBe(0);
+    expect(state.limitCalls).toEqual([]);
+  });
+
+  it("counts a viewer's save against their clerk-outfit limit; over it nothing is written", async () => {
+    state.jar.set(GUEST_COOKIE, { value: signGuestCookie("u1", SECRET) });
+    findUnique.mockResolvedValue({
+      id: "u1",
+      typistName: "Ada",
+      isGuest: true,
+      avatarStatus: null,
+    });
+    state.limited = true;
+    await expect(saveClerkOutfit(OUTFIT)).resolves.toEqual({
+      saved: false,
+      reason: "rate-limited",
+    });
+    expect(state.limitCalls).toEqual([["clerk-outfit", "user:u1"]]);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("invalid input is refused before the limit is counted", async () => {
+    state.jar.set(GUEST_COOKIE, { value: signGuestCookie("u1", SECRET) });
+    await saveClerkOutfit({ ...OUTFIT, hat: "crown" });
+    expect(state.limitCalls).toEqual([]);
   });
 });
 
@@ -118,6 +154,8 @@ describe.skipIf(!testDatabaseUrl)(
     }, 30_000);
     beforeEach(() => {
       state.jar.clear();
+      state.limited = false;
+      state.limitCalls = [];
     });
     afterAll(async () => {
       await client.user.deleteMany({ where: { id: { in: created } } });
@@ -169,6 +207,26 @@ describe.skipIf(!testDatabaseUrl)(
       expect(writes).toEqual([]);
       // getViewer clears an invalid guest cookie (guest.ts); nothing is ever set.
       expect(state.jar.get(GUEST_COOKIE)).toBeUndefined();
+    });
+
+    it("a save over the viewer's clerk-outfit limit makes no write", async () => {
+      const id = await guest();
+      state.jar.set(GUEST_COOKIE, { value: signGuestCookie(id, SECRET) });
+      const { db, writes } = recordWrites(client);
+      state.db = db;
+      await expect(saveClerkOutfit(OUTFIT)).resolves.toEqual({ saved: true });
+      state.limited = true;
+      await expect(saveClerkOutfit({ ...OUTFIT, hat: "beret" })).resolves.toEqual({
+        saved: false,
+        reason: "rate-limited",
+      });
+      expect(state.limitCalls).toEqual([
+        ["clerk-outfit", `user:${id}`],
+        ["clerk-outfit", `user:${id}`],
+      ]);
+      expect(writes).toEqual(["user.update"]);
+      const row = await client.user.findUnique({ where: { id }, select: { outfit: true } });
+      expect(row?.outfit).toEqual(OUTFIT);
     });
 
     it("C4: invalid input makes no write for a real viewer", async () => {

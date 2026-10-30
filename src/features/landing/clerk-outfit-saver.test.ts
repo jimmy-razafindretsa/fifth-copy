@@ -60,6 +60,22 @@ describe("outfitSaver (#687 C7)", () => {
   });
 });
 
+describe("outfitSaver over the save limit (#687)", () => {
+  it("swallows a rate-limited save quietly and retries the outfit on the next report", async () => {
+    const save = vi
+      .fn<(cfg: unknown) => Promise<SaveClerkOutfitResult>>()
+      .mockResolvedValueOnce({ saved: false, reason: "rate-limited" })
+      .mockResolvedValue({ saved: true });
+    const report = outfitSaver(save, null);
+    expect(() => report(A)).not.toThrow();
+    await flush();
+    report(A);
+    await flush();
+    report(A);
+    expect(save.mock.calls.map(([cfg]) => cfg)).toEqual([A, A]);
+  });
+});
+
 describe("clerkEmbedSrc (#687 C7)", () => {
   it("is the plain page without a saved outfit", () => {
     expect(clerkEmbedSrc(null)).toBe(EMBEDS.clerk);

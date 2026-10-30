@@ -14,6 +14,11 @@ const SENTENCE = "Type fast. Type first.";
 const STORY = "THE RING ROOMS NEVER STOP TYPING.";
 const STORY_FR = "LES SALLES EN ANNEAU NE S'ARRÊTENT JAMAIS DE TAPER.";
 const QUICK = "QUICK RACE";
+/** `<title>` per locale (src/i18n meta.title): the brand line, the same in both (bible 1). */
+const TITLE = {
+  en: "FIFTH COPY · TYPE FAST · TYPE FIRST",
+  fr: "FIFTH COPY · TYPE FAST · TYPE FIRST",
+};
 
 /** Computed rgb of a colour role, e.g. `role(page, "--color-fg")`; fails on an unemitted variable. */
 async function role(page: Page, variable: string): Promise<string> {
@@ -49,6 +54,17 @@ async function useScheme(page: Page, context: BrowserContext, scheme: "light" | 
 
 /** Server-action re-renders on a loaded dev server take a few seconds. */
 const AFTER_ACTION = { timeout: ACTION_WAIT };
+
+/**
+ * Waits until the document is in `lang` and carries that locale's non-empty `<title>` (#691). After a
+ * locale or theme server action re-renders the layout, Next.js streams the metadata again: the old
+ * `<title>` leaves the head when the new tree commits and the new one lands a few hundred ms later, so
+ * axe run in that window reports `document-title`.
+ */
+async function titled(page: Page, lang: keyof typeof TITLE) {
+  await expect(page.locator("html")).toHaveAttribute("lang", lang, AFTER_ACTION);
+  await expect(page).toHaveTitle(TITLE[lang], AFTER_ACTION);
+}
 
 /** The live feed's recorded loop (#552). */
 const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']");
@@ -407,12 +423,14 @@ test.describe("landing page (#497)", () => {
       await useScheme(page, context, scheme);
       await ready(page);
       await expect(page.getByRole("heading", { level: 1, name: "Fifth Copy" })).toBeVisible();
+      await titled(page, "en");
       await expectNoA11yViolations(page);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await page.getByRole("button", { name: "FR", exact: true }).click();
       await expect(page.getByRole("heading", { level: 2, name: STORY_FR })).toBeVisible(
         AFTER_ACTION,
       );
+      await titled(page, "fr");
       await expectNoA11yViolations(page);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });

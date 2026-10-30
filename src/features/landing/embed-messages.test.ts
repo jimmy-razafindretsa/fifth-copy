@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { OUTFIT_CATEGORIES as IDENTITY_CATEGORIES } from "@/features/identity";
+import { describe, expect, it, vi } from "vitest";
 import {
   OUTFIT_CATEGORIES,
   parseClerkMessage,
   parseViewMessage,
   sameOutfit,
 } from "./embed-messages";
+
+// The identity barrel is server code: importing it validates the env, which this test does not need.
+vi.mock("@/env", () => ({ env: {} }));
+const { OUTFIT_CATEGORIES: IDENTITY_CATEGORIES } = await import("@/features/identity");
 
 // #626: the embed messages are parsed by hand-written guards (no zod in the landing first load);
 // they accept and reject exactly what the former zod schemas did.

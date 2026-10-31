@@ -55,9 +55,14 @@
   align-self: end;
 }
 
+/* the bezel sits at the slot's end; the slot is an inline-size container so a three-tube bezel (#240)
+   can size its numerals to the gutter (nixie-counters.module.css) */
 .nixie {
   grid-area: nixie;
-  justify-self: end;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  container-type: inline-size;
 }
 
 /* the strip's line box takes the typing size, so an empty tape (before the text arrives) keeps the

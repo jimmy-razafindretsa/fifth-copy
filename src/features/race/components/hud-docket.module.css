@@ -101,6 +101,32 @@
   animation: lkPulse 1.3s ease-in-out infinite;
 }
 
+/* the 7.1 ink button (Oswald 600 13px, ink ground and paper text, hover red), at least 44px tall (bible
+   18): Abandon's confirm (#560) and the finished view's DAWN REPORT link (#240) */
+.ink {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ink:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.ink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .srOnly {
   position: absolute;
   width: 1px;

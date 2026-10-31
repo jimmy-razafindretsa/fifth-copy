@@ -265,6 +265,9 @@ export const fr = {
     stamps: {
       overtake: { ru: "ОБГОН!", text: "DÉPASSEMENT +1" },
       passed: { ru: "ОБОГНАЛИ", text: "DÉPASSÉ −1" },
+      accepted: "ACCEPTÉ · {wpm} MPM",
+      returned: "RETOURNÉ · {n} FAUTES",
+      returnedOne: "RETOURNÉ · 1 FAUTE",
     },
     /** The race announcer (#232 C4; #242 adds the rest). */
     announce: {
@@ -302,6 +305,27 @@ export const fr = {
       place: "RANG",
       aria: "Mots par minute {wpm}, rang {place} sur {total}",
       ariaNoPlace: "Mots par minute {wpm}, {total} dactylos, pas encore de rang",
+      time: "TEMPS",
+      ariaTime: ", {time} restant",
+    },
+    finish: {
+      filed: "CLASSÉ",
+      over: "COURSE TERMINÉE",
+      reason: { "all-finished": "TOUS CLASSÉS", timer: "TEMPS ÉCOULÉ" },
+      standings: "Classement",
+      desk: "BUREAU {n}",
+      you: "TOI",
+      progress: "{n}\u00a0%",
+      wpm: "{n} MPM",
+      status: {
+        typing: "TEMPS ÉCOULÉ",
+        finished: "CLASSÉ",
+        abandoned: "RÉAFFECTÉ",
+        asleep: "ENDORMI AU BUREAU",
+        "line-cut": "LIGNE COUPÉE",
+        expired: "EXPIRÉ",
+      },
+      report: "RAPPORT DE L'AUBE →",
     },
     raceCard: {
       title: "FICHE DE COURSE",

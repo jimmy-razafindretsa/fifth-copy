@@ -53,6 +53,7 @@ export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
               countdown: labels.countdown,
               stamps: labels.stamps,
               announce: labels.announce,
+              finish: labels.finish,
               input: labels.telex.strip,
             }}
           />

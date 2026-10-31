@@ -10,7 +10,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { initialRaceState, reduceRace, type RaceEvent, type RaceState } from "../client/store";
-import { selectPlace, selectWpm } from "./counters";
+import { selectFinishWpm, selectPlace, selectRemaining, selectWpm } from "./counters";
 
 // Contract of #225 C1: the nixie's two numbers as pure selectors over the race store. WPM is the
 // engine's clean WPM (ADR 0016) of your predicted state over the corrected clock (#214: device clock +
@@ -219,5 +219,84 @@ describe("selectPlace (#225 C1)", () => {
       payload: { v: PROTOCOL_VERSION, race: RACE },
     });
     expect(selectPlace(again)).toEqual({ place: 0, total: 2 });
+  });
+});
+
+// Contract of #240 C1: the timer tube's seconds. `null` without a timer; otherwise the seconds left to
+// `race.t0 + race.timerS` on the corrected clock (#214), rounded up, never below 0 nor above `timerS`
+// (before GO), frozen at the race end once the server ended it. The WPM stops at the end too.
+describe("selectRemaining (#240 C1)", () => {
+  const TIMER_S = 60;
+  const timed = welcome({ settings: { ...DEFAULT_RACE_SETTINGS, timerS: TIMER_S } });
+  const timedRace = { ...RACE, timerS: TIMER_S };
+  const countingTimed = () =>
+    reduceRace(seated(timed), {
+      type: "countdown",
+      payload: { v: PROTOCOL_VERSION, race: timedRace },
+    });
+  const runningTimed = () => reduceRace(countingTimed(), { type: "go" });
+  const ended = (s: RaceState, deviceAt: number, reason: "timer" | "all-finished" = "timer") =>
+    reduceRace(s, {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason, ranking: [] },
+      at: deviceAt,
+    });
+
+  it("is null without a timer, before any race and for a race with timerS null", () => {
+    expect(selectRemaining(initialRaceState, at(0))).toBeNull();
+    expect(selectRemaining(seated(timed), at(0))).toBeNull();
+    expect(running().race!.timerS).toBeNull();
+    expect(selectRemaining(running(), at(5_000))).toBeNull();
+  });
+
+  it("counts down from t0 + timerS on the corrected clock, rounded up to whole seconds", () => {
+    const s = runningTimed();
+    expect(selectRemaining(s, at(0))).toBe(60);
+    expect(selectRemaining(s, at(1))).toBe(60);
+    expect(selectRemaining(s, at(999))).toBe(60);
+    expect(selectRemaining(s, at(1_000))).toBe(59);
+    expect(selectRemaining(s, at(30_500))).toBe(30);
+    expect(selectRemaining(s, at(59_001))).toBe(1);
+    expect(selectRemaining(s, at(60_000))).toBe(0);
+    // the device clock alone (no offset) would read 2 s more left
+    expect(selectRemaining(s, at(10_000))).toBe(50);
+  });
+
+  it("never reads below 0 and never above timerS before GO", () => {
+    expect(selectRemaining(runningTimed(), at(75_000))).toBe(0);
+    expect(selectRemaining(countingTimed(), at(-3_000))).toBe(60);
+  });
+
+  it("freezes at the race end once the server ended it", () => {
+    // ended early (all finished) 20.2 s after GO: the tube holds 40 whatever the clock reads later
+    const early = ended(runningTimed(), at(20_200), "all-finished");
+    expect(early.phase).toBe("ended");
+    expect(selectRemaining(early, at(20_200))).toBe(40);
+    expect(selectRemaining(early, at(90_000))).toBe(40);
+    // the timer's own end arrives a little late: still 0, never negative
+    const timeUp = ended(runningTimed(), at(60_150));
+    expect(selectRemaining(timeUp, at(61_000))).toBe(0);
+    // a timer end read a little early on this device's offset estimate is still the timer's end: 0
+    const early2 = ended(runningTimed(), at(59_400));
+    expect(selectRemaining(early2, at(59_400))).toBe(0);
+  });
+
+  it("selectWpm stops at the race end: a typing desk's figure no longer drifts after RACE OVER", () => {
+    const typing = keys("ab cd", 100).reduce(reduceRace, runningTimed());
+    expect(typing.prediction!.state.status).toBe("typing");
+    const over = ended(typing, at(6_000), "all-finished");
+    expect(selectWpm(over, at(6_000))).toBe(engine(typing, 6_000));
+    expect(selectWpm(over, at(30_000))).toBe(engine(typing, 6_000));
+    // the end is capped at the timer: an `ended` that arrives late counts no more than timerS
+    const late = ended(typing, at(65_000));
+    expect(selectWpm(late, at(70_000))).toBe(engine(typing, 60_000));
+  });
+
+  it("selectFinishWpm is your frozen finish figure, the stamp's and the tube's one formula", () => {
+    expect(selectFinishWpm(running())).toBe(0);
+    const s = keys(TEXT, 100).reduce(reduceRace, running());
+    const { finishedAt } = s.prediction!.state;
+    expect(selectFinishWpm(s)).toBe(engine(s, finishedAt!));
+    expect(selectFinishWpm(s)).toBe(selectWpm(s, at(finishedAt! + 10_000)));
   });
 });

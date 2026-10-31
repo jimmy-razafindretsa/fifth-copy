@@ -61,6 +61,8 @@ export interface RoomSocket {
   onSnapshot(cb: (payload: RoomEvents["snapshot"]) => void): Off;
   /** A discrete race happening (`overtake`, `passed`, `finished`...: #232, #240), decided by the server. */
   onEvent(cb: (payload: RoomEvents["event"]) => void): Off;
+  /** The race is over (`all-finished`, `timer`) or void, with the server's final ranking (#240). */
+  onEnded(cb: (payload: RoomEvents["ended"]) => void): Off;
   /** The server refused a `keys`, `abandon` or `bonus:play` (those carry no ack). */
   onRejected(cb: (payload: RoomEvents["rejected"]) => void): Off;
   onProtocolError(cb: (error: ProtocolError) => void): Off;
@@ -202,6 +204,7 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     },
     onSnapshot: (cb) => on("snapshot", cb),
     onEvent: (cb) => on("event", cb),
+    onEnded: (cb) => on("ended", cb),
     onRejected: (cb) => on("rejected", cb),
     onProtocolError: (cb) => {
       // a wrapper per call, so the same callback registered twice is removed once per off

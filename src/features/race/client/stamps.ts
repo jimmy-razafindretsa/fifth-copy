@@ -3,12 +3,15 @@ import type { RoomEvents } from "./socket";
 /**
  * The overtake stamps' queue (#232, bible 7.3, 8, 14.3): pure helpers the race store's `event` and
  * `stamp-expired` cases call. No race rule here (ADR 0007): the server decides who passed whom; the
- * queue only paces what the seat view shows. Extension point: the finish stamp (#240) and bonus stamps
- * are one more `StampKind` and one more case in `stampFromEvent`.
+ * queue only paces what the seat view shows. Extension point: bonus stamps are one more `StampKind` and
+ * one more case in `stampFromEvent` (the finish stamps of #240 are two).
  */
 
-/** The stamps the seat view shows: you passed someone (red), someone passed you (ink). */
-export type StampKind = "overtake" | "passed";
+/**
+ * The stamps the seat view shows: you passed someone (red), someone passed you (ink); your finish
+ * (#240, bible 7.7): `accepted` with zero errors (red, you), `returned` with errors (ink, paperwork).
+ */
+export type StampKind = "overtake" | "passed" | "accepted" | "returned";
 
 export type RaceStamp = {
   /** Unique within a page (a counter): the row's key and the stamp's angle seed. */
@@ -16,8 +19,10 @@ export type RaceStamp = {
   kind: StampKind;
   /** This device's clock when the server's event arrived. */
   at: number;
-  /** The other desk: the one you passed, or the one that passed you. */
+  /** The other desk: the one you passed, or the one that passed you (your own desk on a finish). */
   other: number;
+  /** Your errors at the finish (`returned` reads them); 0 for every other kind. */
+  errors: number;
   /** When it shows (or showed): `at` alone, else the moment the stamp before it expires. */
   shownAt: number;
 };
@@ -27,17 +32,29 @@ export const STAMP_SHOW_MS = 1_400;
 /** A second event of the same kind this soon after the newest queued one is dropped. */
 export const STAMP_COLLAPSE_MS = 300;
 
-/** The queue's stamp for one server event about your desk, or `null` (another kind, another desk). */
+type StampOf = { kind: StampKind; other: number; errors: number };
+
+/**
+ * The queue's stamp for one server event about your desk, or `null` (another kind, another desk).
+ * `errors` is your predicted desk's error count (ADR 0007: the engine's, over the local state): the
+ * server's `finished` of your desk is `accepted` with none, `returned` otherwise.
+ */
 export function stampFromEvent(
   payload: RoomEvents["event"],
   you: number | null,
-): { kind: StampKind; other: number } | null {
+  errors = 0,
+): StampOf | null {
   if (you === null) return null;
   switch (payload.kind) {
     case "overtake":
-      return payload.desk === you ? { kind: "overtake", other: payload.passed } : null;
+      return payload.desk === you ? { kind: "overtake", other: payload.passed, errors: 0 } : null;
     case "passed":
-      return payload.desk === you ? { kind: "passed", other: payload.by } : null;
+      return payload.desk === you ? { kind: "passed", other: payload.by, errors: 0 } : null;
+    case "finished":
+      if (payload.desk !== you) return null;
+      return errors === 0
+        ? { kind: "accepted", other: you, errors: 0 }
+        : { kind: "returned", other: you, errors };
     default:
       return null;
   }

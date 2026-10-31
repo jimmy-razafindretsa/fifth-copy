@@ -5,19 +5,18 @@ import { fill } from "@/i18n/format";
 import { selectRaceCardView, selectTypedView } from "../client/store";
 import { useRaceStore } from "../client/use-race-store";
 import { AbandonControl } from "../components/abandon-control";
-import { NixieCounters } from "../components/nixie-counters";
 import { RaceCard } from "../components/race-card";
 import { TelexStrip, type TelexLabels } from "../components/telex-strip";
 import { TypedSheet } from "../components/typed-sheet";
-import type { AbandonLabels, NixieLabels, RaceCardLabels } from "../view/hud-labels";
+import type { AbandonLabels, RaceCardLabels } from "../view/hud-labels";
 import { COMPACT_QUERY, paperwork, type RaceSeatLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
 /**
  * The HUD leaves that read the race store (#561, ADR 0013: one store, the HUD reads it). Each renders
  * the before-start state on the server (the store's server snapshot) and follows the room after the
- * welcome. The typing surface follows your prediction (#559), the race card the snapshots (#564); WPM
- * and place arrive later; Abandon wakes up with #233.
+ * welcome. The typing surface follows your prediction (#559), the race card the snapshots (#564), the
+ * nixie counters both (`NixieCountersLive`, #225); Abandon wakes up with #233.
  */
 
 /** The telex strip over your desk's typed view (#559): empty until the race text arrives. */
@@ -40,12 +39,6 @@ export function SeatKicker({ labels }: { labels: RaceSeatLabels["kicker"] }) {
       {you === null ? labels.seat : fill(labels.desk, { n: paperwork(you) })}
     </h1>
   );
-}
-
-/** WPM `00` and place `00 / n` before the start: n is the seated typists (bible 7.11). */
-export function SeatNixie({ labels }: { labels: NixieLabels }) {
-  const total = useRaceStore((s) => s.members.length);
-  return <NixieCounters wpm={0} place={null} total={total} labels={labels} />;
 }
 
 /** `matchMedia(query)` as external state; `false` on the server and during hydration. */

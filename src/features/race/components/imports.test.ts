@@ -53,11 +53,13 @@ const FILES = [
 ];
 
 /**
- * #220 C2: the one live leaf of the components, the machine wrapper, reads the race store through its
+ * #220 C2, #225 C2: the live leaves of the components (the machine wrapper, the nixie counters) read the race store through its
  * React binding (ADR 0013: the HTML overlays are driven by the store) and nothing else of the client.
  */
 const STORE_READERS: Record<string, string> = {
   [path.join(components, "machine/typing-machine-live.tsx")]: "../../client/use-race-store",
+  // #225 C2: the nixie counters' live leaf, the same way (its WPM sampler takes the store's API)
+  [path.join(components, "nixie-counters-live.tsx")]: "../client/use-race-store",
 };
 
 /**

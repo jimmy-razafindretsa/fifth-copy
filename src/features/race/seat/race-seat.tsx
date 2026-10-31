@@ -5,16 +5,10 @@ import { SabotageTray } from "../components/sabotage-tray";
 import { SeatLayout } from "../components/seat-layout";
 import type { MachineSkinProps } from "../components/machine/skin";
 import { TypingMachineLive } from "../components/machine/typing-machine-live";
+import { NixieCountersLive } from "../components/nixie-counters-live";
 import type { RaceSeatInfo } from "../queries/get-race-seat";
 import { RaceSeatLive } from "./race-seat-live";
-import {
-  SeatAbandon,
-  SeatKicker,
-  SeatNixie,
-  SeatRaceCard,
-  SeatSheet,
-  SeatTelex,
-} from "./seat-leaves";
+import { SeatAbandon, SeatKicker, SeatRaceCard, SeatSheet, SeatTelex } from "./seat-leaves";
 import type { RaceSeatLabels } from "./seat-view";
 
 export type RaceSeatProps = {
@@ -43,7 +37,7 @@ export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
     <RaceStoreProvider>
       <SeatLayout
         kicker={<SeatKicker labels={labels.kicker} />}
-        nixie={<SeatNixie labels={labels.nixie} />}
+        nixie={<NixieCountersLive labels={labels.counters} />}
         telex={<SeatTelex labels={labels.telex} />}
         raceCard={<SeatRaceCard labels={labels.raceCard} />}
         scene={scene}

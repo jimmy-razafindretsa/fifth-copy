@@ -294,7 +294,7 @@ export const en = {
       back: "BACK TO THE WAITING ROOM →",
     },
     abandon: { abandon: "ABANDON", confirm: "CONFIRM · REASSIGN ME" },
-    nixie: {
+    counters: {
       wpm: "WPM",
       place: "PLACE",
       aria: "Words per minute {wpm}, place {place} of {total}",

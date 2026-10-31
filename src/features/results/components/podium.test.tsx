@@ -1,10 +1,16 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
-import { dawnReportFixtures, placeSlots, type ReportEntry } from "../view/dawn-report";
+import { placeSlots, type ReportEntry } from "../view/dawn-report";
+import { dawnReportFixtures } from "../view/dawn-report-fixtures";
 import { podiumLabels } from "../view/report-labels";
 import { Podium } from "./podium";
+
+// The fixtures read identity's barrel (outfitForDesk), server code that validates the env on import.
+vi.mock("@/env", () => ({ env: {} }));
 
 // Contract of #300 C3: the podium renders at most three plinths from places 1-3 (DOM in place order,
 // CSS 2 | 1 | 3), each with the medal slot, `DESK nn · name`, clean WPM and `97 %`; UNFILLED, TIED,
@@ -113,5 +119,56 @@ describe("Podium (#300 C3)", () => {
     const html = render(full);
     expect(html).not.toContain('data-desk="5"');
     expect(html).not.toContain('data-desk="2"');
+  });
+});
+
+// Contract of #688 C3-C4: each filled plinth holds its player's clerk frame (live) with the place's medal
+// and outfit in its URL once mounted; the frames are idle in the server markup (the stagger mounts them
+// one at a time on the client); UNFILLED and UNDER REVIEW slots hold no frame; a tie shows one clerk.
+function live(entries: ReportEntry[]) {
+  return renderToStaticMarkup(<Podium entries={entries} viewerDesk={null} labels={EN} />);
+}
+
+describe("Podium clerks (#688 C3, C4)", () => {
+  it("live: three idle clerk frames in place order with their medal titles, no stamp", () => {
+    const p = plinths(live(full));
+    for (const [place, variant] of [
+      [1, "gold"],
+      [2, "silver"],
+      [3, "bronze"],
+    ] as const) {
+      expect(p.get(place)).toContain('data-medal-view="frame"');
+      expect(p.get(place)).toContain(`data-medal="${variant}"`);
+      expect(p.get(place)).toContain('data-embed="idle"');
+      expect(p.get(place)).toContain(`title="${EN.medalTitle[variant]}"`);
+    }
+    expect(live(full)).not.toMatch(/<iframe[^>]* src=/);
+  });
+
+  it("still (/design): the stamps, never a frame", () => {
+    expect(render(full)).not.toContain("<iframe");
+    expect(render(full).match(/data-medal-view="stamp"/g)).toHaveLength(3);
+  });
+
+  it("UNFILLED and UNDER REVIEW slots hold no clerk; a tie shows one", () => {
+    expect(plinths(live(dawnReportFixtures["two-finishers"].entries)).get(3)).not.toContain(
+      "<iframe",
+    );
+    expect(plinths(live(dawnReportFixtures["under-review"].entries)).get(1)).not.toContain(
+      "<iframe",
+    );
+    expect(
+      plinths(live(dawnReportFixtures.tie.entries))
+        .get(1)!
+        .match(/<iframe/g),
+    ).toHaveLength(1);
+  });
+
+  it("the plinths pass their place, medal and wearer's outfit (a tie: the first tied entry)", () => {
+    const source = readFileSync(path.join(__dirname, "podium.tsx"), "utf8");
+    expect(source).toContain("const wearer = entries[0];");
+    expect(source).toContain("outfit={wearer.outfit}");
+    expect(source).toContain("<PlinthMounts slots={frames}>");
+    expect(source).toContain("entries.length > 0 && !entries.some((e) => e.suspicious)");
   });
 });

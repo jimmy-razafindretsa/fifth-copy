@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { outfitForDesk, parseOutfit } from "@/features/identity";
 import type { db as appDb } from "@/server/db";
 import type { DawnReport, ReportEntry } from "../view/dawn-report";
 
@@ -15,7 +16,9 @@ const raceIdSchema = z.uuid();
  * or names no race, `filing` while the race has no `RaceResult` row yet (the race server posts them after
  * `ended`, ARCHITECTURE 9.3), else the race and every desk in place order with the viewer's desk. One
  * query; the WPM is `cleanWpm` (ADR 0016), `adjustedWpm` is never read. Suspicious rows are kept and
- * flagged: the podium shows them under review (ARCHITECTURE 7.7).
+ * flagged: the podium shows them under review (ARCHITECTURE 7.7). Each entry's clerk outfit (#688) comes
+ * from the same query (the result's `user.outfit`): the saved outfit when the catalogue accepts it, else
+ * the desk's fixed one (bots, guests with nothing saved, a stored value the catalogue now rejects).
  */
 export async function getDawnReport(
   raceId: string,
@@ -47,6 +50,7 @@ export async function getDawnReport(
           progress: true,
           finishedAtMs: true,
           suspicious: true,
+          user: { select: { outfit: true } },
         },
       },
     },
@@ -66,6 +70,7 @@ export async function getDawnReport(
     progress: r.progress,
     finishedAtMs: r.finishedAtMs,
     suspicious: r.suspicious,
+    outfit: parseOutfit(r.user?.outfit) ?? outfitForDesk(r.desk),
   }));
   const mine = viewer ? race.results.find((r) => r.userId === viewer.id) : undefined;
   return {

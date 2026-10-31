@@ -1,3 +1,5 @@
+import type { Outfit } from "@/features/identity";
+
 /**
  * Where the landing's links go (ARCHITECTURE 8.1 route list). Routes whose cards have not landed yet
  * answer 404 until they do; the guide link anchors to "How a race runs" until the special-characters
@@ -34,3 +36,13 @@ export const EMBEDS = {
   clerk: "/3d/clerk.html",
   medal: "/3d/medal.html",
 } as const;
+
+/**
+ * The clerk embed's URL: with the viewer's saved outfit as `?cfg=` (bible 15, #687) so the first frame
+ * already wears it, or the plain page (a random issue) when nothing is saved.
+ */
+export function clerkEmbedSrc(outfit: Outfit | null): string {
+  return outfit
+    ? `${EMBEDS.clerk}?cfg=${encodeURIComponent(JSON.stringify(outfit))}`
+    : EMBEDS.clerk;
+}

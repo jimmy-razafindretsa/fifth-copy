@@ -10,14 +10,14 @@ import {
   type PodiumLabels,
   type ReportEntry,
 } from "../view/dawn-report";
-import { PodiumMedal } from "./podium-medal";
+import { PlinthClerk, PlinthMounts } from "./plinth-mounts";
 import styles from "./podium.module.css";
 
 export type PodiumProps = {
   entries: readonly ReportEntry[];
   viewerDesk: number | null;
   labels: PodiumLabels;
-  /** `live` (default): the medal embeds; `still`: the gold stamps (the `/design` specimens). */
+  /** `live` (default): the plinth clerks; `still`: the gold stamps (the `/design` specimens). */
   medals?: "live" | "still";
 };
 
@@ -25,23 +25,33 @@ export type PodiumProps = {
  * The Dawn report's podium (#300 C3, bible 14.4): three plinths for places 1, 2 and 3, read from the
  * entries as given (props only, no hook). In the DOM they come in place order (reading order = rank);
  * from 768px CSS stands them 2 | 1 | 3, the first tallest. A tie shares one plinth, a missing place
- * stays `UNFILLED`, a suspicious entry puts the `UNDER REVIEW` docket where its medal would hang.
+ * stays `UNFILLED`, a suspicious entry puts the `UNDER REVIEW` docket where its clerk would stand.
+ * Each filled slot shows its player's clerk with the place's medal pinned (#688, bible 14.4 "Plinth
+ * clerk"), the frames mounted one at a time in place order (`PlinthMounts`).
  */
 export function Podium({ entries, viewerDesk, labels, medals = "live" }: PodiumProps) {
+  const slots = placeSlots(entries);
+  const frames = slots.map((slot) => ({ place: slot.place, frame: hasClerk(slot) }));
   return (
     <ol className={styles.podium} aria-label={labels.title} data-podium>
-      {placeSlots(entries).map((slot) => (
-        <Plinth
-          key={slot.place}
-          slot={slot}
-          viewerDesk={viewerDesk}
-          labels={labels}
-          still={medals === "still"}
-        />
-      ))}
+      <PlinthMounts slots={frames}>
+        {slots.map((slot) => (
+          <Plinth
+            key={slot.place}
+            slot={slot}
+            viewerDesk={viewerDesk}
+            labels={labels}
+            still={medals === "still"}
+          />
+        ))}
+      </PlinthMounts>
     </ol>
   );
 }
+
+/** A slot shows a clerk unless it is `UNFILLED` or `UNDER REVIEW`. */
+const hasClerk = ({ entries }: PlinthSlot) =>
+  entries.length > 0 && !entries.some((e) => e.suspicious);
 
 function Plinth({
   slot,
@@ -60,6 +70,8 @@ function Plinth({
   const review = entries.some((e) => e.suspicious);
   const mine = viewerDesk !== null && entries.some((e) => e.desk === viewerDesk);
   const variant = MEDAL_OF_PLACE[place];
+  // a tie shares one plinth: the first tied entry (query order) wears the place's medal (14.4)
+  const wearer = entries[0];
   return (
     <li
       className={styles.plinth}
@@ -72,11 +84,13 @@ function Plinth({
       <div className={styles.grid}>
         <div className={styles.slot}>
           <div className={styles.frame} data-medal-slot>
-            {empty ? null : review ? (
+            {!wearer ? null : review ? (
               <p className={styles.review}>{labels.underReview}</p>
             ) : (
-              <PodiumMedal
+              <PlinthClerk
+                place={place}
                 variant={variant}
+                outfit={wearer.outfit}
                 title={labels.medalTitle[variant]}
                 fallback={labels.medal}
                 still={still}

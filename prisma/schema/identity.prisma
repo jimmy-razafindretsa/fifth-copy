@@ -22,6 +22,8 @@ model User {
   tokenVersion       Int              @default(0)
   avatarKey          String?
   avatarStatus       AvatarStatus     @default(NONE)
+  /// The clerk outfit config of bible 10.1, validated by outfitSchema; null = never saved
+  outfit             Json?
   createdAt          DateTime         @default(now())
   lastSeenAt         DateTime         @default(now())
   hostedLobbies      Lobby[]          @relation("LobbyHost")

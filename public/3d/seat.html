@@ -45,9 +45,9 @@ html[data-motion="reduce"] .grain{animation:none}
 // `-fallback` out (src/features/race-3d/messages.ts, `v` = SCENE_PROTOCOL). Both directions are locked to
 // this page's origin. The reference's random typing is replaced by the room's desks: your desk sits at the
 // camera's slot, rivals at theirs, a clerk types while the race runs and its desk is typing; empty desks
-// have no clerk. Presets (12): `?preset=low|medium|high` forces one, `auto` runs a 2 s benchmark (below Low:
-// the paper fallback). Reduced motion (8): the bulb burns steady, nothing turns or bobs.
-import * as THREE from 'three';
+// have no clerk. Presets (12): `?preset=low|medium|high` forces one, `auto` measures a fixed probe before
+// any of the room exists (below the floor: the paper fallback, the room never built; #695). Reduced motion (8): the bulb burns steady, nothing turns or bobs.
+// three.js is imported once the probe has passed (below): a weak device never loads it (#695)
 
 const SCENE_PROTOCOL = 1;
 const Q = new URLSearchParams(location.search);
@@ -57,8 +57,140 @@ const PRESETS = {
   high: { pr: Math.min(devicePixelRatio, 2), near: 30, aa: true },
 };
 const FORCED = PRESETS[Q.get('preset')] ? Q.get('preset') : null;
-let PRESET = FORCED || 'medium';
+let PRESET = FORCED || 'low'; // `auto` probes at the LOW drawing buffer, then settles (#695)
 const send = msg => { if (parent !== window) parent.postMessage({ v: SCENE_PROTOCOL, ...msg }, location.origin); };
+// #695: the room is built in slices of about 50 ms of work (a desk, a part of a clerk, a mesh, rows of the grime
+// texture, the shader programs), each its own task, so on a slow CPU the race page sharing this main thread
+// (ADR 0017) runs its countdown, GO and keys between them; a fast CPU never waits.
+let sliceAt = performance.now();
+const slice = async () => {
+  if (performance.now() - sliceAt < 50) return;
+  await new Promise(go => setTimeout(go, 0)); sliceAt = performance.now();
+};
+
+// ---------- the probe, then three.js and the renderer: before any of the room (#695, owner DECISION "Benchmark avant la salle") ----------
+const ROOT = document.documentElement; ROOT.dataset.room = 'none';
+const CLEAR = 0x4A4C47; // the scene's clear colour (background and fog below)
+let LOST = false, CAPPED = false;
+const EMBED = Q.get('embed') === '1';
+const pixelRatio = () => EMBED ? 1 : PRESETS[PRESET].pr;
+const onLost = e => { e.preventDefault(); LOST = true; send({ type: 'fc-scene-fallback', reason: 'context-lost' }); };
+// the canvas and its WebGL2 context (LOW: no AA) exist before three.js loads: the probe draws on them, and the
+// renderer takes them over when the settled preset has no AA
+const CANVAS = document.createElement('canvas');
+const GL = CANVAS.getContext('webgl2', { alpha: false, depth: true, stencil: false, antialias: false, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+if (!GL) { send({ type: 'fc-scene-fallback', reason: 'no-webgl2' }); throw new Error('fc-seat: no WebGL2'); }
+CANVAS.addEventListener('webglcontextlost', onLost);
+const fitCanvas = () => {
+  CANVAS.width = Math.floor(innerWidth * pixelRatio()); CANVAS.height = Math.floor(innerHeight * pixelRatio());
+  CANVAS.style.width = innerWidth + 'px'; CANVAS.style.height = innerHeight + 'px';
+};
+fitCanvas(); document.body.prepend(CANVAS);
+const CLEAR_RGB = [CLEAR >> 16, (CLEAR >> 8) & 255, CLEAR & 255].map(v => v / 255);
+GL.clearColor(...CLEAR_RGB, 1); GL.clear(GL.COLOR_BUFFER_BIT); GL.clearColor(0, 0, 0, 0); // the flat ground
+
+// The page's messages wait in an inbox until the room's handler takes over (it replays them); `fc-race-init`
+// also starts the probe. `fc-scene-hello` goes now: the page answers with its init while the room is not built.
+const inbox = [];
+const fromPage = e => e.origin === location.origin && e.source === parent && e.data && typeof e.data === 'object';
+const toInbox = e => { if (fromPage(e)) inbox.push(e); };
+addEventListener('message', toInbox);
+const initMessage = new Promise(go => {
+  const on = e => {
+    const d = e.data;
+    if (!fromPage(e) || d.v !== SCENE_PROTOCOL || d.type !== 'fc-race-init' || !d.view || typeof d.view !== 'object') return;
+    removeEventListener('message', on); go(d);
+  };
+  addEventListener('message', on);
+});
+send({ type: 'fc-scene-hello' });
+
+// Bible 12 Benchmark (#695): `auto` measures the device, not the room. The probe is its own tiny WebGL2 program
+// (no three.js: a weak device never loads it): PROBE_QUADS full-buffer quads blended in the clear colour (the
+// player sees a flat ground behind the loading card, never a test pattern), drawn into the LOW drawing buffer on
+// the visible canvas, so its reading follows the viewport as the room's cost does. Its first frame (compile) is
+// dropped; then it draws back to back and measures on the wall clock, frame to frame (each frame's commit
+// counts): a first window of PROBE_WINDOW s decides a weak device at once, a passing one is measured to
+// PROBE_SPAN s in all (ADR 0013: at most 2 s). Below PROBE_MIN_FPS: `benchmark-low`, the loop stops and the room
+// is never built; otherwise LOW / MEDIUM / HIGH by PROBE_MEDIUM_FPS / PROBE_HIGH_FPS, and a browser cap (flat
+// 27-33 fps, low CPU ms; bible 12) settles MEDIUM. Calibrated against the room per preset (table: bible 12).
+const PROBE_MIN_FPS = 13, PROBE_MEDIUM_FPS = 53, PROBE_HIGH_FPS = 57;
+const PROBE_QUADS = 128, PROBE_WINDOW = 0.5, PROBE_SPAN = 1.5;
+function probe() {
+  const gl = GL, prog = gl.createProgram(), shaders = [];
+  for (const [type, src] of [
+    [gl.VERTEX_SHADER, '#version 300 es\nin vec2 p;\nvoid main() { gl_Position = vec4(p, 0.0, 1.0); }'],
+    [gl.FRAGMENT_SHADER, '#version 300 es\nprecision mediump float;\nuniform vec4 c;\nout vec4 o;\nvoid main() { o = c; }'],
+  ]) { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); gl.attachShader(prog, sh); shaders.push(sh); }
+  gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog);
+  const vao = gl.createVertexArray(), buf = gl.createBuffer();
+  gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const draw = () => {
+    gl.useProgram(prog); gl.bindVertexArray(vao); gl.uniform4f(gl.getUniformLocation(prog, 'c'), ...CLEAR_RGB, 0.5);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.viewport(0, 0, CANVAS.width, CANVAS.height); gl.clearColor(...CLEAR_RGB, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    for (let k = 0; k < PROBE_QUADS; k++) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+  // hand the context back in its default state (three.js's renderer may take it over)
+  const release = () => {
+    gl.disable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ZERO); gl.clearColor(0, 0, 0, 0); gl.useProgram(null);
+    gl.bindVertexArray(null); gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    gl.deleteVertexArray(vao); gl.deleteBuffer(buf); shaders.forEach(sh => gl.deleteShader(sh)); gl.deleteProgram(prog);
+  };
+  return new Promise(done => {
+    let skip = true, start = -1, frames = 0, cpu = 0;
+    const end = fps => { release(); done(fps); };
+    const frame = now => {
+      if (LOST) return done(0);
+      if (!skip) {
+        if (start < 0) start = now;
+        else {
+          frames++;
+          const s = (now - start) / 1000, fps = frames / s;
+          if ((s >= PROBE_WINDOW && fps < PROBE_MIN_FPS) || s >= PROBE_SPAN) {
+            CAPPED = fps >= 27 && fps <= 33 && cpu / frames < 12;
+            return end(fps);
+          }
+        }
+      }
+      skip = false;
+      const c0 = performance.now(); draw(); if (start >= 0) cpu += performance.now() - c0;
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+}
+if (!FORCED) {
+  const init = await initMessage;
+  if (PRESETS[init.preset]) PRESET = init.preset; // the page forced one: no probe
+  else {
+    const fps = Math.round(await probe());
+    ROOT.dataset.bench = 'probe:' + fps;
+    if (LOST) await new Promise(() => {});
+    if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' }); await new Promise(() => {}); }
+    PRESET = CAPPED ? 'medium' : fps >= PROBE_HIGH_FPS ? 'high' : fps >= PROBE_MEDIUM_FPS ? 'medium' : 'low';
+    ROOT.dataset.bench += ' ' + PRESET;
+  }
+}
+ROOT.dataset.room = 'building';
+const THREE = await import('three');
+// AA is a context attribute: the probe's context (no AA) serves LOW; a preset with AA (12) gets a fresh renderer
+// on a fresh canvas, and so does every later change of AA
+let renderer, AA;
+function makeRenderer(aa) {
+  const own = !renderer && !aa;
+  const r = new THREE.WebGLRenderer(own ? { canvas: CANVAS, context: GL } : { antialias: aa, powerPreference: 'high-performance' });
+  r.setPixelRatio(pixelRatio()); r.setSize(innerWidth, innerHeight); r.shadowMap.type = THREE.PCFShadowMap;
+  r.domElement.addEventListener('webglcontextlost', onLost);
+  const was = renderer ? renderer.domElement : CANVAS;
+  if (!own) { was.removeEventListener('webglcontextlost', onLost); was.replaceWith(r.domElement); }
+  if (renderer) { renderer.dispose(); renderer.forceContextLoss(); }
+  r.setClearColor(CLEAR, 1); r.clear(); // the flat ground, never an empty canvas
+  renderer = r; AA = aa;
+}
+makeRenderer(PRESETS[PRESET].aa);
 
 // ---------- palette (Art Direction: backroom grey, only red = flags) ----------
 const COL = {
@@ -74,11 +206,14 @@ const hash = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x
 const part = (g, geo, col, x, y, z) => { const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); g.add(m); return m; };
 
 function flip(g) { const i = g.index.array; for (let k = 0; k < i.length; k += 3) { const t = i[k]; i[k] = i[k + 2]; i[k + 2] = t; } const n = g.attributes.normal.array; for (let k = 0; k < n.length; k++) n[k] *= -1; }
-function merge(root) {
+// one step per mesh: `merge` runs them at once, `mergeSliced` (the room, the largest) slices between them (#695)
+function merge(root) { const it = mergeSteps(root); let r; while (!(r = it.next()).done); return r.value; }
+async function mergeSliced(root) { const it = mergeSteps(root); let r; while (!(r = it.next()).done) await slice(); return r.value; }
+function* mergeSteps(root) {
   root.updateMatrixWorld(true);
-  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color();
-  root.traverse(o => {
-    if (!o.isMesh) return;
+  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color(), meshes = [];
+  root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  for (const o of meshes) {
     const g = o.geometry.clone();
     if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
     if (g.type === 'LatheGeometry') { const p = g.attributes.position, n = g.attributes.normal, i = Math.floor(p.count / 2); if (p.getX(i) * n.getX(i) + p.getZ(i) * n.getZ(i) < 0) flip(g); }
@@ -90,7 +225,8 @@ function merge(root) {
     for (let i = 0; i < p.length / 3; i++) col.push(c.r, c.g, c.b);
     for (const i of g.index.array) idx.push(base + i);
     g.dispose(); o.geometry.dispose();
-  });
+    yield;
+  }
   const out = new THREE.BufferGeometry();
   out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
@@ -159,6 +295,7 @@ function samovarTable(g) {
   [0.25, -0.25].forEach(x => { part(g, C(0.03, 0.026, 0.08, 8), COL.glass, x, 0.81, 0.4); part(g, C(0.034, 0.03, 0.05, 8), COL.brass, x, 0.795, 0.4); });
 }
 
+await slice();
 // ---------- build the static room ----------
 const room = new THREE.Group();
 part(room, C(WALL_R, WALL_R, 0.1, 64), COL.floor, 0, -0.05, 0);
@@ -177,6 +314,7 @@ Object.entries(WALL_SLOTS).forEach(([k, fn]) => {
 });
 for (let i = 0; i < N; i++) {
   const a = i / N * Math.PI * 2, g = desk(i); g.position.set(Math.sin(a) * R_CHAIR, 0, Math.cos(a) * R_CHAIR); g.rotation.y = a + Math.PI; room.add(g);
+  await slice();
 }
 // litter: paper scraps, dockets and cigarette butts on the floor
 for (let k = 0; k < 45; k++) {
@@ -190,6 +328,7 @@ part(room, C(0.12, 0.55, 0.32, 16, true), COL.enamel, 0, 3.4, 0);
 part(room, C(0.115, 0.545, 0.31, 16, true), 0xD8D2C0, 0, 3.4, 0).userData.flip = true;
 part(room, C(0.13, 0.13, 0.04, 10), COL.enamel, 0, 3.57, 0);
 
+await slice();
 // ---------- the Major's turning platform ----------
 const plat = new THREE.Group();
 part(plat, C(1.5, 1.6, 0.3, 32), COL.steelD, 0, 0.15, 0);
@@ -211,27 +350,20 @@ part(plat, B(0.38, 0.32, 0.34), COL.beige, -0.75, TOP + 0.61, -0.45);
 part(plat, B(0.42, 0.3, 0.32), 0x8A7B5C, 0.7, TOP + 0.15, -0.6);
 part(plat, B(0.36, 0.06, 0.26), COL.paper, 0.7, TOP + 0.33, -0.6);
 
+await slice();
 // film grain tile (CSS overlay, no GPU cost in the 3D pass)
 { const c = document.createElement('canvas'); c.width = c.height = 160; const g = c.getContext('2d'), d = g.createImageData(160, 160);
   for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
   g.putImageData(d, 0, 0); document.getElementById('grain').style.background = 'url(' + c.toDataURL() + ')'; }
-// ---------- renderer, lights, materials ----------
-let renderer;
-try { if (!document.createElement('canvas').getContext('webgl2')) throw new Error('no webgl2'); renderer = new THREE.WebGLRenderer({ antialias: PRESETS[PRESET].aa, powerPreference: 'high-performance' }); }
-catch { send({ type: 'fc-scene-fallback', reason: 'no-webgl2' }); throw new Error('fc-seat: no WebGL2'); }
-const EMBED = Q.get('embed') === '1';
-const pixelRatio = () => EMBED ? 1 : PRESETS[PRESET].pr;
-renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight);
-renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); LOST = true; send({ type: 'fc-scene-fallback', reason: 'context-lost' }); });
-renderer.shadowMap.type = THREE.PCFShadowMap;
-document.body.prepend(renderer.domElement);
-const scene = new THREE.Scene(); scene.background = new THREE.Color(0x4A4C47); scene.fog = new THREE.Fog(0x4A4C47, 20, 42);
+await slice();
+// ---------- scene, lights, materials (the renderer is the probe's, above) ----------
+const scene = new THREE.Scene(); scene.background = new THREE.Color(CLEAR); scene.fog = new THREE.Fog(CLEAR, 20, 42);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 60);
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 const mat = new THREE.MeshLambertMaterial({ vertexColors: true }); mat.name = 'room_vertex_colour';
 // ---- age & grime: one tileable noise texture, triplanar in the room shader (no extra draw calls) ----
-const grimeTex = (() => {
+const grimeTex = await (async () => {
   const N2 = 256, cv = document.createElement('canvas'); cv.width = cv.height = N2; const g = cv.getContext('2d'), img = g.createImageData(N2, N2);
   const grid = (n, seed) => { const a = []; for (let i = 0; i < n * n; i++) a.push(hash(i * 1.37 + seed)); return a; };
   const vn = (a, n, x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, s = t => t * t * (3 - 2 * t);
@@ -244,6 +376,7 @@ const grimeTex = (() => {
     const gr = vn(oct[4][1], 64, x / N2 * 64, y / N2 * 64);
     const sb = vn(st, 48, x / N2 * 48, y / N2 * 3);
     const i = (y * N2 + x) * 4; img.data[i] = r * 255 / 0.94; img.data[i + 1] = gr * 255; img.data[i + 2] = sb * 255; img.data[i + 3] = 255;
+    if (x === N2 - 1) await slice();
   }
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; return t;
@@ -267,13 +400,16 @@ function dirty(m, amt) {
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum) * vec3(1.06, 1.0, 0.84), 0.28 * uAmt);`);
   };
 }
+await slice();
 dirty(mat, 0.55);
-const roomMesh = new THREE.Mesh(merge(room), mat); roomMesh.receiveShadow = true; roomMesh.castShadow = true; scene.add(roomMesh);
+const roomMesh = new THREE.Mesh(await mergeSliced(room), mat); roomMesh.receiveShadow = true; roomMesh.castShadow = true; scene.add(roomMesh);
+await slice();
 const platMesh = new THREE.Mesh(merge(plat), mat); platMesh.castShadow = platMesh.receiveShadow = true;
 const platG = new THREE.Group(); platG.add(platMesh); scene.add(platG);
 const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.22), new THREE.MeshBasicMaterial({ color: 0x3FA66B }));
 screen.position.set(-0.75, TOP + 0.62, -0.279); platG.add(screen);
 
+await slice();
 // ---------- the Major (stands on the footplate, hands behind back, watching) ----------
 const MAJ = { olive: 0x5B5E3C, oliveD: 0x3F4229, gold: COL.gold, boot: 0x161514, skin: 0xEBC09C, grey: 0x9A978E, belt: 0x3A2A1C };
 const LATHE = (pts, s = 14) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), s);
@@ -335,6 +471,7 @@ const majBodyMesh = new THREE.Mesh(merge(majBody), mat), majHeadMesh = new THREE
 majBodyMesh.castShadow = majHeadMesh.castShadow = true; majHeadMesh.position.set(0, 1.13, 0.02);
 major.add(majBodyMesh, majHeadMesh); platG.add(major);
 
+await slice();
 // ---- Major props + idle actions (smoke / pour a shot & drink) ----
 const MS = 1.12, MY = TOP + 0.012, toLocal = (x, y, z) => new THREE.Vector3(x / MS, (y - MY) / MS, z / MS);
 const ARM = 0.3, SH = { '-1': new THREE.Vector3(-0.29, 0.8, 0), '1': new THREE.Vector3(0.29, 0.8, 0) };
@@ -414,6 +551,7 @@ function majorUpdate(t, dt) {
   majHeadMesh.rotation.set(look.p + Math.sin(t * 0.5) * 0.015, look.y, 0);
 }
 
+await slice();
 const hemi = new THREE.HemisphereLight(0xD8DEE0, 0x8A8270, 4.2); scene.add(hemi);
 scene.add(new THREE.AmbientLight(0xE4E0D4, 1.0));
 const fill = new THREE.DirectionalLight(0xEEF2F4, 2.2); fill.position.set(3, 8, -4); scene.add(fill);
@@ -655,13 +793,14 @@ function randCfg(i) {
   const c = {}; Object.entries(CATS).forEach(([k, o], j) => c[k] = o.opts[Math.floor(hash(i * 7.3 + j) * o.opts.length)][0]);
   c.hairCol = HAIRCOL[Math.floor(hash(i * 3.1) * HAIRCOL.length)]; return c;
 }
-function makeClerk(i) {
+async function makeClerk(i) {
   const root = build(randCfg(i));
+  await slice();
   const hd = root.getObjectByName('head'), aL = root.getObjectByName('armL'), aR = root.getObjectByName('armR'), piv = {};
   [hd, aL, aR].forEach(g => { piv[g.name] = g.position.clone(); root.remove(g); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); });
   const ey = hd.getObjectByName('eyes'), ld = hd.getObjectByName('lids'); hd.remove(ey); hd.remove(ld);
   const src = { body: root, head: hd, armL: aL, armR: aR, eyes: ey, lids: ld }, geos = {};
-  PARTS.forEach(p => { const lo = p === 'eyes' || p === 'lids' ? null : merge(src[p], true); geos[p] = { g0: merge(src[p]), g1: lo }; });
+  for (const p of PARTS) { const lo = p === 'eyes' || p === 'lids' ? null : merge(src[p], true); geos[p] = { g0: merge(src[p]), g1: lo }; await slice(); }
   return { geos, piv, speed: 0.75 + hash(i * 1.7) * 0.7, t: hash(i * 9.1) * 20, seed: i * 31, curLod: 0, acc: 0,
     head: { x: 0.28, y: 0, tx: 0.28, ty: 0, next: hash(i) * 3, back: 0 }, eye: { x: 0, y: 0, jx: 0, jy: 0, sacc: 0, blink: hash(i * 2) * 4, bt: -1 } };
 }
@@ -740,16 +879,18 @@ function updateLod() {
 }
 
 
-function init(n, RC) {
-  for (let i = 0; i < n; i++) { pool.push(makeClerk(i)); OCC.push(true); TYPING.push(true); SHOWN.push(true); } active = pool;
+async function init(n, RC) {
+  for (let i = 0; i < n; i++) { pool.push(await makeClerk(i)); OCC.push(true); TYPING.push(true); SHOWN.push(true); await slice(); } active = pool;
   for (let i = 0; i < n; i++) {
     const a = i / n * Math.PI * 2, p = new THREE.Vector3(Math.sin(a) * RC, 0, Math.cos(a) * RC);
     deskM.push(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a + Math.PI), new THREE.Vector3(1, 1, 1))); L.desks.push(p);
   }
+  await slice();
   carrIM = new THREE.InstancedMesh(merge(carriage()), cmat, n); paperIM = new THREE.InstancedMesh(new THREE.BoxGeometry(0.26, 0.24, 0.003), pmat, n);
   carrIM.frustumCulled = paperIM.frustumCulled = false;
   let v = 0, ix = 0, cnt = 0;
   active.forEach(c => PARTS.forEach(p => { [c.geos[p].g0, c.geos[p].g1].forEach(g => { if (g) { v += g.attributes.position.count; ix += g.index.count; } }); cnt++; }));
+  await slice();
   bm = new THREE.BatchedMesh(cnt, v, ix, cmat); bm.frustumCulled = false;
   active.forEach(c => { c.ids = {}; c.inst = {}; c.curLod = 0; PARTS.forEach(p => { const g = c.geos[p]; const i0 = bm.addGeometry(g.g0), i1 = g.g1 ? bm.addGeometry(g.g1) : -1; c.ids[p] = [i0, i1]; c.inst[p] = bm.addInstance(i0); }); });
   scene.add(bm, carrIM, paperIM);
@@ -770,8 +911,9 @@ function seat(slots, near) { slots.forEach((s, i) => { OCC[i] = s.occ; TYPING[i]
 const setBob = on => { BOB = on ? 1 : 0; };
 return { init, update, seat, setBob };
 })();
-Clerks.init(N, R_CHAIR);
+await Clerks.init(N, R_CHAIR);
 
+await slice();
 // ---------- dust motes drifting in the bulb light ----------
 const DUST = 220, dustPos = new Float32Array(DUST * 3), dustSeed = [];
 for (let i = 0; i < DUST; i++) { const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * 3.2; dustSeed.push([a, r, 0.4 + Math.random() * 2.8, Math.random() * 6.283]); }
@@ -784,8 +926,9 @@ function dustUpdate(t) {
   dustGeo.attributes.position.needsUpdate = true;
 }
 
+await slice();
 // ---------- behaviour (the race page drives the scene, #563) ----------
-let FORCE = 'pov', LOST = false;
+let FORCE = 'pov';
 let VIEW = 'over', TURN = true, STUTTER = true, t = 0, last = performance.now(), nextStutter = 4, stutterT = -1, orbitA = 0.6;
 // ?orbit=<seconds>: one full overview orbit in that many seconds; default 0.05 rad/s
 const ORBIT = +Q.get('orbit') > 0 ? 2 * Math.PI / +Q.get('orbit') : 0.05;
@@ -822,26 +965,20 @@ function applyView(view) {
   DESKS = slots; PLACED = slots.filter(s => s.occ).length;
   Clerks.seat(DESKS, PRESETS[PRESET].near);
 }
-function applyPreset(p) { PRESET = p; renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); Clerks.seat(DESKS, PRESETS[p].near); }
-
-// bible 12: `auto` renders 2 s at MEDIUM (0.5 s warm-up, then 1.5 s measured) and picks the preset;
-// below Low the page falls back to paper. A flat ~30 fps with idle frames is a browser cap, not the GPU.
-const bench = { on: false, t: 0, frames: 0, cpu: 0 };
-let READY = false, INIT = false, pendingReady = false;
-const ready = () => { if (READY || LOST) return; READY = true; send({ type: 'fc-scene-ready', preset: PRESET, fov: camera.fov, desks: PLACED }); };
-function benchDone() {
-  bench.on = false;
-  const fps = bench.frames / Math.max(0.001, bench.t), cpu = bench.cpu / Math.max(1, bench.frames);
-  CAPPED = fps >= 27 && fps <= 33 && cpu < 12;
-  if (fps >= 55) applyPreset('high');
-  else if (fps >= 28 || CAPPED) applyPreset('medium');
-  else if (fps >= 18) applyPreset('low');
-  else { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' }); return; }
-  ready();
+function applyPreset(p) {
+  PRESET = p;
+  if (PRESETS[p].aa !== AA) makeRenderer(PRESETS[p].aa); else { renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); }
+  Clerks.seat(DESKS, PRESETS[p].near);
 }
-let CAPPED = false;
 
-addEventListener('message', e => {
+// `fc-scene-ready` (#695): the room's first frame at the settled preset (the probe's, above, or a forced one)
+let READY = false, INIT = false, pendingReady = false;
+const ready = () => {
+  if (READY || LOST) return; READY = true; ROOT.dataset.room = 'ready';
+  send({ type: 'fc-scene-ready', preset: PRESET, fov: camera.fov, desks: PLACED });
+};
+
+function onMessage(e) {
   if (e.origin !== location.origin || e.source !== parent) return;
   const d = e.data;
   if (!d || typeof d !== 'object') return;
@@ -853,22 +990,31 @@ addEventListener('message', e => {
     applyView(d.view);
     if (!INIT) {
       INIT = true;
-      if (PRESETS[d.preset]) applyPreset(d.preset);
-      if (FORCED || PRESETS[d.preset]) pendingReady = true;
-      else { bench.on = true; bench.t = -0.5; bench.frames = 0; bench.cpu = 0; }
+      if (PRESETS[d.preset] && d.preset !== PRESET) applyPreset(d.preset);
+      pendingReady = true;
     }
   }
   if (d.type === 'fc-race-state' && d.view && typeof d.view === 'object') applyView(d.view);
   if (d.type === 'fc-race-motion' && (d.motion === 'full' || d.motion === 'reduce')) { PAGE_REDUCE = d.motion === 'reduce'; applyMotion(); }
   if (d.type === 'fc-race-preset' && PRESETS[d.preset]) applyPreset(d.preset);
-});
+}
+removeEventListener('message', toInbox); addEventListener('message', onMessage); inbox.splice(0).forEach(onMessage);
 
-let fr = 0, ft = 0;
+// #695: the scene shares the race page's main thread (ADR 0017). A drawn frame slower than the Low floor
+// (1/18 s: software WebGL, a starved CPU) is followed by as long a rest with nothing drawn, so the page's
+// keys and timers keep at least half the thread; a scene at or above 18 fps never rests. Nothing is drawn
+// before the page's `fc-race-init`: the first room frame is the settled (or forced) preset's.
+const SLOW_FRAME_MS = 1000 / 18;
+let fr = 0, ft = 0, drawnAt = -1, rest = 0;
 function loop(now) {
   if (LOST) return;
   requestAnimationFrame(loop);
-  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
-  const c0 = performance.now();
+  if (!INIT) { last = now; return; }
+  if (drawnAt >= 0) { const cost = now - drawnAt; drawnAt = -1; if (cost > SLOW_FRAME_MS) rest = now + cost; }
+  if (now < rest) return;
+  drawnAt = now;
+  // wall: the real frame time (telemetry, #695); dt: clamped, for the animation only
+  const wall = Math.max(0, (now - last) / 1000), dt = Math.min(0.05, wall); last = now; t += dt;
   if (TURN) platG.rotation.y += dt * 0.06;
   // Major: slow breathing, head scans the ring and stops to stare; he stands still under reduced motion
   if (!reduced()) majorUpdate(t, dt);
@@ -886,13 +1032,23 @@ function loop(now) {
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over') { orbitA += reduced() ? 0 : dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
-  if (bench.on) { bench.t += dt; if (bench.t > 0) { bench.frames++; bench.cpu += performance.now() - c0; } if (bench.t >= 1.5) benchDone(); }
   if (pendingReady) { pendingReady = false; ready(); }
-  fr++; ft += dt;
+  fr++; ft += wall;
   if (ft >= 1) { const i = renderer.info.render; send({ type: 'fc-scene-telemetry', fps: Math.round(fr / ft), calls: i.calls, triangles: i.triangles, preset: PRESET, capped: CAPPED }); fr = 0; ft = 0; }
 }
+// #695: the first frame does none of the setup on a slow CPU: each part of the room has its shader programs
+// compiled and its buffers uploaded (drawn alone, under the room's lights, into a 1x1 target, nothing on the
+// canvas) in a slice of its own.
+{
+  const warm = new THREE.WebGLRenderTarget(1, 1), parts = scene.children.filter(o => !o.isLight), shown = parts.map(o => o.visible);
+  for (const o of parts) {
+    await slice(); renderer.compile(o, camera, scene);
+    await slice(); parts.forEach(p => { p.visible = p === o; }); renderer.setRenderTarget(warm); renderer.render(scene, camera);
+    renderer.setRenderTarget(null); parts.forEach((p, i) => { p.visible = shown[i]; });
+  }
+  warm.dispose(); await slice();
+}
 requestAnimationFrame(loop);
-send({ type: 'fc-scene-hello' });
 </script>
 </body>
 </html>

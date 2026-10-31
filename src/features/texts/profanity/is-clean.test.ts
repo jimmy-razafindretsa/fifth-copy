@@ -79,8 +79,20 @@ describe("isClean (C2 matching)", () => {
   });
 });
 
+/**
+ * The timed case uses the minimum of RUNS samples (#647, the #600 pattern in
+ * `services/race-server/src/rooms/snapshot.bench.test.ts`): background load (other suites, other
+ * card worktrees) only ever adds time to a sample, so the fastest one is the closest to the code's
+ * own cost, while a single sample rose with the machine's load and failed unchanged code. The
+ * 200 ms budget stays; a regression still fails because every sample, the fastest included, gets
+ * slower.
+ */
+const RUNS = 20;
+const fastest = (xs: number[]) => Math.min(...xs);
+const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+
 describe("isClean performance (C5)", () => {
-  it("runs 10,000 checks of 20-character names in under 200 ms", () => {
+  it("runs 10,000 checks of 20-character names in under 200 ms (minimum of 20)", () => {
     const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ0123456789_-.";
     let seed = 42;
     const rand = () => {
@@ -91,8 +103,15 @@ describe("isClean performance (C5)", () => {
       Array.from({ length: 20 }, () => alphabet[Math.floor(rand() * alphabet.length)]).join(""),
     );
     for (const n of names.slice(0, 500)) isClean(n); // warm-up
-    const start = performance.now();
-    for (const n of names) isClean(n);
-    expect(performance.now() - start).toBeLessThan(200);
+    const times: number[] = [];
+    for (let i = 0; i < RUNS; i++) {
+      const start = performance.now();
+      for (const n of names) isClean(n);
+      times.push(performance.now() - start);
+    }
+    console.log(
+      JSON.stringify({ bench: "isClean", minMs: fastest(times), medianMs: median(times) }),
+    );
+    expect(fastest(times)).toBeLessThan(200);
   });
 });

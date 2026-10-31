@@ -28,6 +28,7 @@ export const EMBEDS = [
   { source: `${BIBLE_DIR}/Fifth Copy Medal.html`, target: "medal.html" },
   { source: `${APP_EMBED_DIR}/Fifth Copy The Major.html`, target: "major.html" },
   { source: `${APP_EMBED_DIR}/Fifth Copy Seat.html`, target: "seat.html" },
+  { source: `${APP_EMBED_DIR}/Fifth Copy Podium Clerk.html`, target: "podium-clerk.html" },
 ] as const;
 
 /** The seat scene's own weight cap (ADR 0017 Consequences, #563 C6): the page plus the vendor files it loads. */
@@ -90,7 +91,10 @@ export function embedFiles(target: string, root = process.cwd()): string[] {
   const map = JSON.parse(IMPORTMAP_RE.exec(html)![1]!) as { imports: Record<string, string> };
   const modules = new Set<string>();
   const used = Object.entries(map.imports).filter(([specifier]) =>
-    new RegExp(`from\\s*['"]${specifier.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}['"]`).test(html),
+    // a static `from 'x'` or a dynamic `import('x')` (the seat page imports three.js after its probe, #695)
+    new RegExp(
+      `(?:from\\s*|import\\(\\s*)['"]${specifier.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}['"]`,
+    ).test(html),
   );
   const queue = used.map(([, served]) => path.join("public", served));
   while (queue.length) {

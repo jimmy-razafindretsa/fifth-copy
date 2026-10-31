@@ -1,5 +1,9 @@
 import type { BrowserContext, Page } from "@playwright/test";
+import { Client } from "pg";
+import { OUTFIT_CATALOGUE, OUTFIT_CATEGORIES } from "../src/features/identity/clerk/outfit";
+import { en } from "../src/i18n/en";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { createLobby } from "./race/helpers";
 import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "./timeouts";
 
 // Contract of #497 (with #489, #373): the whole landing of bible 14.1, ported from
@@ -14,6 +18,11 @@ const SENTENCE = "Type fast. Type first.";
 const STORY = "THE RING ROOMS NEVER STOP TYPING.";
 const STORY_FR = "LES SALLES EN ANNEAU NE S'ARRÊTENT JAMAIS DE TAPER.";
 const QUICK = "QUICK RACE";
+/** `<title>` per locale (src/i18n meta.title): the brand line, the same in both (bible 1). */
+const TITLE = {
+  en: "FIFTH COPY · TYPE FAST · TYPE FIRST",
+  fr: "FIFTH COPY · TYPE FAST · TYPE FIRST",
+};
 
 /** Computed rgb of a colour role, e.g. `role(page, "--color-fg")`; fails on an unemitted variable. */
 async function role(page: Page, variable: string): Promise<string> {
@@ -49,6 +58,17 @@ async function useScheme(page: Page, context: BrowserContext, scheme: "light" | 
 
 /** Server-action re-renders on a loaded dev server take a few seconds. */
 const AFTER_ACTION = { timeout: ACTION_WAIT };
+
+/**
+ * Waits until the document is in `lang` and carries that locale's non-empty `<title>` (#691). After a
+ * locale or theme server action re-renders the layout, Next.js streams the metadata again: the old
+ * `<title>` leaves the head when the new tree commits and the new one lands a few hundred ms later, so
+ * axe run in that window reports `document-title`.
+ */
+async function titled(page: Page, lang: keyof typeof TITLE) {
+  await expect(page.locator("html")).toHaveAttribute("lang", lang, AFTER_ACTION);
+  await expect(page).toHaveTitle(TITLE[lang], AFTER_ACTION);
+}
 
 /** The live feed's recorded loop (#552). */
 const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']");
@@ -407,12 +427,14 @@ test.describe("landing page (#497)", () => {
       await useScheme(page, context, scheme);
       await ready(page);
       await expect(page.getByRole("heading", { level: 1, name: "Fifth Copy" })).toBeVisible();
+      await titled(page, "en");
       await expectNoA11yViolations(page);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await page.getByRole("button", { name: "FR", exact: true }).click();
       await expect(page.getByRole("heading", { level: 2, name: STORY_FR })).toBeVisible(
         AFTER_ACTION,
       );
+      await titled(page, "fr");
       await expectNoA11yViolations(page);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
@@ -857,4 +879,112 @@ test.describe("landing lobby entries (#99)", () => {
       expect(overflow).toBeLessThanOrEqual(0);
     });
   }
+});
+
+// #687 C8: the clerk outfit is saved on the viewer's User row and issued again on the next visit; a visitor
+// without identity is never saved and never becomes a guest.
+test.describe("landing clerk outfit (#687)", () => {
+  test.beforeEach(() => test.slow());
+
+  const clerkRows = (page: Page) => page.locator("[aria-labelledby='clerk-title'] dd");
+
+  /** Hydrated landing, clerk in view, its five issued-uniform rows filled; skips without WebGL2. */
+  async function clerkIssued(page: Page): Promise<string[]> {
+    await ready(page);
+    const webgl = await page.evaluate(
+      () => !!document.createElement("canvas").getContext("webgl2"),
+    );
+    test.skip(!webgl, "no WebGL in this browser");
+    const rows = clerkRows(page);
+    await rows.first().scrollIntoViewIfNeeded();
+    await expect(rows.first()).not.toHaveText("…", { timeout: ACTION_WAIT });
+    return rows.allTextContents();
+  }
+
+  /** REISSUE UNIFORM until the rows differ from `before` (a random hop may repeat a uniform). */
+  async function reissue(page: Page, before: string[]): Promise<string[]> {
+    const button = page.getByRole("button", { name: "REISSUE UNIFORM" });
+    await expect(async () => {
+      if ((await clerkRows(page).allTextContents()).join() !== before.join()) return;
+      await button.click();
+      await expect
+        .poll(() => clerkRows(page).allTextContents(), { timeout: scaled(6_000) })
+        .not.toEqual(before);
+    }).toPass({ timeout: ACTION_WAIT });
+    return clerkRows(page).allTextContents();
+  }
+
+  /** The five row texts as catalogue ids (the en item names, category by category). */
+  const idsOf = (names: string[]) =>
+    Object.fromEntries(
+      OUTFIT_CATEGORIES.map((category, i) => {
+        const items: Record<string, string> = en.landing.clerk.items[category];
+        const id = Object.keys(items).find((k) => items[k] === names[i]);
+        expect(id, `${category} ${names[i]}`).toBeDefined();
+        return [category, id];
+      }),
+    );
+
+  async function storedOutfit(userId: string): Promise<Record<string, string> | null> {
+    const db = new Client({ connectionString: process.env.DATABASE_URL });
+    await db.connect();
+    try {
+      const { rows } = await db.query<{ outfit: Record<string, string> | null }>(
+        `SELECT outfit FROM "User" WHERE id = $1`,
+        [userId],
+      );
+      return rows[0]?.outfit ?? null;
+    } finally {
+      await db.end();
+    }
+  }
+
+  test("C8(a) a guest's reissued outfit is saved and issued again after a reload", async ({
+    page,
+  }) => {
+    test.setTimeout(scaled(180_000));
+    await createLobby(page);
+    const cookie = (await page.context().cookies()).find((c) => c.name === "fc_guest");
+    expect(cookie, "fc_guest cookie").toBeDefined();
+    const userId = cookie!.value.slice(0, cookie!.value.lastIndexOf("."));
+
+    const first = await clerkIssued(page);
+    const shown = await reissue(page, first);
+    const expected = idsOf(shown);
+    await expect
+      .poll(async () => {
+        const saved = await storedOutfit(userId);
+        return saved && Object.fromEntries(OUTFIT_CATEGORIES.map((c) => [c, saved[c]]));
+      }, AFTER_ACTION)
+      .toEqual(expected);
+    const saved = await storedOutfit(userId);
+    expect(OUTFIT_CATALOGUE.hairCol).toContain(saved!.hairCol);
+
+    await page.reload();
+    expect(await clerkIssued(page)).toEqual(shown);
+    expect(idsOf(await clerkRows(page).allTextContents())).toEqual(expected);
+  });
+
+  test("C8(b) a visitor without identity is neither saved nor made a guest", async ({
+    browser,
+  }) => {
+    test.setTimeout(scaled(180_000));
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    try {
+      const page = await context.newPage();
+      const actions: string[] = [];
+      page.on("request", (r) => {
+        if (r.method() === "POST" && r.headers()["next-action"]) actions.push(r.url());
+      });
+      const first = await clerkIssued(page);
+      const second = await reissue(page, first);
+      // A second hop: any request the first one triggered has been issued by the time it lands.
+      await reissue(page, second);
+      expect(actions).toEqual([]);
+      const cookies = await context.cookies();
+      expect(cookies.find((c) => c.name === "fc_guest")).toBeUndefined();
+    } finally {
+      await context.close();
+    }
+  });
 });

@@ -7,6 +7,7 @@
  * Workspace boundaries (docs/adr/0005, 0006, 0007):
  *   packages/engine is pure (imports nothing outside itself)
  *   packages/protocol imports only zod and the engine
+ *   packages/limiter imports only itself; only src/server/limiter and services/race-server use it (ADR 0020)
  *   services/race-server never imports the Next.js app (src/) and never Prisma
  *   src/ never imports services/
  * Run via scripts/check.sh (depcruise src packages services).
@@ -111,6 +112,29 @@ module.exports = {
       severity: "error",
       from: { path: "^packages/protocol/" },
       to: { pathNot: ["^packages/(protocol|engine)/", "node_modules/zod"] },
+    },
+    {
+      name: "limiter-is-self-contained",
+      comment:
+        "The shared limiter is pure TypeScript over an injected Redis client: it imports only its own files (ADR 0020). Its tests bring a real client.",
+      severity: "error",
+      from: { path: "^packages/limiter/", pathNot: "\\.test\\.ts$" },
+      to: { pathNot: "^packages/limiter/" },
+    },
+    {
+      name: "limiter-consumers",
+      comment:
+        "Only the web adapter (src/server/limiter) and the race server use the limiter package; features go through src/server/limiter (ADR 0020).",
+      severity: "error",
+      from: { pathNot: ["^packages/limiter/", "^src/server/limiter/", "^services/race-server/"] },
+      to: { path: "^packages/limiter/" },
+    },
+    {
+      name: "web-redis-only-in-limiter",
+      comment: "In the web app only the limiter adapter talks to Redis (ADR 0020).",
+      severity: "error",
+      from: { path: "^src/", pathNot: "^src/server/limiter/" },
+      to: { path: "node_modules/ioredis/" },
     },
     {
       name: "race-server-no-web-app",

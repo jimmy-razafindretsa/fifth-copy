@@ -3,10 +3,21 @@
  * the page only listens to its own origin and its own iframes (use-embed-bridge.ts).
  * The guards are hand-written, not zod: zod classic costs ~91 kB gzip in the landing first load (#626).
  */
-export const OUTFIT_CATEGORIES = ["hair", "glasses", "hat", "clothes", "face"] as const;
-export type OutfitCategory = (typeof OUTFIT_CATEGORIES)[number];
+import type { Outfit, OutfitCategory } from "@/features/identity";
 
-export type Outfit = Record<OutfitCategory, string> & { hairCol?: string };
+export type { Outfit, OutfitCategory };
+
+/**
+ * identity's `OUTFIT_CATEGORIES` (bible 10.1), restated here because the identity barrel is server-only at
+ * runtime; `embed-messages.test.ts` asserts the two are equal, and `satisfies` keeps every entry an id.
+ */
+export const OUTFIT_CATEGORIES = [
+  "hair",
+  "glasses",
+  "hat",
+  "clothes",
+  "face",
+] as const satisfies readonly OutfitCategory[];
 
 export const VIEWS = ["over", "pov"] as const;
 export type View = (typeof VIEWS)[number];
@@ -19,19 +30,21 @@ export type ViewMessage = { type: "fc-view"; view: View };
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
+// Shape only (six strings): the ids are checked against the catalogue by the server (`outfitSchema`) on save.
 function parseOutfit(v: unknown): Outfit | null {
   if (!isRecord(v)) return null;
   const outfit = {} as Outfit;
-  for (const key of OUTFIT_CATEGORIES) {
+  for (const key of [...OUTFIT_CATEGORIES, "hairCol"] as const) {
     const slot = v[key];
     if (typeof slot !== "string") return null;
     outfit[key] = slot;
   }
-  if (v.hairCol !== undefined) {
-    if (typeof v.hairCol !== "string") return null;
-    outfit.hairCol = v.hairCol;
-  }
   return outfit;
+}
+
+/** Same six slots (an echo of the saved outfit is not saved again, #687). */
+export function sameOutfit(a: Outfit, b: Outfit | null): boolean {
+  return b !== null && [...OUTFIT_CATEGORIES, "hairCol" as const].every((k) => a[k] === b[k]);
 }
 
 /** An `fc-clerk` message with only its known fields, or `null`. */

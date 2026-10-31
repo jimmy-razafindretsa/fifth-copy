@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OUTFIT_CATALOGUE, type OutfitCategory } from "./clerk/outfit";
 
 /** Canonical form for case-insensitive username uniqueness (stored in User.usernameNormalized). */
 export function normalizeUsername(username: string): string {
@@ -38,3 +39,16 @@ export const avatarQuery = z.object({
     .transform(Number)
     .refine(Number.isSafeInteger),
 });
+
+/**
+ * `saveClerkOutfit` input (bible 10.1, #687): the six slots, each an id of `OUTFIT_CATALOGUE`. Unknown keys
+ * are stripped, so only the config object is ever stored.
+ */
+export const outfitSchema = z.object({
+  hair: z.enum(OUTFIT_CATALOGUE.hair),
+  glasses: z.enum(OUTFIT_CATALOGUE.glasses),
+  hat: z.enum(OUTFIT_CATALOGUE.hat),
+  clothes: z.enum(OUTFIT_CATALOGUE.clothes),
+  face: z.enum(OUTFIT_CATALOGUE.face),
+  hairCol: z.enum(OUTFIT_CATALOGUE.hairCol),
+} satisfies Record<OutfitCategory | "hairCol", z.ZodType>);

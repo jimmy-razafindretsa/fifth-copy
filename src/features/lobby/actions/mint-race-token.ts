@@ -3,6 +3,7 @@
 import { parseRoomCode, PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import { env } from "@/env";
 import { ensureGuest } from "@/features/identity";
+import { isGuestSubject, limit, limitCode, requestSubject } from "@/server/limiter";
 import { signRaceToken } from "@/server/race-token";
 import { findLobbyByCode } from "../queries/get-lobby-by-code";
 import { roleFor } from "../role";
@@ -12,13 +13,21 @@ import type { RaceTokenResult } from "../types";
 // Mints the viewer's 5-minute race token for a lobby (ADR 0009: fetched by an action, never in
 // URLs). In the MVP the code is the secret: anyone holding it may join. The lobby is looked up
 // first so a bad code never creates a guest; an unparsable input is `not-found`. `spectator: true`
-// mints a read-only `spectator` token for any viewer, the host included (#187).
+// mints a read-only `spectator` token for any viewer, the host included (#187). The
+// limit is checked first (#207, #699): `mint-race-token` per guest, or, without a guest cookie (a
+// student's first mint), per (IP, code) plus the IP's distinct-code budget, so a class behind one
+// address can all get a token. A refused call reads nothing and creates no guest.
 export async function mintRaceToken(input: {
   code: string;
   spectator?: boolean;
 }): Promise<RaceTokenResult> {
   const parsed = mintRaceTokenInputSchema.safeParse(input);
   const code = parsed.success ? parseRoomCode(parsed.data.code) : null;
+  const subject = await requestSubject();
+  const verdict = isGuestSubject(subject)
+    ? await limit("mint-race-token", subject)
+    : await limitCode("mint-race-token-new-guest", subject, code);
+  if (!verdict.ok) return { ok: false, error: "rate-limited" };
   const lobby = code ? await findLobbyByCode(code) : null;
   if (!lobby) return { ok: false, error: "not-found" };
   if (lobby.status !== "WAITING") return { ok: false, error: "closed" };

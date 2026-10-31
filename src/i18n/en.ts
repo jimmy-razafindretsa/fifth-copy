@@ -372,6 +372,48 @@ export const en = {
       EXPIRED: "EXPIRED",
     },
   },
+  design: {
+    keys: {
+      title: "DEAD-KEY RECORDER",
+      devOnly: "DEV ONLY",
+      intro:
+        "Pick the machine, the layout and the case, then type the case in the box. Every event lands in the log, and COPY FIXTURE files the whole sequence as JSON for the race input.",
+      machine: "MACHINE",
+      os: "OS",
+      browser: "BROWSER",
+      layout: "LAYOUT",
+      case: "CASE",
+      layouts: {
+        csa: "CANADIAN MULTILINGUAL (CSA)",
+        "fr-ca": "CANADIAN FRENCH",
+        azerty: "FRENCH AZERTY",
+        us: "US QWERTY",
+      },
+      cases: {
+        "circumflex-e": "CIRCUMFLEX E",
+        "c-cedilla": "C CEDILLA",
+        "e-acute": "ACUTE E",
+        "e-grave": "GRAVE E",
+        "u-grave": "GRAVE U",
+        "oe-ligature": "OE LIGATURE",
+        guillemets: "GUILLEMETS",
+        "option-combos": "OPTION COMBOS (US, MACOS)",
+      },
+      input: "TYPE HERE",
+      target: "TYPE {text}",
+      committed: "COMMITTED",
+      log: "EVENT LOG",
+      count: "{n} EVENTS",
+      empty: "No keys yet. Type the case in the box.",
+      copy: "COPY FIXTURE",
+      copied: "COPIED",
+      copiedStatus: "Fixture copied. Save it as {file}.",
+      copyFailed: "The clipboard refused. Select the JSON below and copy it by hand.",
+      returned: "RETURNED ·",
+      clear: "CLEAR",
+      fixture: "FIXTURE",
+    },
+  },
   settings: {
     avatar: {
       moderation: {

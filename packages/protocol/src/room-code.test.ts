@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import * as subpath from "@fifth-copy/protocol/room-code";
 import { formatRoomCode, parseRoomCode, ROOM_CODE_RE, roomCodeSchema } from "./index";
 
 describe("room code", () => {
@@ -39,4 +41,28 @@ describe("room code", () => {
   ])("parseRoomCode(%j) is %j", (raw, expected) => {
     expect(parseRoomCode(raw)).toBe(expected);
   });
+});
+
+// #675: the join form imports the helpers from the zod-free subpath, so `/` and `/lobby/[code]`
+// never load zod; the barrel re-exports the very same functions.
+describe("@fifth-copy/protocol/room-code (zod-free subpath)", () => {
+  it("exports the barrel's helpers, not a copy", () => {
+    expect(subpath.ROOM_CODE_RE).toBe(ROOM_CODE_RE);
+    expect(subpath.formatRoomCode).toBe(formatRoomCode);
+    expect(subpath.parseRoomCode).toBe(parseRoomCode);
+  });
+
+  it("imports nothing at runtime (no zod)", () => {
+    const src = readFileSync(new URL("./room-code-format.ts", import.meta.url), "utf8");
+    const runtimeImports = src.match(/^import(?! type)[^;]*;/gm) ?? [];
+    expect(runtimeImports).toEqual([]);
+  });
+
+  it.each(["kgb-4821", "KGB4821", " kgb 4821 ", "KOB-4821", "KGB-482", "", "abc-00001"])(
+    "parseRoomCode(%j) agrees with roomCodeSchema",
+    (raw) => {
+      const parsed = roomCodeSchema.safeParse(formatRoomCode(raw));
+      expect(subpath.parseRoomCode(raw)).toBe(parsed.success ? parsed.data : null);
+    },
+  );
 });

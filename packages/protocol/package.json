@@ -8,6 +8,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./room-code": {
+      "types": "./src/room-code-format.ts",
+      "default": "./src/room-code-format.ts"
     }
   },
   "sideEffects": false,

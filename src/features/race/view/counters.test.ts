@@ -276,12 +276,15 @@ describe("selectRemaining (#240 C1)", () => {
     // the timer's own end arrives a little late: still 0, never negative
     const timeUp = ended(runningTimed(), at(60_150));
     expect(selectRemaining(timeUp, at(61_000))).toBe(0);
+    // a timer end read a little early on this device's offset estimate is still the timer's end: 0
+    const early2 = ended(runningTimed(), at(59_400));
+    expect(selectRemaining(early2, at(59_400))).toBe(0);
   });
 
   it("selectWpm stops at the race end: a typing desk's figure no longer drifts after RACE OVER", () => {
     const typing = keys("ab cd", 100).reduce(reduceRace, runningTimed());
     expect(typing.prediction!.state.status).toBe("typing");
-    const over = ended(typing, at(6_000));
+    const over = ended(typing, at(6_000), "all-finished");
     expect(selectWpm(over, at(6_000))).toBe(engine(typing, 6_000));
     expect(selectWpm(over, at(30_000))).toBe(engine(typing, 6_000));
     // the end is capped at the timer: an `ended` that arrives late counts no more than timerS

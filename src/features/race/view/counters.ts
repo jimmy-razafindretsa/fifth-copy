@@ -49,15 +49,18 @@ export function selectFinishWpm(state: RaceState): number {
 }
 
 /**
- * The race time (ms since GO, server clock) at which the server ended the race (#240): the arrival of
- * `ended` on the corrected clock, capped at the timer; `null` while the race has not ended here (or a
- * reload found it ended: no arrival time).
+ * The race time (ms since GO, server clock) at which the server ended the race (#240): exactly the timer
+ * when its `reason` is `timer` (the offset estimate may read the arrival a little early), otherwise the
+ * arrival of `ended` on the corrected clock, capped at the timer; `null` while the race has not ended
+ * here (or a reload found it ended: no arrival time).
  */
 export function raceEndMs(state: RaceState): number | null {
   const { race, endedAt } = state;
   if (!race || state.phase !== "ended" || endedAt === null) return null;
+  const timerMs = race.timerS === null ? null : race.timerS * 1000;
+  if (timerMs !== null && state.ending?.reason === "timer") return timerMs;
   const end = endedAt + state.clockOffset - race.t0;
-  return race.timerS === null ? end : Math.min(end, race.timerS * 1000);
+  return timerMs === null ? end : Math.min(end, timerMs);
 }
 
 /**

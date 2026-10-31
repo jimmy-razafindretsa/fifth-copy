@@ -28,10 +28,10 @@ const vectorHeaders = {
 
 describe("requireInternal (C2, #518 C1)", () => {
   it("passes INTERNAL_HMAC_TEST_VECTOR and returns the parsed body", async () => {
-    const result = await requireInternal(
-      request(body, vectorHeaders),
-      { secret, nowMs: vectorNowMs },
-    );
+    const result = await requireInternal(request(body, vectorHeaders), {
+      secret,
+      nowMs: vectorNowMs,
+    });
     expect(result).toEqual({ ok: true, body: JSON.parse(body) });
   });
 
@@ -82,7 +82,10 @@ describe("requireInternal (C2, #518 C1)", () => {
     });
     for (const bad of [nonce.toUpperCase(), nonce.slice(1), `${nonce}a`, "0".repeat(32)]) {
       expect(
-        await requireInternal(request(body, { ...vectorHeaders, [INTERNAL_HEADERS.nonce]: bad }), opts),
+        await requireInternal(
+          request(body, { ...vectorHeaders, [INTERNAL_HEADERS.nonce]: bad }),
+          opts,
+        ),
       ).toEqual({ ok: false, status: 401, error: "bad-signature" });
     }
   });

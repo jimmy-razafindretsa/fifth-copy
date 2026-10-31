@@ -132,7 +132,11 @@ describe("POST /internal/rooms (C3)", () => {
     const base = await start();
     await expectError(await post(base, { nonce: null }), 401, "bad-signature");
     for (const nonce of ["", V.nonce.toUpperCase(), V.nonce.slice(1), `${V.nonce}0`]) {
-      await expectError(await post(base, { nonce, signature: sign(V.body, nonce) }), 401, "bad-signature");
+      await expectError(
+        await post(base, { nonce, signature: sign(V.body, nonce) }),
+        401,
+        "bad-signature",
+      );
     }
     expect(await server!.registry.members("lob_test")).toBeNull();
   });

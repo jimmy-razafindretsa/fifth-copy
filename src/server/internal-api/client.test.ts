@@ -47,7 +47,12 @@ describe("internal API client: openRoom", () => {
     const nonce = sent!.headers[INTERNAL_HEADERS.nonce];
     expect(nonce).toMatch(INTERNAL_NONCE_HEX);
     expect(sent!.headers[INTERNAL_HEADERS.signature]).toBe(
-      signInternalBody({ timestamp: "1767225600", nonce: nonce!, rawBody: sent!.body, secret }),
+      signInternalBody({
+        timestamp: "1767225600",
+        nonce: String(nonce),
+        rawBody: sent!.body,
+        secret,
+      }),
     );
   });
 

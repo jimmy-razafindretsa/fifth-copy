@@ -43,14 +43,12 @@ describe("race-server internal signer (#518 C1)", () => {
         nowMs,
       }),
     ).toEqual({ ok: true });
-    expect(signInternalBody({ timestamp, nonce, rawBody: `${body} `, secret })).not.toBe(
-      signature,
-    );
+    expect(signInternalBody({ timestamp, nonce, rawBody: `${body} `, secret })).not.toBe(signature);
     expect(signInternalBody({ timestamp, nonce, rawBody: body, secret: `${secret}x` })).not.toBe(
       signature,
     );
-    expect(
-      signInternalBody({ timestamp, nonce: "0".repeat(32), rawBody: body, secret }),
-    ).not.toBe(signature);
+    expect(signInternalBody({ timestamp, nonce: "0".repeat(32), rawBody: body, secret })).not.toBe(
+      signature,
+    );
   });
 });

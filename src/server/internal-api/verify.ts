@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import {
   INTERNAL_HEADERS,
   INTERNAL_MAX_SKEW_S,
+  INTERNAL_NONCE_HEX,
   PROTOCOL_VERSION,
   type InternalError,
 } from "@fifth-copy/protocol";
@@ -52,9 +53,12 @@ async function readCapped(request: Request, max: number): Promise<string | null>
  * Verifies a race server -> web internal request (ADR 0006 point 6), with the race server's rules
  * and order (`services/race-server/src/http/internal.ts`): raw body capped at `maxBodyBytes` (default
  * `MAX_INTERNAL_BODY_BYTES`, 400 `bad-body`),
- * timestamp format and skew (401 `stale-timestamp`), HMAC-SHA256 hex over `${timestamp}.${rawBody}`
- * compared in constant time (401 `bad-signature`), JSON object (400 `bad-body`), then `v` (426
- * `version`). The caller parses `body` with its protocol schema. Nothing here logs.
+ * timestamp format and skew (401 `stale-timestamp`), nonce format (`INTERNAL_NONCE_HEX`, missing or
+ * malformed = 401 `bad-signature`), HMAC-SHA256 hex over `${timestamp}.${nonce}.${rawBody}` compared in
+ * constant time (401 `bad-signature`), JSON object (400 `bad-body`), then `v` (426 `version`). The
+ * nonce is signed and required but not stored here: the web keeps no replay store yet (#518 scope B;
+ * its internal routes are idempotent on raceId and race+desk). The caller parses `body` with its
+ * protocol schema. Nothing here logs.
  */
 export async function requireInternal(
   request: Request,
@@ -74,11 +78,15 @@ export async function requireInternal(
   if (Math.abs(nowMs / 1000 - Number(timestamp)) > INTERNAL_MAX_SKEW_S) {
     return { ok: false, status: 401, error: "stale-timestamp" };
   }
+  const nonce = request.headers.get(INTERNAL_HEADERS.nonce);
+  if (!nonce || !INTERNAL_NONCE_HEX.test(nonce)) {
+    return { ok: false, status: 401, error: "bad-signature" };
+  }
   const signature = request.headers.get(INTERNAL_HEADERS.signature);
   if (!signature || !HEX_SHA256.test(signature)) {
     return { ok: false, status: 401, error: "bad-signature" };
   }
-  const expected = Buffer.from(signInternalBody({ timestamp, rawBody, secret }), "hex");
+  const expected = Buffer.from(signInternalBody({ timestamp, nonce, rawBody, secret }), "hex");
   const given = Buffer.from(signature, "hex");
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
     return { ok: false, status: 401, error: "bad-signature" };

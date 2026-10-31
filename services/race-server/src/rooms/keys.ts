@@ -70,3 +70,10 @@ export const resumeKey = (key: string) => `resume:${key}`;
 
 /** Hash: `userId` -> its resume key, so every `welcome` of a user returns the same one. Room TTL. */
 export const resumeIndexKey = (lobbyId: string) => `room:${lobbyId}:resume`;
+
+/**
+ * String `1`: a nonce of a correctly signed internal request (#518), `nonce` = 32 lowercase hex. Set
+ * once with `NX` and TTL `INTERNAL_NONCE_TTL_S` (twice the skew window), never refreshed; its presence
+ * makes the same request a replay (`http/nonces.ts`).
+ */
+export const nonceKey = (nonce: string) => `internal:nonce:${nonce}`;

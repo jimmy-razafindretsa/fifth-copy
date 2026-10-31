@@ -9,6 +9,7 @@ import {
 import type { Clock } from "../clock";
 import type { RoomRegistry } from "../rooms/registry";
 import { verifyInternalRequest } from "./hmac";
+import type { NonceStore } from "./nonces";
 
 /** Internal request bodies are tiny JSON objects; anything larger is refused before hashing. */
 export const MAX_INTERNAL_BODY_BYTES = 64 * 1024;
@@ -16,11 +17,14 @@ export const MAX_INTERNAL_BODY_BYTES = 64 * 1024;
 export type InternalRoute = {
   method: "POST" | "PATCH";
   path: string;
-  /** Called only after the signature and timestamp verified; `body` is parsed JSON, not yet a schema. */
+  /**
+   * Called only after the timestamp, nonce and signature verified and the nonce was claimed; `body` is
+   * parsed JSON, not yet a schema.
+   */
   handle(body: unknown): Promise<{ status: number; body: unknown }>;
 };
 
-type Deps = { registry: RoomRegistry; secret: string; clock: Clock };
+type Deps = { registry: RoomRegistry; secret: string; clock: Clock; nonces: NonceStore };
 
 const error = (status: number, code: InternalError["error"]) => ({
   status,
@@ -84,8 +88,10 @@ function send(res: ServerResponse, status: number, body: unknown) {
 
 /**
  * Dispatcher for `/internal/*`: returns false when no route matches. Order is fixed: raw body, then
- * timestamp and signature, then JSON, then `v` (426), then the route's schema. Logs carry the path and
- * outcome only, never the secret, signature or body.
+ * timestamp, nonce format and signature, then the nonce claim (401 `replay` on reuse, #518; only a
+ * correctly signed request may write to Redis, and a Redis error rejects to the router's 500, failing
+ * closed), then JSON, then `v` (426), then the route's schema. Logs carry the path and outcome only,
+ * never the secret, nonce, signature or body.
  */
 export function createInternalHandler(deps: Deps, routes = internalRoutes(deps)) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
@@ -101,14 +107,19 @@ export function createInternalHandler(deps: Deps, routes = internalRoutes(deps))
 
     const rawBody = await readBody(req);
     if (rawBody === null) return (reply(error(400, "bad-body")), true);
+    const nonce = header(req, INTERNAL_HEADERS.nonce);
     const verified = verifyInternalRequest({
       secret: deps.secret,
       timestamp: header(req, INTERNAL_HEADERS.timestamp),
+      nonce,
       signature: header(req, INTERNAL_HEADERS.signature),
       rawBody,
       nowMs: deps.clock.now(),
     });
     if (!verified.ok) return (reply(error(401, verified.error)), true);
+    // The verifier proved `nonce` present and well formed; the guard only narrows its type.
+    if (nonce === undefined) return (reply(error(401, "bad-signature")), true);
+    if (!(await deps.nonces.claim(nonce))) return (reply(error(401, "replay")), true);
 
     let body: unknown;
     try {

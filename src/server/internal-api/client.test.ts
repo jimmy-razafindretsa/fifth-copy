@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
   INTERNAL_HEADERS,
+  INTERNAL_NONCE_HEX,
   openRoomRequestSchema,
   PROTOCOL_VERSION,
   type OpenRoomRequest,
@@ -43,9 +44,26 @@ describe("internal API client: openRoom", () => {
     expect(openRoomRequestSchema.parse(JSON.parse(sent!.body))).toEqual(request);
     const timestamp = sent!.headers[INTERNAL_HEADERS.timestamp];
     expect(timestamp).toBe("1767225600");
+    const nonce = sent!.headers[INTERNAL_HEADERS.nonce];
+    expect(nonce).toMatch(INTERNAL_NONCE_HEX);
     expect(sent!.headers[INTERNAL_HEADERS.signature]).toBe(
-      signInternalBody({ timestamp: "1767225600", rawBody: sent!.body, secret }),
+      signInternalBody({
+        timestamp: "1767225600",
+        nonce: String(nonce),
+        rawBody: sent!.body,
+        secret,
+      }),
     );
+  });
+
+  it("#518: two calls carry two different nonces", async () => {
+    const client = createInternalApiClient({ baseUrl: stub.url, secret, now: () => 1_767_225_600 });
+    await client.openRoom(request);
+    await client.openRoom(request);
+    const [a, b] = stub.requests.map((r) => r.headers[INTERNAL_HEADERS.nonce]);
+    expect(a).toMatch(INTERNAL_NONCE_HEX);
+    expect(b).toMatch(INTERNAL_NONCE_HEX);
+    expect(a).not.toBe(b);
   });
 
   it.each([500, 401, 204])("a %i answer is race-server-unavailable", async (status) => {

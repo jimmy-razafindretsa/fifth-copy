@@ -4,9 +4,15 @@ import { INTERNAL_HMAC_TEST_VECTOR as V, INTERNAL_MAX_SKEW_S } from "@fifth-copy
 import { verifyInternalRequest } from "./hmac";
 
 const nowMs = Number(V.timestamp) * 1000;
-const base = { secret: V.secret, timestamp: V.timestamp, signature: V.signature, rawBody: V.body };
+const base = {
+  secret: V.secret,
+  timestamp: V.timestamp,
+  nonce: V.nonce,
+  signature: V.signature,
+  rawBody: V.body,
+};
 
-describe("verifyInternalRequest (C3, C4)", () => {
+describe("verifyInternalRequest (#518 C1, C3)", () => {
   it("accepts the shared known-answer vector", () => {
     expect(verifyInternalRequest({ ...base, nowMs })).toEqual({ ok: true });
   });
@@ -28,6 +34,12 @@ describe("verifyInternalRequest (C3, C4)", () => {
       "bad-signature",
     ],
     ["another secret", { secret: "x".repeat(48) }, "bad-signature"],
+    ["a missing nonce (C3)", { nonce: undefined }, "bad-signature"],
+    ["an empty nonce", { nonce: "" }, "bad-signature"],
+    ["an uppercase nonce", { nonce: V.nonce.toUpperCase() }, "bad-signature"],
+    ["a 31-char nonce", { nonce: V.nonce.slice(1) }, "bad-signature"],
+    ["a 33-char nonce", { nonce: `${V.nonce}a` }, "bad-signature"],
+    ["a well-formed nonce other than the signed one", { nonce: "0".repeat(32) }, "bad-signature"],
     ["a missing timestamp", { timestamp: undefined }, "stale-timestamp"],
     ["a non-numeric timestamp", { timestamp: "17672256OO" }, "stale-timestamp"],
   ] as const)("rejects %s", (_, patch, error) => {

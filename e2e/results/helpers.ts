@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { Client } from "pg";
@@ -6,6 +6,7 @@ import { ENGINE_VERSION } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   INTERNAL_HEADERS,
+  internalSignedString,
   MAX_RESULTS_PER_REQUEST,
   PROTOCOL_VERSION,
   type InternalRaceResult,
@@ -17,16 +18,20 @@ import { createLobby, lobbyIdOf } from "../race/helpers";
 // The Dawn report seeding (#300, shared with #301): races seeded through the signed internal routes the
 // race server calls (POST /api/internal/races, then /results), read back on /results/<raceId>. The
 // signature is the internal-api one (src/server/internal-api/sign.ts `internalHeaders`: HMAC-SHA256 over
-// `${timestamp}.${rawBody}`), rebuilt here because that module is server-only.
+// `${timestamp}.${nonce}.${rawBody}`, #518), rebuilt here because that module is server-only.
 
 function signed(rawBody: string): Record<string, string> {
   const secret = process.env.RACE_TOKEN_SECRET;
   if (!secret) throw new Error("RACE_TOKEN_SECRET missing (load the worktree .env)");
   const timestamp = String(Math.floor(Date.now() / 1000));
-  const signature = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const nonce = randomBytes(16).toString("hex");
+  const signature = createHmac("sha256", secret)
+    .update(internalSignedString({ timestamp, nonce, rawBody }))
+    .digest("hex");
   return {
     "content-type": "application/json",
     [INTERNAL_HEADERS.timestamp]: timestamp,
+    [INTERNAL_HEADERS.nonce]: nonce,
     [INTERNAL_HEADERS.signature]: signature,
   };
 }

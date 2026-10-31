@@ -7,7 +7,7 @@ import {
 import { internalHeaders } from "./sign";
 import { MAX_INTERNAL_BODY_BYTES, requireInternal } from "./verify";
 
-const { secret, timestamp, body, signature } = INTERNAL_HMAC_TEST_VECTOR;
+const { secret, timestamp, nonce, body, signature } = INTERNAL_HMAC_TEST_VECTOR;
 const vectorNowMs = Number(timestamp) * 1000;
 
 function request(rawBody: string, headers: Record<string, string>) {
@@ -20,15 +20,18 @@ function request(rawBody: string, headers: Record<string, string>) {
 const signed = (rawBody: string, nowS = Number(timestamp)) =>
   request(rawBody, internalHeaders({ rawBody, secret, now: nowS }));
 
-describe("requireInternal (C2)", () => {
+const vectorHeaders = {
+  [INTERNAL_HEADERS.timestamp]: timestamp,
+  [INTERNAL_HEADERS.nonce]: nonce,
+  [INTERNAL_HEADERS.signature]: signature,
+};
+
+describe("requireInternal (C2, #518 C1)", () => {
   it("passes INTERNAL_HMAC_TEST_VECTOR and returns the parsed body", async () => {
-    const result = await requireInternal(
-      request(body, {
-        [INTERNAL_HEADERS.timestamp]: timestamp,
-        [INTERNAL_HEADERS.signature]: signature,
-      }),
-      { secret, nowMs: vectorNowMs },
-    );
+    const result = await requireInternal(request(body, vectorHeaders), {
+      secret,
+      nowMs: vectorNowMs,
+    });
     expect(result).toEqual({ ok: true, body: JSON.parse(body) });
   });
 
@@ -55,17 +58,36 @@ describe("requireInternal (C2)", () => {
       await requireInternal(request(body, { [INTERNAL_HEADERS.timestamp]: "1e9" }), opts),
     ).toMatchObject({ status: 401, error: "stale-timestamp" });
     expect(
-      await requireInternal(request(body, { [INTERNAL_HEADERS.timestamp]: timestamp }), opts),
+      await requireInternal(
+        request(body, { [INTERNAL_HEADERS.timestamp]: timestamp, [INTERNAL_HEADERS.nonce]: nonce }),
+        opts,
+      ),
     ).toEqual({ ok: false, status: 401, error: "bad-signature" });
     expect(
       await requireInternal(
-        request(body, {
-          [INTERNAL_HEADERS.timestamp]: timestamp,
-          [INTERNAL_HEADERS.signature]: signature.toUpperCase(),
-        }),
+        request(body, { ...vectorHeaders, [INTERNAL_HEADERS.signature]: signature.toUpperCase() }),
         opts,
       ),
     ).toMatchObject({ status: 401, error: "bad-signature" });
+  });
+
+  it("#518: refuses a missing, malformed or substituted nonce as bad-signature", async () => {
+    const opts = { secret, nowMs: vectorNowMs };
+    const { [INTERNAL_HEADERS.nonce]: _omit, ...withoutNonce } = vectorHeaders;
+    void _omit;
+    expect(await requireInternal(request(body, withoutNonce), opts)).toEqual({
+      ok: false,
+      status: 401,
+      error: "bad-signature",
+    });
+    for (const bad of [nonce.toUpperCase(), nonce.slice(1), `${nonce}a`, "0".repeat(32)]) {
+      expect(
+        await requireInternal(
+          request(body, { ...vectorHeaders, [INTERNAL_HEADERS.nonce]: bad }),
+          opts,
+        ),
+      ).toEqual({ ok: false, status: 401, error: "bad-signature" });
+    }
   });
 
   it("refuses a body tampered after signing, and another secret, as bad-signature", async () => {

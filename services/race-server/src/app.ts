@@ -7,6 +7,7 @@ import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
 import type { Clock, Scheduler, TimerHandle } from "./clock";
 import type { RaceServerEnv } from "./env";
 import { createInternalHandler } from "./http/internal";
+import { createNonceStore } from "./http/nonces";
 import { createHttpHandler } from "./http/router";
 import { createOutbox, type Outbox } from "./persist/outbox";
 import { buildResults, sendResults } from "./persist/results";
@@ -254,7 +255,12 @@ export function createRaceServer({
   const httpServer = createServer(
     createHttpHandler({
       health: { rooms: () => registry.count(), draining: () => draining },
-      internal: createInternalHandler({ registry, secret, clock }),
+      internal: createInternalHandler({
+        registry,
+        secret,
+        clock,
+        nonces: createNonceStore({ redis }),
+      }),
     }),
   );
   const io = attachSocketServer(httpServer, {

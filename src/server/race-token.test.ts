@@ -45,9 +45,9 @@ describe("signRaceToken", () => {
 });
 
 describe("INTERNAL_HMAC_TEST_VECTOR", () => {
-  it("recomputes with node:crypto over `${timestamp}.${body}`", () => {
-    const { secret: key, timestamp, body, signature } = INTERNAL_HMAC_TEST_VECTOR;
-    const mac = createHmac("sha256", key).update(`${timestamp}.${body}`).digest("hex");
+  it("recomputes with node:crypto over `${timestamp}.${nonce}.${body}`", () => {
+    const { secret: key, timestamp, nonce, body, signature } = INTERNAL_HMAC_TEST_VECTOR;
+    const mac = createHmac("sha256", key).update(`${timestamp}.${nonce}.${body}`).digest("hex");
     expect(mac).toBe(signature);
   });
 });

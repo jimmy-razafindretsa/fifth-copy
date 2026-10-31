@@ -365,7 +365,7 @@ export const en = {
     },
     ranking: {
       caption: "FORM 5-R · RANKING",
-      place: "PLACE",
+      place: "№",
       typist: "TYPIST",
       desk: "DESK",
       wpm: "WPM",

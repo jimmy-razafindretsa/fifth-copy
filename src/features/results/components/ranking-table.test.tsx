@@ -73,7 +73,7 @@ describe("RankingTable (#301 C2)", () => {
 
   it("has six scope=col column headers in order", () => {
     const ths = [...html.matchAll(/<th ([^>]*)>([^<]*)<\/th>/g)];
-    expect(ths.map((m) => m[2])).toEqual(["PLACE", "TYPIST", "DESK", "WPM", "ACCURACY", "STATUS"]);
+    expect(ths.map((m) => m[2])).toEqual(["№", "TYPIST", "DESK", "WPM", "ACCURACY", "STATUS"]);
     for (const m of ths) {
       expect(m[1]).toContain('scope="col"');
       expect(m[1]).toContain('role="columnheader"');
@@ -151,7 +151,7 @@ describe("RankingTable (#301 C2)", () => {
     const out = render(rankingRowsFrom(ENTRIES, 12), FR);
     expect(out).toContain("FORMULAIRE 5-R · CLASSEMENT");
     expect([...out.matchAll(/<th [^>]*>([^<]*)<\/th>/g)].map((m) => m[1])).toEqual([
-      "RANG",
+      "№",
       "DACTYLO",
       "BUREAU",
       "MPM",

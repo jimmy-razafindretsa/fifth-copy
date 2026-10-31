@@ -368,7 +368,7 @@ export const fr = {
     },
     ranking: {
       caption: "FORMULAIRE 5-R · CLASSEMENT",
-      place: "RANG",
+      place: "№",
       typist: "DACTYLO",
       desk: "BUREAU",
       wpm: "MPM",

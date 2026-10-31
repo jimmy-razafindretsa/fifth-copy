@@ -246,7 +246,7 @@ tbody .row + .row {
     --_wpm: 48px;
     --_status: 136px;
     grid-template-columns:
-      var(--_place) var(--_portrait) minmax(0, 1fr) 88px var(--_wpm) 64px
+      var(--_place) var(--_portrait) minmax(0, 1fr) 88px var(--_wpm) 96px
       var(--_status);
     grid-template-areas: "place portrait name desk wpm accuracy status";
     gap: 0 12px;

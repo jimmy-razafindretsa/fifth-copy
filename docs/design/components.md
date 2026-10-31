@@ -43,7 +43,7 @@ Contrast: WCAG 2.1 ratio of each promised pair, light \| Night shift, measured f
 | `primary` / `primary-hover` / `primary-fg` | `agit-red` / `banner` / `paper` | same | primary action | `primary-fg` on `primary` 5.33 \| 5.33; on `primary-hover` 8.75 \| 8.75; on `pressed` 8.75 \| 8.75 |
 | `pressed` | `banner` | same | pressed red, Danger button fill | ground (under `primary-fg`, row above) |
 | `you` | `agit-red` | same | the player | fill |
-| `rival` | `ribbon-violet` | `color-mix(in srgb, #3E3A78 50%, #F4ECDC)` | rivals: fills and marks (violet text is `untyped` / `typing-remaining`; per-rival inks #565) | mark `bg` 8.29 \| 3.86; mark `surface` 7.02 \| 3.20 |
+| `rival` | `ribbon-violet` | `color-mix(in srgb, #3E3A78 50%, #F4ECDC)` | rivals: fills and marks (violet text is `untyped` / `typing-remaining`); a rival's own marker takes its rival ink, `rival-0`..`rival-11` (Colour roles) | mark `bg` 8.29 \| 3.86; mark `surface` 7.02 \| 3.20 |
 | `reward` | `medal-gold` | same | rewards, bests (~2%) | `band` 7.77 \| 7.77; mark `bg` n/a \| 5.80 (toggle dot, night only) |
 | `untyped` | `color-mix(in srgb, #3E3A78 85%, #F1E8D6)` | `#CFC6B3` | text still to type, off the tape | `bg` 5.68 \| 6.73; `surface` 4.81 \| 5.58 |
 | `tape` | `tape-paper` | same | typing strip ground; the teleprinter's wound tape and maker's plate text (bible 7.7a) | ground; plate `machine-ink` 11.25 \| 11.25 |
@@ -69,6 +69,18 @@ Roles the palette does not name follow mapping (a) (human, 2026-10-04) on the Ni
 | `border` | `color-mix(in srgb, #2A2420 25%, transparent)` | `color-mix(in srgb, #F4ECDC 25%, transparent)` | hairlines | decorative (2px `fg` rules carry the edges) |
 | `surface-muted` | `color-mix(in srgb, #E4D6B8 94%, #2A2420 6%)` | `color-mix(in srgb, #4B453E 94%, #F4ECDC 6%)` | hover and info grounds | ground |
 | `finish-ink` / `finish-paper` | `#2A2420` / `#F1E8D6` | `#F4ECDC` / `#3E3934` | the race card's checkered finish: hard-edged squares of the theme's ink and paper (bible 6, 7.4a, #560) | mark `finish-paper` 12.58 \| 9.72 |
+| `rival-0` | `#977042` | `#D6B170` | rival ink 0: race-card marker and tick, placard, scarf (#565) | mark `bg` 3.66 \| 5.64; mark `surface` 3.10 \| 4.68 |
+| `rival-1` | `#4A2D08` | `#E8DAA1` | rival ink 1: race-card marker and tick, placard, scarf (#565) | mark `bg` 10.33 \| 8.14; mark `surface` 8.75 \| 6.75 |
+| `rival-2` | `#734918` | `#BBBD97` | rival ink 2: race-card marker and tick, placard, scarf (#565) | mark `bg` 6.40 \| 5.89; mark `surface` 5.42 \| 4.88 |
+| `rival-3` | `#627A75` | `#CCDFC7` | rival ink 3: race-card marker and tick, placard, scarf (#565) | mark `bg` 3.78 \| 8.12; mark `surface` 3.20 \| 6.73 |
+| `rival-4` | `#0B6542` | `#739F6A` | rival ink 4: race-card marker and tick, placard, scarf (#565) | mark `bg` 5.84 \| 3.75; mark `surface` 4.95 \| 3.11 |
+| `rival-5` | `#053D28` | `#53A287` | rival ink 5: race-card marker and tick, placard, scarf (#565) | mark `bg` 10.12 \| 3.74; mark `surface` 8.57 \| 3.10 |
+| `rival-6` | `#4977B5` | `#9DC0B9` | rival ink 6: race-card marker and tick, placard, scarf (#565) | mark `bg` 3.76 \| 5.80; mark `surface` 3.18 \| 4.81 |
+| `rival-7` | `#2F3240` | `#ADE3EA` | rival ink 7: race-card marker and tick, placard, scarf (#565) | mark `bg` 10.45 \| 8.13; mark `surface` 8.85 \| 6.74 |
+| `rival-8` | `#3D4A87` | `#86DBFF` | rival ink 8: race-card marker and tick, placard, scarf (#565) | mark `bg` 6.83 \| 7.39; mark `surface` 5.78 \| 6.12 |
+| `rival-9` | `#555368` | `#89B7FB` | rival ink 9: race-card marker and tick, placard, scarf (#565) | mark `bg` 6.11 \| 5.56; mark `surface` 5.17 \| 4.61 |
+| `rival-10` | `#827096` | `#A189CB` | rival ink 10: race-card marker and tick, placard, scarf (#565) | mark `bg` 3.67 \| 3.78; mark `surface` 3.10 \| 3.13 |
+| `rival-11` | `#46245A` | `#CAA2D1` | rival ink 11: race-card marker and tick, placard, scarf (#565) | mark `bg` 10.39 \| 5.22; mark `surface` 8.80 \| 4.32 |
 
 ### Bible extensions
 Where the bible's value fails WCAG (bible 3.3: text 4.5:1; WCAG 1.4.11: marks 3:1), the nearest bible-palette value that passes (sRGB mix, WCAG 2.1 luminance):
@@ -83,7 +95,8 @@ Where the bible's value fails WCAG (bible 3.3: text 4.5:1; WCAG 1.4.11: marks 3:
 Design bible 0, 3.1, 3.3 and 7. Every colour is a role (tables above); these rules say where each family may appear. Enforced by `scripts/check-colours.ts` (`scripts/check.sh` step `colours`, rules in `scripts/lib/colour-rules.ts`): no raw hex and no `--brand-*` under `src/` (comments, tests and `%23`-encoded data URIs aside), plus the ink-ground, reward and device rules below. Read-only measurement of a screenshot: `npx tsx scripts/colour-coverage.ts <png...>`.
 - **Red** (`primary`, `you`, `link`, `typing-next-bg`, `typing-error`): headers, primary actions, urgency, *you*. Never decoration.
 - **Banner** (`primary-hover`, `pressed`, light `danger`): red depth, bands, the pressed and hover state of red, the Danger button fill.
-- **Violet** (`rival`, `untyped`, `typing-remaining`): rivals and text still to type, locked items. Nothing else. Violet text uses `untyped` and `typing-remaining`, never `rival` (a fill and mark role, 3:1 as a mark; per-rival inks: #565).
+- **Violet** (`rival`, `untyped`, `typing-remaining`): rivals and text still to type, locked items. Nothing else. Violet text uses `untyped` and `typing-remaining`, never `rival` (a fill and mark role, 3:1 as a mark).
+- **Rival inks** (`rival-0`..`rival-11`, #565, bible 3.1): rival inks appear only on race-card markers, placards and scarves: a rival's lane marker and field tick (`src/features/race`), its 3D placard and scarf (#267), and their `/design` specimen. A rival's ink is `rival-<Member.color>`, the desk allocator's index (`rivalIdentity`); it is never the only cue (the marker shape and the desk number travel with it, R80), never text, never a ground. Twelve muted inks per theme, two independent sets (Night shift is not a mix of the light set), each 3:1 as a mark on `bg` and `surface`, none red (HSL hue outside 340-20), CIE76 >= 12 apart under protanopia, deuteranopia and tritanopia simulation (`src/features/race/view/colour-blind.test.ts`).
 - **Gold** (`reward`): rewards and personal bests, sparingly; also the bible 7.1 social hover and the 7.6 tag on the landing, and the night dot of the theme toggle. Gold (`reward`) is never text on `bg` or `surface` (1.37 to 1.62:1 in light): gold text lives on `band` (7.77:1); bests and rewards on paper are stamps, medals or gold on an ink plaque; the toggle dot is a state indicator also carried by `aria-pressed`. Owners: `src/features/{results,stats,landing,preferences}/**`, `src/components/ui/**`, `src/app/design/**`.
 - **Focus**: the ring is measured against the ground outside the control (`outline-offset: 2px`), never against the control's fill: 12.58 \| 9.72 on `bg`, 10.65 \| 8.05 on `surface`.
 - **Ink** (`fg`, `band`, `typing-done`, `device-bezel`): type, rules, bands, and the inverted label pair: an ink ground always carries paper text (7.1 ink button, 7.4 `YOU` tag, 7.5 active tab, segmented toggles), so a CSS block painting `var(--color-fg)` declares `color: var(--color-bg)` or `var(--color-band-fg)`. Never an unlabelled panel fill in light: `bg-fg`, `bg-typing-done`, `bg-room` and `bg-danger` classes are swatches for `/design` only (`bg-danger-surface` is a ground). Exceptions (bible-mandated): 7.4 grid gaps (`landing/components/sections.module.css`), 6 ink stars (`ui/star.module.css`).

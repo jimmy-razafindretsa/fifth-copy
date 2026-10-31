@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { contrastRatio, mixSrgb, parseHex, type Rgb } from "@/lib/color";
+import { contrastRatio, hue, mixSrgb, parseHex, type Rgb } from "@/lib/color";
 
 // Contract of #16: docs/design/tokens.css (palette, roles, themes) and its docs in components.md.
 const css = readFileSync(path.join(process.cwd(), "docs/design/tokens.css"), "utf8");
@@ -162,6 +162,8 @@ describe("C2/C3 themes", () => {
   }
 });
 
+const MODES_ALL = Object.keys(THEMES) as ThemeName[];
+
 const RIVAL_NIGHT = "color-mix(in srgb, #3E3A78 50%, #F4ECDC)";
 
 describe("C4 new roles", () => {
@@ -284,6 +286,34 @@ describe("C5 mapping (a)", () => {
   });
 });
 
+// Contract of #565 C1: twelve rival inks per theme, raw hexes in each theme block (two independent sets,
+// not brand values: C1 above keeps fifteen), mapped to `--color-rival-N`, none of them red.
+const RIVAL_INKS = Array.from({ length: 12 }, (_, i) => `rival-${i}`);
+
+describe("#565 C1 rival inks", () => {
+  for (const t of MODES_ALL) {
+    it(`declares rival-0..rival-11 as hexes in ${t}, none in the red band (hue 340-20)`, () => {
+      for (const ink of RIVAL_INKS) {
+        expect(theme.get(`--color-${ink}`), ink).toBe(`var(--t-${ink})`);
+        const value = role(ink, t);
+        expect(value, ink).toMatch(/^#[0-9a-f]{6}$/);
+        const h = hue(value);
+        expect(h > 20 && h < 340, `${ink} ${value} hue ${h.toFixed(1)}`).toBe(true);
+      }
+      expect([...theme.keys()].filter((k) => /^--color-rival-\d+$/.test(k))).toHaveLength(12);
+    });
+  }
+
+  it("the light and Night shift sets are independent and distinct", () => {
+    const light = RIVAL_INKS.map((ink) => role(ink, "light"));
+    const night = RIVAL_INKS.map((ink) => role(ink, "attrDark"));
+    expect(new Set(light).size).toBe(12);
+    expect(new Set(night).size).toBe(12);
+    expect(light.filter((v) => night.includes(v))).toEqual([]);
+    expect(night).toEqual(RIVAL_INKS.map((ink) => role(ink, "mediaDark")));
+  });
+});
+
 // #16 C7 and #19 C9-C12: WCAG 2.1 contrast of every pair the design system promises, computed from the
 // declared token values (color-mix resolved with mixSrgb) in light, media dark and attribute dark.
 type Pair = { fg: string; ground: string; kind: "text" | "mark" | "ring"; darkOnly?: boolean };
@@ -333,6 +363,11 @@ const PAIRS: Pair[] = [
   { fg: "finish-ink", ground: "finish-paper", kind: "mark" },
   // the toggle's gold dot lights only on the night ground (bible 14.1)
   { fg: "reward", ground: "bg", kind: "mark", darkOnly: true },
+  // #565 C1: the twelve rival inks are marks (race-card markers and ticks) on the docket's grounds
+  ...RIVAL_INKS.flatMap((ink): Pair[] => [
+    { fg: ink, ground: "bg", kind: "mark" },
+    { fg: ink, ground: "surface", kind: "mark" },
+  ]),
 ];
 const ratio = (a: string, b: string, t: ThemeName) =>
   contrastRatio(toRgb(role(a, t)), toRgb(role(b, t)));

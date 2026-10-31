@@ -4,7 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { hudLabelFixtures } from "../view/hud-labels";
 import { type RaceCardView, raceCardViewFixtures as F } from "../view/race-card-view";
-import { RaceCard } from "./race-card";
+import { MARKERS } from "@fifth-copy/protocol";
+import { RIVAL_INKS } from "../view/rival-identity";
+import { IdentityMarker, RaceCard } from "./race-card";
 
 // Contract of #560 C2 and C3 (markup and CSS; computed colours and the compact box in e2e/race/hud.spec.ts).
 const EN = hudLabelFixtures.en.raceCard;
@@ -44,8 +46,8 @@ describe("RaceCard full-field line (#560 C2)", () => {
     }
     const wild: RaceCardView = {
       field: [
-        { desk: 1, progress: 1.4, you: false },
-        { desk: 2, progress: -0.2, you: true },
+        { desk: 1, progress: 1.4, you: false, ink: "rival-0" },
+        { desk: 2, progress: -0.2, you: true, ink: "you" },
       ],
       lanes: [],
     };
@@ -62,7 +64,12 @@ describe("RaceCard full-field line (#560 C2)", () => {
     expect(you).toMatch(/background:\s*var\(--color-you\)/);
     // Night shift: agit-red is 1.76:1 on the night ground, the fg edge carries the mark (bible 7.4a)
     expect(you).toMatch(/border:\s*1px solid var\(--color-fg\)/);
-    expect(rule(".tick")).toMatch(/background:\s*var\(--color-rival\)/);
+    // #565 C4: a rival tick wears its identity ink (ribbon-violet only as the fallback)
+    expect(rule(".tick")).toMatch(/background:\s*var\(--_ink, var\(--color-rival\)\)/);
+    F["thirty-mid-field"].field.forEach((t, i) => {
+      expect(ticks[i]).toContain(`data-ink="${t.ink}"`);
+      expect(ticks[i]).toMatch(/class="[^"]*inked/);
+    });
   });
 
   it("ends in a checkered finish: a hard-edged repeating gradient of the finish tokens, no blur", () => {
@@ -95,7 +102,16 @@ describe("RaceCard lanes (#560 C2)", () => {
   });
 
   it("draws each marker shape as inline SVG: circle, square, triangle, diamond", () => {
-    const out = lanes(html(<RaceCard view={F["six-mid-field"]} labels={EN} />));
+    // the allocator gives a 30-desk room circles, squares and triangles (#156); diamonds start at desk 37
+    const base = F["six-mid-field"];
+    const view: RaceCardView = {
+      ...base,
+      lanes: base.lanes.map((l, i) => ({
+        ...l,
+        marker: { ...l.marker, shape: MARKERS[i % MARKERS.length]! },
+      })),
+    };
+    const out = lanes(html(<RaceCard view={view} labels={EN} />));
     const shapes = new Set<string>();
     for (const lane of out) {
       const svg = /<svg[^>]*data-marker="(\w+)"[^>]*>([\s\S]*?)<\/svg>/.exec(lane.body);
@@ -132,15 +148,24 @@ describe("RaceCard lanes (#560 C2)", () => {
   });
 
   it("your lane is red (marker, name) with the YOU tag; rivals take their marker ink", () => {
-    const out = lanes(html(<RaceCard view={F["six-mid-field"]} labels={EN} />));
+    const view = F["thirty-mid-field"];
+    const out = lanes(html(<RaceCard view={view} labels={EN} />));
     const you = out.filter((l) => l.attrs.includes("data-you"));
     expect(you).toHaveLength(1);
     expect(you[0]!.body).toContain(">YOU<");
-    for (const rival of out.filter((l) => !l.attrs.includes("data-you"))) {
-      expect(rival.attrs).toContain('data-ink="rival"');
+    expect(you[0]!.attrs).toContain('data-ink="you"');
+    view.lanes.forEach((lane, i) => {
+      if (lane.you) return;
+      expect(out[i]!.attrs).toContain(`data-ink="${lane.marker.colour}"`);
+      expect(lane.marker.colour).toMatch(/^rival-\d+$/);
+    });
+    // #565 C4: one mapping per identity ink, rival-N to its token, you to agit-red
+    for (const ink of RIVAL_INKS) {
+      expect(rule(`.inked[data-ink="${ink}"]`)).toMatch(
+        new RegExp(`--_ink:\\s*var\\(--color-${ink}\\)`),
+      );
     }
-    expect(rule('.lane[data-ink="rival"]')).toMatch(/--_ink:\s*var\(--color-rival\)/);
-    expect(rule('.lane[data-you="true"]')).toMatch(/--_ink:\s*var\(--color-you\)/);
+    expect(rule('.inked[data-ink="you"]')).toMatch(/--_ink:\s*var\(--color-you\)/);
     expect(rule(".marker")).toMatch(/fill:\s*var\(--_ink\)/);
     expect(rule('[data-you="true"] .name')).toMatch(/color:\s*var\(--color-link\)/);
   });
@@ -176,5 +201,14 @@ describe("RaceCard compact (#560 C3)", () => {
     expect(tags(compact, "data-tick")).toHaveLength(view.field.length);
     expect(tags(compact, "data-finish")).toHaveLength(1);
     expect(rule('[data-compact="true"] .lane')).toMatch(/grid-template-columns:/);
+  });
+});
+
+describe("IdentityMarker (#565 /design specimen)", () => {
+  it("draws a shape in an ink, decorative", () => {
+    const out = html(<IdentityMarker shape="diamond" ink="rival-7" />);
+    expect(out).toMatch(/<svg[^>]*data-marker="diamond"/);
+    expect(out).toContain('data-ink="rival-7"');
+    expect(out).toContain('aria-hidden="true"');
   });
 });

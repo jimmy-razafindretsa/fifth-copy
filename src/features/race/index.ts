@@ -43,7 +43,11 @@ export type { CharState, TypedChar, TypedView, TypedViewFixture } from "./view/t
 /** The seat view HUD dockets (#560, ADR 0013): pure components rendering what the race store hands them
  * (ranks, progress and WPM arrive as props, ADR 0007), with their view model and copy (bible 7.4a, 7.11). */
 export { NixieCounters, NIXIE_WPM_MAX, type NixieCountersProps } from "./components/nixie-counters";
-export { RaceCard, type RaceCardProps } from "./components/race-card";
+export { IdentityMarker, RaceCard, type RaceCardProps } from "./components/race-card";
+/** A desk's identity (#565, bible 3.1): its rival ink and marker shape from the allocator; #267 reads it
+ * for the 3D placards and scarves. */
+export { RIVAL_INKS, rivalIdentity } from "./view/rival-identity";
+export type { IdentityInk, RivalIdentity, RivalInk } from "./view/rival-identity";
 export { SabotageTray, type SabotageTrayProps } from "./components/sabotage-tray";
 export {
   ABANDON_CONFIRM_MS,

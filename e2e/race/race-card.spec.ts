@@ -113,6 +113,13 @@ test.describe("#564 race card wiring", () => {
       "fill",
       RED,
     );
+    // #565 C4: every rival lane and tick wears the allocator's ink of its desk (rival-<(desk-1) % 12>)
+    for (const el of await card(page)
+      .locator("[data-lane]:not([data-you]), [data-tick]:not([data-you])")
+      .all()) {
+      const d = Number(await el.getAttribute("data-desk"));
+      await expect(el).toHaveAttribute("data-ink", `rival-${(d - 1) % 12}`);
+    }
 
     // the last trailing player (not in the lanes) passes you: you drop to 6th, the window takes 8 lanes
     const passer = behind.at(-1)!;

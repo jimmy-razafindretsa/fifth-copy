@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createHmac } from "node:crypto";
 import {
   DEFAULT_RACE_SETTINGS,
   deskIdentity,
-  INTERNAL_HEADERS,
   PROTOCOL_VERSION,
   type RaceSettings,
   welcomeSchema,
@@ -19,6 +17,7 @@ import {
   type Booted,
   type Racer,
 } from "../testing/harness";
+import { internalHeaders } from "../http/sign";
 
 let t: Booted | undefined;
 afterEach(async () => {
@@ -78,15 +77,11 @@ describe("waiting room over Socket.IO (C1)", () => {
       hostUserId: "usr_host",
       settings,
     });
-    const timestamp = String(Math.floor(t.clock.now() / 1000));
     const res = await fetch(`${t.url}/internal/rooms`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        [INTERNAL_HEADERS.timestamp]: timestamp,
-        [INTERNAL_HEADERS.signature]: createHmac("sha256", SECRET)
-          .update(`${timestamp}.${body}`)
-          .digest("hex"),
+        ...internalHeaders({ rawBody: body, secret: SECRET, nowMs: t.clock.now() }),
       },
       body,
     });

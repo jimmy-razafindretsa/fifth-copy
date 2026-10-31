@@ -71,6 +71,7 @@ describe("createWebApi.startRace (C4)", () => {
       verifyInternalRequest({
         secret: SECRET,
         timestamp: headers[INTERNAL_HEADERS.timestamp],
+        nonce: headers[INTERNAL_HEADERS.nonce],
         signature: headers[INTERNAL_HEADERS.signature],
         rawBody: init.body as string,
         nowMs: clock.now(),
@@ -245,6 +246,7 @@ describe("createWebApi.postResults (#189)", () => {
       verifyInternalRequest({
         secret: SECRET,
         timestamp: headers[INTERNAL_HEADERS.timestamp],
+        nonce: headers[INTERNAL_HEADERS.nonce],
         signature: headers[INTERNAL_HEADERS.signature],
         rawBody: init.body as string,
         nowMs: clock.now(),

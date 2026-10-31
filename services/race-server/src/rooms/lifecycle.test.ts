@@ -238,6 +238,7 @@ describe("lifecycle: text from the web app over the signed internal API (#199 C5
       verifyInternalRequest({
         secret: SECRET,
         timestamp: request!.headers[INTERNAL_HEADERS.timestamp] as string,
+        nonce: request!.headers[INTERNAL_HEADERS.nonce] as string,
         signature: request!.headers[INTERNAL_HEADERS.signature] as string,
         rawBody: request!.body,
         nowMs: booted.clock.now(),

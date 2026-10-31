@@ -174,7 +174,10 @@ module.exports = {
       from: { pathNot: "^packages/([^/]+)/" },
       to: {
         path: "^packages/[^/]+/src/.+",
-        pathNot: ["^packages/[^/]+/src/index\\.ts$", "^packages/protocol/src/room-code-format\\.ts$"],
+        pathNot: [
+          "^packages/[^/]+/src/index\\.ts$",
+          "^packages/protocol/src/room-code-format\\.ts$",
+        ],
       },
     },
     {

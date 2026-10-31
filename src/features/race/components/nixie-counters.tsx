@@ -55,7 +55,13 @@ export function NixieCounters({
       : fill(labels.aria, { wpm: Number(shownWpm), place, total })) +
     (time === null ? "" : fill(labels.ariaTime, { time }));
   return (
-    <div data-device="nixie" role="group" aria-label={words} className={styles.bezel}>
+    <div
+      data-device="nixie"
+      data-timer={time === null ? undefined : ""}
+      role="group"
+      aria-label={words}
+      className={styles.bezel}
+    >
       <span className={styles.counter} aria-hidden="true">
         <span data-tube="wpm" className={cn(styles.tube, "type-device device-nixie")}>
           {shownWpm}

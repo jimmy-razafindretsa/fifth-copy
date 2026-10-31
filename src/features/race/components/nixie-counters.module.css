@@ -50,3 +50,22 @@
   letter-spacing: 0.2em;
   color: var(--color-band-muted);
 }
+
+/*
+ * Three tubes (the timer, #240; bible 7.11 "Timer tube"): the bezel must fit the 1024+ right gutter
+ * (clamp(208px, 22vw, 300px)), where three tubes at 42px measure about 344px. Its chrome tightens (gap 8,
+ * padding 6, tube padding 4, WPM min-width 36) and the numerals take the slot's width: VT323 advances
+ * 0.4em, so the bezel is about 92px + 4.8em wide (14 glyphs), and the size is the largest that fits,
+ * between 22px and 42px (about 27px at 1024, 39px at 1280, 42px in the tablet row). The slot is the
+ * inline-size container (seat-layout.module.css); two tubes keep the sizes above.
+ */
+.bezel[data-timer] {
+  gap: 8px;
+  padding: 6px 6px 4px;
+}
+
+.bezel[data-timer] .tube {
+  min-width: 36px;
+  padding: 4px 4px 3px;
+  font-size: clamp(22px, calc((100cqi - 92px) / 4.8), 42px);
+}

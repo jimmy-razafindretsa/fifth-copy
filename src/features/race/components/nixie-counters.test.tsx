@@ -114,6 +114,7 @@ describe("NixieCounters timer tube (#240 C1)", () => {
       );
       expect(tubes(out).map((t) => t.name)).toEqual(["wpm", "place"]);
       expect(out).not.toContain(EN.time);
+      expect(out).not.toContain("data-timer");
       expect(out).toContain('aria-label="Words per minute 42, place 4 of 30"');
     }
   });
@@ -127,6 +128,12 @@ describe("NixieCounters timer tube (#240 C1)", () => {
     expect(t[2]!.attrs).toContain("device-nixie");
     expect(out).toContain(">TIME<");
     expect(out).toContain('aria-label="Words per minute 42, place 4 of 30, 00:59 left"');
+    // three tubes go compact to fit the desktop gutter: numerals sized to the nixie slot (container)
+    expect(out).toMatch(/^<div[^>]*data-timer=""/);
+    const compact = rules.find((r) => r.selector === ".bezel[data-timer] .tube");
+    expect(compact?.body).toMatch(
+      /font-size:\s*clamp\(22px, calc\(\(100cqi - 92px\) \/ 4\.8\), 42px\)/,
+    );
     const fr = html(<NixieCounters wpm={0} place={null} total={2} remainingS={60} labels={FR} />);
     expect(fr).toContain(">TEMPS<");
     expect(fr).toContain(

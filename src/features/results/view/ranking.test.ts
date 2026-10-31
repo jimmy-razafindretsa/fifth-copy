@@ -15,7 +15,14 @@ const entry = (over: Partial<ReportEntry>): ReportEntry => ({
   progress: 1,
   finishedAtMs: 48_200,
   suspicious: false,
-  outfit: { hair: "crop", glasses: "none", hat: "none", clothes: "shirt", face: "none", hairCol: "x" },
+  outfit: {
+    hair: "crop",
+    glasses: "none",
+    hat: "none",
+    clothes: "shirt",
+    face: "none",
+    hairCol: "x",
+  },
   ...over,
 });
 
@@ -78,7 +85,12 @@ describe("rankingRowsFrom (#301 C1)", () => {
     );
     expect(rows.map((r) => r.statusKey)).toEqual([...REPORT_STATUSES]);
     const bot = rankingRowsFrom(entries, null).find((r) => r.desk === 2)!;
-    expect(bot).toMatchObject({ isBot: true, suspicious: true, name: "Typist Bot 2", initials: "TB" });
+    expect(bot).toMatchObject({
+      isBot: true,
+      suspicious: true,
+      name: "Typist Bot 2",
+      initials: "TB",
+    });
     expect(bot.avatarUrl).toBeUndefined();
   });
 });

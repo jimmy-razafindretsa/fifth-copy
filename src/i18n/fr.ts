@@ -366,6 +366,18 @@ export const fr = {
         bronze: "La médaille de bronze, en 3D, glisse pour la tourner",
       },
     },
+    ranking: {
+      caption: "FORMULAIRE 5-R · CLASSEMENT",
+      place: "RANG",
+      typist: "DACTYLO",
+      desk: "BUREAU",
+      wpm: "MPM",
+      accuracy: "PRÉCISION",
+      status: "STATUT",
+      bot: "BOT",
+      you: "TOI",
+      underReview: "EN VÉRIFICATION",
+    },
     status: {
       FINISHED: "CLASSÉ",
       TIMED_OUT: "TEMPS ÉCOULÉ",

@@ -114,6 +114,14 @@ module.exports = {
       to: { pathNot: ["^packages/(protocol|engine)/", "node_modules/zod"] },
     },
     {
+      name: "room-code-format-zod-free",
+      comment:
+        "@fifth-copy/protocol/room-code runs in client first loads (/, /lobby/[code]): type-only imports, no runtime zod (#675).",
+      severity: "error",
+      from: { path: "^packages/protocol/src/room-code-format\\.ts$" },
+      to: { dependencyTypesNot: ["type-only"] },
+    },
+    {
       name: "limiter-is-self-contained",
       comment:
         "The shared limiter is pure TypeScript over an injected Redis client: it imports only its own files (ADR 0020). Its tests bring a real client.",
@@ -160,10 +168,17 @@ module.exports = {
     },
     {
       name: "no-package-internals",
-      comment: "Workspace packages are consumed through their package entry point only.",
+      comment:
+        "Workspace packages are consumed through their package.json exports only: index.ts, plus @fifth-copy/protocol/room-code (#675).",
       severity: "error",
       from: { pathNot: "^packages/([^/]+)/" },
-      to: { path: "^packages/[^/]+/src/(?!index\\.ts$).+" },
+      to: {
+        path: "^packages/[^/]+/src/.+",
+        pathNot: [
+          "^packages/[^/]+/src/index\\.ts$",
+          "^packages/protocol/src/room-code-format\\.ts$",
+        ],
+      },
     },
     {
       name: "prisma-only-in-server",

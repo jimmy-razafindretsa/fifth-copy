@@ -1,0 +1,41 @@
+import type { z } from "zod";
+
+/**
+ * Zod-free room-code helpers, also published as `@fifth-copy/protocol/room-code` so client code
+ * (the join form) can use them without loading zod: the barrel builds every schema at module top
+ * level (#626, #675). `room-code.ts` re-exports them. Type-only imports here: no runtime zod
+ * (.dependency-cruiser.cjs `room-code-format-zod-free`).
+ */
+
+/** Room code: 3 letters (no I or O), a dash, 4 digits. Example: `KGB-4821`. */
+export const ROOM_CODE_RE = /^[A-HJ-NP-Z]{3}-[0-9]{4}$/;
+
+/** A validated room code; `roomCodeSchema` (room-code.ts) parses to exactly this branded type. */
+export type RoomCode = string & z.$brand<"RoomCode">;
+
+/**
+ * Input mask for a partially typed code: uppercases, keeps letters then digits only, inserts the
+ * dash after 3 letters, max 8 chars. `formatRoomCode("kgb4821x")` is `"KGB-4821"`.
+ */
+export function formatRoomCode(raw: string): string {
+  const upper = raw.toUpperCase();
+  let letters = "";
+  let digits = "";
+  for (const ch of upper) {
+    if (letters.length < 3) {
+      if (ch >= "A" && ch <= "Z") letters += ch;
+    } else if (digits.length < 4 && ch >= "0" && ch <= "9") {
+      digits += ch;
+    }
+  }
+  return letters.length === 3 && digits.length > 0 ? `${letters}-${digits}` : letters;
+}
+
+/**
+ * Normalizes a full code (case, missing dash, spaces); `null` when it is not a valid room code.
+ * Same result as `roomCodeSchema.safeParse(formatRoomCode(raw))`, without zod.
+ */
+export function parseRoomCode(raw: string): RoomCode | null {
+  const code = formatRoomCode(raw);
+  return ROOM_CODE_RE.test(code) ? (code as RoomCode) : null;
+}

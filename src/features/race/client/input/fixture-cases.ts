@@ -82,14 +82,13 @@ export function fixtureFileName(f: Pick<KeyEventFixture, "os" | "layout" | "case
 const ACCENT_CASES = FIXTURE_CASE_IDS.filter((c) => c !== "option-combos");
 
 /**
- * The minimum set C2 asserts: every accented case for CSA, French Canada and AZERTY on Windows and macOS,
- * plus the Option combos for US QWERTY on macOS (ChromeOS where a machine is available, not required).
+ * The minimum set C2 asserts (22 files): every accented case for CSA, French Canada and AZERTY on macOS,
+ * plus the Option combos for US QWERTY on macOS. Windows (and optional ChromeOS) recordings are #708,
+ * which extends this set; any such fixture already committed is still validated.
  */
 export const MINIMUM_FIXTURE_SET: string[] = [
-  ...(["windows", "macos"] as const).flatMap((os) =>
-    (["csa", "fr-ca", "azerty"] as const).flatMap((layout) =>
-      ACCENT_CASES.map((c) => fixtureFileName({ os, layout, case: c })),
-    ),
+  ...(["csa", "fr-ca", "azerty"] as const).flatMap((layout) =>
+    ACCENT_CASES.map((c) => fixtureFileName({ os: "macos", layout, case: c })),
   ),
   fixtureFileName({ os: "macos", layout: "us", case: "option-combos" }),
 ];

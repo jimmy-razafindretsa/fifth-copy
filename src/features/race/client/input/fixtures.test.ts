@@ -12,8 +12,8 @@ import {
 } from "./fixture-cases";
 
 // Contract of #566 C2: every recorded fixture parses with keyEventFixtureSchema, sits under its own
-// <os>-<layout>-<case>.json name, and the minimum set is on file. The fixtures are real recordings made on
-// Windows, macOS and ChromeOS machines (C3): never write one by hand to make this pass.
+// <os>-<layout>-<case>.json name, and the minimum set (22 macOS files) is on file. The fixtures are real
+// recordings made on a Mac (C3; Windows and ChromeOS are #708): never write one by hand to make this pass.
 const dir = path.join(process.cwd(), "src/features/race/client/input/fixtures");
 const files = existsSync(dir)
   ? readdirSync(dir)
@@ -66,9 +66,12 @@ describe("keyEventFixtureSchema (#566 C2)", () => {
       expect(keyEventFixtureSchema.safeParse(b).success, JSON.stringify(b)).toBe(false);
   });
 
-  it("names the minimum set: 7 cases x 3 layouts x Windows and macOS, plus macOS US Option combos", () => {
-    expect(MINIMUM_FIXTURE_SET).toHaveLength(43);
-    expect(MINIMUM_FIXTURE_SET).toContain("windows-csa-circumflex-e.json");
+  it("names the minimum set: 7 cases x 3 layouts on macOS, plus macOS US Option combos (22)", () => {
+    expect(MINIMUM_FIXTURE_SET).toHaveLength(22);
+    expect(new Set(MINIMUM_FIXTURE_SET).size).toBe(22);
+    expect(MINIMUM_FIXTURE_SET.every((f) => f.startsWith("macos-"))).toBe(true);
+    expect(MINIMUM_FIXTURE_SET).toContain("macos-csa-circumflex-e.json");
+    expect(MINIMUM_FIXTURE_SET).toContain("macos-fr-ca-u-grave.json");
     expect(MINIMUM_FIXTURE_SET).toContain("macos-azerty-guillemets.json");
     expect(MINIMUM_FIXTURE_SET).toContain("macos-us-option-combos.json");
   });
@@ -125,9 +128,10 @@ describe("recorded fixtures (#566 C2, recorded in C3)", () => {
     const missing = MINIMUM_FIXTURE_SET.filter((f) => !files.includes(f));
     expect(
       missing,
-      `${missing.length} of ${MINIMUM_FIXTURE_SET.length} fixtures still to record on real machines (C3): ` +
-        "open /design/keys, pick OS, browser, layout and case, type it, COPY FIXTURE, save as " +
-        `src/features/race/client/input/fixtures/<os>-<layout>-<case>.json. Missing:\n  ${missing.join("\n  ")}`,
+      `${missing.length} of ${MINIMUM_FIXTURE_SET.length} macOS fixtures still to record on a real Mac (C3): ` +
+        "select the layout in macOS, open /design/keys, pick OS, browser, layout and case, type it, " +
+        "COPY FIXTURE, save as src/features/race/client/input/fixtures/<os>-<layout>-<case>.json. " +
+        `Missing:\n  ${missing.join("\n  ")}`,
     ).toEqual([]);
   });
 });

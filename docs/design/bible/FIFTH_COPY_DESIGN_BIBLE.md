@@ -82,7 +82,7 @@ A Kahoot-style **multiplayer typing race** for secondary-school students (12–1
 |---|---|---|
 | `agit-red` | `#B81D24` | primary action, "you", stamps, flags (3D), active caret |
 | `banner` | `#7E1015` | pressed/hover red, red depth, halftone dots on red |
-| `ribbon-violet` | `#3E3A78` | rivals, text still to type (55% opacity), locked items |
+| `ribbon-violet` | `#3E3A78` | rivals (fills, rules), text still to type (55% opacity), locked items; a rival's own marker takes its rival ink (below) |
 | `medal-gold` | `#E2B23A` | rewards, bests, hover on dark, gold star cursor. **Sparingly (~2%)** |
 | `paper` | `#F1E8D6` | main ground |
 | `newsprint` | `#E4D6B8` | panels, cards, alternate sections |
@@ -91,6 +91,22 @@ A Kahoot-style **multiplayer typing race** for secondary-school students (12–1
 | `press-ink` | `#2A2420` | text, rules, borders, dark bands, footer ground |
 
 **Coverage on UI screens:** paper 55% · red 28% · ink 10% · violet 5% · gold 2%.
+
+**Rival inks** (extension, #565; spec 6.2, R80): twelve muted printing inks, one per colour index of the desk allocator (`Member.color` 0..11, #156), so 29 rivals stay apart without red. **Rival inks appear only on race-card markers, placards and scarves** (the 7.4a lane marker and field tick, the 3D placard and scarf of #267): never text, never a ground, never decoration, and never the only cue (the marker shape and the desk number travel with them). Red stays *you*: no rival ink is a red hue (HSL hue outside 340-20°). Light and Night shift are **two independent sets** (Night is not a mix of the light inks): each ink is 3:1 as a mark on its theme's paper and newsprint (3.3), and every pair stays CIE76 ΔE ≥ 12 apart under protanopia, deuteranopia and tritanopia simulation (Machado 2009; measured minima 15.3 light, 14.6 Night). Tokens `--color-rival-0` .. `--color-rival-11`; the owner approves the set (#565 C6).
+| Token | Light | Night shift |
+|---|---|---|
+| `rival-0` | `#977042` ochre | `#D6B170` ochre |
+| `rival-1` | `#4A2D08` umber | `#E8DAA1` straw |
+| `rival-2` | `#734918` burnt sienna | `#BBBD97` khaki |
+| `rival-3` | `#627A75` grey teal | `#CCDFC7` pale sage |
+| `rival-4` | `#0B6542` bottle green | `#739F6A` sage |
+| `rival-5` | `#053D28` forest | `#53A287` sea green |
+| `rival-6` | `#4977B5` steel blue | `#9DC0B9` grey teal |
+| `rival-7` | `#2F3240` slate | `#ADE3EA` pale aqua |
+| `rival-8` | `#3D4A87` indigo | `#86DBFF` sky |
+| `rival-9` | `#555368` grey violet | `#89B7FB` cornflower |
+| `rival-10` | `#827096` lavender | `#A189CB` lavender |
+| `rival-11` | `#46245A` plum | `#CAA2D1` lilac |
 
 ### 3.2 Night shift theme (dark)
 It is *not* black. It's a warm, readable grey-brown.
@@ -107,6 +123,7 @@ Extension (#651): the landing always opens on paper. Without a `theme` cookie th
 Text is 4.5:1 minimum. Never put muted text on red. On red grounds use paper or ink at full opacity.
 Red kicker and label text on Night shift uses night-ink (the link role): agit-red on the night ground is 1.76:1 (extension, #494).
 Red error text (the inline error line, 7.4) follows the same link role: agit-red on newsprint in light (5.0:1), night-ink on night newsprint on Night shift (extension, #99).
+Rival inks (3.1) are marks: 3.10 to 10.45:1 on paper and newsprint in light, 3.10 to 8.14:1 on night and night newsprint (WCAG 1.4.11 non-text 3:1; per-ink ratios in `docs/design/components.md` "Colour roles"; extension, #565).
 Violet rival marks (fills, rules such as the 7.4 docket rule) on Night shift use ribbon-violet mixed 50% with night-ink: ribbon-violet on the night ground is 1.13:1, the mix 3.86:1 on night and 3.20:1 on night newsprint (non-text 3:1, WCAG 1.4.11). Violet text stays the text-still-to-type roles; gold is never text on paper or newsprint (1.62:1), only on ink grounds (extension, #19).
 
 ---
@@ -221,8 +238,8 @@ Textures are opt-in, never on the page body (14 paints a flat paper body). Under
 
 ### 7.4a Race card (extension, #560; spec 6.2)
 The seat view's "where am I in the race": a HUD docket (7.4) in the left gutter, never over the teleprinter (layout #561, #564), `RACE CARD` / `FICHE DE COURSE` | `30 TYPISTS` / `30 DACTYLOS`. Rendered from `RaceCardView = { field, lanes }` (`src/features/race/view/race-card-view.ts`); it computes nothing (ADR 0007).
-- **Full-field line** under the header: a 2px ink rule with **one tick per player** at its progress (0..1). Rival ticks are 2 x 12 `rival` (ribbon-violet; the per-rival inks are #565); **yours is 6 x 18 agit-red with a 1px `fg` edge** (agit-red is 1.76:1 on the night ground: the night-ink edge carries the mark, 9.72:1). It ends in the **checkered finish**: 12 x 18, 6px squares from `repeating-conic-gradient(finish-ink 0 25%, finish-paper 0 50%)`, hard-edged, no blur (6), framed 1px `finish-ink`. `finish-ink` / `finish-paper` are the theme's ink and paper (press-ink / paper, Night shift night-ink / night). The line reads in words (`30 typists on the line, you at 61%`).
-- **Lanes**: 7.4 rows `120px | 1fr` with dashed separators, in rank order: left the rank (mono 500 14px, `04`) and `DESK 07` / `BUREAU 07` (the roll-row desk label); right the name (mono 15px, ellipsis), then the ink `YOU` / `TOI` tag on your lane, then the status label, and under them a hairline track (`border`) ending in a 2px ink post, the lane's **marker riding it** at its progress. Markers are inline SVG in a 12-unit box, `rival` fill (yours `you`) with a 1.5 `fg` stroke: **circle, square, triangle, diamond** (R80: shape plus desk number, colour never alone). Your name takes the red text role (`link`: red on paper, night-ink on Night shift). Status labels: an Oswald 10px `.16em` tag in a 1px muted hairline: `LINE CUT` / `LIGNE COUPÉE`, `ASLEEP AT DESK` / `ENDORMI AU BUREAU`, `REASSIGNED` / `RÉAFFECTÉ`, `FILED` / `CLASSÉ` (finished); typing shows none. Each lane reads in words: `Place 4, Lynx-785, desk 05, 41% typed, LINE CUT` (yours adds `YOU` after the name).
+- **Full-field line** under the header: a 2px ink rule with **one tick per player** at its progress (0..1). Rival ticks are 2 x 12 in the rival's ink (3.1 rival inks, #565: ink on the ticks, shape on the lanes); **yours is 6 x 18 agit-red with a 1px `fg` edge** (agit-red is 1.76:1 on the night ground: the night-ink edge carries the mark, 9.72:1). It ends in the **checkered finish**: 12 x 18, 6px squares from `repeating-conic-gradient(finish-ink 0 25%, finish-paper 0 50%)`, hard-edged, no blur (6), framed 1px `finish-ink`. `finish-ink` / `finish-paper` are the theme's ink and paper (press-ink / paper, Night shift night-ink / night). The line reads in words (`30 typists on the line, you at 61%`).
+- **Lanes**: 7.4 rows `120px | 1fr` with dashed separators, in rank order: left the rank (mono 500 14px, `04`) and `DESK 07` / `BUREAU 07` (the roll-row desk label); right the name (mono 15px, ellipsis), then the ink `YOU` / `TOI` tag on your lane, then the status label, and under them a hairline track (`border`) ending in a 2px ink post, the lane's **marker riding it** at its progress. Markers are inline SVG in a 12-unit box, filled with the rival's ink (3.1 rival inks, #565; yours `you`) with a 1.5 `fg` stroke: **circle, square, triangle, diamond** (R80: shape plus desk number, colour never alone). Ink and shape are the desk allocator's (`rivalIdentity`, #565): desks 1-12 are circles in the twelve inks, 13-24 squares, 25-30 triangles; diamonds start at desk 37. `/design#race-hud` shows the twelve inks in the four shapes beside your red. Your name takes the red text role (`link`: red on paper, night-ink on Night shift). Status labels: an Oswald 10px `.16em` tag in a 1px muted hairline: `LINE CUT` / `LIGNE COUPÉE`, `ASLEEP AT DESK` / `ENDORMI AU BUREAU`, `REASSIGNED` / `RÉAFFECTÉ`, `FILED` / `CLASSÉ` (finished); typing shows none. Each lane reads in words: `Place 4, Lynx-785, desk 05, 41% typed, LINE CUT` (yours adds `YOU` after the name).
 - **Lanes shown** (spec 6.2, selected by #564): every player up to 8; above 8 the top 3, the two just ahead of you, you and the two just behind. Re-selected on every 10 Hz snapshot, in the server's rank order; no lane animation (8). Mid-field that is 8 lanes, with you in the top 3 at most 5; before the first snapshot the line holds every typist at the start and no lanes.
 - **Compact** (tablets and small laptops: below 1280px, extension #564; about 208px wide): rows `84px | 1fr`; names go (they stay in the lane's words), markers, desk numbers, statuses, `YOU` and the field line stay.
 
@@ -501,7 +518,7 @@ Extensions (#497), the landing in the app:
 - **Fitting room:** hovering or clicking a locked item previews it on the clerk with a pulsing violet `FITTING ROOM · PREVIEW ONLY` tag. It is never saveable.
 
 ### 14.3 Next screens (to design using this bible)
-Sign-in / sign-up (guest, username + password + one-time recovery code, GitHub, Discord) · Lobby (seat ring diagram, host settings as a form, invite code/link docket, START) · Race seat view (3D POV + telex strip + nixie counters + race card + overtake stamps `ОБГОН! · OVERTAKE +1` / `ОБОГНАЛИ · PASSED −1`) · Projector view (overview + top-10 sidebar + rank plaques) · Results "Dawn report" (podium with medals pinned, full ranking, personal stats card, keyboard heatmap paper → gold → red) · Personnel file (profile/stats, enamel pins) · Settings · How to type special characters. **Reuse the components above. No new colours or fonts.**
+Sign-in / sign-up (guest, username + password + one-time recovery code, GitHub, Discord) · Lobby (seat ring diagram, host settings as a form, invite code/link docket, START) · Race seat view (3D POV + telex strip + nixie counters + race card + overtake stamps `ОБГОН! · OVERTAKE +1` / `ОБОГНАЛИ · PASSED −1`) · Projector view (overview + top-10 sidebar + rank plaques) · Results "Dawn report" (podium with medals pinned, full ranking, personal stats card, keyboard heatmap paper → gold → red) · Personnel file (profile/stats, enamel pins) · Settings · How to type special characters. **Reuse the components above. No new colours or fonts.** (The one exception is the twelve rival inks of 3.1, which R80 requires and the owner approves, #565.)
 
 Not found (#397): the in-world form 404, composed from the "your clerk" section (14.1 item 5). Left: a sun-ray stage (6) with **the Major** alone in 3D (10.3, `docs/design/embeds/Fifth Copy The Major.html`, served as `/3d/major.html`): breathing, head following the cursor page-wide (`fc-look`, 15), scanning and staring when left alone, leaning in on a click or `fc-stare`; no desk, no props, no cigarette or bottle (they stay set dressing of the room, 2). Right, on newsprint: kicker `MINISTRY OF TYPING · FORM 404`, H1 `ARE YOU LOST, KID?` / `T'ES PERDU, LE JEUNE ?` at the story-headline scale, a `FILE NOT FOUND` / `DOSSIER INTROUVABLE` stamp slamming in at −6° (7.3, 8; still under reduced motion), two deadpan sentences, a docket of rows `FORM | 404`, `STATUS | NOT ON FILE`, `DESK | UNASSIGNED` (7.4), then the primary stamp button `REPORT TO YOUR DESK` (to `/`) and the secondary `JOIN WITH CODE →` (to `/#play`). The header stays. Phones stack the stage over the file; the Major's `fc-look` only has a cursor on pointer devices, so phones see his idle scan.
 

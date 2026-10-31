@@ -7,7 +7,18 @@ import { expect, expectNoA11yViolations, test } from "../fixtures";
  */
 const RED = "rgb(184, 29, 36)";
 const NIXIE = "rgb(255, 154, 60)";
-const VIOLET = "rgb(62, 58, 120)";
+
+/** The computed colour a `--color-*` role resolves to on the page (theme applied), as `rgb(...)`. */
+async function roleColour(page: Page, role: string) {
+  return page.evaluate((r) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(--color-${r})`;
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  }, role);
+}
 
 const state = (page: Page, id: string) => page.locator(`[data-hud-state="${id}"]`);
 
@@ -65,7 +76,7 @@ test.describe("#560 race HUD on /design", () => {
     }
   });
 
-  test("C2 race card: one tick per player, your tick and lane red, rivals violet, checkered finish", async ({
+  test("C2 race card: one tick per player, your tick and lane red, rivals in their inks (#565), checkered finish", async ({
     page,
   }) => {
     await open(page);
@@ -75,13 +86,18 @@ test.describe("#560 race HUD on /design", () => {
     const you = thirty.locator('[data-tick][data-you="true"]');
     await expect(you).toHaveCount(1);
     expect((await styleOf(you)).bg).toBe(RED);
-    expect((await styleOf(thirty.locator("[data-tick]:not([data-you])").first())).bg).toBe(VIOLET);
+    // #565 C4: each rival tick and lane marker wears its identity ink, never red
+    const rivalTick = thirty.locator("[data-tick]:not([data-you])").first();
+    const tickInk = (await rivalTick.getAttribute("data-ink"))!;
+    expect(tickInk).toMatch(/^rival-\d+$/);
+    expect((await styleOf(rivalTick)).bg).toBe(await roleColour(page, tickInk));
+    expect((await styleOf(rivalTick)).bg).not.toBe(RED);
     const finish = await styleOf(thirty.locator("[data-finish]"));
     expect(finish.bgImage).toContain("repeating-conic-gradient");
     expect((await styleOf(thirty.locator('[data-lane][data-you="true"] svg'))).fill).toBe(RED);
-    expect((await styleOf(thirty.locator("[data-lane]:not([data-you]) svg").first())).fill).toBe(
-      VIOLET,
-    );
+    const rivalLane = thirty.locator("[data-lane]:not([data-you])").first();
+    const laneInk = (await rivalLane.getAttribute("data-ink"))!;
+    expect((await styleOf(rivalLane.locator("svg"))).fill).toBe(await roleColour(page, laneInk));
     // ticks sit along the line by progress: the finished desk at the end, yours mid-field
     const line = await thirty
       .locator("[data-tick]")
@@ -102,8 +118,9 @@ test.describe("#560 race HUD on /design", () => {
     for (const label of ["FILED", "LINE CUT", "ASLEEP AT DESK", "REASSIGNED"]) {
       await expect(statuses.getByText(label, { exact: true })).toBeVisible();
     }
-    for (const shape of ["circle", "square", "triangle", "diamond"]) {
-      await expect(statuses.locator(`svg[data-marker="${shape}"]`).first()).toBeVisible();
+    // the allocator gives desks 1-12 circles, 13-24 squares, 25-30 triangles (#156)
+    for (const shape of ["circle", "square", "triangle"]) {
+      await expect(thirty.locator(`svg[data-marker="${shape}"]`).first()).toBeVisible();
     }
   });
 
@@ -217,7 +234,7 @@ test.describe("#560 race HUD on /design", () => {
         await expect(stamps.getByText(text)).toBeVisible();
       }
       await expect(stamps.locator('[data-stamp-tone="ink"]')).toContainText("PASSED −1");
-      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(26);
+      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(27);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
       );
@@ -225,4 +242,46 @@ test.describe("#560 race HUD on /design", () => {
       await expectNoA11yViolations(page);
     });
   }
+});
+
+test.describe("#565 rival inks on /design#race-hud", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C5 the twelve inks in four shapes, you red, each its own theme value (${scheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await open(page);
+      const table = state(page, "rival-inks").locator("[data-rival-inks]");
+      await expect(table.locator("tbody tr")).toHaveCount(13);
+      await expect(table.locator("svg[data-marker]")).toHaveCount(13 * 4);
+      const fills = new Set<string>();
+      for (let i = 0; i < 12; i++) {
+        const row = table.locator(`[data-ink-row="rival-${i}"]`);
+        await expect(row.locator("code")).toHaveText(`rival-${i}`);
+        const expected = await roleColour(page, `rival-${i}`);
+        for (const shape of ["circle", "square", "triangle", "diamond"]) {
+          const marker = row.locator(`svg[data-marker="${shape}"]`);
+          await expect(marker).toBeVisible();
+          expect((await styleOf(marker)).fill).toBe(expected);
+        }
+        expect(expected).not.toBe(RED);
+        fills.add(expected);
+      }
+      expect(fills.size).toBe(12);
+      expect((await styleOf(table.locator('[data-ink-row="you"] svg').first())).fill).toBe(RED);
+    });
+  }
+
+  test("C1 the Night shift set is its own, not the light set", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await open(page);
+    const light = await Promise.all(
+      Array.from({ length: 12 }, (_, i) => roleColour(page, `rival-${i}`)),
+    );
+    await page.emulateMedia({ colorScheme: "dark" });
+    const night = await Promise.all(
+      Array.from({ length: 12 }, (_, i) => roleColour(page, `rival-${i}`)),
+    );
+    expect(light.filter((c) => night.includes(c))).toEqual([]);
+  });
 });

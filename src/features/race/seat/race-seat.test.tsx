@@ -29,7 +29,7 @@ describe("race catalogs (#561 C6)", () => {
     ["en", en.race, hudLabelFixtures.en],
     ["fr", fr.race, hudLabelFixtures.fr],
   ] as const)("%s: the HUD copy is the bible's (hudLabelFixtures)", (_, race, hud) => {
-    expect(race.nixie).toEqual(hud.nixie);
+    expect(race.counters).toEqual(hud.nixie);
     expect(race.raceCard).toEqual(hud.raceCard);
     expect(race.sabotageTray).toEqual(hud.sabotageTray);
     expect(race.abandon).toEqual(hud.abandon);

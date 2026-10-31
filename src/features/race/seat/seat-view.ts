@@ -30,7 +30,8 @@ export type RaceSeatLabels = {
   notice: RaceNoticeLabels & { phones: string };
   errors: SeatErrorLabels;
   abandon: AbandonLabels;
-  nixie: NixieLabels;
+  /** The nixie counters (#225): the tube tags and the words their `aria-label` reads. */
+  counters: NixieLabels;
   raceCard: RaceCardLabels;
   sabotageTray: SabotageTrayLabels;
 };

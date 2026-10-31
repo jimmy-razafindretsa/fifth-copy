@@ -297,7 +297,7 @@ export const fr = {
       back: "RETOUR À LA SALLE D'ATTENTE →",
     },
     abandon: { abandon: "ABANDONNER", confirm: "CONFIRMER · ME RÉAFFECTER" },
-    nixie: {
+    counters: {
       wpm: "MPM",
       place: "RANG",
       aria: "Mots par minute {wpm}, rang {place} sur {total}",

@@ -1,7 +1,13 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { z } from "zod";
 import * as subpath from "@fifth-copy/protocol/room-code";
-import { formatRoomCode, parseRoomCode, ROOM_CODE_RE, roomCodeSchema } from "./index";
+import {
+  formatRoomCode,
+  parseRoomCode,
+  ROOM_CODE_RE,
+  roomCodeSchema,
+  type RoomCode,
+} from "./index";
 
 describe("room code", () => {
   it.each([
@@ -52,10 +58,9 @@ describe("@fifth-copy/protocol/room-code (zod-free subpath)", () => {
     expect(subpath.parseRoomCode).toBe(parseRoomCode);
   });
 
-  it("imports nothing at runtime (no zod)", () => {
-    const src = readFileSync(new URL("./room-code-format.ts", import.meta.url), "utf8");
-    const runtimeImports = src.match(/^import(?! type)[^;]*;/gm) ?? [];
-    expect(runtimeImports).toEqual([]);
+  it("RoomCode is the type roomCodeSchema parses to", () => {
+    expectTypeOf<z.output<typeof roomCodeSchema>>().toEqualTypeOf<RoomCode>();
+    expectTypeOf<subpath.RoomCode>().toEqualTypeOf<RoomCode>();
   });
 
   it.each(["kgb-4821", "KGB4821", " kgb 4821 ", "KOB-4821", "KGB-482", "", "abc-00001"])(

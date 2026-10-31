@@ -1,15 +1,17 @@
-import type { RoomCode } from "./room-code";
+import type { z } from "zod";
 
 /**
  * Zod-free room-code helpers, also published as `@fifth-copy/protocol/room-code` so client code
  * (the join form) can use them without loading zod: the barrel builds every schema at module top
- * level (#626, #675). `room-code.ts` re-exports them; keep runtime imports out of this file.
+ * level (#626, #675). `room-code.ts` re-exports them. Type-only imports here: no runtime zod
+ * (.dependency-cruiser.cjs `room-code-format-zod-free`).
  */
 
 /** Room code: 3 letters (no I or O), a dash, 4 digits. Example: `KGB-4821`. */
 export const ROOM_CODE_RE = /^[A-HJ-NP-Z]{3}-[0-9]{4}$/;
 
-export type { RoomCode };
+/** A validated room code; `roomCodeSchema` (room-code.ts) parses to exactly this branded type. */
+export type RoomCode = string & z.$brand<"RoomCode">;
 
 /**
  * Input mask for a partially typed code: uppercases, keeps letters then digits only, inserts the

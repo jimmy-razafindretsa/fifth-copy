@@ -68,6 +68,7 @@ function fakeSocket() {
     sendKeys: vi.fn(),
     onSnapshot: bind("snapshot"),
     onEvent: bind("event"),
+    onEnded: bind("ended"),
     onRejected: bind("rejected"),
     onProtocolError: bind("protocolError"),
     onConnectError: bind("connectError"),

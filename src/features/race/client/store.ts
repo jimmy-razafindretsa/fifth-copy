@@ -77,6 +77,14 @@ export type RaceState = {
   stamps: readonly RaceStamp[];
   /** The last stamp id handed out (ids stay unique across resets, so each stamp remounts and slams). */
   stampSeq: number;
+  /**
+   * The server's `ended` (#240, ADR 0006): its reason and final ranking, as sent. `null` until the race
+   * ends, and after a reload that finds the room ended (a `welcome` carries no ranking). Reset by every
+   * `welcome` and `countdown`.
+   */
+  ending: RoomEvents["ended"] | null;
+  /** This device's clock when `ended` arrived (the `event.at` convention); `null` with `ending`. */
+  endedAt: number | null;
 };
 
 /**
@@ -102,6 +110,11 @@ export type RaceEvent =
   | { type: "snapshot"; payload: RoomEvents["snapshot"] }
   /** A discrete race happening (#232): `overtake` / `passed` of your desk queue a stamp; `at` = device clock. */
   | { type: "event"; payload: RoomEvents["event"]; at: number }
+  /**
+   * The server ended the race (#240): one case whatever the reason (`all-finished`, `timer`, `void`);
+   * the store never switches on it, the view does (#661 adds the lost-room notice for `void`).
+   */
+  | { type: "ended"; payload: RoomEvents["ended"]; at: number }
   /** The visible stamp's time is up (scheduled by `watchStampExpiry`). */
   | { type: "stamp-expired"; id: number; at: number }
   | { type: "connect-error"; reason: ConnectErrorReason }
@@ -129,6 +142,8 @@ export const initialRaceState: RaceState = {
   lastKey: null,
   stamps: [],
   stampSeq: 0,
+  ending: null,
+  endedAt: null,
 };
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -199,6 +214,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         lastKey: null,
         stamps: [],
         stampSeq: state.stampSeq,
+        ending: null,
+        endedAt: null,
       };
     }
     case "roster":
@@ -222,6 +239,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         ranks: [],
         lastKey: null,
         stamps: [],
+        ending: null,
+        endedAt: null,
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -252,8 +271,18 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         prediction = prediction.reconcile(server, prediction.ackedBy(server, t));
       return { ...state, desks, ranks, prediction };
     }
+    case "ended":
+      // reason-agnostic (#240, #661): the phase, the server's ranking as sent and when it arrived; the
+      // visible stamp keeps its 1.4 s (a finish stamp may still be on screen)
+      return {
+        ...state,
+        phase: "ended",
+        room: state.room && { ...state.room, phase: "ended" },
+        ending: event.payload,
+        endedAt: event.at,
+      };
     case "event": {
-      const stamp = stampFromEvent(event.payload, state.you);
+      const stamp = stampFromEvent(event.payload, state.you, state.prediction?.state.errors ?? 0);
       if (!stamp) return state;
       const id = state.stampSeq + 1;
       const stamps = pushStamp(state.stamps, { id, ...stamp, at: event.at });
@@ -403,6 +432,7 @@ export function bindRaceSocket(
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onSnapshot((payload) => dispatch({ type: "snapshot", payload })),
     socket.onEvent((payload) => dispatch({ type: "event", payload, at: timer.now() })),
+    socket.onEnded((payload) => dispatch({ type: "ended", payload, at: timer.now() })),
     socket.onCountdown((payload) => {
       dispatch({ type: "countdown", payload });
       scheduleGo(payload.race.t0);

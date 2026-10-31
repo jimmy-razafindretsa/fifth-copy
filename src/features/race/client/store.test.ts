@@ -7,6 +7,7 @@ import {
   PROTOCOL_VERSION,
   roomCodeSchema,
   type Countdown,
+  type Ended,
   type Member,
   type Roster,
   type Snapshot,
@@ -102,6 +103,9 @@ describe("reduceRace (#561 C2)", () => {
       // #232: the overtake stamps
       stamps: [],
       stampSeq: 0,
+      // #240: the server's end
+      ending: null,
+      endedAt: null,
     });
   });
 
@@ -363,6 +367,7 @@ describe("bindRaceSocket (#561 C3)", () => {
     expect([...fake.listeners.keys()].sort()).toEqual([
       "connect_error",
       "countdown",
+      "ended",
       "event",
       "roster",
       "settings",
@@ -1245,5 +1250,146 @@ describe("#232 overtake stamps", () => {
     expect(dispatch.mock.calls.map(([e]) => e)).toEqual([
       { type: "event", payload: overtake(3), at: T + 42 },
     ]);
+  });
+});
+
+// Contract of #240 C3 (and the store half of C2): one reason-agnostic `ended` case sets phase `ended`
+// with the server's ranking as sent and the device time it arrived; `welcome` and `countdown` reset it.
+// The server's `finished` of your desk queues the finish stamp of bible 7.7 through the #232 queue.
+describe("#240 ended and the finish stamp", () => {
+  const T = 1_767_225_600_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "ab cd",
+    language: "en" as const,
+    wordCount: 2,
+    t0: T + 3_000,
+    timerS: 60,
+  };
+  const entry = (place: number, desk: number, status: "finished" | "typing" | "asleep") => ({
+    place,
+    desk,
+    name: `Lynx-${100 + desk}`,
+    isBot: false,
+    status,
+    wpm: 52.4,
+    rawWpm: 55,
+    accuracy: 0.97,
+    progress: status === "finished" ? 1 : 0.4,
+    finishedAt: status === "finished" ? 12_000 : null,
+  });
+  const endedPayload = (
+    reason: "all-finished" | "timer" | "void" = "timer",
+    ranking: Ended["ranking"] = [entry(1, 2, "finished"), entry(2, 1, "typing")],
+  ): Ended => ({ v: PROTOCOL_VERSION, raceId: RACE.raceId, reason, ranking });
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const running = () =>
+    reduceRace(reduceRace(run({ type: "welcome", payload: welcome() }), countdown), {
+      type: "go",
+    });
+  const ended = (payload = endedPayload(), at = T + 70_000): RaceEvent => ({
+    type: "ended",
+    payload,
+    at,
+  });
+  const press = (s: RaceState, chars: string, from = 100) =>
+    Array.from(chars).reduce(
+      (acc, key, i) => reduceRace(acc, { type: "key", keystroke: { t: from + i * 100, key } }),
+      s,
+    );
+  const finished = (desk = 5, place = 1): RaceEvent => ({
+    type: "event",
+    payload: { v: PROTOCOL_VERSION, kind: "finished", desk, place },
+    at: T + 9_000,
+  });
+
+  it("sets phase ended with the server ranking as sent and the device time, for every reason", () => {
+    const s = running();
+    for (const reason of ["all-finished", "timer", "void"] as const) {
+      const payload = endedPayload(reason);
+      const next = reduceRace(s, ended(payload, T + 61_000));
+      expect(next.phase).toBe("ended");
+      expect(next.room?.phase).toBe("ended");
+      expect(next.ending).toBe(payload);
+      expect(next.endedAt).toBe(T + 61_000);
+      // nothing else is recomputed or dropped (ADR 0007): the prediction, the desks, the ranks stay
+      expect(next.prediction).toBe(s.prediction);
+      expect(next.ranks).toBe(s.ranks);
+    }
+    // a race ended with no finisher (every desk asleep) is still an end (the 2026-10-29 finding)
+    const asleep = endedPayload("all-finished", [entry(1, 1, "asleep"), entry(2, 2, "asleep")]);
+    expect(reduceRace(s, ended(asleep)).phase).toBe("ended");
+  });
+
+  it("locks typing, keeps the visible stamp, and is reset by countdown and welcome", () => {
+    const s = reduceRace(running(), finished());
+    expect(s.stamps).toHaveLength(1);
+    const over = reduceRace(s, ended());
+    expect(selectCanType(over)).toBe(false);
+    expect(reduceRace(over, { type: "key", keystroke: { t: 9_000, key: "a" } })).toBe(over);
+    expect(over.stamps).toBe(s.stamps);
+    const again = reduceRace(over, countdown);
+    expect(again).toMatchObject({ phase: "countdown", ending: null, endedAt: null });
+    const reloaded = reduceRace(over, { type: "welcome", payload: welcome() });
+    expect(reloaded).toMatchObject({ ending: null, endedAt: null });
+    // GO never revives an ended race
+    expect(reduceRace(over, { type: "go" })).toBe(over);
+  });
+
+  it("your desk's finished event queues ACCEPTED with zero errors, RETURNED with your error count", () => {
+    const clean = reduceRace(press(running(), "ab cd"), finished());
+    expect(clean.prediction!.state.status).toBe("finished");
+    expect(clean.stamps.map(({ kind, other, errors }) => ({ kind, other, errors }))).toEqual([
+      { kind: "accepted", other: 5, errors: 0 },
+    ]);
+    const sloppy = reduceRace(press(running(), "xb cdx"), finished());
+    expect(sloppy.prediction!.state.errors).toBeGreaterThan(0);
+    expect(sloppy.stamps.map(({ kind, errors }) => ({ kind, errors }))).toEqual([
+      { kind: "returned", errors: sloppy.prediction!.state.errors },
+    ]);
+    // another desk's finish, and a spectator, stamp nothing
+    const s = running();
+    expect(reduceRace(s, finished(3, 1))).toBe(s);
+    const spectator = run({ type: "welcome", payload: welcome({ role: "spectator", you: null }) });
+    expect(reduceRace(spectator, finished())).toBe(spectator);
+  });
+
+  it("the finish stamp follows the #232 queue: it waits behind a visible overtake stamp", () => {
+    let s = reduceRace(running(), {
+      type: "event",
+      payload: { v: PROTOCOL_VERSION, kind: "overtake", desk: 5, passed: 3 },
+      at: T + 8_800,
+    });
+    s = reduceRace(s, finished());
+    expect(s.stamps.map((x) => x.kind)).toEqual(["overtake", "accepted"]);
+    expect(s.stamps[1]!.shownAt).toBe(T + 8_800 + 1_400);
+  });
+
+  it("bindRaceSocket turns a parsed `ended` into an ended event stamped with the device clock", () => {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    const room = connectToRoom("http://localhost:7240", "tok", { io });
+    const dispatch = vi.fn();
+    const off = bindRaceSocket(room, dispatch, {
+      timer: { now: () => T + 42, setTimeout: () => 0, clearTimeout: () => {} },
+    });
+    const payload = endedPayload();
+    for (const fn of listeners.get("ended") ?? []) fn(payload);
+    // an invalid payload is dropped at the edge
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const fn of listeners.get("ended") ?? []) fn({ v: PROTOCOL_VERSION, reason: "timer" });
+    expect(dispatch.mock.calls.map(([e]) => e)).toEqual([{ type: "ended", payload, at: T + 42 }]);
+    off();
+    expect(listeners.get("ended")?.size ?? 0).toBe(0);
   });
 });

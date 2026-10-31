@@ -47,6 +47,20 @@
   --color-link: var(--t-link);
   --color-untyped: var(--t-untyped);
   --color-rival: var(--t-rival);
+  /* the twelve rival inks (#565, bible 3.1): a rival's race-card marker, placard and scarf, picked by the
+     desk allocator's colour index (`rival-<Member.color>`); themed below, two independent sets */
+  --color-rival-0: var(--t-rival-0);
+  --color-rival-1: var(--t-rival-1);
+  --color-rival-2: var(--t-rival-2);
+  --color-rival-3: var(--t-rival-3);
+  --color-rival-4: var(--t-rival-4);
+  --color-rival-5: var(--t-rival-5);
+  --color-rival-6: var(--t-rival-6);
+  --color-rival-7: var(--t-rival-7);
+  --color-rival-8: var(--t-rival-8);
+  --color-rival-9: var(--t-rival-9);
+  --color-rival-10: var(--t-rival-10);
+  --color-rival-11: var(--t-rival-11);
 
   /* theme-invariant roles: reds and gold never change, the tape stays tape-paper (bible 3.2); rival is
      themed above: its Night shift marks lighten ribbon-violet to 3:1 on the night grounds (#19) */
@@ -162,6 +176,20 @@
   --t-link: var(--brand-agit-red);
   --t-untyped: color-mix(in srgb, var(--brand-ribbon-violet) 85%, var(--brand-paper));
   --t-rival: var(--brand-ribbon-violet);
+  /* rival inks (#565): muted, never red, 3:1 on paper and newsprint, CIE76 >= 12 apart under protan,
+     deutan and tritan simulation (src/features/race/view/colour-blind.test.ts) */
+  --t-rival-0: #977042;
+  --t-rival-1: #4A2D08;
+  --t-rival-2: #734918;
+  --t-rival-3: #627A75;
+  --t-rival-4: #0B6542;
+  --t-rival-5: #053D28;
+  --t-rival-6: #4977B5;
+  --t-rival-7: #2F3240;
+  --t-rival-8: #3D4A87;
+  --t-rival-9: #555368;
+  --t-rival-10: #827096;
+  --t-rival-11: #46245A;
   --t-finish-ink: var(--brand-press-ink);
   --t-finish-paper: var(--brand-paper);
 }
@@ -187,6 +215,18 @@
     --t-link: var(--brand-night-ink);
     --t-untyped: var(--brand-night-muted);
     --t-rival: color-mix(in srgb, var(--brand-ribbon-violet) 50%, var(--brand-night-ink));
+    --t-rival-0: #D6B170;
+    --t-rival-1: #E8DAA1;
+    --t-rival-2: #BBBD97;
+    --t-rival-3: #CCDFC7;
+    --t-rival-4: #739F6A;
+    --t-rival-5: #53A287;
+    --t-rival-6: #9DC0B9;
+    --t-rival-7: #ADE3EA;
+    --t-rival-8: #86DBFF;
+    --t-rival-9: #89B7FB;
+    --t-rival-10: #A189CB;
+    --t-rival-11: #CAA2D1;
     --t-finish-ink: var(--brand-night-ink);
     --t-finish-paper: var(--brand-night);
   }
@@ -208,6 +248,18 @@
   --t-link: var(--brand-night-ink);
   --t-untyped: var(--brand-night-muted);
   --t-rival: color-mix(in srgb, var(--brand-ribbon-violet) 50%, var(--brand-night-ink));
+  --t-rival-0: #D6B170;
+  --t-rival-1: #E8DAA1;
+  --t-rival-2: #BBBD97;
+  --t-rival-3: #CCDFC7;
+  --t-rival-4: #739F6A;
+  --t-rival-5: #53A287;
+  --t-rival-6: #9DC0B9;
+  --t-rival-7: #ADE3EA;
+  --t-rival-8: #86DBFF;
+  --t-rival-9: #89B7FB;
+  --t-rival-10: #A189CB;
+  --t-rival-11: #CAA2D1;
   --t-finish-ink: var(--brand-night-ink);
   --t-finish-paper: var(--brand-night);
 }

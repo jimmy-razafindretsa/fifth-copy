@@ -65,7 +65,7 @@ export function FinishedView({ mode, value, rows, report, labels }: FinishedView
       ) : null}
       {report === null ? null : (
         <div className={styles.actions}>
-          <a href={report} className={docket.ink}>
+          <a href={report} className={cn(docket.ink, styles.report)}>
             {labels.report}
           </a>
         </div>

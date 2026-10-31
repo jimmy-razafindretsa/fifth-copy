@@ -104,8 +104,6 @@
 /* the 7.1 ink button (Oswald 600 13px, ink ground and paper text, hover red), at least 44px tall (bible
    18): Abandon's confirm (#560) and the finished view's DAWN REPORT link (#240) */
 .ink {
-  display: inline-flex;
-  align-items: center;
   @apply type-label;
   font-size: 13px;
   line-height: normal;
@@ -115,7 +113,6 @@
   border: 2px solid var(--color-fg);
   background: var(--color-fg);
   color: var(--color-bg);
-  text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
 }

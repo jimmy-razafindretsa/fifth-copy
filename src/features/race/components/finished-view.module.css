@@ -109,6 +109,13 @@
   white-space: nowrap;
 }
 
+/* the ink button as a link: centred in its 44px, no underline */
+.report {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;

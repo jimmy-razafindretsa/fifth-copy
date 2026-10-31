@@ -11,10 +11,9 @@ export { DawnReportLayout, DawnReportScreen } from "./components/dawn-report-scr
 export { filingLabels, podiumLabels } from "./view/report-labels";
 export { FilingNoticeView } from "./components/filing-notice-view";
 export { Podium, type PodiumProps } from "./components/podium";
+export { dawnReportFixtures, type DawnReportFixture } from "./view/dawn-report-fixtures";
 export {
-  dawnReportFixtures,
   type DawnReport,
-  type DawnReportFixture,
   MEDAL_VARIANTS,
   type MedalVariant,
   type PodiumLabels,

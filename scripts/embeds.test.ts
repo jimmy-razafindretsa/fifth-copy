@@ -272,3 +272,165 @@ describe("clerk page messages (#687)", () => {
     expect(look()).toEqual([0, 0]);
   });
 });
+
+// #688 C2: the plinth clerk, an app embed built from the clerk and the medal references. The flag reader
+// and the message listener are run from the served page's own source with stubbed globals.
+describe("podium clerk page (#688)", () => {
+  const page = fs.readFileSync(path.join(EMBED_DIR, "podium-clerk.html"), "utf8");
+  const source = (re: RegExp) => {
+    const m = re.exec(page);
+    if (!m) throw new Error(`not found: ${re}`);
+    return m[0];
+  };
+  const cats = source(/const CATS = \{[\s\S]*?\n\};/);
+  const hairCol = source(/const HAIRCOL = \[[^\]]*\];/);
+  const checkCfg = source(/function checkCfg\(v\) \{[\s\S]*?\n\}/);
+  const cfgFlag = source(/function cfgFlag\(\) \{[\s\S]*?\n\}/);
+  const listener = source(/addEventListener\('message', e => \{[\s\S]*?\n\}\);/);
+  const origin = "https://fifth-copy.test";
+  const parentWindow = {};
+  const saved = {
+    hair: "quiff",
+    glasses: "monocle",
+    hat: "beret",
+    clothes: "jacket",
+    face: "beard",
+    hairCol: "#A4552A",
+  };
+  const flag = (v: unknown) => new URLSearchParams(`cfg=${encodeURIComponent(JSON.stringify(v))}`);
+
+  it("is generated from its app embed by scripts/embeds.ts, with no third-party URL", () => {
+    expect(EMBEDS).toContainEqual({
+      source: "docs/design/embeds/Fifth Copy Podium Clerk.html",
+      target: "podium-clerk.html",
+    });
+    expect(page.split("\n")[1]).toContain("Fifth Copy Podium Clerk.html; do not edit");
+    expect(page).not.toMatch(/https?:\/\/(?!www\.w3\.org\/)/);
+  });
+
+  it("reads ?embed=1, ?variant= (default gold) and knows the three metal pairs of bible 13", () => {
+    expect(page).toContain("renderer.setPixelRatio(flags.get('embed') === '1' ? 1 :");
+    expect(page).toContain(
+      "let variant = isVariant(flags.get('variant')) ? flags.get('variant') : 'gold';",
+    );
+    expect(page).toContain("gold: { base: 0xE2B23A, dark: 0xB8862A }");
+    expect(page).toContain("silver: { base: 0xC9CCD1, dark: 0x8E9298 }");
+    expect(page).toContain("bronze: { base: 0xB87333, dark: 0x7A4A21 }");
+    expect(page).toContain("issue(cfgFlag());");
+  });
+
+  it.each([
+    ["a valid outfit", flag(saved), saved],
+    ["extra keys (kept: the six known)", flag({ ...saved, onload: "x" }), saved],
+    ["absent", new URLSearchParams(""), undefined],
+    ["not JSON", new URLSearchParams("cfg=%7Bnope"), undefined],
+    ["an unknown id", flag({ ...saved, hat: "crown" }), undefined],
+    ["a markup id", flag({ ...saved, hair: "<img src=x onerror=alert(1)>" }), undefined],
+    ["an unknown colour", flag({ ...saved, hairCol: "#FFFFFF" }), undefined],
+  ])("?cfg= %s", (_name, flags, expected) => {
+    const run = new Function(
+      "flags",
+      `${cats}\n${hairCol}\n${checkCfg}\n${cfgFlag}\nreturn cfgFlag();`,
+    );
+    expect(run(flags)).toEqual(expected);
+  });
+
+  function mount(worn: unknown = saved) {
+    let handler: ((e: unknown) => void) | undefined;
+    const calls: unknown[][] = [];
+    const run = new Function(
+      "addEventListener",
+      "location",
+      "parent",
+      "issue",
+      "play",
+      "setVariant",
+      "syncMotion",
+      "worn",
+      `${cats}\n${hairCol}\n${checkCfg}\n` +
+        "const isVariant = v => ['gold', 'silver', 'bronze'].includes(v);\n" +
+        "const same = (a, b) => !!a && !!b && Object.keys(a).every(k => a[k] === b[k]);\n" +
+        `let pageReduce = false; const reduced = () => pageReduce;\n${listener}\nreturn () => pageReduce;`,
+    );
+    const reduce = run(
+      (type: string, fn: (e: unknown) => void) => type === "message" && (handler = fn),
+      { origin },
+      parentWindow,
+      (c: unknown) => calls.push(["issue", c]),
+      (n: unknown) => calls.push(["play", n]),
+      (v: unknown) => calls.push(["variant", v]),
+      () => calls.push(["motion"]),
+      worn,
+    ) as () => boolean;
+    return { send: (e: unknown) => handler!(e), calls, reduce };
+  }
+  const other = { ...saved, hat: "ushanka" };
+
+  it("applies fc-setcfg (rebuild + tryon), fc-medal-variant and fc-motion from its parent", () => {
+    const { send, calls, reduce } = mount();
+    send({ origin, source: parentWindow, data: { type: "fc-setcfg", cfg: other } });
+    send({ origin, source: parentWindow, data: { type: "fc-medal-variant", variant: "bronze" } });
+    send({ origin, source: parentWindow, data: { type: "fc-motion", reduce: true } });
+    expect(calls).toEqual([["issue", other], ["play", "tryon"], ["variant", "bronze"], ["motion"]]);
+    expect(reduce()).toBe(true);
+  });
+
+  it("ignores an fc-setcfg that is invalid or the outfit already worn, and unknown variants", () => {
+    const { send, calls } = mount();
+    send({ origin, source: parentWindow, data: { type: "fc-setcfg", cfg: saved } });
+    send({
+      origin,
+      source: parentWindow,
+      data: { type: "fc-setcfg", cfg: { ...saved, hat: "x" } },
+    });
+    send({ origin, source: parentWindow, data: { type: "fc-medal-variant", variant: "platinum" } });
+    send({ origin, source: parentWindow, data: { type: "fc-motion", reduce: "yes" } });
+    send({ origin, source: parentWindow, data: null });
+    expect(calls).toEqual([]);
+  });
+
+  it.each([
+    ["another origin", { origin: "https://elsewhere.test", source: parentWindow }],
+    ["the opaque origin", { origin: "null", source: parentWindow }],
+    ["another window at its own origin", { origin, source: {} }],
+  ])("ignores every message from %s", (_name, from) => {
+    const { send, calls, reduce } = mount();
+    send({ ...from, data: { type: "fc-setcfg", cfg: other } });
+    send({ ...from, data: { type: "fc-medal-variant", variant: "silver" } });
+    send({ ...from, data: { type: "fc-motion", reduce: true } });
+    expect(calls).toEqual([]);
+    expect(reduce()).toBe(false);
+  });
+
+  it("posts fc-clerk to its parent's origin only after the build's first drawn frame, then marks ready", () => {
+    expect(page).toContain(
+      "renderer.render(scene, camera);\n  if (announce) { parent.postMessage({ type: 'fc-clerk', cfg: announce }, location.origin); announce = null; root.dataset.ready = '1'; }",
+    );
+    expect(page).not.toContain("'*')");
+    expect(page).toContain(
+      "worn = c; Object.keys(CATS).forEach(k => { document.documentElement.dataset[k] = c[k]; });",
+    );
+  });
+
+  it("stops its loop while the tab is hidden and resumes on visibilitychange", () => {
+    expect(page).toContain("frame = document.hidden ? 0 : requestAnimationFrame(loop);");
+    expect(page).toContain(
+      "document.addEventListener('visibilitychange', () => { if (!document.hidden && !frame)",
+    );
+  });
+
+  it("salutes first, idles without hop, and under reduced motion neither gestures nor breathes", () => {
+    expect(page).toContain(
+      "play(saluted ? IDLE[Math.floor(Math.random() * IDLE.length)] : 'salute')",
+    );
+    expect(page).not.toMatch(/\bhop\b/);
+    expect(page).toContain("if (still) act = null;");
+    expect(page).toContain("C0.body.scale.set(still ? 1 : 1 + Math.sin(t * 1.6) * 0.008, 1, 1);");
+    expect(page).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
+  });
+
+  it("draws no text in WebGL and takes no pointer or orbit input", () => {
+    expect(page).not.toMatch(/fillText|\.font = |fonts\.load|embed-fonts/);
+    expect(page).not.toMatch(/pointermove|pointerdown|OrbitControls|fc-look|fc-reissue/);
+  });
+});

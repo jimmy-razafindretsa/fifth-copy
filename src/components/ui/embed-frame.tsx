@@ -11,6 +11,8 @@ type Props = {
   className?: string;
   /** Decorative frames (the live feed) are hidden from assistive tech and the tab order. */
   decorative?: boolean;
+  /** Keep the frame idle even near the viewport (a staggered mount: the podium's plinths, #688). */
+  hold?: boolean;
   ref?: Ref<HTMLIFrameElement>;
 };
 
@@ -19,9 +21,17 @@ type Props = {
  * the page's first paint never waits for three.js; `loading="lazy"` covers browsers that skip the
  * observer. Pair it with `useEmbedBridge` for the postMessage protocol (bible 15).
  */
-export function EmbedFrame({ src, title, className, decorative = false, ref }: Props) {
+export function EmbedFrame({
+  src,
+  title,
+  className,
+  decorative = false,
+  hold = false,
+  ref,
+}: Props) {
   const inner = useRef<HTMLIFrameElement | null>(null);
   const near = useNearViewport(inner);
+  const mounted = near && !hold;
 
   const setRef = useCallback(
     (node: HTMLIFrameElement | null) => {
@@ -36,12 +46,12 @@ export function EmbedFrame({ src, title, className, decorative = false, ref }: P
     <iframe
       ref={setRef}
       title={title}
-      src={near ? src : undefined}
+      src={mounted ? src : undefined}
       loading="lazy"
       className={cn(styles.embed, className)}
       aria-hidden={decorative || undefined}
       tabIndex={decorative ? -1 : undefined}
-      data-embed={near ? "mounted" : "idle"}
+      data-embed={mounted ? "mounted" : "idle"}
     />
   );
 }

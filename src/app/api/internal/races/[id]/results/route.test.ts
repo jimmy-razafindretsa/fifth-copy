@@ -17,9 +17,11 @@ import { internalHeaders } from "@/server/internal-api/sign";
 // ADR 0003: DB-backed tests target the test database, not the app env.
 // eslint-disable-next-line no-restricted-properties
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const SECRET = "internal-results-route-test-secret-0123456789";
-
-const state = vi.hoisted(() => ({ db: null as unknown }));
+// hoisted with the env mock: the results barrel reaches @/env early (through identity, #688)
+const { SECRET, state } = vi.hoisted(() => ({
+  SECRET: "internal-results-route-test-secret-0123456789",
+  state: { db: null as unknown },
+}));
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test", RACE_TOKEN_SECRET: SECRET } }));
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),

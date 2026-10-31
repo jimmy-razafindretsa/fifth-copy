@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { getDawnReport } from "./get-dawn-report";
+
+// The identity barrel (outfitForDesk, parseOutfit) is server code: importing it validates the env, which
+// these tests do not need.
+vi.mock("@/env", () => ({ env: {} }));
+const { OUTFIT_CATALOGUE, outfitForDesk } = await import("@/features/identity");
+const { getDawnReport } = await import("./get-dawn-report");
 
 // Contract of #300 C1: `getDawnReport(raceId, viewer)` validates the id as a uuid before any query, then
 // answers null (unknown), filing (no rows yet) or the report (entries in place order, clean WPM, the
@@ -19,6 +24,8 @@ type Row = {
   progress: number;
   finishedAtMs: number | null;
   suspicious: boolean;
+  /** The `user` relation as the nested select returns it: null for a bot. */
+  user: { outfit: unknown } | null;
 };
 type RaceRow = {
   id: string;
@@ -49,8 +56,20 @@ const row = (over: Partial<Row>): Row => ({
   progress: 1,
   finishedAtMs: 40_000,
   suspicious: false,
+  user: null,
   ...over,
 });
+
+/** A saved outfit the catalogue accepts (bible 10.1 ids). */
+const SAVED = {
+  hair: "quiff",
+  glasses: "monocle",
+  hat: "beret",
+  clothes: "jacket",
+  face: "beard",
+  hairCol: OUTFIT_CATALOGUE.hairCol[1]!,
+};
+const OUTFITS_ID = "0b1e8a52-77a4-4f0e-9d3b-2c8f5e6a1d44";
 
 const RACES: RaceRow[] = [
   {
@@ -68,6 +87,28 @@ const RACES: RaceRow[] = [
     ],
   },
   { id: FILING_ID, textLanguage: "EN", endedAt: null, endReason: null, lobby: null, results: [] },
+  {
+    // #688 C1: one of each outfit case, six desks
+    id: OUTFITS_ID,
+    textLanguage: "EN",
+    endedAt: ENDED,
+    endReason: "ALL_FINISHED",
+    lobby: null,
+    results: [
+      row({ desk: 7, place: 1, isBot: false, userId: "u-saved", user: { outfit: SAVED } }),
+      row({ desk: 3, place: 2 }),
+      row({ desk: 12, place: 3, isBot: false, userId: "u-none", user: { outfit: null } }),
+      row({
+        desk: 5,
+        place: 4,
+        isBot: false,
+        userId: "u-stale",
+        user: { outfit: { ...SAVED, hat: "tricorne" } },
+      }),
+      row({ desk: 9, place: 5, isBot: false, userId: "u-junk", user: { outfit: "beret" } }),
+      row({ desk: 6, place: 6 }),
+    ],
+  },
 ];
 
 function fakeDb() {
@@ -77,7 +118,7 @@ function fakeDb() {
       select,
     }: {
       where: { id: string };
-      select: { results: { orderBy: unknown; select: Record<string, true> } };
+      select: { results: { orderBy: unknown; select: Record<string, unknown> } };
     }) => {
       const race = RACES.find((r) => r.id === where.id);
       if (!race) return null;
@@ -137,6 +178,7 @@ describe("getDawnReport (#300 C1)", () => {
       [4, 4, 48],
     ]);
     expect(report.entries[0]).toEqual({
+      outfit: outfitForDesk(2),
       desk: 2,
       name: "Lynx-785",
       isBot: false,
@@ -164,5 +206,37 @@ describe("getDawnReport (#300 C1)", () => {
     const { db } = fakeDb();
     const report = await getDawnReport(RACE_ID, viewer, { db });
     expect(report?.kind === "report" && report.viewerDesk).toBe(desk);
+  });
+});
+
+describe("getDawnReport outfits (#688 C1)", () => {
+  it("one query for a six-desk race, the outfit selected inside the results select", async () => {
+    const { db, findUnique } = fakeDb();
+    const report = await getDawnReport(OUTFITS_ID, null, { db });
+    expect(findUnique).toHaveBeenCalledTimes(1);
+    expect(report?.kind === "report" && report.entries).toHaveLength(6);
+    expect(findUnique.mock.calls[0]![0].select.results.select).toHaveProperty("user", {
+      select: { outfit: true },
+    });
+  });
+
+  it.each([
+    ["a saved outfit, returned as stored", 7, SAVED],
+    ["a bot (userId null)", 3, outfitForDesk(3)],
+    ["a player whose outfit is null", 12, outfitForDesk(12)],
+    ["a stored outfit the catalogue rejects", 5, outfitForDesk(5)],
+    ["a stored value that is not an outfit", 9, outfitForDesk(9)],
+  ])("%s", async (_, desk, outfit) => {
+    const { db } = fakeDb();
+    const report = await getDawnReport(OUTFITS_ID, null, { db });
+    if (report?.kind !== "report") throw new Error("report expected");
+    expect(report.entries.find((e) => e.desk === desk)?.outfit).toEqual(outfit);
+  });
+
+  it("every entry carries an outfit", async () => {
+    const { db } = fakeDb();
+    const report = await getDawnReport(OUTFITS_ID, null, { db });
+    if (report?.kind !== "report") throw new Error("report expected");
+    for (const e of report.entries) expect(Object.keys(e.outfit).sort()).toHaveLength(6);
   });
 });

@@ -1,0 +1,266 @@
+/*
+ * The ranking docket (#301, bible 14.4 "Ranking docket"): a 7.4 docket (2px ink rule, paper ground, no
+ * radius) whose header row is the caption as the ink tag; 7.4 roll rows with dashed separators; the 7.4
+ * roll docket's scroll (`max-height:60vh`, focusable) with the column header row sticky. Each row is one
+ * CSS grid: seven tracks on one line when the docket is at least 600px wide, two lines below (place,
+ * portrait, name, WPM and status first; desk and accuracy under them). Fixed tracks keep the columns
+ * aligned from row to row. Colours are roles, faces the type roles (#531); no motion.
+ */
+
+@reference "../../../app/globals.css";
+
+.docket {
+  container-type: inline-size;
+  min-width: 0;
+  max-height: 60vh;
+  overflow: auto;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.table {
+  display: block;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* header row (bible 7.4): the caption as the ink tag */
+.head {
+  display: block;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--color-fg);
+  text-align: start;
+}
+
+/* the ink tag (bible 7.4 roll rows: Oswald 600 10px .16em, ink ground, paper text) */
+.tag {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* the column header row stays at the top of the docket while it scrolls */
+.thead {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-bg);
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.thead + tbody {
+  display: block;
+}
+
+/* phones and narrow slots: two lines per row */
+.row {
+  --_place: 24px;
+  --_portrait: 32px;
+  --_wpm: 40px;
+  --_status: 96px;
+  display: grid;
+  grid-template-columns: var(--_place) var(--_portrait) minmax(0, 1fr) var(--_wpm) var(--_status);
+  grid-template-areas:
+    "place portrait name wpm status"
+    ". . desk accuracy accuracy";
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 12px;
+}
+
+.thead .row {
+  grid-template-areas:
+    "place typist typist wpm status"
+    ". . desk accuracy accuracy";
+}
+
+tbody .row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.row > [data-col="place"] {
+  grid-area: place;
+}
+.row > [data-col="typist"] {
+  grid-area: typist;
+}
+.row > [data-col="portrait"] {
+  grid-area: portrait;
+}
+.row > [data-col="name"] {
+  grid-area: name;
+}
+.row > [data-col="desk"] {
+  grid-area: desk;
+}
+.row > [data-col="wpm"] {
+  grid-area: wpm;
+}
+.row > [data-col="accuracy"] {
+  grid-area: accuracy;
+}
+.row > [data-col="status"] {
+  grid-area: status;
+}
+
+/* the column labels (bible 7.4 roll-row label: Oswald 600 11px .2em, muted) */
+.th {
+  padding: 0;
+  text-align: start;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.th[data-col="wpm"],
+.th[data-col="status"] {
+  text-align: end;
+}
+
+.row > td {
+  padding: 0;
+  min-width: 0;
+}
+
+/* the rank (bible 7.4a lanes: IBM Plex Mono 500 14px) */
+.place {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the portrait: the seat cell of bible 7.4, a paper square in an ink rule; initials in Plex Mono */
+.portrait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--_portrait);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  @apply type-typing;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* the name and its tags (badges wrap under the name, bible 7.4 roll rows) */
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.name {
+  min-width: 0;
+  @apply type-typing;
+  font-size: 15px;
+  line-height: normal;
+  overflow-wrap: anywhere;
+}
+
+/* the desk (bible 7.4 roll-row desk label: Oswald 600 11px .2em, muted) */
+.desk {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+/* the clean WPM (ADR 0016) */
+.wpm {
+  text-align: end;
+  @apply type-typing;
+  font-size: 16px;
+  line-height: normal;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.accuracy {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.statusCell {
+  text-align: end;
+}
+
+/* the 7.4a status label: Oswald 10px .16em in a 1px muted hairline */
+.status {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+  border: 1px solid var(--color-fg-muted);
+  padding: 0 5px;
+  text-align: center;
+}
+
+/* you: a red left rule on your row and your name in the red text role (night-ink on Night shift, 3.3) */
+.row[data-you="true"] {
+  box-shadow: inset 4px 0 0 var(--color-you);
+}
+
+.row[data-you="true"] .name {
+  color: var(--color-link);
+}
+
+/* from 600px of docket: one line, seven tracks */
+@container (min-width: 600px) {
+  .row {
+    --_place: 32px;
+    --_wpm: 48px;
+    --_status: 136px;
+    grid-template-columns:
+      var(--_place) var(--_portrait) minmax(0, 1fr) 88px var(--_wpm) 96px
+      var(--_status);
+    grid-template-areas: "place portrait name desk wpm accuracy status";
+    gap: 0 12px;
+  }
+
+  .thead .row {
+    grid-template-areas: "place typist typist desk wpm accuracy status";
+  }
+
+  .name {
+    font-size: 18px;
+  }
+
+  .status {
+    white-space: nowrap;
+  }
+}

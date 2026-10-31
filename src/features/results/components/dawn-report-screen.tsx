@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
-import { filingLabels, podiumLabels } from "../view/report-labels";
+import { rankingRowsFrom } from "../view/ranking";
+import { filingLabels, podiumLabels, rankingLabels } from "../view/report-labels";
 import styles from "./dawn-report.module.css";
 import { FilingNotice } from "./filing-notice";
 import { Podium } from "./podium";
+import { RankingTable } from "./ranking-table";
 
 /**
  * The Dawn report's layout (bible 14.4), presentational: kicker, `RACE OVER`, then the body (the
@@ -43,7 +45,8 @@ export function DawnReportLayout({
 
 /**
  * `/results/[raceId]` (#300 C2, ARCHITECTURE 8.1, 8.3): the site header (as the waiting room keeps it),
- * then the report: the filing notice (the one client leaf that polls) or the podium.
+ * then the report: the filing notice (the one client leaf that polls) or the podium with the ranking
+ * docket (#301) in its slot.
  */
 export async function DawnReportScreen({ report }: { report: DawnReport }) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
@@ -53,7 +56,18 @@ export async function DawnReportScreen({ report }: { report: DawnReport }) {
     <>
       <LandingHeader />
       <main className="flex flex-1 flex-col">
-        <DawnReportLayout kicker={r.kicker} heading={r.heading}>
+        <DawnReportLayout
+          kicker={r.kicker}
+          heading={r.heading}
+          ranking={
+            report.kind === "report" ? (
+              <RankingTable
+                rows={rankingRowsFrom(report.entries, report.viewerDesk)}
+                labels={rankingLabels(r)}
+              />
+            ) : undefined
+          }
+        >
           {report.kind === "filing" ? (
             <FilingNotice {...filingLabels(r, report.lobbyCode)} />
           ) : (

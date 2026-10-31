@@ -42,6 +42,9 @@ import {
   FilingNoticeView,
   Podium,
   podiumLabels,
+  RankingTable,
+  rankingLabels,
+  rankingRowsFrom,
 } from "@/features/results";
 import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
@@ -971,6 +974,21 @@ export default async function DesignPage() {
             />
           </HudSpecimen>
         ))}
+        <div id="results-ranking">
+          <HudSpecimen
+            id="ranking"
+            title="Ranking docket"
+            caption="Every desk in place order: one row per status, a bot, a desk under review, you third."
+          >
+            <RankingTable
+              rows={rankingRowsFrom(
+                dawnReportFixtures.ranking.entries,
+                dawnReportFixtures.ranking.viewerDesk,
+              )}
+              labels={rankingLabels(t.results)}
+            />
+          </HudSpecimen>
+        </div>
         <div className="grid gap-6 md:grid-cols-2">
           <HudSpecimen
             id="filing"

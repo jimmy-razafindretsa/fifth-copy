@@ -94,6 +94,47 @@ export const dawnReportFixtures = {
     entry({ desk: 12, name: "Heron-302", place: 3, wpm: 47.8, accuracy: 0.92 }),
   ]),
   viewer: report("0b1e8a52-77a4-4f0e-9d3b-2c8f5e6a1d44", SIX, 12),
+  /** `/design#results-ranking` (#301 C5): six rows, one per status, a bot, a suspicious row, the viewer 3rd. */
+  ranking: report(
+    "5d0c7a9e-2f41-4b8a-9e63-1c7d2b4f8a10",
+    [
+      entry({ desk: 7, name: "Lynx-785", place: 1, wpm: 61.4, accuracy: 0.974 }),
+      entry({
+        desk: 3,
+        name: "Typist Bot 2",
+        isBot: true,
+        place: 2,
+        status: "TIMED_OUT",
+        wpm: 54.2,
+      }),
+      entry({
+        desk: 12,
+        name: "Heron-302",
+        place: 3,
+        status: "LINE_CUT",
+        wpm: 47.8,
+        progress: 0.8,
+      }),
+      entry({ desk: 5, name: "Otter-417", place: 4, status: "ASLEEP", wpm: 22.6, accuracy: 0.88 }),
+      entry({
+        desk: 2,
+        name: "Crow-559",
+        place: 5,
+        status: "REASSIGNED",
+        wpm: 19,
+        suspicious: true,
+      }),
+      entry({
+        desk: 11,
+        name: "Marmot-233",
+        place: 6,
+        status: "EXPIRED",
+        wpm: 12.4,
+        accuracy: 0.81,
+      }),
+    ],
+    12,
+  ),
 } satisfies Record<string, Extract<DawnReport, { kind: "report" }>>;
 
 export type DawnReportFixture = keyof typeof dawnReportFixtures;

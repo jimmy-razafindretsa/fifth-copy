@@ -363,6 +363,18 @@ export const en = {
         bronze: "The bronze medal, in 3D, drag to spin",
       },
     },
+    ranking: {
+      caption: "FORM 5-R · RANKING",
+      place: "№",
+      typist: "TYPIST",
+      desk: "DESK",
+      wpm: "WPM",
+      accuracy: "ACCURACY",
+      status: "STATUS",
+      bot: "BOT",
+      you: "YOU",
+      underReview: "UNDER REVIEW",
+    },
     status: {
       FINISHED: "FILED",
       TIMED_OUT: "TIMED OUT",

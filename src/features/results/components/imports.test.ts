@@ -123,4 +123,18 @@ describe("results imports (#300 C9)", () => {
       }
     }
   });
+
+  it("#301 C7 the ranking docket: exported by the index, no Prisma, engine or protocol module, no client", () => {
+    const index = specifiers(readFileSync(path.join(feature, "index.ts"), "utf8"));
+    expect(index).toContain("./components/ranking-table");
+    expect(index).toContain("./view/ranking");
+    for (const mod of ["components/ranking-table.tsx", "view/ranking.ts"]) {
+      const text = readFileSync(path.join(feature, mod), "utf8");
+      expect(text, mod).not.toMatch(/"use client"/);
+      for (const s of specifiers(text)) {
+        expect(s, mod).not.toMatch(PRISMA);
+        expect(s, mod).not.toMatch(/^@fifth-copy\/(engine|protocol)(\/|$)|^@\/server/);
+      }
+    }
+  });
 });

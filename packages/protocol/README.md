@@ -11,7 +11,7 @@ Every message that crosses a process boundary is declared here once, as a zod sc
 - Keep snapshots compact: arrays of numbers keyed by desk id, not objects per player (10 Hz x 100 players).
 
 ## Modules
-`version.ts` (`PROTOCOL_VERSION`, now 6) · `room-code.ts` (`ROOM_CODE_RE`, `formatRoomCode`, `parseRoomCode`) · `race-token.ts` (claims, `RACE_TOKEN_TTL_S`) · `race.ts` (race value schemas) · `events.ts` (race events) · `socket.ts` (handshake, welcome/roster, event maps) · `internal.ts` (web <-> race-server HTTP) · `settings.ts` (race settings).
+`version.ts` (`PROTOCOL_VERSION`, now 7) · `room-code.ts` (`ROOM_CODE_RE`, `formatRoomCode`, `parseRoomCode`) · `race-token.ts` (claims, `RACE_TOKEN_TTL_S`) · `race.ts` (race value schemas) · `events.ts` (race events) · `socket.ts` (handshake, welcome/roster, event maps) · `internal.ts` (web <-> race-server HTTP) · `settings.ts` (race settings).
 
 Bounds: every string and array is capped (`MAX_DESKS` 256, `MAX_NAME_LENGTH` 64, `MAX_TEXT_LENGTH` 20 000, `MAX_OVERLAY_WORDS` 500, ids 128, token 4096, `MAX_KEYS_PER_BATCH` 64, `MAX_RESULTS_PER_REQUEST` 25, `MAX_TRACE_BASE64_LENGTH` 256 KiB). Times are integer ms: `t`, `lastT`, `kickAt`, `blurUntil`, `finishedAt`, `durationMs` since GO, capped at `MAX_RACE_MS` (1 h: the timer stops at 600 s, an untimed 500-word text at 10 WPM takes 50 min); `t0`, `serverNow`, `startedAt`, `endedAt` server epoch. Names and keys are printable: no control, format (bidi), surrogate, private-use or line-separator code points (names keep ZWJ/ZWNJ).
 

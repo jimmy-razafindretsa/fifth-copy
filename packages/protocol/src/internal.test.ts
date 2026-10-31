@@ -4,7 +4,10 @@ import {
   INTERNAL_HEADERS,
   INTERNAL_HMAC_TEST_VECTOR,
   INTERNAL_MAX_SKEW_S,
+  INTERNAL_NONCE_HEX,
+  INTERNAL_NONCE_TTL_S,
   internalErrorSchema,
+  internalSignedString,
   openRoomRequestSchema,
   openRoomResponseSchema,
   PROTOCOL_VERSION,
@@ -80,8 +83,37 @@ const results = {
 
 describe("internal API", () => {
   it("fixes the header names and the skew window", () => {
-    expect(INTERNAL_HEADERS).toEqual({ timestamp: "x-fc-timestamp", signature: "x-fc-signature" });
+    expect(INTERNAL_HEADERS).toEqual({
+      timestamp: "x-fc-timestamp",
+      signature: "x-fc-signature",
+      nonce: "x-fc-nonce",
+    });
     expect(INTERNAL_MAX_SKEW_S).toBe(300);
+  });
+
+  it("C1: protocol 7 signs `${timestamp}.${nonce}.${rawBody}`", () => {
+    expect(PROTOCOL_VERSION).toBe(7);
+    expect(internalSignedString({ timestamp: "1", nonce: "ab", rawBody: '{"v":7}' })).toBe(
+      '1.ab.{"v":7}',
+    );
+  });
+
+  it("C2: a nonce is remembered across the whole +-skew acceptance span", () => {
+    expect(INTERNAL_NONCE_TTL_S).toBe(2 * INTERNAL_MAX_SKEW_S);
+    expect(INTERNAL_NONCE_TTL_S).toBeGreaterThanOrEqual(INTERNAL_MAX_SKEW_S);
+  });
+
+  it.each([
+    ["the vector nonce", INTERNAL_HMAC_TEST_VECTOR.nonce, true],
+    ["32 lowercase hex", "0".repeat(32), true],
+    ["uppercase hex", "A".repeat(32), false],
+    ["31 chars", "a".repeat(31), false],
+    ["33 chars", "a".repeat(33), false],
+    ["non-hex", "g".repeat(32), false],
+    ["empty", "", false],
+    ["a trailing newline", `${"a".repeat(32)}\n`, false],
+  ])("nonce format: %s -> %s", (_, nonce, ok) => {
+    expect(INTERNAL_NONCE_HEX.test(nonce)).toBe(ok);
   });
 
   it("test vector body is a valid open-room request", () => {
@@ -150,6 +182,7 @@ describe("internal API", () => {
     ["error wrong enum", internalErrorSchema, { v, error: "teapot" }, false],
     ["error not-found", internalErrorSchema, { v, error: "not-found" }, true],
     ["error conflict", internalErrorSchema, { v, error: "conflict" }, true],
+    ["error replay", internalErrorSchema, { v, error: "replay" }, true],
     ["start example", startRaceRequestSchema, start, true],
     ["start previous v", startRaceRequestSchema, { ...start, v: v - 1 }, false],
     ["start missing desks", startRaceRequestSchema, { ...start, desks: undefined }, false],

@@ -822,17 +822,17 @@ export default async function DesignPage() {
           title="Twelve inks, four shapes"
           caption="Each rival's marker takes the ink and shape the desk allocator gave it; you stay red. Rival inks appear only on race-card markers, placards and scarves."
         >
-          <table data-rival-inks className="w-fit border-2 border-fg bg-bg">
+          <table data-rival-inks className="w-fit max-w-full border-2 border-fg bg-bg">
             <thead>
               <tr>
-                <th scope="col" className="type-label px-3 py-2 text-left text-xs text-fg">
+                <th scope="col" className="type-label px-2 py-2 text-left text-xs text-fg md:px-3">
                   Ink
                 </th>
                 {MARKER_SHAPES.map((shape) => (
                   <th
                     key={shape}
                     scope="col"
-                    className="type-label px-2 py-2 text-center text-xs text-fg-muted"
+                    className="type-label px-1 py-2 text-center text-[10px] tracking-[0.16em] text-fg-muted md:px-2"
                   >
                     {shape}
                   </th>
@@ -842,11 +842,11 @@ export default async function DesignPage() {
             <tbody>
               {[...RIVAL_INKS, "you" as const].map((ink) => (
                 <tr key={ink} data-ink-row={ink} className="border-t border-border">
-                  <th scope="row" className="px-3 py-1 text-left">
+                  <th scope="row" className="px-2 py-1 text-left md:px-3">
                     <code className="font-typing text-sm font-normal text-fg">{ink}</code>
                   </th>
                   {MARKER_SHAPES.map((shape) => (
-                    <td key={shape} className="px-2 py-1">
+                    <td key={shape} className="px-1 py-1 md:px-2">
                       <span className="flex justify-center">
                         <IdentityMarker shape={shape} ink={ink} />
                       </span>

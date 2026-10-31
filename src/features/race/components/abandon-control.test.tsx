@@ -20,8 +20,9 @@ const html = (state: "idle" | "confirm" | "disabled", labels = EN) =>
       labels={labels}
     />,
   ).replace(/&amp;/g, "&");
+// the ink button lives in hud-docket.module.css since #240 (shared with the DAWN REPORT link)
 const css = readFileSync(
-  path.join(process.cwd(), "src/features/race/components/abandon-control.module.css"),
+  path.join(process.cwd(), "src/features/race/components/hud-docket.module.css"),
   "utf8",
 ).replace(/\/\*[\s\S]*?\*\//g, "");
 

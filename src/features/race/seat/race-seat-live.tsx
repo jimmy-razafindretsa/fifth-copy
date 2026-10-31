@@ -16,8 +16,12 @@ import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
 import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
 import { RaceInput } from "../components/race-input";
+import { FinishedView } from "../components/finished-view";
+import { nixieNumber } from "../components/nixie-counters";
 import { RaceNotice } from "../components/race-notice";
-import { StampRow } from "../components/stamp-row";
+import { StampRow, stampText } from "../components/stamp-row";
+import { selectFinishWpm, selectPlace } from "../view/counters";
+import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view/standings";
 import { paperwork, PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
@@ -52,7 +56,8 @@ type ViewProps = {
  * The seat's live state for one phase (no hooks, so every phase renders in tests): skeleton rows while
  * connecting (bible 7.4), the waiting and line-cut notices (7.4 notice row), the lost line with the way
  * back to the waiting room (7.4 inline error line). Countdown and the GO stamp are `RaceSeatLive`'s
- * (#214, they follow the clock); running and ended belong to #559 and #240: nothing here.
+ * (#214, they follow the clock); after your finish and at RACE OVER the finished view is `SeatFinish`'s
+ * (#240, it follows the snapshots): nothing here.
  */
 export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
   switch (phase) {
@@ -118,8 +123,50 @@ function useCountdownStep(): CountdownStep | null {
   return live ? step : null;
 }
 
-/** The overtake stamps' copy and the announcer's race lines (#232). */
-export type SeatStampLabels = Pick<RaceSeatLabels, "stamps" | "announce">;
+/** The overtake stamps' copy and the announcer's race lines (#232), the finished view's (#240). */
+export type SeatStampLabels = Pick<RaceSeatLabels, "stamps" | "announce" | "finish">;
+
+/**
+ * The finished view over the store (#240 C2, C3): after your finish while the race runs, the `FILED`
+ * docket with your provisional place (`01 / 02`, from `ranks`) and the live standings (every desk by
+ * rank, one view per snapshot); once the server ended the race, the `RACE OVER` docket with its reason,
+ * the final ranking as sent and the `DAWN REPORT →` link to `/results/<raceId>`, also when nobody
+ * finished or a reload found the room ended (no ranking then). A `void` end is #661's lost-room notice:
+ * nothing here. Each read is a primitive or a memoised view, so a key re-renders nothing.
+ */
+export function SeatFinish({ labels }: { labels: FinishLabels }) {
+  const phase = useRaceStore((s) => s.phase);
+  const finished = useRaceStore((s) => s.prediction?.state.status === "finished");
+  const you = useRaceStore((s) => s.you);
+  const place = useRaceStore((s) => selectPlace(s).place);
+  const total = useRaceStore((s) => selectPlace(s).total);
+  const standings = useRaceStore(selectStandings);
+  const ending = useRaceStore((s) => s.ending);
+  const raceId = useRaceStore((s) => s.race?.raceId ?? null);
+  if (phase === "ended") {
+    if (ending?.reason === "void") return null;
+    const id = ending?.raceId ?? raceId;
+    return (
+      <FinishedView
+        mode="ended"
+        value={ending ? labels.reason[ending.reason] : null}
+        rows={ending ? finalRows(ending.ranking, ending.reason, you, labels) : []}
+        report={id === null ? null : `/results/${id}`}
+        labels={labels}
+      />
+    );
+  }
+  if (phase !== "running" || !finished) return null;
+  return (
+    <FinishedView
+      mode="finished"
+      value={place === 0 ? null : `${nixieNumber(place)} / ${nixieNumber(total)}`}
+      rows={liveRows(standings, labels)}
+      report={null}
+      labels={labels}
+    />
+  );
+}
 
 /**
  * The seat view's client leaf (#561 C4, ARCHITECTURE 8.3): after the server rendered the HUD shell, it
@@ -151,6 +198,7 @@ export function RaceSeatLive({
   const mode = useRaceStore((s) => s.settings?.errorMode);
   const backspace = useRaceStore((s) => s.settings?.backspace);
   const errors = useRaceStore((s) => s.prediction?.state.errors);
+  const finishWpm = useRaceStore(selectFinishWpm);
   const typing = useRef<Typing | null>(null);
   const press = useCallback((key: string) => typing.current?.press(key), []);
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
@@ -184,11 +232,12 @@ export function RaceSeatLive({
   return (
     <div data-phase={phase} className={styles.live}>
       <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />
+      <SeatFinish labels={labels.finish} />
       {/* bible 8: one stamp at a time; the countdown and GO first, then the overtake stamps (#232) */}
       {step !== null ? (
         <Countdown step={step} labels={labels.countdown} />
       ) : (
-        <StampRow stamp={stamp} labels={labels.stamps} />
+        <StampRow stamp={stamp} wpm={finishWpm} labels={labels.stamps} />
       )}
       <RaceInput
         disabled={!canType}
@@ -206,7 +255,9 @@ export function RaceSeatLive({
               ? labels.countdown.go
               : String(step)
             : stamp
-              ? fill(labels.announce[stamp.kind], { desk: paperwork(stamp.other) })
+              ? stamp.kind === "overtake" || stamp.kind === "passed"
+                ? fill(labels.announce[stamp.kind], { desk: paperwork(stamp.other) })
+                : stampText(stamp, finishWpm, labels.stamps)
               : ""}
         </p>
       ) : null}

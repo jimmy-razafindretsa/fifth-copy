@@ -68,15 +68,24 @@ export function selectLanes(
   ranks: readonly number[],
   you: number | null,
 ): LaneSlot[] {
-  const present = new Set(desks.map((d) => d[0]));
-  const order = [...new Set(ranks.filter((d) => present.has(d)))];
-  const ranked = new Set(order);
-  for (const d of [...present].sort((a, b) => a - b)) if (!ranked.has(d)) order.push(d);
+  const order = rankOrder(desks, ranks);
   const all = order.length <= ALL_LANES_UP_TO;
   const at = you === null ? -1 : order.indexOf(you);
   return order.flatMap((desk, i) =>
     all || i < TOP || (at >= 0 && Math.abs(i - at) <= NEIGHBOURS) ? [{ desk, rank: i + 1 }] : [],
   );
+}
+
+/**
+ * Every snapshot desk in the server's `ranks` order (a desk repeated or unknown there is dropped, a desk
+ * missing from it goes last by desk number). The one ordering rule of the card and the standings (#240).
+ */
+export function rankOrder(desks: readonly DeskEntry[], ranks: readonly number[]): number[] {
+  const present = new Set(desks.map((d) => d[0]));
+  const order = [...new Set(ranks.filter((d) => present.has(d)))];
+  const ranked = new Set(order);
+  for (const d of [...present].sort((a, b) => a - b)) if (!ranked.has(d)) order.push(d);
+  return order;
 }
 
 /**
@@ -119,7 +128,8 @@ const DEFAULT_MARKER = { shape: "circle", colour: "rival" } as const satisfies L
 type Memo = Omit<RaceCardSource, "desks"> & { view: RaceCardView };
 const memo = new WeakMap<object, Memo>();
 
-function viewFrom({ members, you, desks, ranks, race }: RaceCardSource): RaceCardView {
+function viewFrom(source: RaceCardSource): RaceCardView {
+  const { members, you, desks, ranks, race } = source;
   if (!race || desks.length === 0) {
     return {
       field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === you })),
@@ -127,9 +137,21 @@ function viewFrom({ members, you, desks, ranks, race }: RaceCardSource): RaceCar
     };
   }
   const field = selectField(desks, charsOf(normalizeTypeable(race.text)).length, you);
+  return { field, lanes: projectLanes(source, field, selectLanes(desks, ranks, you)) };
+}
+
+/**
+ * The lanes of `slots`, joined with the members (names) and the snapshot entries (cursor, status) and
+ * the field's progress, by desk. `field` is `selectField` of the same snapshot. Pure.
+ */
+export function projectLanes(
+  { members, you, desks }: Pick<RaceCardSource, "members" | "you" | "desks">,
+  field: readonly FieldTick[],
+  slots: readonly LaneSlot[],
+): Lane[] {
   const names = new Map(members.map((m) => [m.desk, m.name]));
   const entries = new Map(desks.map((d, i) => [d[0], { entry: d, tick: field[i]! }]));
-  const lanes = selectLanes(desks, ranks, you).map(({ desk, rank }): Lane => {
+  return slots.map(({ desk, rank }): Lane => {
     const { entry, tick } = entries.get(desk)!;
     return {
       desk,
@@ -142,7 +164,6 @@ function viewFrom({ members, you, desks, ranks, race }: RaceCardSource): RaceCar
       you: desk === you,
     };
   });
-  return { field, lanes };
 }
 
 /**

@@ -1,0 +1,117 @@
+/*
+ * Finished view (#240, design bible 7.4, 7.4a, 7.1, 14.3 extension): one HUD docket (hud-docket.module.css)
+ * at the top of the middle column, `min(480px, 100%)` wide and centred (the scene loading card's width
+ * family). Rows are 7.4 roll rows on the `120px | 1fr` grid with dashed separators: the place (mono 500
+ * 14px) and `DESK 07` (the roll-row desk label) | the name (mono 15px, ellipsis; yours in the red text
+ * role with the ink `YOU` tag), the figure (mono 14px, tabular) and the 7.4a status label. The list
+ * scrolls inside itself so the typing surface stays in view. The ink link closes the docket. No motion.
+ */
+
+@reference "../../../app/globals.css";
+
+.view {
+  width: min(480px, 100%);
+  margin-inline: auto;
+  flex: none;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(36vh, 320px);
+  overflow-y: auto;
+}
+
+.rows:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 12px;
+  padding: 6px 12px;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.id {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.place {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+}
+
+/* `DESK 07`: the 7.4 roll-row desk label */
+.desk {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+.main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.name {
+  @apply type-typing;
+  flex: 0 1 auto;
+  font-size: 15px;
+  line-height: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* your name in the red text role (red on paper, night-ink on Night shift: bible 3.3) */
+.row[data-you="true"] .name {
+  color: var(--color-link);
+}
+
+.value {
+  @apply type-typing;
+  margin-inline-start: auto;
+  font-size: 14px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* the lane label (bible 7.4a): an Oswald tag in a muted hairline, never a colour alone */
+.status {
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  padding: 0 5px;
+  border: 1px solid var(--color-fg-muted);
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 2px solid var(--color-fg);
+}

@@ -1,6 +1,7 @@
 import type { CountdownLabels } from "../components/countdown";
 import type { StampRowLabels } from "../components/stamp-row";
 import type { TelexLabels } from "../components/telex-strip";
+import type { FinishLabels } from "../view/standings";
 import type {
   AbandonLabels,
   NixieLabels,
@@ -20,7 +21,7 @@ export type RaceSeatLabels = {
   telex: TelexLabels;
   /** The 3-2-1 countdown and the Major's `НАЧАЛИ · GO` stamp (#214). */
   countdown: CountdownLabels;
-  /** The overtake stamps (#232): `ОБГОН! · OVERTAKE +1`, `ОБОГНАЛИ · PASSED −1`. */
+  /** The overtake stamps (#232) and your finish stamp (#240): `ACCEPTED · 48 WPM`, `RETURNED · 2 ERRORS`. */
   stamps: StampRowLabels;
   /** The race announcer (#232 C4): `{desk}` is the other desk as paperwork (`07`). */
   announce: SeatAnnounceLabels;
@@ -34,6 +35,8 @@ export type RaceSeatLabels = {
   counters: NixieLabels;
   raceCard: RaceCardLabels;
   sabotageTray: SabotageTrayLabels;
+  /** The finished view (#240): the docket after your finish and at RACE OVER, the Dawn report link. */
+  finish: FinishLabels;
 };
 
 /** The polite status region's race lines (#232 C4; #242 adds the rest). */

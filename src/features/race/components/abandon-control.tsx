@@ -4,6 +4,7 @@ import { useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui";
 import type { AbandonLabels } from "../view/hud-labels";
 import styles from "./abandon-control.module.css";
+import docket from "./hud-docket.module.css";
 
 /** An unanswered confirm cancels itself after 5 s (spec 4.4: a quick confirm, never a trap). */
 export const ABANDON_CONFIRM_MS = 5000;
@@ -85,7 +86,7 @@ export function AbandonControl({
         {labels.abandon}
       </Button>
       {confirming ? (
-        <button id={confirmId} type="button" className={styles.ink} onClick={onConfirm}>
+        <button id={confirmId} type="button" className={docket.ink} onClick={onConfirm}>
           {labels.confirm}
         </button>
       ) : null}

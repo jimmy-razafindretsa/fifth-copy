@@ -1,29 +1,40 @@
 import { charsOf, normalizeTypeable, progress } from "@fifth-copy/engine";
-import { PLAYER_STATUSES, type Member, type Snapshot } from "@fifth-copy/protocol";
+import {
+  deskIdentity,
+  MARKERS,
+  PLAYER_STATUSES,
+  type Marker,
+  type Member,
+  type Snapshot,
+} from "@fifth-copy/protocol";
+import { identityOfDesk, rivalIdentity, type IdentityInk } from "./rival-identity";
 
 /**
  * The race card's view model (#560, ADR 0013, design bible 7.4a): "where am I in the race" as data. It is
  * what `RaceCard` renders and nothing else: ranks, progress and statuses arrive from the race server
- * through the store (#564 selects the lanes and projects the snapshot, #565 the per-rival inks); no race
+ * through the store (#564 selects the lanes and projects the snapshot, #565 the per-rival identity); no race
  * rule lives here or in the component (ADR 0007: progress is the engine's own `progress`).
  */
 
-/** The four colour-blind-safe rival marker shapes (spec 6.2, R80), drawn as inline SVG. */
-export const MARKER_SHAPES = ["circle", "square", "triangle", "diamond"] as const;
-export type MarkerShape = (typeof MARKER_SHAPES)[number];
+/** The four colour-blind-safe rival marker shapes (spec 6.2, R80): the protocol's `MARKERS`. */
+export const MARKER_SHAPES = MARKERS;
+export type MarkerShape = Marker;
 
 /**
- * A rival's marker ink, as a colour role name (never a value). `rival` is ribbon-violet (bible 3); the
- * per-rival muted inks of #565 extend this union and add one CSS mapping each in race-card.module.css.
+ * A marker's ink, as a colour role name (never a value): a rival's own ink `rival-0`..`rival-11` (bible
+ * 3.1, #565, from `rivalIdentity`) or `you` (agit-red). One CSS mapping each in race-card.module.css.
  */
-export type MarkerInk = "rival";
+export type MarkerInk = IdentityInk;
 
 /** A lane's status label; `typing` shows none (spec 4.4, 4.5, 7.4; the lane label, bible 7.4a). */
 export const LANE_STATUSES = ["typing", "line-cut", "asleep", "abandoned", "finished"] as const;
 export type LaneStatus = (typeof LANE_STATUSES)[number];
 
-/** One tick of the full-field line: every player of the race, `progress` 0..1 (1 = finished). */
-export type FieldTick = { desk: number; progress: number; you: boolean };
+/**
+ * One tick of the full-field line: every player of the race, `progress` 0..1 (1 = finished), in its
+ * identity ink (bible 7.4a: rival ticks wear their ink, the shape stays on the lanes).
+ */
+export type FieldTick = { desk: number; progress: number; you: boolean; ink: MarkerInk };
 
 /**
  * One lane: a selected player with its name, rank (1 = leading), marker and status. `cursor` is the last
@@ -90,18 +101,22 @@ export function rankOrder(desks: readonly DeskEntry[], ranks: readonly number[])
 
 /**
  * The full-field line (#564 C2): every snapshot desk at the engine's `progress` of its entry (finished =
- * 1, clamped to 0..1, 0 for an empty text), yours marked. `textLength` is the base text's (ADR 0016: a
- * rival's lengthened text is not in the snapshot, so its progress clamps at 1 until #236).
+ * 1, clamped to 0..1, 0 for an empty text), yours marked, each in its identity ink (#565: the roster's
+ * `color`, or the desk's allocator identity when the roster lacks it). `textLength` is the base text's
+ * (ADR 0016: a rival's lengthened text is not in the snapshot, so its progress clamps at 1 until #236).
  */
 export function selectField(
   desks: Snapshot["desks"],
   textLength: number,
   you: number | null = null,
+  members: readonly Member[] = [],
 ): FieldTick[] {
+  const roster = new Map(members.map((m) => [m.desk, m]));
   return desks.map(([desk, cursor, , , code]) => ({
     desk,
     progress: progress({ cursor, status: PLAYER_STATUSES[code] ?? "typing" }, textLength),
     you: desk === you,
+    ink: identityOfDesk(desk, roster, you).colour,
   }));
 }
 
@@ -122,9 +137,6 @@ const laneStatus = (code: number): LaneStatus => {
     : "typing";
 };
 
-/** Until #565 every lane rides a ribbon-violet circle (yours takes the `you` ink in the component). */
-const DEFAULT_MARKER = { shape: "circle", colour: "rival" } as const satisfies Lane["marker"];
-
 type Memo = Omit<RaceCardSource, "desks"> & { view: RaceCardView };
 const memo = new WeakMap<object, Memo>();
 
@@ -132,35 +144,42 @@ function viewFrom(source: RaceCardSource): RaceCardView {
   const { members, you, desks, ranks, race } = source;
   if (!race || desks.length === 0) {
     return {
-      field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === you })),
+      field: members.map((m) => ({
+        desk: m.desk,
+        progress: 0,
+        you: m.desk === you,
+        ink: rivalIdentity(m, you).colour,
+      })),
       lanes: [],
     };
   }
-  const field = selectField(desks, charsOf(normalizeTypeable(race.text)).length, you);
+  const field = selectField(desks, charsOf(normalizeTypeable(race.text)).length, you, members);
   return { field, lanes: projectLanes(source, field, selectLanes(desks, ranks, you)) };
 }
 
 /**
- * The lanes of `slots`, joined with the members (names) and the snapshot entries (cursor, status) and
- * the field's progress, by desk. `field` is `selectField` of the same snapshot. Pure.
+ * The lanes of `slots`, joined with the members (names, identity: `rivalIdentity`, #565) and the snapshot
+ * entries (cursor, status) and the field's progress, by desk. `field` is `selectField` of the same
+ * snapshot. Pure.
  */
 export function projectLanes(
   { members, you, desks }: Pick<RaceCardSource, "members" | "you" | "desks">,
   field: readonly FieldTick[],
   slots: readonly LaneSlot[],
 ): Lane[] {
-  const names = new Map(members.map((m) => [m.desk, m.name]));
+  const roster = new Map(members.map((m) => [m.desk, m]));
   const entries = new Map(desks.map((d, i) => [d[0], { entry: d, tick: field[i]! }]));
   return slots.map(({ desk, rank }): Lane => {
     const { entry, tick } = entries.get(desk)!;
+    const { colour, shape } = identityOfDesk(desk, roster, you);
     return {
       desk,
-      name: names.get(desk) ?? "",
+      name: roster.get(desk)?.name ?? "",
       cursor: entry[1],
       progress: tick.progress,
       rank,
       status: laneStatus(entry[4]),
-      marker: DEFAULT_MARKER,
+      marker: { shape, colour },
       you: desk === you,
     };
   });
@@ -197,7 +216,13 @@ const ANIMALS = ["Sparrow", "Badger", "Heron", "Marmot", "Lynx", "Otter", "Crow"
 
 type Seat = { desk: number; progress: number; status?: LaneStatus };
 
-/** Ranks the seats by progress (finished first), names them and gives them a varied marker shape. */
+/** A specimen desk's marker: the allocator's identity (#156), as a live room would hand it. */
+const markerOf = (desk: number, youDesk: number): Lane["marker"] => {
+  const { colour, shape } = rivalIdentity({ desk, ...deskIdentity(desk) }, youDesk);
+  return { colour, shape };
+};
+
+/** Ranks the seats by progress (finished first), names them and gives them their desk's identity. */
 function lanesOf(seats: Seat[], youDesk: number): Lane[] {
   return [...seats]
     .sort((a, b) => b.progress - a.progress || a.desk - b.desk)
@@ -209,7 +234,7 @@ function lanesOf(seats: Seat[], youDesk: number): Lane[] {
       progress: s.progress,
       rank: i + 1,
       status: s.status ?? (s.progress >= 1 ? "finished" : "typing"),
-      marker: { shape: MARKER_SHAPES[(s.desk - 1) % MARKER_SHAPES.length]!, colour: "rival" },
+      marker: markerOf(s.desk, youDesk),
       you: s.desk === youDesk,
     }));
 }
@@ -225,7 +250,12 @@ function viewOf(seats: Seat[], youDesk: number): RaceCardView {
     ).map((l) => l.desk),
   );
   return {
-    field: seats.map((s) => ({ desk: s.desk, progress: s.progress, you: s.desk === youDesk })),
+    field: seats.map((s) => ({
+      desk: s.desk,
+      progress: s.progress,
+      you: s.desk === youDesk,
+      ink: markerOf(s.desk, youDesk).colour,
+    })),
     lanes: all.filter((l) => shown.has(l.desk)),
   };
 }

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { fill } from "@/i18n/format";
 import { cn } from "@/lib/cn";
 import type { RaceCardLabels } from "../view/hud-labels";
-import type { Lane, MarkerShape, RaceCardView } from "../view/race-card-view";
+import type { Lane, MarkerInk, MarkerShape, RaceCardView } from "../view/race-card-view";
 import docket from "./hud-docket.module.css";
 import styles from "./race-card.module.css";
 
@@ -22,19 +22,28 @@ const SHAPES: Record<MarkerShape, React.ReactNode> = {
   diamond: <polygon points="6,0.5 11.5,6 6,11.5 0.5,6" />,
 };
 
-function Marker({ shape }: { shape: MarkerShape }) {
+function Marker({ shape, ink }: { shape: MarkerShape; ink?: MarkerInk }) {
   return (
     <svg
       data-marker={shape}
+      data-ink={ink}
       aria-hidden="true"
       viewBox="0 0 12 12"
       width="12"
       height="12"
-      className={styles.marker}
+      className={cn(styles.marker, ink && styles.inked)}
     >
       {SHAPES[shape]}
     </svg>
   );
+}
+
+/**
+ * One identity marker on its own (#565): a shape in an ink, as a lane draws it. For specimens of the rival
+ * inks (`/design#race-hud`); decorative, so its label lives beside it.
+ */
+export function IdentityMarker({ shape, ink }: { shape: MarkerShape; ink: MarkerInk }) {
+  return <Marker shape={shape} ink={ink} />;
 }
 
 function LaneRow({
@@ -62,9 +71,9 @@ function LaneRow({
       data-desk-progress={lane.cursor}
       data-status={lane.status}
       data-you={lane.you || undefined}
-      data-ink={lane.you ? undefined : lane.marker.colour}
+      data-ink={lane.marker.colour}
       aria-label={words}
-      className={styles.lane}
+      className={cn(styles.lane, styles.inked)}
     >
       <span className={styles.id} aria-hidden="true">
         <span className={styles.rank}>{String(lane.rank).padStart(2, "0")}</span>
@@ -103,10 +112,10 @@ export type RaceCardProps = {
 
 /**
  * The race card (#560, design bible 7.4a, spec 6.2): a 7.4 docket answering "where am I in the race".
- * The full-field line carries one tick per player (yours agit-red, rivals ribbon-violet) and ends in a
- * checkered finish; the lanes below show the selected players by rank, each with its marker shape riding
- * a track by progress, its paperwork desk number and its status label. Renders the view it is given:
- * selection is #564, rival inks #565 (ADR 0007, 0013).
+ * The full-field line carries one tick per player (yours agit-red, each rival in its ink) and ends in a
+ * checkered finish; the lanes below show the selected players by rank, each with its marker shape in its
+ * ink riding a track by progress, its paperwork desk number and its status label. Renders the view it is
+ * given: selection is #564, identities (`rivalIdentity`) #565 (ADR 0007, 0013).
  */
 export function RaceCard({ view, labels, compact = false }: RaceCardProps) {
   const you = view.field.find((t) => t.you);
@@ -133,7 +142,8 @@ export function RaceCard({ view, labels, compact = false }: RaceCardProps) {
               data-tick
               data-desk={t.desk}
               data-you={t.you || undefined}
-              className={styles.tick}
+              data-ink={t.ink}
+              className={cn(styles.tick, styles.inked)}
               style={at(t.progress)}
             />
           ))}

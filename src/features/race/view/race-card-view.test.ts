@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { charsOf, normalizeTypeable, progress } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
+  deskIdentity,
   PLAYER_STATUS_CODES,
   PLAYER_STATUSES,
   PROTOCOL_VERSION,
@@ -25,6 +26,7 @@ import {
   selectLanes,
   type RaceCardSource,
 } from "./race-card-view";
+import { rivalIdentity } from "./rival-identity";
 
 // Contract of #564 C1, C2, C3: the race card's lane selection, its full-field projection and the join
 // of the store's members with the 10 Hz snapshot (ADR 0006: ranks and cursors are the server's; ADR
@@ -201,9 +203,9 @@ describe("raceCardViewFrom (#564 C3)", () => {
   it("joins the members with the snapshot by desk, marks you and ranks the lanes by the server's order", () => {
     const view = raceCardViewFrom(source());
     expect(view.field).toEqual([
-      { desk: 1, progress: 4 / LENGTH, you: false },
-      { desk: 3, progress: 1, you: false },
-      { desk: 5, progress: 11 / LENGTH, you: true },
+      { desk: 1, progress: 4 / LENGTH, you: false, ink: "rival-0" },
+      { desk: 3, progress: 1, you: false, ink: "rival-2" },
+      { desk: 5, progress: 11 / LENGTH, you: true, ink: "you" },
     ]);
     expect(view.lanes).toEqual([
       {
@@ -213,7 +215,7 @@ describe("raceCardViewFrom (#564 C3)", () => {
         progress: 1,
         rank: 1,
         status: "finished",
-        marker: { shape: "circle", colour: "rival" },
+        marker: { shape: "triangle", colour: "rival-2" },
         you: false,
       },
       {
@@ -223,7 +225,7 @@ describe("raceCardViewFrom (#564 C3)", () => {
         progress: 11 / LENGTH,
         rank: 2,
         status: "asleep",
-        marker: { shape: "circle", colour: "rival" },
+        marker: { shape: "circle", colour: "you" },
         you: true,
       },
       {
@@ -233,21 +235,48 @@ describe("raceCardViewFrom (#564 C3)", () => {
         progress: 4 / LENGTH,
         rank: 3,
         status: "typing",
-        marker: { shape: "circle", colour: "rival" },
+        marker: { shape: "circle", colour: "rival-0" },
         you: false,
       },
     ]);
   });
 
-  it("uses ribbon-violet circles as every lane's default marker (the per-rival shapes and inks are #565)", () => {
-    const desks = Array.from({ length: 12 }, (_, i) => desk(i + 1, i));
-    const many = Array.from({ length: 12 }, (_, i) => member(i + 1, `Crow-${100 + i}`));
+  it("#565 C4 lanes and ticks take each member's ink and shape from rivalIdentity; you are red", () => {
+    const n = 30;
+    const desks = Array.from({ length: n }, (_, i) => desk(i + 1, i));
+    const many = Array.from({ length: n }, (_, i) => ({
+      ...member(i + 1, `Crow-${100 + i}`),
+      ...deskIdentity(i + 1),
+    }));
     const view = raceCardViewFrom(
-      source({ members: many, desks, ranks: desks.map((d) => d[0]).reverse(), you: 7 }),
+      source({ members: many, desks, ranks: desks.map((d) => d[0]).reverse(), you: 17 }),
     );
-    expect(view.lanes.length).toBeGreaterThan(0);
-    for (const lane of view.lanes)
-      expect(lane.marker).toEqual({ shape: "circle", colour: "rival" });
+    expect(view.lanes.length).toBe(8);
+    for (const lane of view.lanes) {
+      const id = rivalIdentity(many[lane.desk - 1]!, 17);
+      expect(lane.marker).toEqual({ shape: id.shape, colour: id.colour });
+    }
+    expect(view.lanes.find((l) => l.you)!.marker).toEqual({ shape: "square", colour: "you" });
+    expect(view.field.map((t) => t.ink)).toEqual(
+      many.map((m) => (m.desk === 17 ? "you" : `rival-${m.color}`)),
+    );
+    // a desk the roster lacks still wears its allocator identity
+    const partial = raceCardViewFrom(
+      source({ members: many.slice(0, 20), desks, ranks: [], you: 17 }),
+    );
+    expect(partial.field[25]!.ink).toBe("rival-1");
+    // the fixtures of /design wear the allocator's identities too
+    for (const view of Object.values(raceCardViewFixtures)) {
+      for (const lane of view.lanes) {
+        const id = rivalIdentity(
+          { desk: lane.desk, ...deskIdentity(lane.desk) },
+          lane.you ? lane.desk : null,
+        );
+        expect(lane.marker).toEqual({ shape: id.shape, colour: id.colour });
+      }
+      for (const t of view.field)
+        expect(t.ink).toBe(t.you ? "you" : `rival-${deskIdentity(t.desk).color}`);
+    }
   });
 
   it("the statuses map from the snapshot code; an expired desk shows no label", () => {
@@ -266,7 +295,12 @@ describe("raceCardViewFrom (#564 C3)", () => {
 
   it("before the race (or before its first snapshot): every member at the start, yours marked, no lanes", () => {
     const empty = {
-      field: members.map((m) => ({ desk: m.desk, progress: 0, you: m.desk === 5 })),
+      field: members.map((m) => ({
+        desk: m.desk,
+        progress: 0,
+        you: m.desk === 5,
+        ink: m.desk === 5 ? "you" : `rival-${m.color}`,
+      })),
       lanes: [],
     };
     expect(raceCardViewFrom(source({ race: null, desks: [], ranks: [] }))).toEqual(empty);

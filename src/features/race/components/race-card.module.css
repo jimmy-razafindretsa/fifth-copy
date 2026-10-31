@@ -1,7 +1,7 @@
 /*
  * Race card (#560, design bible 7.4a, spec 6.2): the 7.4 docket of hud-docket.module.css with a full-field
- * line and the lanes. Red is you (agit-red, `you`), rivals take their marker ink (`rival`, ribbon-violet,
- * until the per-rival inks of #565: one `[data-ink]` line each). On Night shift agit-red reads 1.76:1 on the
+ * line and the lanes. Red is you (agit-red, `you`), each rival takes its own ink (`rival-0`..`rival-11`, #565,
+ * bible 3.1: one `[data-ink]` line each, below). On Night shift agit-red reads 1.76:1 on the
  * night ground, so your marks carry a 1px `fg` edge (night-ink: 5.52:1 against the red, 9.72:1 against the
  * ground) and your lane adds the ink `YOU` tag (colour is never the only cue, R80). The checkered finish is
  * a hard-edged repeating gradient of the finish tokens (bible 6: no blur).
@@ -43,7 +43,7 @@
   width: 2px;
   height: 12px;
   translate: -50% 0;
-  background: var(--color-rival);
+  background: var(--_ink, var(--color-rival));
 }
 
 .tick[data-you="true"] {
@@ -92,11 +92,44 @@
   padding: 6px 10px;
 }
 
-.lane[data-ink="rival"] {
-  --_ink: var(--color-rival);
+/* identity inks (#565, bible 3.1): rival inks appear only on race-card markers, placards and scarves */
+.inked[data-ink="rival-0"] {
+  --_ink: var(--color-rival-0);
 }
-
-.lane[data-you="true"] {
+.inked[data-ink="rival-1"] {
+  --_ink: var(--color-rival-1);
+}
+.inked[data-ink="rival-2"] {
+  --_ink: var(--color-rival-2);
+}
+.inked[data-ink="rival-3"] {
+  --_ink: var(--color-rival-3);
+}
+.inked[data-ink="rival-4"] {
+  --_ink: var(--color-rival-4);
+}
+.inked[data-ink="rival-5"] {
+  --_ink: var(--color-rival-5);
+}
+.inked[data-ink="rival-6"] {
+  --_ink: var(--color-rival-6);
+}
+.inked[data-ink="rival-7"] {
+  --_ink: var(--color-rival-7);
+}
+.inked[data-ink="rival-8"] {
+  --_ink: var(--color-rival-8);
+}
+.inked[data-ink="rival-9"] {
+  --_ink: var(--color-rival-9);
+}
+.inked[data-ink="rival-10"] {
+  --_ink: var(--color-rival-10);
+}
+.inked[data-ink="rival-11"] {
+  --_ink: var(--color-rival-11);
+}
+.inked[data-ink="you"] {
   --_ink: var(--color-you);
 }
 

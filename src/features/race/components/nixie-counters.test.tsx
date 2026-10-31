@@ -3,7 +3,7 @@ import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { hudLabelFixtures } from "../view/hud-labels";
-import { NIXIE_WPM_MAX, NixieCounters, nixieNumber } from "./nixie-counters";
+import { NIXIE_WPM_MAX, NixieCounters, nixieClock, nixieNumber } from "./nixie-counters";
 
 // Contract of #560 C1 (markup and CSS; the computed glow is checked in e2e/race/hud.spec.ts).
 const EN = hudLabelFixtures.en.nixie;
@@ -91,5 +91,46 @@ describe("NixieCounters (#560 C1)", () => {
     expect(tube).toMatch(/box-shadow:\s*inset 0 0 \d+px var\(--color-device-nixie-glow\)/);
     // the numerals' own glow is the scoped device-nixie utility (tokens.css), never a second recipe
     expect(tube).not.toMatch(/text-shadow/);
+  });
+});
+
+// Contract of #240 C1 (the tube half): the optional third tube, `mm:ss` in the type-device role, absent
+// without a timer; the bezel's words add the time left.
+describe("NixieCounters timer tube (#240 C1)", () => {
+  it("nixieClock reads whole seconds as mm:ss, clamped at 00:00", () => {
+    expect(nixieClock(60)).toBe("01:00");
+    expect(nixieClock(59)).toBe("00:59");
+    expect(nixieClock(600)).toBe("10:00");
+    expect(nixieClock(5)).toBe("00:05");
+    expect(nixieClock(0)).toBe("00:00");
+    expect(nixieClock(-2)).toBe("00:00");
+    expect(nixieClock(Number.NaN)).toBe("00:00");
+  });
+
+  it("is absent without a timer: two tubes, the words unchanged", () => {
+    for (const remainingS of [undefined, null]) {
+      const out = html(
+        <NixieCounters wpm={42} place={4} total={30} remainingS={remainingS} labels={EN} />,
+      );
+      expect(tubes(out).map((t) => t.name)).toEqual(["wpm", "place"]);
+      expect(out).not.toContain(EN.time);
+      expect(out).toContain('aria-label="Words per minute 42, place 4 of 30"');
+    }
+  });
+
+  it("with a timer: a third tube in mm:ss, type-device and the nixie glow, tagged TIME / TEMPS", () => {
+    const out = html(<NixieCounters wpm={42} place={4} total={30} remainingS={59} labels={EN} />);
+    const t = tubes(out);
+    expect(t.map((x) => x.name)).toEqual(["wpm", "place", "timer"]);
+    expect(t[2]!.text).toBe("00:59");
+    expect(t[2]!.attrs).toContain("type-device");
+    expect(t[2]!.attrs).toContain("device-nixie");
+    expect(out).toContain(">TIME<");
+    expect(out).toContain('aria-label="Words per minute 42, place 4 of 30, 00:59 left"');
+    const fr = html(<NixieCounters wpm={0} place={null} total={2} remainingS={60} labels={FR} />);
+    expect(fr).toContain(">TEMPS<");
+    expect(fr).toContain(
+      'aria-label="Mots par minute 0, 2 dactylos, pas encore de rang, 01:00 restant"',
+    );
   });
 });

@@ -15,6 +15,10 @@ export type NixieLabels = {
   aria: string;
   /** Before a place exists (before the start): `{wpm}`, `{total}`. */
   ariaNoPlace: string;
+  /** The timer tube's tag (#240): `TIME` / `TEMPS`. */
+  time: string;
+  /** Appended to the words while a timer runs (#240): `, {time} left` (`{time}` = mm:ss). */
+  ariaTime: string;
 };
 
 export type RaceCardLabels = {
@@ -83,6 +87,8 @@ export const hudLabelFixtures = {
       place: "PLACE",
       aria: "Words per minute {wpm}, place {place} of {total}",
       ariaNoPlace: "Words per minute {wpm}, {total} typists, no place yet",
+      time: "TIME",
+      ariaTime: ", {time} left",
     },
     raceCard: {
       title: "RACE CARD",
@@ -131,6 +137,8 @@ export const hudLabelFixtures = {
       place: "RANG",
       aria: "Mots par minute {wpm}, rang {place} sur {total}",
       ariaNoPlace: "Mots par minute {wpm}, {total} dactylos, pas encore de rang",
+      time: "TEMPS",
+      ariaTime: ", {time} restant",
     },
     raceCard: {
       title: "FICHE DE COURSE",

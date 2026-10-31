@@ -265,6 +265,10 @@ export const en = {
     stamps: {
       overtake: { ru: "ОБГОН!", text: "OVERTAKE +1" },
       passed: { ru: "ОБОГНАЛИ", text: "PASSED −1" },
+      /** Your finish (#240, bible 2, 7.7): zero errors, otherwise the error count (singular for one). */
+      accepted: "ACCEPTED · {wpm} WPM",
+      returned: "RETURNED · {n} ERRORS",
+      returnedOne: "RETURNED · 1 ERROR",
     },
     /** The race announcer (#232 C4; #242 adds the rest). */
     announce: { overtake: "You passed desk {desk}", passed: "Desk {desk} passed you" },
@@ -299,6 +303,29 @@ export const en = {
       place: "PLACE",
       aria: "Words per minute {wpm}, place {place} of {total}",
       ariaNoPlace: "Words per minute {wpm}, {total} typists, no place yet",
+      /** The timer tube (#240): its tag, and the words added to the bezel's name (`{time}` = mm:ss). */
+      time: "TIME",
+      ariaTime: ", {time} left",
+    },
+    /** The finished view (#240, bible 2, 7.4, 14.4): the docket after your finish and at RACE OVER. */
+    finish: {
+      filed: "FILED",
+      over: "RACE OVER",
+      reason: { "all-finished": "ALL FINISHED", timer: "TIME'S UP" },
+      standings: "Standings",
+      desk: "DESK {n}",
+      you: "YOU",
+      progress: "{n}\u00a0%",
+      wpm: "{n} WPM",
+      status: {
+        typing: "TIMED OUT",
+        finished: "FILED",
+        abandoned: "REASSIGNED",
+        asleep: "ASLEEP AT DESK",
+        "line-cut": "LINE CUT",
+        expired: "EXPIRED",
+      },
+      report: "DAWN REPORT →",
     },
     raceCard: {
       title: "RACE CARD",

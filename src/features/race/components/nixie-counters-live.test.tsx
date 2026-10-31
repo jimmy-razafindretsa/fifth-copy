@@ -26,8 +26,13 @@ const { createRaceStore } = await import("../client/store");
 const { RaceStoreProvider } = await import("../client/use-race-store");
 const { selectWpm } = await import("../view/counters");
 const { hudLabelFixtures } = await import("../view/hud-labels");
-const { createWpmSampler, NixieCountersLive, WPM_SAMPLE_MS } =
-  await import("./nixie-counters-live");
+const {
+  createRemainingSampler,
+  createWpmSampler,
+  NixieCountersLive,
+  TIMER_SAMPLE_MS,
+  WPM_SAMPLE_MS,
+} = await import("./nixie-counters-live");
 type RaceEvent = import("../client/store").RaceEvent;
 type RaceStore = import("../client/store").RaceStore;
 
@@ -268,9 +273,11 @@ describe("NixieCountersLive (#225 C2)", () => {
     expect(html).toContain('aria-label="Words per minute 0, 0 typists, no place yet"');
     expect(html).toContain(">00<");
     expect(html).toContain("00 / 00");
-    // the WPM from the sampler, the place and the total from the race store; server snapshots read 0
-    expect(calls).toHaveLength(3);
-    for (const [, , server] of calls) expect(server!()).toBe(0);
+    // the WPM and the timer (#240) from their samplers, the place and the total from the race store;
+    // server snapshots read 0, the timer's null (no tube on the server)
+    expect(calls).toHaveLength(4);
+    expect(calls.map(([, , server]) => server!())).toEqual([0, null, 0, 0]);
+    expect(html).not.toContain('data-tube="timer"');
   });
 
   it("the place re-renders at most once per snapshot: two primitives that keys never move", () => {
@@ -305,5 +312,54 @@ describe("NixieCountersLive (#225 C2)", () => {
     const sampler = createWpmSampler(store, { timer: clock.timer });
     expect(sampler.read()).toBe(selectWpm(store.getState(), clock.timer.now()));
     expect(sampler.read()).toBeGreaterThan(0);
+  });
+});
+
+// #240 C1: the timer tube samples `selectRemaining` on the same bounded clock: it ticks from the
+// countdown while a timer is set, never without one, and stops (frozen) once the server ends the race.
+describe("createRemainingSampler (#240 C1)", () => {
+  const timed = { ...welcome, settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 } };
+  const timedRace = { ...RACE, timerS: 60 };
+
+  it("counts down once a second on the corrected clock, and freezes at the race end", () => {
+    const clock = fakeTimer();
+    const store = createRaceStore();
+    store.dispatch({ type: "welcome", payload: timed, receivedAt: clock.now });
+    const sampler = createRemainingSampler(store, { timer: clock.timer });
+    const seen: Array<number | null> = [];
+    const off = sampler.subscribe(() => seen.push(sampler.read()));
+    expect(sampler.read()).toBeNull();
+    store.dispatch({ type: "countdown", payload: { v: PROTOCOL_VERSION, race: timedRace } });
+    expect(sampler.read()).toBe(60);
+    // GO is 3 s away on the server clock; then 2.5 s of race
+    clock.advance(3_000);
+    store.dispatch({ type: "go" });
+    clock.advance(2_500);
+    expect(sampler.read()).toBe(58);
+    expect(seen).toEqual([60, 59, 58]);
+    expect(clock.pending).toBe(1);
+    store.dispatch({
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "all-finished", ranking: [] },
+      at: clock.now,
+    });
+    expect(clock.pending).toBe(0);
+    clock.stall(10_000);
+    expect(sampler.read()).toBe(58);
+    off();
+    expect(TIMER_SAMPLE_MS).toBeLessThanOrEqual(250);
+  });
+
+  it("never ticks without a timer", () => {
+    const clock = fakeTimer();
+    const store = createRaceStore();
+    store.dispatch({ type: "welcome", payload: welcome, receivedAt: clock.now });
+    const sampler = createRemainingSampler(store, { timer: clock.timer });
+    const off = sampler.subscribe(() => {});
+    store.dispatch({ type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } });
+    store.dispatch({ type: "go" });
+    expect(sampler.read()).toBeNull();
+    expect(clock.pending).toBe(0);
+    off();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_RACE_SETTINGS, type RaceSettings } from "@fifth-copy/protocol";
+import { DEFAULT_RACE_SETTINGS, MAX_BOTS, type RaceSettings } from "@fifth-copy/protocol";
 import type { HostSettingsResult } from "@/features/race";
 import {
   BOUNDS,
@@ -7,6 +7,7 @@ import {
   hostRows,
   IDLE_FORM,
   reduceForm,
+  submitLobbyType,
   submitSetting,
   validate,
   type FormState,
@@ -36,7 +37,7 @@ describe("BOUNDS (read from the schema, never restated)", () => {
 });
 
 describe("hostRows (C1, C3)", () => {
-  it("defaults: every field but bots and lobbyType, no accents row, the backspace row", () => {
+  it("defaults: every field, no accents row, the backspace row, no bot sub-row", () => {
     expect(hostRows(S())).toEqual([
       "language",
       "textType",
@@ -50,7 +51,15 @@ describe("hostRows (C1, C3)", () => {
       "errorMode",
       "backspace",
       "bonuses",
+      "bots",
+      "lobbyType",
     ]);
+  });
+
+  it("#114 C1: one sub-row per bot right under BOTS, 1-based in desk order", () => {
+    const rows = hostRows(S({ bots: [{ level: "clerk" }, { level: "major" }, { level: "recruit" }] }));
+    const at = rows.indexOf("bots");
+    expect(rows.slice(at)).toEqual(["bots", "bots.1", "bots.2", "bots.3", "lobbyType"]);
   });
 
   it("the accents row only in French; the recipe rows only while custom; no backspace in block", () => {
@@ -125,6 +134,41 @@ describe("buildPatch (C2, C3)", () => {
     expect(buildPatch("practiceLetters", "é", S())).toEqual({
       practiceLetters: ["e", "́"],
     });
+  });
+});
+
+describe("buildPatch bots (#114 C1)", () => {
+  const TWO = S({ bots: [{ level: "clerk" }, { level: "major" }] });
+
+  it("ADD A BOT appends one bot at Clerk; the whole array is sent", () => {
+    expect(buildPatch("bots", null, S())).toEqual({ bots: [{ level: "clerk" }] });
+    expect(buildPatch("bots", null, TWO)).toEqual({
+      bots: [{ level: "clerk" }, { level: "major" }, { level: "clerk" }],
+    });
+  });
+
+  it("a level rebuilds the array with that bot's level; the same level builds nothing", () => {
+    expect(buildPatch("bots.1", "officer", TWO)).toEqual({
+      bots: [{ level: "officer" }, { level: "major" }],
+    });
+    expect(buildPatch("bots.2", "major", TWO)).toBeNull();
+  });
+
+  it("REMOVE drops that bot; a row that does not exist builds nothing", () => {
+    expect(buildPatch("bots.1", null, TWO)).toEqual({ bots: [{ level: "major" }] });
+    expect(buildPatch("bots.2", null, TWO)).toEqual({ bots: [{ level: "clerk" }] });
+    expect(buildPatch("bots.3", null, TWO)).toBeNull();
+    expect(buildPatch("bots.0", "clerk", TWO)).toBeNull();
+  });
+
+  it("the schema caps the count: a 30th bot is refused before it leaves the page", () => {
+    const full = S({ bots: Array.from({ length: MAX_BOTS }, () => ({ level: "clerk" as const })) });
+    expect(validate(buildPatch("bots", null, full)!)).toEqual({ ok: false, error: "invalid" });
+    expect(validate(buildPatch("bots", null, TWO)!).ok).toBe(true);
+  });
+
+  it("LOBBY is never a room patch (ADR 0008)", () => {
+    expect(buildPatch("lobbyType", "public", S())).toBeNull();
   });
 });
 
@@ -255,5 +299,55 @@ describe("submitSetting with a fake RoomSocket (C2, C4)", () => {
     await submitSetting({ ...h, form: IDLE_FORM, settings: S() }, "errorMode", "continue");
     expect(h.send).not.toHaveBeenCalled();
     expect(h.dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitLobbyType with a fake action (#114 C3)", () => {
+  function harness(result: Awaited<ReturnType<Parameters<typeof submitLobbyType>[0]["send"]>>) {
+    const send = vi.fn(async () => result);
+    let state: FormState = IDLE_FORM;
+    const dispatch = vi.fn((e: Parameters<typeof reduceForm>[1]) => {
+      state = reduceForm(state, e);
+    });
+    return { send, dispatch, state: () => state };
+  }
+
+  it("ok: sent once with the type, pending until the answer, then idle", async () => {
+    const h = harness({ ok: true });
+    const done = submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "public");
+    expect(h.state()).toEqual({ status: "pending", key: "lobbyType" });
+    await done;
+    expect(h.send).toHaveBeenCalledExactlyOnceWith("public");
+    expect(h.state()).toEqual(IDLE_FORM);
+  });
+
+  it.each([
+    ["closed", "not-waiting"],
+    ["not-found", "no-room"],
+    ["invalid", "invalid"],
+    ["rate-limited", "timeout"],
+  ] as const)("a %s answer is the form's %s line", async (answer, error) => {
+    const h = harness({ ok: false, error: answer });
+    await submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "public");
+    expect(h.state()).toEqual({ status: "error", key: "lobbyType", error });
+  });
+
+  it("not-host hides the form", async () => {
+    const h = harness({ ok: false, error: "not-host" });
+    await submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "public");
+    expect(h.state()).toEqual({ status: "hidden" });
+  });
+
+  it("nothing is sent for the current type, while pending, or for an unknown type", async () => {
+    const h = harness({ ok: true });
+    await submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "private");
+    await submitLobbyType(
+      { ...h, form: { status: "pending", key: "language" }, current: "private" },
+      "public",
+    );
+    expect(h.dispatch).not.toHaveBeenCalled();
+    await submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "secret");
+    expect(h.send).not.toHaveBeenCalled();
+    expect(h.state()).toEqual({ status: "error", key: "lobbyType", error: "invalid" });
   });
 });

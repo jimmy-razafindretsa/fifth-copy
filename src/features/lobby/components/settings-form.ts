@@ -1,11 +1,13 @@
 import {
   raceSettingsPatchSchema,
   raceSettingsSchema,
+  type BotLevel,
   type Difficulty,
   type RaceSettings,
   type RaceSettingsPatch,
 } from "@fifth-copy/protocol";
 import type { HostSettingsResult } from "@/features/race";
+import type { SetLobbyTypeResult } from "../types";
 
 /**
  * The host's settings form (#110, spec 8), pure: which rows the host edits, the one place a control
@@ -16,9 +18,22 @@ import type { HostSettingsResult } from "@/features/race";
 /** The custom recipe's fields, each a row of its own under DIFFICULTY while the level is `custom`. */
 export type RecipeField = "wordLength" | "rareLetters" | "punctuationDensity";
 
-/** A row the host edits: every setting but `bots` and `lobbyType` (#114), plus the recipe rows. */
-export type FormKey =
-  Exclude<keyof RaceSettings, "bots" | "lobbyType"> | `difficulty.${RecipeField}`;
+/** One bot's sub-row under BOTS (#114), 1-based in desk order: `bots.1` is the first bot. */
+export type BotKey = `bots.${number}`;
+
+/**
+ * A row the host edits: every setting, plus the recipe rows and one sub-row per bot (#114). `bots` is
+ * the BOTS row itself (its control adds a bot); `lobbyType` is the LOBBY row, written by the web action
+ * `setLobbyType` (Postgres owns `Lobby.type`, ADR 0008), never by a `host:settings` patch.
+ */
+export type FormKey = keyof RaceSettings | `difficulty.${RecipeField}` | BotKey;
+
+/** The lobby's visibility as the docket and the action name it. */
+export type LobbyKind = RaceSettings["lobbyType"];
+export const LOBBY_KINDS = raceSettingsSchema.shape.lobbyType.options;
+
+/** A new bot files at Clerk, the lowest level that beats a learner (bible 14.3, #114). */
+export const NEW_BOT_LEVEL: BotLevel = "clerk";
 
 /** What a control hands over: a segment's option, a toggle's boolean, an input's text, or `null` (NO TIMER). */
 export type RawValue = string | boolean | null;
@@ -69,9 +84,15 @@ export function hostRows(settings: RaceSettings): FormKey[] {
   rows.push("practiceLetters", "includeNumbers", "includeSymbols", "includePunctuation", "timerS");
   rows.push("errorMode");
   if (settings.errorMode === "continue") rows.push("backspace");
-  rows.push("bonuses");
+  rows.push("bonuses", "bots");
+  settings.bots.forEach((_, i) => rows.push(`bots.${i + 1}`));
+  rows.push("lobbyType");
   return rows;
 }
+
+/** The 0-based index of a bot sub-row key, or -1 for any other key. */
+export const botIndex = (key: FormKey): number =>
+  /^bots\.\d+$/.test(key) ? Number(key.slice("bots.".length)) - 1 : -1;
 
 /** A whole number as typed, or NaN (the schema refuses it): `"1e2"` or `"0x32"` never pass as numbers. */
 const wholeNumber = (raw: RawValue) =>
@@ -80,7 +101,22 @@ const wholeNumber = (raw: RawValue) =>
 /** The letters as typed: whitespace dropped, one entry per code point, never normalised (#583). */
 const letters = (raw: RawValue) => Array.from(String(raw ?? "").replace(/\s+/gu, ""));
 
+function botsPatch(key: FormKey, raw: RawValue, current: RaceSettings): RaceSettingsPatch | null {
+  // ADD A BOT: one more at the new bot level; the schema caps the count (MAX_BOTS)
+  if (key === "bots") return { bots: [...current.bots, { level: NEW_BOT_LEVEL }] };
+  const at = botIndex(key);
+  if (at < 0 || at >= current.bots.length) return null;
+  // REMOVE (`null`) drops the bot; a level replaces its level; the whole array is sent either way
+  const bots =
+    raw === null
+      ? current.bots.filter((_, i) => i !== at)
+      : current.bots.map((b, i) => (i === at ? { level: raw as BotLevel } : b));
+  return { bots };
+}
+
 function patchOf(key: FormKey, raw: RawValue, current: RaceSettings): RaceSettingsPatch | null {
+  if (key === "lobbyType") return null; // the web action's, never a room patch (ADR 0008)
+  if (key === "bots" || key.startsWith("bots.")) return botsPatch(key, raw, current);
   switch (key) {
     case "wordCount":
       return { wordCount: wholeNumber(raw) };
@@ -105,8 +141,9 @@ function patchOf(key: FormKey, raw: RawValue, current: RaceSettings): RaceSettin
 }
 
 /**
- * The one place a control becomes a patch (#114 adds `bots` here): one field, or `null` when the value
- * would not change (a pressed segment, an input left as it was, CUSTOM while custom). Unvalidated.
+ * The one place a control becomes a patch: one field, or `null` when the value would not change (a
+ * pressed segment, an input left as it was, CUSTOM while custom). A bot row rebuilds the whole `bots`
+ * array (#114). Unvalidated.
  */
 export function buildPatch(
   key: FormKey,
@@ -162,10 +199,13 @@ export type FormState =
   | { status: "error"; key: FormKey; error: FormError }
   | { status: "hidden" };
 
+/** An answer to a change: the room's ack, or `setLobbyType`'s mapped onto it (#114). */
+export type FormAck = { ok: true } | Extract<HostSettingsResult, { ok: false }>;
+
 export type FormEvent =
   | { type: "submit"; key: FormKey }
   | { type: "refuse"; key: FormKey; error: LocalError }
-  | { type: "ack"; result: HostSettingsResult };
+  | { type: "ack"; result: FormAck };
 
 export const IDLE_FORM: FormState = { status: "idle" };
 
@@ -205,4 +245,43 @@ export async function submitSetting(
   if (!valid.ok) return ctx.dispatch({ type: "refuse", key, error: valid.error });
   ctx.dispatch({ type: "submit", key });
   ctx.dispatch({ type: "ack", result: await ctx.send(valid.patch) });
+}
+
+/** The `setLobbyType` refusals as the form's own (one error line, no new copy). */
+function lobbyAck(result: SetLobbyTypeResult): FormAck {
+  if (result.ok) return { ok: true };
+  switch (result.error) {
+    case "not-host":
+      return { ok: false, error: "not-host" };
+    case "closed":
+      return { ok: false, error: "not-waiting" };
+    case "not-found":
+      return { ok: false, error: "no-room" };
+    case "rate-limited":
+      return { ok: false, error: "timeout" };
+    default:
+      return { ok: false, error: "invalid" };
+  }
+}
+
+/**
+ * The host pressed PUBLIC or PRIVATE (#114 C3): the same form state as a room patch (one change at a
+ * time, pending until the answer, one error line), but sent to the web action `setLobbyType`; on `ok`
+ * the action's revalidation brings the new `Lobby.type` back as the page's prop.
+ */
+export async function submitLobbyType(
+  ctx: {
+    form: FormState;
+    current: LobbyKind;
+    send: (type: LobbyKind) => Promise<SetLobbyTypeResult>;
+    dispatch: (event: FormEvent) => void;
+  },
+  raw: RawValue,
+): Promise<void> {
+  if (ctx.form.status === "pending" || ctx.form.status === "hidden") return;
+  if (raw === ctx.current) return;
+  const type = LOBBY_KINDS.find((k) => k === raw);
+  if (!type) return ctx.dispatch({ type: "refuse", key: "lobbyType", error: "invalid" });
+  ctx.dispatch({ type: "submit", key: "lobbyType" });
+  ctx.dispatch({ type: "ack", result: lobbyAck(await ctx.send(type)) });
 }

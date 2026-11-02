@@ -14,6 +14,7 @@ import { IDLE_FORM, type FormState } from "./settings-form";
 
 // Contract of card 107, C6: every state renders, every string from the catalog (C6 greps `src`).
 vi.mock("../actions/mint-race-token", () => ({ mintRaceToken: vi.fn() }));
+vi.mock("../actions/set-lobby-type", () => ({ setLobbyType: vi.fn() }));
 
 const labels = en.lobby;
 const errors = en.landing.errors;
@@ -377,11 +378,16 @@ describe("host settings form (#110)", () => {
   const settingsOf = (html: string) =>
     html.slice(html.indexOf(labels.settings.tag), html.indexOf("data-start"));
   const controls = (html: string) => settingsOf(html).match(/<(button|input)[ >]/g)?.length ?? 0;
-  const hostView = (form: FormState, state = live([host, guest], 1)) =>
+  const hostView = (
+    form: FormState,
+    state = live([host, guest], 1),
+    lobbyType?: "public" | "private",
+  ) =>
     renderToStaticMarkup(
       <LobbyLiveView
         code={CODE}
         state={state}
+        lobbyType={lobbyType}
         labels={labels}
         errors={errors}
         form={form}
@@ -389,13 +395,30 @@ describe("host settings form (#110)", () => {
       />,
     );
 
-  it("the host edits every row but BOTS and LOBBY; the guest reads the rows", () => {
+  it("the host edits every row, BOTS and LOBBY included (#114); the guest reads the rows", () => {
     const html = hostView(IDLE_FORM);
     expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-errorMode"/);
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-lobbyType"/);
+    expect(settingsOf(html)).toContain(">ADD A BOT</button>");
     expect(controls(html)).toBeGreaterThan(20);
-    expect(settingsOf(html)).toContain(">NONE</dd>");
     expect(controls(view(live([host, guest], 2)))).toBe(0);
     expect(view(live([host, guest], 2))).toContain(">CONTINUE</dd>");
+  });
+
+  it("#114 C3, C4: LOBBY shows the row's Lobby.type over the room's copy, host and guest", () => {
+    expect(hostView(IDLE_FORM, live([host, guest], 1), "public")).toMatch(
+      /aria-pressed="true"[^>]*>PUBLIC<\/button>/,
+    );
+    const guestView = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={live([host, guest], 2)}
+        lobbyType="public"
+        labels={labels}
+        errors={errors}
+      />,
+    );
+    expect(guestView).toMatch(/data-setting="lobbyType"[\s\S]*?>PUBLIC<\/dd>/);
   });
 
   it("pending: the changed row is busy and every control waits", () => {

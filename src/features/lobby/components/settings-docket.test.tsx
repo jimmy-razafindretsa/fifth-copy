@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_RACE_SETTINGS, type RaceSettings } from "@fifth-copy/protocol";
+import { DEFAULT_RACE_SETTINGS, MAX_BOTS, type RaceSettings } from "@fifth-copy/protocol";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { hostForm } from "./settings-controls";
@@ -169,12 +169,13 @@ describe("SettingsDocket host form (#110 C1)", () => {
     form: FormState = IDLE_FORM,
     labels = EN,
     prefix = PREFIX,
+    seated = 1,
   ) =>
     renderToStaticMarkup(
       <SettingsDocket
         settings={settings}
         labels={labels}
-        {...hostForm({ settings, labels, form, revision: 0, prefix })}
+        {...hostForm({ settings, labels, form, revision: 0, seated, prefix })}
       />,
     );
   /** The markup of each row by its `data-setting` key. */
@@ -187,12 +188,10 @@ describe("SettingsDocket host form (#110 C1)", () => {
     );
   const hasControl = (row = "") => /<(button|input)[ >]/.test(row);
 
-  it("every row the host edits has its control; bots and lobby stay read-only", () => {
-    const rows = rowsOf(host(S()));
-    for (const key of hostRows(S())) expect(hasControl(rows[key]), key).toBe(true);
-    expect(hasControl(rows.bots)).toBe(false);
-    expect(hasControl(rows.lobbyType)).toBe(false);
-    expect(rows.bots).toContain(">NONE</dd>");
+  it("every row the host edits has its control, BOTS and LOBBY included (#114)", () => {
+    const settings = S({ bots: [{ level: "clerk" }] });
+    const rows = rowsOf(host(settings));
+    for (const key of hostRows(settings)) expect(hasControl(rows[key]), key).toBe(true);
   });
 
   it("segmented toggles named by their row label, the current value pressed", () => {
@@ -291,6 +290,88 @@ describe("SettingsDocket host form (#110 C1)", () => {
     expect(html).toMatch(/aria-pressed="true"[^>]*>SANS CHRONO<\/button>/);
     expect(html).toContain("RETOURNÉ ·");
     expect(html).toContain("Le chrono prend un nombre entier de minutes de 1 à 10.");
+  });
+
+  it("#114 C1: no bot, no sub-row: BOTS holds ADD A BOT alone", () => {
+    const rows = rowsOf(host(S()));
+    expect(rows.bots).toMatch(/<button type="button"[^>]*>ADD A BOT<\/button>/);
+    expect(rows.bots).not.toMatch(/aria-disabled/);
+    expect(Object.keys(rows).filter((k) => k.startsWith("bots."))).toEqual([]);
+  });
+
+  it("#114 C1: one sub-row per bot: BOT n | the level segments and its WPM | REMOVE BOT n", () => {
+    const html = host(S({ bots: [{ level: "clerk" }, { level: "major" }, { level: "recruit" }] }));
+    const order = [...html.matchAll(/data-setting="([^"]+)"/g)].map((m) => m[1]);
+    const at = order.indexOf("bots");
+    expect(order.slice(at)).toEqual(["bots", "bots.1", "bots.2", "bots.3", "lobbyType"]);
+    const rows = rowsOf(html);
+    expect(rows["bots.2"]).toContain('<dt id="lobby-setting-bots-2"');
+    expect(rows["bots.2"]).toContain(">BOT 2</dt>");
+    expect(rows["bots.2"]).toMatch(/role="group" aria-labelledby="lobby-setting-bots-2"/);
+    for (const level of ["RECRUIT", "CLERK", "OFFICER", "COMMISSAR", "MAJOR"])
+      expect(rows["bots.2"]).toMatch(new RegExp(`aria-pressed="(true|false)"[^>]*>${level}</button>`));
+    expect(rows["bots.2"]).toMatch(/aria-pressed="true"[^>]*>MAJOR<\/button>/);
+    expect(rows["bots.2"]).toContain(">90 WPM</span>");
+    expect(rows["bots.1"]).toContain(">35 WPM</span>");
+    expect(rows["bots.3"]).toContain(">20 WPM</span>");
+    expect(rows["bots.2"]).toMatch(
+      /id="lobby-setting-bots-2-remove" aria-labelledby="lobby-setting-bots-2-remove lobby-setting-bots-2"[^>]*>REMOVE<\/button>/,
+    );
+  });
+
+  it("#114 C1: ADD A BOT is unavailable at MAX_BOTS bots and when the 30 desks are taken", () => {
+    const capped = /<button type="button" aria-disabled="true" data-full="true"[^>]*>ADD A BOT</;
+    const full = S({ bots: Array.from({ length: MAX_BOTS }, () => ({ level: "clerk" as const })) });
+    expect(rowsOf(host(full, IDLE_FORM, EN, PREFIX, 30)).bots).toMatch(capped);
+    expect(rowsOf(host(S({ bots: [{ level: "clerk" }] }), IDLE_FORM, EN, PREFIX, 30)).bots).toMatch(
+      capped,
+    );
+    expect(rowsOf(host(S({ bots: [{ level: "clerk" }] }), IDLE_FORM, EN, PREFIX, 29)).bots).not.toMatch(
+      /aria-disabled/,
+    );
+  });
+
+  it("#114 C1, C3: a pending bot or lobby change marks its own row busy; refusals point at it", () => {
+    const settings = S({ bots: [{ level: "clerk" }, { level: "major" }] });
+    expect(rowsOf(host(settings, { status: "pending", key: "bots.2" }))["bots.2"]).toMatch(
+      /^bots\.2"[^>]*aria-busy="true"/,
+    );
+    const lobby = rowsOf(host(settings, { status: "pending", key: "lobbyType" })).lobbyType;
+    expect(lobby).toMatch(/^lobbyType"[^>]*aria-busy="true"/);
+    const refused = host(settings, { status: "error", key: "lobbyType", error: "not-waiting" });
+    expect(rowsOf(refused).lobbyType).toContain('aria-describedby="lobby-settings-error"');
+    expect(refused).toContain("RETURNED ·</span> This race has already started.");
+  });
+
+  it("#114 C3: LOBBY is a PUBLIC | PRIVATE segmented toggle, the current type pressed", () => {
+    const row = rowsOf(host(S({ lobbyType: "public" }))).lobbyType;
+    expect(row).toMatch(/role="group" aria-labelledby="lobby-setting-lobbyType"/);
+    expect(row).toMatch(/aria-pressed="true"[^>]*>PUBLIC<\/button><button[^>]*aria-pressed="false"[^>]*>PRIVATE</);
+  });
+
+  it("#114 French: the bot rows and the lobby toggle from the French catalog", () => {
+    const html = host(S({ bots: [{ level: "officer" }] }), IDLE_FORM, FR, fr.landing.errors.prefix);
+    const rows = rowsOf(html);
+    expect(rows.bots).toContain(">AJOUTER UN BOT</button>");
+    expect(rows["bots.1"]).toContain(">BOT 1</dt>");
+    expect(rows["bots.1"]).toContain(">50 MPM</span>");
+    expect(rows["bots.1"]).toContain(">RETIRER</button>");
+    expect(rows["bots.1"]).toMatch(/aria-pressed="true"[^>]*>OFFICIER<\/button>/);
+    expect(rows.lobbyType).toMatch(/aria-pressed="true"[^>]*>PRIVÉE<\/button>/);
+  });
+
+  it("#114 C4: the guest reads BOTS and LOBBY as words", () => {
+    const rows = rowsOf(
+      renderToStaticMarkup(
+        <SettingsDocket
+          settings={S({ bots: [{ level: "clerk" }, { level: "major" }], lobbyType: "public" })}
+          labels={EN}
+        />,
+      ),
+    );
+    expect(rows.bots).toContain(">2 BOTS · CLERK, MAJOR</dd>");
+    expect(rows.lobbyType).toContain(">PUBLIC</dd>");
+    expect(hasControl(rows.bots)).toBe(false);
   });
 
   it("the guest view has no control at all", () => {

@@ -6,3 +6,7 @@ export const codeInputSchema = z.object({ code: z.string().trim().min(1).max(16)
 export const mintRaceTokenInputSchema = codeInputSchema.extend({
   spectator: z.boolean().optional(),
 });
+/** setLobbyType's input (#114): the room and the visibility to file; never a user id. */
+export const setLobbyTypeInputSchema = codeInputSchema.extend({
+  type: z.enum(["public", "private"]),
+});

@@ -8,6 +8,7 @@ import { TypingMachineLive } from "../components/machine/typing-machine-live";
 import { NixieCountersLive } from "../components/nixie-counters-live";
 import type { RaceSeatInfo } from "../queries/get-race-seat";
 import { RaceSeatLive } from "./race-seat-live";
+import { SeatFrame } from "./seat-frame";
 import { SeatAbandon, SeatKicker, SeatRaceCard, SeatSheet, SeatTelex } from "./seat-leaves";
 import type { RaceSeatLabels } from "./seat-view";
 
@@ -63,6 +64,7 @@ export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
         tray={<SabotageTray card={null} cooldownS={0} hint={null} labels={labels.sabotageTray} />}
         abandon={<SeatAbandon labels={labels.abandon} />}
         phones={labels.notice.phones}
+        frame={SeatFrame}
       />
     </RaceStoreProvider>
   );

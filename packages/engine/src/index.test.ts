@@ -46,8 +46,30 @@ describe("@fifth-copy/engine", () => {
     "canPlay",
     "canHit",
     "record",
+    "BOT_LEVELS",
+    "BOT_LEVEL_WPM",
+    "botProfile",
+    "nextBotKeystroke",
   ])("re-exports %s", (name) => {
     expect(engine).toHaveProperty(name);
+  });
+
+  it("exposes the bot interface (#729): a profile per level and its next key", () => {
+    const profile: engine.BotProfile = engine.botProfile("officer");
+    const level: engine.BotLevel = engine.BOT_LEVELS[2];
+    expect(profile).toMatchObject({ level, targetWpm: engine.BOT_LEVEL_WPM.officer });
+    const ctx: engine.BotContext = {
+      chars: engine.charsOf("OK"),
+      state: engine.initialState(),
+      settings: { errorMode: "block", backspace: true },
+      elapsedMs: 0,
+    };
+    const action: engine.BotAction | null = engine.nextBotKeystroke(
+      profile,
+      ctx,
+      engine.mulberry32(1),
+    );
+    expect(action).toEqual({ key: "O", delayMs: 240 });
   });
 
   it("drives a keystroke end to end through the public entry point", () => {

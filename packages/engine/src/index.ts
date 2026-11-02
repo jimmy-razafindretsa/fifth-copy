@@ -82,6 +82,18 @@ export {
   type BonusLogEntry,
 } from "./bonus/ledger";
 
+// bots: the bot typing model's interface (stub until #361; the race server driver, #366, calls only this)
+export {
+  BOT_LEVEL_WPM,
+  BOT_LEVELS,
+  botProfile,
+  nextBotKeystroke,
+  type BotAction,
+  type BotContext,
+  type BotLevel,
+  type BotProfile,
+} from "./bots";
+
 // ranking: one comparator for live and final order
 export { compareResults, placeOf, rank, type Rankable } from "./ranking/compare";
 

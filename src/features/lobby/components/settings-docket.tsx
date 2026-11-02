@@ -7,6 +7,13 @@ export type SettingsLabels = LobbyLabels["settings"];
 export type SettingKey = keyof RaceSettings;
 /** Per-key controls (#110): a key's control takes its value's place in the row; the label stays. */
 export type SettingControls = Partial<Record<SettingKey, ReactNode>>;
+/** Extra rows of the same recipe right after a key's row (#110: the custom recipe under DIFFICULTY). */
+export type SettingSubRows = Partial<
+  Record<SettingKey, ReadonlyArray<{ key: string; label: string; control: ReactNode }>>
+>;
+
+/** The id of a row's label (`dt`): the row's control is named by it (`aria-labelledby`). */
+export const settingLabelId = (key: string) => `lobby-setting-${key.replace(/\./g, "-")}`;
 
 type SettingRowSpec = {
   key: SettingKey;
@@ -91,16 +98,24 @@ const SKELETON_ROWS = 14;
  * The read-only `FORM 5-L · RACE SETTINGS` docket (#498, bible 7.4, spec 8): the values every member
  * sees, following the host's changes live (the store replaces `settings` on every broadcast). Newsprint
  * docket, mono header plus Oswald tag, `120px | 1fr` rows with dashed separators; newsprint skeleton
- * blocks while `settings` is null. `controls` swaps a row's value for the host's control (#110).
+ * blocks while `settings` is null. The host's form (#110) plugs in through `controls` (a row's value
+ * becomes its control), `after` (rows under a row), `busy` (the row whose change is on its way) and
+ * `error` (the inline error line under the rows).
  */
 export function SettingsDocket({
   settings,
   labels,
   controls,
+  after,
+  busy,
+  error,
 }: {
   settings: RaceSettings | null;
   labels: SettingsLabels;
   controls?: SettingControls;
+  after?: SettingSubRows;
+  busy?: string;
+  error?: ReactNode;
 }) {
   return (
     <section aria-label={labels.tag} className={`${styles.docket} ${styles.settings}`}>
@@ -109,14 +124,27 @@ export function SettingsDocket({
         <span className={styles.tag}>{labels.tag}</span>
       </div>
       {settings ? (
-        <dl className={styles.facts}>
-          {settingRows(settings, labels).map((row) => (
-            <div key={row.key} className={styles.row} data-setting={row.key}>
-              <dt className={styles.label}>{row.label}</dt>
-              <dd className={styles.value}>{controls?.[row.key] ?? row.value}</dd>
-            </div>
-          ))}
-        </dl>
+        <>
+          <dl className={styles.facts}>
+            {settingRows(settings, labels).flatMap((row) => [
+              { key: row.key as string, label: row.label, content: controls?.[row.key] ?? row.value },
+              ...(after?.[row.key] ?? []).map((sub) => ({ ...sub, content: sub.control })),
+            ]).map((row) => (
+              <div
+                key={row.key}
+                className={styles.row}
+                data-setting={row.key}
+                aria-busy={busy === row.key || undefined}
+              >
+                <dt id={settingLabelId(row.key)} className={styles.label}>
+                  {row.label}
+                </dt>
+                <dd className={styles.value}>{row.content}</dd>
+              </div>
+            ))}
+          </dl>
+          {error}
+        </>
       ) : (
         <div className={styles.facts} aria-busy="true">
           {Array.from({ length: SKELETON_ROWS }, (_, i) => (

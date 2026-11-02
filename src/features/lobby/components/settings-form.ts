@@ -27,10 +27,18 @@ export type RawValue = string | boolean | null;
 const shape = raceSettingsSchema.shape;
 const timerShape = shape.timerS.unwrap();
 
-/** The numeric inputs' bounds, from the schema (`min`/`max` attributes and the error copy). */
+/** The schema's own limit on practice letters, read from the issue it raises for too long a list. */
+function lettersMax(): number {
+  const tooMany = Array.from({ length: 1000 }, () => "a");
+  const issue = shape.practiceLetters.safeParse(tooMany).error?.issues.find((i) => i.code === "too_big");
+  return issue && "maximum" in issue ? Number(issue.maximum) : 0;
+}
+
+/** The inputs' bounds, from the schema (`min`/`max` attributes and the error copy). */
 export const BOUNDS = {
   words: { min: shape.wordCount.minValue ?? 0, max: shape.wordCount.maxValue ?? 0 },
   minutes: { min: (timerShape.minValue ?? 0) / 60, max: (timerShape.maxValue ?? 0) / 60 },
+  letters: { max: lettersMax() },
 } as const;
 
 /** CUSTOM starts from NORMAL's middle values (bible 14.3, #110). */

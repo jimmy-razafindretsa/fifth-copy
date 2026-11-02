@@ -27,7 +27,11 @@ const CUSTOM = {
 
 describe("BOUNDS (read from the schema, never restated)", () => {
   it("words 10-500, timer 1-10 minutes", () => {
-    expect(BOUNDS).toEqual({ words: { min: 10, max: 500 }, minutes: { min: 1, max: 10 } });
+    expect(BOUNDS).toEqual({
+      words: { min: 10, max: 500 },
+      minutes: { min: 1, max: 10 },
+      letters: { max: 12 },
+    });
   });
 });
 

@@ -318,6 +318,26 @@ export const fr = {
         major: "MAJOR",
       },
       lobbyType: { public: "PUBLIQUE", private: "PRIVÉE" },
+      form: {
+        labels: {
+          wordLength: "LONGUEUR DES MOTS",
+          rareLetters: "LETTRES RARES",
+          punctuationDensity: "DOSE DE PONCTUATION",
+        },
+        wordLength: { short: "COURTS", medium: "MOYENS", long: "LONGS" },
+        punctuationDensity: { none: "AUCUNE", light: "LÉGÈRE", heavy: "ABONDANTE" },
+        minutes: "MIN",
+        errors: {
+          words: "Le nombre de mots est un nombre entier de {min} à {max}.",
+          timer: "Le chrono prend un nombre entier de minutes de {min} à {max}.",
+          "too-many-letters": "Les lettres à pratiquer : {max} lettres au plus.",
+          letters: "Les lettres à pratiquer : des lettres seulement, chacune une fois.",
+          invalid: "La salle a refusé ce réglage.",
+          "not-waiting": "Cette course est déjà commencée.",
+          "no-room": "La salle n'est plus ouverte.",
+          timeout: "La salle n'a pas répondu. Réessaie.",
+        },
+      },
     },
     invite: {
       label: "INVITATION",

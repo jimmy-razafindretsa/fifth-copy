@@ -1,29 +1,12 @@
-import type { BotLevel } from "@fifth-copy/protocol";
+import { BOT_NAMES } from "@fifth-copy/engine";
+import type { BotLevel, RaceLanguage } from "@fifth-copy/protocol";
 import { nextDesk } from "./desks";
 
 /**
  * Bot seats (#156, ADR 0006 point 3, ARCHITECTURE 7.5): pure helpers the registry uses to seat bot
- * members in a room's members hash. Bots do not type here (#361 profile, #366 scheduler).
+ * members in a room's members hash. Bots do not type here (#366 scheduler over the engine's
+ * `nextBotKeystroke`, #361). Names come from the engine's bilingual `BOT_NAMES` (#361).
  */
-
-/**
- * Placeholder in-world clerk names, cycled by desk. #361 replaces this list by name with the final
- * bilingual one (checked against `isClean`).
- */
-export const BOT_NAMES: readonly string[] = [
-  "Clerk Dubois",
-  "Agent 47",
-  "Clerk Moreau",
-  "Inspector Petrov",
-  "Clerk Tremblay",
-  "Officer Kovac",
-  "Clerk Gagnon",
-  "Archivist Lebrun",
-  "Clerk Novak",
-  "Auditor Roy",
-  "Clerk Volkova",
-  "Agent 12",
-];
 
 const BOT_PREFIX = "bot:";
 
@@ -56,13 +39,14 @@ function roman(n: number): string {
 }
 
 /**
- * The bot name of a desk: `BOT_NAMES` cycled by desk, suffixed ` II`, ` III`... from the second
- * cycle on, so two desks of one room never share a bot name.
+ * The bot name of a desk in the race language: `BOT_NAMES[language]` cycled by desk, suffixed
+ * ` II`, ` III`... from the second cycle on, so two desks of one room never share a bot name.
  */
-export function botName(desk: number): string {
-  const index = (desk - 1) % BOT_NAMES.length;
-  const cycle = Math.floor((desk - 1) / BOT_NAMES.length);
-  const base = BOT_NAMES[index]!;
+export function botName(desk: number, language: RaceLanguage): string {
+  const names = BOT_NAMES[language];
+  const index = (desk - 1) % names.length;
+  const cycle = Math.floor((desk - 1) / names.length);
+  const base = names[index]!;
   return cycle === 0 ? base : `${base} ${roman(cycle + 1)}`;
 }
 

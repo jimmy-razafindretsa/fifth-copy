@@ -82,14 +82,17 @@ export {
   type BonusLogEntry,
 } from "./bonus/ledger";
 
-// bots: the bot typing model's interface (stub until #361; the race server driver, #366, calls only this)
+// bots: the bot typing model (#361) and bilingual desk names; the race server driver (#366) calls
+// only `botProfile` and `nextBotKeystroke`
 export {
   BOT_LEVEL_WPM,
   BOT_LEVELS,
+  BOT_NAMES,
   botProfile,
   nextBotKeystroke,
   type BotAction,
   type BotContext,
+  type BotLanguage,
   type BotLevel,
   type BotProfile,
 } from "./bots";
@@ -98,4 +101,4 @@ export {
 export { compareResults, placeOf, rank, type Rankable } from "./ranking/compare";
 
 /** Bumped whenever scoring, ranking or text handling changes. Stored on every race result. */
-export const ENGINE_VERSION = "0.4.0";
+export const ENGINE_VERSION = "0.5.0";

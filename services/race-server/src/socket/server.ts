@@ -185,7 +185,7 @@ export function attachSocketServer(
           log("settings", { lobby, outcome: result.ok ? "ok" : result.reason, keys });
           if (!result.ok) return reply({ ok: false, error: result.reason });
           io.to(everyone).emit("settings", { v: PROTOCOL_VERSION, settings: result.settings });
-          // A `bots` patch re-seated the room (#156): the bot desks changed.
+          // A `bots` patch, or a language change with bots, re-seated the room (#156, #361).
           if (result.members) {
             io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: result.members });
           }

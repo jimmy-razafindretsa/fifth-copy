@@ -21,9 +21,12 @@ export function countdownStep(msToGo: number): CountdownStep | null {
   return null;
 }
 
-/** Milliseconds until `countdownStep` changes, or `null` once the stamp is gone. */
+/**
+ * Milliseconds until `countdownStep` changes, or `null` once the stamp is gone. Exact for a fractional
+ * `msToGo` too (#643: a ping/pong clock offset need not be whole): the next whole second below it.
+ */
 export function nextStepIn(msToGo: number): number | null {
-  if (msToGo > 0) return ((msToGo - 1) % 1000) + 1;
+  if (msToGo > 0) return msToGo - (Math.ceil(msToGo / 1000) - 1) * 1000;
   if (msToGo > -GO_STAMP_MS) return msToGo + GO_STAMP_MS;
   return null;
 }

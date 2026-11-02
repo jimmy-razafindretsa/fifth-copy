@@ -9,7 +9,7 @@ import {
 import type { LastKey } from "../view/machine-props";
 import { raceCardViewFrom, type RaceCardView } from "../view/race-card-view";
 import { NO_TEXT_VIEW, typedViewFrom, type TypedView } from "../view/typed-view";
-import { clockOffset, remainingTo } from "./clock";
+import { bestOffset, clockOffset, remainingTo, type PongSample } from "./clock";
 import {
   createPrediction,
   typedText,
@@ -54,7 +54,10 @@ export type RaceState = {
   resumeKey: Welcome["resumeKey"];
   /** The server clock at the welcome (the first clock offset, #172). */
   serverNow: Welcome["serverNow"] | null;
-  /** Server time = `Date.now()` + this (#214, `clockOffset` of the last welcome; 0 until one). */
+  /**
+   * Server time = `Date.now()` + this (#214: `clockOffset` of the last welcome, 0 until one; then the
+   * best pong of that welcome's ping round, #643).
+   */
   clockOffset: number;
   /**
    * Your desk's typing (#559, ADR 0007): the engine's state predicted from your keys, reconciled with
@@ -100,6 +103,8 @@ export type RaceEvent =
   | { type: "settings"; payload: RoomEvents["settings"] }
   /** The host started: the race and its GO instant (#214). */
   | { type: "countdown"; payload: RoomEvents["countdown"] }
+  /** The welcome's ping round refined the clock offset (#643, `bestOffset` of its pongs so far). */
+  | { type: "clock"; offset: number }
   /** `race.t0` passed on the corrected clock (scheduled by `bindRaceSocket`, #214). */
   | { type: "go" }
   /** A key typed after GO, `t` in ms since GO on the corrected clock (#559, `createTyping`). */
@@ -218,6 +223,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         endedAt: null,
       };
     }
+    case "clock":
+      return event.offset === state.clockOffset ? state : { ...state, clockOffset: event.offset };
     case "roster":
       return { ...state, members: byDesk(event.payload.members) };
     case "settings":
@@ -392,11 +399,22 @@ export type BindRaceSocketOptions = {
 };
 
 /**
+ * The ping round after each `welcome` (#643): this many pings, this far apart. 600 ms keeps any 1 s
+ * window at 2 pings, inside the race server's `ping` budget (ADR 0020: 2 a second per identity, and 3
+ * refusals disconnect); the round (2.4 s) ends inside the 3 s countdown.
+ */
+export const PING_ROUND_COUNT = 5;
+export const PING_ROUND_INTERVAL_MS = 600;
+
+/**
  * Subscribes the room socket's events and turns them into race events; returns the unbind, which offs
  * every listener bound here (and only those) and cancels a pending GO. Every `welcome` stores its resume
  * key for this lobby, so the next page (a reload, the seat view after the lobby) can reclaim the desk,
  * and sets the clock offset. GO is scheduled at `race.t0` on the corrected clock from a `countdown`, or
  * from a `welcome` that finds the room counting down (the seat view connects after the broadcast, #214).
+ * Each `welcome` also starts a ping round (#643): `PING_ROUND_COUNT` pings `PING_ROUND_INTERVAL_MS`
+ * apart on the injected timer (never closer, across rounds too); each pong of the round that improves its best round trip sets the
+ * offset (`bestOffset`) and moves a pending GO onto it. The unbind cancels the pings still to send.
  */
 export function bindRaceSocket(
   socket: RoomSocket,
@@ -405,20 +423,67 @@ export function bindRaceSocket(
 ): Off {
   let offset = 0;
   let pendingGo: unknown = null;
+  let goAt: number | null = null;
   const cancelGo = () => {
     if (pendingGo !== null) timer.clearTimeout(pendingGo);
     pendingGo = null;
+    goAt = null;
   };
   const scheduleGo = (t0: number) => {
     cancelGo();
+    goAt = t0;
     pendingGo = timer.setTimeout(
       () => {
         pendingGo = null;
+        goAt = null;
         dispatch({ type: "go" });
       },
       remainingTo(t0, timer.now() + offset),
     );
   };
+
+  // the current welcome's ping round: the send times still awaited, its pongs, its best offset so far
+  let pendingPing: unknown = null;
+  let awaited = new Set<number>();
+  let samples: PongSample[] = [];
+  let roundOffset: number | null = null;
+  let lastPingAt: number | null = null;
+  const cancelPings = () => {
+    if (pendingPing !== null) timer.clearTimeout(pendingPing);
+    pendingPing = null;
+  };
+  const startPingRound = () => {
+    cancelPings();
+    awaited = new Set();
+    samples = [];
+    roundOffset = null;
+    let sentCount = 0;
+    const ping = () => {
+      pendingPing = null;
+      const sent = timer.now();
+      lastPingAt = sent;
+      awaited.add(sent);
+      socket.sendPing(sent);
+      if (++sentCount < PING_ROUND_COUNT)
+        pendingPing = timer.setTimeout(ping, PING_ROUND_INTERVAL_MS);
+    };
+    // a welcome soon after a ping (a reconnect mid-round) keeps the spacing across rounds too
+    const wait = lastPingAt === null ? 0 : lastPingAt + PING_ROUND_INTERVAL_MS - timer.now();
+    if (wait > 0) pendingPing = timer.setTimeout(ping, wait);
+    else ping();
+  };
+  const onPong = ({ sent, serverNow }: RoomEvents["pong"]) => {
+    if (!awaited.has(sent)) return; // a stale round's pong, or one this binder never asked for
+    awaited.delete(sent);
+    samples.push({ sent, serverNow, receivedAt: timer.now() });
+    const refined = bestOffset(samples);
+    if (refined === null || Math.round(refined) === roundOffset) return;
+    // whole milliseconds, like the welcome's offset: the countdown and the timers step on whole ms
+    roundOffset = offset = Math.round(refined);
+    dispatch({ type: "clock", offset });
+    if (goAt !== null) scheduleGo(goAt);
+  };
+
   const offs: Off[] = [
     socket.onWelcome((payload) => {
       const receivedAt = timer.now();
@@ -427,7 +492,9 @@ export function bindRaceSocket(
       dispatch({ type: "welcome", payload, receivedAt });
       if (payload.room.phase === "countdown" && payload.race) scheduleGo(payload.race.t0);
       else cancelGo();
+      startPingRound();
     }),
+    socket.onPong(onPong),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onSnapshot((payload) => dispatch({ type: "snapshot", payload })),
@@ -443,6 +510,7 @@ export function bindRaceSocket(
   ];
   return () => {
     cancelGo();
+    cancelPings();
     for (const off of offs.splice(0)) off();
   };
 }

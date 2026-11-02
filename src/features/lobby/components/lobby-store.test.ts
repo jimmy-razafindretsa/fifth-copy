@@ -71,6 +71,9 @@ function fakeSocket() {
     onEvent: bind("event"),
     onEnded: bind("ended"),
     onRejected: bind("rejected"),
+    // #643: the seat view's clock sync (the lobby binds none of them)
+    sendPing: vi.fn(),
+    onPong: bind("pong"),
     onProtocolError: bind("protocolError"),
     onConnectError: bind("connectError"),
     onReconnecting: bind("reconnecting"),

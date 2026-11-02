@@ -33,6 +33,8 @@ const {
   selectTypedView,
   selectVisibleStamp,
   watchStampExpiry,
+  PING_ROUND_COUNT,
+  PING_ROUND_INTERVAL_MS,
 } = await import("./store");
 const { RaceStoreProvider, useRaceStore } = await import("./use-race-store");
 const { connectToRoom } = await import("./socket");
@@ -369,6 +371,7 @@ describe("bindRaceSocket (#561 C3)", () => {
       "countdown",
       "ended",
       "event",
+      "pong",
       "roster",
       "settings",
       "snapshot",
@@ -601,6 +604,7 @@ describe("countdown and GO (#214 C1)", () => {
   it("one go per countdown: a repeated countdown or a later welcome reschedules or cancels it", () => {
     const { fake, clock, gos } = setup();
     fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    clock.advance(2_400); // the welcome's ping round (#643) is over
     fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
     fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 2_000 }));
     expect(clock.pending()).toBe(1);
@@ -609,6 +613,7 @@ describe("countdown and GO (#214 C1)", () => {
     // a welcome that no longer counts down (the race was voided) cancels the pending go
     fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
     fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    clock.advance(2_400); // its ping round (#643); the go was cancelled, nothing else is due
     expect(clock.pending()).toBe(0);
     clock.advance(5_000);
     expect(gos()).toBe(1);
@@ -636,6 +641,173 @@ describe("countdown and GO (#214 C1)", () => {
     expect(store.getState().phase).toBe("countdown");
     clock.advance(3_000);
     expect(store.getState().phase).toBe("running");
+  });
+
+  // Contract of #643 C3: after each welcome the binder sends 5 pings 600 ms apart on the injected timer
+  // (inside the ADR 0020 ping budget of 2 a second),
+  // sets the offset to the best pong of the round (`bestOffset`), reschedules a pending GO on it (still
+  // one go) and its unbind cancels the pings still to send.
+  describe("ping/pong refinement (#643 C3)", () => {
+    const pings = (fake: ReturnType<typeof makeRoom>["fake"]) =>
+      fake.emit.mock.calls.filter(([event]) => event === "ping").map(([, payload]) => payload);
+    /** The server answers `sent` at `serverNow`; the pong reaches this device `after` ms later. */
+    const answer = (
+      fake: ReturnType<typeof makeRoom>["fake"],
+      clock: ReturnType<typeof fakeTimer>,
+      sent: number,
+      serverNow: number,
+      after = 0,
+    ) => {
+      clock.advance(after);
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent, serverNow });
+    };
+
+    it("sends 5 pings 600 ms apart after a welcome, stamped with the injected clock", () => {
+      const { fake, clock } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      expect(pings(fake)).toEqual([{ v: PROTOCOL_VERSION, sent: start }]);
+      clock.advance(599);
+      expect(pings(fake)).toHaveLength(1);
+      clock.advance(1);
+      expect(pings(fake)).toHaveLength(2);
+      clock.advance(3_000);
+      expect(pings(fake)).toEqual(
+        [0, 600, 1_200, 1_800, 2_400].map((d) => ({ v: PROTOCOL_VERSION, sent: start + d })),
+      );
+      expect(clock.pending()).toBe(0);
+      // never more than 2 pings in any 1 s window (ADR 0020)
+      const sent = pings(fake).map((p) => (p as { sent: number }).sent);
+      for (const at of sent)
+        expect(sent.filter((t) => t > at - 1_000 && t <= at).length).toBeLessThanOrEqual(2);
+    });
+
+    it("the round ends inside the 3 s countdown and keeps the ADR 0020 budget", () => {
+      expect(PING_ROUND_INTERVAL_MS * (PING_ROUND_COUNT - 1)).toBeLessThan(3_000);
+      expect(PING_ROUND_INTERVAL_MS).toBeGreaterThanOrEqual(500);
+    });
+
+    it("sets the store's clock offset to the best pong of the round", () => {
+      const { fake, room } = makeRoom();
+      const clock = fakeTimer();
+      const store = createRaceStore();
+      bindRaceSocket(room, store.dispatch, { timer: clock.timer });
+      const start = clock.now;
+      // the welcome was 60 ms in flight: the welcome offset reads 500, the true offset is 560
+      fake.deliver("welcome", welcome({ serverNow: start + 500 }));
+      expect(store.getState().clockOffset).toBe(500);
+      // ping 1: 200 ms round trip, answered half way -> 560
+      answer(fake, clock, start, start + 100 + 560, 200);
+      expect(store.getState().clockOffset).toBe(560);
+      // ping 3 (sent at +1200): 20 ms round trip -> 560 + 4 (the server read late) = 564
+      clock.advance(start + 1_200 - clock.now);
+      answer(fake, clock, start + 1_200, start + 1_214 + 560, 20);
+      expect(store.getState().clockOffset).toBe(564);
+      // ping 4 (sent at +1800): 80 ms round trip, worse than 20: ignored
+      clock.advance(start + 1_800 - clock.now);
+      answer(fake, clock, start + 1_800, start + 1_800 + 900, 80);
+      expect(store.getState().clockOffset).toBe(564);
+      clock.advance(600);
+      expect(pings(fake)).toHaveLength(5);
+    });
+
+    it("rounds the offset to whole milliseconds (the countdown steps on whole ms)", () => {
+      const { fake, room } = makeRoom();
+      const clock = fakeTimer();
+      const store = createRaceStore();
+      bindRaceSocket(room, store.dispatch, { timer: clock.timer });
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      // 1 ms round trip: pongOffset = 100 - 0.5 = 99.5
+      answer(fake, clock, start, start + 100, 1);
+      expect(Number.isInteger(store.getState().clockOffset)).toBe(true);
+      expect(store.getState().clockOffset).toBe(Math.round(99.5));
+    });
+
+    it("dispatches a clock event only when the best offset changes", () => {
+      const { fake, clock, dispatch } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      answer(fake, clock, start, start + 20, 40);
+      clock.advance(start + 600 - clock.now);
+      answer(fake, clock, start + 600, start + 600 + 50, 100); // worse round trip
+      const clocks = dispatch.mock.calls.map(([e]) => e).filter((e) => e.type === "clock");
+      expect(clocks).toEqual([{ type: "clock", offset: 0 }]);
+    });
+
+    it("ignores a pong that answers no ping of the current round", () => {
+      const { fake, clock, dispatch } = setup();
+      const first = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: first }));
+      clock.advance(3_000);
+      // a second welcome (a reconnect) starts a new round: the first round's pongs are stale
+      const second = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: second }));
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent: first, serverNow: first + 9_999 });
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent: second + 1, serverNow: second + 9_999 });
+      expect(dispatch.mock.calls.some(([e]) => e.type === "clock")).toBe(false);
+      answer(fake, clock, second, second + 300, 10);
+      expect(dispatch.mock.calls.at(-1)![0]).toEqual({ type: "clock", offset: 295 });
+    });
+
+    it("a second welcome restarts the round: 5 more pings, the old ones cancelled", () => {
+      const { fake, clock } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      clock.advance(650); // 2 pings sent, at +0 and +600
+      fake.deliver("welcome", welcome({ serverNow: clock.now }));
+      // the new round's first ping keeps 600 ms after the last one, not at once
+      expect(pings(fake)).toHaveLength(2);
+      clock.advance(549);
+      expect(pings(fake)).toHaveLength(2);
+      clock.advance(1);
+      expect(pings(fake).at(-1)).toEqual({ v: PROTOCOL_VERSION, sent: start + 1_200 });
+      clock.advance(5_000);
+      expect(pings(fake)).toHaveLength(2 + 5);
+      const sent = pings(fake).map((p) => (p as { sent: number }).sent);
+      for (let i = 1; i < sent.length; i++) expect(sent[i]! - sent[i - 1]!).toBe(600);
+    });
+
+    it("reschedules a pending GO on the refined offset: still one go, now on time", () => {
+      const { fake, clock, gos } = setup();
+      const start = clock.now;
+      // the welcome reads 500; the true offset is 560, so GO on the welcome offset would be 60 ms late
+      fake.deliver("welcome", welcome({ serverNow: start + 500 }));
+      const t0 = start + 560 + 3_000; // server clock: 3 s after the welcome left
+      fake.deliver("countdown", countdown({ ...RACE, t0 }));
+      answer(fake, clock, start, start + 10 + 560, 20);
+      // GO now due at start + 3_000 on this device's clock
+      clock.advance(start + 2_999 - clock.now);
+      expect(gos()).toBe(0);
+      clock.advance(1);
+      expect(gos()).toBe(1);
+      clock.advance(10_000);
+      expect(gos()).toBe(1);
+    });
+
+    it("a pong without a pending GO schedules none", () => {
+      const { fake, clock, gos } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      answer(fake, clock, start, start + 100, 20);
+      clock.advance(10_000);
+      expect(gos()).toBe(0);
+      expect(clock.pending()).toBe(0);
+    });
+
+    it("the unbind cancels the pending pings and offs the pong listener", () => {
+      const { fake, clock, unbind, dispatch } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      clock.advance(650);
+      unbind();
+      expect(clock.pending()).toBe(0);
+      clock.advance(1_000);
+      expect(pings(fake)).toHaveLength(2);
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent: start, serverNow: start + 100 });
+      expect(dispatch.mock.calls.some(([e]) => e.type === "clock")).toBe(false);
+      expect(fake.listeners.get("pong")?.size ?? 0).toBe(0);
+    });
   });
 });
 

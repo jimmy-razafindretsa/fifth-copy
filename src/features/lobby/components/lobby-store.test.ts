@@ -4,6 +4,7 @@ import {
   deskIdentity,
   PROTOCOL_VERSION,
   type Member,
+  type RaceSettings,
 } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
 import {
@@ -88,6 +89,7 @@ describe("reduceLobby", () => {
       you: null,
       members: [],
       raceId: null,
+      settings: null,
     });
   });
 
@@ -99,6 +101,7 @@ describe("reduceLobby", () => {
       you: 2,
       members: [ada, bob, cyd],
       raceId: null,
+      settings: DEFAULT_RACE_SETTINGS,
     });
   });
 
@@ -163,7 +166,15 @@ describe("bindRoomSocket", () => {
     const dispatch = vi.fn();
     bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps });
     expect(Object.keys(cbs).sort()).toEqual(
-      ["connectError", "countdown", "reconnected", "reconnecting", "roster", "welcome"].sort(),
+      [
+        "connectError",
+        "countdown",
+        "reconnected",
+        "reconnecting",
+        "roster",
+        "settings",
+        "welcome",
+      ].sort(),
     );
 
     const w = welcome(1, [ada]);
@@ -172,12 +183,15 @@ describe("bindRoomSocket", () => {
     fire("connectError", "transport" satisfies ConnectErrorReason);
     fire("reconnecting", 1);
     fire("reconnected", 1);
+    const changed = { v: PROTOCOL_VERSION, settings: { ...DEFAULT_RACE_SETTINGS, bonuses: false } };
+    fire("settings", changed);
     expect(dispatch.mock.calls.map(([e]) => e)).toEqual([
       { type: "welcome", payload: w },
       { type: "roster", payload: { v: PROTOCOL_VERSION, members: [ada, bob] } },
       { type: "connect-error", reason: "transport" },
       { type: "reconnecting" },
       { type: "reconnected" },
+      { type: "settings", payload: changed },
     ]);
   });
 
@@ -195,6 +209,7 @@ describe("bindRoomSocket", () => {
       you: 2,
       members: [ada, bob],
       raceId: null,
+      settings: DEFAULT_RACE_SETTINGS,
     });
   });
 });
@@ -308,6 +323,7 @@ describe("countdown and the resume key (#214 C2)", () => {
       you: 1,
       members: [ada, bob],
       raceId: RACE_ID,
+      settings: DEFAULT_RACE_SETTINGS,
     });
     // a roster while the page moves keeps it starting
     const later = reduceLobby(state, {
@@ -363,7 +379,15 @@ describe("countdown and the resume key (#214 C2)", () => {
     unbind();
     unbind();
     expect(Object.keys(offs).sort()).toEqual(
-      ["connectError", "countdown", "reconnected", "reconnecting", "roster", "welcome"].sort(),
+      [
+        "connectError",
+        "countdown",
+        "reconnected",
+        "reconnecting",
+        "roster",
+        "settings",
+        "welcome",
+      ].sort(),
     );
     for (const off of Object.values(offs)) expect(off).toHaveBeenCalledTimes(1);
   });
@@ -396,6 +420,7 @@ describe("welcome during the countdown (#659)", () => {
         you: 2,
         members: [ada, bob],
         raceId: RACE_ID,
+        settings: DEFAULT_RACE_SETTINGS,
       });
     },
   );
@@ -417,6 +442,7 @@ describe("welcome during the countdown (#659)", () => {
       you: 2,
       members: [ada, bob],
       raceId: null,
+      settings: DEFAULT_RACE_SETTINGS,
     });
   });
 
@@ -447,5 +473,75 @@ describe("welcome during the countdown (#659)", () => {
       { type: "welcome", payload: bare },
     );
     expect(state).toMatchObject({ phase: "starting", raceId: RACE_ID });
+  });
+});
+
+// Contract of #498 C1: the room's settings come from `welcome.settings` and every `settings` broadcast
+// (ADR 0006: the client's only source); a roster never touches them.
+describe("settings (#498 C1)", () => {
+  const block = { ...DEFAULT_RACE_SETTINGS, errorMode: "block" as const, timerS: 300 };
+  const fr = { ...DEFAULT_RACE_SETTINGS, language: "fr" as const, accentEveryWord: true };
+  const settingsEvent = (settings: RaceSettings): RoomEvents["settings"] => ({
+    v: PROTOCOL_VERSION,
+    settings,
+  });
+
+  it("is null until the welcome, then the welcome's settings", () => {
+    expect(initialLobbyState.settings).toBeNull();
+    const state = run({ type: "welcome", payload: { ...welcome(1, [ada]), settings: fr } });
+    expect(state.settings).toEqual(fr);
+  });
+
+  it("every settings event replaces them whole", () => {
+    const state = run(
+      { type: "welcome", payload: welcome(1, [ada]) },
+      { type: "settings", payload: settingsEvent(block) },
+    );
+    expect(state.settings).toEqual(block);
+    expect(reduceLobby(state, { type: "settings", payload: settingsEvent(fr) }).settings).toEqual(
+      fr,
+    );
+  });
+
+  it("a roster leaves them untouched", () => {
+    const before = run(
+      { type: "welcome", payload: welcome(1, [ada]) },
+      { type: "settings", payload: settingsEvent(block) },
+    );
+    const after = reduceLobby(before, {
+      type: "roster",
+      payload: { v: PROTOCOL_VERSION, members: [ada, bob] },
+    });
+    expect(after.settings).toBe(before.settings);
+  });
+
+  it("a later welcome (a reconnect) brings the room's current settings", () => {
+    const state = run(
+      { type: "welcome", payload: welcome(1, [ada]) },
+      { type: "reconnecting" },
+      { type: "welcome", payload: { ...welcome(1, [ada]), settings: block } },
+    );
+    expect(state.settings).toEqual(block);
+  });
+
+  it("an error stays terminal: a settings event never revives it", () => {
+    const state = run(
+      { type: "token-error", error: "closed" },
+      { type: "settings", payload: settingsEvent(block) },
+    );
+    expect(state).toMatchObject({ phase: "error", settings: null });
+  });
+
+  it("bindRoomSocket binds onSettings and feeds the reducer", () => {
+    const { socket, fire, offs } = fakeSocket();
+    let state = initialLobbyState;
+    const unbind = bindRoomSocket(socket, (event) => (state = reduceLobby(state, event)), {
+      versionReload: fakeReload().deps,
+    });
+    fire("welcome", welcome(1, [ada]));
+    fire("settings", settingsEvent(block));
+    expect(state.settings).toEqual(block);
+    unbind();
+    expect(offs.settings).toHaveBeenCalledTimes(1);
   });
 });

@@ -18,8 +18,7 @@ export type RecipeField = "wordLength" | "rareLetters" | "punctuationDensity";
 
 /** A row the host edits: every setting but `bots` and `lobbyType` (#114), plus the recipe rows. */
 export type FormKey =
-  | Exclude<keyof RaceSettings, "bots" | "lobbyType">
-  | `difficulty.${RecipeField}`;
+  Exclude<keyof RaceSettings, "bots" | "lobbyType"> | `difficulty.${RecipeField}`;
 
 /** What a control hands over: a segment's option, a toggle's boolean, an input's text, or `null` (NO TIMER). */
 export type RawValue = string | boolean | null;
@@ -30,7 +29,9 @@ const timerShape = shape.timerS.unwrap();
 /** The schema's own limit on practice letters, read from the issue it raises for too long a list. */
 function lettersMax(): number {
   const tooMany = Array.from({ length: 1000 }, () => "a");
-  const issue = shape.practiceLetters.safeParse(tooMany).error?.issues.find((i) => i.code === "too_big");
+  const issue = shape.practiceLetters
+    .safeParse(tooMany)
+    .error?.issues.find((i) => i.code === "too_big");
   return issue && "maximum" in issue ? Number(issue.maximum) : 0;
 }
 
@@ -112,7 +113,8 @@ export function buildPatch(
   raw: RawValue,
   current: RaceSettings,
 ): RaceSettingsPatch | null {
-  if (key === "difficulty" && raw === "custom" && current.difficulty.level === "custom") return null;
+  if (key === "difficulty" && raw === "custom" && current.difficulty.level === "custom")
+    return null;
   const patch = patchOf(key, raw, current);
   if (!patch) return null;
   const [field, value] = Object.entries(patch)[0]!;

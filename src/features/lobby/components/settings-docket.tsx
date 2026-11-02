@@ -126,22 +126,28 @@ export function SettingsDocket({
       {settings ? (
         <>
           <dl className={styles.facts}>
-            {settingRows(settings, labels).flatMap((row) => [
-              { key: row.key as string, label: row.label, content: controls?.[row.key] ?? row.value },
-              ...(after?.[row.key] ?? []).map((sub) => ({ ...sub, content: sub.control })),
-            ]).map((row) => (
-              <div
-                key={row.key}
-                className={styles.row}
-                data-setting={row.key}
-                aria-busy={busy === row.key || undefined}
-              >
-                <dt id={settingLabelId(row.key)} className={styles.label}>
-                  {row.label}
-                </dt>
-                <dd className={styles.value}>{row.content}</dd>
-              </div>
-            ))}
+            {settingRows(settings, labels)
+              .flatMap((row) => [
+                {
+                  key: row.key as string,
+                  label: row.label,
+                  content: controls?.[row.key] ?? row.value,
+                },
+                ...(after?.[row.key] ?? []).map((sub) => ({ ...sub, content: sub.control })),
+              ])
+              .map((row) => (
+                <div
+                  key={row.key}
+                  className={styles.row}
+                  data-setting={row.key}
+                  aria-busy={busy === row.key || undefined}
+                >
+                  <dt id={settingLabelId(row.key)} className={styles.label}>
+                    {row.label}
+                  </dt>
+                  <dd className={styles.value}>{row.content}</dd>
+                </div>
+              ))}
           </dl>
           {error}
         </>

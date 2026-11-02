@@ -257,7 +257,9 @@ describe("SettingsDocket host form (#110 C1)", () => {
     expect(rows.language).not.toMatch(/^language"[^>]*aria-busy/);
     const controls = html.match(/<(button|input)[^>]*>/g) ?? [];
     expect(controls.length).toBeGreaterThan(20);
-    for (const c of controls) expect(c).toContain("disabled");
+    // aria-disabled keeps the focus where it was (the minutes under NO TIMER are disabled outright)
+    for (const c of controls) expect(c).toMatch(/aria-disabled="true"|disabled=""/);
+    expect(rowsOf(html).wordCount).toMatch(/<input[^>]*readOnly=""|<input[^>]*readonly=""/);
   });
 
   it("C2, C4: a refusal is one inline error line under the rows, never the typed text", () => {
@@ -268,7 +270,11 @@ describe("SettingsDocket host form (#110 C1)", () => {
     expect(rowsOf(html).wordCount).toContain('aria-describedby="lobby-settings-error"');
     // only the minutes input under the pressed NO TIMER is disabled: nothing is on its way
     expect(html.match(/disabled=""/g)).toHaveLength(1);
-    const letters = host(S(), { status: "error", key: "practiceLetters", error: "too-many-letters" });
+    const letters = host(S(), {
+      status: "error",
+      key: "practiceLetters",
+      error: "too-many-letters",
+    });
     expect(letters).toContain("Practice letters take 12 letters at most.");
     expect(host(S(), { status: "error", key: "language", error: "timeout" })).toContain(
       "The room did not answer. Try again.",

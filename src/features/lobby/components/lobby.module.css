@@ -347,15 +347,17 @@
 }
 
 /* unavailable (the minutes under NO TIMER): the Button primitive's disabled recipe; while a change is on
-   its way (data-pending, the row aria-busy) the controls keep full strength, as START's pending does */
+   its way (aria-disabled, the row aria-busy) the controls keep full strength and focus, as START's
+   pending does */
 .segment:disabled,
 .field:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.segment:disabled:not([data-pending]),
-.field:disabled:not([data-pending]) {
-  opacity: 0.5;
+.segment[aria-disabled="true"],
+.field[aria-disabled="true"] {
+  cursor: progress;
 }
 
 /* bible 18: hit targets >= 44px on touch widths */

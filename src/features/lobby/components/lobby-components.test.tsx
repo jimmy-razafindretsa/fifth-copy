@@ -10,6 +10,7 @@ import { deskLabel, fill, playersLabel } from "./lobby-labels";
 import { LobbyLiveView, type StartState } from "./lobby-live";
 import { initialLobbyState, type LobbyState } from "./lobby-store";
 import { PlayerList } from "./player-list";
+import { IDLE_FORM, type FormState } from "./settings-form";
 
 // Contract of card 107, C6: every state renders, every string from the catalog (C6 greps `src`).
 vi.mock("../actions/mint-race-token", () => ({ mintRaceToken: vi.fn() }));
@@ -133,8 +134,9 @@ describe("START (#214 C8)", () => {
     );
   // START, not the invite row's COPY (#498 puts it first in the dockets column)
   const copyLabels = [en.lobby.invite.copy, fr.lobby.invite.copy].map((c) => `>${c}<`);
+  // START's own block (#110 puts the host's settings buttons before it)
   const button = (html: string) =>
-    [...html.matchAll(/<button[^>]*>[^<]*<\/button>/g)]
+    [...(html.split("data-start")[1] ?? "").matchAll(/<button[^>]*>[^<]*<\/button>/g)]
       .map((m) => m[0])
       .find((b) => !copyLabels.some((c) => b.includes(c))) ?? null;
   const host = member(1, true);
@@ -364,6 +366,62 @@ describe("lobby layout (#498)", () => {
     expect(html).toContain(">BLOCK</dd>");
     expect(html).toContain(">5 MIN</dd>");
     expect(html).not.toContain(">BACKSPACE</dt>");
+  });
+});
+
+// Contract of #110 C1, C2: the host's form in the docket's rows, its pending, refusal and not-host
+// states from props (the waiting room owns them; the fake socket drives them in settings-form.test.ts).
+describe("host settings form (#110)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const settingsOf = (html: string) =>
+    html.slice(html.indexOf(labels.settings.tag), html.indexOf("data-start"));
+  const controls = (html: string) => settingsOf(html).match(/<(button|input)[ >]/g)?.length ?? 0;
+  const hostView = (form: FormState, state = live([host, guest], 1)) =>
+    renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={state}
+        labels={labels}
+        errors={errors}
+        form={form}
+        revision={0}
+      />,
+    );
+
+  it("the host edits every row but BOTS and LOBBY; the guest reads the rows", () => {
+    const html = hostView(IDLE_FORM);
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-errorMode"/);
+    expect(controls(html)).toBeGreaterThan(20);
+    expect(settingsOf(html)).toContain(">NONE</dd>");
+    expect(controls(view(live([host, guest], 2)))).toBe(0);
+    expect(view(live([host, guest], 2))).toContain(">CONTINUE</dd>");
+  });
+
+  it("pending: the changed row is busy and every control waits", () => {
+    const html = hostView({ status: "pending", key: "errorMode" });
+    expect(html).toMatch(/data-setting="errorMode" aria-busy="true"/);
+    expect(settingsOf(html)).not.toMatch(/<button(?![^>]*aria-disabled="true")[^>]*>/);
+  });
+
+  it("a refusal: the RETURNED line under the rows, the broadcast value still pressed", () => {
+    const html = hostView({ status: "error", key: "errorMode", error: "not-waiting" });
+    expect(html).toMatch(
+      /role="alert"[^>]*><span[^>]*>RETURNED ·<\/span> This race has already started.<\/p>/,
+    );
+    expect(html).toMatch(/aria-pressed="true"[^>]*>CONTINUE<\/button>/);
+  });
+
+  it("not-host hides the controls: read-only rows, like START's", () => {
+    const html = hostView({ status: "hidden" });
+    expect(controls(html)).toBe(0);
+    expect(html).toContain(">CONTINUE</dd>");
+  });
+
+  it("no controls while reconnecting or starting", () => {
+    expect(
+      controls(hostView(IDLE_FORM, { ...live([host, guest], 1), phase: "reconnecting" })),
+    ).toBe(0);
   });
 });
 

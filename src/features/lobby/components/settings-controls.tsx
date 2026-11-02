@@ -34,7 +34,7 @@ import styles from "./lobby.module.css";
 export const SETTINGS_ERROR_ID = "lobby-settings-error";
 
 type Ctx = {
-  disabled: boolean;
+  /** A change is on its way: every control is unavailable (`aria-disabled`, keeping focus) until the ack. */
   pending: boolean;
   /** The control of the refused row points at the error line. */
   describedBy: (key: FormKey) => string | undefined;
@@ -69,10 +69,9 @@ function Segmented({
           key={o.value}
           type="button"
           aria-pressed={o.value === value}
-          disabled={ctx.disabled}
-          data-pending={ctx.pending || undefined}
+          aria-disabled={ctx.pending || undefined}
           className={styles.segment}
-          onClick={() => ctx.onChange?.(name, o.value)}
+          onClick={() => (ctx.pending ? undefined : ctx.onChange?.(name, o.value))}
         >
           {o.label}
         </button>
@@ -82,7 +81,17 @@ function Segmented({
 }
 
 /** Booleans as `ON | OFF`, the docket's own words. */
-function OnOff({ name, value, ctx, labels }: { name: FormKey; value: boolean; ctx: Ctx; labels: SettingsLabels }) {
+function OnOff({
+  name,
+  value,
+  ctx,
+  labels,
+}: {
+  name: FormKey;
+  value: boolean;
+  ctx: Ctx;
+  labels: SettingsLabels;
+}) {
   return (
     <Segmented
       name={name}
@@ -129,12 +138,13 @@ function Field({
       autoComplete="off"
       autoCapitalize={type === "text" ? "off" : undefined}
       spellCheck={type === "text" ? false : undefined}
-      disabled={ctx.disabled || disabled}
-      data-pending={ctx.pending || undefined}
+      disabled={disabled}
+      readOnly={ctx.pending}
+      aria-disabled={ctx.pending || undefined}
       aria-labelledby={labelledBy ?? settingLabelId(name)}
       aria-describedby={ctx.describedBy(name)}
       className={cn(styles.field, type === "number" && styles.fieldNumber)}
-      onBlur={(e) => ctx.onChange?.(name, e.currentTarget.value)}
+      onBlur={(e) => (ctx.pending ? undefined : ctx.onChange?.(name, e.currentTarget.value))}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
       }}
@@ -143,7 +153,15 @@ function Field({
 }
 
 /** TIMER: the pressed `NO TIMER` toggle beside the minutes; released, it starts at the schema minimum. */
-function Timer({ timerS, ctx, labels }: { timerS: number | null; ctx: Ctx; labels: SettingsLabels }) {
+function Timer({
+  timerS,
+  ctx,
+  labels,
+}: {
+  timerS: number | null;
+  ctx: Ctx;
+  labels: SettingsLabels;
+}) {
   const none = timerS === null;
   const unitId = `${settingLabelId("timerS")}-unit`;
   return (
@@ -151,11 +169,14 @@ function Timer({ timerS, ctx, labels }: { timerS: number | null; ctx: Ctx; label
       <button
         type="button"
         aria-pressed={none}
-        disabled={ctx.disabled}
-        data-pending={ctx.pending || undefined}
+        aria-disabled={ctx.pending || undefined}
         aria-describedby={ctx.describedBy("timerS")}
         className={cn(styles.segment, styles.single)}
-        onClick={() => ctx.onChange?.("timerS", none ? String(BOUNDS.minutes.min) : null)}
+        onClick={() =>
+          ctx.pending
+            ? undefined
+            : ctx.onChange?.("timerS", none ? String(BOUNDS.minutes.min) : null)
+        }
       >
         {labels.timer.none}
       </button>
@@ -212,7 +233,6 @@ export function hostForm({
   const pending = form.status === "pending";
   const refused = form.status === "error" ? form : null;
   const ctx: Ctx = {
-    disabled: pending,
     pending,
     describedBy: (key) => (refused?.key === key ? SETTINGS_ERROR_ID : undefined),
     revision,

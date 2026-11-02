@@ -77,7 +77,9 @@ describe("buildPatch (C2, C3)", () => {
     expect(buildPatch("wordCount", " 120 ", S())).toEqual({ wordCount: 120 });
     expect(buildPatch("timerS", "3", S())).toEqual({ timerS: 180 });
     expect(buildPatch("timerS", null, S({ timerS: 180 }))).toEqual({ timerS: null });
-    expect(buildPatch("practiceLetters", "q z x", S())).toEqual({ practiceLetters: ["q", "z", "x"] });
+    expect(buildPatch("practiceLetters", "q z x", S())).toEqual({
+      practiceLetters: ["q", "z", "x"],
+    });
     expect(buildPatch("practiceLetters", "", S({ practiceLetters: ["q"] }))).toEqual({
       practiceLetters: [],
     });

@@ -41,7 +41,8 @@ type Driver = {
  * Bots as server race participants (ADR 0006 point 3, 0007; ARCHITECTURE 7.5): the engine's
  * `nextBotKeystroke` decides each key and its delay; this only schedules it on the injected clock
  * and feeds it through `ingest`, the path human keys take (clamps, budget, trace cap), with `t` the
- * server elapsed since GO. One pending handle per bot, never a queue of keys. Delays are real ms,
+ * server elapsed since GO. One pending handle per bot, never a queue of keys. Delays are real ms
+ * rounded to the whole ms a system timer has anyway (the jitter keeps the rhythm human),
  * never scaled by the fast clock (a scaled bot would type 10x its level and trip `wpm-cap`).
  * Independent of Socket.IO and of Redis: the load test (spec 9) and the Quick race fill reuse it.
  */
@@ -100,10 +101,12 @@ export function createBotDrivers({
         return drop(runtime.lobbyId, driver);
       }
       const now = clock.now();
-      const { terminal } = ingest(runtime, driver.desk, [{ t: now - runtime.t0, key: action.key }], now);
+      // Whole ms, as a human key's `t` on the wire (`raceMsSchema`): the results carry it.
+      const t = Math.floor(now - runtime.t0);
+      const { terminal } = ingest(runtime, driver.desk, [{ t, key: action.key }], now);
       if (terminal) return drop(runtime.lobbyId, driver);
       arm(runtime, driver, language);
-    }, action.delayMs);
+    }, Math.round(action.delayMs));
   }
 
   function stop(lobbyId: string) {

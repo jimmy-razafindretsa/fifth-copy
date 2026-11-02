@@ -98,6 +98,9 @@ describe("bot driver: types through ingest to the end (C1, C5)", () => {
       // `t` is the server elapsed since GO: monotonic, within the race.
       expect(s.trace.every((k, i) => i === 0 || k.t >= s.trace[i - 1]!.t)).toBe(true);
       expect(s.trace[0]!.t).toBeGreaterThan(0);
+      // Whole ms, as on the wire (`raceMsSchema`): the results carry `finishedAt` and the trace.
+      expect(s.trace.every((k) => Number.isInteger(k.t))).toBe(true);
+      expect(Number.isInteger(s.finishedAt)).toBe(true);
       expect(s.timingAnomalies).toBe(0);
       expect(flagsOf(rt, 2)).toEqual([]);
       // The human desk is untouched; the driver dropped its timer at the finish.

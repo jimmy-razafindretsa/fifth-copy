@@ -17,6 +17,7 @@ import { releaseDropped, type LeaveDeps } from "./players/leave";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
 import { createBonuses } from "./rooms/bonus-step";
+import { createBotDrivers, type BotDrivers } from "./rooms/bot-driver";
 import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-state";
 import { durationsFor } from "./rooms/durations";
 import { ingest } from "./rooms/ingest";
@@ -45,6 +46,8 @@ export type RaceServer = {
   presence: Presence;
   /** Spectator admission slots per room (#616). */
   spectators: SpectatorSlots;
+  /** The bots' drivers of the running rooms (#366). */
+  bots: BotDrivers;
   /**
    * Rehydrates the rooms of the previous process (#204) before it binds, then starts the count
    * reconciliation; resolves with the bound port (pass 0 for an ephemeral one in tests).
@@ -81,7 +84,10 @@ export function createRaceServer({
    * files' live rooms (`testing/harness.ts`).
    */
   recovery?: boolean;
-  /** Randomness of the bonus effects (#190: Extra Paperwork's words); tests seed it. */
+  /**
+   * Randomness of the bonus effects (#190: Extra Paperwork's words) and of the bots' keys (#366);
+   * tests seed it.
+   */
   rng?: Rng;
   /** Spectator sockets one room admits on this process (#616); tests lower it. */
   maxSpectatorsPerRoom?: number;
@@ -122,6 +128,8 @@ export function createRaceServer({
     emit: { room: roomEvent, desk: deskEvent },
     rng,
   });
+  // Bots (#366): one timer per bot desk from GO, keys through `ingest`; real ms, never fast-clocked.
+  const bots = createBotDrivers({ clock, scheduler, rng });
   const ticker = createTicker({
     desksState,
     clock,
@@ -182,14 +190,20 @@ export function createRaceServer({
       // Synchronous, before any await of the ending: abandon and the idle kick stand down (#183).
       const runtime = desksState.get(lobbyId);
       if (runtime) runtime.ending = true;
+      bots.stop(lobbyId);
       return presence.settle(lobbyId);
     },
-    onGo: (lobbyId: string, init: Parameters<typeof desksState.open>[1]) => {
-      desksState.open(lobbyId, init);
+    onGo: (
+      lobbyId: string,
+      init: Parameters<typeof desksState.open>[1] & { bots: Parameters<BotDrivers["start"]>[1] },
+    ) => {
+      const runtime = desksState.open(lobbyId, init);
       presence.onGo(lobbyId);
       ticker.start(lobbyId);
+      bots.start(runtime, init.bots, init.race.language);
     },
     onEnded: (lobbyId: string) => {
+      bots.stop(lobbyId);
       ticker.finish(lobbyId);
       desksState.end(lobbyId);
     },
@@ -205,11 +219,13 @@ export function createRaceServer({
     // "Race again" (#143): race 1's runtime goes before race 2's countdown; presence keeps the
     // seats of the members still connected (GO rebuilds the rest).
     onRestart: (lobbyId: string) => {
+      bots.stop(lobbyId);
       ticker.stop(lobbyId);
       desksState.close(lobbyId);
       idle.closeRoom(lobbyId);
     },
     onClosed: (lobbyId: string) => {
+      bots.stop(lobbyId);
       ticker.stop(lobbyId);
       desksState.close(lobbyId);
       presence.closeRoom(lobbyId);
@@ -294,6 +310,7 @@ export function createRaceServer({
     outbox,
     presence,
     spectators,
+    bots,
     listen: async (port, host) => {
       if (recovery) {
         const { kept, voided, gone } = await registry.rehydrate();
@@ -310,6 +327,7 @@ export function createRaceServer({
       reconcileTimer = null;
       lifecycle.close();
       presence.close();
+      bots.close();
       ticker.close();
       outbox.close();
       await new Promise<void>((resolve) => void io.close(() => resolve()));

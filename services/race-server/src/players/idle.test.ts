@@ -1,6 +1,7 @@
 import type { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
+  DEFAULT_RACE_SETTINGS,
   PLAYER_STATUS_CODES,
   PROTOCOL_VERSION,
   type RaceEvent,
@@ -118,6 +119,27 @@ describe("idle warning and kick (C1)", () => {
     expect(kinds(one, "idle-warning", two.desk)).toEqual([
       { v, kind: "idle-warning", desk: two.desk, kickAt: 90_000 },
     ]);
+  });
+});
+
+describe("bots are never idle (#366 C5)", () => {
+  it("a typing bot desk next to a silent host: the host is warned and put asleep, the bot never", async () => {
+    // ~400 characters: a Recruit (20 WPM) is still typing at +70 s.
+    const text = Array.from({ length: 12 }, () => "le bureau ouvre ses dossiers").join(" ");
+    const race = await startedRace(process.env.REDIS_URL, {
+      players: 1,
+      text,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "recruit" }] },
+    });
+    booted = race.booted;
+    const { booted: b, lobby, t0 } = race;
+    const [host] = race.racers as [Racer];
+    await at(b, t0, 70_000, host);
+    expect(kinds(host, "asleep", host.desk)).toHaveLength(1);
+    expect(kinds(host, "idle-warning", 2)).toEqual([]);
+    expect(kinds(host, "asleep", 2)).toEqual([]);
+    expect(stateOf(b, lobby, 2)).toMatchObject({ status: "typing" });
+    expect(stateOf(b, lobby, 2).cursor).toBeGreaterThan(50);
   });
 });
 

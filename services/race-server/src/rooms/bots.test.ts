@@ -22,7 +22,7 @@ import {
   until,
   type Booted,
 } from "../testing/harness";
-import { BOT_NAMES } from "@fifth-copy/engine";
+import { BOT_NAMES, mulberry32 } from "@fifth-copy/engine";
 import { botName, botUserId, isBotUserId, planBotSeats } from "./bots";
 import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
 import { createRoomRegistry, type RoomRegistry } from "./registry";
@@ -327,10 +327,12 @@ describe("registry: the last human leaving closes a room with bots (ARCHITECTURE
 });
 
 describe("race with a bot (C3)", () => {
-  it("host alone + 1 bot starts; the bot sits at cursor 0 typing, and ranks after the human on time", async () => {
+  it("host alone + 1 bot starts; the bot starts at cursor 0, types from GO (#366) and ranks first at the timer", async () => {
     const race = await startedRace(process.env.REDIS_URL, {
       players: 1,
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60, bots: levels("clerk") },
+      // Seeded: the bot's first key lands after the +100 ms snapshot below.
+      rng: mulberry32(156),
     });
     t = race.booted;
     const [host] = race.racers;
@@ -360,9 +362,10 @@ describe("race with a bot (C3)", () => {
     await until(() => host!.seen.ended.length === 1, 2_000, "ended");
     const { reason, ranking } = host!.seen.ended[0]!;
     expect(reason).toBe("timer");
+    // The bot (#366) finished "bonjour" long before the timer; the host is still typing.
     expect(ranking.map((r) => [r.place, r.desk, r.isBot, r.status])).toEqual([
-      [1, 1, false, "typing"],
-      [2, 2, true, "typing"],
+      [1, 2, true, "finished"],
+      [2, 1, false, "typing"],
     ]);
   });
 });

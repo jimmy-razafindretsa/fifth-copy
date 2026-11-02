@@ -16,7 +16,8 @@ const TEXTS = [
 ] as const satisfies readonly (readonly [BotLanguage, string])[];
 
 /** Stated independently of the model: not a letter, digit or space; or a non-ASCII letter. */
-const isMarked = (ch: string) => ch !== " " && (/[^\p{L}\p{Nd}]/u.test(ch) || /[^\x00-\x7f]/.test(ch));
+const isMarked = (ch: string) =>
+  ch !== " " && (/[^\p{L}\p{Nd}]/u.test(ch) || /[^\x00-\x7f]/.test(ch));
 
 function longShares(profile: BotProfile, text: string, lang: BotLanguage) {
   const chars = charsOf(text);
@@ -41,7 +42,9 @@ function longShares(profile: BotProfile, text: string, lang: BotLanguage) {
   return { marked: markedLong / marked, other: otherLong / other, count: marked / SEEDS.length };
 }
 
-const CASES = BOT_LEVELS.flatMap((level) => TEXTS.map(([lang, text]) => [level, lang, text] as const));
+const CASES = BOT_LEVELS.flatMap((level) =>
+  TEXTS.map(([lang, text]) => [level, lang, text] as const),
+);
 
 describe("hesitation (C5)", () => {
   it("the model's hesitation positions are C5's punctuation and accented characters", () => {
@@ -49,18 +52,24 @@ describe("hesitation (C5)", () => {
       expect(hesitatesBefore(ch), JSON.stringify(ch)).toBe(isMarked(ch));
   });
 
-  it.each(CASES)("%s (%s): long pauses before punctuation and accents, rarely elsewhere", (level, lang, text) => {
-    const profile = { ...botProfile(level), errorRate: 0 };
-    const shares = longShares(profile, text, lang);
-    expect(shares.count).toBeGreaterThan(30);
-    expect(shares.marked).toBeGreaterThanOrEqual(0.3);
-    expect(shares.other).toBeLessThanOrEqual(0.1);
-  });
+  it.each(CASES)(
+    "%s (%s): long pauses before punctuation and accents, rarely elsewhere",
+    (level, lang, text) => {
+      const profile = { ...botProfile(level), errorRate: 0 };
+      const shares = longShares(profile, text, lang);
+      expect(shares.count).toBeGreaterThan(30);
+      expect(shares.marked).toBeGreaterThanOrEqual(0.3);
+      expect(shares.other).toBeLessThanOrEqual(0.1);
+    },
+  );
 
-  it.each(CASES)("%s (%s): with hesitation 0, no more long pauses before them either", (level, lang, text) => {
-    const profile = { ...botProfile(level), errorRate: 0, hesitation: 0 };
-    const shares = longShares(profile, text, lang);
-    expect(shares.marked).toBeLessThanOrEqual(0.1);
-    expect(shares.other).toBeLessThanOrEqual(0.1);
-  });
+  it.each(CASES)(
+    "%s (%s): with hesitation 0, no more long pauses before them either",
+    (level, lang, text) => {
+      const profile = { ...botProfile(level), errorRate: 0, hesitation: 0 };
+      const shares = longShares(profile, text, lang);
+      expect(shares.marked).toBeLessThanOrEqual(0.1);
+      expect(shares.other).toBeLessThanOrEqual(0.1);
+    },
+  );
 });

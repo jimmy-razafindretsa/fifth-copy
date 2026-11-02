@@ -36,16 +36,19 @@ describe("nextBotKeystroke (#729 interface, #361 model)", () => {
     expect(wordCount(FIXTURE)).toBe(50);
   });
 
-  it.each(BOT_LEVELS)("%s: a key for the cursor's position, after a positive float delay", (level) => {
-    const profile = { ...botProfile(level), errorRate: 0 };
-    const settings = MODES[0] as EngineSettings;
-    const action = nextBotKeystroke(profile, ctx(initialState(), settings), mulberry32(1));
-    expect(action?.key).toBe(FIXTURE[0]);
-    expect(action!.delayMs).toBeGreaterThan(0);
-    expect(Number.isInteger(action!.delayMs)).toBe(false);
-    const mid = { ...initialState(), cursor: 7, typed: Array(7).fill(null) };
-    expect(nextBotKeystroke(profile, ctx(mid, settings), mulberry32(1))?.key).toBe(FIXTURE[7]);
-  });
+  it.each(BOT_LEVELS)(
+    "%s: a key for the cursor's position, after a positive float delay",
+    (level) => {
+      const profile = { ...botProfile(level), errorRate: 0 };
+      const settings = MODES[0] as EngineSettings;
+      const action = nextBotKeystroke(profile, ctx(initialState(), settings), mulberry32(1));
+      expect(action?.key).toBe(FIXTURE[0]);
+      expect(action!.delayMs).toBeGreaterThan(0);
+      expect(Number.isInteger(action!.delayMs)).toBe(false);
+      const mid = { ...initialState(), cursor: 7, typed: Array(7).fill(null) };
+      expect(nextBotKeystroke(profile, ctx(mid, settings), mulberry32(1))?.key).toBe(FIXTURE[7]);
+    },
+  );
 
   it("returns null at the end of the text and once not typing", () => {
     const profile = botProfile("clerk");
@@ -84,7 +87,9 @@ describe("determinism (C6)", () => {
         expect(b.state).toEqual(a.state);
       }
       const other = drive(botProfile(level), FIXTURE_FR, settings, 2, "fr");
-      expect(other.trace).not.toEqual(drive(botProfile(level), FIXTURE_FR, settings, 1, "fr").trace);
+      expect(other.trace).not.toEqual(
+        drive(botProfile(level), FIXTURE_FR, settings, 1, "fr").trace,
+      );
     },
   );
 

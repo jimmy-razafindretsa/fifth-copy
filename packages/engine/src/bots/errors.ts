@@ -11,6 +11,7 @@ import type { EngineSettings, Rng } from "../types";
  */
 
 /** QWERTY neighbours of each letter: a slip lands next to the intended key. */
+// prettier-ignore
 const NEIGHBOURS: Readonly<Record<string, string>> = {
   q: "wa", w: "qes", e: "wrd", r: "etf", t: "ryg", y: "tuh", u: "yij", i: "uok", o: "ipl",
   p: "ol", a: "qsz", s: "adw", d: "sfe", f: "dgr", g: "fht", h: "gjy", j: "hku", k: "jli",

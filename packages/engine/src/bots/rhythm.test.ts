@@ -27,7 +27,9 @@ function runsOf(level: BotLevel, language: BotLanguage, text: string): Run[] {
   return r;
 }
 
-const CASES = BOT_LEVELS.flatMap((level) => TEXTS.map(([lang, text]) => [level, lang, text] as const));
+const CASES = BOT_LEVELS.flatMap((level) =>
+  TEXTS.map(([lang, text]) => [level, lang, text] as const),
+);
 
 /** C3's slow words, stated independently of the model: nine letters or more, or a rare letter. */
 const RARE = { fr: /[kwxyz]/, en: /[jqxz]/ } as const;
@@ -55,21 +57,26 @@ describe("fixtures", () => {
 });
 
 describe("rhythm (C2)", () => {
-  it.each(CASES)("%s (%s): CV >= 0.25, no run of five equal delays, WPM within 15 %", (level, lang, text) => {
-    const target = botProfile(level).targetWpm;
-    for (const [s, run] of runsOf(level, lang, text).entries()) {
-      expect(run.state.status, `seed ${SEEDS[s]}`).toBe("finished");
-      const delays = run.keys.slice(1).map((k) => k.delayMs);
-      expect(cv(delays), `seed ${SEEDS[s]}`).toBeGreaterThanOrEqual(0.25);
-      for (let i = 4; i < delays.length; i++) {
-        const window = delays.slice(i - 4, i + 1);
-        expect(new Set(window).size, `seed ${SEEDS[s]} at ${i}`).toBeGreaterThan(1);
+  it.each(CASES)(
+    "%s (%s): CV >= 0.25, no run of five equal delays, WPM within 15 %",
+    (level, lang, text) => {
+      const target = botProfile(level).targetWpm;
+      for (const [s, run] of runsOf(level, lang, text).entries()) {
+        expect(run.state.status, `seed ${SEEDS[s]}`).toBe("finished");
+        const delays = run.keys.slice(1).map((k) => k.delayMs);
+        expect(cv(delays), `seed ${SEEDS[s]}`).toBeGreaterThanOrEqual(0.25);
+        for (let i = 4; i < delays.length; i++) {
+          const window = delays.slice(i - 4, i + 1);
+          expect(new Set(window).size, `seed ${SEEDS[s]} at ${i}`).toBeGreaterThan(1);
+        }
+        const minutes = run.state.finishedAt! / 60_000;
+        const wpm = text.length / 5 / minutes;
+        expect(Math.abs(wpm - target) / target, `seed ${SEEDS[s]} wpm ${wpm}`).toBeLessThanOrEqual(
+          0.15,
+        );
       }
-      const minutes = run.state.finishedAt! / 60_000;
-      const wpm = text.length / 5 / minutes;
-      expect(Math.abs(wpm - target) / target, `seed ${SEEDS[s]} wpm ${wpm}`).toBeLessThanOrEqual(0.15);
-    }
-  });
+    },
+  );
 
   it.each(CASES)("%s (%s): every trace passes the anti-cheat analysis", (level, lang, text) => {
     for (const run of runsOf(level, lang, text)) {
@@ -87,32 +94,35 @@ describe("rhythm (C2)", () => {
 });
 
 describe("burst and pause (C3)", () => {
-  it.each(CASES)("%s (%s): common words are typed faster than long or rare-letter words", (level, lang, text) => {
-    const words = wordsOf(text).map(letters);
-    const freq = new Map<string, number>();
-    for (const w of words) if (w) freq.set(w, (freq.get(w) ?? 0) + 1);
-    // The fixture's 100 most frequent words (ties: shorter, then alphabetical).
-    const common = new Set(
-      [...freq.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length || a[0].localeCompare(b[0]))
-        .slice(0, 100)
-        .map(([w]) => w),
-    );
-    const slow = new Set(words.filter((w) => w && isSlow(w, lang)));
-    for (const w of slow) common.delete(w); // disjoint sets: a slow word is never counted as common
-    const wordAt = wordIndexOf(text);
-    const fast: number[] = [];
-    const slower: number[] = [];
-    for (const run of runsOf(level, lang, text)) {
-      for (const k of run.keys) {
-        const w = wordAt[k.cursor]!;
-        if (w < 0) continue;
-        const word = words[w]!;
-        if (common.has(word)) fast.push(k.delayMs);
-        else if (slow.has(word)) slower.push(k.delayMs);
+  it.each(CASES)(
+    "%s (%s): common words are typed faster than long or rare-letter words",
+    (level, lang, text) => {
+      const words = wordsOf(text).map(letters);
+      const freq = new Map<string, number>();
+      for (const w of words) if (w) freq.set(w, (freq.get(w) ?? 0) + 1);
+      // The fixture's 100 most frequent words (ties: shorter, then alphabetical).
+      const common = new Set(
+        [...freq.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length || a[0].localeCompare(b[0]))
+          .slice(0, 100)
+          .map(([w]) => w),
+      );
+      const slow = new Set(words.filter((w) => w && isSlow(w, lang)));
+      for (const w of slow) common.delete(w); // disjoint sets: a slow word is never counted as common
+      const wordAt = wordIndexOf(text);
+      const fast: number[] = [];
+      const slower: number[] = [];
+      for (const run of runsOf(level, lang, text)) {
+        for (const k of run.keys) {
+          const w = wordAt[k.cursor]!;
+          if (w < 0) continue;
+          const word = words[w]!;
+          if (common.has(word)) fast.push(k.delayMs);
+          else if (slow.has(word)) slower.push(k.delayMs);
+        }
       }
-    }
-    expect(slow.size).toBeGreaterThan(10);
-    expect(mean(fast)).toBeLessThan(mean(slower));
-  });
+      expect(slow.size).toBeGreaterThan(10);
+      expect(mean(fast)).toBeLessThan(mean(slower));
+    },
+  );
 });

@@ -20,51 +20,54 @@ describe("errors and corrections (C4)", () => {
     expect(botProfile(level).errorRate).toBe(RATES[level]);
   });
 
-  it.each(CASES)("%s %o: rate within one point, corrected per mode, finished", (level, settings) => {
-    let wrong = 0;
-    for (const seed of SEEDS) {
-      const run = drive(botProfile(level), TEXT, settings, seed, "fr");
-      const { keys, state } = run;
-      expect(state.status, `seed ${seed}`).toBe("finished");
-      const misses = keys.filter((k) => k.wrong).length;
-      wrong += misses;
-      const backspaces = keys.filter((k) => k.key === BACKSPACE).length;
-      if (settings.errorMode === "block") {
-        // Every wrong key is refused by the reducer: the next key is the same position again.
-        expect(backspaces).toBe(0);
-        keys.forEach((k, i) => {
-          if (k.wrong) expect(keys[i + 1]?.cursor).toBe(k.cursor);
+  it.each(CASES)(
+    "%s %o: rate within one point, corrected per mode, finished",
+    (level, settings) => {
+      let wrong = 0;
+      for (const seed of SEEDS) {
+        const run = drive(botProfile(level), TEXT, settings, seed, "fr");
+        const { keys, state } = run;
+        expect(state.status, `seed ${seed}`).toBe("finished");
+        const misses = keys.filter((k) => k.wrong).length;
+        wrong += misses;
+        const backspaces = keys.filter((k) => k.key === BACKSPACE).length;
+        if (settings.errorMode === "block") {
+          // Every wrong key is refused by the reducer: the next key is the same position again.
+          expect(backspaces).toBe(0);
+          keys.forEach((k, i) => {
+            if (k.wrong) expect(keys[i + 1]?.cursor).toBe(k.cursor);
+          });
+          expect(state).toMatchObject({ correct: TEXT.length, errors: misses });
+        } else if (settings.backspace) {
+          // Each wrong key is backspaced at once (unless it ended the text), then the position retyped.
+          keys.forEach((k, i) => {
+            if (!k.wrong || k.cursor === TEXT.length - 1) return;
+            expect(keys[i + 1]?.key).toBe(BACKSPACE);
+            expect(keys[i + 2]?.cursor).toBe(k.cursor);
+          });
+          const last = keys.at(-1)!;
+          expect(backspaces).toBe(misses - (last.wrong ? 1 : 0));
+          expect(state.errors).toBe(last.wrong ? 1 : 0);
+        } else {
+          // No backspace allowed: the bot types on, one key per character.
+          expect(backspaces).toBe(0);
+          expect(keys).toHaveLength(TEXT.length);
+          expect(state.errors).toBe(misses);
+        }
+        const { cursor, correct, errors } = state;
+        const flags = analyseTrace({
+          keystrokes: run.trace,
+          text: TEXT,
+          settings,
+          recorded: { cursor, correct, errors },
+          timingAnomalies: 0,
         });
-        expect(state).toMatchObject({ correct: TEXT.length, errors: misses });
-      } else if (settings.backspace) {
-        // Each wrong key is backspaced at once (unless it ended the text), then the position retyped.
-        keys.forEach((k, i) => {
-          if (!k.wrong || k.cursor === TEXT.length - 1) return;
-          expect(keys[i + 1]?.key).toBe(BACKSPACE);
-          expect(keys[i + 2]?.cursor).toBe(k.cursor);
-        });
-        const last = keys.at(-1)!;
-        expect(backspaces).toBe(misses - (last.wrong ? 1 : 0));
-        expect(state.errors).toBe(last.wrong ? 1 : 0);
-      } else {
-        // No backspace allowed: the bot types on, one key per character.
-        expect(backspaces).toBe(0);
-        expect(keys).toHaveLength(TEXT.length);
-        expect(state.errors).toBe(misses);
+        expect(flags, `seed ${seed}`).toEqual([]);
       }
-      const { cursor, correct, errors } = state;
-      const flags = analyseTrace({
-        keystrokes: run.trace,
-        text: TEXT,
-        settings,
-        recorded: { cursor, correct, errors },
-        timingAnomalies: 0,
-      });
-      expect(flags, `seed ${seed}`).toEqual([]);
-    }
-    const rate = wrong / (TEXT.length * SEEDS.length);
-    expect(Math.abs(rate - RATES[level])).toBeLessThanOrEqual(0.01);
-  });
+      const rate = wrong / (TEXT.length * SEEDS.length);
+      expect(Math.abs(rate - RATES[level])).toBeLessThanOrEqual(0.01);
+    },
+  );
 
   it("a wrong key is never the expected one and keeps its case", () => {
     const rng = mulberry32(3);

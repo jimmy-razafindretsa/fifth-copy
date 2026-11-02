@@ -384,7 +384,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         if (created && settings.bots.length) {
           await withTtl(
             lobbyId,
-            seatBots(redis.multi(), lobbyId, await readSeats(lobbyId), settings.bots, settings.language),
+            seatBots(
+              redis.multi(),
+              lobbyId,
+              await readSeats(lobbyId),
+              settings.bots,
+              settings.language,
+            ),
           );
         }
         const room = await readRoom(lobbyId);

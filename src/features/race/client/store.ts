@@ -398,9 +398,13 @@ export type BindRaceSocketOptions = {
   timer?: RaceTimer;
 };
 
-/** The ping round after each `welcome` (#643): this many pings, this far apart. */
+/**
+ * The ping round after each `welcome` (#643): this many pings, this far apart. 600 ms keeps any 1 s
+ * window at 2 pings, inside the race server's `ping` budget (ADR 0020: 2 a second per identity, and 3
+ * refusals disconnect); the round (2.4 s) ends inside the 3 s countdown.
+ */
 export const PING_ROUND_COUNT = 5;
-export const PING_ROUND_INTERVAL_MS = 100;
+export const PING_ROUND_INTERVAL_MS = 600;
 
 /**
  * Subscribes the room socket's events and turns them into race events; returns the unbind, which offs
@@ -409,7 +413,7 @@ export const PING_ROUND_INTERVAL_MS = 100;
  * and sets the clock offset. GO is scheduled at `race.t0` on the corrected clock from a `countdown`, or
  * from a `welcome` that finds the room counting down (the seat view connects after the broadcast, #214).
  * Each `welcome` also starts a ping round (#643): `PING_ROUND_COUNT` pings `PING_ROUND_INTERVAL_MS`
- * apart on the injected timer; each pong of the round that improves its best round trip sets the
+ * apart on the injected timer (never closer, across rounds too); each pong of the round that improves its best round trip sets the
  * offset (`bestOffset`) and moves a pending GO onto it. The unbind cancels the pings still to send.
  */
 export function bindRaceSocket(
@@ -443,6 +447,7 @@ export function bindRaceSocket(
   let awaited = new Set<number>();
   let samples: PongSample[] = [];
   let roundOffset: number | null = null;
+  let lastPingAt: number | null = null;
   const cancelPings = () => {
     if (pendingPing !== null) timer.clearTimeout(pendingPing);
     pendingPing = null;
@@ -456,12 +461,16 @@ export function bindRaceSocket(
     const ping = () => {
       pendingPing = null;
       const sent = timer.now();
+      lastPingAt = sent;
       awaited.add(sent);
       socket.sendPing(sent);
       if (++sentCount < PING_ROUND_COUNT)
         pendingPing = timer.setTimeout(ping, PING_ROUND_INTERVAL_MS);
     };
-    ping();
+    // a welcome soon after a ping (a reconnect mid-round) keeps the spacing across rounds too
+    const wait = lastPingAt === null ? 0 : lastPingAt + PING_ROUND_INTERVAL_MS - timer.now();
+    if (wait > 0) pendingPing = timer.setTimeout(ping, wait);
+    else ping();
   };
   const onPong = ({ sent, serverNow }: RoomEvents["pong"]) => {
     if (!awaited.has(sent)) return; // a stale round's pong, or one this binder never asked for

@@ -6,6 +6,7 @@ One Redis-backed sliding-window rate limiter, shared by the web app (`src/server
 
 ## API
 `createLimiter(redis, { prefix })` -> `{ limit(key, { max, windowMs }, now = Date.now()) }` -> `{ ok, remaining, retryAfterMs }`, and `count(key, windowMs, now)` -> the calls `limit` would count in that window, read-only (`WINDOW_COUNT_LUA`, `ZCOUNT`; #699: the web app checks whether a room code was already admitted without counting a call).
+- `admit(budgetKey, markerKey, { max, windowMs }, now)` -> `{ ok, remaining, retryAfterMs }` (#701, `ADMIT_ONCE_LUA`, one atomic script over both keys): an item whose marker is in the window passes without spending; otherwise one call is counted on the budget as `limit` would, and only an allowed one writes the marker. Concurrent first attempts of one item spend once; the web app admits room codes with it. Both keys keep a TTL <= `windowMs`; the two keys must live on one node (no Redis Cluster).
 - `redis` is any client with `eval(script, numKeys, ...args)`; both processes pass ioredis. The package never imports a Redis client.
 - One Lua script (`SLIDING_WINDOW_LUA`), atomic: sorted set per key, `ZREMRANGEBYSCORE` drops calls older than the window, `ZCARD` counts, `ZADD` records an allowed call (a refused call is not recorded), `PEXPIRE windowMs`.
 - Key: `${prefix}:rl:${key}`. Every key carries a TTL <= `windowMs`.

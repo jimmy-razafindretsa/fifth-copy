@@ -192,3 +192,49 @@
     animation-name: lkPulseText;
   }
 }
+
+/*
+ * On-screen keyboard (#251, bible 14.3 tablets): `data-osk="open"` while a touch keyboard covers the
+ * bottom of the screen. The decorative machine folds away (the real keyboard is under the fingers) and the
+ * typing surface moves up under the telex, so the strip and the sheet's next line stay above the keyboard;
+ * the race card and the tray follow below it. A hardware keyboard keeps the full layout.
+ */
+.seat[data-osk="open"] [data-machine] {
+  display: none;
+}
+
+.seat[data-osk="open"] .hud {
+  grid-template-rows: auto auto auto auto;
+  grid-template-areas:
+    "kicker nixie"
+    "telex telex"
+    "center center"
+    "left right";
+}
+
+@media (min-width: 1024px) {
+  .seat[data-osk="open"] .hud {
+    grid-template-columns:
+      clamp(208px, 22vw, 300px)
+      minmax(0, 1fr)
+      clamp(208px, 22vw, 300px);
+    grid-template-areas:
+      "kicker kicker nixie"
+      "telex telex nixie"
+      "center center center"
+      "left . right";
+  }
+}
+
+.seat[data-osk="open"] .surface {
+  margin-top: 0;
+}
+
+.seat[data-osk="open"] .status:has([data-countdown], [data-stamps]) {
+  flex: 0 0 auto;
+}
+
+/* without the machine to rise out of, the sheet takes no overlap */
+.seat[data-osk="open"] .sheet {
+  margin-bottom: 0;
+}

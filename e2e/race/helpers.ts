@@ -194,7 +194,7 @@ export async function setHostSettings(host: Page, patch: RaceSettingsPatch): Pro
       socket.once("connect_error", reject);
     });
     const ack = (await socket
-      .timeout(5_000)
+      .timeout(scaled(5_000))
       .emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch })) as
       { ok: true; settings: RaceSettings } | { ok: false; error: string };
     expect(ack, "host:settings").toMatchObject({ ok: true });

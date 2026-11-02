@@ -2,6 +2,12 @@
  * Test-wait deadlines for e2e specs (#629). These are test waits, not product budgets: a loaded machine
  * (several card worktrees running checks at once) needs longer ones, so every deadline is a base in ms
  * multiplied by `E2E_TIMEOUT_SCALE` (positive number, default 1: an idle run is unchanged).
+ *
+ * Rule (#681): this is the only file under `e2e/` that may hold a literal deadline. Specs and helpers
+ * write `{ timeout: scaled(N) }`, `test.setTimeout(scaled(N))`, `HYDRATION_WAIT`, `ACTION_WAIT` or a new
+ * named export here with a one-line doc of what it waits for; `src/lib/e2e-timeouts.test.ts` fails on any
+ * `timeout: <number>`, `setTimeout(<number>)` or `.timeout(<number>)` elsewhere. Deliberate pauses
+ * (`page.waitForTimeout(N)`) are not deadlines and stay literal.
  */
 export function timeoutScale(raw = process.env.E2E_TIMEOUT_SCALE): number {
   const scale = Number(raw);

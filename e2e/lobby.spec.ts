@@ -57,12 +57,12 @@ test.describe("lobby waiting room (#107)", () => {
     await expect(rows(b.page).filter({ hasText: "HOST" })).not.toContainText("YOU");
 
     // A updates without a reload
-    await expect(rows(page)).toHaveCount(2, { timeout: 5_000 });
+    await expect(rows(page)).toHaveCount(2, { timeout: scaled(5_000) });
     await expect(liveRegion(page)).toHaveText("2 players in the room");
     await expect(typists(page)).toHaveText("2 / 30");
 
     await b.context.close();
-    await expect(rows(page)).toHaveCount(1, { timeout: 5_000 });
+    await expect(rows(page)).toHaveCount(1, { timeout: scaled(5_000) });
     await expect(liveRegion(page)).toHaveText("1 player in the room");
     await expect(typists(page)).toHaveText("1 / 30");
     await expect(rows(page).first()).toContainText("YOU");
@@ -168,7 +168,7 @@ test.describe("lobby waiting room (#107)", () => {
     await expect(rows(page)).toHaveCount(1);
     await sockets[0]!.close();
     const notice = page.getByRole("status").filter({ hasText: "CONNECTION LOST, RETRYING" });
-    await expect(notice).toBeVisible({ timeout: 10_000 });
+    await expect(notice).toBeVisible({ timeout: scaled(10_000) });
     await expect(rows(page)).toHaveCount(1);
     const animation = await notice.evaluate((el) => getComputedStyle(el).animationName);
     expect(animation).toMatch(/lkPulse$/);
@@ -330,7 +330,7 @@ test.describe("lobby roll: BOT tag, non-host notice, kicker (#105)", () => {
     await expect(waitingNotice(b.page)).toBeVisible();
     await expect(startButton(b.page)).toHaveCount(0);
 
-    await expect(rows(page)).toHaveCount(2, { timeout: 5_000 });
+    await expect(rows(page)).toHaveCount(2, { timeout: scaled(5_000) });
     await expect(startButton(page)).toBeVisible();
     await expect(waitingNotice(page)).toHaveCount(0);
 

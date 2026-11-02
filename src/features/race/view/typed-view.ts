@@ -38,6 +38,18 @@ export type TypedProgress = {
   readonly lastT: number;
 };
 
+/** The typing surface's phase (#215), as the strip and the sheet show it: their roots carry it as `data-phase`. */
+export type SurfacePhase = "before" | "racing" | "finished";
+
+/**
+ * `before` while nothing is typed (no text yet, or the cursor on the first char), `finished` once the
+ * cursor passed the last char, `racing` in between. It reads the view only: no race rule (ADR 0007).
+ */
+export function surfacePhase(view: TypedView): SurfacePhase {
+  if (view.chars.length > 0 && view.cursor >= view.chars.length) return "finished";
+  return view.cursor > 0 ? "racing" : "before";
+}
+
 /** The typing surface with no text yet (before the countdown hands the race text over). */
 export const NO_TEXT_VIEW: TypedView = { chars: [], cursor: 0, jammed: false, lastTypedAt: null };
 

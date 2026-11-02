@@ -12,15 +12,30 @@ import {
 } from "./helpers";
 
 // Contract of #226 C1: the race card in a crowded race. The viewer hosts the room and 29 simulated players
-// (`simulatedPlayers`, #564) fill it to 30 desks (the viewer takes desk 1 or 30, by whichever socket seats
-// first; desks 2, 13, 14 and 26 are always simulated). Four of them type ahead of the viewer, so
-// the viewer is 5th of 30 and the lanes are ranks 1..7 (top 3, the two ahead of you counted once, you, the
-// two behind). Three of the four share one ink (desks 2, 14, 26: rival-1 on circle, square, triangle; the
-// allocator's `deskIdentity`, #565), so "distinct (colour, shape)" is checked where it can fail.
-// The test drives its own viewports, so only the desktop project runs.
+// (`simulatedPlayers`, #564) fill it to 30 desks; desks follow the order the sockets seat, so the viewer
+// can sit at any desk and the leaders are chosen once the viewer's desk is known. Four players type ahead
+// of the viewer, so the viewer is 5th of 30 and the lanes are ranks 1..7 (top 3, the two ahead of you
+// counted once, you, the two behind). Three of the four share one ink (desks k+1, k+13, k+25: rival-k on
+// circle, square, triangle; the allocator's `deskIdentity`, #565), so "distinct (colour, shape)" is
+// checked where it can fail. The test drives its own viewports, so only the desktop project runs.
 
 const RED = "rgb(184, 29, 36)";
-const AHEAD_DESKS = [2, 14, 26, 13];
+
+/**
+ * The four leaders for a viewer at `you`: the three desks of the first ink k whose band desks
+ * (k+1, k+13, k+25) are all rivals, plus the next rival desk. Returns the shared ink too.
+ */
+function leadersFor(you: number) {
+  for (let k = 0; k < 6; k++) {
+    const trio = [k + 1, k + 13, k + 25];
+    if (trio.includes(you)) continue;
+    const fourth = Array.from({ length: 30 }, (_, i) => i + 1).find(
+      (d) => d !== you && !trio.includes(d),
+    )!;
+    return { desks: [...trio, fourth], ink: `rival-${k}` };
+  }
+  throw new Error(`no ink band free of desk ${you}`);
+}
 
 const card = (page: Page) => page.locator("[data-race-card]");
 const lanes = (page: Page) => card(page).locator("[data-lane]");
@@ -63,8 +78,11 @@ test.describe("#226 race card, 30 typists", () => {
 
     // the viewer types 3 keys, four players type more (6..9), the other 25 stay at 0 (ties rank by desk)
     await page.keyboard.type(Array.from(text).slice(0, 3).join(""));
-    const ahead = AHEAD_DESKS.map((d) => sims.find((s) => s.desk === d)!);
-    expect(ahead.every(Boolean), "simulated players at desks 2, 13, 14, 26").toBe(true);
+    const leaders = leadersFor(desk);
+    const ahead = leaders.desks.map((d) => sims.find((s) => s.desk === d)!);
+    expect(ahead.every(Boolean), `simulated players at desks ${leaders.desks.join(", ")}`).toBe(
+      true,
+    );
     for (const [i, sim] of ahead.entries()) await sim.type(6 + i);
 
     await expect(card(page).locator("[data-tick]")).toHaveCount(30);
@@ -101,7 +119,7 @@ test.describe("#226 race card, 30 typists", () => {
     // three rivals wear the same ink: only the shape tells them apart
     expect(
       rivals
-        .filter((r) => r.ink === "rival-1")
+        .filter((r) => r.ink === leaders.ink)
         .map((r) => r.shape)
         .sort(),
     ).toEqual(["circle", "square", "triangle"]);
@@ -132,5 +150,10 @@ test.describe("#226 race card, 30 typists", () => {
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
     expect(overflow, "768: horizontal scroll").toBeLessThanOrEqual(0);
+    // the running race at 768 in both themes: no serious or critical axe violation
+    await expectNoA11yViolations(page);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectNoA11yViolations(page);
+    await page.emulateMedia({ colorScheme: "light" });
   });
 });

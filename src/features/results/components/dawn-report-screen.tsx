@@ -2,16 +2,17 @@ import type { ReactNode } from "react";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
-import { filingLabels, podiumLabels, rankingLabels } from "../view/report-labels";
+import { filingLabels, podiumLabels, rankingLabels, reportAction } from "../view/report-labels";
 import styles from "./dawn-report.module.css";
 import { FilingNotice } from "./filing-notice";
 import { Podium } from "./podium";
 import { RankingTable } from "./ranking-table";
+import { ReportActions } from "./report-actions";
 
 /**
  * The Dawn report's layout (bible 14.4), presentational: kicker, `RACE OVER`, then the body (the
  * podium, or the filing notice), and under the podium the ranking docket (#301) beside the personal
- * stats card (#302) from 1024px. Empty slots render nothing.
+ * stats card (#302) from 1024px, then the action row (#143). Empty slots render nothing.
  */
 export function DawnReportLayout({
   kicker,
@@ -19,12 +20,14 @@ export function DawnReportLayout({
   children,
   ranking,
   personal,
+  actions,
 }: {
   kicker: string;
   heading: string;
   children: ReactNode;
   ranking?: ReactNode;
   personal?: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
     <div className={styles.screen} data-dawn-report>
@@ -38,6 +41,7 @@ export function DawnReportLayout({
             {personal && <div data-slot="personal">{personal}</div>}
           </div>
         )}
+        {actions && <div data-slot="actions">{actions}</div>}
       </div>
     </div>
   );
@@ -46,7 +50,7 @@ export function DawnReportLayout({
 /**
  * `/results/[raceId]` (#300 C2, ARCHITECTURE 8.1, 8.3): the site header (as the waiting room keeps it),
  * then the report: the filing notice (the one client leaf that polls) or the podium with the ranking
- * docket (#301) in its slot.
+ * docket (#301) in its slot and the action row under it (#143: RACE AGAIN or the way home).
  */
 export async function DawnReportScreen({ report }: { report: DawnReport }) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
@@ -65,6 +69,11 @@ export async function DawnReportScreen({ report }: { report: DawnReport }) {
                 rows={rankingRowsFrom(report.entries, report.viewerDesk)}
                 labels={rankingLabels(r)}
               />
+            ) : undefined
+          }
+          actions={
+            report.kind === "report" ? (
+              <ReportActions action={reportAction(r, report)} />
             ) : undefined
           }
         >

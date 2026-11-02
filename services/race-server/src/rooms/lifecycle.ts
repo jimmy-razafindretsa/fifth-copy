@@ -6,6 +6,7 @@ import {
   startRaceResponseSchema,
   type EndReason,
   type HostStartAck,
+  type Phase,
   type RaceInfo,
   type RaceRole,
   type RaceSettings,
@@ -64,6 +65,13 @@ export type Lifecycle = {
 
 /** Statuses after which a desk never types again in this race (`line-cut` may resume, #178). */
 const TERMINAL: ReadonlySet<PlayerStatus> = new Set(["finished", "abandoned", "asleep", "expired"]);
+/**
+ * The phases a host start leaves from (ARCHITECTURE 7.1): `waiting`, and `ended` for "Race again"
+ * (#143: same room, same members, bots and settings, a new race). The seam a later automatic
+ * Race again (#128) reuses with `onRestart`.
+ */
+export const canStart = (phase: Phase): boolean => phase === "waiting" || phase === "ended";
+
 /** Bound on the web start call (card #166); the room's queue waits for it. */
 export const START_TIMEOUT_MS = 5_000;
 
@@ -72,7 +80,7 @@ const log = (msg: string, fields: Record<string, unknown>) =>
 
 /**
  * The room's phase transitions and clock (ADR 0006, 0008; ARCHITECTURE 7.1): `waiting ->
- * countdown` on a host start with >= 2 desks, `countdown -> running` at GO (`t0`), `running ->
+ * countdown` (or `ended -> countdown`, "Race again", #143) on a host start with >= 2 desks, `countdown -> running` at GO (`t0`), `running ->
  * ended` through `endRace`. Every transition runs in the registry's per-room queue and writes Redis
  * (the single state) before it emits; only timer handles live in this process.
  */
@@ -89,6 +97,7 @@ export function createLifecycle({
   onGo = () => {},
   onEnded = () => {},
   onClosed = () => {},
+  onRestart = () => {},
   liveRace = () => null,
 }: {
   registry: RoomRegistry;
@@ -115,6 +124,11 @@ export function createLifecycle({
   onEnded?: (lobbyId: string) => void;
   /** The room closed (#173: the tick loop and the runtime are dropped). */
   onClosed?: (lobbyId: string) => void;
+  /**
+   * An ended room starts again (#143), before its new race is written and `countdown` emitted:
+   * the previous race's in-process state (tick loop, desks' runtime, idle warnings) is dropped.
+   */
+  onRestart?: (lobbyId: string) => void;
   /** The race running in this process for the room (#204: the desks' runtime), else null. */
   liveRace?: (lobbyId: string) => { raceId: string; t0: number; desks: number[] } | null;
 }): Lifecycle {
@@ -201,7 +215,8 @@ export function createLifecycle({
     if (by.role !== "host" || by.sub !== room.hostUserId) {
       return { ok: false, error: "not-host" } as const;
     }
-    if (room.phase !== "waiting") return { ok: false, error: "not-waiting" } as const;
+    // `not-waiting`: a race is on (countdown or running).
+    if (!canStart(room.phase)) return { ok: false, error: "not-waiting" } as const;
     if (room.seated.length < 2) return { ok: false, error: "too-few" } as const;
 
     const raceId = randomUUID();
@@ -240,6 +255,13 @@ export function createLifecycle({
       t0,
       timerS,
     };
+    if (room.phase === "ended") {
+      try {
+        onRestart(lobbyId);
+      } catch (err) {
+        log("onRestart failed", { lobby: lobbyId, err: String(err) });
+      }
+    }
     await registry.startRace(lobbyId, { race, endAt, desks: room.seated });
     at(lobbyId, t0, () => goRunning(lobbyId, raceId));
     at(lobbyId, endAt, () => lifecycle.endRace(lobbyId, "timer"));

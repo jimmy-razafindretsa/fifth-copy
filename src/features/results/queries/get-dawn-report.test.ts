@@ -32,7 +32,7 @@ type RaceRow = {
   textLanguage: "FR" | "EN";
   endedAt: Date | null;
   endReason: "ALL_FINISHED" | "TIMER" | null;
-  lobby: { code: string } | null;
+  lobby: { code: string; status: "WAITING" | "CLOSED" } | null;
   results: Row[];
 };
 
@@ -77,7 +77,7 @@ const RACES: RaceRow[] = [
     textLanguage: "FR",
     endedAt: ENDED,
     endReason: "ALL_FINISHED",
-    lobby: { code: "KGB-4821" },
+    lobby: { code: "KGB-4821", status: "WAITING" },
     // stored out of order: the query orders by place, then desk
     results: [
       row({ desk: 5, place: 3, name: "Otter-417", isBot: false, userId: "u-otter", cleanWpm: 31 }),
@@ -111,16 +111,19 @@ const RACES: RaceRow[] = [
   },
 ];
 
-function fakeDb() {
+function fakeDb(races: RaceRow[] = RACES) {
   const findUnique = vi.fn(
     async ({
       where,
       select,
     }: {
       where: { id: string };
-      select: { results: { orderBy: unknown; select: Record<string, unknown> } };
+      select: {
+        lobby: { select: Record<string, true> };
+        results: { orderBy: unknown; select: Record<string, unknown> };
+      };
     }) => {
-      const race = RACES.find((r) => r.id === where.id);
+      const race = races.find((r) => r.id === where.id);
       if (!race) return null;
       const keys = Object.keys(select.results.select);
       const results = [...race.results]
@@ -147,6 +150,18 @@ describe("getDawnReport (#300 C1)", () => {
     await expect(getDawnReport(UNKNOWN_ID, null, { db })).resolves.toBeNull();
   });
 
+  it("lobbyOpen is true only while the race's lobby is WAITING (#143 C4)", async () => {
+    const closed = RACES.map((r) =>
+      r.id === RACE_ID ? { ...r, lobby: { code: "KGB-4821", status: "CLOSED" as const } } : r,
+    );
+    const open = await getDawnReport(RACE_ID, null, { db: fakeDb().db });
+    const shut = await getDawnReport(RACE_ID, null, { db: fakeDb(closed).db });
+    const none = await getDawnReport(OUTFITS_ID, null, { db: fakeDb().db });
+    expect(open?.kind === "report" && open.race.lobbyOpen).toBe(true);
+    expect(shut?.kind === "report" && shut.race.lobbyOpen).toBe(false);
+    expect(none?.kind === "report" && none.race.lobbyOpen).toBe(false);
+  });
+
   it("answers filing while the race has no results", async () => {
     const { db } = fakeDb();
     await expect(getDawnReport(FILING_ID, { id: "u-lynx" }, { db })).resolves.toEqual({
@@ -167,8 +182,12 @@ describe("getDawnReport (#300 C1)", () => {
         endedAt: ENDED,
         endReason: "ALL_FINISHED",
         lobbyCode: "KGB-4821",
+        lobbyOpen: true,
       },
       viewerDesk: null,
+    });
+    expect(findUnique.mock.calls[0]![0].select.lobby).toEqual({
+      select: { code: true, status: true },
     });
     if (report?.kind !== "report") throw new Error("report expected");
     expect(report.entries.map((e) => [e.place, e.desk, e.wpm])).toEqual([

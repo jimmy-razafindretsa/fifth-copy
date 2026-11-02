@@ -1,5 +1,5 @@
 import type { Messages } from "@/i18n/en";
-import type { PodiumLabels } from "./dawn-report";
+import type { DawnReport, PodiumLabels } from "./dawn-report";
 import type { RankingLabels } from "./ranking";
 
 /** The filing notice's copy (#300 C2). */
@@ -36,4 +36,20 @@ export function filingLabels(results: Messages["results"], lobbyCode: string | n
   const { notice, prefix, late, lobby, home } = results.filing;
   const labels: FilingLabels = { notice, prefix, late, back: lobbyCode ? lobby : home };
   return { labels, backHref: lobbyCode ? `/lobby/${lobbyCode}` : "/" };
+}
+
+/**
+ * The Dawn report's one action (#143, bible 14.4 action row): `again`, the way back to the waiting
+ * room for another race, only for a member of the race while its lobby is open; else `home`.
+ */
+export type ReportAction = { kind: "again" | "home"; label: string; href: string };
+
+export function reportAction(
+  results: Messages["results"],
+  { race, viewerDesk }: Pick<Extract<DawnReport, { kind: "report" }>, "race" | "viewerDesk">,
+): ReportAction {
+  if (race.lobbyOpen && race.lobbyCode && viewerDesk !== null) {
+    return { kind: "again", label: results.actions.again, href: `/lobby/${race.lobbyCode}` };
+  }
+  return { kind: "home", label: results.filing.home, href: "/" };
 }

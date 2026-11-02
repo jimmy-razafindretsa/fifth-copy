@@ -377,6 +377,9 @@ export const fr = {
       lobby: "RETOUR À LA SALLE D'ATTENTE →",
       home: "RETOUR À L'ACCUEIL →",
     },
+    actions: {
+      again: "ENCORE UNE FOIS",
+    },
     podium: {
       title: "Podium",
       place: "№ {n}",

@@ -25,6 +25,7 @@ import { botName, botUserId, isBotUserId, planBotSeats } from "./bots";
 import { nextDesk } from "./desks";
 import {
   desksKey,
+  ENDED_GRACE_TTL_S,
   membersKey,
   resumeIndexKey,
   resumeKey,
@@ -82,8 +83,27 @@ export type JoinResult =
 /**
  * `closed` is true only when this call removed the last human member and deleted the room's keys
  * (bots seated with no human left go with the room, ARCHITECTURE 7.1 "last human leaves").
+ * `kept` (#143): the last human left a room in phase `ended`; its keys stay for
+ * `ENDED_GRACE_TTL_S` so a member can come back for "Race again". Either way nothing of the room
+ * is left in this process's live race state.
  */
-export type LeaveResult = { members: Member[]; closed: boolean };
+export type LeaveResult = { members: Member[]; closed: boolean; kept: boolean };
+
+/**
+ * Who may take a seat once the room has left `waiting` (#166, #143), behind the verified race
+ * token: a current member (a second tab, a resume); in `ended` only, also the host or a user who
+ * raced in the room's last race (`desks`), so its members come back for "Race again". Nobody
+ * else: late joiners are #732.
+ */
+export function mayRejoin(
+  room: Pick<RoomState, "phase" | "hostUserId" | "desks">,
+  userId: string,
+  isMember: boolean,
+): boolean {
+  if (room.phase === "waiting" || isMember) return true;
+  if (room.phase !== "ended") return false;
+  return userId === room.hostUserId || (room.desks ?? []).some((d) => d.userId === userId);
+}
 /** `members` is set when the patch carried `bots`: the room was re-seated (#156). */
 export type UpdateSettingsResult =
   | { ok: true; settings: RaceSettings; members?: Member[] }
@@ -326,6 +346,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     return tx;
   }
 
+  /** The trace list keys of the desks stored in the room hash's `desks` field (#592). */
+  function traceKeysOf(lobbyId: string, raw: string | undefined) {
+    return raw
+      ? raceDesksSchema.parse(JSON.parse(raw)).map(({ desk }) => traceKey(lobbyId, desk))
+      : [];
+  }
+
   async function voidRoom(lobbyId: string, extraDesks: readonly number[] = []) {
     const room = await redis.hgetall(roomKey(lobbyId));
     const stored = room.desks
@@ -417,9 +444,22 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const settings = parseSettings(lobbyId, room.settings);
         const phase = parsePhase(room.phase);
         const seats = await readSeats(lobbyId);
-        // Defence in depth behind the handshake: once started, only existing members come back.
-        if (phase !== "waiting" && !seats.has(userId)) return { ok: false, reason: "in-progress" };
-        const desk = seats.get(userId)?.desk ?? nextDesk([...seats.values()].map((s) => s.desk));
+        // Lenient: only admission and the desk preference read it; unreadable means "nobody raced".
+        const desks =
+          room.desks === undefined
+            ? null
+            : (raceDesksSchema.safeParse(JSON.parse(room.desks)).data ?? null);
+        // Defence in depth behind the handshake: once started, only existing members come back,
+        // and in `ended` the racers of the last race (#143).
+        if (!mayRejoin({ phase, hostUserId: room.hostUserId, desks }, userId, seats.has(userId))) {
+          return { ok: false, reason: "in-progress" };
+        }
+        const taken = [...seats.values()].map((s) => s.desk);
+        // A racer coming back after the end gets the desk it raced at when it is still free.
+        const raced = desks?.find((d) => d.userId === userId)?.desk;
+        const desk =
+          seats.get(userId)?.desk ??
+          (raced !== undefined && !taken.includes(raced) ? raced : nextDesk(taken));
         seats.set(userId, { desk, name });
         await withTtl(
           lobbyId,
@@ -436,17 +476,27 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     leave: (lobbyId, userId) =>
       serial(lobbyId, async (): Promise<LeaveResult> => {
         const room = await readRoom(lobbyId);
-        if (!room) return { members: [], closed: false };
+        if (!room) return { members: [], closed: false, kept: false };
         const removed = await redis.hdel(membersKey(lobbyId), userId);
         const seats = await readSeats(lobbyId);
         const humans = [...seats.values()].filter((s) => !s.isBot).length;
         if (removed === 1 && humans === 0) {
           // The trace lists (#592) of the last race's desks go with the room.
-          const traces = room.desks
-            ? raceDesksSchema
-                .parse(JSON.parse(room.desks))
-                .map(({ desk }) => traceKey(lobbyId, desk))
-            : [];
+          const traces = traceKeysOf(lobbyId, room.desks);
+          if (room.phase === "ended") {
+            // "Race again" (#143): the ended room waits for its members under a short TTL; the
+            // race's mirror is never read back, so it goes now.
+            await execAll(
+              lobbyId,
+              redis
+                .multi()
+                .del(desksKey(lobbyId), ...traces)
+                .expire(roomKey(lobbyId), ENDED_GRACE_TTL_S)
+                .expire(membersKey(lobbyId), ENDED_GRACE_TTL_S)
+                .expire(ROOMS_KEY, ROOM_TTL_S),
+            );
+            return { members: toMembers(seats, room.hostUserId), closed: false, kept: true };
+          }
           await execAll(
             lobbyId,
             redis
@@ -455,10 +505,10 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
               .srem(ROOMS_KEY, lobbyId),
           );
           openRooms.delete(lobbyId);
-          return { members: [], closed: true };
+          return { members: [], closed: true, kept: false };
         }
         await withTtl(lobbyId, redis.multi());
-        return { members: toMembers(seats, room.hostUserId), closed: false };
+        return { members: toMembers(seats, room.hostUserId), closed: false, kept: false };
       }),
 
     setBots: (lobbyId, bots) =>
@@ -539,16 +589,29 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     hasMember: async (lobbyId, userId) => (await redis.hexists(membersKey(lobbyId), userId)) === 1,
 
     startRace: async (lobbyId, { race, endAt, desks }) => {
+      // "Race again" (#143): nothing of the previous race survives into this one: its end fields,
+      // its desks mirror and the trace lists of its desks and of this race's (ADR 0016).
+      const previous = await redis.hget(roomKey(lobbyId), "desks");
+      const traces = [
+        ...new Set([
+          ...traceKeysOf(lobbyId, previous ?? undefined),
+          ...desks.map(({ desk }) => traceKey(lobbyId, desk)),
+        ]),
+      ];
       await withTtl(
         lobbyId,
-        redis.multi().hset(roomKey(lobbyId), {
-          phase: "countdown",
-          raceId: race.raceId,
-          t0: String(race.t0),
-          endAt: String(endAt),
-          race: JSON.stringify(race),
-          desks: JSON.stringify(desks),
-        }),
+        redis
+          .multi()
+          .hdel(roomKey(lobbyId), "endReason", "endedAt")
+          .del(desksKey(lobbyId), ...traces)
+          .hset(roomKey(lobbyId), {
+            phase: "countdown",
+            raceId: race.raceId,
+            t0: String(race.t0),
+            endAt: String(endAt),
+            race: JSON.stringify(race),
+            desks: JSON.stringify(desks),
+          }),
       );
     },
 

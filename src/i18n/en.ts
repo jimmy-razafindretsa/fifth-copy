@@ -260,6 +260,73 @@ export const en = {
         timeout: "The room did not answer. Try again.",
       },
     },
+    /**
+     * The read-only `FORM 5-L` race settings docket (#498, bible 7.4, spec 8): one row label and the
+     * value words per `RaceSettings` field; the host's controls (#110) reuse the labels.
+     */
+    settings: {
+      name: "FORM 5-L",
+      tag: "RACE SETTINGS",
+      loading: "Reading the race settings…",
+      on: "ON",
+      off: "OFF",
+      noLetters: "NONE",
+      noBots: "NONE",
+      labels: {
+        language: "LANGUAGE",
+        textType: "TEXT TYPE",
+        wordCount: "WORDS",
+        accentEveryWord: "ACCENTS",
+        difficulty: "DIFFICULTY",
+        practiceLetters: "PRACTICE LETTERS",
+        includeNumbers: "NUMBERS",
+        includeSymbols: "SYMBOLS",
+        includePunctuation: "PUNCTUATION",
+        timerS: "TIMER",
+        errorMode: "ERROR MODE",
+        backspace: "BACKSPACE",
+        bonuses: "BONUSES",
+        bots: "BOTS",
+        lobbyType: "LOBBY",
+      },
+      language: { fr: "FRENCH", en: "ENGLISH" },
+      textType: {
+        sentences: "REAL SENTENCES",
+        words: "RANDOM WORDS",
+        "special-characters": "SPECIAL CHARACTERS",
+      },
+      wordCount: "{n} WORDS",
+      accentEveryWord: "EVERY WORD",
+      difficulty: { easy: "EASY", normal: "NORMAL", hard: "HARD", custom: "CUSTOM" },
+      wordLength: { short: "SHORT WORDS", medium: "MEDIUM WORDS", long: "LONG WORDS" },
+      rareLetters: { on: "RARE LETTERS", off: "COMMON LETTERS" },
+      punctuationDensity: {
+        none: "NO PUNCTUATION",
+        light: "LIGHT PUNCTUATION",
+        heavy: "HEAVY PUNCTUATION",
+      },
+      timer: { none: "NO TIMER", minutes: "{m} MIN", minutesSeconds: "{m} MIN {s} S" },
+      errorMode: { continue: "CONTINUE", block: "BLOCK" },
+      bots: { one: "1 BOT · {levels}", other: "{n} BOTS · {levels}" },
+      botLevel: {
+        recruit: "RECRUIT",
+        clerk: "CLERK",
+        officer: "OFFICER",
+        commissar: "COMMISSAR",
+        major: "MAJOR",
+      },
+      lobbyType: { public: "PUBLIC", private: "PRIVATE" },
+    },
+    /** The invite rows of the room docket (#498, bible 7.1 ink button); #121 adds the link row. */
+    invite: {
+      label: "INVITE",
+      copy: "COPY",
+      copied: "COPIED",
+      /** Read out when the code is copied (polite live region). */
+      copiedStatus: "Room code copied",
+      /** Read out when the clipboard is unavailable and the code is selected instead. */
+      selectedStatus: "Room code selected: copy it with your keyboard",
+    },
   },
   race: {
     kicker: { seat: "SEAT VIEW", desk: "SEAT VIEW · DESK {n}" },

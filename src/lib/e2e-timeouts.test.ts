@@ -26,9 +26,11 @@ function literalWaits(files: { file: string; text: string }[]): string[] {
   return files.flatMap(({ file, text }) =>
     ALLOW.has(file)
       ? []
-      : text.split("\n").flatMap((line, i) =>
-          LITERAL_WAIT.test(line) ? [`${file}:${i + 1}: ${line.trim()}`] : [],
-        ),
+      : text
+          .split("\n")
+          .flatMap((line, i) =>
+            LITERAL_WAIT.test(line) ? [`${file}:${i + 1}: ${line.trim()}`] : [],
+          ),
   );
 }
 
@@ -48,7 +50,9 @@ describe("e2e waits go through e2e/timeouts.ts (#681)", () => {
     expect(literalWaits([{ file: spec, text }])).toEqual([
       "e2e/x.spec.ts:2: await expect(a).toBeVisible({ timeout: 1_000 });",
     ]);
-    expect(literalWaits([{ file: "e2e/race/y.spec.ts", text: "test.setTimeout(60_000);" }])).toHaveLength(1);
+    expect(
+      literalWaits([{ file: "e2e/race/y.spec.ts", text: "test.setTimeout(60_000);" }]),
+    ).toHaveLength(1);
     expect(literalWaits([{ file: "e2e/timeouts.ts", text: "timeout: 30_000" }])).toEqual([]);
     expect(literalWaits([{ file: spec, text: "{ timeout: scaled(1_000) }" }])).toEqual([]);
   });

@@ -316,6 +316,31 @@ export const en = {
         major: "MAJOR",
       },
       lobbyType: { public: "PUBLIC", private: "PRIVATE" },
+      /**
+       * The host's controls in the rows (#110, bible 14.3): the custom recipe's own rows, short segment
+       * words, the timer unit and the refusals (inline error lines after `RETURNED ·`; never the typed
+       * text). `{min}`/`{max}` are filled from the protocol schema.
+       */
+      form: {
+        labels: {
+          wordLength: "WORD LENGTH",
+          rareLetters: "RARE LETTERS",
+          punctuationDensity: "PUNCTUATION DENSITY",
+        },
+        wordLength: { short: "SHORT", medium: "MEDIUM", long: "LONG" },
+        punctuationDensity: { none: "NONE", light: "LIGHT", heavy: "HEAVY" },
+        minutes: "MIN",
+        errors: {
+          words: "Words take a whole number from {min} to {max}.",
+          timer: "The timer takes a whole number of minutes from {min} to {max}.",
+          "too-many-letters": "Practice letters take {max} letters at most.",
+          letters: "Practice letters take letters only, each one once.",
+          invalid: "The room refused that setting.",
+          "not-waiting": "This race has already started.",
+          "no-room": "The room is no longer open.",
+          timeout: "The room did not answer. Try again.",
+        },
+      },
     },
     /** The invite rows of the room docket (#498, bible 7.1 ink button); #121 adds the link row. */
     invite: {

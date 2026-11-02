@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_RACE_SETTINGS, type RaceSettings } from "@fifth-copy/protocol";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
+import { hostForm } from "./settings-controls";
 import { SETTING_ROWS, SettingsDocket, settingRows } from "./settings-docket";
+import { hostRows, IDLE_FORM, type FormState } from "./settings-form";
 
 // Contract of #498 C2: the read-only `FORM 5-L` docket, one bible 7.4 row per `RaceSettings` field, the
 // values in words from the catalog; the accents row only in French, the backspace row only in continue
@@ -156,5 +158,144 @@ describe("SettingsDocket view (#498 C2)", () => {
     expect(html).toContain(">ERROR MODE</dt>");
     expect(html).not.toContain(">CONTINUE</dd>");
     expect(html.match(/<dt/g)).toHaveLength(14);
+  });
+});
+
+// Contract of #110 C1, C2: the host's controls in the rows (bible 7.1 segmented, 7.2 inputs, 7.4 rows).
+describe("SettingsDocket host form (#110 C1)", () => {
+  const PREFIX = en.landing.errors.prefix;
+  const host = (
+    settings: RaceSettings,
+    form: FormState = IDLE_FORM,
+    labels = EN,
+    prefix = PREFIX,
+  ) =>
+    renderToStaticMarkup(
+      <SettingsDocket
+        settings={settings}
+        labels={labels}
+        {...hostForm({ settings, labels, form, revision: 0, prefix })}
+      />,
+    );
+  /** The markup of each row by its `data-setting` key. */
+  const rowsOf = (html: string) =>
+    Object.fromEntries(
+      html
+        .split('data-setting="')
+        .slice(1)
+        .map((chunk) => [chunk.slice(0, chunk.indexOf('"')), chunk]),
+    );
+  const hasControl = (row = "") => /<(button|input)[ >]/.test(row);
+
+  it("every row the host edits has its control; bots and lobby stay read-only", () => {
+    const rows = rowsOf(host(S()));
+    for (const key of hostRows(S())) expect(hasControl(rows[key]), key).toBe(true);
+    expect(hasControl(rows.bots)).toBe(false);
+    expect(hasControl(rows.lobbyType)).toBe(false);
+    expect(rows.bots).toContain(">NONE</dd>");
+  });
+
+  it("segmented toggles named by their row label, the current value pressed", () => {
+    const html = host(S());
+    expect(html).toContain('id="lobby-setting-errorMode"');
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-errorMode"/);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>CONTINUE<\/button>/);
+    expect(html).toMatch(/aria-pressed="false"[^>]*>BLOCK<\/button>/);
+    // booleans read ON | OFF from the docket's own words
+    expect(rowsOf(html).bonuses).toMatch(/aria-pressed="true"[^>]*>ON<\/button>/);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>ENGLISH<\/button>/);
+  });
+
+  it("numeric inputs carry the schema bounds; NO TIMER is a pressed toggle beside the minutes", () => {
+    const rows = rowsOf(host(S()));
+    expect(rows.wordCount).toMatch(/<input[^>]*type="number"/);
+    expect(rows.wordCount).toMatch(/min="10"[^>]*max="500"|max="500"[^>]*min="10"/);
+    expect(rows.wordCount).toContain('value="50"');
+    expect(rows.timerS).toMatch(/aria-pressed="true"[^>]*>NO TIMER<\/button>/);
+    expect(rows.timerS).toMatch(/<input[^>]*disabled/);
+    expect(rows.timerS).toContain(">MIN<");
+    const timed = rowsOf(host(S({ timerS: 180 })));
+    expect(timed.timerS).toMatch(/aria-pressed="false"[^>]*>NO TIMER<\/button>/);
+    expect(timed.timerS).toContain('value="3"');
+    expect(timed.timerS).not.toMatch(/<input[^>]*disabled/);
+    expect(rowsOf(host(S({ practiceLetters: ["q", "z"] }))).practiceLetters).toMatch(
+      /<input[^>]*type="text"[^>]*value="qz"|value="qz"[^>]*type="text"/,
+    );
+  });
+
+  it("C3: the recipe rows only while custom, right under DIFFICULTY; no backspace row in block", () => {
+    expect(host(S())).not.toContain('data-setting="difficulty.wordLength"');
+    const custom = host(
+      S({
+        difficulty: {
+          level: "custom",
+          wordLength: "short",
+          rareLetters: true,
+          punctuationDensity: "heavy",
+        },
+      }),
+    );
+    const order = [...custom.matchAll(/data-setting="([^"]+)"/g)].map((m) => m[1]);
+    const at = order.indexOf("difficulty");
+    expect(order.slice(at, at + 4)).toEqual([
+      "difficulty",
+      "difficulty.wordLength",
+      "difficulty.rareLetters",
+      "difficulty.punctuationDensity",
+    ]);
+    expect(custom).toContain(">WORD LENGTH</dt>");
+    expect(custom).toMatch(/aria-pressed="true"[^>]*>SHORT<\/button>/);
+    expect(custom).toMatch(/aria-pressed="true"[^>]*>HEAVY<\/button>/);
+    expect(host(S({ errorMode: "block" }))).not.toContain('data-setting="backspace"');
+    expect(host(S({ language: "fr" }))).toContain('data-setting="accentEveryWord"');
+  });
+
+  it("C2: pending disables every control and marks its row busy", () => {
+    const html = host(S(), { status: "pending", key: "timerS" });
+    const rows = rowsOf(html);
+    expect(rows.timerS).toMatch(/^timerS"[^>]*aria-busy="true"/);
+    expect(rows.language).not.toMatch(/^language"[^>]*aria-busy/);
+    const controls = html.match(/<(button|input)[^>]*>/g) ?? [];
+    expect(controls.length).toBeGreaterThan(20);
+    // aria-disabled keeps the focus where it was (the minutes under NO TIMER are disabled outright)
+    for (const c of controls) expect(c).toMatch(/aria-disabled="true"|disabled=""/);
+    expect(rowsOf(html).wordCount).toMatch(/<input[^>]*readOnly=""|<input[^>]*readonly=""/);
+  });
+
+  it("C2, C4: a refusal is one inline error line under the rows, never the typed text", () => {
+    const html = host(S(), { status: "error", key: "wordCount", error: "words" });
+    expect(html).toMatch(
+      /<\/dl><div[^>]*><p id="lobby-settings-error" role="alert"[^>]*><span[^>]*>RETURNED ·<\/span> Words take a whole number from 10 to 500.<\/p>/,
+    );
+    expect(rowsOf(html).wordCount).toContain('aria-describedby="lobby-settings-error"');
+    // only the minutes input under the pressed NO TIMER is disabled: nothing is on its way
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
+    const letters = host(S(), {
+      status: "error",
+      key: "practiceLetters",
+      error: "too-many-letters",
+    });
+    expect(letters).toContain("Practice letters take 12 letters at most.");
+    expect(host(S(), { status: "error", key: "language", error: "timeout" })).toContain(
+      "The room did not answer. Try again.",
+    );
+  });
+
+  it("French: labels and refusals from the French catalog", () => {
+    const html = host(
+      S(),
+      { status: "error", key: "timerS", error: "timer" },
+      FR,
+      fr.landing.errors.prefix,
+    );
+    expect(html).toMatch(/aria-pressed="true"[^>]*>SANS CHRONO<\/button>/);
+    expect(html).toContain("RETOURNÉ ·");
+    expect(html).toContain("Le chrono prend un nombre entier de minutes de 1 à 10.");
+  });
+
+  it("the guest view has no control at all", () => {
+    expect(hasControl(renderToStaticMarkup(<SettingsDocket settings={S()} labels={EN} />))).toBe(
+      false,
+    );
   });
 });

@@ -18,7 +18,17 @@ import {
 import { PlayerList, PlayerListSkeleton } from "./player-list";
 import { InviteDocket } from "./invite-docket";
 import { ROOM_CODE_ID, RoomCodeDocket } from "./room-code-docket";
+import { hostForm } from "./settings-controls";
 import { SettingsDocket } from "./settings-docket";
+import {
+  IDLE_FORM,
+  reduceForm,
+  submitSetting,
+  type FormEvent,
+  type FormKey,
+  type FormState,
+  type RawValue,
+} from "./settings-form";
 import { StartControl, type StartError } from "./start-control";
 import styles from "./lobby.module.css";
 
@@ -34,6 +44,10 @@ type ViewProps = {
   errors: EntryErrors;
   start?: StartState;
   onStart?: () => void;
+  /** The host's settings form (#110): its state, the refusal count that resets its inputs, its changes. */
+  form?: FormState;
+  revision?: number;
+  onSetting?: (key: FormKey, raw: RawValue) => void;
 };
 
 /** The viewer's own row says whether they host (`Member.isHost`, protocol v4). */
@@ -52,12 +66,27 @@ export function LobbyLiveView({
   errors,
   start = IDLE_START,
   onStart,
+  form = IDLE_FORM,
+  revision = 0,
+  onSetting,
 }: ViewProps) {
   const known =
     state.phase === "live" || state.phase === "reconnecting" || state.phase === "starting";
   const canStart = (state.phase === "live" || state.phase === "starting") && isHost(state);
   // a non-host waits for the host's START: a statement row, so it does not pulse (bible 7.4, #105)
   const waitsForHost = known && state.phase !== "starting" && !isHost(state);
+  // the host edits while the room is live and waiting; `not-host` (form hidden) falls back to the rows
+  const edits =
+    state.phase === "live" && state.settings && isHost(state) && form.status !== "hidden"
+      ? hostForm({
+          settings: state.settings,
+          labels: labels.settings,
+          form,
+          revision,
+          prefix: errors.prefix,
+          onChange: onSetting,
+        })
+      : null;
   return (
     <div className={styles.room}>
       <div className={styles.dockets}>
@@ -70,7 +99,7 @@ export function LobbyLiveView({
           <InviteDocket code={code} codeId={ROOM_CODE_ID} labels={labels.invite} />
         </RoomCodeDocket>
         {state.phase === "error" ? null : (
-          <SettingsDocket settings={state.settings} labels={labels.settings} />
+          <SettingsDocket settings={state.settings} labels={labels.settings} {...edits} />
         )}
         {canStart && !start.hidden ? (
           <StartControl
@@ -138,6 +167,10 @@ export function LobbyLive({
   const router = useRouter();
   const [state, dispatch] = useReducer(reduceLobby, initialLobbyState);
   const [start, setStart] = useState<StartState>(IDLE_START);
+  const [form, setForm] = useState<FormState>(IDLE_FORM);
+  const [revision, setRevision] = useState(0);
+  // the form's state without waiting for a render: a blur and a click in one tick send one patch
+  const formRef = useRef<FormState>(IDLE_FORM);
   const socketRef = useRef<RoomSocket | null>(null);
   // set once the page moves to the seat view: the cleanup then parks the socket instead of closing it
   const handedOver = useRef(false);
@@ -200,6 +233,29 @@ export function LobbyLive({
     );
   }
 
+  function dispatchForm(event: FormEvent) {
+    const next = reduceForm(formRef.current, event);
+    formRef.current = next;
+    setForm(next);
+    // a refusal puts the inputs back on the last broadcast value
+    if (next.status === "error") setRevision((r) => r + 1);
+  }
+
+  function onSetting(key: FormKey, raw: RawValue) {
+    const socket = socketRef.current;
+    if (!socket || !state.settings) return;
+    void submitSetting(
+      {
+        form: formRef.current,
+        settings: state.settings,
+        send: (patch) => socket.sendHostSettings(patch),
+        dispatch: dispatchForm,
+      },
+      key,
+      raw,
+    );
+  }
+
   return (
     <LobbyLiveView
       code={code}
@@ -208,6 +264,9 @@ export function LobbyLive({
       errors={errors}
       start={start}
       onStart={onStart}
+      form={form}
+      revision={revision}
+      onSetting={onSetting}
     />
   );
 }

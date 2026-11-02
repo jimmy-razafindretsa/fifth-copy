@@ -266,6 +266,108 @@
   color: var(--color-fg-muted);
 }
 
+/* the host's controls in the settings rows (#110, bible 14.3 "Host settings form"): the 7.1 segmented
+   toggle (the recipe of preferences/components/toggles.module.css; CSS modules do not cross features),
+   wrapping inside the row's 1fr column, and 7.2 inputs at the row's 16px mono value size */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  border: 2px solid var(--color-fg);
+}
+
+.segment {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  padding: 5px 10px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-fg);
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* a lone toggle (NO TIMER) carries the group's 2px ink rule itself */
+.single {
+  border: 2px solid var(--color-fg);
+}
+
+.segment:focus-visible,
+.field:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* 7.2 input: IBM Plex Mono 500, 2px ink rule on newsprint, muted placeholder (#99) */
+.field {
+  width: 100%;
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  padding: 4px 8px;
+  @apply type-typing;
+  font-size: 16px;
+  line-height: normal;
+  font-weight: 500;
+  color: var(--color-fg);
+}
+
+.field::placeholder {
+  color: var(--color-fg-muted);
+  opacity: 1;
+}
+
+/* three digits plus the spin buttons */
+.fieldNumber {
+  width: calc(5ch + 40px);
+}
+
+/* TIMER: NO TIMER beside the minutes input and its MIN unit */
+.timer,
+.minutes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.unit {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* unavailable (the minutes under NO TIMER): the Button primitive's disabled recipe; while a change is on
+   its way (aria-disabled, the row aria-busy) the controls keep full strength and focus, as START's
+   pending does */
+.segment:disabled,
+.field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.segment[aria-disabled="true"],
+.field[aria-disabled="true"] {
+  cursor: progress;
+}
+
+/* bible 18: hit targets >= 44px on touch widths */
+@media (max-width: 768px) {
+  .segment,
+  .field {
+    min-height: 44px;
+  }
+}
+
 .srOnly {
   position: absolute;
   width: 1px;

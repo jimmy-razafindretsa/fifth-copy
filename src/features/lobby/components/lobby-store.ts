@@ -1,4 +1,4 @@
-import type { Member } from "@fifth-copy/protocol";
+import type { Member, RaceSettings } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "@/features/race";
 
 /** Desks in a waiting room (spec: thirty desks, one message). */
@@ -17,6 +17,11 @@ export type LobbyState = {
   members: Member[];
   /** The started race (`countdown.race.raceId`, the stored `Race.id`), `null` before the start. */
   raceId: string | null;
+  /**
+   * The room's race settings (#498): from `welcome.settings`, replaced whole by every `settings`
+   * broadcast (ADR 0006: the client's only source); `null` until the first welcome.
+   */
+  settings: RaceSettings | null;
 };
 
 /**
@@ -26,6 +31,7 @@ export type LobbyState = {
 export type LobbyEvent =
   | { type: "welcome"; payload: RoomEvents["welcome"] }
   | { type: "roster"; payload: RoomEvents["roster"] }
+  | { type: "settings"; payload: RoomEvents["settings"] }
   | { type: "countdown"; payload: RoomEvents["countdown"] }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
@@ -38,6 +44,7 @@ export const initialLobbyState: LobbyState = {
   you: null,
   members: [],
   raceId: null,
+  settings: null,
 };
 
 const byDesk = (members: Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -78,10 +85,13 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
         you: event.payload.you,
         members: byDesk(event.payload.members),
         raceId: started ? race.raceId : state.raceId,
+        settings: event.payload.settings,
       };
     }
     case "roster":
       return { ...state, members: byDesk(event.payload.members) };
+    case "settings":
+      return { ...state, settings: event.payload.settings };
     case "countdown":
       return { ...state, phase: "starting", raceId: event.payload.race.raceId };
     case "connect-error": {
@@ -167,6 +177,7 @@ export function bindRoomSocket(
       dispatch({ type: "welcome", payload });
     }),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
+    socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onCountdown((payload) => dispatch({ type: "countdown", payload })),
     socket.onConnectError((reason) => {
       if (reloading) return;

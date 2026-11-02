@@ -1,4 +1,4 @@
-# Required checks for main: check, migrations, e2e, visual. The merge gate is scripts/merge.sh (private
+# Required checks for main: changes, check, migrations, e2e, visual. The merge gate is scripts/merge.sh (private
 # free-plan repo, no branch protection); .github/branch-protection.json lists these job names as the
 # required contexts, so renaming a job means updating that file (scripts/lib/protection.test.ts).
 name: CI
@@ -29,6 +29,33 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  changes:
+    # Owner decision 2026-11-02 (velocity): a PR that only touches Markdown or work/ (card logs, plans)
+    # skips the e2e shards and the visual job; check and migrations always run, and main always runs all.
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only "$BASE...$HEAD")
+          echo "$files"
+          if [ -n "$files" ] && ! echo "$files" | grep -qvE '(\.md$|^work/)'; then
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
   check:
     # format, lint, types, boundaries, unit, ADR lint, prisma validate
     name: check
@@ -120,13 +147,15 @@ jobs:
     # Playwright, functional + a11y, split into shards (#532): one runner ran ~250 tests in ~17 min and
     # hit the 20-min timeout. Each shard has its own services and build; `e2e` below is the required check.
     name: e2e (${{ matrix.shard }}/${{ matrix.shardTotal }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-        shardTotal: [4]
+        shard: [1, 2, 3, 4, 5, 6]
+        shardTotal: [6]
     services:
       postgres:
         image: postgres:17-alpine
@@ -188,21 +217,27 @@ jobs:
     # The one required e2e check (.github/branch-protection.json, scripts/merge.sh): fails unless every
     # shard succeeded, including when a shard failed, timed out, was cancelled or skipped.
     name: e2e
-    needs: e2e-shard
+    needs: [changes, e2e-shard]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: All e2e shards passed
+      - name: All e2e shards passed (or a docs-only PR)
         env:
+          CODE: ${{ needs.changes.outputs.code }}
+          CHANGES: ${{ needs.changes.result }}
           SHARDS: ${{ needs.e2e-shard.result }}
         run: |
-          echo "e2e shards: $SHARDS"
+          echo "changes: $CHANGES code=$CODE e2e shards: $SHARDS"
+          test "$CHANGES" = "success"
+          if [ "$CODE" = "false" ]; then exit 0; fi
           test "$SHARDS" = "success"
 
   visual:
     # pinned Playwright image
     name: visual
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Pinned to the @playwright/test version in package.json. Bump both together.

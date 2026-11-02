@@ -243,3 +243,13 @@ Pipeline tiers (`scripts/lib/flow.ts` `cardTier`), so ceremony scales with risk,
 | full | estimate 3, any `touches:*`, `pentest`, `type:adr`, `type:spike` | Explorer (Fable) -> Builder/UI -> check -> Pen tester (if `pentest`) -> Deliver |
 Deliver always runs in a fresh context; no tier skips review.
 In every mode the durable handoff is the board + repo, never the conversation.
+
+## 14. Velocity mode (owner decision 2026-11-02)
+The owner asked for more throughput with lighter pen test, QA and CI. Until revoked:
+- WIP 3 (`BOARD_WIP_LIMIT` defaults to 3 in `board.yml`; locks of section 7 still apply).
+- Explorer: skipped for tier lite, estimate <= 1 and `discovered` bug cards; the Builder runs a short pass and posts the BRIEF itself.
+- Pen test: only when the card changes the security model (5a item 4: auth, sessions, tokens, HMAC, uploads, privacy flows). Time-boxed, targeted at the diff; everything else is `no pentest` in the BRIEF.
+- Builder: runs `scripts/check.sh` and the card's own new or changed e2e once; CI runs the rest. No repeated flake runs unless a spec is new and timing-sensitive (then 2).
+- Deliver: reviews the diff against the Contract and relies on green CI on the head plus the Builder's evidence; re-runs only the criteria it doubts or the card's new e2e, once. No full `check.sh` re-run when CI is green on the head. The card log rides the Builder's PR (Deliver adds to it only when it already pushes a fix).
+- Merge: a PR behind `main` merges without a refresh when GitHub reports it mergeable and the commits it lacks touch none of its files; CI on the merge commit is the guard (Done gate), and a red main is fixed forward first.
+- CI: PRs touching only Markdown or `work/` skip e2e and visual (`changes` job); e2e runs in 6 shards; `main` always runs everything.

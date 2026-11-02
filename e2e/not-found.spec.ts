@@ -6,7 +6,7 @@ import {
   test,
   type FailedRequest,
 } from "./fixtures";
-import { ACTION_WAIT } from "./timeouts";
+import { ACTION_WAIT, HYDRATION_WAIT } from "./timeouts";
 
 // Card 397 (not-found part): the in-world form 404 with the Major in 3D (bible 10.3, 14.3).
 const TITLE = "ARE YOU LOST, KID?";
@@ -65,7 +65,7 @@ test.describe("not found (#397)", () => {
     const frame = page.locator("iframe");
     await expect(frame).toHaveCount(1);
     await expect(frame).toHaveAttribute("title", "The Major, watching, in 3D");
-    await expect(frame).toHaveAttribute("data-embed", "mounted", { timeout: 30_000 });
+    await expect(frame).toHaveAttribute("data-embed", "mounted", { timeout: HYDRATION_WAIT });
     await expect(frame).toHaveAttribute("src", "/3d/major.html");
     const res = await request.get("/3d/major.html");
     expect(res.status()).toBe(200);
@@ -89,7 +89,7 @@ test.describe("not found (#397)", () => {
   test("C4 French through the header toggle", async ({ page }) => {
     await page.goto(MISSING);
     await expect(page.locator("iframe")).toHaveAttribute("data-embed", "mounted", {
-      timeout: 30_000,
+      timeout: HYDRATION_WAIT,
     });
     await switchLocale(page, "FR");
     await expect(page.getByRole("heading", { level: 1, name: TITLE_FR })).toBeVisible({

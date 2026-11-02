@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { scaled } from "../timeouts";
 import { createLobby, joinAsGuest, lobbyIdOf } from "./helpers";
 
 // Contract of #214: the host's START (C8), the lobby -> seat view move with no line cut and the phase
@@ -239,7 +240,9 @@ test.describe("#214 countdown and GO stamp", () => {
     for (const p of [page, guest.page]) {
       await expect(p).toHaveURL(new RegExp(`/race/${raceId}$`));
       await expect(p.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
-      await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
+      await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", {
+        timeout: scaled(10_000),
+      });
     }
     // one second after GO on both pages, then read what they saw
     await page.waitForTimeout(1_000);
@@ -295,8 +298,10 @@ test.describe("#214 countdown and GO stamp", () => {
 
     await start(room.host).click();
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "countdown");
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
-    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: 5_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
+    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: scaled(5_000) });
 
     const log = await logOf(page);
     const path = `/race/${room.lobbyId}`;
@@ -378,8 +383,10 @@ test.describe("#214 countdown and GO stamp", () => {
     await warm(room.host, room.lobbyId);
 
     await start(room.host).click();
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
-    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: 5_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
+    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: scaled(5_000) });
 
     const log = await logOf(page);
     const path = `/race/${room.lobbyId}`;

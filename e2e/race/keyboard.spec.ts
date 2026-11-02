@@ -1,6 +1,7 @@
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import type { RaceSettingsPatch } from "@fifth-copy/protocol";
 import { expect, test } from "../fixtures";
+import { scaled } from "../timeouts";
 import {
   hostRoom,
   phaseOf,
@@ -170,7 +171,9 @@ test.describe("#224 machine keys, live", () => {
     await expect(startButton(room.host)).toBeEnabled();
     await warmRace(room.host, room.lobbyId);
     await startButton(room.host).click();
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
     await expect(input(page)).toBeFocused();
     const text = await textOf(page);
     expect(text.length, "the race text").toBeGreaterThan(1);

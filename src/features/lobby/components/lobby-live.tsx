@@ -16,7 +16,9 @@ import {
   type LobbyState,
 } from "./lobby-store";
 import { PlayerList, PlayerListSkeleton } from "./player-list";
-import { RoomCodeDocket } from "./room-code-docket";
+import { InviteDocket } from "./invite-docket";
+import { ROOM_CODE_ID, RoomCodeDocket } from "./room-code-docket";
+import { SettingsDocket } from "./settings-docket";
 import { StartControl, type StartError } from "./start-control";
 import styles from "./lobby.module.css";
 
@@ -37,7 +39,12 @@ type ViewProps = {
 /** The viewer's own row says whether they host (`Member.isHost`, protocol v4). */
 const isHost = (state: LobbyState) => state.members.some((m) => m.desk === state.you && m.isHost);
 
-/** The room docket, the roll and the host's START for one lobby state (no hooks, so every state renders in tests). */
+/**
+ * The waiting room's layout for one lobby state (no hooks, so every state renders in tests; #498, bible
+ * 14.3): the dockets column (the room docket with its invite rows, the `FORM 5-L` settings docket, the
+ * host's START under it) beside the seat ring (#731) and the roll. Phones keep the room docket, the roll
+ * and START (CSS).
+ */
 export function LobbyLiveView({
   code,
   state,
@@ -53,13 +60,32 @@ export function LobbyLiveView({
   const waitsForHost = known && state.phase !== "starting" && !isHost(state);
   return (
     <div className={styles.room}>
-      <RoomCodeDocket
-        code={code}
-        count={known ? state.members.length : null}
-        seats={ROOM_SEATS}
-        labels={labels}
-      />
+      <div className={styles.dockets}>
+        <RoomCodeDocket
+          code={code}
+          count={known ? state.members.length : null}
+          seats={ROOM_SEATS}
+          labels={labels}
+        >
+          <InviteDocket code={code} codeId={ROOM_CODE_ID} labels={labels.invite} />
+        </RoomCodeDocket>
+        {state.phase === "error" ? null : (
+          <SettingsDocket settings={state.settings} labels={labels.settings} />
+        )}
+        {canStart && !start.hidden ? (
+          <StartControl
+            seated={state.members.length}
+            pending={start.pending || state.phase === "starting"}
+            error={start.error}
+            labels={labels.start}
+            prefix={errors.prefix}
+            onStart={onStart}
+          />
+        ) : null}
+      </div>
       <div className={styles.side}>
+        {/* the seat ring diagram (#731) */}
+        <div className={styles.ring} />
         <div className={styles.roll}>
           {state.phase === "reconnecting" ? (
             <p role="status" className={cn(styles.notice, styles.pulse)}>
@@ -84,16 +110,6 @@ export function LobbyLiveView({
             {known ? playersLabel(labels, state.members.length) : ""}
           </p>
         </div>
-        {canStart && !start.hidden ? (
-          <StartControl
-            seated={state.members.length}
-            pending={start.pending || state.phase === "starting"}
-            error={start.error}
-            labels={labels.start}
-            prefix={errors.prefix}
-            onStart={onStart}
-          />
-        ) : null}
       </div>
     </div>
   );

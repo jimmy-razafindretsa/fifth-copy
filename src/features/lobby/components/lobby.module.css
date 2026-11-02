@@ -42,7 +42,9 @@
   text-wrap: balance;
 }
 
-/* room-code docket beside the roll; both wrap under each other on narrow screens */
+/* the room (bible 7.10, #498): the dockets column (room code and invite, settings, START) beside the
+   seat ring and the roll; from 481 to 1023px both wrap under each other (`flex-wrap`), from 1024px a
+   two-column grid; at 480px and under only the room docket, the roll and START (phones watch, bible 18) */
 .room {
   display: flex;
   flex-wrap: wrap;
@@ -50,23 +52,35 @@
   gap: 24px;
 }
 
-/* bible 7.4 docket: 2px ink, no radius, newsprint */
-.docket {
+/* the dockets column: newsprint dockets, START under the settings docket */
+.dockets {
   flex: 1 1 280px;
   max-width: 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* bible 7.4 docket: 2px ink, no radius, newsprint */
+.docket {
   min-width: 0;
   border: 2px solid var(--color-fg);
   border-radius: 0;
   background: var(--color-surface);
 }
 
-/* the roll and, for the host, START under it (#214) */
+/* the seat ring and the roll under it (#731 fills the ring; empty, it takes no room and no gap) */
 .side {
   flex: 2 1 320px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.ring:empty {
+  display: none;
 }
 
 /* the roll: the same docket on paper, so skeleton blocks can be newsprint */
@@ -199,13 +213,40 @@
 }
 
 /* the host's START (#214): the bible 7.1 primary stamp button, its reason line and its 7.4 error line
-   under it, left-aligned under the roll (#498 moves it into the full lobby layout) */
+   under it, left-aligned under the settings docket (#498); under the roll on phones */
 .start {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
+}
+
+/* the 7.1 ink button (Oswald 600 13px, ink ground and paper text, hover red), at least 44px tall (bible
+   18): the invite's COPY (#498; the recipe of race/components/hud-docket.module.css, CSS modules do
+   not cross features) */
+.ink {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ink:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.ink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 /* not startable yet: the Button primitive's disabled recipe (half strength, no press); while the start
@@ -246,4 +287,47 @@
 /* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
 :root[data-motion="reduce"] .pulse {
   animation: none;
+}
+
+/* the room's layout per width (#498, bible 7.10, 18): last, so it wins over the row and docket rules */
+@media (min-width: 1024px) {
+  .room {
+    display: grid;
+    grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+    grid-template-areas: "dockets side";
+  }
+
+  .dockets {
+    grid-area: dockets;
+    max-width: none;
+  }
+
+  .side {
+    grid-area: side;
+  }
+}
+
+@media (max-width: 480px) {
+  .room {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* the column's dockets become the room's own rows, so START can follow the roll */
+  .dockets {
+    display: contents;
+  }
+
+  .side {
+    order: 1;
+  }
+
+  .start {
+    order: 2;
+  }
+
+  .settings,
+  .invite {
+    display: none;
+  }
 }

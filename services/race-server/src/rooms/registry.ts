@@ -155,6 +155,11 @@ export type RoomRegistry = {
   room(lobbyId: string): Promise<RoomState | null>;
   hasMember(lobbyId: string, userId: string): Promise<boolean>;
   /**
+   * The level of each bot desk of the members hash (#366: the drivers at GO), by desk. One HGETALL,
+   * not queued (the lifecycle reads it inside `withRoom`); empty for an unknown room.
+   */
+  botLevels(lobbyId: string): Promise<Map<number, BotLevel>>;
+  /**
    * Phase `countdown` with the race, its clock and its desks, in one MULTI with both TTLs (ADR
    * 0008). The caller checked the phase under `withRoom`.
    */
@@ -587,6 +592,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     },
 
     hasMember: async (lobbyId, userId) => (await redis.hexists(membersKey(lobbyId), userId)) === 1,
+
+    botLevels: async (lobbyId) =>
+      new Map(
+        [...(await readSeats(lobbyId)).values()].flatMap(({ desk, isBot, level }) =>
+          isBot && level ? [[desk, level] as const] : [],
+        ),
+      ),
 
     startRace: async (lobbyId, { race, endAt, desks }) => {
       // "Race again" (#143): nothing of the previous race survives into this one: its end fields,

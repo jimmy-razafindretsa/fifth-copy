@@ -12,6 +12,7 @@ import {
   type HostStartAck,
   type Pong,
   type RaceSettings,
+  type Snapshot,
   INTERNAL_HEADERS,
   startRaceRequestSchema,
 } from "@fifth-copy/protocol";
@@ -213,6 +214,137 @@ describe("lifecycle: bots count as desks (#156 C3)", () => {
       { desk: 1, userId: HOST_SUB, name: "Ada", isBot: false },
       { desk: 2, userId: null, name: expect.any(String), isBot: true },
     ]);
+  });
+});
+
+describe("lifecycle: bots type from GO and stop with the race (#366 C3, C4)", () => {
+  /** Host (and `players` players) with `bots`, started and run to GO; the host's snapshots kept. */
+  async function botRace(bots: RaceSettings["bots"], players = 0) {
+    const r = await room({ players, settings: { ...DEFAULT_RACE_SETTINGS, bots } });
+    const snapshots: Snapshot[] = [];
+    r.host.on("snapshot", (snap) => void snapshots.push(snap));
+    const ack = await start(r.host);
+    expect(ack).toMatchObject({ ok: true });
+    r.booted.clock.advance(3_000);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO");
+    return { ...r, snapshots, raceId: (ack as { raceId: string }).raceId };
+  }
+  const traceOf = (b: Booted, lobby: string, desk: number) =>
+    b.server.desks.states(lobby).get(desk)?.trace.length ?? 0;
+  /** Advances the fake clock in 100 ms steps, yielding to the socket and Redis between them. */
+  async function stepFor(b: Booted, ms: number) {
+    for (let done = 0; done < ms; done += 100) {
+      b.clock.advance(100);
+      await new Promise((r) => setImmediate(r));
+    }
+  }
+
+  it("a bot removed by a settings change before START gets no driver; the other types, shows in snapshots and the rank", async () => {
+    const r = await room({
+      players: 0,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }, { level: "officer" }] },
+    });
+    // Bots leave highest desk first (#156): desk 3 goes, desk 2 stays.
+    expect(await r.booted.server.registry.setBots(r.lobby, [{ level: "clerk" }])).toMatchObject({
+      ok: true,
+    });
+    expect((await r.booted.server.registry.members(r.lobby))!.map((m) => m.desk)).toEqual([1, 2]);
+    const snapshots: Snapshot[] = [];
+    r.host.on("snapshot", (snap) => void snapshots.push(snap));
+    expect(await start(r.host)).toMatchObject({ ok: true });
+    r.booted.clock.advance(3_000);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO");
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([2]);
+    expect(r.booted.server.desks.get(r.lobby)!.desks.map((d) => d.desk)).toEqual([1, 2]);
+    await stepFor(r.booted, 2_000);
+    expect(traceOf(r.booted, r.lobby, 2)).toBeGreaterThan(0);
+    // The bot leads the silent host in the live rank and its cursor is in the snapshots.
+    await until(
+      () => (snapshots.at(-1)?.desks.find((d) => d[0] === 2)?.[1] ?? 0) > 0,
+      WAIT_MS,
+      "bot row",
+    );
+    expect(snapshots.at(-1)!.ranks[0]).toBe(2);
+  });
+
+  it("a host and a bot: the bot finishes first, the race ends all-finished once the host finishes too", async () => {
+    const { booted, lobby, host, seenHost } = await botRace([{ level: "major" }]);
+    const text = FIXTURE_TEXT.content;
+    for (
+      let i = 0;
+      i < 100 && booted.server.desks.states(lobby).get(2)?.status !== "finished";
+      i++
+    ) {
+      await stepFor(booted, 500);
+    }
+    expect(booted.server.desks.states(lobby).get(2)?.status).toBe("finished");
+    expect(booted.server.bots.active(lobby)).toEqual([]);
+    expect(seenHost.ended).toHaveLength(0);
+    const elapsed = booted.clock.now() - booted.server.desks.get(lobby)!.t0;
+    typeKeys(host, text, elapsed, 1);
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
+    expect(seenHost.ended[0]).toMatchObject({ reason: "all-finished" });
+    expect(seenHost.ended[0]!.ranking.map((e) => [e.desk, e.isBot, e.status])).toEqual([
+      [2, true, "finished"],
+      [1, false, "finished"],
+    ]);
+  });
+
+  it("an ending race (timer) stops every bot timer; no key lands afterwards", async () => {
+    const { booted, lobby, seenHost } = await botRace([{ level: "recruit" }, { level: "clerk" }]);
+    await stepFor(booted, 1_500);
+    expect(booted.server.bots.active(lobby)).toEqual([2, 3]);
+    await booted.server.lifecycle.endRace(lobby, "timer");
+    expect(booted.server.bots.active(lobby)).toEqual([]);
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
+    expect(seenHost.ended[0]!.ranking.filter((e) => e.isBot).map((e) => e.status)).toEqual([
+      "typing",
+      "typing",
+    ]);
+  });
+
+  it("voidRoom and a closed room stop the bots", async () => {
+    const a = await botRace([{ level: "clerk" }]);
+    await stepFor(a.booted, 1_000);
+    expect(a.booted.server.bots.active(a.lobby)).toEqual([2]);
+    await a.booted.server.lifecycle.voidRoom(a.lobby, a.raceId);
+    expect(a.booted.server.bots.active(a.lobby)).toEqual([]);
+    await t!.stop();
+    t = undefined;
+
+    const b = await botRace([{ level: "clerk" }]);
+    await stepFor(b.booted, 1_000);
+    const before = traceOf(b.booted, b.lobby, 2);
+    b.booted.server.lifecycle.onRoomClosed(b.lobby);
+    expect(b.booted.server.bots.active(b.lobby)).toEqual([]);
+    expect(b.booted.scheduler.armed()).toBe(0);
+    await stepFor(b.booted, 2_000);
+    expect(traceOf(b.booted, b.lobby, 2)).toBeLessThanOrEqual(before);
+  });
+
+  it("the race server's close() leaves no timer armed, bots included", async () => {
+    const r = await botRace([{ level: "clerk" }, { level: "major" }]);
+    await stepFor(r.booted, 1_000);
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([2, 3]);
+    // `restart` closes this server (keys kept) and boots another: the closed one holds nothing.
+    t = await r.booted.restart();
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([]);
+    expect(r.booted.scheduler.armed()).toBe(0);
+  });
+
+  it("Race again: the first race's bots stopped at its end, the second race's start at its GO", async () => {
+    const r = await botRace([{ level: "clerk" }]);
+    await stepFor(r.booted, 1_000);
+    await r.booted.server.lifecycle.endRace(r.lobby, "timer");
+    await until(() => r.seenHost.ended.length === 1, WAIT_MS, "ended 1");
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([]);
+    expect(await start(r.host)).toMatchObject({ ok: true });
+    r.booted.clock.advance(3_000);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO 2");
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([2]);
+    expect(traceOf(r.booted, r.lobby, 2)).toBe(0);
+    await stepFor(r.booted, 1_500);
+    expect(traceOf(r.booted, r.lobby, 2)).toBeGreaterThan(0);
   });
 });
 

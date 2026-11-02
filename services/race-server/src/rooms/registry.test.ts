@@ -144,6 +144,23 @@ describe("room registry: settings (#568 C4)", () => {
   });
 });
 
+describe("room registry: botLevels (#366)", () => {
+  it("maps each bot desk of the members hash to its level; humans and unknown rooms give nothing", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    expect(await registry.botLevels(lobbyId)).toEqual(new Map());
+    await registry.setBots(lobbyId, [{ level: "recruit" }, { level: "major" }]);
+    expect(await registry.botLevels(lobbyId)).toEqual(
+      new Map([
+        [2, "recruit"],
+        [3, "major"],
+      ]),
+    );
+    expect(await registry.botLevels(`lob_${randomUUID()}`)).toEqual(new Map());
+  });
+});
+
 describe("room registry: join (C2, C3)", () => {
   it("allocates the lowest free desk", async () => {
     const { registry } = setup();

@@ -17,6 +17,7 @@ import type { Clock, Scheduler, TimerHandle } from "../clock";
 import type { WebApi } from "../persist/web-api";
 import type { Durations } from "./durations";
 import { rankingFor, type RankedState } from "./ranking";
+import type { BotSeat } from "./bot-driver";
 import type { RaceDesk, RoomRegistry } from "./registry";
 
 /** The room broadcasts the lifecycle sends; implemented by the socket edge with `io.to(room)`. */
@@ -115,10 +116,13 @@ export function createLifecycle({
    * desks turn `expired`). Must not call the registry's queued methods.
    */
   onEnding?: (lobbyId: string) => Promise<void>;
-  /** The room is `running` (#173: the desks' runtime and the tick loop start here). */
+  /**
+   * The room is `running` (#173: the desks' runtime and the tick loop start here; #366: `bots`, the
+   * bot desks of the race with their level from the members hash, get their drivers).
+   */
   onGo?: (
     lobbyId: string,
-    init: { race: RaceInfo; settings: RaceSettings; desks: RaceDesk[] },
+    init: { race: RaceInfo; settings: RaceSettings; desks: RaceDesk[]; bots: BotSeat[] },
   ) => void;
   /** The race is ending: ranked, phase `ended`, `ended` not yet emitted (#173: last tick, keys refused). */
   onEnded?: (lobbyId: string) => void;
@@ -205,8 +209,14 @@ export function createLifecycle({
       // Lost during the countdown (#204): GO never comes, the clients must not wait for it.
       if (room === null) return lose(lobbyId, raceId);
       if (room.phase !== "countdown" || room.race?.raceId !== raceId) return;
+      const levels = await registry.botLevels(lobbyId);
       await registry.setPhase(lobbyId, "running");
-      onGo(lobbyId, { race: room.race, settings: room.settings, desks: room.desks ?? room.seated });
+      const desks = room.desks ?? room.seated;
+      // A bot desk always has its level (#156 seats it); "clerk" only guards a hand-edited hash.
+      const bots = desks
+        .filter(({ isBot }) => isBot)
+        .map(({ desk }): BotSeat => ({ desk, level: levels.get(desk) ?? "clerk" }));
+      onGo(lobbyId, { race: room.race, settings: room.settings, desks, bots });
     });
 
   async function begin(lobbyId: string, by: { sub: string; role: RaceRole }) {

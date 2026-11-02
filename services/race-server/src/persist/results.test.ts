@@ -388,6 +388,46 @@ describe("results at race end over the wire (C1)", () => {
   });
 });
 
+describe("a bot's results (#366 C4)", () => {
+  it("host + Clerk bot: both finish, the race ends all-finished, the bot row has no user, its WPM, accuracy and status", async () => {
+    const posted: RaceResultsRequest[] = [];
+    const text = "le bureau ouvre";
+    const r = await startedRace(process.env.REDIS_URL, {
+      players: 1,
+      text,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }] },
+      redisPrefix: `t366-results-${randomUUID()}:`,
+      rng: mulberry32(366),
+      postResults: async (request) => {
+        posted.push(request);
+        return ackResults(request);
+      },
+    });
+    booted = r.booted;
+    const [host] = r.racers;
+    typeKeys(host!.client, text, 100, 60);
+    // The bot types on the server clock: advance it in steps until the results are posted.
+    for (let i = 0; i < 120 && posted.length === 0; i++) {
+      r.booted.clock.advance(500);
+      await new Promise((done) => setTimeout(done, 5));
+    }
+    await until(() => posted.length === 1, 3_000, "results posted");
+    const request = raceResultsRequestSchema.parse(posted[0]);
+    expect(request.reason).toBe("all-finished");
+    expect(request.results).toHaveLength(2);
+    const bot = request.results.find((x) => x.desk === 2)!;
+    expect(bot).toMatchObject({ userId: null, isBot: true, status: "finished", flags: [] });
+    expect(bot.wpm).toBeGreaterThan(10);
+    expect(bot.accuracy).toBeGreaterThan(0.8);
+    expect(bot.progress).toBe(1);
+    expect(request.results.find((x) => x.desk === host!.desk)).toMatchObject({
+      userId: HOST_SUB,
+      isBot: false,
+      status: "finished",
+    });
+  });
+});
+
 // #190 C6: clean and adjusted WPM, the bonus counts and log, and the analysis on the effective text.
 describe("bonus fields of the results (#190 C6)", () => {
   it("unit: extra words typed -> clean < adjusted; counts and log from the ledger; replayed on the effective text", () => {

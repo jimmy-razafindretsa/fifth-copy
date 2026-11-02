@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { deskIdentity, type Member } from "@fifth-copy/protocol";
+import { DEFAULT_RACE_SETTINGS, deskIdentity, type Member } from "@fifth-copy/protocol";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { deskLabel, fill, playersLabel } from "./lobby-labels";
@@ -31,6 +31,7 @@ const live = (members: Member[], you = 1): LobbyState => ({
   you,
   members,
   raceId: null,
+  settings: DEFAULT_RACE_SETTINGS,
 });
 const view = (state: LobbyState) =>
   renderToStaticMarkup(<LobbyLiveView code={CODE} state={state} labels={labels} errors={errors} />);
@@ -130,7 +131,12 @@ describe("START (#214 C8)", () => {
         onStart={() => {}}
       />,
     );
-  const button = (html: string) => /<button[^>]*>[^<]*<\/button>/.exec(html)?.[0] ?? null;
+  // START, not the invite row's COPY (#498 puts it first in the dockets column)
+  const copyLabels = [en.lobby.invite.copy, fr.lobby.invite.copy].map((c) => `>${c}<`);
+  const button = (html: string) =>
+    [...html.matchAll(/<button[^>]*>[^<]*<\/button>/g)]
+      .map((m) => m[0])
+      .find((b) => !copyLabels.some((c) => b.includes(c))) ?? null;
   const host = member(1, true);
   const guest = member(2);
 
@@ -275,7 +281,9 @@ describe("non-host notice row (#105 C2)", () => {
     expect(cls).toMatch(/_notice_/);
     expect(cls).not.toMatch(/_pulse_/);
     expect(html.indexOf(labels.waitingForHost)).toBeLessThan(html.indexOf("<ul"));
-    expect(html).not.toContain("<button");
+    // the invite row's COPY is the guest's only button (#498)
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).not.toContain(`>${labels.start.button}<`);
     expect(labels.waitingForHost).toBe("WAITING FOR THE HOST");
   });
 
@@ -312,6 +320,50 @@ describe("non-host notice row (#105 C2)", () => {
     );
     expect(html).toContain("EN ATTENTE DE L&#x27;HÔTE");
     expect(html).not.toContain("WAITING FOR");
+  });
+});
+
+// Contract of #498 C5/C6: the dockets column (room docket with its invite row, the settings docket, then
+// the host's START), beside the ring slot and the roll.
+describe("lobby layout (#498)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const at = (html: string, needle: string) => html.indexOf(needle);
+
+  it("the host: room docket, invite row, settings docket, START, then the roll", () => {
+    const html = view(live([host, guest], 1));
+    const order = [
+      labels.codeTag,
+      `>${labels.invite.copy}<`,
+      labels.settings.tag,
+      `>${labels.start.button}<`,
+      `aria-label="${labels.listName}"`,
+    ].map((s) => at(html, s));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("a guest: the same dockets, no START", () => {
+    const html = view(live([host, guest], 2));
+    expect(html).toContain(labels.settings.tag);
+    expect(html).toContain(`>${labels.invite.copy}<`);
+    expect(html).not.toContain(`>${labels.start.button}<`);
+  });
+
+  it("loading: the settings docket's skeleton rows; an error shows no settings docket", () => {
+    expect(view(initialLobbyState)).toContain(labels.settings.loading);
+    const error = view({ ...initialLobbyState, phase: "error", error: "closed" });
+    expect(error).not.toContain(labels.settings.tag);
+  });
+
+  it("the settings rows follow the state's settings", () => {
+    const html = view({
+      ...live([host, guest], 2),
+      settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "block", timerS: 300 },
+    });
+    expect(html).toContain(">BLOCK</dd>");
+    expect(html).toContain(">5 MIN</dd>");
+    expect(html).not.toContain(">BACKSPACE</dt>");
   });
 });
 

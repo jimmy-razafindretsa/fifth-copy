@@ -104,7 +104,9 @@ export async function PrivacyScreen({ header }: { header: ReactNode }) {
                   </p>
                 ) : null}
                 {section.id === "rules" ? (
-                  <p className={styles.sectionNum}>{fill(s.rulesUpdated, { date: TERMS_UPDATED })}</p>
+                  <p className={styles.sectionNum}>
+                    {fill(s.rulesUpdated, { date: TERMS_UPDATED })}
+                  </p>
                 ) : null}
                 {section.id === "rules"
                   ? terms.map((rule) => (

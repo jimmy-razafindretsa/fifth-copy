@@ -126,7 +126,11 @@ describe("privacy page: facts match docs/privacy (C3)", () => {
   // [period in retention.md, French, English]
   const PERIODS = [
     ["12 months (365 days)", "12 mois", "12 months"],
-    ["Until the student deletes the account", "jusqu'à ce que tu le supprimes", "until you delete it"],
+    [
+      "Until the student deletes the account",
+      "jusqu'à ce que tu le supprimes",
+      "until you delete it",
+    ],
     ["| 30 days after the race |", "30 jours", "30 days"],
     ["| Request logs and IP addresses | 30 days |", "30 jours", "30 days"],
     ["24 hours after the lobby closes", "24 heures", "24 hours"],

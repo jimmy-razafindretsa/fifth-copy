@@ -90,7 +90,9 @@ test.describe("privacy page (#76)", () => {
     await useLocale(page, "fr");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("lang", "fr");
-    await expect(page.getByRole("heading", { level: 2, name: "Effacer mes données" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Effacer mes données" }),
+    ).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Delete my data" })).toHaveCount(0);
   });
 
@@ -126,7 +128,10 @@ test.describe("privacy page (#76)", () => {
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await stabilize(page);
       await page.goto("/privacy");
-      await expect(page).toHaveScreenshot(`privacy-${scheme}.png`, { fullPage: true, timeout: 45_000 });
+      await expect(page).toHaveScreenshot(`privacy-${scheme}.png`, {
+        fullPage: true,
+        timeout: 45_000,
+      });
     });
   }
 });

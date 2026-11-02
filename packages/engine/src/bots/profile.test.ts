@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BOT_LEVEL_WPM, botProfile } from "./profile";
 import { BOT_LEVELS } from "./types";
 
-describe("bot profiles (#729)", () => {
+describe("bot profiles (#729, #361)", () => {
   it("lists the five levels in rank order", () => {
     expect(BOT_LEVELS).toEqual(["recruit", "clerk", "officer", "commissar", "major"]);
   });

@@ -463,6 +463,60 @@ describe("host start (#214 C7)", () => {
   });
 });
 
+// Contract of #643 C2: the clock sync pair (ARCHITECTURE 7.3). `sendPing` emits `ping { v, sent }`
+// with the device clock; `onPong` delivers a parsed `pong`, and an invalid one goes to onProtocolError.
+describe("ping and pong (#643 C2)", () => {
+  it("sendPing emits ping with the protocol version and Date.now()", () => {
+    const { fake, room } = setup();
+    vi.spyOn(Date, "now").mockReturnValue(1_767_225_600_123);
+    room.sendPing();
+    expect(fake.emit).toHaveBeenCalledTimes(1);
+    expect(fake.emit).toHaveBeenCalledWith("ping", {
+      v: PROTOCOL_VERSION,
+      sent: 1_767_225_600_123,
+    });
+  });
+
+  it("sendPing takes an explicit send time (the binder's injected clock)", () => {
+    const { fake, room } = setup();
+    room.sendPing(42);
+    expect(fake.emit).toHaveBeenCalledWith("ping", { v: PROTOCOL_VERSION, sent: 42 });
+  });
+
+  it("an invalid send time is not sent", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    room.sendPing(-1);
+    room.sendPing(Number.NaN);
+    expect(fake.emit).not.toHaveBeenCalled();
+  });
+
+  it("onPong delivers a parsed pong; an invalid one goes to onProtocolError", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    const onPong = vi.fn();
+    const onProtocolError = vi.fn();
+    room.onPong(onPong);
+    room.onProtocolError(onProtocolError);
+    const pong = { v: PROTOCOL_VERSION, sent: 1_000, serverNow: 1_540 };
+    fake.deliver("pong", pong);
+    fake.deliver("pong", { v: PROTOCOL_VERSION, sent: 1_000 });
+    expect(onPong.mock.calls).toEqual([[pong]]);
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "pong" });
+  });
+
+  it("onPong returns its off", () => {
+    const { fake, room } = setup();
+    const onPong = vi.fn();
+    const off = room.onPong(onPong);
+    off();
+    fake.deliver("pong", { v: PROTOCOL_VERSION, sent: 1, serverNow: 2 });
+    expect(onPong).not.toHaveBeenCalled();
+    expect(fake.listeners.has("pong")).toBe(false);
+  });
+});
+
 describe("boundaries (C5)", () => {
   const source = readFileSync(path.join(__dirname, "socket.ts"), "utf8");
 

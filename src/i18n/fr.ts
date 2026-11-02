@@ -229,6 +229,23 @@ export const fr = {
       stageHint: "LE MAJOR · IL SUIT TON CURSEUR",
     },
   },
+  privacy: {
+    title: "CONFIDENTIALITÉ",
+    kicker: "MINISTÈRE DE LA DACTYLO · DOSSIER CONFIDENTIALITÉ",
+    heading: "CE QU'ON GARDE AU DOSSIER",
+    intro:
+      "Cette page t'explique ce que Fifth Copy sait sur toi, pourquoi et pour combien de temps. Elle t'explique aussi comment le faire effacer.",
+    rows: [
+      ["FORMULAIRE", "LOI 25"],
+      ["MIS À JOUR", "{date}"],
+      ["QUESTIONS", "DEMANDE À TON ENSEIGNANT"],
+    ],
+    tocLabel: "Sur cette page",
+    tocTag: "SOMMAIRE",
+    deleteLink: "MES RÉGLAGES →",
+    rulesUpdated: "RÈGLES MISES À JOUR · {date}",
+    backToTop: "RETOUR EN HAUT ↑",
+  },
   lobby: {
     kicker: "SALLE D'ATTENTE · COURSE PRIVÉE",
     heading: "PRÉSENTE-TOI À TON BUREAU",

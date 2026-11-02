@@ -34,7 +34,9 @@ describe("branch protection for main (card #8 C2)", () => {
   });
 
   it("reports no drift when the live settings match", () => {
-    expect(protectionDrift(desired, live(["visual", "e2e", "migrations", "check", "changes"]))).toEqual([]);
+    expect(
+      protectionDrift(desired, live(["visual", "e2e", "migrations", "check", "changes"])),
+    ).toEqual([]);
   });
 
   it("reports an unprotected branch", () => {

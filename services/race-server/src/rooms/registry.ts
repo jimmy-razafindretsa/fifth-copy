@@ -15,6 +15,7 @@ import {
   type Member,
   type Phase,
   type RaceInfo,
+  type RaceLanguage,
   type RaceSettings,
   type RaceSettingsPatch,
   type StartRaceRequest,
@@ -324,6 +325,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     lobbyId: string,
     seats: Map<string, Seat>,
     bots: readonly { level: BotLevel }[],
+    language: RaceLanguage,
   ) {
     const botDesks = [...seats.values()].filter((s) => s.isBot).map((s) => s.desk);
     const taken = [...seats.values()].map((s) => s.desk);
@@ -337,7 +339,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
       for (const desk of plan.remove) seats.delete(botUserId(desk));
     }
     for (const { desk, level } of plan.seats) {
-      const seat: Seat = { desk, name: botName(desk), isBot: true, level };
+      const seat: Seat = { desk, name: botName(desk, language), isBot: true, level };
       seats.set(botUserId(desk), seat);
       tx.hset(membersKey(lobbyId), botUserId(desk), JSON.stringify(seat));
     }
@@ -409,7 +411,13 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         if (created && settings.bots.length) {
           await withTtl(
             lobbyId,
-            seatBots(redis.multi(), lobbyId, await readSeats(lobbyId), settings.bots),
+            seatBots(
+              redis.multi(),
+              lobbyId,
+              await readSeats(lobbyId),
+              settings.bots,
+              settings.language,
+            ),
           );
         }
         const room = await readRoom(lobbyId);
@@ -513,7 +521,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const settings = { ...parseSettings(lobbyId, room.settings), bots: parsed.data };
         const seats = await readSeats(lobbyId);
         const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(settings));
-        await withTtl(lobbyId, seatBots(tx, lobbyId, seats, parsed.data));
+        await withTtl(lobbyId, seatBots(tx, lobbyId, seats, parsed.data, settings.language));
         return { ok: true, members: toMembers(seats, room.hostUserId) };
       }),
 
@@ -541,19 +549,20 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const clean = Object.fromEntries(
           Object.entries(parsed.data).filter(([, value]) => value !== undefined),
         );
-        const merged = raceSettingsSchema.safeParse({
-          ...parseSettings(lobbyId, room.settings),
-          ...clean,
-        });
+        const current = parseSettings(lobbyId, room.settings);
+        const merged = raceSettingsSchema.safeParse({ ...current, ...clean });
         if (!merged.success) return { ok: false, reason: "invalid" };
         const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(merged.data));
-        if (!("bots" in clean)) {
+        const renamed = merged.data.language !== current.language && merged.data.bots.length > 0;
+        if (!("bots" in clean) && !renamed) {
           await withTtl(lobbyId, tx);
           return { ok: true, settings: merged.data };
         }
-        // A bots patch re-seats in the same step and the same MULTI (#156).
+        // A bots patch, or a language change in a room with bots, re-seats in the same step and
+        // the same MULTI (#156): bot names follow the race language (#361).
         const seats = await readSeats(lobbyId);
-        await withTtl(lobbyId, seatBots(tx, lobbyId, seats, merged.data.bots));
+        const { bots, language } = merged.data;
+        await withTtl(lobbyId, seatBots(tx, lobbyId, seats, bots, language));
         return { ok: true, settings: merged.data, members: toMembers(seats, room.hostUserId) };
       }),
 

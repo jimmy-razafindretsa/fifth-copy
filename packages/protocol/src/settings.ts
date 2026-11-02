@@ -1,4 +1,4 @@
-import { type EngineSettings, type ErrorMode, isTypeable } from "@fifth-copy/engine";
+import { BOT_LEVELS, type EngineSettings, type ErrorMode, isTypeable } from "@fifth-copy/engine";
 import { z } from "zod";
 
 /**
@@ -26,17 +26,12 @@ export const difficultySchema = z.discriminatedUnion("level", [
 ]);
 export type Difficulty = z.infer<typeof difficultySchema>;
 
-export const botLevelSchema = z.enum(["recruit", "clerk", "officer", "commissar", "major"]);
+/** The engine's level scale is the one source (#361): this only parses it. */
+export const botLevelSchema = z.enum(BOT_LEVELS);
 export type BotLevel = z.infer<typeof botLevelSchema>;
 
-/** Target typing speed of each bot level (spec 9). */
-export const BOT_LEVEL_WPM: Record<BotLevel, number> = {
-  recruit: 20,
-  clerk: 35,
-  officer: 50,
-  commissar: 70,
-  major: 90,
-};
+/** Target typing speed of each bot level (spec 9), the engine's own table. */
+export { BOT_LEVEL_WPM } from "@fifth-copy/engine";
 
 /** 30 desks in the waiting-room ring, one for the host. */
 export const MAX_BOTS = 29;

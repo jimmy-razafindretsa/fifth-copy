@@ -10,9 +10,9 @@ export const BOT_LEVEL_WPM: Readonly<Record<BotLevel, number>> = {
 };
 
 /**
- * One row per level. Stub values (#729): `errorRate` is the per-level rate #361 implements;
- * `hesitation` and `burst` are placeholders #361 tunes. The stub `nextBotKeystroke` reads only
- * `targetWpm`.
+ * One row per level (#361): `errorRate` is the share of wrong keys (C4); `hesitation` the chance
+ * of a long pause before punctuation and accents (at least 0.35 keeps C5's 30 % floor); `burst` the
+ * strength of the fast-common-word, slow-long-word rhythm (C3). A new level is one row here.
  */
 const PROFILES: Readonly<Record<BotLevel, Omit<BotProfile, "level" | "targetWpm">>> = {
   recruit: { errorRate: 0.06, hesitation: 0.6, burst: 0.4 },

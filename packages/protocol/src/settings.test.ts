@@ -1,6 +1,8 @@
+import * as engine from "@fifth-copy/engine";
 import { describe, expect, it } from "vitest";
 import {
   BOT_LEVEL_WPM,
+  botLevelSchema,
   DEFAULT_RACE_SETTINGS,
   engineSettingsOf,
   MAX_BOTS,
@@ -64,6 +66,11 @@ describe("raceSettingsSchema", () => {
       major: 90,
     });
     expect(MAX_BOTS).toBe(29);
+  });
+
+  it("derives the bot levels from the engine: one source, no drift (#361 C1)", () => {
+    expect(botLevelSchema.options).toEqual([...engine.BOT_LEVELS]);
+    expect(BOT_LEVEL_WPM).toBe(engine.BOT_LEVEL_WPM);
   });
 });
 

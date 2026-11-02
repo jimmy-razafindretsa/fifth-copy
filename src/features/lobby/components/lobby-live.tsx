@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/cn";
 import type { RoomSocket } from "@/features/race";
 import { mintRaceToken } from "../actions/mint-race-token";
 import { errorMessage, type EntryErrors } from "./entry-errors";
@@ -48,6 +49,8 @@ export function LobbyLiveView({
   const known =
     state.phase === "live" || state.phase === "reconnecting" || state.phase === "starting";
   const canStart = (state.phase === "live" || state.phase === "starting") && isHost(state);
+  // a non-host waits for the host's START: a statement row, so it does not pulse (bible 7.4, #105)
+  const waitsForHost = known && state.phase !== "starting" && !isHost(state);
   return (
     <div className={styles.room}>
       <RoomCodeDocket
@@ -59,8 +62,13 @@ export function LobbyLiveView({
       <div className={styles.side}>
         <div className={styles.roll}>
           {state.phase === "reconnecting" ? (
-            <p role="status" className={styles.notice}>
+            <p role="status" className={cn(styles.notice, styles.pulse)}>
               {labels.reconnecting}
+            </p>
+          ) : null}
+          {waitsForHost ? (
+            <p role="status" className={styles.notice}>
+              {labels.waitingForHost}
             </p>
           ) : null}
           {state.phase === "loading" ? <PlayerListSkeleton labels={labels} /> : null}

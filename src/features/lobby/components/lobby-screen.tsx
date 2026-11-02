@@ -8,7 +8,8 @@ import styles from "./lobby.module.css";
 /**
  * `/lobby/[code]` (ARCHITECTURE 8.1, 8.3): the shell renders on the server, the roll connects in
  * the client leaf. Only a canonical code (`KGB-4821`) of an existing lobby renders; anything else is
- * `notFound()`. A closed lobby still renders: its token request answers `closed` as an error line.
+ * `notFound()`. A closed lobby still renders: its token request answers `closed` as an error line. The
+ * kicker names the room's type from the row (`Lobby.type`, #105).
  */
 export async function LobbyScreen({ code }: { code: string }) {
   const parsed = roomCodeSchema.safeParse(code);
@@ -19,7 +20,9 @@ export async function LobbyScreen({ code }: { code: string }) {
   const t = await getT();
   return (
     <section className={styles.screen} aria-labelledby="lobby-heading">
-      <div className={styles.kicker}>{t.lobby.kicker}</div>
+      <div className={styles.kicker}>
+        {lobby.type === "PUBLIC" ? t.lobby.kicker.public : t.lobby.kicker.private}
+      </div>
       <h1 id="lobby-heading" className={styles.heading}>
         {t.lobby.heading}
       </h1>

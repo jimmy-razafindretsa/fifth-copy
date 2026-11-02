@@ -6,6 +6,6 @@ import { db } from "@/server/db";
 export function findLobbyByCode(code: RoomCode) {
   return db.lobby.findUnique({
     where: { code },
-    select: { id: true, code: true, status: true, hostUserId: true },
+    select: { id: true, code: true, type: true, status: true, hostUserId: true },
   });
 }

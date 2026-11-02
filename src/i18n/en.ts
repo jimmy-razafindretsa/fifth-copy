@@ -228,7 +228,8 @@ export const en = {
     },
   },
   lobby: {
-    kicker: "WAITING ROOM · PRIVATE RACE",
+    /** The kicker names the lobby's type (`Lobby.type`, #105). */
+    kicker: { private: "WAITING ROOM · PRIVATE RACE", public: "WAITING ROOM · PUBLIC RACE" },
     heading: "REPORT TO YOUR DESK",
     codeName: "Room code",
     codeTag: "ROOM CODE",
@@ -241,6 +242,10 @@ export const en = {
     desk: "DESK {n}",
     host: "HOST",
     you: "YOU",
+    /** The ink tag on a bot's roll row (#105, as the Dawn report's). */
+    bot: "BOT",
+    /** A non-host's 7.4 notice row at the top of the roll (#105). */
+    waitingForHost: "WAITING FOR THE HOST",
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
     /** The host's START (#214, bible 7.1 primary; its layout moves with #498) and its 7.4 lines. */

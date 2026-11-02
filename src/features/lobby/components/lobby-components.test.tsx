@@ -221,6 +221,100 @@ describe("START (#214 C8)", () => {
   });
 });
 
+// Contract of #105 C1: a bot's row carries the ink BOT tag (the YOU tag recipe) after its name; a human
+// none; a bot never gets YOU or HOST.
+describe("BOT tag (#105 C1)", () => {
+  const bot = (desk: number): Member => ({ ...member(desk), name: `Agent ${desk}`, isBot: true });
+  const tag = (text: string) => new RegExp(`<span class="_tag_[^"]*">${text}</span>`);
+
+  it("a bot row: the BOT tag after the name, in the YOU tag's class", () => {
+    const html = view(live([member(1, true), bot(2)], 1));
+    const [first, second] = html.split("<li").slice(1);
+    expect(second).toMatch(tag(labels.bot));
+    expect(second!.indexOf("Agent 2")).toBeLessThan(second!.indexOf(`>${labels.bot}<`));
+    expect(first).not.toContain(`>${labels.bot}<`);
+    expect(labels.bot).toBe("BOT");
+  });
+
+  it("a bot never gets YOU or HOST, even with the flags on its member", () => {
+    const html = renderToStaticMarkup(
+      <PlayerList members={[{ ...bot(4), isHost: true }]} you={4} labels={labels} />,
+    );
+    expect(html).toContain(`>${labels.bot}<`);
+    expect(html).not.toContain(`>${labels.you}<`);
+    expect(html).not.toContain(labels.host);
+  });
+
+  it("several bots, each tagged; no bots, no tag", () => {
+    expect(view(live([member(1, true), bot(2), bot(3)])).match(/>BOT</g)).toHaveLength(2);
+    expect(view(live([member(1, true), member(2)]))).not.toContain(`>${labels.bot}<`);
+  });
+
+  it("French: the tag stays BOT (language-neutral, as the Dawn report's)", () => {
+    expect(fr.lobby.bot).toBe("BOT");
+  });
+});
+
+// Contract of #105 C2: a non-host sees the 7.4 notice row WAITING FOR THE HOST (role status, no pulse)
+// at the top of the roll and no START; the host sees START and no notice; absent while loading, in error
+// and once the phase is starting.
+describe("non-host notice row (#105 C2)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const waiting = (html: string) => html.includes(`>${labels.waitingForHost}<`);
+
+  it("the guest: one status row WAITING FOR THE HOST above the list, no pulse, no START", () => {
+    const html = view(live([host, guest], 2));
+    expect(html.match(new RegExp(`>${labels.waitingForHost}<`, "g"))).toHaveLength(1);
+    expect(html).toMatch(
+      new RegExp(`<p role="status" class="[^"]*"[^>]*>${labels.waitingForHost}<`),
+    );
+    const cls = new RegExp(`<p role="status" class="([^"]*)"[^>]*>${labels.waitingForHost}<`).exec(
+      html,
+    )![1]!;
+    expect(cls).toMatch(/_notice_/);
+    expect(cls).not.toMatch(/_pulse_/);
+    expect(html.indexOf(labels.waitingForHost)).toBeLessThan(html.indexOf("<ul"));
+    expect(html).not.toContain("<button");
+    expect(labels.waitingForHost).toBe("WAITING FOR THE HOST");
+  });
+
+  it("the host: START and no notice", () => {
+    const html = view(live([host, guest], 1));
+    expect(html).toContain(`>${labels.start.button}<`);
+    expect(waiting(html)).toBe(false);
+  });
+
+  it("absent while loading, in error and once starting", () => {
+    expect(waiting(view(initialLobbyState))).toBe(false);
+    expect(waiting(view({ ...initialLobbyState, phase: "error", error: "generic" }))).toBe(false);
+    expect(waiting(view({ ...live([host, guest], 2), phase: "starting", raceId: "r" }))).toBe(
+      false,
+    );
+  });
+
+  it("a reconnecting guest: the pulsing reconnecting row above the notice", () => {
+    const html = view({ ...live([host, guest], 2), phase: "reconnecting" });
+    const statuses = [...html.matchAll(/<p role="status" class="([^"]*)"[^>]*>([^<]*)</g)];
+    expect(statuses.map((m) => m[2])).toEqual([labels.reconnecting, labels.waitingForHost]);
+    expect(statuses[0]![1]).toMatch(/_pulse_/);
+    expect(statuses[1]![1]).not.toMatch(/_pulse_/);
+  });
+
+  it("French: EN ATTENTE DE L'HÔTE", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={live([host, guest], 2)}
+        labels={fr.lobby}
+        errors={errors}
+      />,
+    );
+    expect(html).toContain("EN ATTENTE DE L&#x27;HÔTE");
+    expect(html).not.toContain("WAITING FOR");
+  });
+});
+
 describe("PlayerList slots", () => {
   it("renders leading before the name and tags after the badges", () => {
     const html = renderToStaticMarkup(

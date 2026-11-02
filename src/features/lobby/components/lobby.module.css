@@ -178,7 +178,8 @@
   height: 18px;
 }
 
-/* reconnecting notice: an Oswald label row with the lkPulse opacity pulse (bible 8) */
+/* notice rows (bible 7.4): an Oswald label row; a live state (reconnecting) adds the lkPulse opacity
+   pulse (.pulse, bible 8), a statement (WAITING FOR THE HOST, #105) stays still */
 .notice {
   margin: 0;
   padding: 8px 12px;
@@ -187,6 +188,9 @@
   font-size: 11px;
   line-height: normal;
   letter-spacing: 0.16em;
+}
+
+.pulse {
   animation: lkPulse 1.3s ease-in-out infinite;
 }
 
@@ -234,12 +238,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .notice {
+  .pulse {
     animation: none;
   }
 }
 
 /* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
-:root[data-motion="reduce"] .notice {
+:root[data-motion="reduce"] .pulse {
   animation: none;
 }

@@ -11,26 +11,28 @@ export type LeaveDeps = {
   announce: (lobbyId: string, members: Member[]) => void;
 };
 
-/** Removes a member: the last human closes the room, otherwise the room gets the new roster. */
+/**
+ * Removes a member: the last human closes the room, otherwise the room gets the new roster. The
+ * last human leaving an ended room (`kept`, #143) leaves its keys for "Race again" but frees the
+ * room in this process as a close does (#658: nothing of the race outlives its last human here).
+ */
 export async function leaveRoom(
   deps: LeaveDeps,
   lobbyId: string,
   userId: string,
-): Promise<{ members: Member[]; closed: boolean }> {
-  const { members, closed } = await deps.registry.leave(lobbyId, userId);
-  if (closed) deps.onRoomClosed(lobbyId);
-  else {
-    await deps.presence.left(lobbyId, userId);
-    deps.announce(lobbyId, members);
-  }
-  return { members, closed };
+): Promise<{ members: Member[]; closed: boolean; kept: boolean }> {
+  const { members, closed, kept } = await deps.registry.leave(lobbyId, userId);
+  if (closed || kept) deps.onRoomClosed(lobbyId);
+  else await deps.presence.left(lobbyId, userId);
+  if (!closed) deps.announce(lobbyId, members);
+  return { members, closed, kept };
 }
 
 /**
  * Once a race has ended (#658): a member seated through a socket whose sockets all closed during
  * the countdown or the race was kept for it (line cut, or past typing, `presence.socketClosed`).
  * Nothing holds that seat any more, so it leaves as a disconnect in `waiting` or `ended` would;
- * otherwise the room never closes and its in-process state is never released.
+ * otherwise the room is never released in this process; the last one keeps an ended room (#143).
  */
 export async function releaseDropped(deps: LeaveDeps, lobbyId: string): Promise<void> {
   const room = await deps.registry.withRoom(lobbyId, () => deps.registry.room(lobbyId));
@@ -39,7 +41,7 @@ export async function releaseDropped(deps: LeaveDeps, lobbyId: string): Promise<
   for (const userId of deps.presence.dropped(lobbyId)) {
     // A socket that reopened since the end keeps its seat.
     if (!members.has(userId) || deps.presence.sockets(lobbyId, userId) > 0) continue;
-    const { closed } = await leaveRoom(deps, lobbyId, userId);
-    if (closed) return;
+    const { closed, kept } = await leaveRoom(deps, lobbyId, userId);
+    if (closed || kept) return;
   }
 }

@@ -1,0 +1,108 @@
+import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_RACE_SETTINGS, deskIdentity, type Member } from "@fifth-copy/protocol";
+import type { LeaveResult, RaceDesk, RoomState } from "../rooms/registry";
+import { leaveRoom, releaseDropped, type LeaveDeps } from "./leave";
+
+// #143 C3 (and #658): who leaves after a race, and what the process frees, with fakes for the
+// registry and presence (the Redis side is registry.test.ts, the wire side lifecycle.test.ts).
+
+const bot: Member = { desk: 3, name: "Bot", isHost: false, isBot: true, ...deskIdentity(3) };
+const desks: RaceDesk[] = [
+  { desk: 1, userId: "host", name: "Ada", isBot: false },
+  { desk: 2, userId: "b", name: "Bob", isBot: false },
+  { desk: 3, userId: null, name: "Bot", isBot: true },
+];
+
+function deps({
+  phase = "ended",
+  result = () => ({ members: [], closed: false, kept: false }),
+  dropped = [],
+  sockets = {},
+}: {
+  phase?: RoomState["phase"];
+  result?: (userId: string) => LeaveResult;
+  dropped?: string[];
+  sockets?: Record<string, number>;
+} = {}) {
+  const room: RoomState = {
+    code: "ABCD",
+    hostUserId: "host",
+    phase,
+    settings: DEFAULT_RACE_SETTINGS,
+    race: null,
+    endAt: null,
+    seated: desks,
+    desks,
+    raceId: "r1",
+    endReason: null,
+  };
+  const leave = vi.fn(async (_lobbyId: string, userId: string) => result(userId));
+  const d = {
+    registry: {
+      leave,
+      room: async () => room,
+      withRoom: <T>(_lobbyId: string, fn: () => Promise<T>) => fn(),
+    },
+    presence: {
+      left: vi.fn(async () => {}),
+      sockets: (_lobbyId: string, userId: string) => sockets[userId] ?? 0,
+      dropped: () => dropped,
+    },
+    onRoomClosed: vi.fn(),
+    announce: vi.fn(),
+  } satisfies LeaveDeps;
+  return d;
+}
+
+describe("leaveRoom (#143)", () => {
+  it("the last human leaving an ended room (kept): the process frees the room, the roster goes out", async () => {
+    const d = deps({ result: () => ({ members: [bot], closed: false, kept: true }) });
+    expect(await leaveRoom(d, "lob", "host")).toEqual({
+      members: [bot],
+      closed: false,
+      kept: true,
+    });
+    expect(d.onRoomClosed).toHaveBeenCalledWith("lob");
+    expect(d.announce).toHaveBeenCalledWith("lob", [bot]);
+  });
+
+  it("a closed room is freed and announces nothing; a plain leave announces and frees nothing", async () => {
+    const closed = deps({ result: () => ({ members: [], closed: true, kept: false }) });
+    await leaveRoom(closed, "lob", "host");
+    expect(closed.onRoomClosed).toHaveBeenCalledOnce();
+    expect(closed.announce).not.toHaveBeenCalled();
+
+    const plain = deps({ result: () => ({ members: [bot], closed: false, kept: false }) });
+    await leaveRoom(plain, "lob", "b");
+    expect(plain.onRoomClosed).not.toHaveBeenCalled();
+    expect(plain.presence.left).toHaveBeenCalledWith("lob", "b");
+    expect(plain.announce).toHaveBeenCalledWith("lob", [bot]);
+  });
+});
+
+describe("releaseDropped after the end (#658, #143 C3)", () => {
+  it("releases every dropped member with no socket, so the next race's desks hold only those present", async () => {
+    const d = deps({ dropped: ["b", "host"], sockets: { host: 1 } });
+    await releaseDropped(d, "lob");
+    expect(d.registry.leave.mock.calls.map(([, userId]) => userId)).toEqual(["b"]);
+  });
+
+  it("stops after the leave that keeps the ended room for its members", async () => {
+    const d = deps({
+      dropped: ["host", "b"],
+      result: (userId) =>
+        userId === "host"
+          ? { members: [bot], closed: false, kept: false }
+          : { members: [bot], closed: false, kept: true },
+    });
+    await releaseDropped(d, "lob");
+    expect(d.registry.leave).toHaveBeenCalledTimes(2);
+    expect(d.onRoomClosed).toHaveBeenCalledOnce();
+  });
+
+  it("does nothing before the end", async () => {
+    const d = deps({ phase: "running", dropped: ["b"] });
+    await releaseDropped(d, "lob");
+    expect(d.registry.leave).not.toHaveBeenCalled();
+  });
+});

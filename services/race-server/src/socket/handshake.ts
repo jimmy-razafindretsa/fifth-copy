@@ -7,7 +7,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import type { ResumeKeys } from "../players/resume-keys";
-import type { RoomRegistry } from "../rooms/registry";
+import { mayRejoin, type RoomRegistry } from "../rooms/registry";
 import { verifyRaceToken } from "./race-token";
 import type { SpectatorSlots } from "./spectator-slots";
 
@@ -31,7 +31,7 @@ export type HandshakeResult =
  * Decides whether a Socket.IO handshake may proceed (ADR 0006, 0009). Order: protocol version, then
  * the auth shape and race token (any failure is `bad-token`), then the room of the token's `lobby`
  * claim, the only source of the room: a client never names one; then `in-progress` for a new user of
- * a started room. Reads only; joining happens on connect.
+ * a started room (in `ended`, one who neither is a member nor raced in it, #143). Reads only; joining happens on connect.
  * A `spectator` token (#187, ADR 0006 point 8) needs only its room: it is let in in every phase,
  * member or not, and never resumes (its `resumeKey` is not even looked up): it never takes a desk.
  * Last, `auth.resumeKey` (#178, ADR 0009): read only after all of the above passed and only while a
@@ -54,13 +54,11 @@ export async function authenticateHandshake(
   if (room === null) return { ok: false, reason: "no-room" };
   if (verified.claims.role === "spectator")
     return { ok: true, claims: verified.claims, resume: false };
-  // Once started, only an existing member (a second tab, same `sub`) is let in (#166).
-  if (
-    room.phase !== "waiting" &&
-    !(await registry.hasMember(verified.claims.lobby, verified.claims.sub))
-  ) {
-    return { ok: false, reason: "in-progress" };
-  }
+  // Once started, only an existing member (a second tab, same `sub`) is let in (#166); in `ended`
+  // also the host and the last race's racers, back for "Race again" (#143, `mayRejoin`).
+  const { sub, lobby } = verified.claims;
+  const isMember = room.phase !== "waiting" && (await registry.hasMember(lobby, sub));
+  if (!mayRejoin(room, sub, isMember)) return { ok: false, reason: "in-progress" };
   const { resumeKey } = parsed.data;
   const raceOn = room.phase === "countdown" || room.phase === "running";
   if (!resumeKey || !raceOn || !resumeKeys) {

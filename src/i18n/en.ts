@@ -227,6 +227,23 @@ export const en = {
       stageHint: "THE MAJOR · HE'S WATCHING YOUR CURSOR",
     },
   },
+  privacy: {
+    title: "PRIVACY",
+    kicker: "MINISTRY OF TYPING · PRIVACY FILE",
+    heading: "WHAT WE KEEP ON FILE",
+    intro:
+      "This page tells you what Fifth Copy knows about you, why, and for how long. It also tells you how to have it deleted.",
+    rows: [
+      ["FORM", "LAW 25"],
+      ["UPDATED", "{date}"],
+      ["QUESTIONS", "ASK YOUR TEACHER"],
+    ],
+    tocLabel: "On this page",
+    tocTag: "CONTENTS",
+    deleteLink: "MY SETTINGS →",
+    rulesUpdated: "RULES UPDATED · {date}",
+    backToTop: "BACK TO THE TOP ↑",
+  },
   lobby: {
     kicker: "WAITING ROOM · PRIVATE RACE",
     heading: "REPORT TO YOUR DESK",

@@ -1,0 +1,323 @@
+/*
+ * Privacy page (card #76, design bible 14.3 "Privacy"). No privacy screen in the reference set: the page
+ * extends the closest pattern, the not-found file side (14.3): kicker, H1 at the section-H2 scale and a 7.4
+ * docket on newsprint; then the 7.10 rhythm newsprint -> paper under a 2px ink rule, gutters
+ * `clamp(16px,4vw,48px)`, text `min(72ch,100%)`. The table of contents is a 7.4 docket (ink tag header,
+ * dashed rows). Colours are roles from docs/design/tokens.css only; no new colour, no new face.
+ */
+
+@reference "../../../app/globals.css";
+
+.screen {
+  --gutter: clamp(16px, 4vw, 48px);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: var(--color-bg);
+}
+
+/* the form file: newsprint, as the not-found file side */
+.file {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 56px var(--gutter);
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.kicker {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+.title {
+  margin: 0;
+  @apply type-display-lg;
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 0.98;
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+
+.intro {
+  margin: 0;
+  max-width: min(72ch, 100%);
+  @apply type-body;
+  font-size: 19px;
+  line-height: 1.6;
+}
+
+.docket {
+  background: var(--color-bg);
+  border: 2px solid var(--color-fg);
+  max-width: 420px;
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 18px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  @apply type-body;
+  font-size: 15px;
+  line-height: normal;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row dt {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+  color: var(--color-fg-muted);
+  align-self: center;
+}
+
+.row dd {
+  margin: 0;
+  @apply type-typing;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* contents docket beside the sections; wraps above them on phones and tablets (7.10, flex-wrap) */
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 48px;
+  padding: 56px var(--gutter) 96px;
+}
+
+.toc {
+  flex: 1 1 240px;
+  max-width: 320px;
+  background: var(--color-surface);
+  border: 2px solid var(--color-fg);
+}
+
+.tocHead {
+  padding: 9px 18px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+/* the 7.4 ink tag (the YOU tag recipe): an ink ground carries paper text */
+.tag {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+}
+
+.tocList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tocRow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 18px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.tocRow:last-child {
+  border-bottom: 0;
+}
+
+.tocNum {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.tocLink {
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+.sections {
+  flex: 999 1 min(72ch, 100%);
+  min-width: 0;
+  max-width: 72ch;
+  display: flex;
+  flex-direction: column;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 40px 0;
+  border-top: 2px solid var(--color-fg);
+  scroll-margin-top: 16px;
+}
+
+.section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.sectionNum {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.h2 {
+  margin: 0;
+  @apply type-display-md;
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-wrap: balance;
+}
+
+.h3 {
+  margin: 0;
+  @apply type-label;
+  font-size: 14px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.body {
+  margin: 0;
+  @apply type-body;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.25em;
+  list-style: square;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  @apply type-body;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.listSmall {
+  font-size: 16px;
+}
+
+/* a conduct rule (#91) under `rules`: a dashed docket separator, the label face for its heading */
+.rule {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  scroll-margin-top: 16px;
+}
+
+.rule .body {
+  font-size: 16px;
+}
+
+.linkRow {
+  margin: 0;
+}
+
+/* bible 7.1 secondary, as a link (the not-found pattern) */
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  padding: 12px 18px;
+  text-decoration: none;
+}
+
+.secondary:hover {
+  background: var(--color-surface);
+}
+
+.backToTop {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+@media (min-width: 1024px) {
+  .toc {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .toc {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .row {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+
+/* print: the text only, as it reads on screen (themed grounds kept); the header and contents are navigation */
+@media print {
+  .noPrint,
+  .toc {
+    display: none;
+  }
+
+  .screen {
+    print-color-adjust: exact;
+  }
+
+  .layout {
+    padding-top: 24px;
+  }
+
+  .h2,
+  .h3 {
+    break-after: avoid;
+  }
+
+  .rule {
+    break-inside: avoid;
+  }
+}

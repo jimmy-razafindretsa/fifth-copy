@@ -202,6 +202,13 @@ export function createRaceServer({
         desks: runtime.desks.map(({ desk }) => desk),
       };
     },
+    // "Race again" (#143): race 1's runtime goes before race 2's countdown; presence keeps the
+    // seats of the members still connected (GO rebuilds the rest).
+    onRestart: (lobbyId: string) => {
+      ticker.stop(lobbyId);
+      desksState.close(lobbyId);
+      idle.closeRoom(lobbyId);
+    },
     onClosed: (lobbyId: string) => {
       ticker.stop(lobbyId);
       desksState.close(lobbyId);

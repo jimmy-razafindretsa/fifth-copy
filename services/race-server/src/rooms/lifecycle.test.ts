@@ -26,6 +26,7 @@ import {
   fixtureWebApi,
   HOST_SUB,
   track,
+  typeKeys,
   until,
   WAIT_MS,
   type Booted,
@@ -33,7 +34,7 @@ import {
   type Client,
 } from "../testing/harness";
 import { startWebStub, STUB_TEXT, type WebStub } from "../testing/web-stub";
-import { membersKey, roomKey } from "./keys";
+import { desksKey, ENDED_GRACE_TTL_S, membersKey, roomKey, traceKey } from "./keys";
 import type { RaceEnded } from "./lifecycle";
 
 // #166: the room lifecycle over the wire, real Redis, fake clock and scheduler, fake WebApi
@@ -117,6 +118,16 @@ async function eventually(check: () => Promise<boolean>, what: string, ms = WAIT
   while (!(await check())) {
     if (Date.now() > deadline) throw new Error(`timed out after ${ms} ms waiting for ${what}`);
     await new Promise((r) => setTimeout(r, 20));
+  }
+}
+
+/** Runs `fn` with a short-lived Redis connection. */
+async function redis<T>(fn: (c: Awaited<ReturnType<typeof connectRedis>>) => Promise<T>) {
+  const c = await connectRedis(process.env.REDIS_URL);
+  try {
+    return await fn(c);
+  } finally {
+    c.disconnect();
   }
 }
 
@@ -515,7 +526,7 @@ describe("lifecycle: room close", () => {
     expect(booted.scheduler.armed()).toBe(0);
   });
 
-  it("the last member leaving after the end closes the room with no timer left", async () => {
+  it("the last member leaving after the end keeps the room for Race again, with no timer left (#143)", async () => {
     const { booted, host, lobby, seenHost, others } = await room({
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
     });
@@ -524,8 +535,150 @@ describe("lifecycle: room close", () => {
     await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
     others[0]!.client.disconnect();
     host.disconnect();
-    await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
+    await eventually(async () => {
+      const { fields, ttl } = await hash(lobby);
+      return fields.phase === "ended" && ttl > 0 && ttl <= ENDED_GRACE_TTL_S;
+    }, "room kept under the grace TTL");
+    // #658: the process holds nothing of the room any more.
     await until(() => booted.scheduler.armed() === 0, WAIT_MS, "no timer armed");
+    expect(booted.server.desks.get(lobby)).toBeUndefined();
+  });
+});
+
+describe("lifecycle: race again (#143)", () => {
+  /** A room of the host and one player whose first race ended on its 60 s timer. */
+  async function endedRoom(options: { webApi?: WebApi } = {}) {
+    const r = await room({ settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 }, ...options });
+    const first = await start(r.host);
+    expect(first).toMatchObject({ ok: true });
+    await until(() => r.seenHost.countdown.length === 1, WAIT_MS, "countdown 1");
+    r.booted.clock.advance(63_000);
+    await until(() => r.seenHost.ended.length === 1, WAIT_MS, "ended 1");
+    expect(await phaseOf(r.lobby)).toBe("ended");
+    return { ...r, raceId1: (first as { raceId: string }).raceId };
+  }
+
+  it("host:start on an ended room starts a new race: new raceId, countdown to all, GO at t0 (C1)", async () => {
+    const { booted, host, lobby, seenHost, others, raceId1 } = await endedRoom();
+    await redis(async (c) => c.hset(roomKey(lobby), { endReason: "void", endedAt: "1" }));
+
+    const ack = await start(host);
+    expect(ack).toEqual({ ok: true, raceId: expect.any(String) });
+    const raceId2 = (ack as { raceId: string }).raceId;
+    expect(raceId2).not.toBe(raceId1);
+    await until(
+      () => seenHost.countdown.length === 2 && others[0]!.seen.countdown.length === 2,
+      WAIT_MS,
+      "second countdown to every member",
+    );
+    const race = seenHost.countdown[1]!.race;
+    expect(race).toMatchObject({ raceId: raceId2, t0: booted.clock.now() + 3_000 });
+    const { fields } = await hash(lobby);
+    expect(fields).toMatchObject({ phase: "countdown", raceId: raceId2, t0: String(race.t0) });
+    expect(JSON.parse(fields.race!)).toEqual(race);
+    expect(JSON.parse(fields.desks!)).toHaveLength(2);
+    expect(fields.endReason).toBeUndefined();
+    expect(fields.endedAt).toBeUndefined();
+
+    booted.clock.advance(3_000);
+    await eventually(async () => (await phaseOf(lobby)) === "running", "phase running");
+    expect(booted.server.desks.get(lobby)?.raceId).toBe(raceId2);
+  });
+
+  it("refusals on an ended room keep it ended: not-host, too-few, start-failed (C1)", async () => {
+    let fail = false;
+    const web = fixtureWebApi({ now: () => 0 });
+    const webApi: WebApi = {
+      startRace: (req) => (fail ? Promise.reject(new Error("500")) : web.api.startRace(req)),
+      postResults: ackResults,
+    };
+    const { host, lobby, seenHost, others } = await endedRoom({ webApi });
+
+    expect(await start(others[0]!.client)).toEqual({ ok: false, error: "not-host" });
+    fail = true;
+    expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
+    expect(await phaseOf(lobby)).toBe("ended");
+    fail = false;
+    others[0]!.client.disconnect();
+    await until(() => seenHost.roster?.length === 1, WAIT_MS, "player gone");
+    expect(await start(host)).toEqual({ ok: false, error: "too-few" });
+    await settle();
+    expect(seenHost.countdown).toHaveLength(1);
+    expect(await phaseOf(lobby)).toBe("ended");
+  });
+
+  it("two races in one room: fresh desks and traces, two results with distinct ids and their own keys (C2)", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, host, lobby, seenHost } = await room({
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+      webApi: web.api,
+    });
+    const race = async (n: number, chars: string) => {
+      const ack = await start(host);
+      expect(ack).toMatchObject({ ok: true });
+      await until(() => seenHost.countdown.length === n, WAIT_MS, `countdown ${n}`);
+      if (n === 2) {
+        // Nothing of race 1 is left before race 2's countdown: no runtime, no mirror, no trace.
+        expect(booted.server.desks.get(lobby)).toBeUndefined();
+        await redis(async (c) => {
+          expect(await c.exists(desksKey(lobby), traceKey(lobby, 1), traceKey(lobby, 2))).toBe(0);
+        });
+      }
+      booted.clock.advance(3_000);
+      await until(() => booted.server.desks.get(lobby)?.phase === "running", WAIT_MS, `GO ${n}`);
+      expect(booted.server.desks.states(lobby).get(1)?.trace).toEqual([]);
+      typeKeys(host, chars, 100, 50);
+      await until(
+        () => booted.server.desks.states(lobby).get(1)?.trace.length === chars.length,
+        WAIT_MS,
+        `keys of race ${n}`,
+      );
+      booted.clock.advance(60_000);
+      await until(() => web.results.length === n, WAIT_MS, `results of race ${n}`);
+      return (ack as { raceId: string }).raceId;
+    };
+
+    const raceId1 = await race(1, "Le for");
+    const first = structuredClone(web.results[0]!);
+    const raceId2 = await race(2, "Le");
+
+    expect(web.calls.map((c) => c.raceId)).toEqual([raceId1, raceId2]);
+    expect(web.results.map((r) => r.raceId)).toEqual([raceId1, raceId2]);
+    const desk1 = (n: number) => web.results[n]!.results.find((r) => r.desk === 1)!;
+    expect(desk1(0).trace.count).toBe(6);
+    expect(desk1(1).trace.count).toBe(2);
+    expect(web.results[0]).toEqual(first);
+  });
+
+  it("members who left after the end come back at their desks and race again (C3)", async () => {
+    const { booted, host, lobby, others, connectAs, raceId1 } = await endedRoom();
+    others[0]!.client.disconnect();
+    host.disconnect();
+    await eventually(async () => (await hash(lobby)).ttl <= ENDED_GRACE_TTL_S, "room kept");
+
+    const host2 = await connectAs(HOST_SUB, "Ada", "host");
+    const seen2 = watch(host2);
+    const back = await connectAs("usr_p0", "Clerk 0");
+    const seenBack = watch(back);
+    await until(() => seen2.roster?.length === 2 && !!seenBack.welcome, WAIT_MS, "both back");
+    expect(seen2.welcome?.you).toBe(1);
+    expect(seenBack.welcome?.you).toBe(2);
+    expect((await hash(lobby)).ttl).toBeGreaterThan(ENDED_GRACE_TTL_S);
+    // Nobody else comes in after the end (late joiners are #732).
+    const late = booted.connect({
+      v: PROTOCOL_VERSION,
+      token: await booted.token({ lobby, sub: "usr_late", name: "Lou" }),
+    });
+    expect(await connectError(late)).toBe("in-progress");
+
+    const ack = await start(host2);
+    expect(ack).toEqual({ ok: true, raceId: expect.any(String) });
+    expect((ack as { raceId: string }).raceId).not.toBe(raceId1);
+    await until(
+      () => seenBack.countdown.length === 1,
+      WAIT_MS,
+      "countdown to the returning member",
+    );
   });
 });
 

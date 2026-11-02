@@ -502,7 +502,12 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
     expect(box!.height).toBeGreaterThanOrEqual(44);
     const ink = await button.evaluate((el) => {
       const c = getComputedStyle(el);
-      return { family: c.fontFamily, weight: c.fontWeight, size: c.fontSize, bg: c.backgroundColor };
+      return {
+        family: c.fontFamily,
+        weight: c.fontWeight,
+        size: c.fontSize,
+        bg: c.backgroundColor,
+      };
     });
     expect(ink.family).toMatch(/Oswald/i);
     expect(ink).toMatchObject({ weight: "600", size: "13px", bg: await role(page, "--color-fg") });

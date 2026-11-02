@@ -10,14 +10,19 @@ import { SETTING_ROWS, SettingsDocket, settingRows } from "./settings-docket";
 // mode; skeleton rows while the settings are unknown.
 const EN = en.lobby.settings;
 const FR = fr.lobby.settings;
-const S = (patch: Partial<RaceSettings> = {}): RaceSettings => ({ ...DEFAULT_RACE_SETTINGS, ...patch });
+const S = (patch: Partial<RaceSettings> = {}): RaceSettings => ({
+  ...DEFAULT_RACE_SETTINGS,
+  ...patch,
+});
 
 const table = (settings: RaceSettings, labels = EN) =>
   Object.fromEntries(settingRows(settings, labels).map((r) => [r.label, r.value]));
 
 describe("SETTING_ROWS", () => {
   it("has one row per RaceSettings field, in the spec 8 order", () => {
-    expect(SETTING_ROWS.map((r) => r.key).sort()).toEqual(Object.keys(DEFAULT_RACE_SETTINGS).sort());
+    expect(SETTING_ROWS.map((r) => r.key).sort()).toEqual(
+      Object.keys(DEFAULT_RACE_SETTINGS).sort(),
+    );
     expect(SETTING_ROWS.map((r) => r.key)).toEqual([
       "language",
       "textType",
@@ -72,7 +77,9 @@ describe("settingRows (#498 C2)", () => {
         punctuationDensity: "heavy",
       },
     });
-    expect(table(custom).DIFFICULTY).toBe("CUSTOM · SHORT WORDS · RARE LETTERS · HEAVY PUNCTUATION");
+    expect(table(custom).DIFFICULTY).toBe(
+      "CUSTOM · SHORT WORDS · RARE LETTERS · HEAVY PUNCTUATION",
+    );
     expect(table(custom, FR)["DIFFICULTÉ"]).toBe(
       "PERSONNALISÉE · MOTS COURTS · LETTRES RARES · PONCTUATION ABONDANTE",
     );
@@ -120,7 +127,7 @@ describe("SettingsDocket view (#498 C2)", () => {
     expect(html).toMatch(/<span class="[^"]*tag[^"]*">RACE SETTINGS<\/span>/);
     expect(html.match(/<dt/g)).toHaveLength(14);
     expect(html.match(/<dd/g)).toHaveLength(14);
-    expect(html).toContain("data-setting=\"errorMode\"");
+    expect(html).toContain('data-setting="errorMode"');
     expect(html).not.toContain('aria-busy="true"');
   });
 

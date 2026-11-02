@@ -30,7 +30,9 @@ describe("copyRoomCode", () => {
     const writeText = vi.fn(async () => {
       throw new DOMException("denied", "NotAllowedError");
     });
-    await expect(copyRoomCode(CODE, { clipboard: { writeText }, select })).resolves.toBe("selected");
+    await expect(copyRoomCode(CODE, { clipboard: { writeText }, select })).resolves.toBe(
+      "selected",
+    );
     expect(select).toHaveBeenCalledTimes(1);
   });
 });

@@ -498,7 +498,9 @@ describe("settings (#498 C1)", () => {
       { type: "settings", payload: settingsEvent(block) },
     );
     expect(state.settings).toEqual(block);
-    expect(reduceLobby(state, { type: "settings", payload: settingsEvent(fr) }).settings).toEqual(fr);
+    expect(reduceLobby(state, { type: "settings", payload: settingsEvent(fr) }).settings).toEqual(
+      fr,
+    );
   });
 
   it("a roster leaves them untouched", () => {

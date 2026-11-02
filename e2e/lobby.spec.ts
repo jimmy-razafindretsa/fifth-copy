@@ -462,6 +462,11 @@ const setting = (page: Page, label: string) =>
     .locator("dt")
     .filter({ hasText: new RegExp(`^${label}$`) })
     .locator("+ dd");
+/** A segment of the host's #110 segmented toggle in a settings row, named by the row's label. */
+const segment = (page: Page, row: string, name: string) =>
+  settingsDocket(page)
+    .getByRole("group", { name: row, exact: true })
+    .getByRole("button", { name, exact: true });
 const copyButton = (page: Page) => page.getByRole("button", { name: /^COP(Y|IED)$/ });
 const noSideScroll = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -484,8 +489,10 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
     await expect(setting(b.page, "ERROR MODE")).toHaveText("BLOCK", { timeout: scaled(2_000) });
     await expect(setting(b.page, "TIMER")).toHaveText("5 MIN", { timeout: scaled(2_000) });
     await expect(settingsDocket(b.page).locator("dt", { hasText: "BACKSPACE" })).toHaveCount(0);
-    // the host's own docket follows too
-    await expect(setting(page, "ERROR MODE")).toHaveText("BLOCK", { timeout: scaled(2_000) });
+    // the host's own docket follows too (its row holds the #110 control: the pressed segment)
+    await expect(segment(page, "ERROR MODE", "BLOCK")).toHaveAttribute("aria-pressed", "true", {
+      timeout: scaled(2_000),
+    });
     await b.context.close();
   });
 
@@ -579,4 +586,158 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
     }
     expect(await noSideScroll(page)).toBeLessThanOrEqual(0);
   });
+});
+
+// Contract of #110: the host's settings form in the FORM 5-L rows (bible 14.3 "Host settings form",
+// 7.1 segmented toggle, 7.2 inputs, 7.4 inline error line), over the real `host:settings` path. Each test
+// stays under the 5 per 10 s `host:settings` budget of the host's token.
+test.describe("host settings form (#110)", () => {
+  test.skip(
+    ({ viewport }) => (viewport?.width ?? 0) <= 480,
+    "phones hide the settings docket (#498)",
+  );
+
+  test("C5 the host's BLOCK and 3 MIN reach the guest within 2 s; FRENCH leaves the UI in English", async ({
+    page,
+    browser,
+  }) => {
+    const code = await createLobby(page);
+    const b = await joinAsGuest(browser, code);
+    await expect(rows(page)).toHaveCount(2);
+
+    await segment(page, "ERROR MODE", "BLOCK").click();
+    await expect(segment(page, "ERROR MODE", "BLOCK")).toHaveAttribute("aria-pressed", "true");
+    await expect(setting(b.page, "ERROR MODE")).toHaveText("BLOCK", { timeout: scaled(2_000) });
+    // block mode: no backspace row on either side
+    await expect(settingsDocket(page).locator('[data-setting="backspace"]')).toHaveCount(0);
+    await expect(settingsDocket(b.page).locator("dt", { hasText: "BACKSPACE" })).toHaveCount(0);
+
+    // releasing NO TIMER starts at the schema minimum; the minutes commit on Enter
+    const noTimer = settingsDocket(page).getByRole("button", { name: "NO TIMER", exact: true });
+    await noTimer.click();
+    await expect(noTimer).toHaveAttribute("aria-pressed", "false");
+    await expect(setting(b.page, "TIMER")).toHaveText("1 MIN", { timeout: scaled(2_000) });
+    const minutes = settingsDocket(page).getByRole("spinbutton", { name: /^TIMER/ });
+    await minutes.fill("3");
+    await minutes.press("Enter");
+    await expect(setting(b.page, "TIMER")).toHaveText("3 MIN", { timeout: scaled(2_000) });
+    await expect(minutes).toHaveValue("3");
+
+    // the guest has no control at all
+    await expect(settingsDocket(b.page).getByRole("button")).toHaveCount(0);
+    await expect(settingsDocket(b.page).getByRole("spinbutton")).toHaveCount(0);
+    await expect(settingsDocket(b.page).getByRole("textbox")).toHaveCount(0);
+
+    // the race language is a setting, never the UI language (R190, ADR 0010)
+    await segment(page, "LANGUAGE", "FRENCH").click();
+    await expect(setting(b.page, "LANGUAGE")).toHaveText("FRENCH", { timeout: scaled(2_000) });
+    await expect(segment(page, "ACCENTS", "OFF")).toHaveAttribute("aria-pressed", "true");
+    for (const p of [page, b.page]) {
+      await expect(p.locator("html")).toHaveAttribute("lang", "en");
+      await expect(p.getByRole("heading", { level: 1 })).toHaveText("REPORT TO YOUR DESK");
+      await expect(settingsDocket(p).locator("dt").first()).toHaveText("LANGUAGE");
+      await expect(settingsDocket(p).getByText("ACCENTS", { exact: true })).toBeVisible();
+    }
+    await b.context.close();
+  });
+
+  test("C4 an invalid value never leaves the page: the inline line, the broadcast value back", async ({
+    page,
+    browser,
+  }) => {
+    const code = await createLobby(page);
+    const b = await joinAsGuest(browser, code);
+    const words = settingsDocket(page).getByRole("spinbutton", { name: "WORDS", exact: true });
+    await expect(words).toHaveValue("50");
+    await words.fill("9000");
+    await words.press("Enter");
+    const line = page.getByRole("alert").filter({ hasText: "RETURNED ·" });
+    await expect(line).toHaveText("RETURNED · Words take a whole number from 10 to 500.");
+    await expect(line).not.toContainText("9000");
+    await expect(words).toHaveValue("50");
+    await expect(words).toHaveAttribute("aria-describedby", "lobby-settings-error");
+
+    const letters = settingsDocket(page).getByRole("textbox", { name: "PRACTICE LETTERS" });
+    await letters.fill("a1");
+    await letters.press("Enter");
+    await expect(line).toHaveText("RETURNED · Practice letters take letters only, each one once.");
+    await expect(letters).toHaveValue("");
+    // nothing reached the room
+    await expect(setting(b.page, "WORDS")).toHaveText("50 WORDS");
+    await expect(setting(b.page, "PRACTICE LETTERS")).toHaveText("NONE");
+
+    // a valid value then goes through and clears the line
+    await letters.fill("é è");
+    await letters.press("Enter");
+    await expect(setting(b.page, "PRACTICE LETTERS")).toHaveText("é è", {
+      timeout: scaled(2_000),
+    });
+    await expect(line).toHaveCount(0);
+    await b.context.close();
+  });
+
+  test("C6 every control is keyboard-reachable and labelled; 44px tall on touch widths", async ({
+    page,
+  }) => {
+    await createLobby(page);
+    const docket = settingsDocket(page);
+    await expect(segment(page, "ERROR MODE", "CONTINUE")).toBeVisible();
+    // custom difficulty opens its recipe rows, each with its own control
+    const custom = segment(page, "DIFFICULTY", "CUSTOM");
+    await custom.focus();
+    await page.keyboard.press("Enter");
+    await expect(segment(page, "WORD LENGTH", "MEDIUM")).toHaveAttribute("aria-pressed", "true");
+    await expect(segment(page, "PUNCTUATION DENSITY", "LIGHT")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(segment(page, "RARE LETTERS", "OFF")).toHaveAttribute("aria-pressed", "true");
+    // the focus stays on the control while the change is on its way (aria-disabled, not disabled)
+    await expect(custom).toBeFocused();
+
+    const controls = docket.locator("button, input");
+    const n = await controls.count();
+    expect(n).toBeGreaterThan(25);
+    const touch = test.info().project.name === "tablet";
+    for (let i = 0; i < n; i++) {
+      const control = controls.nth(i);
+      const name = await control.evaluate(
+        (el) =>
+          (el as HTMLElement).closest("[role=group]")?.getAttribute("aria-labelledby") ??
+          el.getAttribute("aria-labelledby") ??
+          el.textContent,
+      );
+      expect(name, `control ${i} named`).toBeTruthy();
+      if (await control.isDisabled()) continue; // the minutes under NO TIMER
+      expect(await control.getAttribute("tabindex")).not.toBe("-1");
+      if (touch) {
+        const box = (await control.boundingBox())!;
+        expect(box.height, `control ${i} height`).toBeGreaterThanOrEqual(44);
+      }
+    }
+    expect(await noSideScroll(page)).toBeLessThanOrEqual(0);
+  });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C6 ${scheme}: axe clean for the host's form (a refusal shown) and the guest's rows`, async ({
+      page,
+      browser,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      const code = await createLobby(page);
+      await segment(page, "DIFFICULTY", "CUSTOM").click();
+      await expect(segment(page, "WORD LENGTH", "MEDIUM")).toBeVisible();
+      const words = settingsDocket(page).getByRole("spinbutton", { name: "WORDS", exact: true });
+      await words.fill("5");
+      await words.press("Enter");
+      await expect(page.getByRole("alert").filter({ hasText: "RETURNED ·" })).toBeVisible();
+      await expectNoA11yViolations(page);
+
+      const b = await joinAsGuest(browser, code);
+      await b.page.emulateMedia({ colorScheme: scheme });
+      await expect(setting(b.page, "DIFFICULTY")).toContainText("CUSTOM");
+      await expectNoA11yViolations(b.page);
+      await b.context.close();
+    });
+  }
 });

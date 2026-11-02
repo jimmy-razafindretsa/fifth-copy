@@ -67,11 +67,55 @@ async function closedPort(): Promise<number> {
   return port;
 }
 
+// Wraps a real client and records every write it is asked to make, on any model or raw (same
+// recorder as src/features/identity/actions/ensure-guest.test.ts, #594). A Proxy, because Prisma 7
+// model delegates are lazy getters that vi.spyOn cannot redefine.
+const WRITES = new Set([
+  "create",
+  "createMany",
+  "createManyAndReturn",
+  "upsert",
+  "update",
+  "updateMany",
+  "updateManyAndReturn",
+  "delete",
+  "deleteMany",
+]);
+const RAW_WRITES = new Set(["$executeRaw", "$executeRawUnsafe", "$transaction"]);
+function recordWrites<T extends object>(client: T) {
+  const writes: string[] = [];
+  const bind = (target: object, key: PropertyKey) => {
+    const value = Reflect.get(target, key, target) as unknown;
+    return typeof value === "function" ? value.bind(target) : value;
+  };
+  const db = new Proxy(client, {
+    get(target, key) {
+      const value = bind(target, key);
+      if (typeof key !== "string") return value;
+      if (RAW_WRITES.has(key) && typeof value === "function") {
+        return (...args: unknown[]) => (writes.push(key), value(...args));
+      }
+      if (key.startsWith("$") || value === null || typeof value !== "object") return value;
+      return new Proxy(value, {
+        get(delegate, method) {
+          const fn = bind(delegate, method);
+          if (typeof method !== "string" || !WRITES.has(method) || typeof fn !== "function") {
+            return fn;
+          }
+          return (...args: unknown[]) => (writes.push(`${key}.${method}`), fn(...args));
+        },
+      });
+    },
+  });
+  return { db, writes };
+}
+
 describe.skipIf(!testDatabaseUrl)(
   "lobby actions behind the limiter (C3, test DB + Redis)",
   { timeout: 30_000 },
   () => {
     let db: ReturnType<typeof createPrismaClient>;
+    let hostId: string;
     const ip = () => {
       const value = freshIp();
       state.headers = new Headers({ "x-forwarded-for": value });
@@ -84,6 +128,7 @@ describe.skipIf(!testDatabaseUrl)(
       await db.$connect();
       await db.lobby.deleteMany({ where: { code: CODE } });
       const host = await db.user.create({ data: { isGuest: true, typistName: `${PREFIX}host` } });
+      hostId = host.id;
       await db.lobby.create({ data: { code: CODE, hostUserId: host.id } });
     }, 30_000);
     beforeEach(() => {
@@ -100,6 +145,33 @@ describe.skipIf(!testDatabaseUrl)(
 
     /** A well-formed code no lobby uses. */
     const otherCode = (i: number) => `ZQX-${String(i).padStart(4, "0")}`;
+
+    /**
+     * Wraps the client for the refused calls of one case (#710, the #594 pattern): records every
+     * write it is asked to make, so "nothing was created" is exact while other DB test files insert
+     * users in parallel. Counts are scoped to the guest ids this file issued, never global.
+     */
+    const refusedCalls = async () => {
+      const recorded = recordWrites(db);
+      state.db = recorded.db; // the next beforeEach restores the plain client
+      const issued = state.issued.length;
+      const scoped = async () => {
+        const ids = state.issued;
+        return {
+          users: await db.user.count({ where: { id: { in: ids } } }),
+          lobbies: await db.lobby.count({ where: { hostUserId: { in: [hostId, ...ids] } } }),
+        };
+      };
+      const before = await scoped();
+      return {
+        async expectNothingCreated() {
+          state.db = db;
+          expect(recorded.writes).toEqual([]);
+          expect(state.issued.length).toBe(issued);
+          expect(await scoped()).toEqual(before);
+        },
+      };
+    };
 
     it("C1: 100 cookie-less joinByCode from one IP for one open lobby within 60 s all succeed", async () => {
       ip();
@@ -120,8 +192,7 @@ describe.skipIf(!testDatabaseUrl)(
           error: "not-found",
         });
       }
-      const users = await db.user.count();
-      const lobbies = await db.lobby.count();
+      const refused = await refusedCalls();
       await expect(joinByCode({ code: otherCode(20) })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
@@ -140,8 +211,7 @@ describe.skipIf(!testDatabaseUrl)(
         ok: false,
         error: "rate-limited",
       });
-      expect(await db.user.count()).toBe(users);
-      expect(await db.lobby.count()).toBe(lobbies);
+      await refused.expectNothingCreated();
       expect(state.jar.size).toBe(0);
       // The code this subject already found still works; another client is not throttled.
       await expect(joinByCode({ code: CODE })).resolves.toEqual({ ok: true, code: CODE });
@@ -171,12 +241,12 @@ describe.skipIf(!testDatabaseUrl)(
         const result = await mintRaceToken({ code: CODE });
         expect(result.ok).toBe(true);
       }
-      const users = await db.user.count();
+      const refused = await refusedCalls();
       await expect(mintRaceToken({ code: CODE })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
       });
-      expect(await db.user.count()).toBe(users);
+      await refused.expectNothingCreated();
     });
 
     it("C2: a cookie-less client cycling codes is refused before any guest is created", async () => {
@@ -188,13 +258,13 @@ describe.skipIf(!testDatabaseUrl)(
           error: "not-found",
         });
       }
-      const before = await db.user.count();
+      const refused = await refusedCalls();
       // A 21st distinct code is refused before the lookup, even one of an open lobby.
       await expect(mintRaceToken({ code: CODE })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
       });
-      expect(await db.user.count()).toBe(before);
+      await refused.expectNothingCreated();
       expect(state.jar.size).toBe(0);
     });
 

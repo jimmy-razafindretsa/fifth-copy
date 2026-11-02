@@ -43,8 +43,9 @@ test.describe("#366 bots as server race participants", () => {
     });
     expect(settings.bots).toEqual([{ level: "clerk" }]);
     // The lobby's START counts the bot: the host alone with one bot may start.
-    await expect(host.getByRole("list", { name: "Typists in the room" }).getByRole("listitem"))
-      .toHaveCount(2, { timeout: scaled(10_000) });
+    await expect(
+      host.getByRole("list", { name: "Typists in the room" }).getByRole("listitem"),
+    ).toHaveCount(2, { timeout: scaled(10_000) });
     await expect(startButton(host)).toBeEnabled({ timeout: scaled(10_000) });
 
     await warmRace(host, lobbyId);
@@ -75,7 +76,8 @@ test.describe("#366 bots as server race participants", () => {
     const wpm = Number((await bot.locator('[data-col="wpm"]').textContent())!.trim());
     expect(wpm).toBeGreaterThanOrEqual(25);
     expect(wpm).toBeLessThanOrEqual(45);
-    await expect(rows.filter({ hasNot: host.locator('[data-col="name"]', { hasText: "BOT" }) }))
-      .toHaveAttribute("data-place", "01");
+    await expect(
+      rows.filter({ hasNot: host.locator('[data-col="name"]', { hasText: "BOT" }) }),
+    ).toHaveAttribute("data-place", "01");
   });
 });

@@ -121,7 +121,13 @@ export function createBotDrivers({
       rooms.set(runtime.lobbyId, room);
       for (const { desk, level } of bots) {
         if (!runtime.states.has(desk)) continue;
-        const driver: Driver = { desk, profile: profileOf(level), handle: null, text: "", chars: [] };
+        const driver: Driver = {
+          desk,
+          profile: profileOf(level),
+          handle: null,
+          text: "",
+          chars: [],
+        };
         room.set(desk, driver);
         arm(runtime, driver, language);
       }

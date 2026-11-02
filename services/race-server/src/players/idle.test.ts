@@ -139,7 +139,7 @@ describe("bots are never idle (#366 C5)", () => {
     expect(kinds(host, "idle-warning", 2)).toEqual([]);
     expect(kinds(host, "asleep", 2)).toEqual([]);
     expect(stateOf(b, lobby, 2)).toMatchObject({ status: "typing" });
-    expect(stateOf(b, lobby, 2).cursor).toBeGreaterThan(50);
+    expect(stateOf(b, lobby, 2)!.cursor).toBeGreaterThan(50);
   });
 });
 

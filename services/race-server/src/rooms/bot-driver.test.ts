@@ -215,7 +215,9 @@ describe("bot driver: bonuses aimed at a bot (C6)", () => {
     expect(hit.rt.states.get(2)!.correct).toBeGreaterThanOrEqual(
       plain.rt.states.get(2)!.correct + extraKeys,
     );
-    expect(hit.rt.states.get(2)!.trace.length).toBeGreaterThan(plain.rt.states.get(2)!.trace.length);
+    expect(hit.rt.states.get(2)!.trace.length).toBeGreaterThan(
+      plain.rt.states.get(2)!.trace.length,
+    );
     expect(flagsOf(hit.rt, 2)).toEqual([]);
   });
 
@@ -224,7 +226,11 @@ describe("bot driver: bonuses aimed at a bot (C6)", () => {
     drivers.start(rt, bots, "fr");
     clock.advance(3_000);
     expect(rt.states.get(2)!.status).toBe("typing");
-    desksState.set("lob", 2, withOverlay(rt, 2, rt.states.get(2)!, { extra: ["dossier"], removed: [] }));
+    desksState.set(
+      "lob",
+      2,
+      withOverlay(rt, 2, rt.states.get(2)!, { extra: ["dossier"], removed: [] }),
+    );
     run(clock, () => rt.states.get(2)!.status !== "typing");
     expect(rt.states.get(2)!.status).toBe("finished");
     expect(rt.states.get(2)!.cursor).toBe(rt.textLength + " dossier".length);

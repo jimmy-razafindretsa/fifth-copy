@@ -259,20 +259,28 @@ describe("lifecycle: bots type from GO and stop with the race (#366 C3, C4)", ()
     await stepFor(r.booted, 2_000);
     expect(traceOf(r.booted, r.lobby, 2)).toBeGreaterThan(0);
     // The bot leads the silent host in the live rank and its cursor is in the snapshots.
-    await until(() => (snapshots.at(-1)?.desks.find((d) => d[0] === 2)?.[1] ?? 0) > 0, WAIT_MS, "bot row");
+    await until(
+      () => (snapshots.at(-1)?.desks.find((d) => d[0] === 2)?.[1] ?? 0) > 0,
+      WAIT_MS,
+      "bot row",
+    );
     expect(snapshots.at(-1)!.ranks[0]).toBe(2);
   });
 
   it("a host and a bot: the bot finishes first, the race ends all-finished once the host finishes too", async () => {
     const { booted, lobby, host, seenHost } = await botRace([{ level: "major" }]);
     const text = FIXTURE_TEXT.content;
-    for (let i = 0; i < 100 && booted.server.desks.states(lobby).get(2)?.status !== "finished"; i++) {
+    for (
+      let i = 0;
+      i < 100 && booted.server.desks.states(lobby).get(2)?.status !== "finished";
+      i++
+    ) {
       await stepFor(booted, 500);
     }
     expect(booted.server.desks.states(lobby).get(2)?.status).toBe("finished");
     expect(booted.server.bots.active(lobby)).toEqual([]);
     expect(seenHost.ended).toHaveLength(0);
-    const elapsed = booted.clock.now() - (booted.server.desks.get(lobby)!.t0);
+    const elapsed = booted.clock.now() - booted.server.desks.get(lobby)!.t0;
     typeKeys(host, text, elapsed, 1);
     await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
     expect(seenHost.ended[0]).toMatchObject({ reason: "all-finished" });

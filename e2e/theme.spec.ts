@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { ACTION_WAIT, scaled } from "./timeouts";
 
 // Contract of #19 (ARCHITECTURE 8.4, bible 3.2 and 14.1): light by default, the OS decides without a
 // cookie, the `theme` cookie (written by the NIGHT SHIFT toggle) wins and is server-rendered as
@@ -7,7 +8,6 @@ import { expect, expectNoA11yViolations, test } from "./fixtures";
 
 const PAPER = "rgb(241, 232, 214)"; // bible 3.1 paper #F1E8D6
 const NIGHT = "rgb(62, 57, 52)"; // bible 3.2 night #3E3934
-const AFTER_ACTION = { timeout: 20_000 };
 
 async function setThemeCookie(context: BrowserContext, value: string) {
   const url = test.info().project.use.baseURL;
@@ -29,7 +29,9 @@ const toggle = (page: Page) =>
 async function ready(page: Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/design");
-  await expect(page.locator("[data-motion-safe]")).toHaveText("Motion reduced", AFTER_ACTION);
+  await expect(page.locator("[data-motion-safe]")).toHaveText("Motion reduced", {
+    timeout: ACTION_WAIT,
+  });
 }
 
 test.describe("#19 theme", () => {
@@ -104,11 +106,13 @@ test.describe("#19 theme", () => {
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false");
     await toggle(page).click();
     // at once: the client sets the attribute before the action answers
-    await expect(html(page)).toHaveAttribute("data-theme", "dark", { timeout: 1_000 });
+    await expect(html(page)).toHaveAttribute("data-theme", "dark", { timeout: scaled(1_000) });
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "true");
     expect(await bodyBg(page)).toBe(NIGHT);
     await expect
-      .poll(async () => (await context.cookies()).find((c) => c.name === "theme"), AFTER_ACTION)
+      .poll(async () => (await context.cookies()).find((c) => c.name === "theme"), {
+        timeout: ACTION_WAIT,
+      })
       .toMatchObject({ value: "dark", httpOnly: true, sameSite: "Lax", path: "/" });
     const cookie = (await context.cookies()).find((c) => c.name === "theme");
     // max-age one year (a few seconds of slack for the round trip)
@@ -120,12 +124,11 @@ test.describe("#19 theme", () => {
     expect(await colorScheme(page)).toBe("dark");
 
     await toggle(page).click();
-    await expect(html(page)).toHaveAttribute("data-theme", "light", { timeout: 1_000 });
+    await expect(html(page)).toHaveAttribute("data-theme", "light", { timeout: scaled(1_000) });
     await expect
-      .poll(
-        async () => (await context.cookies()).find((c) => c.name === "theme")?.value,
-        AFTER_ACTION,
-      )
+      .poll(async () => (await context.cookies()).find((c) => c.name === "theme")?.value, {
+        timeout: ACTION_WAIT,
+      })
       .toBe("light");
     await page.reload();
     await expect(html(page)).toHaveAttribute("data-theme", "light");
@@ -153,7 +156,7 @@ test.describe("#19 theme", () => {
       await ready(page);
       await toggle(page).focus();
       await page.keyboard.press(key);
-      await expect(html(page)).toHaveAttribute("data-theme", "dark", { timeout: 1_000 });
+      await expect(html(page)).toHaveAttribute("data-theme", "dark", { timeout: scaled(1_000) });
       await expect(toggle(page)).toHaveAttribute("aria-pressed", "true");
     });
   }

@@ -1,5 +1,6 @@
 import type { Locator } from "@playwright/test";
 import { expect, expectNoA11yViolations, stabilize, test } from "./fixtures";
+import { scaled } from "./timeouts";
 
 /** Computed type of the first element matched by `locator` (#20 type roles). */
 async function typeOf(locator: Locator) {
@@ -429,7 +430,7 @@ test.describe("design system page", () => {
       await expect(page).toHaveScreenshot(`design-${scheme}.png`, {
         fullPage: true,
         // two full-page shots that must match need more than 5s in that renderer
-        timeout: 45_000,
+        timeout: scaled(45_000),
         mask: [page.getByRole("status", { name: "Loading" })],
       });
     });

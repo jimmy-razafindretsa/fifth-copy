@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { scaled } from "../timeouts";
 import { hostRoom, phaseOf, startButton, warmRace } from "./helpers";
 
 // Contract of #559 C4 (the hidden input: aids off, locked until GO and after the finish, focused at GO
@@ -75,7 +76,9 @@ test.describe("#559 race input", () => {
     await expect(sheet(page, "done")).toHaveCount(0);
     expect(keysFrames(room.sent), "no keys frame before running").toEqual([]);
 
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
     const runningAt = Date.now();
     await expect(input(page)).toBeFocused();
     await page.keyboard.press(keyName(first));
@@ -97,7 +100,7 @@ test.describe("#559 race input", () => {
     page,
     browser,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(scaled(60_000));
     const room = await seat(page, browser);
     const field = input(page);
     await expect(field).toHaveAttribute("autocomplete", "off");
@@ -113,7 +116,9 @@ test.describe("#559 race input", () => {
 
     await startRace(page, room.host);
     await expect(field).toBeDisabled();
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
     await expect(field).toBeEnabled();
     await expect(field).toBeFocused();
     await expectNoA11yViolations(page);
@@ -165,7 +170,9 @@ test.describe("#559 race input", () => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const room = await seat(page, browser);
     await startRace(page, room.host);
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
     await expect(input(page)).toBeFocused();
     const text = await textOf(page);
     // the clipboard events the page sees: the shortcuts below really paste and copy

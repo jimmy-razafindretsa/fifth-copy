@@ -1,7 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
-import { createLobby, joinAsGuest } from "./race/helpers";
+import {
+  createLobby,
+  joinAsGuest,
+  recordRaceTokens,
+  setHostSettings,
+  startButton,
+} from "./race/helpers";
+import { HYDRATION_WAIT, scaled } from "./timeouts";
 
 // Contract of #107: the waiting room /lobby/[code] (bible 4, 7.3, 7.4, 7.10, 8), live over the race
 // server started by playwright.config.ts. next/font and CSS modules rename families and keyframes,
@@ -299,6 +306,150 @@ test.describe("lobby waiting room (#107)", () => {
         () => document.documentElement.scrollWidth - window.innerWidth,
       );
       expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+});
+
+// Contract of #105: the roll says who is a bot (the ink BOT tag), a non-host waits on the 7.4 notice row
+// WAITING FOR THE HOST where the host has START, and the kicker names the lobby's type (bible 14.3).
+const waitingNotice = (page: Page) =>
+  page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" });
+const kicker = (page: Page) =>
+  page.locator('section[aria-labelledby="lobby-heading"] > div').first();
+const botRows = (page: Page) => rows(page).filter({ has: page.getByText("BOT", { exact: true }) });
+
+test.describe("lobby roll: BOT tag, non-host notice, kicker (#105)", () => {
+  test("C2 the host sees START and no notice, a guest the still notice row and no START", async ({
+    page,
+    browser,
+  }) => {
+    const code = await createLobby(page);
+    const b = await joinAsGuest(browser, code);
+    await expect(rows(b.page)).toHaveCount(2);
+    await expect(waitingNotice(b.page)).toHaveCount(1);
+    await expect(waitingNotice(b.page)).toBeVisible();
+    await expect(startButton(b.page)).toHaveCount(0);
+
+    await expect(rows(page)).toHaveCount(2, { timeout: 5_000 });
+    await expect(startButton(page)).toBeVisible();
+    await expect(waitingNotice(page)).toHaveCount(0);
+
+    // a 7.4 notice row: Oswald 600 11px .16em, dashed rule under it, at the top of the roll, no pulse
+    const style = await waitingNotice(b.page).evaluate((el) => {
+      const c = getComputedStyle(el);
+      return {
+        family: c.fontFamily,
+        weight: c.fontWeight,
+        size: c.fontSize,
+        spacing: c.letterSpacing,
+        rule: c.borderBottomStyle,
+        animation: c.animationName,
+        first: el.parentElement!.firstElementChild === el,
+      };
+    });
+    expect(style.family).toMatch(/Oswald/i);
+    expect(style).toMatchObject({
+      weight: "600",
+      size: "11px",
+      spacing: "1.76px",
+      rule: "dashed",
+      animation: "none",
+      first: true,
+    });
+    await b.context.close();
+  });
+
+  test("C3 the kicker names the room: private from CREATE PRIVATE RACE, public from QUICK RACE", async ({
+    page,
+  }) => {
+    await createLobby(page);
+    await expect(kicker(page)).toHaveText("WAITING ROOM · PRIVATE RACE");
+
+    await page.goto("/");
+    // the QUICK RACE form is a client action: wait for the landing to hydrate (landing.spec.ts `ready`)
+    await expect(page.locator("section#play video[aria-hidden='true']")).toHaveAttribute(
+      "data-feed",
+      /^(armed|near)$/,
+      { timeout: HYDRATION_WAIT },
+    );
+    await page.locator("section#play").getByRole("button", { name: "QUICK RACE" }).click();
+    await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
+    await expect(kicker(page)).toHaveText("WAITING ROOM · PUBLIC RACE");
+  });
+
+  test("C4 a seated bot shows its row with the ink BOT tag in every context; removing it removes the row", async ({
+    page,
+    browser,
+  }) => {
+    await recordRaceTokens(page);
+    const code = await createLobby(page);
+    await expect(rows(page)).toHaveCount(1);
+    const hostName = await rows(page).first().locator("span").nth(2).textContent();
+
+    await setHostSettings(page, { bots: [{ level: "clerk" }] });
+    await expect(rows(page)).toHaveCount(2, { timeout: scaled(2_000) });
+    await expect(typists(page)).toHaveText("2 / 30");
+    const bot = botRows(page);
+    await expect(bot).toHaveCount(1);
+    await expect(bot).not.toContainText("YOU");
+    await expect(bot.locator("[data-stamp-tone]")).toHaveCount(0);
+    const botName = (await bot.locator("span").nth(2).textContent())?.trim() ?? "";
+    expect(botName).not.toBe("");
+    expect(botName).not.toBe(hostName?.trim());
+    // the YOU tag's recipe: Oswald 600 10px .16em on ink, paper text
+    const tag = await bot.getByText("BOT", { exact: true }).evaluate((el) => {
+      const c = getComputedStyle(el);
+      return {
+        family: c.fontFamily,
+        weight: c.fontWeight,
+        size: c.fontSize,
+        spacing: c.letterSpacing,
+        bg: c.backgroundColor,
+        color: c.color,
+      };
+    });
+    expect(tag.family).toMatch(/Oswald/i);
+    expect(tag).toMatchObject({ weight: "600", size: "10px", spacing: "1.6px" });
+    expect({ bg: tag.bg, color: tag.color }).toEqual({
+      bg: await role(page, "--color-fg"),
+      color: await role(page, "--color-bg"),
+    });
+    // humans carry no BOT tag
+    await expect(rows(page).first()).not.toContainText("BOT");
+
+    // a second context sees the same bot row
+    const b = await joinAsGuest(browser, code);
+    await expect(rows(b.page)).toHaveCount(3);
+    await expect(botRows(b.page)).toHaveCount(1);
+    await expect(botRows(b.page)).toContainText(botName);
+    await expect(rows(page)).toHaveCount(3, { timeout: scaled(2_000) });
+
+    await setHostSettings(page, { bots: [] });
+    await expect(botRows(page)).toHaveCount(0, { timeout: scaled(2_000) });
+    await expect(botRows(b.page)).toHaveCount(0, { timeout: scaled(2_000) });
+    await expect(rows(page)).toHaveCount(2);
+    await expect(typists(page)).toHaveText("2 / 30");
+    await b.context.close();
+  });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C5 ${scheme}: axe clean with a bot row (host view) and the notice (guest view)`, async ({
+      page,
+      browser,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await recordRaceTokens(page);
+      const code = await createLobby(page);
+      await setHostSettings(page, { bots: [{ level: "clerk" }] });
+      await expect(botRows(page)).toHaveCount(1, { timeout: scaled(2_000) });
+      await expectNoA11yViolations(page);
+
+      const b = await joinAsGuest(browser, code);
+      await b.page.emulateMedia({ colorScheme: scheme });
+      await expect(waitingNotice(b.page)).toBeVisible();
+      await expect(botRows(b.page)).toHaveCount(1);
+      await expectNoA11yViolations(b.page);
+      await b.context.close();
     });
   }
 });

@@ -230,7 +230,10 @@ export const fr = {
     },
   },
   lobby: {
-    kicker: "SALLE D'ATTENTE · COURSE PRIVÉE",
+    kicker: {
+      private: "SALLE D'ATTENTE · COURSE PRIVÉE",
+      public: "SALLE D'ATTENTE · COURSE PUBLIQUE",
+    },
     heading: "PRÉSENTE-TOI À TON BUREAU",
     codeName: "Code de salle",
     codeTag: "CODE DE SALLE",
@@ -243,6 +246,8 @@ export const fr = {
     desk: "BUREAU {n}",
     host: "HÔTE",
     you: "TOI",
+    bot: "BOT",
+    waitingForHost: "EN ATTENTE DE L'HÔTE",
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",
     start: {

@@ -192,7 +192,9 @@ describe("createLimiter (C1, real Redis)", () => {
   it("concurrent distinct items admit exactly max (#701)", async () => {
     const rule = { max: 20, windowMs: 1_000 };
     const results = await Promise.all(
-      Array.from({ length: 30 }, (_, i) => limiter.admit("adm2:budget", `adm2:item:${i}`, rule, T0)),
+      Array.from({ length: 30 }, (_, i) =>
+        limiter.admit("adm2:budget", `adm2:item:${i}`, rule, T0),
+      ),
     );
     expect(results.filter((r) => r.ok)).toHaveLength(20);
     expect(await limiter.count("adm2:budget", rule.windowMs, T0)).toBe(20);

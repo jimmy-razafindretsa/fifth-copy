@@ -477,8 +477,9 @@ export function bindRaceSocket(
     awaited.delete(sent);
     samples.push({ sent, serverNow, receivedAt: timer.now() });
     const refined = bestOffset(samples);
-    if (refined === null || refined === roundOffset) return;
-    roundOffset = offset = refined;
+    if (refined === null || Math.round(refined) === roundOffset) return;
+    // whole milliseconds, like the welcome's offset: the countdown and the timers step on whole ms
+    roundOffset = offset = Math.round(refined);
     dispatch({ type: "clock", offset });
     if (goAt !== null) scheduleGo(goAt);
   };

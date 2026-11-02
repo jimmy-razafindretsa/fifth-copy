@@ -52,6 +52,35 @@ describe("nextStepIn (#214 C3)", () => {
       expect(countdownStep(msToGo - next + 1), String(msToGo)).toBe(countdownStep(msToGo));
     }
   });
+
+  // #643: a ping/pong clock offset can be fractional, so the time left to GO can be too
+  it.each([
+    [1_000.5, 0.5, 2],
+    [2_000.5, 0.5, 3],
+    [1_999.5, 999.5, 2],
+    [0.5, 0.5, 1],
+    [-0.5, GO_STAMP_MS - 0.5, "go"],
+  ] as const)("fractional %s ms to GO: the step changes in %s ms (now %s)", (msToGo, next, now) => {
+    expect(countdownStep(msToGo)).toBe(now);
+    expect(nextStepIn(msToGo)).toBeCloseTo(next, 9);
+  });
+
+  it("walks 3, 2, 1, GO on a fractional clock without skipping a step", () => {
+    for (const start of [3_000.5, 2_999.25, 3_000.75]) {
+      const seen: unknown[] = [];
+      let msToGo = start;
+      for (let i = 0; i < 10; i++) {
+        const step = countdownStep(msToGo);
+        if (seen.at(-1) !== step) seen.push(step);
+        const next = nextStepIn(msToGo);
+        if (next === null) break;
+        expect(next, String(msToGo)).toBeGreaterThan(0);
+        expect(next, String(msToGo)).toBeLessThanOrEqual(GO_STAMP_MS);
+        msToGo -= next;
+      }
+      expect(seen, String(start)).toEqual([3, 2, 1, "go", null]);
+    }
+  });
 });
 
 describe("Countdown (#214 C3)", () => {

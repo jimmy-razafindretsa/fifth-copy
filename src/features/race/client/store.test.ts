@@ -711,6 +711,19 @@ describe("countdown and GO (#214 C1)", () => {
       expect(pings(fake)).toHaveLength(5);
     });
 
+    it("rounds the offset to whole milliseconds (the countdown steps on whole ms)", () => {
+      const { fake, room } = makeRoom();
+      const clock = fakeTimer();
+      const store = createRaceStore();
+      bindRaceSocket(room, store.dispatch, { timer: clock.timer });
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      // 1 ms round trip: pongOffset = 100 - 0.5 = 99.5
+      answer(fake, clock, start, start + 100, 1);
+      expect(Number.isInteger(store.getState().clockOffset)).toBe(true);
+      expect(store.getState().clockOffset).toBe(Math.round(99.5));
+    });
+
     it("dispatches a clock event only when the best offset changes", () => {
       const { fake, clock, dispatch } = setup();
       const start = clock.now;

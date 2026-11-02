@@ -4,6 +4,7 @@ import {
   deskIdentity,
   PROTOCOL_VERSION,
   type Member,
+  type RaceSettings,
 } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
 import {
@@ -480,7 +481,7 @@ describe("welcome during the countdown (#659)", () => {
 describe("settings (#498 C1)", () => {
   const block = { ...DEFAULT_RACE_SETTINGS, errorMode: "block" as const, timerS: 300 };
   const fr = { ...DEFAULT_RACE_SETTINGS, language: "fr" as const, accentEveryWord: true };
-  const settingsEvent = (settings: typeof block): RoomEvents["settings"] => ({
+  const settingsEvent = (settings: RaceSettings): RoomEvents["settings"] => ({
     v: PROTOCOL_VERSION,
     settings,
   });

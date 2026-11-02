@@ -247,6 +247,30 @@ describe("createWebLimit.code: room-code attempts (#699, real Redis)", () => {
     expect((await limit.code("join-by-code", subject("cycle-2"), otherCode(20))).ok).toBe(true);
   });
 
+  it("100 concurrent first calls of one (subject, code) all pass and charge the budget once (#701 C1)", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const s = subject("burst");
+    const verdicts = await Promise.all(
+      Array.from({ length: 100 }, () => limit.code("join-by-code", s, "KGB-4821")),
+    );
+    expect(verdicts.filter((v) => v.ok)).toHaveLength(100);
+    expect(await codeBudget(s)).toBe(1);
+  });
+
+  it("concurrent distinct codes admit exactly 20; a refused code stays refused (#701 C2)", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const s = subject("burst-cycle");
+    const codes = Array.from({ length: 25 }, (_, i) => otherCode(i));
+    const verdicts = await Promise.all(codes.map((c) => limit.code("join-by-code", s, c)));
+    expect(verdicts.filter((v) => v.ok)).toHaveLength(20);
+    expect(await codeBudget(s)).toBe(20);
+    const refused = codes.filter((_, i) => !verdicts[i]!.ok);
+    const admitted = codes.filter((_, i) => verdicts[i]!.ok);
+    for (const c of refused) expect((await limit.code("join-by-code", s, c)).ok).toBe(false);
+    for (const c of admitted) expect((await limit.code("join-by-code", s, c)).ok).toBe(true);
+    expect(await codeBudget(s)).toBe(20);
+  });
+
   it("an unparsable code (null) counts against the code budget on every call", async () => {
     const limit = make({ url: redisUrl, nodeEnv: "test" });
     const s = subject("garbage");

@@ -63,6 +63,7 @@ const race = (id: string): ReportRace => ({
   endedAt: new Date("2026-10-08T08:14:00Z"),
   endReason: "ALL_FINISHED",
   lobbyCode: "KGB-4821",
+  lobbyOpen: true,
 });
 
 const report = (

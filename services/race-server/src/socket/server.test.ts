@@ -238,7 +238,7 @@ describe("health and shutdown (C6)", () => {
 });
 
 describe("a room whose racer dropped for good still closes (#658 C2)", () => {
-  it("one racer drops mid-race, the race ends, the other leaves: room closed, state released", async () => {
+  it("one racer drops mid-race, the race ends, the other leaves: room kept for Race again (#143), state released", async () => {
     const race = await startedRace(process.env.REDIS_URL, {
       players: 2,
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
@@ -257,10 +257,11 @@ describe("a room whose racer dropped for good still closes (#658 C2)", () => {
     await until(() => host.seen.roster?.length === 1, WAIT_MS, "dropped racer released");
 
     host.client.disconnect();
+    // The ended room outlives its last human under a grace TTL (#143); the process frees it (#658).
     await expect
-      .poll(() => t!.server.registry.room(lobby), { timeout: WAIT_MS, interval: 20 })
-      .toBeNull();
-    expect(t.server.desks.get(lobby)).toBeUndefined();
+      .poll(() => t!.server.desks.get(lobby), { timeout: WAIT_MS, interval: 20 })
+      .toBeUndefined();
+    expect(await t.server.registry.room(lobby)).toMatchObject({ phase: "ended", seated: [] });
     expect(t.server.presence.sockets(lobby, host.sub)).toBe(0);
   });
 });

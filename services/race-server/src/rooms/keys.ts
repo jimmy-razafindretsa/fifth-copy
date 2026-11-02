@@ -10,7 +10,8 @@ export const ROOM_TTL_S = 2 * 3600;
  * `RaceSettings`, parsed on read); from `host:start` on (#166): `raceId`, `t0` and `endAt` (server ms
  * epoch of GO and of the timed end), `race` (JSON `RaceInfo`) and `desks` (JSON desks at start).
  * A room voided by a restart (#204) is `phase: ended` with `endReason: void` and `endedAt` (server ms
- * epoch), keeps `raceId` and loses `race`, `t0`, `endAt` and `desks`.
+ * epoch), keeps `raceId` and loses `race`, `t0`, `endAt` and `desks`. A new start ("Race again",
+ * #143) rewrites the race fields and drops `endReason` and `endedAt`.
  */
 export const roomKey = (lobbyId: string) => `room:${lobbyId}`;
 
@@ -26,6 +27,13 @@ export const ROOMS_KEY = "rooms";
  * then the lobby can be reopened. A later join refreshes it to `ROOM_TTL_S` like any activity.
  */
 export const VOID_TTL_S = 300;
+
+/**
+ * TTL of an ended room whose last human left (#143 "Race again"): opening the Dawn report closes
+ * every member's socket, so the room, its settings and its bots wait this long for a member to come
+ * back to `/lobby/[code]`. A later join refreshes it to `ROOM_TTL_S` like any activity.
+ */
+export const ENDED_GRACE_TTL_S = 600;
 
 /**
  * Hash: `userId` -> JSON `{ desk, name }`; a bot seat (#156) is keyed `bot:<desk>` -> JSON
@@ -44,7 +52,8 @@ export const desksKey = (lobbyId: string) => `room:${lobbyId}:desks`;
 /**
  * List: one JSON `Keystroke` per entry, in order (#592): the desk's trace, appended each tick with
  * only the keys accepted since the previous one. TTL set at each write (not refreshed by the room's
- * other writes); emptied by the first write of a new race and deleted with the room.
+ * other writes); deleted by the next race's start (#143), when the ended room is left, and with the
+ * room.
  */
 export const traceKey = (lobbyId: string, desk: number) => `room:${lobbyId}:trace:${desk}`;
 

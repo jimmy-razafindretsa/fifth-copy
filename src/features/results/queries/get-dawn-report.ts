@@ -35,7 +35,7 @@ export async function getDawnReport(
       textLanguage: true,
       endedAt: true,
       endReason: true,
-      lobby: { select: { code: true } },
+      lobby: { select: { code: true, status: true } },
       results: {
         orderBy: [{ place: "asc" }, { desk: "asc" }],
         select: {
@@ -81,6 +81,8 @@ export async function getDawnReport(
       endedAt: race.endedAt,
       endReason: race.endReason,
       lobbyCode,
+      // "Race again" (#143): the same lobby takes another race while it is open.
+      lobbyOpen: race.lobby?.status === "WAITING",
     },
     entries,
     viewerDesk: mine?.desk ?? null,

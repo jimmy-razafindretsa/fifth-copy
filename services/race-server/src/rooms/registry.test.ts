@@ -12,6 +12,7 @@ import { createFakeClock } from "../clock";
 import { createRedis } from "../redis/client";
 import {
   desksKey,
+  ENDED_GRACE_TTL_S,
   membersKey,
   resumeIndexKey,
   resumeKey,
@@ -227,8 +228,9 @@ describe("room registry: leave (C4)", () => {
     expect(await registry.leave(lobbyId, "a")).toEqual({
       members: [m(2, "Bob", false)],
       closed: false,
+      kept: false,
     });
-    expect(await registry.leave(lobbyId, "b")).toEqual({ members: [], closed: true });
+    expect(await registry.leave(lobbyId, "b")).toEqual({ members: [], closed: true, kept: false });
     expect(await redis.exists(roomKey(lobbyId), membersKey(lobbyId))).toBe(0);
     expect(await registry.members(lobbyId)).toBeNull();
     expect(registry.count()).toBe(before - 1);
@@ -236,13 +238,17 @@ describe("room registry: leave (C4)", () => {
 
   it("leaving an unknown room closes nothing", async () => {
     const { registry } = setup();
-    expect(await registry.leave(lobby(), "a")).toEqual({ members: [], closed: false });
+    expect(await registry.leave(lobby(), "a")).toEqual({ members: [], closed: false, kept: false });
   });
 
   it("a non-member leaving an empty room does not close it", async () => {
     const { registry } = setup();
     const lobbyId = await openRoom(registry);
-    expect(await registry.leave(lobbyId, "stranger")).toEqual({ members: [], closed: false });
+    expect(await registry.leave(lobbyId, "stranger")).toEqual({
+      members: [],
+      closed: false,
+      kept: false,
+    });
     expect(await registry.members(lobbyId)).toEqual([]);
   });
 });
@@ -691,5 +697,121 @@ describe("room registry: recovery writes (#204 C6)", () => {
     expect(registry.count()).toBe(before - 1);
     expect(await redis.exists(roomKey(lobbyId), membersKey(lobbyId))).toBe(0);
     expect(await redis.sismember(ROOMS_KEY, lobbyId)).toBe(0);
+  });
+});
+
+// #143 Race again: the ended room outlives its last human, admits its members back (same desk
+// when free) and the next start replaces every field and key of the previous race.
+describe("room registry: race again (#143)", () => {
+  const raced: RaceDesk[] = [
+    { desk: 1, userId: "host", name: "Ada", isBot: false },
+    { desk: 2, userId: "b", name: "Bob", isBot: false },
+    { desk: 3, userId: "c", name: "Cy", isBot: false },
+  ];
+
+  async function endedRoom(registry: RoomRegistry) {
+    const lobbyId = await openRoom(registry);
+    for (const { userId, name } of raced) await registry.join(lobbyId, { userId: userId!, name });
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks: raced });
+    await registry.setPhase(lobbyId, "running");
+    await registry.setPhase(lobbyId, "ended");
+    return lobbyId;
+  }
+
+  it("the last human leaving an ended room keeps it under ENDED_GRACE_TTL_S; a join refreshes ROOM_TTL_S", async () => {
+    const { registry } = setup();
+    const lobbyId = await endedRoom(registry);
+    await redis.rpush(traceKey(lobbyId, 2), "{}");
+    await redis.hset(desksKey(lobbyId), "2", "{}");
+    expect(await registry.leave(lobbyId, "b")).toMatchObject({ closed: false, kept: false });
+    expect(await registry.leave(lobbyId, "c")).toMatchObject({ closed: false, kept: false });
+    expect(await registry.leave(lobbyId, "host")).toEqual({
+      members: [],
+      closed: false,
+      kept: true,
+    });
+
+    expect(await redis.hget(roomKey(lobbyId), "phase")).toBe("ended");
+    const ttl = await redis.ttl(roomKey(lobbyId));
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(ENDED_GRACE_TTL_S);
+    // No bot seated: the emptied members hash is gone (Redis drops an empty hash).
+    expect(await redis.exists(membersKey(lobbyId))).toBe(0);
+    // The race's mirror is never read back once ended: it goes now, not with the grace TTL.
+    expect(await redis.exists(desksKey(lobbyId), traceKey(lobbyId, 2))).toBe(0);
+    expect(registry.count()).toBeGreaterThan(0);
+
+    expect(await registry.join(lobbyId, { userId: "b", name: "Bob" })).toMatchObject({ ok: true });
+    for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(ENDED_GRACE_TTL_S);
+  });
+
+  it("a waiting room still closes on its last human", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    expect(await registry.leave(lobbyId, "host")).toEqual({
+      members: [],
+      closed: true,
+      kept: false,
+    });
+    expect(await redis.exists(roomKey(lobbyId))).toBe(0);
+  });
+
+  it("an ended room seats a returning racer at the desk it raced at", async () => {
+    const { registry } = setup();
+    const lobbyId = await endedRoom(registry);
+    await registry.leave(lobbyId, "b");
+    await registry.leave(lobbyId, "c");
+    expect(await registry.join(lobbyId, { userId: "c", name: "Cy" })).toMatchObject({
+      ok: true,
+      desk: 3,
+      room: { phase: "ended" },
+    });
+    expect(await registry.join(lobbyId, { userId: "b", name: "Bob" })).toMatchObject({
+      ok: true,
+      desk: 2,
+    });
+  });
+
+  it("an ended room refuses a user who neither is a member nor raced in it (in-progress)", async () => {
+    const { registry } = setup();
+    const lobbyId = await endedRoom(registry);
+    expect(await registry.join(lobbyId, { userId: "late", name: "Lou" })).toEqual({
+      ok: false,
+      reason: "in-progress",
+    });
+    expect(await registry.hasMember(lobbyId, "late")).toBe(false);
+  });
+
+  it("startRace replaces the previous race: endReason, endedAt, the desks mirror and the old trace lists go", async () => {
+    const { registry } = setup();
+    const lobbyId = await endedRoom(registry);
+    await redis.hset(roomKey(lobbyId), { endReason: "void", endedAt: "1" });
+    await redis.hset(desksKey(lobbyId), "3", "{}");
+    for (const desk of [1, 2, 3]) await redis.rpush(traceKey(lobbyId, desk), "{}");
+    await registry.leave(lobbyId, "c");
+
+    const next = { ...race, raceId: "0e7a3c1b-5d2f-4a6b-8c9d-1e2f3a4b5c6d", t0: race.t0 + 120_000 };
+    const desks = raced.slice(0, 2);
+    await registry.startRace(lobbyId, { race: next, endAt: next.t0 + 60_000, desks });
+
+    expect(await registry.room(lobbyId)).toMatchObject({
+      phase: "countdown",
+      race: next,
+      raceId: next.raceId,
+      endAt: next.t0 + 60_000,
+      desks,
+      endReason: null,
+    });
+    expect(await redis.hexists(roomKey(lobbyId), "endedAt")).toBe(0);
+    expect(
+      await redis.exists(
+        desksKey(lobbyId),
+        traceKey(lobbyId, 1),
+        traceKey(lobbyId, 2),
+        traceKey(lobbyId, 3),
+      ),
+    ).toBe(0);
+    for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(ENDED_GRACE_TTL_S);
   });
 });

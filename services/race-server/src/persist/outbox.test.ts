@@ -138,6 +138,31 @@ describe("outbox (C2)", () => {
     outbox.close();
   });
 
+  it("Race again (#143): a second race of the room gets its own entry; the first stays untouched", async () => {
+    const { clock, sent, outbox } = setup([false, true, true]);
+    const [first] = results(2);
+    const [second] = results(2);
+    await outbox.enqueue(first!.raceId, [first!]);
+    await until(() => sent.length === 1, 2_000, "first race sent, refused");
+    await outbox.enqueue(second!.raceId, [second!]);
+    await until(() => sent.length === 2, 2_000, "second race sent");
+    await settle();
+    expect(await pendingIn(second!.raceId)).toEqual({ length: 0, listed: false });
+    expect(await pendingIn(first!.raceId)).toEqual({ length: 1, listed: true });
+    expect(JSON.parse((await redis.lindex(outboxKey(first!.raceId), 0))!)).toEqual(first);
+
+    clock.advance(1_000);
+    await until(() => sent.length === 3, 2_000, "first race retried");
+    await settle();
+    expect(sent.map((s) => (s.entry as RaceResultsRequest).raceId)).toEqual([
+      first!.raceId,
+      second!.raceId,
+      first!.raceId,
+    ]);
+    expect(await pendingIn(first!.raceId)).toEqual({ length: 0, listed: false });
+    outbox.close();
+  });
+
   it("30 results are 2 chunks, sent in order, then removed", async () => {
     const { sent, outbox } = setup([true, true]);
     const chunks = results(30);

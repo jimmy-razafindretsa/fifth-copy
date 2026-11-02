@@ -294,7 +294,11 @@ describe("registry: the last human leaving closes a room with bots (ARCHITECTURE
       [1, false],
       [2, true],
     ]);
-    expect(await registry.leave(lobbyId, "host")).toEqual({ members: [], closed: true });
+    expect(await registry.leave(lobbyId, "host")).toEqual({
+      members: [],
+      closed: true,
+      kept: false,
+    });
     expect(await redis.exists(roomKey(lobbyId), membersKey(lobbyId))).toBe(0);
   });
 });

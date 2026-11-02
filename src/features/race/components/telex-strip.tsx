@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import type { TypedView } from "../view/typed-view";
+import { surfacePhase, type TypedView } from "../view/typed-view";
 import styles from "./telex-strip.module.css";
 import { TypingChars } from "./typing-chars";
 
@@ -80,7 +80,13 @@ export function TelexStrip({ view, labels }: { view: TypedView; labels: TelexLab
   }, [focus]);
 
   return (
-    <div role="group" aria-label={labels.strip} className={styles.strip} data-telex>
+    <div
+      role="group"
+      aria-label={labels.strip}
+      className={styles.strip}
+      data-telex
+      data-phase={surfacePhase(view)}
+    >
       <div ref={viewport} className={styles.viewport}>
         <span ref={tape} className={styles.tape} aria-hidden="true">
           <TypingChars chars={view.chars} last={view.cursor - 1} stamp={view.lastTypedAt} />

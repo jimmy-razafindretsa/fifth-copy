@@ -1,4 +1,4 @@
-import type { TypedView } from "../view/typed-view";
+import { surfacePhase, type TypedView } from "../view/typed-view";
 import styles from "./typed-sheet.module.css";
 import { TypingChars } from "./typing-chars";
 
@@ -11,7 +11,7 @@ import { TypingChars } from "./typing-chars";
 export function TypedSheet({ view }: { view: TypedView }) {
   const typed = view.chars.slice(0, view.cursor + 1);
   return (
-    <div className={styles.sheet} data-sheet aria-hidden="true">
+    <div className={styles.sheet} data-sheet data-phase={surfacePhase(view)} aria-hidden="true">
       <div className={styles.lines}>
         <p className={styles.copy}>
           <TypingChars chars={typed} last={view.cursor - 1} stamp={view.lastTypedAt} words />

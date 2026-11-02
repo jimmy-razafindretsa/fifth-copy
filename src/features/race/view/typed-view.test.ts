@@ -1,7 +1,13 @@
 import { applyKeystroke, initialState, type EngineSettings } from "@fifth-copy/engine";
 import { describe, expect, it } from "vitest";
 import { createPrediction } from "../client/prediction";
-import { type TypedView, typedViewFixtures, typedViewFrom } from "./typed-view";
+import {
+  NO_TEXT_VIEW,
+  surfacePhase,
+  type TypedView,
+  typedViewFixtures,
+  typedViewFrom,
+} from "./typed-view";
 
 // Contract of #558 C1: the TypedView shape and its static fixtures (no logic: #559 derives views).
 const NAMES = ["before-start", "racing", "continue-wrong", "block-jammed", "finished"] as const;
@@ -179,5 +185,16 @@ describe("typedViewFrom with the prediction's marks (#220 C1)", () => {
     const back = jammed.push({ t: 180, key: "Backspace" });
     expect(view(back)).toMatchObject({ cursor: 0, jammed: false, lastTypedAt: null });
     expect(view(back.push({ t: 220, key: "L" }))).toMatchObject({ cursor: 1, lastTypedAt: 220 });
+  });
+});
+
+describe("surfacePhase (#215)", () => {
+  it("reads before, racing and finished off the view", () => {
+    expect(surfacePhase(NO_TEXT_VIEW)).toBe("before");
+    expect(surfacePhase(typedViewFixtures["before-start"])).toBe("before");
+    expect(surfacePhase(typedViewFixtures.racing)).toBe("racing");
+    expect(surfacePhase(typedViewFixtures["continue-wrong"])).toBe("racing");
+    expect(surfacePhase(typedViewFixtures["block-jammed"])).toBe("racing");
+    expect(surfacePhase(typedViewFixtures.finished)).toBe("finished");
   });
 });

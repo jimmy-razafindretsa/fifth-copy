@@ -453,3 +453,125 @@ test.describe("lobby roll: BOT tag, non-host notice, kicker (#105)", () => {
     });
   }
 });
+
+// Contract of #498: the lobby layout (bible 14.3, 7.4, 7.1, 7.10): the read-only FORM 5-L settings
+// docket following the host's broadcast, the invite row's COPY, START under the settings docket.
+const settingsDocket = (page: Page) => page.getByRole("region", { name: "RACE SETTINGS" });
+const setting = (page: Page, label: string) =>
+  settingsDocket(page)
+    .locator("dt")
+    .filter({ hasText: new RegExp(`^${label}$`) })
+    .locator("+ dd");
+const copyButton = (page: Page) => page.getByRole("button", { name: /^COP(Y|IED)$/ });
+const noSideScroll = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+
+test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => {
+  test("C3 a second context's docket follows the host's settings broadcast", async ({
+    page,
+    browser,
+  }) => {
+    test.skip(test.info().project.name === "mobile", "phones hide the settings docket (C5)");
+    await recordRaceTokens(page);
+    const code = await createLobby(page);
+    const b = await joinAsGuest(browser, code);
+    await expect(setting(b.page, "ERROR MODE")).toHaveText("CONTINUE");
+    await expect(setting(b.page, "TIMER")).toHaveText("NO TIMER");
+    await expect(setting(b.page, "BACKSPACE")).toHaveText("ON");
+    await expect(setting(b.page, "WORDS")).toHaveText("50 WORDS");
+
+    await setHostSettings(page, { errorMode: "block", timerS: 300 });
+    await expect(setting(b.page, "ERROR MODE")).toHaveText("BLOCK", { timeout: scaled(2_000) });
+    await expect(setting(b.page, "TIMER")).toHaveText("5 MIN", { timeout: scaled(2_000) });
+    await expect(settingsDocket(b.page).locator("dt", { hasText: "BACKSPACE" })).toHaveCount(0);
+    // the host's own docket follows too
+    await expect(setting(page, "ERROR MODE")).toHaveText("BLOCK", { timeout: scaled(2_000) });
+    await b.context.close();
+  });
+
+  test("C4 COPY writes the room code to the clipboard and reads COPIED, then COPY", async ({
+    page,
+  }) => {
+    test.skip(test.info().project.name === "mobile", "phones hide the invite row (C5)");
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const code = await createLobby(page);
+    await expect(rows(page)).toHaveCount(1);
+    const button = copyButton(page);
+    await expect(button).toHaveText("COPY");
+    const box = await button.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    const ink = await button.evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { family: c.fontFamily, weight: c.fontWeight, size: c.fontSize, bg: c.backgroundColor };
+    });
+    expect(ink.family).toMatch(/Oswald/i);
+    expect(ink).toMatchObject({ weight: "600", size: "13px", bg: await role(page, "--color-fg") });
+
+    await button.click();
+    await expect(button).toHaveText("COPIED");
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(code);
+    // --motion-duration-slow x 3 (1.8 s), then back
+    await expect(button).toHaveText("COPY", { timeout: scaled(5_000) });
+  });
+
+  test("C4 without a clipboard API, COPY selects the room code", async ({ page }) => {
+    test.skip(test.info().project.name === "mobile", "phones hide the invite row (C5)");
+    await page.addInitScript(() =>
+      Object.defineProperty(Navigator.prototype, "clipboard", { get: () => undefined }),
+    );
+    const code = await createLobby(page);
+    await expect(rows(page)).toHaveCount(1);
+    await copyButton(page).click();
+    await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(code);
+    await expect(copyButton(page)).toHaveText("COPY");
+  });
+
+  test("C4 under reduced motion COPIED stays until the button blurs", async ({ page }) => {
+    test.skip(test.info().project.name === "mobile", "phones hide the invite row (C5)");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await createLobby(page);
+    await expect(rows(page)).toHaveCount(1);
+    const button = copyButton(page);
+    await button.click();
+    await expect(button).toHaveText("COPIED");
+    // past the 1.8 s hold of full motion: the 0 ms token never flashes it back
+    await page.waitForTimeout(2_200);
+    await expect(button).toHaveText("COPIED");
+    await button.blur();
+    await expect(button).toHaveText("COPY");
+  });
+
+  test("C5 C6 the layout per width; START under the settings docket, unchanged", async ({
+    page,
+  }) => {
+    await createLobby(page);
+    await expect(rows(page)).toHaveCount(1);
+    const start = startButton(page);
+    await expect(start).toBeDisabled();
+    await expect(page.getByText("TWO TYPISTS NEEDED", { exact: true })).toBeVisible();
+    await expect(roomCode(page)).toBeVisible();
+    const rollBox = (await roll(page).boundingBox())!;
+    const startBox = (await start.boundingBox())!;
+
+    if (test.info().project.name === "mobile") {
+      // phones watch (bible 18): the room docket, the roll and START only, START last
+      await expect(settingsDocket(page)).toBeHidden();
+      await expect(copyButton(page)).toBeHidden();
+      expect(startBox.y).toBeGreaterThan(rollBox.y + rollBox.height);
+    } else {
+      // two columns at 768 and from 1024: the dockets column beside the roll, START under the settings
+      await expect(settingsDocket(page)).toBeVisible();
+      await expect(copyButton(page)).toBeVisible();
+      const settingsBox = (await settingsDocket(page).boundingBox())!;
+      const docketBox = (await roomCode(page).locator("..").boundingBox())!;
+      expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(rollBox.x);
+      // the column's first docket and the roll start on the same line
+      expect(Math.abs(docketBox.y - rollBox.y)).toBeLessThanOrEqual(2);
+      expect(settingsBox.y).toBeGreaterThanOrEqual(docketBox.y + docketBox.height);
+      expect(startBox.y).toBeGreaterThanOrEqual(settingsBox.y + settingsBox.height);
+      expect(Math.abs(startBox.x - settingsBox.x)).toBeLessThanOrEqual(2);
+    }
+    expect(await noSideScroll(page)).toBeLessThanOrEqual(0);
+  });
+});

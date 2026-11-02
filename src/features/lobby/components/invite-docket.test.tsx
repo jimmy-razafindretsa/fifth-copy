@@ -57,7 +57,7 @@ describe("InviteRow view", () => {
     );
     expect(html).toContain(">INVITE</dt>");
     expect(html).toMatch(/<button type="button" class="[^"]*ink[^"]*"[^>]*>COPY<\/button>/);
-    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('role="status"');
   });
 
   it("copied: the button reads COPIED and the live region says so", () => {

@@ -47,7 +47,7 @@ function selectText(id: string) {
   if (node && selection) selection.selectAllChildren(node);
 }
 
-/** The invite row (no hooks, so every state renders in tests): `INVITE | COPY`, a polite status. */
+/** The invite row (no hooks, so every state renders in tests): `INVITE | COPY`, a polite status (role). */
 export function InviteRow({
   status,
   labels,
@@ -66,7 +66,7 @@ export function InviteRow({
         <button type="button" className={styles.ink} onClick={onCopy} onBlur={onBlur}>
           {status === "copied" ? labels.copied : labels.copy}
         </button>
-        <span aria-live="polite" className={styles.srOnly}>
+        <span role="status" className={styles.srOnly}>
           {status === "copied"
             ? labels.copiedStatus
             : status === "selected"

@@ -50,6 +50,8 @@ export type ReportRace = {
   endedAt: Date | null;
   endReason: ReportEndReason | null;
   lobbyCode: string | null;
+  /** The race's lobby is still `WAITING` (open, #143): the report offers `RACE AGAIN` to its members. */
+  lobbyOpen: boolean;
 };
 
 /**

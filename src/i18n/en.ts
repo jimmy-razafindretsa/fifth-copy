@@ -377,6 +377,10 @@ export const en = {
       lobby: "BACK TO THE WAITING ROOM →",
       home: "BACK TO THE FRONT DESK →",
     },
+    /** The action row under the ranking (#143, bible 14.4): the same lobby races again. */
+    actions: {
+      again: "RACE AGAIN",
+    },
     podium: {
       title: "Podium",
       place: "№ {n}",

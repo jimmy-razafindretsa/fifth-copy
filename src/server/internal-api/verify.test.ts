@@ -222,7 +222,10 @@ describe("requireInternal replay store (#716)", () => {
       signed(body, Number(timestamp) - 301),
       signed(body, Number(timestamp) + 301),
       request(body, { ...vectorHeaders, [INTERNAL_HEADERS.timestamp]: "1e9" }),
-      request(body, { [INTERNAL_HEADERS.timestamp]: timestamp, [INTERNAL_HEADERS.signature]: signature }),
+      request(body, {
+        [INTERNAL_HEADERS.timestamp]: timestamp,
+        [INTERNAL_HEADERS.signature]: signature,
+      }),
       request(body, { ...vectorHeaders, [INTERNAL_HEADERS.nonce]: nonce.toUpperCase() }),
       request(body, { ...vectorHeaders, [INTERNAL_HEADERS.signature]: "0".repeat(64) }),
       request(body.replace('"wordCount":50', '"wordCount":51'), vectorHeaders),

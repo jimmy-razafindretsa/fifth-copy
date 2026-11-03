@@ -119,8 +119,7 @@ export async function requireInternal(
 /** The response to a refusal: the protocol error body, or a bare 503 when the nonce store is unavailable. */
 export function internalRefusalResponse(refusal: InternalRefusal): Response {
   if (refusal.status === 503) return new Response(null, { status: 503 });
-  return Response.json(
-    { v: PROTOCOL_VERSION, error: refusal.error } satisfies InternalError,
-    { status: refusal.status },
-  );
+  return Response.json({ v: PROTOCOL_VERSION, error: refusal.error } satisfies InternalError, {
+    status: refusal.status,
+  });
 }

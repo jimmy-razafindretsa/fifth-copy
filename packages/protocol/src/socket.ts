@@ -118,12 +118,16 @@ export const hostSettingsSchema = z.object({
 });
 export type HostSettings = z.infer<typeof hostSettingsSchema>;
 
-/** Acknowledgement of `host:settings`: the settings after the change, or why nothing changed. */
+/**
+ * Acknowledgement of `host:settings`: the settings after the change, or why nothing changed.
+ * `rate-limited` is answered by the race server's guard when the call is over the identity's
+ * budget (#750), so the host's form shows it at once instead of waiting out its timeout.
+ */
 export const hostSettingsAckSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), settings: raceSettingsSchema }),
   z.object({
     ok: z.literal(false),
-    error: z.enum(["not-host", "not-waiting", "invalid", "no-room"]),
+    error: z.enum(["not-host", "not-waiting", "invalid", "no-room", "rate-limited"]),
   }),
 ]);
 export type HostSettingsAck = z.infer<typeof hostSettingsAckSchema>;

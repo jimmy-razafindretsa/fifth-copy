@@ -4,7 +4,11 @@
 // belong to the token's identity, not to a socket: counting goes through the shared Redis limiter
 // (`@fifth-copy/limiter`); the socket cap and the refusal count that disconnects a flooding identity
 // are process-local (its sockets live on this process).
-import { PROTOCOL_VERSION, type ClientToServerEvents } from "@fifth-copy/protocol";
+import {
+  PROTOCOL_VERSION,
+  type ClientToServerEvents,
+  type HostSettingsAck,
+} from "@fifth-copy/protocol";
 import type { Limiter, LimitRule } from "@fifth-copy/limiter";
 import type { Clock } from "../clock";
 
@@ -17,16 +21,27 @@ export const RACE_LIMITER_PREFIX = "race";
 /**
  * One bucket per client event and identity (all of its sockets). `keys`: 25 batches a second (a client batches <= 50 ms of
  * keys, so 20 a second, plus slack; each batch holds at most `MAX_KEYS_PER_BATCH` keys, bounded by
- * the protocol schema). `ping`: 2 a second (clock sync, #172). Host and race actions: 5 per 10 s.
+ * the protocol schema). `ping`: 2 a second (clock sync, #172). Host and race actions: 5 per 10 s,
+ * except `host:settings`: 30 per 10 s (#750), since the host settings form sends one patch per
+ * control (13 controls, up to 2 per bot row) with one patch in flight, and its budget is shared
+ * with the e2e helper `setHostSettings`; a flood past it is still refused and cut.
  */
 export const SOCKET_LIMITS = {
   keys: { max: 25, windowMs: 1_000 },
   ping: { max: 2, windowMs: 1_000 },
   "host:start": { max: 5, windowMs: 10_000 },
-  "host:settings": { max: 5, windowMs: 10_000 },
+  "host:settings": { max: 30, windowMs: 10_000 },
   abandon: { max: 5, windowMs: 10_000 },
   "bonus:play": { max: 5, windowMs: 10_000 },
 } as const satisfies Record<keyof ClientToServerEvents, LimitRule>;
+
+/**
+ * Budget refusals answered through the event's own ack instead of `rejected`, so the client shows
+ * them at once (#750). They still count toward `REFUSALS_TO_DISCONNECT`.
+ */
+const BUDGET_REFUSAL_ACKS: Partial<Record<keyof ClientToServerEvents, HostSettingsAck>> = {
+  "host:settings": { ok: false, error: "rate-limited" },
+};
 
 /** Any client message larger than this (JSON bytes, estimated without serialising) is refused. */
 export const MAX_PAYLOAD_BYTES = 4 * 1024;
@@ -127,7 +142,8 @@ const SWEEP_AT = 256;
  * event is checked in order: socket already being cut -> dropped locally; payload over
  * `MAX_PAYLOAD_BYTES` -> refused before any parsing; local count of the event's window already at
  * `max` -> refused without a Redis call; else the shared Redis bucket decides. A refused message
- * is dropped and answered with `rejected { reason: "rate-limit" }`; the `REFUSALS_TO_DISCONNECT`th
+ * is dropped and answered with `rejected { reason: "rate-limit" }`, except a budget refusal of an
+ * event listed in `BUDGET_REFUSAL_ACKS` sent with an ack, answered by that ack; the `REFUSALS_TO_DISCONNECT`th
  * refusal of the identity within `REFUSAL_WINDOW_MS` disconnects all of its sockets with one log
  * line (socket id, lobby, count; never the payload). Fails closed: when Redis cannot answer, the
  * message is dropped (logged once per socket) without counting as a refusal. Unknown event names
@@ -184,9 +200,11 @@ export function createSocketGuard(deps: RateLimitDeps): SocketGuard {
 
       let unavailableLogged = false;
 
-      const refuse = () => {
+      /** `answer`: the message's ack, called instead of `rejected` (a budget refusal, #750). */
+      const refuse = (answer?: () => void) => {
         if (state.cut || socket.disconnected) return;
-        reject(socket);
+        if (answer) answer();
+        else reject(socket);
         const at = deps.clock.now();
         self.refusals.push(at);
         prune(self.refusals, REFUSAL_WINDOW_MS, at);
@@ -211,12 +229,16 @@ export function createSocketGuard(deps: RateLimitDeps): SocketGuard {
         // Own keys only: an event named `constructor` or `__proto__` is no bucket.
         if (typeof event !== "string" || !Object.hasOwn(SOCKET_LIMITS, event)) return next();
         const rule: LimitRule = SOCKET_LIMITS[event as keyof typeof SOCKET_LIMITS];
+        const ackRefusal = BUDGET_REFUSAL_ACKS[event as keyof ClientToServerEvents];
+        const ack = args.at(-1);
+        const answer =
+          ackRefusal && typeof ack === "function" ? () => void ack(ackRefusal) : undefined;
         const at = deps.clock.now();
         let times = self.admitted.get(event);
         if (!times) self.admitted.set(event, (times = []));
         prune(times, rule.windowMs, at);
         // Already `max` calls of this identity in the window here: Redis would refuse as well.
-        if (times.length >= rule.max) return refuse();
+        if (times.length >= rule.max) return refuse(answer);
         times.push(at);
         const forget = () => {
           const i = times.indexOf(at);
@@ -232,7 +254,7 @@ export function createSocketGuard(deps: RateLimitDeps): SocketGuard {
             if (!verdict.ok) forget();
             // A message admitted before the cut still reaches its handler; the socket closes after.
             if (verdict.ok && !socket.disconnected) next();
-            else if (!verdict.ok) refuse();
+            else if (!verdict.ok) refuse(answer);
             settled();
           },
           () => {

@@ -593,7 +593,7 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
 
 // Contract of #110: the host's settings form in the FORM 5-L rows (bible 14.3 "Host settings form",
 // 7.1 segmented toggle, 7.2 inputs, 7.4 inline error line), over the real `host:settings` path. Each test
-// stays under the 5 per 10 s `host:settings` budget of the host's token.
+// stays under the 30 per 10 s `host:settings` budget of the host's token (#750).
 test.describe("host settings form (#110)", () => {
   test.skip(
     ({ viewport }) => (viewport?.width ?? 0) <= 480,

@@ -221,9 +221,11 @@ describe("host:settings over the budget (#750 C2)", () => {
     const { host, seenPlayer } = await room();
     const max = SOCKET_LIMITS["host:settings"].max;
     for (let i = 0; i < max; i++) {
-      expect(await send(host, { v: PROTOCOL_VERSION, patch: { wordCount: 10 + i } })).toMatchObject({
-        ok: true,
-      });
+      expect(await send(host, { v: PROTOCOL_VERSION, patch: { wordCount: 10 + i } })).toMatchObject(
+        {
+          ok: true,
+        },
+      );
     }
     await until(() => seenPlayer.settings.length === max, 2_000, "every change broadcast");
     const started = Date.now();

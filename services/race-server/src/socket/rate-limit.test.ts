@@ -465,7 +465,9 @@ describe("host:settings budget sized for the host settings form (#750)", () => {
   }
   const patchAt = (i: number) => ({ v: PROTOCOL_VERSION, patch: { wordCount: 10 + i } });
   const ask = (client: Client, payload: unknown) =>
-    client.timeout(2_000).emitWithAck("host:settings", payload as never) as Promise<HostSettingsAck>;
+    client
+      .timeout(2_000)
+      .emitWithAck("host:settings", payload as never) as Promise<HostSettingsAck>;
 
   it("C1: a host editing 13 controls in a row within one window gets every change, socket kept (real Redis)", async () => {
     const { host, seen } = await hostRoom();
@@ -504,7 +506,8 @@ describe("host:settings budget sized for the host settings form (#750)", () => {
     const { socket, emitted, passed, send } = fakeSocket();
     guardOf(limit).admit(socket, ID);
     const max = SOCKET_LIMITS["host:settings"].max;
-    for (let i = 0; i < max; i++) send("host:settings", { v: PROTOCOL_VERSION, patch: {} }, () => {});
+    for (let i = 0; i < max; i++)
+      send("host:settings", { v: PROTOCOL_VERSION, patch: {} }, () => {});
     await settle();
     expect(passed).toHaveLength(max);
     const acks: unknown[] = [];

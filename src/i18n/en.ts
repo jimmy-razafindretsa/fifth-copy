@@ -496,9 +496,9 @@ export const en = {
       underReview: "UNDER REVIEW",
       medal: "HERO OF PAPERWORK",
       medalTitle: {
-        gold: "The gold medal, in 3D, drag to spin",
-        silver: "The silver medal, in 3D, drag to spin",
-        bronze: "The bronze medal, in 3D, drag to spin",
+        gold: "A clerk, in 3D, wearing the gold medal",
+        silver: "A clerk, in 3D, wearing the silver medal",
+        bronze: "A clerk, in 3D, wearing the bronze medal",
       },
     },
     ranking: {

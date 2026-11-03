@@ -163,8 +163,16 @@ test.describe("Dawn report podium (#300)", () => {
     // desk 12 saved nothing: its desk's outfit, the bronze medal
     await expect(clerkDoc(page, 3)).toHaveAttribute("data-variant", "bronze");
     await expect(clerkDoc(page, 3)).toHaveAttribute("data-hat", outfitForDesk(12).hat);
-    // the frames keep the catalog titles (no new strings)
-    await expect(plinth(page, 1).locator("iframe")).toHaveAttribute("title", /gold medal/i);
+    // the frames carry the catalog titles: the clerk and the medal of the place, no drag (#714 C2)
+    for (const [n, medal] of [
+      [1, "gold"],
+      [2, "silver"],
+      [3, "bronze"],
+    ] as const) {
+      const title = plinth(page, n).locator("iframe");
+      await expect(title).toHaveAttribute("title", new RegExp(`clerk.*${medal} medal`, "i"));
+      await expect(title).not.toHaveAttribute("title", /drag|spin/i);
+    }
     await expect(clerkDoc(page, 1)).toHaveAttribute("data-motion", "full");
   });
 

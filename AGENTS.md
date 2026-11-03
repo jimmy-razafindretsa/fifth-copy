@@ -35,6 +35,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Board playbook (read before touching the board): `agents/BOARD.md`
 - Build a whole board from requirements: workflow `build-board` (see agents/BOARD.md)
 - Board operations: `npx tsx scripts/board.ts <op> ...` (see agents/PROTOCOL.md section 11)
+- GraphQL blocked (cloud session): dispatch the Board workflow `.github/workflows/board.yml`, see `agents/BOARD.md` "Board from a cloud session"
 - DB guard (run before any DB command): `scripts/db-guard.sh`
 - local DB up: `npm run db:up` · test DB prepare: `scripts/test-db.sh`
 - visual baselines (pinned image, needs `visual-change` label): `scripts/visual-baselines.sh [--check]`

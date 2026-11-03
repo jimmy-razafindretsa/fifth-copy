@@ -37,7 +37,8 @@ Estimate (1, 2, 3; never above 3, split instead) and priority (Urgent, High, Med
 ## Which tool to use
 1. `npx tsx scripts/board.ts <op>` (default). It talks to GitHub through `gh api graphql` with the user's `gh` login (scopes `repo`, `project`), re-reads after every write, refuses `plan-approved`, and supports `--dry-run`.
 2. Raw `gh` / `gh api graphql` with the calls below, only for something board.ts does not cover.
-3. `gh auth status` fails or GitHub is unreachable: stop and report.
+3. GraphQL blocked (Claude Code cloud sessions: the GitHub proxy rejects `gh api graphql`): dispatch the Board workflow, see "Board from a cloud session" below.
+4. `gh auth status` fails or GitHub is unreachable, or the workflow cannot be dispatched: stop and report.
 
 ### Operation -> call
 | Kit op | board.ts | Raw equivalent |
@@ -81,6 +82,17 @@ New issues get no Status automatically (the "Item added to project" workflow is 
 
 After **every write**, re-read (`board.ts get <n>`) and confirm the status, labels and relationships you intended. If they differ, stop and report; do not retry blindly.
 Write comments and bodies as Markdown files (`--body-file`). GitHub turns `#n` into issue links and `@name` into mentions: use `#n` only for real cards, never `@` anyone, and put commands and paths in backticks.
+
+### Board from a cloud session
+`.github/workflows/board.yml` (workflow "Board", `workflow_dispatch`) runs `npx tsx scripts/board.ts <op> <args>` on a GitHub runner, for sessions whose proxy blocks GraphQL (Projects v2 has no REST route).
+- **Secret**: `BOARD_TOKEN`, a classic PAT with scopes `repo` and `project` (the Actions `GITHUB_TOKEN` cannot reach a user-owned Project). It lives in the `board` environment whose deployment branches are limited to `main`, never as a repo secret, so only runs of `main` get it. Missing secret: the run exits 2 with a message.
+- **Who may dispatch**: anyone with write access to the repo (team sessions; the REST dispatch call needs it). Always dispatch `ref=main`.
+- **Public**: the repo is public, so the inputs (`op`, `args`, `body`) and the output are visible to anyone in the run log, job summary and artifact. Nothing posted this way (HANDOFF, BRIEF, any comment or body) may carry secrets, personal data or an unfixed security finding (PROTOCOL 10).
+- **Calls** (REST, all allowed through the proxy):
+  1. `gh api -X POST repos/<owner>/<repo>/actions/workflows/board.yml/dispatches -f ref=main -f "inputs[op]=get" -f 'inputs[args]=["12","--comments","5"]' -f "inputs[body]=$(cat body.md)" -f "inputs[request_id]=<unique id>"`; for `comment` pass `'["12","--body-file","@BODY@"]'`.
+  2. Find the run: `gh api "repos/<owner>/<repo>/actions/workflows/board.yml/runs?per_page=10"`, keep the one whose `display_title` ends with your `request_id`; poll `actions/runs/<id>` until `status` is `completed`.
+  3. Read the result from the artifact `board-<request_id>` (`actions/runs/<id>/artifacts`, then `actions/artifacts/<aid>/zip`: `output.txt`, `exit-code.txt`) or the job summary.
+- Read ops (`get`, `next`, `list_ready`, `locks`, `hash`, `dag_check`) run in parallel; writes share one concurrency group and run one at a time (about a minute each). Verify after every write as above: dispatch a `get`.
 
 ## Who touches what (restates PROTOCOL 5 and 10)
 - **Picker** is the only role that changes Status or closes/reopens issues. Everyone else changes only labels and comments (and creates `discovered` cards in Backlog).

@@ -147,9 +147,10 @@ module.exports = {
     },
     {
       name: "web-redis-only-in-limiter",
-      comment: "In the web app only the limiter adapter talks to Redis (ADR 0020).",
+      comment:
+        "In the web app only the client factory (src/server/redis.ts) and the limiter adapter import ioredis (ADR 0020, #716).",
       severity: "error",
-      from: { path: "^src/", pathNot: "^src/server/limiter/" },
+      from: { path: "^src/", pathNot: "^src/server/(limiter/|redis\\.ts$)" },
       to: { path: "node_modules/ioredis/" },
     },
     {

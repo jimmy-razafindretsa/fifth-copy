@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { Redis } from "ioredis";
+import type { Redis } from "ioredis";
 import { createLimiter, type LimitRule } from "@fifth-copy/limiter";
+import { createRedisClient } from "../redis";
 
 // The web app's side of the shared limiter (ADR 0020): one table of actions, one lazy Redis client,
 // fail open. Pure of `env`: `index.ts` wires it to `env.REDIS_URL`; tests build their own.
@@ -121,13 +122,8 @@ export function createWebLimit({
   };
   const client = () => {
     if (!limiter) {
-      redis = new Redis(url, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 1_000,
-        retryStrategy: (attempt) => Math.min(attempt * 500, 5_000),
-      });
       // Reconnect errors are reported through `failOpen` by the calls; never with the URL.
-      redis.on("error", () => {});
+      redis = createRedisClient(url);
       limiter = createLimiter(redis, { prefix: WEB_LIMITER_PREFIX });
     }
     return limiter;

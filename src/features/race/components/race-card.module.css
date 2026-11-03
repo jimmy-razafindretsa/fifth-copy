@@ -67,7 +67,8 @@
     0 0 / 6px 6px;
 }
 
-/* lanes: 7.4 rows, `120px | 1fr` with dashed separators */
+/* lanes: 7.4 rows, `84px | 1fr` with dashed separators (bible 7.4a, #758: the rank and `DESK 07` fit in
+   84px, so a 10-character name keeps its digits next to the longest label in the 320px card) */
 .lanes {
   list-style: none;
   margin: 0;
@@ -76,20 +77,14 @@
 
 .lane {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 84px minmax(0, 1fr);
   align-items: center;
-  gap: 0 12px;
-  padding: 6px 12px;
+  gap: 0 8px;
+  padding: 6px 10px;
 }
 
 .lane + .lane {
   border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
-}
-
-[data-compact="true"] .lane {
-  grid-template-columns: 84px minmax(0, 1fr);
-  gap: 0 8px;
-  padding: 6px 10px;
 }
 
 /* identity inks (#565, bible 3.1): rival inks appear only on race-card markers, placards and scarves */

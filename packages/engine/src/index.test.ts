@@ -51,6 +51,7 @@ describe("@fifth-copy/engine", () => {
     "botProfile",
     "nextBotKeystroke",
     "BOT_NAMES",
+    "RARE_LETTERS",
   ])("re-exports %s", (name) => {
     expect(engine).toHaveProperty(name);
   });

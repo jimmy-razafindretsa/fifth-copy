@@ -83,13 +83,14 @@ export {
 } from "./bonus/ledger";
 
 // bots: the bot typing model (#361) and bilingual desk names; the race server driver (#366) calls
-// only `botProfile` and `nextBotKeystroke`
+// only `botProfile` and `nextBotKeystroke`; `RARE_LETTERS` is the one rare-letter list (#351 difficulty)
 export {
   BOT_LEVEL_WPM,
   BOT_LEVELS,
   BOT_NAMES,
   botProfile,
   nextBotKeystroke,
+  RARE_LETTERS,
   type BotAction,
   type BotContext,
   type BotLanguage,

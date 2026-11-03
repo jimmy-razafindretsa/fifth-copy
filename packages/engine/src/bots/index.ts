@@ -2,6 +2,7 @@
 export { nextBotKeystroke } from "./next";
 export { BOT_NAMES } from "./names";
 export { BOT_LEVEL_WPM, botProfile } from "./profile";
+export { RARE_LETTERS } from "./pace";
 export {
   BOT_LEVELS,
   type BotAction,

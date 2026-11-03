@@ -6,8 +6,11 @@ import type { BotLanguage } from "./types";
  * mean. Common short words go in a burst, long words and words with a rare letter slow it down.
  */
 
-/** Letters rare enough on the keyboard of each language to slow a typist (C3). */
-const RARE: Readonly<Record<BotLanguage | "any", ReadonlySet<string>>> = {
+/**
+ * Letters rare enough on the keyboard of each language to slow a typist (C3). The one rare-letter list
+ * (ADR 0007): the text generator's difficulty (#351) reads it through the engine index.
+ */
+export const RARE_LETTERS: Readonly<Record<BotLanguage | "any", ReadonlySet<string>>> = {
   fr: new Set([..."kwxyz"]),
   en: new Set([..."jqxz"]),
   any: new Set([..."jkqwxyz"]),
@@ -39,7 +42,7 @@ function wordAt(chars: readonly string[], i: number): string {
 /** The pace class of a word: `fast` (common), `slow` (long or with a rare letter) or `neutral`. */
 export function wordClass(word: string, language?: BotLanguage): "fast" | "neutral" | "slow" {
   if (word === "") return "neutral";
-  const rare = RARE[language ?? "any"];
+  const rare = RARE_LETTERS[language ?? "any"];
   const letters = [...word.toLowerCase()];
   if (letters.length >= LONG_WORD || letters.some((c) => rare.has(c))) return "slow";
   return letters.length <= SHORT_WORD ? "fast" : "neutral";

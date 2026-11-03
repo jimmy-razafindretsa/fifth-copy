@@ -2,6 +2,7 @@ import { io as realIo } from "socket.io-client";
 import {
   clientAcks,
   keysSchema,
+  pingSchema,
   PROTOCOL_VERSION,
   rejectReasonSchema,
   serverEvents,
@@ -65,6 +66,13 @@ export interface RoomSocket {
   onEnded(cb: (payload: RoomEvents["ended"]) => void): Off;
   /** The server refused a `keys`, `abandon` or `bonus:play` (those carry no ack). */
   onRejected(cb: (payload: RoomEvents["rejected"]) => void): Off;
+  /**
+   * Clock sync (#643, ARCHITECTURE 7.3): emits `ping { v, sent }`, `sent` = this device's clock
+   * (`Date.now()` unless the caller passes its own); the server answers the sender with `pong`.
+   */
+  sendPing(sent?: number): void;
+  /** The server's answer to a `ping`: `sent` echoed, plus its clock (`serverNow`). */
+  onPong(cb: (payload: RoomEvents["pong"]) => void): Off;
   onProtocolError(cb: (error: ProtocolError) => void): Off;
   onConnectError(cb: (reason: ConnectErrorReason) => void): Off;
   onReconnecting(cb: (attempt: number) => void): Off;
@@ -206,6 +214,12 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     onEvent: (cb) => on("event", cb),
     onEnded: (cb) => on("ended", cb),
     onRejected: (cb) => on("rejected", cb),
+    sendPing: (sent = Date.now()) => {
+      const ping = pingSchema.safeParse({ v: PROTOCOL_VERSION, sent });
+      if (ping.success) socket.emit("ping", ping.data);
+      else console.warn("[race] dropped an invalid ping", ping.error.issues.length);
+    },
+    onPong: (cb) => on("pong", cb),
     onProtocolError: (cb) => {
       // a wrapper per call, so the same callback registered twice is removed once per off
       const fn = (error: ProtocolError) => cb(error);

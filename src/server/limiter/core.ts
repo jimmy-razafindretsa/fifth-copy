@@ -66,8 +66,9 @@ export type LimitVerdict = { ok: boolean; retryAfterMs: number };
 export type WebLimit = ((action: LimitAction, subject: string) => Promise<LimitVerdict>) & {
   /**
    * One attempt of `subject` at room code `code` (`null`: unparsable) for `action`. A code new to
-   * the subject in the window spends one `lobby-codes` call first (a refused one is not admitted,
-   * so retrying it is refused again); `null` spends one on every call. Then the call counts
+   * the subject in the window spends one `lobby-codes` call first, atomically with its admission
+   * (a refused one is not admitted, so retrying it is refused again; concurrent first calls spend
+   * once, #701); `null` spends one on every call. Then the call counts
    * against `action` per (subject, code). Fails open like `limit`.
    */
   code(action: CodeAction, subject: string, code: string | null): Promise<LimitVerdict>;
@@ -178,16 +179,16 @@ export function createWebLimit({
   ): Promise<LimitVerdict> => {
     if (roomCode === null) return limit("lobby-codes", subject);
     const pair = subjectKey(`${subject}:${roomCode}`);
-    const window = LIMITS["lobby-codes"].windowMs;
-    const admittedKey = `${CODE_ADMITTED}:${pair}`;
-    const admitted = await guarded(() => client().count(admittedKey, window));
-    if (admitted === undefined) return ALLOW;
-    if (admitted === 0) {
-      const budget = await count(`lobby-codes:${subjectKey(subject)}`, LIMITS["lobby-codes"]);
-      if (!budget) return ALLOW;
-      if (!budget.ok) return budget;
-      if (!(await count(admittedKey, { max: 1, windowMs: window }))) return ALLOW;
-    }
+    // One atomic call (#701): concurrent first calls of one pair spend the budget once.
+    const budget = await guarded(() =>
+      client().admit(
+        `lobby-codes:${subjectKey(subject)}`,
+        `${CODE_ADMITTED}:${pair}`,
+        LIMITS["lobby-codes"],
+      ),
+    );
+    if (!budget) return ALLOW;
+    if (!budget.ok) return { ok: false, retryAfterMs: budget.retryAfterMs };
     return (await count(`${action}:${pair}`, LIMITS[action])) ?? ALLOW;
   };
 

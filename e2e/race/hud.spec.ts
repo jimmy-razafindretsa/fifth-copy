@@ -244,6 +244,62 @@ test.describe("#560 race HUD on /design", () => {
   }
 });
 
+test.describe("#697 race card lanes: name, YOU tag and status share one row", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C2 a 24-character FILED lane and a short LINE CUT lane keep the chip on the name row (${scheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await open(page);
+      for (const width of [1280, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        const card = state(page, "card-six-statuses");
+        const box = async (lane: Locator) =>
+          lane.evaluate((el) => {
+            const r = (n: Element | null) => {
+              const b = n!.getBoundingClientRect();
+              return { top: b.top, left: b.left, right: b.right, height: b.height };
+            };
+            // the lane's box without its dashed separator (`.lane + .lane` border-top, the first lane has none)
+            const lane = r(el);
+            lane.height -= parseFloat(getComputedStyle(el).borderTopWidth);
+            return {
+              lane,
+              name: r(el.querySelector("[data-name]")),
+              chip: r(el.querySelector("[data-status-label]")),
+              name24: el.querySelector("[data-name]")!.textContent!.length,
+            };
+          });
+        const filed = await box(card.locator('[data-lane][data-status="finished"]'));
+        const cut = await box(card.locator('[data-lane][data-status="line-cut"]'));
+        expect(filed.name24, `${width}`).toBe(24);
+        for (const lane of [filed, cut]) {
+          expect(
+            Math.abs(lane.chip.top - lane.name.top),
+            `${width} chip on the name row`,
+          ).toBeLessThanOrEqual(2);
+          expect(lane.name.left).toBeGreaterThanOrEqual(lane.lane.left);
+          expect(lane.name.right, `${width} name inside the lane`).toBeLessThanOrEqual(
+            lane.chip.left,
+          );
+          expect(lane.chip.right).toBeLessThanOrEqual(lane.lane.right);
+        }
+        expect(
+          Math.abs(filed.lane.height - cut.lane.height),
+          `${width} equal lane heights`,
+        ).toBeLessThanOrEqual(0.5);
+        // your lane: the YOU tag sits on the name row too
+        const you = card.locator('[data-lane][data-you="true"]');
+        const [nameTop, tagTop] = await Promise.all([
+          you.locator("[data-name]").evaluate((el) => el.getBoundingClientRect().top),
+          you.getByText("YOU", { exact: true }).evaluate((el) => el.getBoundingClientRect().top),
+        ]);
+        expect(Math.abs(tagTop - nameTop), `${width} YOU on the name row`).toBeLessThanOrEqual(2);
+      }
+    });
+  }
+});
+
 test.describe("#565 rival inks on /design#race-hud", () => {
   for (const scheme of ["light", "dark"] as const) {
     test(`C5 the twelve inks in four shapes, you red, each its own theme value (${scheme})`, async ({

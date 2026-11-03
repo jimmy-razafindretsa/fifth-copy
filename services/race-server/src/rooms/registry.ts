@@ -77,7 +77,7 @@ export type Rehydrated = { kept: string[]; voided: string[]; gone: string[] };
 /**
  * `in-progress`: a user who is not already a member while a race is on (`countdown`, `running`; #166).
  * `bot-id`: a user id in the bots' reserved `bot:` space (#156; web user ids are cuids).
- * `room-full`: a user who is not a member while `ROOM_SEATS` typists are already seated (#732).
+ * `room-full`: a user who is not a member while `ROOM_SEATS` desks (typists and bots) are seated (#732).
  */
 export type JoinResult =
   | { ok: true; desk: number; members: Member[]; room: Room }
@@ -91,15 +91,29 @@ export type JoinResult =
  */
 export type LeaveResult = { members: Member[]; closed: boolean; kept: boolean };
 
-/** Desks in a room's ring (spec: thirty desks, one for the host; `MAX_BOTS` is the rest). */
+/**
+ * Desks in a room (spec 5.2, owner decision 2026-11-03: 30 desks, humans and bots together; one is
+ * the host's, so `MAX_BOTS` is the rest).
+ */
 export const ROOM_SEATS = MAX_BOTS + 1;
 
 /**
- * Whether a user who is not yet a member finds every desk taken (#732): `ROOM_SEATS` typists (bots
- * aside, they have their own cap) are seated. A member (a second tab) is never refused by it.
+ * Whether a user who is not yet a member finds every desk taken (#732): `ROOM_SEATS` desks are
+ * seated, typists and bots alike. A member (a second tab) is never refused by it.
  */
-export function seatsFull(members: Pick<Member, "isBot">[], isMember: boolean): boolean {
-  return !isMember && members.filter((m) => !m.isBot).length >= ROOM_SEATS;
+export function seatsFull(members: readonly unknown[], isMember: boolean): boolean {
+  return !isMember && members.length >= ROOM_SEATS;
+}
+
+/**
+ * Whether a bots list would seat more desks than the room has (#732): the typists seated plus the
+ * bots. A list that does not add bots is never refused, so a host can always remove one.
+ */
+function botsOverflow(seats: Map<string, Seat>, bots: readonly unknown[]): boolean {
+  const seated = [...seats.values()];
+  const typists = seated.filter((seat) => !seat.isBot).length;
+  const current = seated.length - typists;
+  return bots.length > current && typists + bots.length > ROOM_SEATS;
 }
 
 /**
@@ -467,8 +481,9 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         if (!mayRejoin({ phase }, seats.has(userId))) {
           return { ok: false, reason: "in-progress" };
         }
-        const seated = [...seats.values()].map((seat) => ({ isBot: seat.isBot ?? false }));
-        if (seatsFull(seated, seats.has(userId))) return { ok: false, reason: "room-full" };
+        if (seatsFull([...seats.values()], seats.has(userId))) {
+          return { ok: false, reason: "room-full" };
+        }
         const taken = [...seats.values()].map((s) => s.desk);
         // A racer coming back after the end gets the desk it raced at when it is still free; a
         // newcomer in `ended` (#732) skips the last race's desks, so it never takes a racer's.
@@ -538,6 +553,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         if (!parsed.success) return { ok: false, reason: "invalid" };
         const settings = { ...parseSettings(lobbyId, room.settings), bots: parsed.data };
         const seats = await readSeats(lobbyId);
+        if (botsOverflow(seats, parsed.data)) return { ok: false, reason: "invalid" };
         const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(settings));
         await withTtl(lobbyId, seatBots(tx, lobbyId, seats, parsed.data, settings.language));
         return { ok: true, members: toMembers(seats, room.hostUserId) };
@@ -570,15 +586,17 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         const current = parseSettings(lobbyId, room.settings);
         const merged = raceSettingsSchema.safeParse({ ...current, ...clean });
         if (!merged.success) return { ok: false, reason: "invalid" };
-        const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(merged.data));
         const renamed = merged.data.language !== current.language && merged.data.bots.length > 0;
-        if (!("bots" in clean) && !renamed) {
+        const seats = "bots" in clean || renamed ? await readSeats(lobbyId) : null;
+        // Every desk counts, bots too (#732): a bots patch never seats past ROOM_SEATS.
+        if (seats && botsOverflow(seats, merged.data.bots)) return { ok: false, reason: "invalid" };
+        const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(merged.data));
+        if (!seats) {
           await withTtl(lobbyId, tx);
           return { ok: true, settings: merged.data };
         }
         // A bots patch, or a language change in a room with bots, re-seats in the same step and
         // the same MULTI (#156): bot names follow the race language (#361).
-        const seats = await readSeats(lobbyId);
         const { bots, language } = merged.data;
         await withTtl(lobbyId, seatBots(tx, lobbyId, seats, bots, language));
         return { ok: true, settings: merged.data, members: toMembers(seats, room.hostUserId) };

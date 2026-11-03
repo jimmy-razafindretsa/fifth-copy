@@ -35,7 +35,8 @@ export type JoinRoomDeps = {
  * the player join every `retryMs` instead. The store bound by `attach` reports the refusal itself
  * (phase `spectating`); a refused player socket is unbound and closed here, since a middleware
  * refusal never reconnects. A server disconnect before the first welcome (a join refused after the
- * handshake) is held the same way. The hold only reads a player socket's refusals until its first welcome:
+ * handshake) is held the same way, unless the server sent `rejected` first (the user's socket cap):
+ * that ends the join on the generic error. The hold only reads a player socket's refusals until its first welcome:
  * after that the socket is the page's. The spectator socket never reaches the store (its welcome has
  * `you: null`). Returns the cancel, which never closes an attached socket (the page parks or closes it).
  */
@@ -99,8 +100,14 @@ export function joinRoom({
       if (polling) later(seat);
       else void watch();
     };
+    // A `rejected` before the welcome (the user's socket cap, `rate-limit`) means the server is
+    // about to close this socket for a reason that is not the race: no hold, no retry.
+    let refused = false;
     pending = [
       socket.onWelcome(stop),
+      socket.onRejected(() => {
+        refused = true;
+      }),
       socket.onConnectError((reason) => {
         if (cancelled || reason === "transport") return;
         // the bound store reports the refusal; any other reason is its terminal error
@@ -111,6 +118,11 @@ export function joinRoom({
       // closes the socket from the server with no reason and no reconnect: hold as for in-progress.
       socket.onServerDisconnect(() => {
         if (cancelled) return;
+        if (refused) {
+          stop();
+          dispatch({ type: "token-error", error: "generic" });
+          return;
+        }
         dispatch({ type: "connect-error", reason: "in-progress" });
         hold();
       }),

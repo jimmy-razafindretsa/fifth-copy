@@ -843,6 +843,48 @@ describe("room registry: race again (#143)", () => {
     expect(await registry.join(ended, { userId: "c", name: "Cy" })).toMatchObject({ ok: true });
   });
 
+  it("bots take desks: 30 desks of typists and bots refuse a stranger and the next bot (#732)", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    const typists = 10;
+    for (let i = 1; i <= typists; i++)
+      await registry.join(lobbyId, { userId: i === 1 ? "host" : `u${i}`, name: `U${i}` });
+    const bots = (n: number) => Array.from({ length: n }, () => ({ level: "clerk" as const }));
+    expect(
+      await registry.updateSettings(lobbyId, "host", { bots: bots(ROOM_SEATS - typists) }),
+    ).toMatchObject({
+      ok: true,
+    });
+    expect(await registry.members(lobbyId)).toHaveLength(ROOM_SEATS);
+    // the next stranger: every desk is taken
+    expect(await registry.join(lobbyId, { userId: "extra", name: "X" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    // one more bot: refused, the room keeps its bots
+    expect(
+      await registry.updateSettings(lobbyId, "host", { bots: bots(ROOM_SEATS - typists + 1) }),
+    ).toEqual({ ok: false, reason: "invalid" });
+    expect(await registry.setBots(lobbyId, bots(ROOM_SEATS - typists + 1))).toEqual({
+      ok: false,
+      reason: "invalid",
+    });
+    expect(await registry.members(lobbyId)).toHaveLength(ROOM_SEATS);
+    // a member (a second tab) still comes in at the cap; removing a bot is always allowed
+    expect(await registry.join(lobbyId, { userId: "u2", name: "U2" })).toMatchObject({
+      ok: true,
+      desk: 2,
+    });
+    expect(
+      await registry.updateSettings(lobbyId, "host", { bots: bots(ROOM_SEATS - typists - 1) }),
+    ).toMatchObject({
+      ok: true,
+    });
+    expect(await registry.join(lobbyId, { userId: "extra", name: "X" })).toMatchObject({
+      ok: true,
+    });
+  });
+
   it("a started room still refuses a user who is not a member (in-progress)", async () => {
     const { registry } = setup();
     const lobbyId = await endedRoom(registry);

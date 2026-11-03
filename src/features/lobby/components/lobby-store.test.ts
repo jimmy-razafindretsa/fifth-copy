@@ -790,6 +790,19 @@ describe("joinRoom: the late joiner's hold (#732 C2)", () => {
     expect(h.state()).toMatchObject({ phase: "live", you: 3 });
   });
 
+  it("a rejected before the server disconnect (the socket cap) ends the join: no hold, no retry", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("rejected", { v: PROTOCOL_VERSION, reason: "rate-limit" });
+    h.sockets[0]!.fire("serverDisconnect", undefined);
+    await h.flush();
+    expect(h.state()).toMatchObject({ phase: "error", error: "generic" });
+    expect(h.mint).toHaveBeenCalledTimes(1);
+    expect(h.sockets).toHaveLength(1);
+    expect(h.timers).toEqual([]);
+  });
+
   it("a server disconnect after the seat is not the hold's", async () => {
     const h = harness();
     joinRoom(h.deps);

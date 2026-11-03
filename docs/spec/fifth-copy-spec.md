@@ -26,7 +26,7 @@
 | Lower priority | Trophies / extra gamification |
 
 ### Success criteria
-1. A full class of **30+ students** can race together without lag on school laptops/Chromebooks.
+1. A full class of **up to 30 students** (one room of 30 desks, §5.2) can race together without lag on school laptops/Chromebooks.
 2. A race can be started in **under 60 seconds** from opening the site.
 3. Every student leaves a race knowing their **place, WPM, accuracy, and one thing to improve**.
 4. After 2 weeks of use, a student's profile clearly shows **progress over time**.
@@ -151,7 +151,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 
 ### 5.2 Size
 - **Minimum 2 participants** to start (bots count toward the minimum).
-- **No maximum.** Must be tested and smooth with **30+ live players** (target: 60 tested, 100 supported).
+- **30 desks per room**, typists and bots together (owner decision 2026-11-03): a newcomer finds the room full once 30 desks are seated, and the host cannot add a bot past 30. Must be tested and smooth with **30 live players**.
 - **No offline mode**, except racing against **bots**.
 
 ### 5.3 Landing page matchmaking
@@ -194,7 +194,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 
 ### 7.1 Layout
 - Round room: desks in a ring, all facing the centre; the Major on a turning platform in the middle.
-- 2–30 players: one ring. 31+: extra raised tiers behind (amphitheatre).
+- 2–30 players: one ring. ~~31+: extra raised tiers behind (amphitheatre).~~ Superseded 2026-11-03: a room has 30 desks (§5.2).
 - Small lobbies: the ring shrinks (desks pull in) so rivals stay close.
 
 ### 7.2 "Everyone sees everyone"

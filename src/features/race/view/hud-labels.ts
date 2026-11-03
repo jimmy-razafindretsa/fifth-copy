@@ -69,6 +69,30 @@ export type AbandonLabels = {
   confirm: string;
 };
 
+/** How your desk left the race (#233): the store's `ExitKind`, mirrored (the HUD never imports the client). */
+export const EXIT_KINDS = ["abandoned", "asleep"] as const;
+export type ExitDocketKind = (typeof EXIT_KINDS)[number];
+
+/** The exit dockets (#233, bible 7.3, 7.4): Reassigned after ABANDON, Asleep at desk after the idle kick. */
+export type ExitLabels = {
+  /** The ink stamp, also the docket's name: `REASSIGNED`, `ASLEEP AT DESK`. */
+  stamp: Record<ExitDocketKind, string>;
+  /** Row labels of your partial stats. */
+  wpm: string;
+  accuracy: string;
+  place: string;
+  /** Reassigned ranks last (ADR 0007): the `PLACE` row's value. */
+  last: string;
+  /** The accuracy value: `{n} %` (U+00A0 before the sign). */
+  percent: string;
+  /** The secondary button: the docket closes, the HUD stays live without input. */
+  keepWatching: string;
+  /** The ink link to `/lobby/[code]` after Reassigned (the seat view's lost-line string). */
+  back: string;
+  /** The ink link to `/lobby/[code]` after the idle kick. */
+  leave: string;
+};
+
 export const RACE_NOTICES = [
   "waiting-for-host",
   "reconnecting",
@@ -84,6 +108,7 @@ export type HudLabels = {
   sabotageTray: SabotageTrayLabels;
   abandon: AbandonLabels;
   notice: RaceNoticeLabels;
+  exit: ExitLabels;
 };
 
 export const hudLabelFixtures = {
@@ -139,6 +164,17 @@ export const hudLabelFixtures = {
       "idle-warning": "THE MAJOR IS LOOKING AT YOU. TYPE.",
       "no-scene": "NO PICTURE FROM THE ROOM · KEEP TYPING",
     },
+    exit: {
+      stamp: { abandoned: "REASSIGNED", asleep: "ASLEEP AT DESK" },
+      wpm: "WPM",
+      accuracy: "ACCURACY",
+      place: "PLACE",
+      last: "LAST",
+      percent: "{n}\u00a0%",
+      keepWatching: "KEEP WATCHING",
+      back: "BACK TO THE WAITING ROOM →",
+      leave: "LEAVE →",
+    },
   },
   fr: {
     nixie: {
@@ -191,6 +227,17 @@ export const hudLabelFixtures = {
       reconnecting: "LIGNE COUPÉE · RECONNEXION",
       "idle-warning": "LE MAJOR TE REGARDE. TAPE.",
       "no-scene": "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
+    },
+    exit: {
+      stamp: { abandoned: "RÉAFFECTÉ", asleep: "ENDORMI AU BUREAU" },
+      wpm: "MPM",
+      accuracy: "PRÉCISION",
+      place: "RANG",
+      last: "DERNIER",
+      percent: "{n}\u00a0%",
+      keepWatching: "CONTINUER À REGARDER",
+      back: "RETOUR À LA SALLE D'ATTENTE →",
+      leave: "QUITTER →",
     },
   },
 } satisfies Record<"en" | "fr", HudLabels>;

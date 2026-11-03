@@ -6,7 +6,9 @@ import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
 import {
   selectCanType,
+  selectExit,
   selectVisibleStamp,
+  sendAbandons,
   sendBonusPlays,
   watchBlurExpiry,
   watchRefusalExpiry,
@@ -18,12 +20,15 @@ import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
 import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
+import { AsleepAtDesk } from "../components/asleep-at-desk";
 import { RaceInput } from "../components/race-input";
+import { ReassignedNotice } from "../components/reassigned-notice";
 import { FinishedView } from "../components/finished-view";
 import { nixieNumber } from "../components/nixie-counters";
 import { RaceNotice } from "../components/race-notice";
 import { StampRow, stampText } from "../components/stamp-row";
-import { selectFinishWpm, selectPlace } from "../view/counters";
+import { selectAccuracy, selectFinishWpm, selectPlace } from "../view/counters";
+import type { ExitLabels } from "../view/hud-labels";
 import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view/standings";
 import { paperwork, PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
@@ -126,8 +131,46 @@ function useCountdownStep(): CountdownStep | null {
   return live ? step : null;
 }
 
-/** The overtake stamps' copy and the announcer's race lines (#232), the finished view's (#240). */
-export type SeatStampLabels = Pick<RaceSeatLabels, "stamps" | "announce" | "finish">;
+/**
+ * The overtake stamps' copy and the announcer's race lines (#232), the finished view's (#240), the exit
+ * dockets' (#233).
+ */
+export type SeatStampLabels = Pick<RaceSeatLabels, "stamps" | "announce" | "finish" | "exit">;
+
+/**
+ * The exit docket over the store (#233 C3, C4): after the server took your ABANDON, the Reassigned notice;
+ * after its idle kick, Asleep at desk; each with your partial stats frozen at your last key (the engine's
+ * WPM and accuracy over your predicted state, ADR 0007), until KEEP WATCHING closes it (the HUD stays live,
+ * without input) or RACE OVER yields to the finished view. A reload finds it again (`selectExit` reads the
+ * server's status too).
+ */
+export function SeatExit({ code, labels }: { code: string; labels: ExitLabels }) {
+  const store = useRaceStoreApi();
+  const exit = useRaceStore(selectExit);
+  const wpm = useRaceStore(selectFinishWpm);
+  const accuracy = useRaceStore((s) => selectAccuracy(s) ?? 100);
+  const keepWatching = useCallback(() => store.dispatch({ type: "exit-dismissed" }), [store]);
+  if (exit === null) return null;
+  const Docket = exit === "abandoned" ? ReassignedNotice : AsleepAtDesk;
+  return (
+    <Docket
+      wpm={wpm}
+      accuracy={accuracy}
+      leaveHref={`/lobby/${code}`}
+      onKeepWatching={keepWatching}
+      labels={labels}
+    />
+  );
+}
+
+/**
+ * The idle warning (#233 C4, bible 7.4 notice row): the urgent notice `THE MAJOR IS LOOKING AT YOU.
+ * TYPE.` while the race runs and the server warned your silent desk; your next key clears it.
+ */
+export function SeatIdleNotice({ labels }: { labels: SeatStatusLabels["notice"] }) {
+  const warned = useRaceStore((s) => s.phase === "running" && s.idleWarning);
+  return warned ? <RaceNotice kind="idle-warning" labels={labels} /> : null;
+}
 
 /**
  * The finished view over the store (#240 C2, C3): after your finish while the race runs, the `FILED`
@@ -226,8 +269,11 @@ export function RaceSeatLive({
         const own = createTyping({ store, send: (batch) => socket.sendKeys(batch) });
         typing.current = own;
         const stopPlays = sendBonusPlays(store, socket);
+        // #233: one `abandon` per confirm the store took
+        const stopAbandons = sendAbandons(store, socket);
         return () => {
           stopPlays();
+          stopAbandons();
           own.dispose();
           if (typing.current === own) typing.current = null;
         };
@@ -243,6 +289,8 @@ export function RaceSeatLive({
   return (
     <div data-phase={phase} className={styles.live}>
       <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />
+      <SeatIdleNotice labels={labels.notice} />
+      <SeatExit code={code} labels={labels.exit} />
       <SeatFinish labels={labels.finish} />
       {/* bible 8: one stamp at a time; the countdown and GO first, then the overtake stamps (#232) */}
       {step !== null ? (

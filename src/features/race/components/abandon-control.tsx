@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { type MouseEvent, useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui";
 import type { AbandonLabels } from "../view/hud-labels";
 import styles from "./abandon-control.module.css";
@@ -73,6 +73,9 @@ export function AbandonControl({
   }, [state]);
 
   const confirming = state === "confirm";
+  // #233: a pointer press never takes the focus from the race input (the #236 tray's pointer path), so a
+  // cancelled confirm leaves you typing; the keyboard path (Tab, Enter) is unchanged
+  const keepFocus = (e: MouseEvent) => e.preventDefault();
   return (
     <div data-abandon={state} className={styles.control}>
       <Button
@@ -81,12 +84,19 @@ export function AbandonControl({
         disabled={state === "disabled"}
         aria-expanded={confirming}
         aria-controls={confirming ? confirmId : undefined}
+        onMouseDown={keepFocus}
         onClick={confirming ? onCancel : onAbandon}
       >
         {labels.abandon}
       </Button>
       {confirming ? (
-        <button id={confirmId} type="button" className={docket.ink} onClick={onConfirm}>
+        <button
+          id={confirmId}
+          type="button"
+          className={docket.ink}
+          onMouseDown={keepFocus}
+          onClick={onConfirm}
+        >
           {labels.confirm}
         </button>
       ) : null}

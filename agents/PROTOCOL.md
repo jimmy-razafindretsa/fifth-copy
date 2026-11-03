@@ -94,8 +94,8 @@ Script-checkable preconditions are enforced by `board.ts`: `promote` (Backlog ->
 | Ready -> In Progress | all blockers Done; WIP limit not exceeded; no lock conflict (section 7); contract hash recorded in a PICKUP comment |
 | In Progress -> In Review | `scripts/check.sh` green; branch pushed; PR open; HANDOFF posted; contract hash unchanged; PENTEST comment present if the card carries `pentest` |
 | In Review -> QA | reviewer verdict has zero blockers |
-| In Review -> QA (script) | Deliver HANDOFF `verdict: pass` (or `verdict: needs-human` after the human removed the label); every box ticked |
-| QA -> Done | every contract checkbox ticked by Deliver with evidence; PR merged through `scripts/merge.sh`; CI green on the merge commit on base; smoke passed (when a preview exists) |
+| In Review -> QA (script) | Deliver HANDOFF `verdict: pass` (or `verdict: needs-human` after the human removed the label) after the newest PICKUP; every box ticked; PR open or already merged |
+| QA -> Done | card Status is QA (the Done gate refuses any other state); every contract checkbox ticked by Deliver with evidence; PR merged through `scripts/merge.sh`; CI green on the merge commit on base; smoke passed (when a preview exists) |
 | any -> Backlog + `needs-replan` | contract invalid, unverifiable, or dependency missing |
 | any -> `needs-human` (state unchanged) | `autonomy:hitl` reached, ADR conflict, fix budget exhausted |
 

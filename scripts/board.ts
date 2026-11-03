@@ -1085,6 +1085,7 @@ async function opGate(n: number, requested: string) {
     trusted: TRUSTED,
     pr,
     mainCi,
+    status: (await itemOf(i)).status,
   });
   if (failures.length) {
     for (const f of failures) console.log(`FAIL ${cardId(n)} -> ${target}: ${f}`);

@@ -42,6 +42,8 @@ export default defineConfig({
     environment: "node",
     // A card worktree's unit run gets its own Redis db (REDIS_URL_TEST), not the e2e race server's (#680).
     env: unitRedisEnv(process.env),
+    // next-auth imports `next/server` without the extension Node ESM needs; Vite resolves it when inlined (#786).
+    server: { deps: { inline: ["next-auth"] } },
     projects: [
       {
         extends: true,

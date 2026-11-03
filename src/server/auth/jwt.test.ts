@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { NextAuthConfig } from "next-auth";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // #786 C1 + C3: the Auth.js config, its JWT/session callbacks and the Credentials `authorize`.
@@ -12,7 +13,8 @@ vi.mock("@/env", () => {
 vi.mock("@/server/db", () => ({ db: {} }));
 vi.mock("./credentials", () => ({ verifyCredentials }));
 
-const { authConfig, authorizeCredentials } = await import("./auth");
+const { authConfig: config, authorizeCredentials } = await import("./auth");
+const authConfig: NextAuthConfig = config;
 
 type JwtCallback = NonNullable<NonNullable<typeof authConfig.callbacks>["jwt"]>;
 type SessionCallback = NonNullable<NonNullable<typeof authConfig.callbacks>["session"]>;
@@ -61,7 +63,9 @@ describe("jwt callback (C1)", () => {
 
   it("returns the token unchanged on later reads", async () => {
     const stored = { sub: "u1", name: "Ada", tokenVersion: 3, iat: 1, exp: 2, jti: "j" };
-    await expect(jwt({ token: stored, account: null } as never)).resolves.toEqual(stored);
+    await expect(Promise.resolve(jwt({ token: stored, account: null } as never))).resolves.toEqual(
+      stored,
+    );
   });
 });
 

@@ -4,8 +4,8 @@ import { normalizeUsername } from "@/lib/username";
 import { db } from "@/server/db";
 import { DUMMY_HASH, MAX_PASSWORD_LENGTH, verifyPassword } from "./password";
 
-/** The account a correct username and password resolve to. */
-export type CredentialsAccount = { id: string; name: string };
+/** The account a correct username and password resolve to; tokenVersion feeds the session JWT (#786). */
+export type CredentialsAccount = { id: string; name: string; tokenVersion: number };
 
 /** Thrown when the account lookup fails. Takes no arguments, so it can never carry a password or a hash. */
 export class CredentialsLookupError extends Error {
@@ -28,7 +28,7 @@ async function findAccount(usernameNormalized: string) {
   try {
     return await db.user.findUnique({
       where: { usernameNormalized },
-      select: { id: true, typistName: true, isGuest: true, passwordHash: true },
+      select: { id: true, typistName: true, tokenVersion: true, isGuest: true, passwordHash: true },
     });
   } catch {
     throw new CredentialsLookupError();
@@ -49,5 +49,7 @@ export async function verifyCredentials(input: unknown): Promise<CredentialsAcco
   const row = await findAccount(username);
   const hash = row && !row.isGuest ? row.passwordHash : null;
   const ok = await verifyPassword(password, hash ?? DUMMY_HASH);
-  return ok && row && hash !== null ? { id: row.id, name: row.typistName } : null;
+  return ok && row && hash !== null
+    ? { id: row.id, name: row.typistName, tokenVersion: row.tokenVersion }
+    : null;
 }

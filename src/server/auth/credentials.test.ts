@@ -7,20 +7,39 @@ import { DUMMY_HASH, hashPassword } from "./password";
 const findUnique = vi.hoisted(() => vi.fn());
 vi.mock("@/server/db", () => ({ db: { user: { findUnique } } }));
 
-type Row = { id: string; typistName: string; isGuest: boolean; passwordHash: string | null };
+type Row = {
+  id: string;
+  typistName: string;
+  tokenVersion: number;
+  isGuest: boolean;
+  passwordHash: string | null;
+};
 const rows = new Map<string, Row>();
 const PASSWORD = "correct horse battery";
 
 beforeAll(async () => {
   const passwordHash = await hashPassword(PASSWORD);
-  rows.set("ada", { id: "u-ada", typistName: "Ada-101", isGuest: false, passwordHash });
+  rows.set("ada", {
+    id: "u-ada",
+    typistName: "Ada-101",
+    tokenVersion: 4,
+    isGuest: false,
+    passwordHash,
+  });
   rows.set("sparrow-482", {
     id: "u-guest",
     typistName: "Sparrow-482",
+    tokenVersion: 0,
     isGuest: true,
     passwordHash,
   });
-  rows.set("oauth-only", { id: "u-oauth", typistName: "Gh-7", isGuest: false, passwordHash: null });
+  rows.set("oauth-only", {
+    id: "u-oauth",
+    typistName: "Gh-7",
+    tokenVersion: 0,
+    isGuest: false,
+    passwordHash: null,
+  });
 });
 
 beforeEach(() => {
@@ -38,6 +57,7 @@ describe("verifyCredentials (C4)", () => {
       await expect(verifyCredentials({ username, password: PASSWORD })).resolves.toEqual({
         id: "u-ada",
         name: "Ada-101",
+        tokenVersion: 4,
       });
     },
   );
@@ -46,7 +66,7 @@ describe("verifyCredentials (C4)", () => {
     await verifyCredentials({ username: " ADA ", password: PASSWORD });
     expect(findUnique).toHaveBeenCalledWith({
       where: { usernameNormalized: normalizeUsername(" ADA ") },
-      select: { id: true, typistName: true, isGuest: true, passwordHash: true },
+      select: { id: true, typistName: true, tokenVersion: true, isGuest: true, passwordHash: true },
     });
   });
 

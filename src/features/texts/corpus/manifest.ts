@@ -66,6 +66,6 @@ export const CONTENT_FILES: ReadonlyArray<readonly [string, unknown]> = [
 
 /** Per language, a hash of its content files: changes whenever a file is added, removed or edited. */
 export const CONTENT_VERSION = {
-  en: "69643e05dd33",
+  en: "2350d826fae8",
   fr: "d7a9a00b032b",
 } as const;

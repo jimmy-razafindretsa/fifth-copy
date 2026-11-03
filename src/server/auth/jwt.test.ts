@@ -95,10 +95,12 @@ describe("Credentials authorize (C3)", () => {
 
   it("delegates once to verifyCredentials with the submitted username and password", async () => {
     verifyCredentials.mockResolvedValueOnce({ id: "u1", name: "Ada", tokenVersion: 0 });
-    const user = await authorizeCredentials(
-      { username: "Ada", password: "correct horse", csrfToken: "x", callbackUrl: "/" },
-      new Request("http://localhost/api/auth/callback/credentials"),
-    );
+    const user = await authorizeCredentials({
+      username: "Ada",
+      password: "correct horse",
+      csrfToken: "x",
+      callbackUrl: "/",
+    });
     expect(verifyCredentials).toHaveBeenCalledTimes(1);
     expect(verifyCredentials).toHaveBeenCalledWith({ username: "Ada", password: "correct horse" });
     expect(user).toEqual({ id: "u1", name: "Ada", tokenVersion: 0 });
@@ -107,10 +109,7 @@ describe("Credentials authorize (C3)", () => {
   it("returns null, without throwing, when verifyCredentials does", async () => {
     verifyCredentials.mockResolvedValueOnce(null);
     await expect(
-      authorizeCredentials(
-        { username: "nobody", password: "wrong" },
-        new Request("http://localhost/api/auth/callback/credentials"),
-      ),
+      authorizeCredentials({ username: "nobody", password: "wrong" }),
     ).resolves.toBeNull();
     expect(verifyCredentials).toHaveBeenCalledTimes(1);
   });

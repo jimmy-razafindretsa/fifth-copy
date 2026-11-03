@@ -35,7 +35,9 @@ function toAdapterUser(row: { id: string; typistName: string; tokenVersion: numb
 /** "github" -> GITHUB; null for a provider outside the OAuthProvider enum (credentials included). */
 function toProvider(provider: string): OAuthProvider | null {
   const upper = provider.toUpperCase();
-  return (Object.values(OAuthProvider) as string[]).includes(upper) ? (upper as OAuthProvider) : null;
+  return (Object.values(OAuthProvider) as string[]).includes(upper)
+    ? (upper as OAuthProvider)
+    : null;
 }
 
 function isUniqueViolation(error: unknown) {

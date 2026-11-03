@@ -32,7 +32,6 @@ export const SESSION_MAX_AGE = 2_592_000;
  */
 export async function authorizeCredentials(
   credentials: Partial<Record<string, unknown>>,
-  _request: Request,
 ): Promise<User | null> {
   return verifyCredentials({ username: credentials.username, password: credentials.password });
 }
@@ -50,7 +49,10 @@ export const authConfig = {
   adapter: createAuthAdapter({ db, typistNameFor: createTypistNameFor(db) }),
   providers: [
     Credentials({
-      credentials: { username: { label: "Username" }, password: { label: "Password", type: "password" } },
+      credentials: {
+        username: { label: "Username" },
+        password: { label: "Password", type: "password" },
+      },
       authorize: authorizeCredentials,
     }),
   ],
@@ -63,7 +65,11 @@ export const authConfig = {
     session({ session, token }) {
       return {
         expires: session.expires,
-        user: { id: token.sub ?? "", name: token.name ?? "", tokenVersion: token.tokenVersion ?? 0 },
+        user: {
+          id: token.sub ?? "",
+          name: token.name ?? "",
+          tokenVersion: token.tokenVersion ?? 0,
+        },
       } as typeof session;
     },
   },

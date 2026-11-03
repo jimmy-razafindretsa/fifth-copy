@@ -99,7 +99,9 @@ test.describe("Auth.js endpoints (#786)", () => {
       expect(body.user).toEqual({ id: expect.any(String), name: typistName, tokenVersion: 0 });
     });
 
-    test("the wrong password sets no session cookie and the session stays {}", async ({ request }) => {
+    test("the wrong password sets no session cookie and the session stays {}", async ({
+      request,
+    }) => {
       const res = await postCredentials(request, username, `${PASSWORD}-wrong`);
       expect(res.status()).toBe(302);
       expect(res.headers()["location"]).toContain("error=CredentialsSignin");

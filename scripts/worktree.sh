@@ -8,10 +8,14 @@
 #
 # In the worktree, agents load the env first:  set -a; . ./.env; set +a
 # Slot = n mod 1000: web PORT 5000+slot (see.ts, `npm run dev`), PW_PORT 6000+slot (Playwright),
-# RACE_SERVER_PORT 7000+slot, databases app_c<n> and app_c<n>_test, Redis db 1 + n mod 15.
+# RACE_SERVER_PORT 7000+slot, databases app_c<n> and app_c<n>_test, two Redis dbs (#680): REDIS_URL for the
+# e2e race server and REDIS_URL_TEST for the unit step (vitest.config.ts maps it onto REDIS_URL). Preferred
+# pair 1 + 2*(n mod 7) and the next db; a db another worktree's .env holds is skipped for the lowest free
+# ones in 1..15 (db 0 stays the main checkout's and CI's). No two free dbs left -> exit 3 naming the cards.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ROOT="$(cd "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" && pwd)"
+# WORKTREE_ROOT: fixture checkout for scripts/worktree-env.test.ts (--env only).
+ROOT="${WORKTREE_ROOT:-$(cd "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" && pwd)}"
 
 mode=create force=0
 case "${1:-}" in
@@ -24,6 +28,35 @@ n="${1:-}"; n="${n#\#}"
 WT="$ROOT/.worktrees/$n"
 slot=$(( n % 1000 ))
 DB="app_c$n"
+
+# Redis db indexes in a .env file (REDIS_URL and REDIS_URL_TEST), one per line.
+env_redis_dbs() { sed -n 's#^REDIS_URL\(_TEST\)\{0,1\}="redis://localhost:6379/\([0-9]*\)"$#\2#p' "$1" 2>/dev/null; }
+
+# Sets REDIS_E2E and REDIS_UNIT for card n: keeps the pair its own .env holds when still free, else the
+# preferred pair, else the lowest free dbs. Exits 3 when fewer than two dbs are free.
+redis_dbs() {
+  local taken=" " holders="" f card db
+  for f in "$ROOT"/.worktrees/*/.env; do
+    [[ -f "$f" ]] || continue
+    card="$(basename "$(dirname "$f")")"
+    [[ "$card" == "$n" ]] && continue
+    for db in $(env_redis_dbs "$f"); do taken+="$db "; holders+=" #$card(db $db)"; done
+  done
+  free() { [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 1 && $1 <= 15 )) && [[ "$taken" != *" $1 "* ]]; }
+  local own=($(env_redis_dbs "$WT/.env"))
+  if (( ${#own[@]} == 2 )) && [[ "${own[0]}" != "${own[1]}" ]] && free "${own[0]}" && free "${own[1]}"; then
+    REDIS_E2E=${own[0]} REDIS_UNIT=${own[1]}; return
+  fi
+  local p=$(( 1 + 2 * (n % 7) ))
+  if free "$p" && free "$(( p + 1 ))"; then REDIS_E2E=$p REDIS_UNIT=$(( p + 1 )); return; fi
+  local got=()
+  for db in $(seq 1 15); do free "$db" && got+=("$db"); (( ${#got[@]} == 2 )) && break; done
+  if (( ${#got[@]} < 2 )); then
+    echo "worktree: no two free Redis dbs for #$n; held by:$holders. Remove finished worktrees (scripts/worktree.sh --remove <n>)." >&2
+    exit 3
+  fi
+  REDIS_E2E=${got[0]} REDIS_UNIT=${got[1]}
+}
 
 card_env() {
   cat <<EOF
@@ -38,7 +71,8 @@ RACE_SERVER_PORT="$(( 7000 + slot ))"
 NEXT_PUBLIC_RACE_SERVER_URL="http://localhost:$(( 7000 + slot ))"
 RACE_SERVER_INTERNAL_URL="http://localhost:$(( 7000 + slot ))"
 WEB_ORIGIN="http://localhost:$(( 5000 + slot ))"
-REDIS_URL="redis://localhost:6379/$(( 1 + n % 15 ))"
+REDIS_URL="redis://localhost:6379/$REDIS_E2E"
+REDIS_URL_TEST="redis://localhost:6379/$REDIS_UNIT"
 RACE_TOKEN_SECRET="local-card-$n-$(printf '%s' "$ROOT" | shasum | cut -c1-24)"
 AUTH_SECRET="local-card-auth-$n-$(printf 'auth:%s' "$ROOT" | shasum | cut -c1-32)"
 DB_GUARD_ALLOWED_HOSTS=""
@@ -49,7 +83,7 @@ compose() { docker compose -f "$ROOT/docker-compose.yml" --project-directory "$R
 psql_admin() { compose exec -T postgres psql -U app -d app -tAc "$1"; }
 db_ready() { command -v docker >/dev/null && compose up -d --wait >/dev/null 2>&1; }
 
-if [[ "$mode" == env ]]; then card_env; exit 0; fi
+if [[ "$mode" == env ]]; then redis_dbs; card_env; exit 0; fi
 
 if [[ "$mode" == remove ]]; then
   if [[ -d "$WT" ]]; then
@@ -84,6 +118,7 @@ if [[ ! -d "$WT" ]]; then
   echo "worktree: created $WT on $branch"
 fi
 
+redis_dbs
 card_env >"$WT/.env"
 set -a; . "$WT/.env"; set +a
 

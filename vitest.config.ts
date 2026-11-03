@@ -1,5 +1,6 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
+import { unitRedisEnv } from "./scripts/lib/redis-env";
 
 const INCLUDE = [
   "src/**/*.test.{ts,tsx}",
@@ -39,6 +40,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // A card worktree's unit run gets its own Redis db (REDIS_URL_TEST), not the e2e race server's (#680).
+    env: unitRedisEnv(process.env),
     projects: [
       {
         extends: true,

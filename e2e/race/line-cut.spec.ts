@@ -88,8 +88,12 @@ async function cuttableLine(page: Page) {
   // sides are closed here
   const live = new Map<WebSocketRoute, WebSocketRoute>();
   let offline = false;
-  await page.routeWebSocket(/\/socket\.io\//, (ws) => {
-    if (offline) return void ws.close({ code: 1001, reason: "offline" });
+  // An attempt made while offline stalls until `goOnline`, as on a dead network. Closing it instead
+  // would hang the client: the page sees the mocked socket open then close before the engine.io
+  // handshake, which socket.io's Manager only gives up on after its 20 s connect timeout.
+  const held: Array<() => void> = [];
+  await page.routeWebSocket(/\/socket\.io\//, async (ws) => {
+    if (offline) await new Promise<void>((resume) => held.push(resume));
     const server = ws.connectToServer();
     live.set(ws, server);
     ws.onClose(() => {
@@ -114,6 +118,7 @@ async function cuttableLine(page: Page) {
     async goOnline() {
       offline = false;
       await page.context().setOffline(false);
+      for (const resume of held.splice(0)) resume();
     },
   };
 }

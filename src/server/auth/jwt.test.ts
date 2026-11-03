@@ -30,6 +30,7 @@ describe("authConfig (C1)", () => {
     expect(authConfig.secret).toBe(secret.value);
     expect(authConfig.trustHost).toBe(true);
     expect(authConfig.debug).toBeFalsy();
+    expect(Object.keys(authConfig.logger ?? {}).sort()).toEqual(["debug", "error", "warn"]);
   });
 
   it("lists exactly the Credentials provider", () => {

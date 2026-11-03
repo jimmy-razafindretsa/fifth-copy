@@ -4,7 +4,9 @@ import Credentials from "next-auth/providers/credentials";
 import type { NextRequest } from "next/server";
 import { env } from "@/env";
 import { db } from "@/server/db";
+import { logger } from "@/server/logger";
 import { createAuthAdapter } from "./adapter";
+import { createAuthLogger } from "./auth-logger";
 import { verifyCredentials } from "./credentials";
 import { createTypistNameFor } from "./typist-name";
 
@@ -45,6 +47,8 @@ export const authConfig = {
   // Railway's proxy sets the host; a production build refuses every request (UntrustedHost) otherwise.
   // Callback URLs stay checked against the request origin.
   trustHost: true,
+  // JSON lines through the app logger, not Auth.js's console output (ARCHITECTURE 10).
+  logger: createAuthLogger(logger),
   session: { strategy: "jwt", maxAge: SESSION_MAX_AGE },
   adapter: createAuthAdapter({ db, typistNameFor: createTypistNameFor(db) }),
   providers: [

@@ -477,6 +477,17 @@ describe("host start (#214 C7)", () => {
   });
 });
 
+// Contract of #233 C1: the abandon intent is `abandon { v }`, no ack (the server answers the room with
+// `abandoned`, or you with `rejected { not-running }`).
+describe("sendAbandon (#233 C1)", () => {
+  it("emits abandon with the protocol version only", () => {
+    const { fake, room } = setup();
+    room.sendAbandon();
+    expect(fake.emit).toHaveBeenCalledTimes(1);
+    expect(fake.emit).toHaveBeenCalledWith("abandon", { v: PROTOCOL_VERSION });
+  });
+});
+
 // Contract of #643 C2: the clock sync pair (ARCHITECTURE 7.3). `sendPing` emits `ping { v, sent }`
 // with the device clock; `onPong` delivers a parsed `pong`, and an invalid one goes to onProtocolError.
 describe("ping and pong (#643 C2)", () => {

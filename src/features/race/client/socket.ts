@@ -1,5 +1,6 @@
 import { io as realIo } from "socket.io-client";
 import {
+  abandonSchema,
   bonusPlaySchema,
   clientAcks,
   keysSchema,
@@ -72,6 +73,11 @@ export interface RoomSocket {
    * `bonus-sent`, or you with `rejected { no-bonus }`.
    */
   sendBonusPlay(): void;
+  /**
+   * Leaves the race (#233, spec 4.4): `abandon { v }`, no ack; the server answers the room with
+   * `abandoned` for your desk, or you with `rejected { not-running }`.
+   */
+  sendAbandon(): void;
   /**
    * Clock sync (#643, ARCHITECTURE 7.3): emits `ping { v, sent }`, `sent` = this device's clock
    * (`Date.now()` unless the caller passes its own); the server answers the sender with `pong`.
@@ -228,6 +234,10 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     sendBonusPlay: () => {
       const play = bonusPlaySchema.safeParse({ v: PROTOCOL_VERSION });
       if (play.success) socket.emit("bonus:play", play.data);
+    },
+    sendAbandon: () => {
+      const abandon = abandonSchema.safeParse({ v: PROTOCOL_VERSION });
+      if (abandon.success) socket.emit("abandon", abandon.data);
     },
     sendPing: (sent = Date.now()) => {
       const ping = pingSchema.safeParse({ v: PROTOCOL_VERSION, sent });

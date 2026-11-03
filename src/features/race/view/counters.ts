@@ -1,4 +1,4 @@
-import { cleanAndAdjustedWpm, EMPTY_OVERLAY, elapsedFor } from "@fifth-copy/engine";
+import { accuracy, cleanAndAdjustedWpm, EMPTY_OVERLAY, elapsedFor } from "@fifth-copy/engine";
 import type { RacePhase, RaceState } from "../client/store";
 
 /**
@@ -33,7 +33,9 @@ function wpmAt(state: RaceState, raceElapsed: number): number {
   const { race, prediction } = state;
   if (!race || !prediction) return 0;
   const p = prediction.state;
-  const elapsed = elapsedFor(p, p.status === "typing" ? raceElapsed : p.lastT);
+  // after your exit (#233) the figure stops at your last key, before the snapshot adopts the status
+  const live = p.status === "typing" && state.exit === null;
+  const elapsed = elapsedFor(p, live ? raceElapsed : p.lastT);
   const { clean } = cleanAndAdjustedWpm(p, race.text, state.overlay ?? EMPTY_OVERLAY, elapsed);
   return Math.round(clean);
 }
@@ -46,6 +48,15 @@ function wpmAt(state: RaceState, raceElapsed: number): number {
 export function selectFinishWpm(state: RaceState): number {
   const p = state.prediction?.state;
   return p ? wpmAt(state, p.lastT) : 0;
+}
+
+/**
+ * Your accuracy in whole percent (#233 C3, the Reassigned docket's `ACCURACY | 93 %`): the engine's
+ * `accuracy` (`correct / total`) over your predicted state; `null` without a prediction (a spectator).
+ */
+export function selectAccuracy(state: RaceState): number | null {
+  const p = state.prediction?.state;
+  return p ? Math.round(accuracy(p) * 100) : null;
 }
 
 /**

@@ -60,6 +60,7 @@ export function fakeRoomSocket() {
     onEnded: on("onEnded"),
     onRejected: on("onRejected"),
     sendBonusPlay: vi.fn<RoomSocket["sendBonusPlay"]>(),
+    sendAbandon: vi.fn<RoomSocket["sendAbandon"]>(),
     sendPing: vi.fn<RoomSocket["sendPing"]>(),
     onPong: on("onPong"),
     onProtocolError: on("onProtocolError"),

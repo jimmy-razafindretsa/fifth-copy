@@ -1,7 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { decode, encode } from "next-auth/jwt";
 import { describe, expect, it, vi } from "vitest";
-import { type AccountRow, createSessionResolver, type SessionClaims } from "./session";
+import {
+  type AccountRow,
+  createSessionResolver,
+  type FindAccountById,
+  type SessionClaims,
+} from "./session";
 
 // #787 C1, C3, C5: the Auth.js session resolver, over injected dependencies (no DB, no Next).
 const account: AccountRow = {
@@ -16,7 +21,7 @@ const session = (id: string, tokenVersion: number): SessionClaims => ({
 
 function setup(claims: SessionClaims | null, row: AccountRow | null = account) {
   const getSession = vi.fn(async () => claims);
-  const findAccountById = vi.fn(async (_id: string) => (row ? { ...row } : null));
+  const findAccountById = vi.fn<FindAccountById>(async () => (row ? { ...row } : null));
   return {
     resolve: createSessionResolver({ getSession, findAccountById }),
     getSession,

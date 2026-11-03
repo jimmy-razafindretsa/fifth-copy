@@ -253,3 +253,12 @@ The owner asked for more throughput with lighter pen test, QA and CI. Until revo
 - Deliver: reviews the diff against the Contract and relies on green CI on the head plus the Builder's evidence; re-runs only the criteria it doubts or the card's new e2e, once. No full `check.sh` re-run when CI is green on the head. The card log rides the Builder's PR (Deliver adds to it only when it already pushes a fix).
 - Merge: a PR behind `main` merges without a refresh when GitHub reports it mergeable and the commits it lacks touch none of its files; CI on the merge commit is the guard (Done gate), and a red main is fixed forward first.
 - CI: PRs touching only Markdown or `work/` skip e2e and visual (`changes` job); e2e runs in 6 shards; `main` always runs everything.
+
+## 15. Bundle mode (owner decision 2026-11-03)
+One branch, one worktree and one PR deliver 2-8 small sibling cards, so pickup, worktree, CI, Deliver and the gates are paid once (10-day delivery push). Logic: `scripts/lib/bundle.ts`.
+- Eligible: at most 8 cards (lead included), all Ready, each passing the solo pickup checks (epic `plan-approved`, blockers Done or inside the bundle, a Contract). Prefer siblings of one epic with estimate <= 2 that touch nearby files.
+- Solo only (never bundled): `touches:prisma`, `area:auth`, `area:race-server`, `pentest`, `autonomy:hitl`. Big or risky cards stay solo.
+- Pickup: `board.ts pickup <lead> --bundle <n,n,...>` moves every card to In Progress, labels each `bundle:<lead>`, posts one PICKUP on the lead (`... bundle=#lead,#a,#b`) and `BUNDLED-IN #lead card=#a contract_hash=<a's hash> branch=<lead branch> worktree=.worktrees/<lead>` on each other card. Worktree and branch are the lead's.
+- Locks and WIP: the bundle locks the union of its cards' `area:*` and `touches:*` labels and takes one WIP slot.
+- Build: the Builder runs one session for the bundle, commits with each card's `[#n]`, and posts one HANDOFF on the lead (it covers every card). The PR body references every card: `Card: #lead #a #b` (or one `Refs #n` line per card), never `Closes`.
+- Gates: `board.ts gate <lead> <status>` checks every card on its own (its contract hash against its BUNDLED-IN record, the lead's HANDOFF and Deliver verdict, the PR referencing it, its own ticked boxes) and moves all of them, or none: one failing card blocks the bundle and is named. Gating a member directly is refused. Deliver ticks each card's boxes and posts one verdict on the lead. Merge with `scripts/merge.sh <lead>`.

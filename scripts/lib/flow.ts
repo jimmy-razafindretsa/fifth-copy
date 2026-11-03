@@ -8,7 +8,18 @@ import { NEEDS_LABELS } from "./board";
 import { trustedOnly, type Comment } from "./trust";
 
 export { isTrusted, trustedAuthors, trustedOnly, type Comment } from "./trust";
-export type Pickup = { hash: string; branch: string; worktree: string; at: string };
+/**
+ * `bundle`: the cards a lead's PICKUP lists (`bundle=#a,#b`, PROTOCOL 15), empty for a solo card.
+ * `lead`: set when the record is a `BUNDLED-IN #lead` on a bundle member (its hash, the lead's branch).
+ */
+export type Pickup = {
+  hash: string;
+  branch: string;
+  worktree: string;
+  at: string;
+  bundle: number[];
+  lead: number | null;
+};
 
 export const pickupComment = (n: number, hash: string, branch: string) =>
   `PICKUP #${n} contract_hash=${hash} branch=${branch} worktree=.worktrees/${n}`;
@@ -42,18 +53,30 @@ function fieldOf(body: string, name: string): string | null {
 /** A PENTEST blocks unless its header has `blockers: 0` (missing or unparsable blocks: fail closed). */
 const blocking = (body: string) => !/^0+$/.test(fieldOf(body, "blockers") ?? "");
 
-/** The newest PICKUP comment for card n written by a trusted author (trust.ts), or null. */
+/**
+ * The newest pickup record for card n written by a trusted author (trust.ts), or null: a `PICKUP #n` comment
+ * (optionally listing a bundle), or a `BUNDLED-IN #lead card=#n` comment when n is a bundle member.
+ */
 export function latestPickup(
   n: number,
   comments: readonly Comment[],
   trusted: ReadonlySet<string>,
 ): Pickup | null {
-  const re = new RegExp(`^PICKUP #${n} contract_hash=(\\w+) branch=(\\S+) worktree=(\\S+)`);
+  const re = new RegExp(
+    `^(?:PICKUP #${n}|BUNDLED-IN #(\\d+) card=#${n}) contract_hash=(\\w+) branch=(\\S+) worktree=(\\S+)(?: bundle=(\\S+))?`,
+  );
   let best: Pickup | null = null;
   for (const c of trustedOnly(comments, trusted)) {
     const m = re.exec(head(c.body));
     if (m && (!best || c.createdAt > best.at))
-      best = { hash: m[1]!, branch: m[2]!, worktree: m[3]!, at: c.createdAt };
+      best = {
+        hash: m[2]!,
+        branch: m[3]!,
+        worktree: m[4]!,
+        at: c.createdAt,
+        lead: m[1] ? Number(m[1]) : null,
+        bundle: !m[1] && m[5] ? [...m[5].matchAll(/#(\d+)/g)].map((x) => Number(x[1])) : [],
+      };
   }
   return best;
 }
@@ -77,7 +100,8 @@ export type GateFacts = {
   comments: Comment[];
   /** Logins whose comments count (trust.ts); every other comment is ignored by every gate. */
   trusted: ReadonlySet<string>;
-  pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED" } | null;
+  /** `cards`: the cards the PR body references (bundle.ts prCards); checked for bundle cards only. */
+  pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED"; cards?: number[] } | null;
   /** The card's current Project Status (null = unknown or not on the board). Done requires QA. */
   status: string | null;
   /** Conclusion of the CI run on main for the PR's merge commit (Done gate only). */
@@ -99,6 +123,10 @@ export function evaluateGate(facts: GateFacts): string[] {
     out.push(`contract hash ${hash ?? "none"} != PICKUP ${pickup.hash} (label needs-replan)`);
   const needs = f.labels.filter((l) => NEEDS_LABELS.includes(l));
   if (needs.length) out.push(`labeled ${needs.join(",")}`);
+  // A bundle shares one PR (found by the lead's branch): it must reference every card (PROTOCOL 15).
+  const bundled = pickup.lead !== null || pickup.bundle.length > 0;
+  if (bundled && f.pr?.cards && !f.pr.cards.includes(f.n))
+    out.push(`PR #${f.pr.number} body does not reference #${f.n} (Card: #a #b or Refs #n)`);
   const criteria = parseContract(f.body);
   const unticked = criteria.filter((c) => !c.checked).map((c) => c.id);
 

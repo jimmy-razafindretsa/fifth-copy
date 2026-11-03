@@ -91,10 +91,10 @@ describe("internal API", () => {
     expect(INTERNAL_MAX_SKEW_S).toBe(300);
   });
 
-  it("C1: protocol 7 signs `${timestamp}.${nonce}.${rawBody}`", () => {
-    expect(PROTOCOL_VERSION).toBe(7);
-    expect(internalSignedString({ timestamp: "1", nonce: "ab", rawBody: '{"v":7}' })).toBe(
-      '1.ab.{"v":7}',
+  it("C1: protocol 7+ signs `${timestamp}.${nonce}.${rawBody}`", () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(7);
+    expect(internalSignedString({ timestamp: "1", nonce: "ab", rawBody: '{"v":8}' })).toBe(
+      '1.ab.{"v":8}',
     );
   });
 

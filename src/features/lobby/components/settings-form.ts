@@ -223,6 +223,10 @@ export function reduceForm(state: FormState, event: FormEvent): FormState {
       // ok: the `settings` broadcast carries the new value; the control never trusts its own
       if (event.result.ok) return IDLE_FORM;
       if (event.result.error === "not-host") return { status: "hidden" };
+      // Over the room's budget (#750): the "did not answer, try again" line, no new copy.
+      if (event.result.error === "rate-limited") {
+        return { status: "error", key: state.key, error: "timeout" };
+      }
       return { status: "error", key: state.key, error: event.result.error };
   }
 }

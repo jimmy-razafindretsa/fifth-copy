@@ -399,6 +399,11 @@ export const en = {
       "no-scene": "NO PICTURE FROM THE ROOM · KEEP TYPING",
       phones: "PHONES WATCH FROM THE BACK OF THE ROOM",
     },
+    /** Presence (#235, bible 7.4 notice row): the room went away under a seated page (#204). */
+    presence: {
+      roomLost: "THE ROOM WAS LOST",
+      backToLobby: "BACK TO THE LOBBY",
+    },
     errors: {
       prefix: "RETURNED ·",
       closed: "This race is closed.",

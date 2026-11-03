@@ -19,6 +19,7 @@ import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
 import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
+import notice from "../components/race-notice.module.css";
 import { AsleepAtDesk } from "../components/asleep-at-desk";
 import { RaceInput } from "../components/race-input";
 import { ReassignedNotice } from "../components/reassigned-notice";
@@ -33,7 +34,7 @@ import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view
 import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
-export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors">;
+export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors" | "presence">;
 
 /** The live leaf's copy: the status slot's, the countdown's (#214) and the typing input's name (#559). */
 export type SeatLiveLabels = SeatStatusLabels &
@@ -51,6 +52,8 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
   // A spectator past the room's cap (#616): no dedicated copy yet.
   "room-full": "generic",
   generic: "generic",
+  // The lost room shows its own notice row (#235 C4); this sentence is never read.
+  "room-lost": "noRoom",
 };
 
 type ViewProps = {
@@ -63,7 +66,8 @@ type ViewProps = {
 /**
  * The seat's live state for one phase (no hooks, so every phase renders in tests): skeleton rows while
  * connecting (bible 7.4), the waiting and line-cut notices (7.4 notice row), the lost line with the way
- * back to the waiting room (7.4 inline error line). Countdown and the GO stamp are `RaceSeatLive`'s
+ * back to the waiting room (7.4 inline error line); the lost room (#235 C4) as the still notice row
+ * `THE ROOM WAS LOST · BACK TO THE LOBBY`, its link to `/lobby/[code]`. Countdown and the GO stamp are `RaceSeatLive`'s
  * (#214, they follow the clock); after your finish and at RACE OVER the finished view is `SeatFinish`'s
  * (#240, it follows the snapshots): nothing here.
  */
@@ -88,6 +92,23 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
     case "reconnecting":
       return <RaceNotice kind="reconnecting" labels={labels.notice} />;
     case "lost":
+      if (lost === "room-lost") {
+        return (
+          <div data-lost="room-lost" className={styles.lost}>
+            {/* a statement, not a live state: the notice row without its pulse (bible 7.4) */}
+            <p
+              role="alert"
+              data-notice="room-lost"
+              className={cn(docket.notice, notice.notice, styles.roomLost)}
+            >
+              {labels.presence.roomLost} ·{" "}
+              <a href={`/lobby/${code}`} className={styles.roomLink}>
+                {labels.presence.backToLobby}
+              </a>
+            </p>
+          </div>
+        );
+      }
       return (
         <div data-lost={lost ?? "generic"} className={styles.lost}>
           <p role="alert" className={styles.errorLine}>

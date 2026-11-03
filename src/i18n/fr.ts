@@ -389,6 +389,11 @@ export const fr = {
       "no-scene": "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
       phones: "LES CELLULAIRES REGARDENT DU FOND DE LA SALLE",
     },
+    /** Presence (#235, bible 7.4 notice row): the room went away under a seated page (#204). */
+    presence: {
+      roomLost: "LA SALLE EST PERDUE",
+      backToLobby: "RETOUR AU VESTIAIRE",
+    },
     errors: {
       prefix: "RETOURNÉ ·",
       closed: "Cette course est fermée.",

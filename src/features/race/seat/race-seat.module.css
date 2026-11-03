@@ -67,6 +67,30 @@
   letter-spacing: 0.16em;
 }
 
+/* the lost room (#235 C4): the one-row notice docket, still; its link keeps the row's type and takes a
+   44px hit area without growing the row (bible 18 touch targets) */
+.roomLost {
+  max-width: 100%;
+}
+
+.roomLink {
+  display: inline-block;
+  padding-block: 14px;
+  margin-block: -14px;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.roomLink:hover {
+  text-decoration-thickness: 2px;
+}
+
+.roomLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 /* the way back: the 7.1 secondary label button as a link, 44px tall (bible 18 touch targets) */
 .back {
   display: inline-flex;

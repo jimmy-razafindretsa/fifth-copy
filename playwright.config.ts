@@ -67,7 +67,9 @@ export default defineConfig({
           // The web rate limiter (#207, ADR 0020) is off here: every browser context of the suite is
           // one client IP, so cookie-less joins and mints would share one bucket across tests. Its
           // behaviour is covered by src/server/limiter and src/features/lobby/actions tests.
-          env: { REDIS_URL: "" },
+          // REDIS_URL stays inherited: the production build requires it for the internal nonce
+          // store (#716), which the race server's calls then exercise end to end.
+          env: { WEB_RATE_LIMIT: "off" },
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
         },

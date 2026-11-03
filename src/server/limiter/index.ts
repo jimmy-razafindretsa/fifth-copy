@@ -18,13 +18,12 @@ export { isGuestSubject, requestSubject } from "./subject";
 let current: { url: string | undefined; limit: WebLimit & { close(): void } } | undefined;
 
 function webLimit(): WebLimit {
+  // `WEB_RATE_LIMIT=off` (Playwright, #716) disables the limiter as an absent URL does.
+  const url = env.WEB_RATE_LIMIT === "off" ? undefined : env.REDIS_URL;
   // Keyed on the URL so a test that swaps the mocked env gets a fresh client.
-  if (current?.url !== env.REDIS_URL || !current) {
+  if (current?.url !== url || !current) {
     current?.limit.close();
-    current = {
-      url: env.REDIS_URL,
-      limit: createWebLimit({ url: env.REDIS_URL, nodeEnv: env.NODE_ENV }),
-    };
+    current = { url, limit: createWebLimit({ url, nodeEnv: env.NODE_ENV }) };
   }
   return current.limit;
 }

@@ -51,7 +51,7 @@ describe("env", () => {
     expect(String(error)).not.toMatch(/short-secret-value/);
   });
 
-  it("REDIS_URL is an optional redis url (#207): absent or empty disables the limiter", async () => {
+  it("REDIS_URL is an optional redis url outside production (#207): absent or empty disables the limiter", async () => {
     expect((await loadEnv({ REDIS_URL: "redis://localhost:6379/3" })).REDIS_URL).toBe(
       "redis://localhost:6379/3",
     );
@@ -60,6 +60,26 @@ describe("env", () => {
     const error = await loadEnv({ REDIS_URL: "http://secret-host:6379" }).catch((e: Error) => e);
     expect(String(error)).toMatch(/REDIS_URL/);
     expect(String(error)).not.toMatch(/secret-host/);
+  });
+
+  it("#716 C3: REDIS_URL is required in production (the nonce store fails closed), not in dev/test", async () => {
+    for (const value of [undefined, ""]) {
+      const error = await loadEnv({ NODE_ENV: "production", REDIS_URL: value }).catch(
+        (e: Error) => e,
+      );
+      expect(String(error)).toMatch(/Invalid environment variables: REDIS_URL/);
+    }
+    const prod = await loadEnv({ NODE_ENV: "production", REDIS_URL: "redis://redis:6379/0" });
+    expect(prod.REDIS_URL).toBe("redis://redis:6379/0");
+    for (const NODE_ENV of ["development", "test"]) {
+      expect((await loadEnv({ NODE_ENV, REDIS_URL: undefined })).REDIS_URL).toBeUndefined();
+    }
+  });
+
+  it("#716: WEB_RATE_LIMIT is on by default and only on or off", async () => {
+    expect((await loadEnv({ WEB_RATE_LIMIT: undefined })).WEB_RATE_LIMIT).toBe("on");
+    expect((await loadEnv({ WEB_RATE_LIMIT: "off" })).WEB_RATE_LIMIT).toBe("off");
+    await expect(loadEnv({ WEB_RATE_LIMIT: "no" })).rejects.toThrow(/WEB_RATE_LIMIT/);
   });
 
   it.each(["RACE_SERVER_INTERNAL_URL", "NEXT_PUBLIC_RACE_SERVER_URL"])(

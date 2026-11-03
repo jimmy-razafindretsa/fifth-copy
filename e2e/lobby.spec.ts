@@ -1,12 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
 import {
   createLobby,
+  hostRoom,
   joinAsGuest,
+  phaseOf,
   recordRaceTokens,
   setHostSettings,
   startButton,
+  warmRace,
 } from "./race/helpers";
 import { HYDRATION_WAIT, scaled } from "./timeouts";
 
@@ -849,4 +852,80 @@ test.describe("bot rows and lobby type (#114)", () => {
       await expectNoA11yViolations(page);
     });
   }
+});
+
+// Contract of #732 C3: a late joiner. Host and guest start a race (Block mode, 10 words, untimed); a third
+// context opens /lobby/<code> during it and sees the 7.4 notice over the skeleton rows, no START; host and
+// guest type the strip to the end; within 5 s the third roll shows three rows and the notice is gone
+// (seated by the ended room, #732 race-server change); the host comes back through RACE AGAIN to three
+// rows and an enabled START.
+const raceInProgress = (page: Page) =>
+  page.getByRole("status").filter({ hasText: "RACE IN PROGRESS · YOU ARE SEATED WHEN IT ENDS" });
+
+test.describe("late joiner (#732 C3)", () => {
+  test.skip(({ viewport }) => viewport?.width !== 1280, "desktop project");
+
+  const opened: BrowserContext[] = [];
+  test.afterEach(async () => {
+    for (const context of opened.splice(0)) await context.close();
+  });
+
+  test("C3: held during the race, seated when it ends; the host's START is enabled", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(scaled(120_000));
+    const RACE_PATH = /\/race\/([0-9a-f-]{36})$/;
+    const input = (p: Page) => p.getByRole("textbox", { name: "Text to type" });
+    const strip = async (p: Page) =>
+      (await p.locator("[data-telex] [data-state]").allTextContents()).join("");
+
+    const { host, code, lobbyId } = await hostRoom(browser, opened, { before: recordRaceTokens });
+    await setHostSettings(host, { errorMode: "block", wordCount: 10, timerS: null });
+    await page.goto(`/race/${lobbyId}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
+    await expect(startButton(host)).toBeEnabled();
+    await warmRace(host, lobbyId);
+    await startButton(host).click();
+    await expect(host).toHaveURL(RACE_PATH);
+    const raceId = RACE_PATH.exec(host.url())![1]!;
+    for (const p of [host, page]) {
+      await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", {
+        timeout: scaled(10_000),
+      });
+      await expect(input(p)).toHaveAttribute("data-mode", "block");
+    }
+
+    // the late joiner: the notice, the skeleton rows, no START
+    const lateContext = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    opened.push(lateContext);
+    const late = await lateContext.newPage();
+    await late.goto(`/lobby/${code}`);
+    await expect(raceInProgress(late)).toBeVisible({ timeout: scaled(10_000) });
+    await expect(roll(late)).toHaveAttribute("aria-busy", "true");
+    await expect(startButton(late)).toHaveCount(0);
+    await expect(late.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0);
+
+    // host and guest finish: the race ends all-finished
+    const texts = await Promise.all([host, page].map(strip));
+    await Promise.all([host, page].map((p, i) => p.keyboard.type(texts[i]!, { delay: 40 })));
+    for (const p of [host, page]) {
+      await expect(p.locator('[data-seat-status] [data-finished="ended"]')).toBeVisible({
+        timeout: scaled(20_000),
+      });
+    }
+    // within 5 s of the end
+    await expect(rows(late)).toHaveCount(3, { timeout: scaled(5_000) });
+    await expect(raceInProgress(late)).toHaveCount(0);
+    await expect(startButton(late)).toHaveCount(0);
+
+    // the host comes back through the Dawn report's RACE AGAIN: three seated, START enabled
+    await host.getByRole("link", { name: "DAWN REPORT →" }).click();
+    await expect(host).toHaveURL(`/results/${raceId}`);
+    await host.getByRole("link", { name: "RACE AGAIN", exact: true }).click();
+    await expect(host).toHaveURL(`/lobby/${code}`);
+    await expect(rows(host)).toHaveCount(3, { timeout: scaled(10_000) });
+    await expect(startButton(host)).toBeEnabled();
+    await expect(rows(late)).toHaveCount(3);
+  });
 });

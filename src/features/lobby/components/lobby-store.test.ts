@@ -15,6 +15,7 @@ import {
   type LobbyEvent,
   type VersionReload,
 } from "./lobby-store";
+import { joinRoom, LATE_JOIN_RETRY_MS, type JoinRoomDeps } from "./late-join";
 
 // Contract of card 107, C5: the lobby store reduces `welcome` and `roster` into a desk-sorted list.
 // Fixtures of the v4 shape (#557): members carry isBot and their desk identity.
@@ -52,9 +53,14 @@ function fakeSocket() {
   const cbs: Partial<Record<string, (arg: never) => void>> = {};
   // each on* returns its off (#561); the lobby unbinds them all before it parks the socket (#214)
   const offs: Record<string, Mock<() => void>> = {};
+  // every listener of an event, as on a real socket (the late-join hold binds beside the store, #732)
+  const listeners: Record<string, ((arg: never) => void)[]> = {};
   const bind = (name: string) => (cb: unknown) => {
     cbs[name] = cb as never;
-    const off = vi.fn<() => void>();
+    (listeners[name] ??= []).push(cb as never);
+    const off = vi.fn<() => void>(() => {
+      listeners[name] = (listeners[name] ?? []).filter((fn) => fn !== cb);
+    });
     offs[name] = off;
     return off;
   };
@@ -80,7 +86,9 @@ function fakeSocket() {
     onReconnected: bind("reconnected"),
     close: vi.fn(),
   };
-  const fire = (name: string, arg: unknown) => cbs[name]?.(arg as never);
+  const fire = (name: string, arg: unknown) => {
+    for (const fn of [...(listeners[name] ?? [])]) fn(arg as never);
+  };
   return { socket, cbs, fire, offs };
 }
 
@@ -122,6 +130,7 @@ describe("reduceLobby", () => {
     ["no-room", "not-found"],
     ["bad-token", "generic"],
     ["version", "generic"],
+    // a seated viewer refused later (#732 C4): the generic error, never the late joiner's hold
     ["in-progress", "generic"],
   ] as const)("connect-error %s is a terminal %s error", (reason, error) => {
     const state = run(
@@ -546,5 +555,273 @@ describe("settings (#498 C1)", () => {
     expect(state.settings).toEqual(block);
     unbind();
     expect(offs.settings).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Contract of #732 C1 and C4: an `in-progress` refusal before the viewer was ever seated enters the
+// `spectating` hold; a viewer who had a desk (a line-cut member, a second tab) keeps today's handling.
+describe("spectating (#732 C1 C4)", () => {
+  const refused = { type: "connect-error", reason: "in-progress" } as const;
+
+  it("C1: in-progress from loading is phase spectating, not an error", () => {
+    expect(run(refused)).toEqual({ ...initialLobbyState, phase: "spectating" });
+  });
+
+  it("C1: a first connect that went through reconnecting, never seated, also holds", () => {
+    expect(run({ type: "connect-error", reason: "transport" }, refused).phase).toBe("spectating");
+  });
+
+  it("C1: spectating keeps its phase on in-progress, room-full, transport and reconnect events", () => {
+    for (const event of [
+      refused,
+      { type: "connect-error", reason: "room-full" },
+      { type: "connect-error", reason: "transport" },
+      { type: "reconnecting" },
+      { type: "reconnected" },
+    ] as const) {
+      expect(run(refused, event).phase).toBe("spectating");
+    }
+  });
+
+  it("C1: a refusal that is not about the race still ends the hold in its error", () => {
+    expect(run(refused, { type: "connect-error", reason: "no-room" })).toMatchObject({
+      phase: "error",
+      error: "not-found",
+    });
+  });
+
+  it("C2: the player welcome of an ended room seats the viewer: live, no notice", () => {
+    const ended = welcome(3, [ada, bob, member(3, "Cyd", false)]);
+    const state = run(refused, {
+      type: "welcome",
+      payload: { ...ended, room: { ...ended.room, phase: "ended" } },
+    });
+    expect(state).toMatchObject({ phase: "live", you: 3 });
+    expect(state.members).toHaveLength(3);
+  });
+
+  it.each(["live", "reconnecting", "starting"] as const)(
+    "C4: a viewer seated before (%s) refused in-progress keeps the generic error",
+    (phase) => {
+      const seated = run({ type: "welcome", payload: welcome(2, [ada, bob]) });
+      const state = reduceLobby({ ...seated, phase, raceId: phase === "starting" ? "r" : null }, refused);
+      expect(state).toMatchObject({ phase: "error", error: "generic" });
+    },
+  );
+});
+
+// Contract of #732 C2: the late joiner's hold (`joinRoom`), on fake sockets and an injected timer.
+describe("joinRoom: the late joiner's hold (#732 C2)", () => {
+  function harness() {
+    const sockets: ReturnType<typeof fakeSocket>[] = [];
+    const events: LobbyEvent[] = [];
+    const timers: { fn: () => void; ms: number }[] = [];
+    const mint = vi.fn(async ({ spectator }: { spectator: boolean }) => ({
+      ok: true as const,
+      token: spectator ? "spectator-token" : "player-token",
+      url: "ws://race.test",
+    }));
+    const connect = vi.fn(async () => {
+      const fake = fakeSocket();
+      sockets.push(fake);
+      return fake.socket;
+    });
+    const attached: RoomSocket[] = [];
+    const detach = vi.fn();
+    const deps: JoinRoomDeps = {
+      mint,
+      connect,
+      // the page's binding: the store sees the player socket's events
+      attach: (socket) => {
+        attached.push(socket);
+        const off = bindRoomSocket(socket, (e) => events.push(e), {
+          versionReload: { reload: vi.fn(), storage: null },
+        });
+        return () => {
+          off();
+          detach();
+        };
+      },
+      dispatch: (e) => events.push(e),
+      setTimer: (fn, ms) => {
+        timers.push({ fn, ms });
+        return timers.length;
+      },
+      clearTimer: vi.fn(),
+    };
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const state = () => events.reduce(reduceLobby, initialLobbyState);
+    return { sockets, events, timers, mint, connect, attached, detach, deps, flush, state };
+  }
+
+  const endedWelcome = (you: number, members: Member[]): RoomEvents["welcome"] => {
+    const w = welcome(you, members);
+    return { ...w, room: { ...w.room, phase: "ended" } };
+  };
+  const spectatorWelcome = (phase: "running" | "ended"): RoomEvents["welcome"] => ({
+    ...welcome(1, [ada, bob]),
+    role: "spectator",
+    you: null,
+    room: { code: "KGB-4821" as never, phase },
+  });
+
+  it("is LATE_JOIN_RETRY_MS = 10 s (under the 10/min mint budget)", () => {
+    expect(LATE_JOIN_RETRY_MS).toBe(10_000);
+  });
+
+  it("a seat at once: one player mint, one socket, attached, no hold", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    expect(h.mint.mock.calls).toEqual([[{ spectator: false }]]);
+    h.sockets[0]!.fire("welcome", welcome(2, [ada, bob]));
+    expect(h.state()).toMatchObject({ phase: "live", you: 2 });
+    expect(h.attached).toEqual([h.sockets[0]!.socket]);
+    expect(h.sockets[0]!.socket.close).not.toHaveBeenCalled();
+  });
+
+  it("in-progress -> spectator welcome -> ended -> player welcome: seated, every refused socket closed", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    const [player1] = h.sockets;
+    player1!.fire("connectError", "in-progress");
+    expect(h.state().phase).toBe("spectating");
+    // the refused socket never reconnects by itself: closed and unbound
+    expect(player1!.socket.close).toHaveBeenCalled();
+    expect(h.detach).toHaveBeenCalledTimes(1);
+    await h.flush();
+    expect(h.mint.mock.calls[1]).toEqual([{ spectator: true }]);
+    expect(h.connect.mock.calls[1]).toEqual(["ws://race.test", "spectator-token"]);
+    const watcher = h.sockets[1]!;
+    // the spectator socket never reaches the store: its `you: null` welcome would empty the roll
+    expect(h.attached).not.toContain(watcher.socket);
+    watcher.fire("welcome", spectatorWelcome("running"));
+    expect(h.state().phase).toBe("spectating");
+    watcher.fire("ended", { v: PROTOCOL_VERSION, raceId: "r", reason: "all-finished", ranking: [] });
+    expect(watcher.socket.close).toHaveBeenCalled();
+    await h.flush();
+    expect(h.mint.mock.calls[2]).toEqual([{ spectator: false }]);
+    const player2 = h.sockets[2]!;
+    expect(h.attached.at(-1)).toBe(player2.socket);
+    player2.fire("welcome", endedWelcome(3, [ada, bob, member(3, "Cyd", false)]));
+    expect(h.state()).toMatchObject({ phase: "live", you: 3 });
+    expect(h.state().members).toHaveLength(3);
+    expect(player2.socket.close).not.toHaveBeenCalled();
+    expect(h.timers).toEqual([]);
+  });
+
+  it("a spectator welcome of a room already ended seats at once", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    h.sockets[1]!.fire("welcome", spectatorWelcome("ended"));
+    expect(h.sockets[1]!.socket.close).toHaveBeenCalled();
+    await h.flush();
+    expect(h.mint).toHaveBeenLastCalledWith({ spectator: false });
+    expect(h.sockets).toHaveLength(3);
+  });
+
+  it("room-full keeps the notice and retries the player join every LATE_JOIN_RETRY_MS", async () => {
+    const h = harness();
+    h.deps.retryMs = 7;
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    h.sockets[1]!.fire("connectError", "room-full");
+    expect(h.state().phase).toBe("spectating");
+    expect(h.sockets[1]!.socket.close).toHaveBeenCalled();
+    expect(h.timers.map((t) => t.ms)).toEqual([7]);
+    expect(h.mint).toHaveBeenCalledTimes(2);
+    // the retry: a player join; still racing -> refused -> the next retry, no spectator mint again
+    h.timers[0]!.fn();
+    await h.flush();
+    expect(h.mint).toHaveBeenLastCalledWith({ spectator: false });
+    h.sockets[2]!.fire("connectError", "in-progress");
+    expect(h.sockets[2]!.socket.close).toHaveBeenCalled();
+    expect(h.state().phase).toBe("spectating");
+    expect(h.timers.map((t) => t.ms)).toEqual([7, 7]);
+    await h.flush();
+    expect(h.mint).toHaveBeenCalledTimes(3);
+    // the race ended meanwhile: the next retry seats
+    h.timers[1]!.fn();
+    await h.flush();
+    h.sockets[3]!.fire("welcome", endedWelcome(3, [ada, bob, member(3, "Cyd", false)]));
+    expect(h.state()).toMatchObject({ phase: "live", you: 3 });
+  });
+
+  it("a throttled mint during the hold waits LATE_JOIN_RETRY_MS instead of failing", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.mint.mockResolvedValueOnce({ ok: false, error: "rate-limited" } as never);
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    expect(h.state().phase).toBe("spectating");
+    expect(h.timers.map((t) => t.ms)).toEqual([LATE_JOIN_RETRY_MS]);
+  });
+
+  it("the first mint's refusal is the page's error, as before (throttled is generic)", async () => {
+    const h = harness();
+    h.mint.mockResolvedValueOnce({ ok: false, error: "rate-limited" } as never);
+    joinRoom(h.deps);
+    await h.flush();
+    expect(h.state()).toMatchObject({ phase: "error", error: "generic" });
+    expect(h.connect).not.toHaveBeenCalled();
+  });
+
+  it("a transport error of the spectator socket waits for its own reconnect", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    h.sockets[1]!.fire("connectError", "transport");
+    expect(h.sockets[1]!.socket.close).not.toHaveBeenCalled();
+    expect(h.state().phase).toBe("spectating");
+  });
+
+  it("an in-progress refusal after the seat is the store's, never a new hold", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("welcome", welcome(2, [ada, bob]));
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    expect(h.state()).toMatchObject({ phase: "error", error: "generic" });
+    expect(h.mint).toHaveBeenCalledTimes(1);
+    expect(h.sockets[0]!.socket.close).not.toHaveBeenCalled();
+  });
+
+  it("cancel closes the spectator socket and clears the pending retry; a late mint opens nothing", async () => {
+    const h = harness();
+    const cancel = joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    h.sockets[1]!.fire("connectError", "room-full");
+    cancel();
+    expect(h.deps.clearTimer).toHaveBeenCalledWith(1);
+    const idle = harness();
+    const stop = joinRoom(idle.deps);
+    stop();
+    await idle.flush();
+    expect(idle.connect).not.toHaveBeenCalled();
+  });
+
+  it("cancel while spectating closes the spectator socket", async () => {
+    const h = harness();
+    const cancel = joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    cancel();
+    expect(h.sockets[1]!.socket.close).toHaveBeenCalled();
+    h.sockets[1]!.fire("ended", { v: PROTOCOL_VERSION, raceId: "r", reason: "all-finished", ranking: [] });
+    await h.flush();
+    expect(h.sockets).toHaveLength(2);
   });
 });

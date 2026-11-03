@@ -8,8 +8,12 @@ export const ROOM_SEATS = 30;
 export type LobbyError = "not-found" | "closed" | "generic";
 
 export type LobbyState = {
-  /** `starting`: the host pressed START; the page moves to the seat view of `raceId` (#214). */
-  phase: "loading" | "live" | "reconnecting" | "starting" | "error";
+  /**
+   * `starting`: the host pressed START; the page moves to the seat view of `raceId` (#214).
+   * `spectating`: a late joiner refused `in-progress` before it was ever seated, held until the race
+   * ends (#732, `joinRoom`); extension point for the phone spectator screen (#292) and the projector.
+   */
+  phase: "loading" | "live" | "reconnecting" | "starting" | "spectating" | "error";
   error: LobbyError | null;
   /** The viewer's desk, from `welcome`. */
   you: number | null;
@@ -60,7 +64,7 @@ function connectError(reason: ConnectErrorReason): LobbyError | null {
     case "bad-token":
     // Reached only when the one-shot reload already ran (see `bindRoomSocket`).
     case "version":
-    // No lobby copy for a race already under way yet (#210 adds it).
+    // A viewer seated before (a member refused later): a late joiner holds instead (#732).
     case "in-progress":
     // A spectator past the room's cap (#616); a seated player is never refused with it.
     case "room-full":
@@ -95,12 +99,21 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
     case "countdown":
       return { ...state, phase: "starting", raceId: event.payload.race.raceId };
     case "connect-error": {
-      const error = connectError(event.reason);
+      const { reason } = event;
+      // A late joiner (#732): refused before its first seat, it holds until the race ends; the hold's
+      // own refusals and transport errors keep the notice. A viewer seated before keeps today's path.
+      const neverSeated = state.you === null && state.phase !== "starting";
+      if (reason === "in-progress" && neverSeated) return { ...state, phase: "spectating" };
+      if (state.phase === "spectating" && (reason === "room-full" || reason === "transport")) {
+        return state;
+      }
+      const error = connectError(reason);
       return error ? { ...state, phase: "error", error } : { ...state, phase: "reconnecting" };
     }
     case "reconnecting":
-      return { ...state, phase: "reconnecting" };
+      return state.phase === "spectating" ? state : { ...state, phase: "reconnecting" };
     case "reconnected":
+      if (state.phase === "spectating") return state;
       return { ...state, phase: state.you === null ? "loading" : "live" };
     case "token-error":
       return { ...state, phase: "error", error: event.error };

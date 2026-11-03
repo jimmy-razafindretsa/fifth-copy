@@ -326,6 +326,47 @@ describe("non-host notice row (#105 C2)", () => {
   });
 });
 
+// Contract of #732 C1: a late joiner (phase `spectating`) sees the 7.4 notice row RACE IN PROGRESS (role
+// status, no pulse: a statement) at the top of the roll, the skeleton rows under it, the settings
+// skeleton and no START, whoever hosts the room.
+describe("late joiner notice row (#732 C1)", () => {
+  const spectating: LobbyState = { ...initialLobbyState, phase: "spectating" };
+  const statuses = (html: string) => [
+    ...html.matchAll(/<p role="status" class="([^"]*)"[^>]*>([^<]*)</g),
+  ];
+
+  it("one status row RACE IN PROGRESS above the skeleton rows, no pulse, no START", () => {
+    const html = view(spectating);
+    const rows = statuses(html);
+    expect(rows.map((m) => m[2])).toEqual([labels.raceInProgress]);
+    expect(rows[0]![1]).toMatch(/_notice_/);
+    expect(rows[0]![1]).not.toMatch(/_pulse_/);
+    // the roll's skeleton (aria-busy list) under the notice, and the settings docket's skeleton
+    const notice = html.indexOf(labels.raceInProgress);
+    const roll = html.indexOf(`aria-label="${labels.listName}" aria-busy="true"`);
+    expect(roll).toBeGreaterThan(notice);
+    expect(html).toContain("data-skeleton");
+    expect(html).not.toContain(`>${labels.start.button}<`);
+    expect(html).not.toContain(`>${labels.waitingForHost}<`);
+    expect(labels.raceInProgress).toBe("RACE IN PROGRESS · YOU ARE SEATED WHEN IT ENDS");
+  });
+
+  it("absent while loading, live and in error", () => {
+    const has = (html: string) => html.includes(`>${labels.raceInProgress}<`);
+    expect(has(view(initialLobbyState))).toBe(false);
+    expect(has(view(live([member(1, true), member(2)], 2)))).toBe(false);
+    expect(has(view({ ...initialLobbyState, phase: "error", error: "generic" }))).toBe(false);
+  });
+
+  it("French: COURSE EN COURS · TU SERAS PLACÉ À LA FIN", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView code={CODE} state={spectating} labels={fr.lobby} errors={errors} />,
+    );
+    expect(html).toContain(">COURSE EN COURS · TU SERAS PLACÉ À LA FIN<");
+    expect(html).not.toContain("RACE IN PROGRESS");
+  });
+});
+
 // Contract of #498 C5/C6: the dockets column (room docket with its invite row, the settings docket, then
 // the host's START), beside the ring slot and the roll.
 describe("lobby layout (#498)", () => {

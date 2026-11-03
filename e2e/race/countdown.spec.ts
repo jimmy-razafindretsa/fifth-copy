@@ -357,8 +357,8 @@ test.describe("#214 countdown and GO stamp", () => {
       expect(disjoint(s.overlay!, s.sheet!), `${s.step} overlay vs sheet`).toBe(true);
     }
 
-    // C5: one polite status region says 3, 2, 1, GO
-    const said = log.said.filter((e) => e.path === path && e.text);
+    // C5: one polite status region says 3, 2, 1, GO (then your place, #242)
+    const said = log.said.filter((e) => e.path === path && e.text).slice(0, 4);
     expect(said.map((e) => e.text)).toEqual(["3", "2", "1", "GO"]);
     for (const e of said) {
       expect(e.role).toBe("status");
@@ -398,11 +398,12 @@ test.describe("#214 countdown and GO stamp", () => {
       expect(disjoint(s.overlay!, s.sheet!), `${s.step} overlay vs sheet`).toBe(true);
     }
     expect(steps[3]!.angle).toBe("-6");
-    expect(log.said.filter((e) => e.path === path && e.text).map((e) => e.text)).toEqual([
-      "3",
-      "2",
-      "1",
-      "GO",
-    ]);
+    // then your place (#242)
+    expect(
+      log.said
+        .filter((e) => e.path === path && e.text)
+        .map((e) => e.text)
+        .slice(0, 4),
+    ).toEqual(["3", "2", "1", "GO"]);
   });
 });

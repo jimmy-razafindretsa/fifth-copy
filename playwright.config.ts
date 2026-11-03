@@ -69,7 +69,8 @@ export default defineConfig({
           // behaviour is covered by src/server/limiter and src/features/lobby/actions tests.
           // REDIS_URL stays inherited: the production build requires it for the internal nonce
           // store (#716), which the race server's calls then exercise end to end.
-          env: { WEB_RATE_LIMIT: "off" },
+          // PLAYWRIGHT_E2E marks this run: src/env.ts refuses WEB_RATE_LIMIT=off in production otherwise.
+          env: { WEB_RATE_LIMIT: "off", PLAYWRIGHT_E2E: "1" },
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
         },

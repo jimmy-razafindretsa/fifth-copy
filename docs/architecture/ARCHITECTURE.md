@@ -379,7 +379,7 @@ Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis
 |---|---|---|
 | `DATABASE_URL`, `TEST_DATABASE_URL` | web, worker | Postgres (ADR 0002, 0003) |
 | `REDIS_URL` | race-server, web | live state; web (required in production, #716): shared rate limiter (fails open) and internal-request nonce store `web:internal:nonce:*` (fails closed) (ADR 0020) |
-| `WEB_RATE_LIMIT` | web | `off` turns only the web rate limiter off (Playwright); default `on`, unset on Railway (ADR 0020) |
+| `WEB_RATE_LIMIT`, `PLAYWRIGHT_E2E` | web | `off` turns only the web rate limiter off; in production only with `PLAYWRIGHT_E2E=1` (set by `playwright.config.ts`); both unset on Railway (ADR 0020) |
 | `RACE_SERVER_PORT` | race-server | listen port |
 | `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (the race-server's own Railway domain in production, ADR 0019) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |

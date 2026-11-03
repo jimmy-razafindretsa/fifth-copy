@@ -82,6 +82,35 @@ describe("env", () => {
     await expect(loadEnv({ WEB_RATE_LIMIT: "no" })).rejects.toThrow(/WEB_RATE_LIMIT/);
   });
 
+  it("#716: WEB_RATE_LIMIT=off is refused on a deployed production server", async () => {
+    const prod = {
+      NODE_ENV: "production",
+      REDIS_URL: "redis://redis:6379/0",
+      WEB_RATE_LIMIT: "off",
+    };
+    for (const extra of [{}, { CI: "true" }, { RAILWAY_ENVIRONMENT_NAME: "production" }]) {
+      await expect(loadEnv({ ...prod, ...extra, PLAYWRIGHT_E2E: undefined })).rejects.toThrow(
+        /Invalid environment variables: WEB_RATE_LIMIT/,
+      );
+    }
+    await expect(loadEnv({ ...prod, PLAYWRIGHT_E2E: "true" })).rejects.toThrow(/PLAYWRIGHT_E2E/);
+  });
+
+  it("#716: WEB_RATE_LIMIT=off is allowed under Playwright (CI e2e) and in dev and test", async () => {
+    const prod = await loadEnv({
+      NODE_ENV: "production",
+      REDIS_URL: "redis://redis:6379/0",
+      WEB_RATE_LIMIT: "off",
+      PLAYWRIGHT_E2E: "1",
+      CI: "true",
+    });
+    expect(prod.WEB_RATE_LIMIT).toBe("off");
+    for (const NODE_ENV of ["development", "test"]) {
+      const env = await loadEnv({ NODE_ENV, WEB_RATE_LIMIT: "off", PLAYWRIGHT_E2E: undefined });
+      expect(env.WEB_RATE_LIMIT).toBe("off");
+    }
+  });
+
   it.each(["RACE_SERVER_INTERNAL_URL", "NEXT_PUBLIC_RACE_SERVER_URL"])(
     "rejects a non-url %s",
     async (name) => {

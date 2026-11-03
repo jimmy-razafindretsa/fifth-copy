@@ -68,7 +68,8 @@ describe.skipIf(!testDatabaseUrl)(
   "POST /api/internal/races/:id/results (needs TEST_DATABASE_URL, run scripts/test-db.sh)",
   () => {
     let db: ReturnType<typeof createPrismaClient>;
-    const PREFIX = "test-race-results-";
+    // Not under "test-race-": race-model.test.ts cleans that prefix up and would cascade to this lobby.
+    const PREFIX = "test-results-route-";
     const CODE = "TXT-1890";
     const raceIds: string[] = [];
     let host: { id: string };

@@ -309,7 +309,9 @@ describe("SettingsDocket host form (#110 C1)", () => {
     expect(rows["bots.2"]).toContain(">BOT 2</dt>");
     expect(rows["bots.2"]).toMatch(/role="group" aria-labelledby="lobby-setting-bots-2"/);
     for (const level of ["RECRUIT", "CLERK", "OFFICER", "COMMISSAR", "MAJOR"])
-      expect(rows["bots.2"]).toMatch(new RegExp(`aria-pressed="(true|false)"[^>]*>${level}</button>`));
+      expect(rows["bots.2"]).toMatch(
+        new RegExp(`aria-pressed="(true|false)"[^>]*>${level}</button>`),
+      );
     expect(rows["bots.2"]).toMatch(/aria-pressed="true"[^>]*>MAJOR<\/button>/);
     expect(rows["bots.2"]).toContain(">90 WPM</span>");
     expect(rows["bots.1"]).toContain(">35 WPM</span>");
@@ -326,9 +328,9 @@ describe("SettingsDocket host form (#110 C1)", () => {
     expect(rowsOf(host(S({ bots: [{ level: "clerk" }] }), IDLE_FORM, EN, PREFIX, 30)).bots).toMatch(
       capped,
     );
-    expect(rowsOf(host(S({ bots: [{ level: "clerk" }] }), IDLE_FORM, EN, PREFIX, 29)).bots).not.toMatch(
-      /aria-disabled/,
-    );
+    expect(
+      rowsOf(host(S({ bots: [{ level: "clerk" }] }), IDLE_FORM, EN, PREFIX, 29)).bots,
+    ).not.toMatch(/aria-disabled/);
   });
 
   it("#114 C1, C3: a pending bot or lobby change marks its own row busy; refusals point at it", () => {
@@ -346,7 +348,9 @@ describe("SettingsDocket host form (#110 C1)", () => {
   it("#114 C3: LOBBY is a PUBLIC | PRIVATE segmented toggle, the current type pressed", () => {
     const row = rowsOf(host(S({ lobbyType: "public" }))).lobbyType;
     expect(row).toMatch(/role="group" aria-labelledby="lobby-setting-lobbyType"/);
-    expect(row).toMatch(/aria-pressed="true"[^>]*>PUBLIC<\/button><button[^>]*aria-pressed="false"[^>]*>PRIVATE</);
+    expect(row).toMatch(
+      /aria-pressed="true"[^>]*>PUBLIC<\/button><button[^>]*aria-pressed="false"[^>]*>PRIVATE</,
+    );
   });
 
   it("#114 French: the bot rows and the lobby toggle from the French catalog", () => {

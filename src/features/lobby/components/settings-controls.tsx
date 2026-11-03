@@ -427,9 +427,7 @@ export function hostForm({
       botRows.push({
         key,
         label: fill(labels.form.bot, { n: bot + 1 }),
-        control: (
-          <BotRow n={bot + 1} level={settings.bots[bot].level} ctx={ctx} labels={labels} />
-        ),
+        control: <BotRow n={bot + 1} level={settings.bots[bot].level} ctx={ctx} labels={labels} />,
       });
       continue;
     }

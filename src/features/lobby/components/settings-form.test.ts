@@ -57,7 +57,9 @@ describe("hostRows (C1, C3)", () => {
   });
 
   it("#114 C1: one sub-row per bot right under BOTS, 1-based in desk order", () => {
-    const rows = hostRows(S({ bots: [{ level: "clerk" }, { level: "major" }, { level: "recruit" }] }));
+    const rows = hostRows(
+      S({ bots: [{ level: "clerk" }, { level: "major" }, { level: "recruit" }] }),
+    );
     const at = rows.indexOf("bots");
     expect(rows.slice(at)).toEqual(["bots", "bots.1", "bots.2", "bots.3", "lobbyType"]);
   });

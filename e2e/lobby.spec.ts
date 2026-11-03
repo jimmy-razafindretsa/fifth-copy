@@ -841,9 +841,10 @@ test.describe("bot rows and lobby type (#114)", () => {
       expect(n).toBe(1 + 5 + 1 + 2);
       if (touch)
         for (let i = 0; i < n; i++)
-          expect((await controls.nth(i).boundingBox())!.height, `control ${i}`).toBeGreaterThanOrEqual(
-            44,
-          );
+          expect(
+            (await controls.nth(i).boundingBox())!.height,
+            `control ${i}`,
+          ).toBeGreaterThanOrEqual(44);
       expect(await noSideScroll(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);
     });

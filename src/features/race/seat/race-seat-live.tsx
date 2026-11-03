@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { fill } from "@/i18n/format";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
 import {
@@ -26,11 +25,12 @@ import { ReassignedNotice } from "../components/reassigned-notice";
 import { FinishedView } from "../components/finished-view";
 import { nixieNumber } from "../components/nixie-counters";
 import { RaceNotice } from "../components/race-notice";
-import { StampRow, stampText } from "../components/stamp-row";
+import { RaceAnnouncer } from "../components/race-announcer";
+import { StampRow } from "../components/stamp-row";
 import { selectAccuracy, selectFinishWpm, selectPlace } from "../view/counters";
 import type { ExitLabels } from "../view/hud-labels";
 import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view/standings";
-import { paperwork, PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
+import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
 export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors">;
@@ -220,8 +220,8 @@ export function SeatFinish({ labels }: { labels: FinishLabels }) {
  * the one race store every HUD leaf reads; it renders the live state. Phones only watch (the layout shows
  * them the notice; spectator mode is #292), so a phone-width page never takes a desk.
  * Its root carries the store's phase as `data-phase` (`countdown` until GO, `running` from GO: the gate
- * #559's input reads) and holds the countdown overlay and the polite announcer of 3, 2, 1, GO (#214;
- * the race announcer of #242 reuses it). It owns the typing path too (#559): the hidden `RaceInput`,
+ * #559's input reads) and holds the countdown overlay and the race's one polite announcer (#242: 3, 2,
+ * 1, GO of #214, the overtake lines of #232, your place, your finish, the race over). It owns the typing path too (#559): the hidden `RaceInput`,
  * unlocked while you may type, feeds `createTyping` over the open socket. A bare Enter there plays your
  * Sabotage card (#236): the store takes the play when it may go out and `sendBonusPlays` emits it.
  */
@@ -246,6 +246,8 @@ export function RaceSeatLive({
   const backspace = useRaceStore((s) => s.settings?.backspace);
   const errors = useRaceStore((s) => s.prediction?.state.errors);
   const finishWpm = useRaceStore(selectFinishWpm);
+  const { announce, countdown, stamps } = labels;
+  const announcer = useMemo(() => ({ announce, countdown, stamps }), [announce, countdown, stamps]);
   const typing = useRef<Typing | null>(null);
   const press = useCallback((key: string) => typing.current?.press(key), []);
   // #236: Enter plays your card; the store gates it and `sendBonusPlays` sends it
@@ -307,20 +309,9 @@ export function RaceSeatLive({
         backspace={backspace}
         errors={errors}
       />
-      {/* present before the countdown starts, so each change is announced; nothing to say once lost */}
-      {phase !== "lost" ? (
-        <p role="status" aria-atomic="true" data-announcer className={docket.srOnly}>
-          {step !== null
-            ? step === "go"
-              ? labels.countdown.go
-              : String(step)
-            : stamp
-              ? stamp.kind === "overtake" || stamp.kind === "passed"
-                ? fill(labels.announce[stamp.kind], { desk: paperwork(stamp.other) })
-                : stampText(stamp, finishWpm, labels.stamps)
-              : ""}
-        </p>
-      ) : null}
+      {/* #242: the one polite announcer, present before the countdown starts so each change is read;
+          nothing to say once lost (the lost line is its own alert) */}
+      {phase !== "lost" ? <RaceAnnouncer step={step} labels={announcer} /> : null}
     </div>
   );
 }

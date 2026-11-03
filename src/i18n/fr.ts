@@ -364,10 +364,14 @@ export const fr = {
       returned: "RETOURNÉ · {n} FAUTES",
       returnedOne: "RETOURNÉ · 1 FAUTE",
     },
-    /** The race announcer (#232 C4; #242 adds the rest). */
+    /** The race announcer (#232 C4, #242; bible 14.3): one polite status region, never the race text. */
     announce: {
       overtake: "Tu as dépassé le bureau {desk}",
       passed: "Le bureau {desk} t'a dépassé",
+      place: "Position {place} sur {total}",
+      finished: "Terminé. Position {place} sur {total}",
+      over: "Course terminée. Position {place} sur {total}",
+      overUnranked: "Course terminée.",
     },
     loading: "On t'installe à ton bureau…",
     /** The 3D scene's loading card (#563, bible 7.4 extension): the stamp, the frame's name, the tip tag. */

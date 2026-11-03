@@ -24,7 +24,7 @@ export type RaceSeatLabels = {
   countdown: CountdownLabels;
   /** The overtake stamps (#232) and your finish stamp (#240): `ACCEPTED · 48 WPM`, `RETURNED · 2 ERRORS`. */
   stamps: StampRowLabels;
-  /** The race announcer (#232 C4): `{desk}` is the other desk as paperwork (`07`). */
+  /** The race announcer (#232 C4, #242): countdown, place, overtakes, your finish, the race over. */
   announce: SeatAnnounceLabels;
   /** The connecting skeleton's name. */
   loading: string;
@@ -42,8 +42,18 @@ export type RaceSeatLabels = {
   finish: FinishLabels;
 };
 
-/** The polite status region's race lines (#232 C4; #242 adds the rest). */
-export type SeatAnnounceLabels = { overtake: string; passed: string };
+/**
+ * The race announcer's lines (#232 C4, #242; bible 14.3): `{desk}` is the other desk as paperwork,
+ * `{place}` / `{total}` your place and the desks in the race; `overUnranked` when you hold no place.
+ */
+export type SeatAnnounceLabels = {
+  overtake: string;
+  passed: string;
+  place: string;
+  finished: string;
+  over: string;
+  overUnranked: string;
+};
 
 /** The lost line (bible 7.4 inline error line): the prefix, one sentence per reason, the way back. */
 export type SeatErrorLabels = {

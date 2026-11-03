@@ -62,6 +62,8 @@ const STORE_READERS: Record<string, string> = {
   [path.join(components, "nixie-counters-live.tsx")]: "../client/use-race-store",
   // #236 C3: the Sabotage tray's live leaf (its cooldown sampler is the nixie one)
   [path.join(components, "sabotage-tray-live.tsx")]: "../client/use-race-store",
+  // #242 C2: the race announcer reads primitives of the store (its selectors live in view/announcements)
+  [path.join(components, "race-announcer.tsx")]: "../client/use-race-store",
 };
 
 /**

@@ -922,6 +922,10 @@ test.describe("late joiner (#732 C3)", () => {
     // the host comes back through the Dawn report's RACE AGAIN: three seated, START enabled
     await host.getByRole("link", { name: "DAWN REPORT →" }).click();
     await expect(host).toHaveURL(`/results/${raceId}`);
+    // the report is filed (the filing notice refreshes the page): click only then, as race-again.spec
+    await expect(host.locator("[data-ranking] tbody tr")).toHaveCount(2, {
+      timeout: scaled(15_000),
+    });
     await host.getByRole("link", { name: "RACE AGAIN", exact: true }).click();
     await expect(host).toHaveURL(`/lobby/${code}`);
     await expect(rows(host)).toHaveCount(3, { timeout: scaled(10_000) });

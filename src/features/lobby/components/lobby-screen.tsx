@@ -9,7 +9,8 @@ import styles from "./lobby.module.css";
  * `/lobby/[code]` (ARCHITECTURE 8.1, 8.3): the shell renders on the server, the roll connects in
  * the client leaf. Only a canonical code (`KGB-4821`) of an existing lobby renders; anything else is
  * `notFound()`. A closed lobby still renders: its token request answers `closed` as an error line. The
- * kicker names the room's type from the row (`Lobby.type`, #105).
+ * kicker names the room's type from the row (`Lobby.type`, #105), and so does the docket's LOBBY row
+ (#114): `setLobbyType` revalidates this page, so both follow the host's change.
  */
 export async function LobbyScreen({ code }: { code: string }) {
   const parsed = roomCodeSchema.safeParse(code);
@@ -26,7 +27,13 @@ export async function LobbyScreen({ code }: { code: string }) {
       <h1 id="lobby-heading" className={styles.heading}>
         {t.lobby.heading}
       </h1>
-      <LobbyLive code={lobby.code} lobbyId={lobby.id} labels={t.lobby} errors={t.landing.errors} />
+      <LobbyLive
+        code={lobby.code}
+        lobbyId={lobby.id}
+        lobbyType={lobby.type === "PUBLIC" ? "public" : "private"}
+        labels={t.lobby}
+        errors={t.landing.errors}
+      />
     </section>
   );
 }

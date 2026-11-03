@@ -1,13 +1,18 @@
 import type { ReactNode } from "react";
 import {
+  BOT_LEVEL_WPM,
+  botLevelSchema,
   difficultySchema,
+  MAX_BOTS,
   raceLanguageSchema,
   textTypeSchema,
+  type BotLevel,
   type RaceSettings,
 } from "@fifth-copy/protocol";
 import { cn } from "@/lib/cn";
 import { InlineError } from "./inline-error";
 import { fill } from "./lobby-labels";
+import { ROOM_SEATS } from "./lobby-store";
 import {
   settingLabelId,
   type SettingControls,
@@ -16,7 +21,10 @@ import {
 } from "./settings-docket";
 import {
   BOUNDS,
+  botIndex,
   hostRows,
+  LOBBY_KINDS,
+  type BotKey,
   type FormError,
   type FormKey,
   type FormState,
@@ -198,6 +206,78 @@ function Timer({
   );
 }
 
+/** Bible 7.1 secondary button, row-sized (bible 14.3 "Bot rows", #114): ADD A BOT and REMOVE. */
+function Secondary({
+  children,
+  ctx,
+  full = false,
+  ...rest
+}: {
+  children: ReactNode;
+  ctx: Ctx;
+  /** At the cap: unavailable for good (the disabled recipe), focus kept (`aria-disabled`). */
+  full?: boolean;
+  onPress: () => void;
+  id?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
+}) {
+  const { onPress, ...attrs } = rest;
+  const off = ctx.pending || full;
+  return (
+    <button
+      type="button"
+      {...attrs}
+      aria-disabled={off || undefined}
+      data-full={full || undefined}
+      className={styles.secondary}
+      onClick={() => (off ? undefined : onPress())}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * One bot's sub-row (#114 C1): the level as a 7.1 segmented toggle named by `BOT n`, its speed from the
+ * engine's table (`BOT_LEVEL_WPM`, never restated) in the TIMER unit recipe, then REMOVE, named
+ * `REMOVE BOT n` by its own word and the row label.
+ */
+function BotRow({
+  n,
+  level,
+  ctx,
+  labels,
+}: {
+  n: number;
+  level: BotLevel;
+  ctx: Ctx;
+  labels: SettingsLabels;
+}) {
+  const key: FormKey = `bots.${n}`;
+  const removeId = `${settingLabelId(key)}-remove`;
+  return (
+    <div className={styles.botRow}>
+      <Segmented
+        name={key}
+        value={level}
+        options={botLevelSchema.options.map((v) => ({ value: v, label: labels.botLevel[v] }))}
+        ctx={ctx}
+      />
+      <span className={styles.unit}>{fill(labels.form.wpm, { n: BOT_LEVEL_WPM[level] })}</span>
+      <Secondary
+        id={removeId}
+        aria-labelledby={`${removeId} ${settingLabelId(key)}`}
+        aria-describedby={ctx.describedBy(key)}
+        ctx={ctx}
+        onPress={() => ctx.onChange?.(key, null)}
+      >
+        {labels.form.remove}
+      </Secondary>
+    </div>
+  );
+}
+
 const PRESETS = difficultySchema.options[0].shape.level.options;
 const RECIPE = difficultySchema.options[1].shape;
 
@@ -211,14 +291,16 @@ function errorText(labels: SettingsLabels, error: FormError): string {
 
 /**
  * The host's form for these settings, as the docket's seams: a control per edited row, the custom
- * recipe rows under DIFFICULTY, the busy row and the error line. The rows themselves (which show, in
- * which order) stay the docket's; `hostRows` says which of them get a control.
+ * recipe rows under DIFFICULTY, one sub-row per bot under BOTS (#114), the busy row and the error line.
+ * The rows themselves (which show, in which order) stay the docket's; `hostRows` says which of them get
+ * a control.
  */
 export function hostForm({
   settings,
   labels,
   form,
   revision,
+  seated = 0,
   prefix,
   onChange,
 }: {
@@ -226,6 +308,8 @@ export function hostForm({
   labels: SettingsLabels;
   form: FormState;
   revision: number;
+  /** The desks taken (humans and bots): ADD A BOT stops at the room's 30 seats (#114 C1). */
+  seated?: number;
   /** The rejection word of the inline error line (`RETURNED ·`). */
   prefix: string;
   onChange?: (key: FormKey, raw: RawValue) => void;
@@ -246,7 +330,7 @@ export function hostForm({
   );
   const d = settings.difficulty;
 
-  const all: Record<FormKey, () => ReactNode> = {
+  const all: Record<Exclude<FormKey, BotKey>, () => ReactNode> = {
     language: () =>
       seg(
         "language",
@@ -315,22 +399,53 @@ export function hostForm({
       ]),
     backspace: () => onOff("backspace", settings.backspace),
     bonuses: () => onOff("bonuses", settings.bonuses),
+    bots: () => (
+      <Secondary
+        ctx={ctx}
+        full={settings.bots.length >= MAX_BOTS || seated >= ROOM_SEATS}
+        aria-describedby={ctx.describedBy("bots")}
+        onPress={() => ctx.onChange?.("bots", null)}
+      >
+        {labels.form.addBot}
+      </Secondary>
+    ),
+    lobbyType: () =>
+      seg(
+        "lobbyType",
+        settings.lobbyType,
+        LOBBY_KINDS.map((v) => ({ value: v, label: labels.lobbyType[v] })),
+      ),
   };
 
   const controls: SettingControls = {};
   const recipe: Array<{ key: string; label: string; control: ReactNode }> = [];
+  const botRows: Array<{ key: string; label: string; control: ReactNode }> = [];
   for (const key of hostRows(settings)) {
-    if (key.startsWith("difficulty.")) {
+    const bot = botIndex(key);
+    if (bot >= 0) {
+      if (!settings.bots[bot]) continue;
+      botRows.push({
+        key,
+        label: fill(labels.form.bot, { n: bot + 1 }),
+        control: <BotRow n={bot + 1} level={settings.bots[bot].level} ctx={ctx} labels={labels} />,
+      });
+      continue;
+    }
+    const row = key as Exclude<FormKey, BotKey>;
+    if (row.startsWith("difficulty.")) {
       const field = key.slice("difficulty.".length) as keyof SettingsLabels["form"]["labels"];
-      recipe.push({ key, label: labels.form.labels[field], control: all[key]() });
+      recipe.push({ key, label: labels.form.labels[field], control: all[row]() });
     } else {
-      controls[key as keyof SettingControls] = all[key]();
+      controls[row as keyof SettingControls] = all[row]();
     }
   }
+  const after: SettingSubRows = {};
+  if (recipe.length) after.difficulty = recipe;
+  if (botRows.length) after.bots = botRows;
 
   return {
     controls,
-    after: recipe.length ? { difficulty: recipe } : {},
+    after,
     busy: pending ? form.key : undefined,
     error: refused ? (
       <div className={styles.error}>

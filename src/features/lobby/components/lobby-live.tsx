@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import type { RoomSocket } from "@/features/race";
 import { mintRaceToken } from "../actions/mint-race-token";
+import { setLobbyType } from "../actions/set-lobby-type";
 import { errorMessage, type EntryErrors } from "./entry-errors";
 import { InlineError } from "./inline-error";
 import { playersLabel, type LobbyLabels } from "./lobby-labels";
@@ -23,10 +24,12 @@ import { SettingsDocket } from "./settings-docket";
 import {
   IDLE_FORM,
   reduceForm,
+  submitLobbyType,
   submitSetting,
   type FormEvent,
   type FormKey,
   type FormState,
+  type LobbyKind,
   type RawValue,
 } from "./settings-form";
 import { StartControl, type StartError } from "./start-control";
@@ -40,6 +43,11 @@ const IDLE_START: StartState = { pending: false, error: null, hidden: false };
 type ViewProps = {
   code: string;
   state: LobbyState;
+  /**
+   * The lobby's visibility from its row (`Lobby.type`, #114): Postgres owns it (ADR 0008), so it wins
+   * over the room's copy in the settings; absent, the room's copy shows.
+   */
+  lobbyType?: LobbyKind;
   labels: LobbyLabels;
   errors: EntryErrors;
   start?: StartState;
@@ -61,7 +69,8 @@ const isHost = (state: LobbyState) => state.members.some((m) => m.desk === state
  */
 export function LobbyLiveView({
   code,
-  state,
+  state: room,
+  lobbyType,
   labels,
   errors,
   start = IDLE_START,
@@ -70,6 +79,8 @@ export function LobbyLiveView({
   revision = 0,
   onSetting,
 }: ViewProps) {
+  const state: LobbyState =
+    room.settings && lobbyType ? { ...room, settings: { ...room.settings, lobbyType } } : room;
   const known =
     state.phase === "live" || state.phase === "reconnecting" || state.phase === "starting";
   const canStart = (state.phase === "live" || state.phase === "starting") && isHost(state);
@@ -83,6 +94,7 @@ export function LobbyLiveView({
           labels: labels.settings,
           form,
           revision,
+          seated: state.members.length,
           prefix: errors.prefix,
           onChange: onSetting,
         })
@@ -155,12 +167,15 @@ export function LobbyLiveView({
 export function LobbyLive({
   code,
   lobbyId,
+  lobbyType,
   labels,
   errors,
 }: {
   code: string;
   /** The room's lobby id (`Lobby.id`): the resume key and the parked socket are keyed by it. */
   lobbyId: string;
+  /** `Lobby.type` as the server rendered it; `setLobbyType` revalidates the page, which renews it. */
+  lobbyType: LobbyKind;
   labels: LobbyLabels;
   errors: EntryErrors;
 }) {
@@ -242,6 +257,19 @@ export function LobbyLive({
   }
 
   function onSetting(key: FormKey, raw: RawValue) {
+    // LOBBY is the web action's (Postgres owns `Lobby.type`, ADR 0008); every other row is a room patch
+    if (key === "lobbyType") {
+      void submitLobbyType(
+        {
+          form: formRef.current,
+          current: lobbyType,
+          send: (type) => setLobbyType({ code, type }),
+          dispatch: dispatchForm,
+        },
+        raw,
+      );
+      return;
+    }
     const socket = socketRef.current;
     if (!socket || !state.settings) return;
     void submitSetting(
@@ -260,6 +288,7 @@ export function LobbyLive({
     <LobbyLiveView
       code={code}
       state={state}
+      lobbyType={lobbyType}
       labels={labels}
       errors={errors}
       start={start}

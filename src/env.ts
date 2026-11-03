@@ -18,13 +18,22 @@ const server = z.object({
   /** Avatar moderator (ADR 0015): the local heuristic, or the colour-driven fake for tests (never in production). */
   AVATAR_MODERATOR: z.enum(["heuristic", "fake"]).default("heuristic"),
   /**
-   * The shared rate limiter's Redis (ADR 0020, `src/server/limiter`). Optional: absent (or empty)
-   * disables the web limiter, with one warning in production; unreachable fails open.
+   * The web's Redis (ADR 0020): the rate limiter (`src/server/limiter`, unreachable fails open) and
+   * the internal-request nonce store (`src/server/internal-api/nonces.ts`, #716, fails closed).
+   * Required in production; in development and test absent (or empty) disables both, one warning.
    */
   REDIS_URL: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.url({ protocol: /^rediss?$/ }).optional(),
   ),
+  /**
+   * `off` turns the web rate limiter off while REDIS_URL stays set for the nonce store (#716):
+   * Playwright runs the production build from one client IP (playwright.config.ts). Unset on Railway;
+   * refused in production without `PLAYWRIGHT_E2E=1`.
+   */
+  WEB_RATE_LIMIT: z.enum(["on", "off"]).default("on"),
+  /** Set to `1` by playwright.config.ts only: the one run where a production build may take `WEB_RATE_LIMIT=off`. */
+  PLAYWRIGHT_E2E: z.literal("1").optional(),
 });
 
 const client = z.object({
@@ -41,6 +50,23 @@ const schema = server.extend(client.shape).superRefine((value, ctx) => {
       message: "fake is not allowed in production",
     });
   }
+  // The limiter's test switch is default-deny in production: only a Playwright run may set it.
+  if (
+    value.NODE_ENV === "production" &&
+    value.WEB_RATE_LIMIT === "off" &&
+    value.PLAYWRIGHT_E2E !== "1"
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["WEB_RATE_LIMIT"],
+      message: "off is allowed in production only under Playwright",
+    });
+  }
+  // The nonce store fails closed (ADR 0020 amendment, #716): a production web without Redis
+  // refuses to boot rather than refusing every race server call.
+  if (value.NODE_ENV === "production" && !value.REDIS_URL) {
+    ctx.addIssue({ code: "custom", path: ["REDIS_URL"], message: "required in production" });
+  }
 });
 
 function parse() {
@@ -53,6 +79,8 @@ function parse() {
     AVATAR_DIR: process.env.AVATAR_DIR,
     AVATAR_MODERATOR: process.env.AVATAR_MODERATOR,
     REDIS_URL: process.env.REDIS_URL,
+    WEB_RATE_LIMIT: process.env.WEB_RATE_LIMIT,
+    PLAYWRIGHT_E2E: process.env.PLAYWRIGHT_E2E,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_RACE_SERVER_URL: process.env.NEXT_PUBLIC_RACE_SERVER_URL,
   });

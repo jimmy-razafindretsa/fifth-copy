@@ -22,7 +22,7 @@ ADR 0012 chose one VPS with Docker Compose and Caddy, and left the provider open
   - `packages/engine` and `packages/protocol` are libraries bundled into the two apps; they are never services.
 - **Domains:** each app has a Railway domain (`*.up.railway.app`). The browser opens Socket.IO directly on the race-server domain (`NEXT_PUBLIC_RACE_SERVER_URL`), allowed by `WEB_ORIGIN` CORS; no reverse proxy sits in front. A custom domain replaces both later without code changes.
 - **Variables (names only):**
-  - web: `DATABASE_URL` (reference to Postgres), `AUTH_SECRET`, `RACE_TOKEN_SECRET`, `RACE_SERVER_INTERNAL_URL` (`http://race-server.railway.internal:4000`), `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_RACE_SERVER_URL`, `AVATAR_DIR`, `NODE_ENV`, `PORT`.
+  - web: `DATABASE_URL` (reference to Postgres), `AUTH_SECRET`, `RACE_TOKEN_SECRET`, `RACE_SERVER_INTERNAL_URL` (`http://race-server.railway.internal:4000`), `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_RACE_SERVER_URL`, `AVATAR_DIR`, `REDIS_URL` (reference to Redis, with `?family=0`; required in production since #716: rate limiter and internal nonce store, ADR 0020), `NODE_ENV`, `PORT`.
   - race-server: `REDIS_URL` (reference to Redis, with `?family=0` so ioredis resolves Railway's private DNS over IPv4 or IPv6), `RACE_TOKEN_SECRET` (same value as web), `WEB_ORIGIN`, `RACE_SERVER_PORT`, `RACE_FAST_CLOCK=0`, `NODE_ENV`.
   - Secrets are generated with `openssl rand -hex 32` and piped into the Railway CLI (`railway variable set --stdin`); they are never printed, committed or pasted into issues. Rotation is a human task.
 - **Deploys:** Railway builds and deploys each service on push to `main` when its watch paths change. `NEXT_PUBLIC_*` values are build-time, so changing them needs a web rebuild.

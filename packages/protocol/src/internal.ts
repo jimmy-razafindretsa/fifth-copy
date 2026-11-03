@@ -24,9 +24,9 @@ import { versionSchema } from "./version";
  * unix-seconds timestamp, a nonce (`INTERNAL_NONCE_HEX`, 16 random bytes, fresh per request) and a
  * lowercase hex HMAC-SHA256 over `internalSignedString` = `${timestamp}.${nonce}.${rawBody}`, keyed by
  * `RACE_TOKEN_SECRET`. The receiver rejects a timestamp more than `INTERNAL_MAX_SKEW_S` away from its
- * clock (401 `stale-timestamp`) and a missing or malformed nonce (401 `bad-signature`). The race server
- * also remembers each correctly signed nonce for `INTERNAL_NONCE_TTL_S` and refuses its reuse
- * (401 `replay`, #518); the web side does not store nonces yet.
+ * clock (401 `stale-timestamp`) and a missing or malformed nonce (401 `bad-signature`). Both receivers
+ * remember each correctly signed nonce for `INTERNAL_NONCE_TTL_S` and refuse its reuse (401 `replay`):
+ * the race server since #518, the web since #716 (a bare 503 when its store is unavailable).
  */
 export const INTERNAL_HEADERS = {
   timestamp: "x-fc-timestamp",

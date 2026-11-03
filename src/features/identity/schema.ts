@@ -1,10 +1,8 @@
 import { z } from "zod";
 import { OUTFIT_CATALOGUE, type OutfitCategory } from "./clerk/outfit";
 
-/** Canonical form for case-insensitive username uniqueness (stored in User.usernameNormalized). */
-export function normalizeUsername(username: string): string {
-  return username.normalize("NFKC").trim().toLowerCase();
-}
+// Lives in src/lib so src/server/auth can use it without importing a feature (ADR 0001).
+export { normalizeUsername } from "@/lib/username";
 
 /** The square crop chosen in the dialog (#60), in displayed-image pixels; bounds are checked by storeAvatar. */
 export const cropSchema = z.object({

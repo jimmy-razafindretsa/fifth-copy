@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createPrismaClient } from "@/server/db-client";
 import { MODEL_NAMES } from "@/server/db-models";
 import { featureMergeStepFiles, indexImports, loadFeatureMergeSteps } from "../testing/merge-steps";
@@ -9,6 +9,11 @@ import {
   mergeSteps,
   modelsWithoutStep,
 } from "./registry";
+
+// CI has no AUTH_SECRET or RACE_TOKEN_SECRET: the feature indexes the steps load import @/env.
+vi.mock("@/env", () => ({
+  env: { NODE_ENV: "test", AUTH_SECRET: "m".repeat(32), RACE_TOKEN_SECRET: "r".repeat(32) },
+}));
 
 // C3 (#56): every model holding per-user data has a registered guest-merge step, or the guest's
 // rows would silently cascade away when the guest row is deleted.

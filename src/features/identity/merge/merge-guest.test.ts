@@ -16,6 +16,10 @@ const state = vi.hoisted(() => ({ db: null as unknown, store: null as unknown })
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));
+// CI has no AUTH_SECRET or RACE_TOKEN_SECRET: the feature indexes the steps load import @/env.
+vi.mock("@/env", () => ({
+  env: { NODE_ENV: "test", AUTH_SECRET: "m".repeat(32), RACE_TOKEN_SECRET: "r".repeat(32) },
+}));
 vi.mock("../avatars/default-store", () => ({
   avatarStore: new Proxy(
     {},

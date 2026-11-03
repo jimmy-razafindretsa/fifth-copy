@@ -37,9 +37,10 @@ function makeFakeSocket() {
   const socket = makeEmitter();
   const manager = makeEmitter();
   const disconnect = vi.fn();
+  const connect = vi.fn();
   /** Outbound: what the client sends; distinct from the inbound `deliver`. */
   const emit = vi.fn();
-  return { ...socket, io: manager, disconnect, emit };
+  return { ...socket, io: manager, disconnect, connect, emit };
 }
 
 function setup(token = "tok.en.value") {
@@ -153,6 +154,20 @@ describe("resume key in the handshake (#561 C11)", () => {
     expect(handshake(io)).toEqual({ v: 7, token: "tok", resumeKey: KEY });
     stored = null;
     expect(handshake(io)).toEqual({ v: 7, token: "tok" });
+  });
+
+  it("#235 C6 reads a token given as a function before every handshake; reconnect() connects again", () => {
+    const fake = makeFakeSocket();
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    let token = "expired";
+    const room = connectToRoom("http://x", () => token, { io, resumeKey: KEY });
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "expired", resumeKey: KEY });
+    // a re-minted token reaches the next handshake of the same socket
+    token = "fresh";
+    room.reconnect();
+    expect(fake.connect).toHaveBeenCalledTimes(1);
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "fresh", resumeKey: KEY });
+    expect(io).toHaveBeenCalledTimes(1);
   });
 
   it.each([undefined, null, ""])("sends no resumeKey field when the key is %j", (resumeKey) => {

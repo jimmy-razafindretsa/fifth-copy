@@ -68,6 +68,7 @@ export function fakeRoomSocket() {
     onServerDisconnect: on("onServerDisconnect"),
     onReconnecting: on("onReconnecting"),
     onReconnected: on("onReconnected"),
+    reconnect: vi.fn<RoomSocket["reconnect"]>(),
     close: vi.fn<RoomSocket["close"]>(),
   } satisfies RoomSocket;
 

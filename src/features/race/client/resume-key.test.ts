@@ -133,7 +133,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       stop();
       const [url, token, opts] = connectToRoom.mock.calls.at(-1) as unknown as [
         string,
-        string,
+        () => string,
         { resumeKey: () => string | null },
       ];
       return { url, token, key: opts.resumeKey };
@@ -141,7 +141,8 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
 
     const first = await open();
     expect(first.url).toBe("http://race.test");
-    expect(first.token).toBe("tok");
+    // the token is read at each handshake too (#235 C6)
+    expect(first.token()).toBe("tok");
     expect(first.key()).toBeNull();
     // a welcome stores the key after the socket was created: its reconnects read it
     storeResumeKey(LOBBY, KEY);

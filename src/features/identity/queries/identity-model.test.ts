@@ -1,12 +1,7 @@
 import "dotenv/config";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPrismaClient } from "@/server/db-client";
-import {
-  KeyboardLayout,
-  Locale,
-  OAuthProvider,
-  Theme,
-} from "@/generated/prisma/client";
+import { KeyboardLayout, Locale, OAuthProvider, Theme } from "@/generated/prisma/client";
 import {
   seedIdentity,
   SEED_ACCOUNT_PROVIDER_ACCOUNT_ID,

@@ -70,9 +70,10 @@
   background: var(--color-surface);
 }
 
-/* the seat ring and the roll under it (#731 fills the ring; empty, it takes no room and no gap) */
+/* the seat ring and the roll under it (#731 fills the ring; empty, it takes no room and no gap). Its
+   500px basis is the ring's width: 30 upright desks need it, so below it the side wraps under the column */
 .side {
-  flex: 2 1 320px;
+  flex: 2 1 500px;
   min-width: 0;
   display: flex;
   flex-direction: column;

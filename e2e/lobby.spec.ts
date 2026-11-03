@@ -11,6 +11,7 @@ import {
   startButton,
   warmRace,
 } from "./race/helpers";
+import { contrastRatio, type Rgb } from "../src/lib/color";
 import { HYDRATION_WAIT, scaled } from "./timeouts";
 
 // Contract of #107: the waiting room /lobby/[code] (bible 4, 7.3, 7.4, 7.10, 8), live over the race
@@ -575,14 +576,21 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
       await expect(copyButton(page)).toBeHidden();
       expect(startBox.y).toBeGreaterThan(rollBox.y + rollBox.height);
     } else {
-      // two columns at 768 and from 1024: the dockets column beside the roll, START under the settings
+      // the dockets column, START under the settings docket; then the side (seat ring #731, the roll
+      // under it): beside the column from 1024, wrapped under it below (bible 14.3: the ring needs 500px)
       await expect(settingsDocket(page)).toBeVisible();
       await expect(copyButton(page)).toBeVisible();
       const settingsBox = (await settingsDocket(page).boundingBox())!;
       const docketBox = (await roomCode(page).locator("..").boundingBox())!;
-      expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(rollBox.x);
-      // the column's first docket and the roll start on the same line
-      expect(Math.abs(docketBox.y - rollBox.y)).toBeLessThanOrEqual(2);
+      const ringBox = (await page.locator("[data-seat-ring]").boundingBox())!;
+      expect(rollBox.y).toBeGreaterThanOrEqual(ringBox.y + ringBox.height);
+      if (test.info().project.name === "desktop") {
+        expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(rollBox.x);
+        // the column's first docket and the side (its ring) start on the same line
+        expect(Math.abs(docketBox.y - ringBox.y)).toBeLessThanOrEqual(2);
+      } else {
+        expect(ringBox.y).toBeGreaterThanOrEqual(startBox.y + startBox.height);
+      }
       expect(settingsBox.y).toBeGreaterThanOrEqual(docketBox.y + docketBox.height);
       expect(startBox.y).toBeGreaterThanOrEqual(settingsBox.y + settingsBox.height);
       expect(Math.abs(startBox.x - settingsBox.x)).toBeLessThanOrEqual(2);
@@ -932,4 +940,144 @@ test.describe("late joiner (#732 C3)", () => {
     await expect(startButton(host)).toBeEnabled();
     await expect(rows(late)).toHaveCount(3);
   });
+});
+
+// Contract of #731 C3-C5: the seat ring diagram follows the roster live (a guest joining, a bot seated
+// through `host:settings`), fits its slot at 768 / 1024 / 1280, hides at 480 and under, and keeps its
+// initials at 4.5:1 and its rival rules at 3:1 in both themes (computed colours, as e2e/race/race-card).
+const seatRing = (page: Page) => page.getByRole("img", { name: /^Seat ring: / });
+const ringCell = (page: Page, desk: number) =>
+  page.locator(`[data-seat-ring] [data-desk="${desk}"]`);
+const rgbOf = (css: string): Rgb => {
+  const m = /rgba?\((\d+), (\d+), (\d+)/.exec(css);
+  expect(m, css).not.toBeNull();
+  return [Number(m![1]), Number(m![2]), Number(m![3])];
+};
+
+test.describe("seat ring diagram (#731)", () => {
+  test("C3 phones: no ring at 480px and under, the roll stays", async ({ page }) => {
+    test.skip(test.info().project.name !== "mobile", "the 375 px check");
+    await createLobby(page);
+    await expect(rows(page)).toHaveCount(1);
+    await expect(page.locator("[data-seat-ring]")).toBeHidden();
+    expect(
+      await page.locator("[data-seat-ring]").evaluate((el) => getComputedStyle(el).display),
+    ).toBe("none");
+  });
+
+  test("C3 C4 one named image that follows the roster within 2 s; never focusable; fits 768 / 1024 / 1280", async ({
+    page,
+    browser,
+  }) => {
+    test.skip(test.info().project.name !== "desktop", "drives its own viewports");
+    await recordRaceTokens(page);
+    const code = await createLobby(page);
+    await expect(seatRing(page)).toHaveAccessibleName("Seat ring: 1 of 30 desks taken");
+    await expect(ringCell(page, 1)).toHaveAttribute("data-state", "you");
+    await expect(page.locator("[data-seat-ring] [aria-hidden='true'][data-desk]")).toHaveCount(30);
+    expect(await seatRing(page).evaluate((el) => (el as HTMLElement).tabIndex)).toBe(-1);
+
+    const b = await joinAsGuest(browser, code);
+    await expect(seatRing(page)).toHaveAccessibleName("Seat ring: 2 of 30 desks taken", {
+      timeout: scaled(2_000),
+    });
+    await expect(ringCell(b.page, 2)).toHaveAttribute("data-state", "you");
+    await expect(ringCell(b.page, 1)).toHaveAttribute("data-state", "taken");
+
+    await setHostSettings(page, { bots: [{ level: "clerk" }] });
+    for (const p of [page, b.page])
+      await expect(seatRing(p)).toHaveAccessibleName("Seat ring: 3 of 30 desks taken", {
+        timeout: scaled(2_000),
+      });
+    const bot = page.locator("[data-seat-ring] [data-bot='true']");
+    await expect(bot).toHaveCount(1);
+    await expect(bot).toContainText("B");
+
+    for (const width of [768, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(seatRing(page)).toBeVisible();
+      const fit = await page.evaluate(() => {
+        const ring = document.querySelector("[data-seat-ring]")!;
+        const slot = ring.parentElement!.getBoundingClientRect();
+        const cells = [...ring.querySelectorAll("[data-desk]")].map((c) =>
+          c.getBoundingClientRect(),
+        );
+        return {
+          page: document.documentElement.scrollWidth - window.innerWidth,
+          left: Math.min(...cells.map((c) => c.left)) - slot.left,
+          right: slot.right - Math.max(...cells.map((c) => c.right)),
+          // desks never overlap (each placed on its own spot of the circle)
+          overlaps: cells.some((a, i) =>
+            cells.some(
+              (c, j) =>
+                j > i &&
+                a.left < c.right - 0.5 &&
+                c.left < a.right - 0.5 &&
+                a.top < c.bottom - 0.5 &&
+                c.top < a.bottom - 0.5,
+            ),
+          ),
+        };
+      });
+      expect(fit.page, `${width}: no horizontal scroll`).toBeLessThanOrEqual(0);
+      expect(fit.left, `${width}: inside its slot`).toBeGreaterThanOrEqual(0);
+      expect(fit.right, `${width}: inside its slot`).toBeGreaterThanOrEqual(0);
+      expect(fit.overlaps, `${width}: desks apart`).toBe(false);
+    }
+    await b.context.close();
+  });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C5 ${scheme}: initials 4.5:1 on paper and on you, rival rules 3:1; axe clean`, async ({
+      page,
+      browser,
+    }) => {
+      test.skip(test.info().project.name !== "desktop", "one width is enough for colours");
+      await page.emulateMedia({ colorScheme: scheme });
+      await recordRaceTokens(page);
+      const code = await createLobby(page);
+      const b = await joinAsGuest(browser, code);
+      await b.page.emulateMedia({ colorScheme: scheme });
+      await setHostSettings(page, {
+        bots: Array.from({ length: 12 }, () => ({ level: "clerk" as const })),
+      });
+      // host + guest + 12 bots: desks 1-14 cover all twelve inks at least once
+      await expect(seatRing(page)).toHaveAccessibleName("Seat ring: 14 of 30 desks taken", {
+        timeout: scaled(5_000),
+      });
+      const colours = await page.evaluate(() =>
+        [...document.querySelectorAll("[data-seat-ring] [data-desk]")]
+          .filter((c) => c.getAttribute("data-state") !== "empty")
+          .map((c) => {
+            const face = c.firstElementChild!;
+            const initials = face.querySelector("[class*='initials']")!;
+            const f = getComputedStyle(face);
+            return {
+              desk: c.getAttribute("data-desk"),
+              state: c.getAttribute("data-state"),
+              ink: c.getAttribute("data-ink"),
+              text: getComputedStyle(initials).color,
+              ground: f.backgroundColor,
+              rule: f.borderTopColor,
+              ruleWidth: f.borderTopWidth,
+            };
+          }),
+      );
+      expect(colours).toHaveLength(14);
+      expect(new Set(colours.filter((c) => c.ink !== "you").map((c) => c.ink)).size).toBe(12);
+      for (const c of colours) {
+        const ratio = contrastRatio(rgbOf(c.text), rgbOf(c.ground));
+        expect(ratio, `desk ${c.desk} initials`).toBeGreaterThanOrEqual(4.5);
+        if (c.state === "you") continue;
+        expect(c.ruleWidth).toBe("4px");
+        expect(
+          contrastRatio(rgbOf(c.rule), rgbOf(c.ground)),
+          `desk ${c.desk} rule`,
+        ).toBeGreaterThanOrEqual(3);
+      }
+      expect(colours.find((c) => c.state === "you")?.ground).toBe(await role(page, "--color-you"));
+      await expectNoA11yViolations(page);
+      await b.context.close();
+    });
+  }
 });

@@ -604,7 +604,10 @@ describe("spectating (#732 C1 C4)", () => {
     "C4: a viewer seated before (%s) refused in-progress keeps the generic error",
     (phase) => {
       const seated = run({ type: "welcome", payload: welcome(2, [ada, bob]) });
-      const state = reduceLobby({ ...seated, phase, raceId: phase === "starting" ? "r" : null }, refused);
+      const state = reduceLobby(
+        { ...seated, phase, raceId: phase === "starting" ? "r" : null },
+        refused,
+      );
       expect(state).toMatchObject({ phase: "error", error: "generic" });
     },
   );
@@ -698,7 +701,12 @@ describe("joinRoom: the late joiner's hold (#732 C2)", () => {
     expect(h.attached).not.toContain(watcher.socket);
     watcher.fire("welcome", spectatorWelcome("running"));
     expect(h.state().phase).toBe("spectating");
-    watcher.fire("ended", { v: PROTOCOL_VERSION, raceId: "r", reason: "all-finished", ranking: [] });
+    watcher.fire("ended", {
+      v: PROTOCOL_VERSION,
+      raceId: "r",
+      reason: "all-finished",
+      ranking: [],
+    });
     expect(watcher.socket.close).toHaveBeenCalled();
     await h.flush();
     expect(h.mint.mock.calls[2]).toEqual([{ spectator: false }]);
@@ -820,7 +828,12 @@ describe("joinRoom: the late joiner's hold (#732 C2)", () => {
     await h.flush();
     cancel();
     expect(h.sockets[1]!.socket.close).toHaveBeenCalled();
-    h.sockets[1]!.fire("ended", { v: PROTOCOL_VERSION, raceId: "r", reason: "all-finished", ranking: [] });
+    h.sockets[1]!.fire("ended", {
+      v: PROTOCOL_VERSION,
+      raceId: "r",
+      reason: "all-finished",
+      ranking: [],
+    });
     await h.flush();
     expect(h.sockets).toHaveLength(2);
   });

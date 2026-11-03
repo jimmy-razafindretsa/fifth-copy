@@ -783,7 +783,7 @@ describe("lifecycle: race again (#143)", () => {
   });
 
   it("members who left after the end come back at their desks and race again (C3)", async () => {
-    const { booted, host, lobby, others, connectAs, raceId1 } = await endedRoom();
+    const { host, lobby, others, connectAs, raceId1 } = await endedRoom();
     others[0]!.client.disconnect();
     host.disconnect();
     await eventually(async () => (await hash(lobby)).ttl <= ENDED_GRACE_TTL_S, "room kept");

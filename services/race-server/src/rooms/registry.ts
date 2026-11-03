@@ -458,7 +458,8 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         // A racer coming back after the end gets the desk it raced at when it is still free; a
         // newcomer in `ended` (#732) skips the last race's desks, so it never takes a racer's.
         const raced = desks?.find((d) => d.userId === userId)?.desk;
-        const held = phase === "ended" && raced === undefined ? (desks ?? []).map((d) => d.desk) : [];
+        const held =
+          phase === "ended" && raced === undefined ? (desks ?? []).map((d) => d.desk) : [];
         const desk =
           seats.get(userId)?.desk ??
           (raced !== undefined && !taken.includes(raced) ? raced : nextDesk([...taken, ...held]));

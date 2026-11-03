@@ -5,9 +5,9 @@ import { disjoint, hostRoom, phaseOf, SEAT_HUD, startButton, warmRace } from "./
 
 // Contract of #251 C2-C4 (bible 14.3 tablets, 7.10, 18; ADR 0013): the seat view of a running race on a
 // tablet, landscape 1024x768 and portrait 768x1024. Playwright cannot open a real on-screen keyboard, so
-// C3 emulates one the way it looks to the page: the viewport height drops to 45 % right after the race
-// input takes focus, and comes back. The page under test takes a desk alone (the host waits in its own
-// context). Tablet project only; the tests set their own sizes.
+// C3 emulates one the way it looks to the page: a tap on the typing surface (the race input has focus
+// since GO, #748), then the viewport height drops to 45 %, and comes back. The page under test takes a
+// desk alone (the host waits in its own context). Tablet project only; the tests set their own sizes.
 
 const SIZES = [
   { name: "landscape", width: 1024, height: 768 },
@@ -63,12 +63,33 @@ test.describe("#251 tablet seat view", () => {
     return room;
   }
 
-  /** Focuses the race input again, as a tap on the typing surface does (#559). */
-  async function refocus(page: Page) {
-    await input(page).evaluate((el: HTMLInputElement) => {
-      el.blur();
-      el.focus({ preventScroll: true });
+  /**
+   * A tap on the typed sheet (#748 C3): the race input already has focus since GO, so no `focusin` fires;
+   * the press itself starts the detection's 300 ms window, as on a real tablet.
+   */
+  const tapSurface = (page: Page) => page.locator("[data-sheet]").tap();
+
+  /**
+   * Holds the page's `performance.now` (the detection's clock, `use-on-screen-keyboard.ts`) still while
+   * `fn` runs, so the 300 ms window cannot run out between two Playwright calls on a loaded machine
+   * (#748 C3). Returns `fn`'s result once the clock runs again.
+   */
+  async function withPageClockHeld<T>(page: Page, fn: () => Promise<T>): Promise<T> {
+    await page.evaluate(() => {
+      const real = performance.now.bind(performance);
+      const at = real();
+      (window as unknown as { __releaseClock: () => void }).__releaseClock = () => {
+        performance.now = real;
+      };
+      performance.now = () => at;
     });
+    try {
+      return await fn();
+    } finally {
+      await page.evaluate(() =>
+        (window as unknown as { __releaseClock: () => void }).__releaseClock(),
+      );
+    }
   }
 
   test("C2 landscape and portrait: strip, sheet, nixie, compact race card and Abandon in view, no sideways scroll, the card clear of the typewriter", async ({
@@ -93,37 +114,44 @@ test.describe("#251 tablet seat view", () => {
     }
   });
 
-  test("C3 an on-screen keyboard (height to 45 % after focus) keeps the strip and the sheet's next line in view and folds the machine away; it returns when the height recovers", async ({
-    page,
-    browser,
-  }) => {
-    await running(page, browser);
-    for (const size of SIZES) {
-      await page.setViewportSize(size);
-      await page.waitForTimeout(400); // past the 300 ms window of the GO focus
+  // #748 C3: a touch tablet, so the keyboard opens from a real tap on the typing surface
+  test.describe("on a touch screen", () => {
+    test.use({ hasTouch: true });
 
-      // a hardware keyboard: the focus shrinks nothing, the full layout stays
-      await refocus(page);
-      await page.waitForTimeout(400);
-      await expect(seat(page), `${size.name} hardware`).toHaveAttribute("data-osk", "closed");
-      await expect(SEAT_HUD.machine(page)).toBeVisible();
+    test("C3 an on-screen keyboard (height to 45 % after a tap on the typing surface) keeps the strip and the sheet's next line in view and folds the machine away; it returns when the height recovers", async ({
+      page,
+      browser,
+    }) => {
+      await running(page, browser);
+      for (const size of SIZES) {
+        await page.setViewportSize(size);
+        await page.waitForTimeout(400); // past the 300 ms window of the GO focus
 
-      // the on-screen keyboard opens over the bottom of the page
-      const short = Math.round(size.height * 0.45);
-      await refocus(page);
-      await page.setViewportSize({ width: size.width, height: short });
-      await expect(seat(page), `${size.name} osk`).toHaveAttribute("data-osk", "open");
-      await expect(SEAT_HUD.machine(page), `${size.name} machine folded`).toBeHidden();
-      await expectInside(SEAT_HUD.telex(page), size.width, short, `${size.name} osk strip`);
-      await expectInside(nextChar(page), size.width, short, `${size.name} osk next char`);
-      expect(await horizontalOverflow(page), `${size.name} osk sideways`).toBeLessThanOrEqual(0);
-      await expect(input(page)).toBeFocused();
+        // a hardware keyboard: the tap shrinks nothing, the full layout stays
+        await tapSurface(page);
+        await page.waitForTimeout(400);
+        await expect(seat(page), `${size.name} hardware`).toHaveAttribute("data-osk", "closed");
+        await expect(SEAT_HUD.machine(page)).toBeVisible();
 
-      // it closes: the keyboard returns
-      await page.setViewportSize(size);
-      await expect(seat(page), `${size.name} recovered`).toHaveAttribute("data-osk", "closed");
-      await expect(SEAT_HUD.machine(page)).toBeVisible();
-    }
+        // the on-screen keyboard opens over the bottom of the page
+        const short = Math.round(size.height * 0.45);
+        await withPageClockHeld(page, async () => {
+          await tapSurface(page);
+          await page.setViewportSize({ width: size.width, height: short });
+          await expect(seat(page), `${size.name} osk`).toHaveAttribute("data-osk", "open");
+        });
+        await expect(SEAT_HUD.machine(page), `${size.name} machine folded`).toBeHidden();
+        await expectInside(SEAT_HUD.telex(page), size.width, short, `${size.name} osk strip`);
+        await expectInside(nextChar(page), size.width, short, `${size.name} osk next char`);
+        expect(await horizontalOverflow(page), `${size.name} osk sideways`).toBeLessThanOrEqual(0);
+        await expect(input(page)).toBeFocused();
+
+        // it closes: the keyboard returns
+        await page.setViewportSize(size);
+        await expect(seat(page), `${size.name} recovered`).toHaveAttribute("data-osk", "closed");
+        await expect(SEAT_HUD.machine(page)).toBeVisible();
+      }
+    });
   });
 
   test("C4 every interactive control of the seat view at 768 px is at least 44x44", async ({

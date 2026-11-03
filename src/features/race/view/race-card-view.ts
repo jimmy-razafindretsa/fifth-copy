@@ -26,8 +26,18 @@ export type MarkerShape = Marker;
  */
 export type MarkerInk = IdentityInk;
 
-/** A lane's status label; `typing` shows none (spec 4.4, 4.5, 7.4; the lane label, bible 7.4a). */
-export const LANE_STATUSES = ["typing", "line-cut", "asleep", "abandoned", "finished"] as const;
+/**
+ * A lane's status label; `typing` shows none (spec 4.4, 4.5, 7.4; the lane label, bible 7.4a). A cut line
+ * (`line-cut`) and one whose 2-minute grace ran out (`expired`, ARCHITECTURE 7.1) dim the marker too (#235).
+ */
+export const LANE_STATUSES = [
+  "typing",
+  "line-cut",
+  "expired",
+  "asleep",
+  "abandoned",
+  "finished",
+] as const;
 export type LaneStatus = (typeof LANE_STATUSES)[number];
 
 /**
@@ -129,7 +139,7 @@ export type RaceCardSource = {
   readonly race: { readonly text: string } | null;
 };
 
-/** The lane label of a server status: `expired` (the timer ran out) shows none, like typing. */
+/** The lane label of a server status; a status the card has no label for reads as typing. */
 const laneStatus = (code: number): LaneStatus => {
   const status = PLAYER_STATUSES[code];
   return (LANE_STATUSES as readonly string[]).includes(status ?? "")
@@ -292,13 +302,14 @@ export const raceCardViewFixtures = {
   "six-leading": six(1),
   "six-mid-field": six(4),
   "six-last": six(6),
-  // one lane per status: a finished copy, a cut line, a kicked and an abandoned typist; the finished
-  // typist has a 24-character name, so the ellipsis gives way and FILED stays on the name row (#697)
+  // one lane per status: a finished copy, a cut line, an expired one (#235), a kicked and an abandoned
+  // typist; the finished typist has a 24-character name, so the ellipsis gives way and FILED stays on the
+  // name row (#697)
   "six-statuses": viewOf(
     [
       { desk: 1, progress: 1, name: "Quartermaster-Penhaligon" },
       { desk: 2, progress: 0.71, status: "line-cut" },
-      { desk: 3, progress: 0.58 },
+      { desk: 3, progress: 0.58, status: "expired" },
       { desk: 4, progress: 0.36, status: "asleep" },
       { desk: 5, progress: 0.52 },
       { desk: 6, progress: 0.18, status: "abandoned" },

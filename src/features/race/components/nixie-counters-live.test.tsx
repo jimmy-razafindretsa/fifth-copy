@@ -243,6 +243,21 @@ describe("createWpmSampler (#225 C2)", () => {
     off();
   });
 
+  it("#235 C1 keeps sampling your figure while the line is cut", () => {
+    const clock = fakeTimer();
+    const store = racing(clock);
+    const sampler = createWpmSampler(store, { timer: clock.timer });
+    const off = sampler.subscribe(() => {});
+    typeOneSecond(store, clock);
+    const live = sampler.read();
+    store.dispatch({ type: "reconnecting" });
+    expect(clock.pending).toBe(1);
+    clock.advance(3_000);
+    // the clock ran on without new keys: the figure decays instead of freezing
+    expect(sampler.read()).toBeLessThan(live);
+    off();
+  });
+
   it("stops its clock when the last reader leaves", () => {
     const clock = fakeTimer();
     const store = racing(clock);
@@ -348,6 +363,24 @@ describe("createRemainingSampler (#240 C1)", () => {
     expect(sampler.read()).toBe(58);
     off();
     expect(TIMER_SAMPLE_MS).toBeLessThanOrEqual(250);
+  });
+
+  it("#235 C1 keeps counting down while the line is cut (the race clock never pauses)", () => {
+    const clock = fakeTimer();
+    const store = createRaceStore();
+    store.dispatch({ type: "welcome", payload: timed, receivedAt: clock.now });
+    const sampler = createRemainingSampler(store, { timer: clock.timer });
+    const off = sampler.subscribe(() => {});
+    store.dispatch({ type: "countdown", payload: { v: PROTOCOL_VERSION, race: timedRace } });
+    clock.advance(3_000);
+    store.dispatch({ type: "go" });
+    clock.advance(1_000);
+    expect(sampler.read()).toBe(59);
+    store.dispatch({ type: "reconnecting" });
+    clock.advance(3_000);
+    expect(sampler.read()).toBe(56);
+    expect(clock.pending).toBe(1);
+    off();
   });
 
   it("never ticks without a timer", () => {

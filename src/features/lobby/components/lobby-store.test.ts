@@ -87,6 +87,7 @@ function fakeSocket() {
     onReconnecting: bind("reconnecting"),
     onServerDisconnect: bind("serverDisconnect"),
     onReconnected: bind("reconnected"),
+    reconnect: vi.fn(),
     close: vi.fn(),
   };
   const fire = (name: string, arg: unknown) => {

@@ -389,6 +389,11 @@ export const fr = {
       "no-scene": "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
       phones: "LES CELLULAIRES REGARDENT DU FOND DE LA SALLE",
     },
+    /** Presence (#235, bible 7.4 notice row): the room went away under a seated page (#204). */
+    presence: {
+      roomLost: "LA SALLE EST PERDUE",
+      backToLobby: "RETOUR AU VESTIAIRE",
+    },
     errors: {
       prefix: "RETOURNÉ ·",
       closed: "Cette course est fermée.",
@@ -447,6 +452,7 @@ export const fr = {
       lane: "Rang {rank}, {name}{you}, bureau {desk}, {progress} % tapé{status}",
       status: {
         "line-cut": "LIGNE COUPÉE",
+        expired: "EXPIRÉ",
         asleep: "ENDORMI AU BUREAU",
         abandoned: "RÉAFFECTÉ",
         finished: "CLASSÉ",

@@ -31,6 +31,8 @@ export type RaceSeatLabels = {
   /** The live notices, plus the phones-only notice (bible 7.4 notice row). */
   notice: RaceNoticeLabels & { phones: string };
   errors: SeatErrorLabels;
+  /** The room-lost notice (#235 C4): its statement and the link back to the lobby. */
+  presence: SeatPresenceLabels;
   abandon: AbandonLabels;
   /** The exit dockets (#233): Reassigned after ABANDON, Asleep at desk after the idle kick. */
   exit: ExitLabels;
@@ -65,6 +67,13 @@ export type SeatErrorLabels = {
   generic: string;
   /** The link back to `/lobby/[code]`. */
   back: string;
+};
+
+/** The room-lost notice (#235 C4, bible 7.4 notice row): `THE ROOM WAS LOST · BACK TO THE LOBBY`. */
+export type SeatPresenceLabels = {
+  roomLost: string;
+  /** The link to `/lobby/[code]`. */
+  backToLobby: string;
 };
 
 /** Phones watch from the back of the room (spectator mode is #292): the seat view shows only a notice. */

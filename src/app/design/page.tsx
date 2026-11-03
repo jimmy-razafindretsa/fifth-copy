@@ -331,7 +331,8 @@ const CARD_STATES: { id: RaceCardViewFixture; title: string; caption: string }[]
   {
     id: "six-statuses",
     title: "Statuses",
-    caption: "Filed, line cut, asleep at desk, reassigned.",
+    caption:
+      "Filed, line cut, expired, asleep at desk, reassigned; a cut or expired line dims its marker.",
   },
   {
     id: "thirty-mid-field",

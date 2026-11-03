@@ -18,7 +18,7 @@ afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const envFor = (n: number) =>
   spawnSync(SCRIPT, ["--env", String(n)], {
-    env: { PATH: process.env.PATH ?? "", WORKTREE_ROOT: root },
+    env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", WORKTREE_ROOT: root },
     encoding: "utf8",
   });
 

@@ -78,6 +78,8 @@ export type GateFacts = {
   /** Logins whose comments count (trust.ts); every other comment is ignored by every gate. */
   trusted: ReadonlySet<string>;
   pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED" } | null;
+  /** The card's current Project Status (null = unknown or not on the board). Done requires QA. */
+  status: string | null;
   /** Conclusion of the CI run on main for the PR's merge commit (Done gate only). */
   mainCi: "success" | "failure" | "pending" | "missing" | null;
 };
@@ -110,14 +112,24 @@ export function evaluateGate(facts: GateFacts): string[] {
       out.push("PENTEST reports blockers");
   }
   if (f.target === "QA") {
-    if (f.pr?.state !== "OPEN") out.push("PR is not open");
+    // A merged PR still owes the QA gate (a re-picked card whose PR merged early, #651); a closed one does not pass.
+    if (f.pr?.state !== "OPEN" && f.pr?.state !== "MERGED")
+      out.push("PR is neither open nor merged");
     // A needs-human verdict counts once the human removed the needs-human label (checked above).
     const passed = (b: string) => ["pass", "needs-human"].includes(fieldOf(b, "verdict") ?? "");
-    if (!after(f.comments, pickup.at, /^HANDOFF deliver\b/, passed))
+    if (!after(f.comments, pickup.at, /^HANDOFF deliver\b/, passed)) {
       out.push("no Deliver HANDOFF with verdict: pass after PICKUP");
+      if (after(f.comments, pickup.at, /^HANDOFF deliver\b/, (b) => fieldOf(b, "verdict") === null))
+        out.push(
+          "a HANDOFF deliver after PICKUP has no verdict: in its header block (blank line or fence before it? PROTOCOL 9)",
+        );
+    }
     if (unticked.length) out.push(`contract not ticked by Deliver: ${unticked.join(",")}`);
   }
   if (f.target === "Done") {
+    // PROTOCOL 5: only QA -> Done; In Review (or anything else) must pass the QA gate first.
+    if (f.status !== "QA")
+      out.push(`card is in ${f.status ?? "an unknown status"}, not QA (run gate QA first)`);
     if (f.pr?.state !== "MERGED") out.push("PR not merged");
     if (unticked.length) out.push(`contract not ticked: ${unticked.join(",")}`);
     if (f.mainCi !== "success")

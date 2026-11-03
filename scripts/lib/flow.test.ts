@@ -39,6 +39,7 @@ const facts = (over: Partial<GateFacts>): GateFacts => ({
   comments: [pickup],
   pr: { number: 3, state: "OPEN" },
   mainCi: null,
+  status: "In Progress",
   trusted,
   ...over,
 });
@@ -153,7 +154,7 @@ describe("evaluateGate", () => {
 
   it("Done needs a merged PR and green CI on main", () => {
     const merged = { number: 3, state: "MERGED" as const };
-    const base = { target: "Done" as const, body: body("[x]"), pr: merged };
+    const base = { target: "Done" as const, status: "QA", body: body("[x]"), pr: merged };
     expect(evaluateGate(facts({ ...base, mainCi: "success" }))).toEqual([]);
     expect(evaluateGate(facts({ ...base, mainCi: "pending" }))).toContain(
       "CI on main for the merge commit: pending",
@@ -161,6 +162,63 @@ describe("evaluateGate", () => {
     expect(
       evaluateGate(facts({ ...base, pr: { number: 3, state: "OPEN" }, mainCi: "success" })),
     ).toContain("PR not merged");
+  });
+});
+
+describe("gate order: Done after QA, QA on a merged PR (#759)", () => {
+  const merged = { number: 3, state: "MERGED" as const };
+  const pass = at("HANDOFF deliver 2026-10-04\nverdict: pass\nblockers: 0");
+
+  it("C1 Done fails unless the card's Status is QA", () => {
+    const done = {
+      target: "Done" as const,
+      body: body("[x]"),
+      pr: merged,
+      mainCi: "success" as const,
+    };
+    for (const status of ["In Review", "In Progress", "Ready", null]) {
+      expect(evaluateGate(facts({ ...done, status }))).toContain(
+        `card is in ${status ?? "an unknown status"}, not QA (run gate QA first)`,
+      );
+    }
+    expect(evaluateGate(facts({ ...done, status: "QA" }))).toEqual([]);
+  });
+
+  it("C2 QA passes for a merged PR with a trusted Deliver pass after the newest PICKUP", () => {
+    const repick = { ...pickup, createdAt: "2026-11-03T00:54:46Z" };
+    const deliver = at("HANDOFF deliver 2026-11-03\nverdict: pass", "2026-11-03T01:01:00Z");
+    const qa = { target: "QA" as const, body: body("[x]"), pr: merged, status: "In Review" };
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, pass, repick, deliver] }))).toEqual([]);
+    // A pass older than the newest PICKUP does not count, nor does a forged one, nor unticked boxes.
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, pass, repick] }))).toContain(
+      "no Deliver HANDOFF with verdict: pass after PICKUP",
+    );
+    const fake = forged("HANDOFF deliver x\nverdict: pass", "2026-11-03T01:01:00Z");
+    expect(evaluateGate(facts({ ...qa, comments: [repick, fake] }))).toContain(
+      "no Deliver HANDOFF with verdict: pass after PICKUP",
+    );
+    expect(evaluateGate(facts({ ...qa, body: body(), comments: [repick, deliver] }))).toContain(
+      "contract not ticked by Deliver: C1",
+    );
+  });
+
+  it("QA still refuses a PR closed without merge, or no PR", () => {
+    const qa = { target: "QA" as const, body: body("[x]"), comments: [pickup, pass] };
+    expect(evaluateGate(facts({ ...qa, pr: { number: 3, state: "CLOSED" } }))).toContain(
+      "PR is neither open nor merged",
+    );
+    expect(evaluateGate(facts({ ...qa, pr: null }))).toContain("PR is neither open nor merged");
+  });
+
+  it("a verdict after a blank line stays outside the header and the failure says so (#651)", () => {
+    const spaced = at("HANDOFF deliver 2026-11-03\n\nverdict: pass\nblockers: 0");
+    const r = evaluateGate(
+      facts({ target: "QA", body: body("[x]"), pr: merged, comments: [pickup, spaced] }),
+    );
+    expect(r).toContain("no Deliver HANDOFF with verdict: pass after PICKUP");
+    expect(r).toContain(
+      "a HANDOFF deliver after PICKUP has no verdict: in its header block (blank line or fence before it? PROTOCOL 9)",
+    );
   });
 });
 

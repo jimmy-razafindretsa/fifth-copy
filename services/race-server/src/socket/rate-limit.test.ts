@@ -3,6 +3,7 @@ import {
   keysSchema,
   pingSchema,
   PROTOCOL_VERSION,
+  type HostSettings,
   type HostSettingsAck,
   type Rejected,
 } from "@fifth-copy/protocol";
@@ -463,7 +464,10 @@ describe("host:settings budget sized for the host settings form (#750)", () => {
     await until(() => !!seen.welcome, undefined, "host welcomed");
     return { host, seen };
   }
-  const patchAt = (i: number) => ({ v: PROTOCOL_VERSION, patch: { wordCount: 10 + i } });
+  const patchAt = (i: number): HostSettings => ({
+    v: PROTOCOL_VERSION,
+    patch: { wordCount: 10 + i },
+  });
   const ask = (client: Client, payload: unknown) =>
     client
       .timeout(2_000)

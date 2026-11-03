@@ -1,8 +1,10 @@
 {
   "language": "en",
-  "source": "Leo Tolstoy, Anna Karenina (1878), translated by Constance Garnett (1901)",
+  "source": "Leo Tolstoy, Anna Karenina (1878), translated by Constance Garnett (1901), Project Gutenberg eBook #1399",
   "licence": "public domain",
   "authorType": "public-domain",
-  "reviewed": null,
-  "passages": ["Happy families are all alike; every unhappy family is unhappy in its own way."]
+  "reviewed": "2026-11-03",
+  "passages": [
+    "Happy families are all alike; every unhappy family is unhappy in its own way."
+  ]
 }

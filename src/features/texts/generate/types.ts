@@ -1,4 +1,5 @@
-import type { RaceLanguage } from "@fifth-copy/protocol";
+import type { Rng } from "@fifth-copy/engine";
+import type { RaceLanguage, RaceSettings } from "@fifth-copy/protocol";
 
 /** One attributed passage of a text source (a content-file passage and its file's `source`). */
 export type SeedSentence = { readonly text: string; readonly source: string };
@@ -22,3 +23,13 @@ export type GeneratedText = {
   wordCount: number;
   sourceRef: string | null;
 };
+
+/** What a strategy gets: the host's settings, the injected rng and the text source. */
+export type StrategyInput = {
+  settings: RaceSettings;
+  rng: Rng;
+  provider: TextProvider;
+};
+
+/** Turns settings into the tokens of one text of exactly `settings.wordCount` engine words, typeable. */
+export type Strategy = (input: StrategyInput) => string[];

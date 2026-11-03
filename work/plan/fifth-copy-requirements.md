@@ -258,3 +258,4 @@ Extracted 2026-10-02 by the `build-board` workflow from `docs/spec/fifth-copy-sp
 22. How is the 'one thing to improve' (success criterion 3) chosen?
 23. Real-time server: Socket.IO or Colyseus? It lives outside src/, so it needs a new ADR (ADR 0001 says a new top-level folder needs an ADR update; the product-spec says real-time transport needs an ADR).
 24. Does the 'Accents: every word contains an accent' toggle apply to Real sentences texts, or only to generated word lists?
+    Settled (#354): strict for generated words (Random words and the Special characters drill: every word holds one of é è ê ë à â ç î ï ô ù û ü œ); best-effort for Real sentences, which draw from the passages with the highest accented-word ratio (literature cannot put an accent in every word). French races only.

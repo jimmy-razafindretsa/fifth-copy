@@ -29,4 +29,65 @@ model User {
   hostedLobbies      Lobby[]          @relation("LobbyHost")
   raceResults        RaceResult[]
   raceKeystrokes     RaceKeystrokes[]
+  oauthAccounts      OAuthAccount[]
+  recoveryCode       RecoveryCode?
+  preference         Preference?
+}
+
+enum OAuthProvider {
+  GITHUB
+  DISCORD
+}
+
+/// A sign-in link to GitHub or Discord (#486). Only the provider and its account id are kept:
+/// sessions are JWTs (ADR 0009), so nothing else from the provider is stored.
+model OAuthAccount {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          OAuthProvider
+  providerAccountId String
+  createdAt         DateTime      @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+/// One recovery code per account (ADR 0009), stored as an Argon2id hash (#46); rotated in place.
+model RecoveryCode {
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  createdAt DateTime  @default(now())
+  rotatedAt DateTime?
+}
+
+enum KeyboardLayout {
+  CSA
+  FR_CA
+  US_QWERTY
+  AZERTY
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+/// UI locale; independent of the race text language (RaceLanguage, R190).
+enum Locale {
+  FR
+  EN
+}
+
+/// One settings row per user; defaults match #66 C2 so a bare row reads as "not chosen yet".
+model Preference {
+  userId    String          @unique
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  layout    KeyboardLayout?
+  theme     Theme           @default(SYSTEM)
+  locale    Locale?
+  sound     Boolean         @default(true)
+  updatedAt DateTime        @updatedAt
 }

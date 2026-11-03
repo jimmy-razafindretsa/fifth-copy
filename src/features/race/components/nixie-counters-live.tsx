@@ -40,8 +40,9 @@ export type Sampler<T> = {
 };
 
 /** You are typing in a running race: the only time the figure moves with the clock. */
+// the store's `selectCanType` (#233: an exit stops the figure before the snapshot adopts the status)
 const typingNow = (s: RaceState) =>
-  s.phase === "running" && s.prediction?.state.status === "typing";
+  s.phase === "running" && s.prediction?.state.status === "typing" && s.exit === null;
 
 /**
  * A value as a tiny external store on a bounded clock (#225 C2, generalised by #240; the

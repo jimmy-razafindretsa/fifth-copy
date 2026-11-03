@@ -78,6 +78,15 @@ const NO_BONUS = {
   pending: null,
 } as const satisfies Omit<BonusState, "plays">;
 
+/**
+ * How your desk left the race before filing (#233, ARCHITECTURE 7.1): `abandoned` (you confirmed
+ * ABANDON, Reassigned) or `asleep` (the server's idle kick, spec 4.5). The server decides it (its
+ * `event` or your status in a snapshot or a reload's `welcome`); `dismissed` once you chose KEEP
+ * WATCHING (the HUD stays live, without input).
+ */
+export type ExitKind = "abandoned" | "asleep";
+export type RaceExit = { kind: ExitKind; dismissed: boolean };
+
 export type RaceState = {
   phase: RacePhase;
   lost: RaceLostReason | null;
@@ -131,6 +140,16 @@ export type RaceState = {
   endedAt: number | null;
   /** Your card, cooldown, blur and refusal (#236); the overlay stays `overlay`. */
   bonus: BonusState;
+  /** Your exit (#233), or `null` while you type or filed. Reset by every `welcome` and `countdown`. */
+  exit: RaceExit | null;
+  /** The server warned your silent desk (`idle-warning`, #233): cleared by your next accepted key. */
+  idleWarning: boolean;
+  /** The desk the Major's lamp points at (#233 sets it to yours while warned; #267 reads it). */
+  lampTarget: number | null;
+  /** An abandon intent is in flight (taken, no answer yet): a second confirm sends nothing. */
+  abandoning: boolean;
+  /** Abandon intents sent so far on this page (never reset): `sendAbandons` emits one per step. */
+  abandons: number;
 };
 
 /**
@@ -170,6 +189,10 @@ export type RaceEvent =
    * clock. The reducer takes it only while you hold a card, may type and are not cooling.
    */
   | { type: "bonus-play"; at: number }
+  /** You confirmed ABANDON (#233): taken once while you may type; `sendAbandons` sends the intent. */
+  | { type: "abandon" }
+  /** KEEP WATCHING (#233): the exit docket closes, the HUD stays live without input. */
+  | { type: "exit-dismissed" }
   /** The server refused a `keys`, `abandon` or `bonus:play` (#236 reads `no-bonus`). */
   | { type: "rejected"; payload: RoomEvents["rejected"]; at: number }
   /** The refusal that arrived at `refusedAt` has shown its 1.2 s (scheduled by `watchRefusalExpiry`). */
@@ -204,7 +227,36 @@ export const initialRaceState: RaceState = {
   ending: null,
   endedAt: null,
   bonus: { ...NO_BONUS, plays: 0 },
+  exit: null,
+  idleWarning: false,
+  lampTarget: null,
+  abandoning: false,
+  abandons: 0,
 };
+
+/** No exit, no warning, no lamp, nothing in flight: a (re)connect or a new race (#233). */
+const NO_EXIT = {
+  exit: null,
+  idleWarning: false,
+  lampTarget: null,
+  abandoning: false,
+} as const satisfies Partial<RaceState>;
+
+/**
+ * The exit your desk's status implies (#233): `abandoned` and `asleep` are exits, any other status
+ * none. The server's status wins over a lost event: a snapshot or a reload's `welcome` brings it.
+ */
+function exitFromStatus(prediction: Prediction | null): ExitKind | null {
+  const status = prediction?.state.status;
+  return status === "abandoned" || status === "asleep" ? status : null;
+}
+
+/** `state` with the exit its prediction's status implies, unless an exit is already known. */
+function withStatusExit(state: RaceState): RaceState {
+  if (state.exit) return state;
+  const kind = exitFromStatus(state.prediction);
+  return kind ? { ...state, ...NO_EXIT, exit: { kind, dismissed: false } } : state;
+}
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
 
@@ -250,7 +302,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   switch (event.type) {
     case "welcome": {
       const w = event.payload;
-      return {
+      const next: RaceState = {
         phase: w.room.phase,
         lost: null,
         room: w.room,
@@ -277,7 +329,11 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         ending: null,
         endedAt: null,
         bonus: { ...NO_BONUS, plays: state.bonus.plays },
+        ...NO_EXIT,
+        abandons: state.abandons,
       };
+      // a reload after your exit: the server's status brings the docket back
+      return withStatusExit(next);
     }
     case "clock":
       return event.offset === state.clockOffset ? state : { ...state, clockOffset: event.offset };
@@ -301,6 +357,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         ending: null,
         endedAt: null,
         bonus: { ...NO_BONUS, plays: state.bonus.plays },
+        ...NO_EXIT,
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -312,12 +369,20 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       };
     case "key": {
       // typing is locked before GO and after your own finish (the engine refuses a key once you stop)
-      if (state.phase !== "running" || !state.prediction) return state;
+      // ... and after your exit (#233: the server decided, the prediction may not know yet)
+      if (state.phase !== "running" || !state.prediction || state.exit) return state;
       const prediction = state.prediction.push(event.keystroke);
       if (prediction === state.prediction) return state;
       // the engine's verdict on the key, as the prediction read it (#220): no comparison here
       const { key, t } = event.keystroke;
-      return { ...state, prediction, lastKey: { key, t, wrong: prediction.wrong } };
+      // an accepted key ends the idle warning (#233): the Major looks away
+      return {
+        ...state,
+        prediction,
+        lastKey: { key, t, wrong: prediction.wrong },
+        idleWarning: false,
+        lampTarget: null,
+      };
     }
     case "sent": {
       const prediction = state.prediction?.markSent(event.count) ?? null;
@@ -329,7 +394,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       const server = prediction && state.you !== null ? serverProgressOf(desks, state.you) : null;
       if (prediction && server)
         prediction = prediction.reconcile(server, prediction.ackedBy(server, t));
-      return { ...state, desks, ranks, prediction };
+      return withStatusExit({ ...state, desks, ranks, prediction });
     }
     case "ended":
       // reason-agnostic (#240, #661): the phase, the server's ranking as sent and when it arrived; the
@@ -340,10 +405,14 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         room: state.room && { ...state.room, phase: "ended" },
         ending: event.payload,
         endedAt: event.at,
+        idleWarning: false,
+        lampTarget: null,
       };
     case "event": {
       const bonus = reduceBonusEvent(state, event.payload, event.at);
       if (bonus) return bonus;
+      const exit = reduceExitEvent(state, event.payload);
+      if (exit) return exit;
       const stamp = stampFromEvent(event.payload, state.you, state.prediction?.state.errors ?? 0);
       if (!stamp) return state;
       const id = state.stampSeq + 1;
@@ -370,7 +439,16 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         },
       };
     }
+    case "abandon":
+      if (!selectCanType(state) || state.abandoning) return state;
+      return { ...state, abandoning: true, abandons: state.abandons + 1 };
+    case "exit-dismissed":
+      if (!state.exit || state.exit.dismissed) return state;
+      return { ...state, exit: { ...state.exit, dismissed: true } };
     case "rejected": {
+      // an abandon refused (`not-running`: the race ended or you stopped first) may be confirmed again
+      if (event.payload.reason === "not-running" && state.abandoning)
+        return { ...state, abandoning: false };
       // every refusal of a play is `no-bonus` on the wire (#190); the client never sends while cooling,
       // so one while a card is held means the target is immune (or there is none)
       const { bonus } = state;
@@ -450,6 +528,27 @@ function reduceBonusEvent(
 }
 
 /**
+ * The exit and idle events of your desk (#233, ADR 0006: the server decides both), or `null` for any
+ * other event: `abandoned` and `asleep` (the idle kick, C1's `kicked`) set your exit, `idle-warning`
+ * turns the warning on and points the Major's lamp at you. Another desk's changes nothing here (the
+ * race card reads its status from the snapshots).
+ */
+function reduceExitEvent(state: RaceState, payload: RoomEvents["event"]): RaceState | null {
+  switch (payload.kind) {
+    case "abandoned":
+    case "asleep":
+      if (payload.desk !== state.you || state.exit) return state;
+      return { ...state, ...NO_EXIT, exit: { kind: payload.kind, dismissed: false } };
+    case "idle-warning":
+      if (payload.desk !== state.you || !selectCanType(state)) return state;
+      if (state.idleWarning && state.lampTarget === state.you) return state;
+      return { ...state, idleWarning: true, lampTarget: state.you };
+    default:
+      return null;
+  }
+}
+
+/**
  * A play at `at` (device clock) may go out: the race runs, you type, bonuses are on, you hold a card,
  * no play is in flight and the cooldown is over. The server decides again (#190); this only keeps the
  * client from sending what it knows is refused.
@@ -467,7 +566,23 @@ function mayPlayAt(state: RaceState, at: number): boolean {
 
 /** You may type: the race runs, you have a desk, and you have not stopped (finished, asleep...). */
 export function selectCanType(state: RaceState): boolean {
-  return state.phase === "running" && state.prediction?.state.status === "typing";
+  return (
+    state.phase === "running" && state.prediction?.state.status === "typing" && state.exit === null
+  );
+}
+
+/** Abandon's state from the store (#233 C2): `idle` while you may type and none is in flight. */
+export function selectAbandonState(state: RaceState): "idle" | "disabled" {
+  return selectCanType(state) && !state.abandoning ? "idle" : "disabled";
+}
+
+/**
+ * The exit docket the seat view shows (#233 C3, C4): your exit while the race runs and until KEEP
+ * WATCHING; `null` otherwise (RACE OVER yields to the finished view).
+ */
+export function selectExit(state: RaceState): ExitKind | null {
+  const { exit } = state;
+  return state.phase === "running" && exit && !exit.dismissed ? exit.kind : null;
 }
 
 /** What the tray and the typing surface show of your bonus (#236 C1): stable between changes. */
@@ -812,5 +927,20 @@ export function sendBonusPlays(store: RaceStore, socket: BonusPlaySink): Off {
   return store.subscribe(() => {
     const { plays } = store.getState().bonus;
     for (; sent < plays; sent++) socket.sendBonusPlay();
+  });
+}
+
+/** The one send an abandon needs (`RoomSocket.sendAbandon`). */
+export type AbandonSink = { sendAbandon(): void };
+
+/**
+ * Sends one `abandon` per intent the store took (#233 C1): the reducer takes a confirm once, while you
+ * may type, so a double press or a press after the exit sends nothing. Returns the stop.
+ */
+export function sendAbandons(store: RaceStore, socket: AbandonSink): Off {
+  let sent = store.getState().abandons;
+  return store.subscribe(() => {
+    const { abandons } = store.getState();
+    for (; sent < abandons; sent++) socket.sendAbandon();
   });
 }

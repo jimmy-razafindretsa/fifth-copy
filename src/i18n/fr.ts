@@ -395,6 +395,17 @@ export const fr = {
       back: "RETOUR À LA SALLE D'ATTENTE →",
     },
     abandon: { abandon: "ABANDONNER", confirm: "CONFIRMER · ME RÉAFFECTER" },
+    exit: {
+      stamp: { abandoned: "RÉAFFECTÉ", asleep: "ENDORMI AU BUREAU" },
+      wpm: "MPM",
+      accuracy: "PRÉCISION",
+      place: "RANG",
+      last: "DERNIER",
+      percent: "{n}\u00a0%",
+      keepWatching: "CONTINUER À REGARDER",
+      back: "RETOUR À LA SALLE D'ATTENTE →",
+      leave: "QUITTER →",
+    },
     counters: {
       wpm: "MPM",
       place: "RANG",

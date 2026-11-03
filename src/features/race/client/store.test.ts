@@ -30,10 +30,13 @@ const {
   createRaceStore,
   initialRaceState,
   reduceRace,
+  selectAbandonState,
   selectBonus,
   selectCanType,
+  selectExit,
   selectTypedView,
   selectVisibleStamp,
+  sendAbandons,
   sendBonusPlays,
   watchBlurExpiry,
   watchRefusalExpiry,
@@ -124,6 +127,12 @@ describe("reduceRace (#561 C2)", () => {
         pending: null,
         plays: 0,
       },
+      // #233: your exit, the idle warning, the Major's lamp and the abandon intents sent
+      exit: null,
+      idleWarning: false,
+      lampTarget: null,
+      abandoning: false,
+      abandons: 0,
     });
   });
 
@@ -1865,5 +1874,178 @@ describe("#236 bonus state", () => {
     });
     room.sendBonusPlay();
     expect(fake.emit).toHaveBeenCalledWith("bonus:play", { v: PROTOCOL_VERSION });
+  });
+});
+
+describe("#233 abandon, idle warning and asleep (C1)", () => {
+  const TEXT = "one two three";
+  const T0 = 1_767_225_603_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "en" as const,
+    wordCount: 3,
+    t0: T0,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const ev = (payload: Record<string, unknown>, at = T0 + 2_000): RaceEvent =>
+    ({ type: "event", payload: { v: PROTOCOL_VERSION, ...payload }, at }) as RaceEvent;
+  const key = (key: string, t: number): RaceEvent => ({ type: "key", keystroke: { t, key } });
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const racing = (w = welcome()) => run({ type: "welcome", payload: w }, countdown, { type: "go" });
+  const abandon: RaceEvent = { type: "abandon" };
+  const snapshot = (code: number, cursor = 2, t = 3_000): RaceEvent => ({
+    type: "snapshot",
+    payload: {
+      v: PROTOCOL_VERSION,
+      t,
+      desks: [
+        [5, cursor, cursor, 0, code, cursor],
+        [1, 6, 6, 0, PLAYER_STATUS_CODES.typing, 6],
+      ],
+      ranks: [1, 5],
+    },
+  });
+
+  it("takes the abandon intent once, only while you may type", () => {
+    expect(reduceRace(run({ type: "welcome", payload: welcome() }), abandon).abandons).toBe(0);
+    const counting = run({ type: "welcome", payload: welcome() }, countdown);
+    expect(reduceRace(counting, abandon)).toBe(counting);
+    const s = reduceRace(racing(), abandon);
+    expect(s.abandons).toBe(1);
+    expect(s.abandoning).toBe(true);
+    expect(selectAbandonState(s)).toBe("disabled");
+    // a second confirm while the first is in flight sends nothing
+    expect(reduceRace(s, abandon)).toBe(s);
+    expect(selectAbandonState(racing())).toBe("idle");
+  });
+
+  it("the server's `abandoned` for your desk locks typing and freezes the exit; other desks change nothing", () => {
+    const typed = [key("o", 400), key("n", 800)].reduce(reduceRace, reduceRace(racing(), abandon));
+    const other = reduceRace(typed, ev({ kind: "abandoned", desk: 1 }));
+    expect(other.exit).toBeNull();
+    const s = reduceRace(typed, ev({ kind: "abandoned", desk: 5 }));
+    expect(s.exit).toEqual({ kind: "abandoned", dismissed: false });
+    expect(s.phase).toBe("running");
+    expect(selectCanType(s)).toBe(false);
+    expect(selectExit(s)).toBe("abandoned");
+    expect(selectAbandonState(s)).toBe("disabled");
+    // a key after the exit is refused
+    expect(reduceRace(s, key("e", 900))).toBe(s);
+  });
+
+  it("the server's `asleep` (the idle kick) for your desk sets the asleep exit", () => {
+    const warned = reduceRace(racing(), ev({ kind: "idle-warning", desk: 5, kickAt: 60_000 }));
+    const s = reduceRace(warned, ev({ kind: "asleep", desk: 5 }));
+    expect(s.exit).toEqual({ kind: "asleep", dismissed: false });
+    expect(selectExit(s)).toBe("asleep");
+    expect(selectCanType(s)).toBe(false);
+    // the warning is over once kicked
+    expect(s.idleWarning).toBe(false);
+    expect(s.lampTarget).toBeNull();
+    expect(reduceRace(racing(), ev({ kind: "asleep", desk: 3 })).exit).toBeNull();
+  });
+
+  it("`idle-warning` for you turns the warning and the lamp on; your next accepted key clears both", () => {
+    const base = racing();
+    expect(reduceRace(base, ev({ kind: "idle-warning", desk: 3, kickAt: 60_000 }))).toBe(base);
+    const s = reduceRace(base, ev({ kind: "idle-warning", desk: 5, kickAt: 60_000 }));
+    expect(s.idleWarning).toBe(true);
+    expect(s.lampTarget).toBe(5);
+    const typed = reduceRace(s, key("o", 46_000));
+    expect(typed.idleWarning).toBe(false);
+    expect(typed.lampTarget).toBeNull();
+  });
+
+  it("a snapshot or a reload's welcome that carries your exit status sets it (the docket survives a reload)", () => {
+    const viaSnapshot = reduceRace(racing(), snapshot(PLAYER_STATUS_CODES.abandoned));
+    expect(viaSnapshot.exit).toEqual({ kind: "abandoned", dismissed: false });
+    const reloaded = run({
+      type: "welcome",
+      payload: welcome({
+        room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+        race: RACE,
+        state: {
+          cursor: 2,
+          correct: 2,
+          errors: 0,
+          total: 2,
+          typed: ["o", "n"],
+          status: "asleep",
+          lastT: 1_200,
+          finishedAt: null,
+        },
+      }),
+    });
+    expect(selectExit(reloaded)).toBe("asleep");
+    expect(selectCanType(reloaded)).toBe(false);
+  });
+
+  it("KEEP WATCHING dismisses the docket but keeps the exit (typing stays locked)", () => {
+    const s = reduceRace(racing(), ev({ kind: "abandoned", desk: 5 }));
+    const watching = reduceRace(s, { type: "exit-dismissed" });
+    expect(watching.exit).toEqual({ kind: "abandoned", dismissed: true });
+    expect(selectExit(watching)).toBeNull();
+    expect(selectCanType(watching)).toBe(false);
+    expect(reduceRace(watching, { type: "exit-dismissed" })).toBe(watching);
+    expect(reduceRace(racing(), { type: "exit-dismissed" }).exit).toBeNull();
+    // a later snapshot with the same status does not bring the docket back
+    expect(selectExit(reduceRace(watching, snapshot(PLAYER_STATUS_CODES.abandoned)))).toBeNull();
+  });
+
+  it("a welcome or a new countdown resets the exit, the warning and the lamp; RACE OVER hides the docket", () => {
+    const warned = reduceRace(racing(), ev({ kind: "idle-warning", desk: 5, kickAt: 60_000 }));
+    const out = reduceRace(reduceRace(warned, abandon), ev({ kind: "abandoned", desk: 5 }));
+    for (const next of [
+      reduceRace(out, countdown),
+      reduceRace(out, { type: "welcome", payload: welcome() }),
+    ]) {
+      expect(next.exit).toBeNull();
+      expect(next.idleWarning).toBe(false);
+      expect(next.lampTarget).toBeNull();
+      expect(next.abandoning).toBe(false);
+      // the sender's counter never goes back
+      expect(next.abandons).toBe(1);
+    }
+    const ended = reduceRace(out, {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "timer", ranking: [] },
+      at: T0 + 60_000,
+    } as RaceEvent);
+    expect(selectExit(ended)).toBeNull();
+    const endedWarned = reduceRace(warned, {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "timer", ranking: [] },
+      at: T0 + 60_000,
+    } as RaceEvent);
+    expect(endedWarned.idleWarning).toBe(false);
+    expect(endedWarned.lampTarget).toBeNull();
+  });
+
+  it("a refused abandon (`not-running`) lets you confirm again", () => {
+    const s = reduceRace(racing(), abandon);
+    const refused = reduceRace(s, {
+      type: "rejected",
+      payload: { v: PROTOCOL_VERSION, reason: "not-running" },
+      at: T0 + 2_000,
+    } as RaceEvent);
+    expect(refused.abandoning).toBe(false);
+  });
+
+  it("sendAbandons emits one abandon per intent the store took", () => {
+    const store = createRaceStore(racing());
+    const socket = { sendAbandon: vi.fn() };
+    const stop = sendAbandons(store, socket);
+    store.dispatch(abandon);
+    store.dispatch(abandon); // in flight
+    expect(socket.sendAbandon).toHaveBeenCalledTimes(1);
+    stop();
+    store.dispatch({
+      type: "rejected",
+      payload: { v: PROTOCOL_VERSION, reason: "not-running" },
+      at: 1,
+    } as RaceEvent);
+    store.dispatch(abandon);
+    expect(socket.sendAbandon).toHaveBeenCalledTimes(1);
   });
 });

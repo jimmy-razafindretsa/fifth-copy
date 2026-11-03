@@ -4,6 +4,7 @@ import type { TelexLabels } from "../components/telex-strip";
 import type { FinishLabels } from "../view/standings";
 import type {
   AbandonLabels,
+  ExitLabels,
   NixieLabels,
   RaceCardLabels,
   RaceNoticeLabels,
@@ -31,6 +32,8 @@ export type RaceSeatLabels = {
   notice: RaceNoticeLabels & { phones: string };
   errors: SeatErrorLabels;
   abandon: AbandonLabels;
+  /** The exit dockets (#233): Reassigned after ABANDON, Asleep at desk after the idle kick. */
+  exit: ExitLabels;
   /** The nixie counters (#225): the tube tags and the words their `aria-label` reads. */
   counters: NixieLabels;
   raceCard: RaceCardLabels;

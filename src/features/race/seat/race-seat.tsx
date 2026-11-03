@@ -55,6 +55,7 @@ export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
               stamps: labels.stamps,
               announce: labels.announce,
               finish: labels.finish,
+              exit: labels.exit,
               input: labels.telex.strip,
             }}
           />

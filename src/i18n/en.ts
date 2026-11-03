@@ -402,6 +402,18 @@ export const en = {
       back: "BACK TO THE WAITING ROOM →",
     },
     abandon: { abandon: "ABANDON", confirm: "CONFIRM · REASSIGN ME" },
+    /** The exit dockets (#233, bible 7.3, 7.4): Reassigned after ABANDON, Asleep at desk after the idle kick. */
+    exit: {
+      stamp: { abandoned: "REASSIGNED", asleep: "ASLEEP AT DESK" },
+      wpm: "WPM",
+      accuracy: "ACCURACY",
+      place: "PLACE",
+      last: "LAST",
+      percent: "{n}\u00a0%",
+      keepWatching: "KEEP WATCHING",
+      back: "BACK TO THE WAITING ROOM →",
+      leave: "LEAVE →",
+    },
     counters: {
       wpm: "WPM",
       place: "PLACE",

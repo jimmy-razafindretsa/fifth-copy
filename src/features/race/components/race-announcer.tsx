@@ -99,7 +99,12 @@ export function RaceAnnouncer({
 
   return (
     <p role="status" aria-live="polite" aria-atomic="true" data-announcer className={docket.srOnly}>
-      {line ? <span key={line.id}>{line.text}</span> : null}
+      {/* the line's own node (a new one per line, so a repeated sentence is re-read) is a 1px box too */}
+      {line ? (
+        <span key={line.id} className={docket.srOnly}>
+          {line.text}
+        </span>
+      ) : null}
     </p>
   );
 }

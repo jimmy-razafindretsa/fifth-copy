@@ -996,7 +996,10 @@ test.describe("landing clerk outfit (#687)", () => {
 // header stands on `/`, `/lobby/<code>` and the Dawn report `/results/<raceId>`.
 test.describe("site header at phone width (#696)", () => {
   test.beforeEach(({}, info) => {
-    test.skip(info.project.name !== "mobile", "the phone rule (<= 480px) runs on the mobile project");
+    test.skip(
+      info.project.name !== "mobile",
+      "the phone rule (<= 480px) runs on the mobile project",
+    );
     test.slow();
   });
 

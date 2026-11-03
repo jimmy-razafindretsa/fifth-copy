@@ -75,6 +75,11 @@ export interface RoomSocket {
   onPong(cb: (payload: RoomEvents["pong"]) => void): Off;
   onProtocolError(cb: (error: ProtocolError) => void): Off;
   onConnectError(cb: (reason: ConnectErrorReason) => void): Off;
+  /**
+   * The server closed this socket (`io server disconnect`, #732): socket.io never reconnects it. A
+   * join the registry refused after the handshake passed ends this way, before any `welcome`.
+   */
+  onServerDisconnect(cb: () => void): Off;
   onReconnecting(cb: (attempt: number) => void): Off;
   onReconnected(cb: (attempt: number) => void): Off;
   /** Removes every listener registered here and disconnects. */
@@ -231,6 +236,10 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
         const message = err instanceof Error ? err.message : undefined;
         const reason = rejectReasonSchema.safeParse(message);
         cb(reason.success ? reason.data : "transport");
+      }),
+    onServerDisconnect: (cb) =>
+      listen(socket, "disconnect", (reason: unknown) => {
+        if (reason === "io server disconnect") cb();
       }),
     onReconnecting: (cb) =>
       listen(socket.io, "reconnect_attempt", (attempt: number) => cb(attempt)),

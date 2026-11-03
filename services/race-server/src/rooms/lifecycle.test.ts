@@ -783,7 +783,7 @@ describe("lifecycle: race again (#143)", () => {
   });
 
   it("members who left after the end come back at their desks and race again (C3)", async () => {
-    const { booted, host, lobby, others, connectAs, raceId1 } = await endedRoom();
+    const { host, lobby, others, connectAs, raceId1 } = await endedRoom();
     others[0]!.client.disconnect();
     host.disconnect();
     await eventually(async () => (await hash(lobby)).ttl <= ENDED_GRACE_TTL_S, "room kept");
@@ -796,12 +796,6 @@ describe("lifecycle: race again (#143)", () => {
     expect(seen2.welcome?.you).toBe(1);
     expect(seenBack.welcome?.you).toBe(2);
     expect((await hash(lobby)).ttl).toBeGreaterThan(ENDED_GRACE_TTL_S);
-    // Nobody else comes in after the end (late joiners are #732).
-    const late = booted.connect({
-      v: PROTOCOL_VERSION,
-      token: await booted.token({ lobby, sub: "usr_late", name: "Lou" }),
-    });
-    expect(await connectError(late)).toBe("in-progress");
 
     const ack = await start(host2);
     expect(ack).toEqual({ ok: true, raceId: expect.any(String) });

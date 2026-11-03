@@ -8,6 +8,7 @@ import { mintRaceToken } from "../actions/mint-race-token";
 import { setLobbyType } from "../actions/set-lobby-type";
 import { errorMessage, type EntryErrors } from "./entry-errors";
 import { InlineError } from "./inline-error";
+import { joinRoom } from "./late-join";
 import { playersLabel, type LobbyLabels } from "./lobby-labels";
 import {
   bindRoomSocket,
@@ -138,7 +139,15 @@ export function LobbyLiveView({
               {labels.waitingForHost}
             </p>
           ) : null}
-          {state.phase === "loading" ? <PlayerListSkeleton labels={labels} /> : null}
+          {/* a late joiner (#732): a statement row, so it does not pulse (bible 7.4, 14.3) */}
+          {state.phase === "spectating" ? (
+            <p role="status" className={styles.notice}>
+              {labels.raceInProgress}
+            </p>
+          ) : null}
+          {state.phase === "loading" || state.phase === "spectating" ? (
+            <PlayerListSkeleton labels={labels} />
+          ) : null}
           {known ? <PlayerList members={state.members} you={state.you} labels={labels} /> : null}
           {state.phase === "error" ? (
             <div className={styles.error}>
@@ -159,7 +168,8 @@ export function LobbyLiveView({
 /**
  * The waiting room's client leaf (ARCHITECTURE 8.3): mints the race token through the action (ADR
  * 0009: never in a URL, the HTML or a cookie), connects through a lazily loaded `connectToRoom` (ADR
- * 0006, 0013) and keeps the roster in one store that later cards extend with more events. Every welcome
+ * 0006, 0013) and keeps the roster in one store that later cards extend with more events. A viewer
+ * who arrives after START is held by `joinRoom` (#732) and seated when the race ends. Every welcome
  * stores the desk's resume key for the seat view. The host's START sends `host:start`; the `countdown`
  * that follows moves every member to `/race/<raceId>` once (#214), and the socket is parked for the seat
  * view instead of closed, so the desk is never line-cut while that page connects.
@@ -191,38 +201,42 @@ export function LobbyLive({
   const handedOver = useRef(false);
 
   useEffect(() => {
-    // StrictMode runs this twice in dev: a stale mint must never open a socket.
-    let aborted = false;
+    // StrictMode runs this twice in dev: a cancelled join never opens a socket.
     let socket: RoomSocket | null = null;
     let unbind = () => {};
-    let park: ((lobbyId: string, socket: RoomSocket) => void) | null = null;
+    let race: typeof import("@/features/race") | null = null;
     // The socket module (socket.io-client + protocol schemas) is a lazy chunk (ADR 0013 budget):
-    // its download overlaps the mint round trip, and a failed chunk load is a generic error.
-    Promise.all([mintRaceToken({ code }), import("@/features/race")]).then(
-      ([result, race]) => {
-        if (aborted) return;
-        if (!result.ok) {
-          // A throttled mint (#207) is the generic error: callers own their throttled state.
-          const error = result.error === "rate-limited" ? "generic" : result.error;
-          return dispatch({ type: "token-error", error });
-        }
-        socket = race.connectToRoom(result.url, result.token);
-        socketRef.current = socket;
-        park = race.parkSocket;
-        unbind = bindRoomSocket(socket, dispatch, {
+    // its download overlaps the first mint round trip, and a failed chunk load is a generic error.
+    const raceModule = import("@/features/race");
+    const cancel = joinRoom({
+      mint: ({ spectator }) => mintRaceToken({ code, spectator }),
+      connect: async (url, token) => {
+        race = await raceModule;
+        return race.connectToRoom(url, token);
+      },
+      attach: (seat) => {
+        socket = seat;
+        socketRef.current = seat;
+        const off = bindRoomSocket(seat, dispatch, {
           lobbyId,
-          storeResumeKey: race.storeResumeKey,
+          storeResumeKey: race?.storeResumeKey,
         });
+        unbind = off;
+        return () => {
+          off();
+          if (socket !== seat) return;
+          socket = null;
+          socketRef.current = null;
+          unbind = () => {};
+        };
       },
-      () => {
-        if (!aborted) dispatch({ type: "token-error", error: "generic" });
-      },
-    );
+      dispatch,
+    });
     return () => {
-      aborted = true;
+      cancel();
       unbind();
       socketRef.current = null;
-      if (socket && handedOver.current && park) park(lobbyId, socket);
+      if (socket && handedOver.current && race) race.parkSocket(lobbyId, socket);
       else socket?.close();
     };
   }, [code, lobbyId]);

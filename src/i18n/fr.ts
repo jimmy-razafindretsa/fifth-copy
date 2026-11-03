@@ -248,6 +248,7 @@ export const fr = {
     you: "TOI",
     bot: "BOT",
     waitingForHost: "EN ATTENTE DE L'HÔTE",
+    raceInProgress: "COURSE EN COURS · TU SERAS PLACÉ À LA FIN",
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",
     start: {

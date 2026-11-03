@@ -106,6 +106,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       sendPing: () => {},
       onConnectError: () => off,
       onReconnecting: () => off,
+      onServerDisconnect: () => off,
       onReconnected: () => off,
     } as unknown as import("./socket").RoomSocket;
     const dispatch = vi.fn();
@@ -144,6 +145,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       sendPing: () => {},
       onConnectError: () => () => {},
       onReconnecting: () => () => {},
+      onServerDisconnect: () => () => {},
       onReconnected: () => () => {},
       close: vi.fn(),
     };
@@ -199,6 +201,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       sendPing: () => {},
       onConnectError: () => () => {},
       onReconnecting: () => () => {},
+      onServerDisconnect: () => () => {},
       onReconnected: () => () => {},
       close: vi.fn(),
     };

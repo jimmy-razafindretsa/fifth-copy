@@ -22,7 +22,7 @@ import {
   traceKey,
   VOID_TTL_S,
 } from "./keys";
-import { createRoomRegistry, type RaceDesk, type RoomRegistry } from "./registry";
+import { createRoomRegistry, ROOM_SEATS, type RaceDesk, type RoomRegistry } from "./registry";
 
 // Integration tests against a real Redis (ADR 0008, ARCHITECTURE 10). They fail, never skip, when
 // Redis is missing: a card worktree loads REDIS_URL from its .env, CI from the `check` job service.
@@ -790,13 +790,111 @@ describe("room registry: race again (#143)", () => {
     });
   });
 
-  it("an ended room refuses a user who neither is a member nor raced in it (in-progress)", async () => {
+  it("an ended room seats a late joiner, never at the free desk of a racer who left (#732)", async () => {
     const { registry } = setup();
     const lobbyId = await endedRoom(registry);
-    expect(await registry.join(lobbyId, { userId: "late", name: "Lou" })).toEqual({
-      ok: false,
-      reason: "in-progress",
+    await registry.leave(lobbyId, "b");
+    const late = await registry.join(lobbyId, { userId: "late", name: "Lou" });
+    // Desks 1 and 3 are seated, desk 2 is Bob's from the last race: Lou takes the next free one.
+    expect(late).toMatchObject({ ok: true, desk: 4, room: { phase: "ended" } });
+    expect(await registry.hasMember(lobbyId, "late")).toBe(true);
+    expect(await registry.join(lobbyId, { userId: "b", name: "Bob" })).toMatchObject({
+      ok: true,
+      desk: 2,
     });
+  });
+
+  it("the room seats at most ROOM_SEATS typists: the next stranger is room-full, waiting and ended (#732)", async () => {
+    const { registry } = setup();
+    const waiting = await openRoom(registry);
+    for (let i = 1; i <= ROOM_SEATS; i++) {
+      expect(await registry.join(waiting, { userId: `u${i}`, name: `U${i}` })).toMatchObject({
+        ok: true,
+      });
+    }
+    expect(await registry.join(waiting, { userId: "extra", name: "X" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    expect(await registry.hasMember(waiting, "extra")).toBe(false);
+    // a member at the cap (a second tab) still comes in
+    expect(await registry.join(waiting, { userId: "u3", name: "U3" })).toMatchObject({
+      ok: true,
+      desk: 3,
+    });
+
+    const ended = await endedRoom(registry);
+    for (let i = 4; i <= ROOM_SEATS; i++) {
+      expect(await registry.join(ended, { userId: `l${i}`, name: `L${i}` })).toMatchObject({
+        ok: true,
+      });
+    }
+    expect(await registry.join(ended, { userId: "extra", name: "X" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    // a racer of the last race who left and came back while the room is full of others: still a seat
+    await registry.leave(ended, "b");
+    await registry.join(ended, { userId: "l99", name: "L99" });
+    expect(await registry.join(ended, { userId: "b", name: "Bob" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    expect(await registry.join(ended, { userId: "c", name: "Cy" })).toMatchObject({ ok: true });
+  });
+
+  it("bots take desks: 30 desks of typists and bots refuse a stranger and the next bot (#732)", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    const typists = 10;
+    for (let i = 1; i <= typists; i++)
+      await registry.join(lobbyId, { userId: i === 1 ? "host" : `u${i}`, name: `U${i}` });
+    const bots = (n: number) => Array.from({ length: n }, () => ({ level: "clerk" as const }));
+    expect(
+      await registry.updateSettings(lobbyId, "host", { bots: bots(ROOM_SEATS - typists) }),
+    ).toMatchObject({
+      ok: true,
+    });
+    expect(await registry.members(lobbyId)).toHaveLength(ROOM_SEATS);
+    // the next stranger: every desk is taken
+    expect(await registry.join(lobbyId, { userId: "extra", name: "X" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    // one more bot: refused, the room keeps its bots
+    expect(
+      await registry.updateSettings(lobbyId, "host", { bots: bots(ROOM_SEATS - typists + 1) }),
+    ).toEqual({ ok: false, reason: "invalid" });
+    expect(await registry.setBots(lobbyId, bots(ROOM_SEATS - typists + 1))).toEqual({
+      ok: false,
+      reason: "invalid",
+    });
+    expect(await registry.members(lobbyId)).toHaveLength(ROOM_SEATS);
+    // a member (a second tab) still comes in at the cap; removing a bot is always allowed
+    expect(await registry.join(lobbyId, { userId: "u2", name: "U2" })).toMatchObject({
+      ok: true,
+      desk: 2,
+    });
+    expect(
+      await registry.updateSettings(lobbyId, "host", { bots: bots(ROOM_SEATS - typists - 1) }),
+    ).toMatchObject({
+      ok: true,
+    });
+    expect(await registry.join(lobbyId, { userId: "extra", name: "X" })).toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("a started room still refuses a user who is not a member (in-progress)", async () => {
+    const { registry } = setup();
+    const lobbyId = await endedRoom(registry);
+    for (const phase of ["countdown", "running"] as const) {
+      await registry.setPhase(lobbyId, phase);
+      expect(await registry.join(lobbyId, { userId: "late", name: "Lou" })).toEqual({
+        ok: false,
+        reason: "in-progress",
+      });
+    }
     expect(await registry.hasMember(lobbyId, "late")).toBe(false);
   });
 

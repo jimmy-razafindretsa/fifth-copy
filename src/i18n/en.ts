@@ -246,6 +246,8 @@ export const en = {
     bot: "BOT",
     /** A non-host's 7.4 notice row at the top of the roll (#105). */
     waitingForHost: "WAITING FOR THE HOST",
+    /** A late joiner's 7.4 notice row while the race runs (#732): held, seated at `ended`. */
+    raceInProgress: "RACE IN PROGRESS · YOU ARE SEATED WHEN IT ENDS",
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
     /** The host's START (#214, bible 7.1 primary; its layout moves with #498) and its 7.4 lines. */

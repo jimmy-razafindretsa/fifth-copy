@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearResumeKey, readResumeKey, RESUME_KEY_PREFIX, storeResumeKey } from "./resume-key";
+import { fakeRoomSocket } from "./testing/fake-room-socket";
 
 // Contract of #561 C11: the desk's resume key lives in sessionStorage under
 // `fifth-copy:resume:<lobbyId>`; every call survives a storage that is missing or throws, and reads
@@ -92,25 +93,7 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const storage = memoryStorage();
     vi.stubGlobal("window", { sessionStorage: storage });
     const { bindRaceSocket } = await import("./store");
-    let onWelcome: ((payload: unknown) => void) | null = null;
-    const off = () => {};
-    const socket = {
-      onWelcome: (cb: (payload: unknown) => void) => ((onWelcome = cb), off),
-      onRoster: () => off,
-      onSettings: () => off,
-      onCountdown: () => off,
-      onSnapshot: () => off,
-      onEvent: () => off,
-      onEnded: () => off,
-      onRejected: () => off,
-      onPong: () => off,
-      sendPing: () => {},
-      sendBonusPlay: () => {},
-      onConnectError: () => off,
-      onReconnecting: () => off,
-      onServerDisconnect: () => off,
-      onReconnected: () => off,
-    } as unknown as import("./socket").RoomSocket;
+    const socket = fakeRoomSocket();
     const dispatch = vi.fn();
     bindRaceSocket(socket, dispatch, { lobbyId: LOBBY });
     const second = `${KEY.slice(0, 40)}`;
@@ -121,12 +104,12 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       room: { phase: "waiting" },
       race: null,
     });
-    onWelcome!(welcome(KEY));
+    socket.deliver("welcome", welcome(KEY));
     expect(readResumeKey(LOBBY)).toBe(KEY);
-    onWelcome!(welcome(second));
+    socket.deliver("welcome", welcome(second));
     expect(readResumeKey(LOBBY)).toBe(second);
     // a welcome without a key (a spectator) leaves the stored one alone
-    onWelcome!(welcome(null));
+    socket.deliver("welcome", welcome(null));
     expect(readResumeKey(LOBBY)).toBe(second);
     expect(dispatch).toHaveBeenCalledTimes(3);
   });
@@ -135,25 +118,8 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
     const storage = memoryStorage();
     vi.stubGlobal("window", { sessionStorage: storage });
     const { connectSeat } = await import("./connect-seat");
-    const room = {
-      onWelcome: () => () => {},
-      onRoster: () => () => {},
-      onSettings: () => () => {},
-      onCountdown: () => () => {},
-      onSnapshot: () => () => {},
-      onEvent: () => () => {},
-      onEnded: () => () => {},
-      onRejected: () => () => {},
-      onPong: () => () => {},
-      sendPing: () => {},
-      sendBonusPlay: () => {},
-      onConnectError: () => () => {},
-      onReconnecting: () => () => {},
-      onServerDisconnect: () => () => {},
-      onReconnected: () => () => {},
-      close: vi.fn(),
-    };
-    const connectToRoom = vi.fn(() => room as unknown as import("./socket").RoomSocket);
+    const room = fakeRoomSocket();
+    const connectToRoom = vi.fn(() => room);
     const mint = vi.fn(async () => ({ ok: true as const, token: "tok", url: "http://race.test" }));
     const open = async () => {
       const stop = connectSeat({
@@ -189,29 +155,8 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       },
     });
     const { connectSeat } = await import("./connect-seat");
-    let onWelcome: ((w: { resumeKey: string | null }) => void) | undefined;
-    const room = {
-      onWelcome: (cb: typeof onWelcome) => {
-        onWelcome ??= cb;
-        return () => {};
-      },
-      onRoster: () => () => {},
-      onSettings: () => () => {},
-      onCountdown: () => () => {},
-      onSnapshot: () => () => {},
-      onEvent: () => () => {},
-      onEnded: () => () => {},
-      onRejected: () => () => {},
-      onPong: () => () => {},
-      sendPing: () => {},
-      sendBonusPlay: () => {},
-      onConnectError: () => () => {},
-      onReconnecting: () => () => {},
-      onServerDisconnect: () => () => {},
-      onReconnected: () => () => {},
-      close: vi.fn(),
-    };
-    const connectToRoom = vi.fn(() => room as unknown as import("./socket").RoomSocket);
+    const room = fakeRoomSocket();
+    const connectToRoom = vi.fn(() => room);
     const mint = vi.fn(async () => ({ ok: true as const, token: "tok", url: "http://race.test" }));
     const stop = connectSeat({
       code: "KGB-4821",
@@ -227,7 +172,8 @@ describe("the race page keeps and sends the key (#561 C11)", () => {
       { resumeKey: () => string | null },
     ];
     expect(opts.resumeKey()).toBeNull();
-    onWelcome?.({ resumeKey: KEY });
+    // the issued-key memory is connectSeat's first welcome listener (#656)
+    room.onWelcome.mock.calls[0]![0]({ resumeKey: KEY } as never);
     expect(opts.resumeKey()).toBe(KEY);
     stop();
   });

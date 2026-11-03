@@ -2,40 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { connectSeat, type MintRaceToken } from "./connect-seat";
 import { HANDOFF_MS, parkSocket, releaseParkedSocket } from "./handoff";
 import type { RoomSocket } from "./socket";
+import { bindRaceSocket } from "./store";
+import { fakeRoomSocket, type FakeRoomSocket } from "./testing/fake-room-socket";
 
 // #561 C4 (the client leaf's side effects, unit-level): `RaceSeatLive` runs `connectSeat` in an effect.
 // It mints the race token through the lobby action, loads the socket module lazily (ADR 0013 budget),
 // connects, binds the store, and its cleanup unbinds and closes; a stale mint never opens a socket.
 const LOBBY = "cmuvut8r2000106r7wf01vr30";
 
+/** The shared typed fake (#682); `offs` are the `Off`s of every recorded `on*` call. */
 function fakeRoom() {
-  const offs: ReturnType<typeof vi.fn>[] = [];
-  const on = () => {
-    const off = vi.fn();
-    offs.push(off);
-    return off;
-  };
-  const room = {
-    onWelcome: vi.fn(on),
-    onRoster: vi.fn(on),
-    onSettings: vi.fn(on),
-    onCountdown: vi.fn(on),
-    onSnapshot: vi.fn(on),
-    onEvent: vi.fn(on),
-    onEnded: vi.fn(on),
-    // #236: a refused bonus play
-    onRejected: vi.fn(on),
-    // #643: the welcome's ping round
-    onPong: vi.fn(on),
-    sendPing: vi.fn(),
-    sendBonusPlay: vi.fn(),
-    onConnectError: vi.fn(on),
-    onReconnecting: vi.fn(on),
-    onServerDisconnect: vi.fn(on),
-    onReconnected: vi.fn(on),
-    close: vi.fn(),
-  };
-  return { room: room as unknown as RoomSocket & typeof room, offs };
+  const room = fakeRoomSocket();
+  return { room, offs: room.offs };
 }
 
 function deferred<T>() {
@@ -152,9 +130,11 @@ describe("connectSeat (#561 C4)", () => {
     });
     await vi.waitFor(() => expect(room.onWelcome).toHaveBeenCalled());
     stop();
-    // bindRaceSocket's eleven (#214 adds countdown, #559 snapshot, #654 settings, #232 event, #240 ended,
-    // #643 pong), the handoff's own welcome listener and the issued-key memory's (#656)
-    expect(offs.length).toBe(14);
+    // bindRaceSocket's own listeners (counted on a probe fake, so a new one needs no edit here), plus
+    // the handoff's welcome listener (#214 C2) and the issued-key memory's (#656)
+    const probe = fakeRoomSocket();
+    bindRaceSocket(probe, vi.fn());
+    expect(offs.length).toBe(probe.bound.length + 2);
     for (const off of offs) expect(off).toHaveBeenCalledTimes(1);
     expect(room.close).toHaveBeenCalledTimes(1);
   });
@@ -180,11 +160,7 @@ describe("the parked lobby socket (#214 C2)", () => {
   }
 
   /** Delivers a welcome to every welcome listener bound on the fake room. */
-  const welcomeTo = (room: ReturnType<typeof fakeRoom>["room"]) => {
-    for (const call of room.onWelcome.mock.calls as unknown as [(p: unknown) => void][]) {
-      call[0](welcome);
-    }
-  };
+  const welcomeTo = (room: FakeRoomSocket) => room.deliver("welcome", welcome);
 
   it("closes the parked socket of its lobby after its own welcome, and only that one", async () => {
     const lobbySocket = parked();

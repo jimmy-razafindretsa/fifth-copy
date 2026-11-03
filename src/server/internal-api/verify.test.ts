@@ -4,8 +4,35 @@ import {
   INTERNAL_HMAC_TEST_VECTOR,
   PROTOCOL_VERSION,
 } from "@fifth-copy/protocol";
+import type { NonceClaim, NonceStore } from "./nonces";
 import { internalHeaders } from "./sign";
-import { MAX_INTERNAL_BODY_BYTES, requireInternal } from "./verify";
+import {
+  internalRefusalResponse,
+  MAX_INTERNAL_BODY_BYTES,
+  requireInternal as verifyWith,
+} from "./verify";
+
+/** An in-memory store that counts its claims; `outage` makes every claim `unavailable`. */
+function memoryStore({ outage = false } = {}) {
+  const seen = new Set<string>();
+  const claims: string[] = [];
+  const store: NonceStore = {
+    async claim(nonce): Promise<NonceClaim> {
+      claims.push(nonce);
+      if (outage) return "unavailable";
+      if (seen.has(nonce)) return "replay";
+      seen.add(nonce);
+      return "claimed";
+    },
+  };
+  return Object.assign(store, { claims, seen });
+}
+
+/** The cases below predate the store (#518): each call gets a fresh one, so none is a replay. */
+const requireInternal = (
+  request: Request,
+  opts: Omit<Parameters<typeof verifyWith>[1], "nonces"> & { nonces?: NonceStore },
+) => verifyWith(request, { nonces: memoryStore(), ...opts });
 
 const { secret, timestamp, nonce, body, signature } = INTERNAL_HMAC_TEST_VECTOR;
 const vectorNowMs = Number(timestamp) * 1000;
@@ -152,5 +179,81 @@ describe("requireInternal (C2, #518 C1)", () => {
       status: 426,
       error: "version",
     });
+  });
+});
+
+describe("requireInternal replay store (#716)", () => {
+  it("C1: a second request with the same nonce answers 401 replay, also 300 s later", async () => {
+    const nonces = memoryStore();
+    const opts = { secret, nowMs: vectorNowMs, nonces };
+    expect((await verifyWith(request(body, vectorHeaders), opts)).ok).toBe(true);
+    expect(await verifyWith(request(body, vectorHeaders), opts)).toEqual({
+      ok: false,
+      status: 401,
+      error: "replay",
+    });
+    expect(
+      await verifyWith(request(body, vectorHeaders), { ...opts, nowMs: vectorNowMs + 300_000 }),
+    ).toEqual({ ok: false, status: 401, error: "replay" });
+    expect(nonces.claims).toEqual([nonce, nonce, nonce]);
+    // A fresh nonce on the same body is a new request.
+    expect((await verifyWith(signed(body), opts)).ok).toBe(true);
+  });
+
+  it("C1: claims before parsing, like the race server: a replayed non-JSON body is a replay", async () => {
+    const nonces = memoryStore();
+    const headers = internalHeaders({ rawBody: "not json", secret, now: Number(timestamp) });
+    const opts = { secret, nowMs: vectorNowMs, nonces };
+    expect(await verifyWith(request("not json", headers), opts)).toMatchObject({
+      error: "bad-body",
+    });
+    expect(await verifyWith(request("not json", headers), opts)).toMatchObject({
+      status: 401,
+      error: "replay",
+    });
+  });
+
+  it("C2: a request failing the body cap, timestamp, nonce or signature check never claims", async () => {
+    const nonces = memoryStore();
+    const opts = { secret, nowMs: vectorNowMs, nonces };
+    const big = JSON.stringify({ v: PROTOCOL_VERSION, pad: "x".repeat(MAX_INTERNAL_BODY_BYTES) });
+    const refused = [
+      signed(big),
+      signed(body, Number(timestamp) - 301),
+      signed(body, Number(timestamp) + 301),
+      request(body, { ...vectorHeaders, [INTERNAL_HEADERS.timestamp]: "1e9" }),
+      request(body, { [INTERNAL_HEADERS.timestamp]: timestamp, [INTERNAL_HEADERS.signature]: signature }),
+      request(body, { ...vectorHeaders, [INTERNAL_HEADERS.nonce]: nonce.toUpperCase() }),
+      request(body, { ...vectorHeaders, [INTERNAL_HEADERS.signature]: "0".repeat(64) }),
+      request(body.replace('"wordCount":50', '"wordCount":51'), vectorHeaders),
+    ];
+    for (const req of refused) expect((await verifyWith(req, opts)).ok).toBe(false);
+    expect(await verifyWith(signed(body), { ...opts, secret: `${secret}x` })).toMatchObject({
+      error: "bad-signature",
+    });
+    expect(nonces.claims).toEqual([]);
+    // The genuine request is then still accepted: nothing was burnt by the refusals.
+    expect((await verifyWith(request(body, vectorHeaders), opts)).ok).toBe(true);
+  });
+
+  it("C3: store unavailable (Redis down or slow): a bare 503, the body is not parsed", async () => {
+    const nonces = memoryStore({ outage: true });
+    const result = await verifyWith(request(body, vectorHeaders), {
+      secret,
+      nowMs: vectorNowMs,
+      nonces,
+    });
+    expect(result).toEqual({ ok: false, status: 503 });
+    expect(nonces.seen.size).toBe(0);
+    if (result.ok) throw new Error("unreachable");
+    const response = internalRefusalResponse(result);
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("");
+  });
+
+  it("refusals other than 503 answer the protocol error body", async () => {
+    const response = internalRefusalResponse({ ok: false, status: 401, error: "replay" });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ v: PROTOCOL_VERSION, error: "replay" });
   });
 });

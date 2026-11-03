@@ -153,7 +153,9 @@ describe("connectSeat (#561 C4)", () => {
 describe("the re-mint after an expired token (#235 C6)", () => {
   async function seated() {
     const { room } = fakeRoom();
-    const connectToRoom = vi.fn((_url: string, _token: string | (() => string)) => room);
+    const connectToRoom = vi.fn<(url: string, token: string | (() => string)) => typeof room>(
+      () => room,
+    );
     const tokens = ["first", "second", "third"];
     const mint = vi.fn<MintRaceToken>(async () => ({
       ok: true,

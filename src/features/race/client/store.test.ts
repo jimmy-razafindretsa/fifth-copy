@@ -2137,7 +2137,13 @@ describe("#235 line cut, reconnect and the lost room", () => {
       const deliver = (event: string, ...args: unknown[]) => {
         for (const fn of [...(listeners.get(event) ?? [])]) fn(...args);
       };
-      const fake = { ...emitter(), io: emitter(), emit: vi.fn(), disconnect: vi.fn(), connect: vi.fn() };
+      const fake = {
+        ...emitter(),
+        io: emitter(),
+        emit: vi.fn(),
+        disconnect: vi.fn(),
+        connect: vi.fn(),
+      };
       const room = connectToRoom("http://localhost:7235", "tok", {
         io: vi.fn(() => fake) as unknown as IoFactory,
       });
@@ -2175,7 +2181,11 @@ describe("#235 line cut, reconnect and the lost room", () => {
 
     it("keys the server never got give way to its state; a key not yet sent is typed again on top", () => {
       // three keys sent, a fourth still in the 50 ms batch window at the cut
-      const typed = press(reduceRace(press(running(), "ab "), { type: "sent", count: 3 }), "c", 400);
+      const typed = press(
+        reduceRace(press(running(), "ab "), { type: "sent", count: 3 }),
+        "c",
+        400,
+      );
       const back = reduceRace(reduceRace(typed, { type: "reconnecting" }), { type: "reconnected" });
       // the server dropped the third key (its desk was cut): cursor 2
       const s = reduceRace(back, rewelcome(2));
@@ -2202,7 +2212,11 @@ describe("#235 line cut, reconnect and the lost room", () => {
     const voided: Ended = { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "void", ranking: [] };
 
     it("ended { void } is lost with the room-lost reason", () => {
-      const s = reduceRace(press(running(), "ab"), { type: "ended", payload: voided, at: T + 9_000 });
+      const s = reduceRace(press(running(), "ab"), {
+        type: "ended",
+        payload: voided,
+        at: T + 9_000,
+      });
       expect(s).toMatchObject({ phase: "lost", lost: "room-lost" });
       expect(selectCanType(s)).toBe(false);
       // terminal, like any lost

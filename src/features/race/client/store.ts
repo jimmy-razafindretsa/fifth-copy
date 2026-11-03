@@ -42,9 +42,7 @@ export type RaceTokenError = "not-found" | "closed" | "generic";
  * or a Redis loss, #204, or a reconnect answered `no-room`).
  */
 export type RaceLostReason =
-  | Exclude<ConnectErrorReason, "transport">
-  | RaceTokenError
-  | "room-lost";
+  Exclude<ConnectErrorReason, "transport"> | RaceTokenError | "room-lost";
 
 /** How long the tray shows a refused play (`IMMUNE`, #236 C1). */
 export const REFUSAL_SHOW_MS = 1_200;
@@ -353,7 +351,9 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         ranks: state.ranks,
         // the struck cap stays when the reconcile kept your sheet as it was
         lastKey:
-          prediction !== null && prediction.state === state.prediction?.state ? state.lastKey : null,
+          prediction !== null && prediction.state === state.prediction?.state
+            ? state.lastKey
+            : null,
         stamps: [],
         stampSeq: state.stampSeq,
         ending: null,

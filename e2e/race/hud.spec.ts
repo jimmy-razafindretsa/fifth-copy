@@ -115,7 +115,7 @@ test.describe("#560 race HUD on /design", () => {
     expect(line.find((t) => t.desk === 9)!.x).toBeCloseTo(1, 1);
     expect(line.find((t) => t.desk === 17)!.x).toBeCloseTo(0.61, 1);
     const statuses = state(page, "card-six-statuses");
-    for (const label of ["FILED", "LINE CUT", "ASLEEP AT DESK", "REASSIGNED"]) {
+    for (const label of ["FILED", "LINE CUT", "EXPIRED", "ASLEEP AT DESK", "REASSIGNED"]) {
       await expect(statuses.getByText(label, { exact: true })).toBeVisible();
     }
     // the allocator gives desks 1-12 circles, 13-24 squares, 25-30 triangles (#156)

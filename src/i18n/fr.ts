@@ -447,6 +447,7 @@ export const fr = {
       lane: "Rang {rank}, {name}{you}, bureau {desk}, {progress} % tapé{status}",
       status: {
         "line-cut": "LIGNE COUPÉE",
+        expired: "EXPIRÉ",
         asleep: "ENDORMI AU BUREAU",
         abandoned: "RÉAFFECTÉ",
         finished: "CLASSÉ",

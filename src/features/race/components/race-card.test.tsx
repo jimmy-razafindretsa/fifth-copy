@@ -127,7 +127,7 @@ describe("RaceCard lanes (#560 C2)", () => {
     expect([...shapes].sort()).toEqual(["circle", "diamond", "square", "triangle"]);
   });
 
-  it("shows the status label for line-cut, asleep, abandoned and finished, none while typing", () => {
+  it("shows the status label for line-cut, expired, asleep, abandoned and finished, none while typing", () => {
     const out = lanes(html(<RaceCard view={F["six-statuses"]} labels={EN} />));
     const statusOf = (body: string) => /data-status-label="[\w-]+"[^>]*>([^<]*)</.exec(body)?.[1];
     const byStatus = Object.fromEntries(
@@ -136,13 +136,13 @@ describe("RaceCard lanes (#560 C2)", () => {
     expect(byStatus).toEqual({
       finished1: "FILED",
       "line-cut2": "LINE CUT",
-      typing3: undefined,
+      expired3: "EXPIRED",
       typing5: undefined,
       asleep4: "ASLEEP AT DESK",
       abandoned6: "REASSIGNED",
     });
     const fr = html(<RaceCard view={F["six-statuses"]} labels={FR} />);
-    for (const label of ["CLASSÉ", "LIGNE COUPÉE", "ENDORMI AU BUREAU", "RÉAFFECTÉ"]) {
+    for (const label of ["CLASSÉ", "LIGNE COUPÉE", "EXPIRÉ", "ENDORMI AU BUREAU", "RÉAFFECTÉ"]) {
       expect(fr).toContain(label);
     }
   });
@@ -176,7 +176,7 @@ describe("RaceCard lanes (#560 C2)", () => {
     expect(out[1]!.attrs).toContain(
       'aria-label="Place 2, Badger-374, desk 02, 71% typed, LINE CUT"',
     );
-    expect(out[2]!.attrs).toContain('aria-label="Place 3, Heron-511, desk 03, 58% typed"');
+    expect(out[2]!.attrs).toContain('aria-label="Place 3, Heron-511, desk 03, 58% typed, EXPIRED"');
     expect(out[3]!.attrs).toContain('aria-label="Place 4, Lynx-785, YOU, desk 05, 52% typed"');
     view.lanes.forEach((lane, i) => {
       expect(out[i]!.body).toMatch(new RegExp(`data-rider[^>]*--_p:${lane.progress}`));

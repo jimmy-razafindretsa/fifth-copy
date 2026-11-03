@@ -460,6 +460,7 @@ export const en = {
       lane: "Place {rank}, {name}{you}, desk {desk}, {progress}% typed{status}",
       status: {
         "line-cut": "LINE CUT",
+        expired: "EXPIRED",
         asleep: "ASLEEP AT DESK",
         abandoned: "REASSIGNED",
         finished: "FILED",

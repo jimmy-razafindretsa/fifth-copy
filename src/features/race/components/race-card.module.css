@@ -205,6 +205,13 @@
   white-space: nowrap;
 }
 
+/* a cut line and an expired one dim the marker (bible 7.4a, #235): the label says it in words, the shape and
+   its fg stroke stay above 3:1 at 0.6 */
+[data-status="line-cut"] .rider,
+[data-status="expired"] .rider {
+  opacity: 0.6;
+}
+
 /* the lane's track: a hairline the marker rides, to a 2px ink post at the finish */
 .track {
   position: relative;

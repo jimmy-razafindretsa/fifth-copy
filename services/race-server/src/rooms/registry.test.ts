@@ -790,13 +790,30 @@ describe("room registry: race again (#143)", () => {
     });
   });
 
-  it("an ended room refuses a user who neither is a member nor raced in it (in-progress)", async () => {
+  it("an ended room seats a late joiner, never at the free desk of a racer who left (#732)", async () => {
     const { registry } = setup();
     const lobbyId = await endedRoom(registry);
-    expect(await registry.join(lobbyId, { userId: "late", name: "Lou" })).toEqual({
-      ok: false,
-      reason: "in-progress",
+    await registry.leave(lobbyId, "b");
+    const late = await registry.join(lobbyId, { userId: "late", name: "Lou" });
+    // Desks 1 and 3 are seated, desk 2 is Bob's from the last race: Lou takes the next free one.
+    expect(late).toMatchObject({ ok: true, desk: 4, room: { phase: "ended" } });
+    expect(await registry.hasMember(lobbyId, "late")).toBe(true);
+    expect(await registry.join(lobbyId, { userId: "b", name: "Bob" })).toMatchObject({
+      ok: true,
+      desk: 2,
     });
+  });
+
+  it("a started room still refuses a user who is not a member (in-progress)", async () => {
+    const { registry } = setup();
+    const lobbyId = await endedRoom(registry);
+    for (const phase of ["countdown", "running"] as const) {
+      await registry.setPhase(lobbyId, phase);
+      expect(await registry.join(lobbyId, { userId: "late", name: "Lou" })).toEqual({
+        ok: false,
+        reason: "in-progress",
+      });
+    }
     expect(await registry.hasMember(lobbyId, "late")).toBe(false);
   });
 

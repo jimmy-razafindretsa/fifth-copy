@@ -74,7 +74,7 @@ export type RoomState = {
 export type Rehydrated = { kept: string[]; voided: string[]; gone: string[] };
 
 /**
- * `in-progress`: a user who is not already a member while the phase is not `waiting` (#166).
+ * `in-progress`: a user who is not already a member while a race is on (`countdown`, `running`; #166).
  * `bot-id`: a user id in the bots' reserved `bot:` space (#156; web user ids are cuids).
  */
 export type JoinResult =
@@ -90,19 +90,14 @@ export type JoinResult =
 export type LeaveResult = { members: Member[]; closed: boolean; kept: boolean };
 
 /**
- * Who may take a seat once the room has left `waiting` (#166, #143), behind the verified race
- * token: a current member (a second tab, a resume); in `ended` only, also the host or a user who
- * raced in the room's last race (`desks`), so its members come back for "Race again". Nobody
- * else: late joiners are #732.
+ * Who may take a seat (#166, #143, #732), behind the verified race token: anyone while the room is
+ * `waiting` or `ended` (spec 5.1: a late joiner is seated once the race is over); while a race is
+ * on (`countdown`, `running`) only a current member (a second tab, a resume). Never a stranger
+ * mid-race: a late joiner holds a spectator socket until `ended`. The last race's racers keep
+ * their desk preference in `join`.
  */
-export function mayRejoin(
-  room: Pick<RoomState, "phase" | "hostUserId" | "desks">,
-  userId: string,
-  isMember: boolean,
-): boolean {
-  if (room.phase === "waiting" || isMember) return true;
-  if (room.phase !== "ended") return false;
-  return userId === room.hostUserId || (room.desks ?? []).some((d) => d.userId === userId);
+export function mayRejoin(room: Pick<RoomState, "phase">, isMember: boolean): boolean {
+  return room.phase === "waiting" || room.phase === "ended" || isMember;
 }
 /** `members` is set when the patch carried `bots`: the room was re-seated (#156). */
 export type UpdateSettingsResult =
@@ -454,17 +449,19 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
           room.desks === undefined
             ? null
             : (raceDesksSchema.safeParse(JSON.parse(room.desks)).data ?? null);
-        // Defence in depth behind the handshake: once started, only existing members come back,
-        // and in `ended` the racers of the last race (#143).
-        if (!mayRejoin({ phase, hostUserId: room.hostUserId, desks }, userId, seats.has(userId))) {
+        // Defence in depth behind the handshake: during a race only existing members come back;
+        // `waiting` and `ended` seat anyone (#143, #732).
+        if (!mayRejoin({ phase }, seats.has(userId))) {
           return { ok: false, reason: "in-progress" };
         }
         const taken = [...seats.values()].map((s) => s.desk);
-        // A racer coming back after the end gets the desk it raced at when it is still free.
+        // A racer coming back after the end gets the desk it raced at when it is still free; a
+        // newcomer in `ended` (#732) skips the last race's desks, so it never takes a racer's.
         const raced = desks?.find((d) => d.userId === userId)?.desk;
+        const held = phase === "ended" && raced === undefined ? (desks ?? []).map((d) => d.desk) : [];
         const desk =
           seats.get(userId)?.desk ??
-          (raced !== undefined && !taken.includes(raced) ? raced : nextDesk(taken));
+          (raced !== undefined && !taken.includes(raced) ? raced : nextDesk([...taken, ...held]));
         seats.set(userId, { desk, name });
         await withTtl(
           lobbyId,

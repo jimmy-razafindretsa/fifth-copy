@@ -57,7 +57,7 @@ describe("authenticateHandshake (C2)", () => {
     expect(await as("usr_a")).toMatchObject({ ok: true });
   });
 
-  it("an ended room lets back only the host and its last race's racers who left (#143)", async () => {
+  it("an ended room admits anyone, like waiting; countdown and running stay members only (#143, #732)", async () => {
     t = await boot(process.env.REDIS_URL);
     const lobby = await t.openRoom();
     const { registry } = t.server;
@@ -85,10 +85,12 @@ describe("authenticateHandshake (C2)", () => {
       authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token({ lobby, sub }) }, deps);
     expect(await as("usr_b")).toMatchObject({ ok: true, resume: false });
     expect(await as("usr_host")).toMatchObject({ ok: true });
-    expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
+    // A late joiner is seated once the race is over (#732, spec 5.1).
+    expect(await as("usr_new")).toMatchObject({ ok: true, resume: false });
     // Countdown and running stay members only.
     await registry.setPhase(lobby, "running");
     expect(await as("usr_b")).toEqual({ ok: false, reason: "in-progress" });
+    expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
   });
 
   it("accepts a well-formed resumeKey (restoring a desk is #178's)", async () => {

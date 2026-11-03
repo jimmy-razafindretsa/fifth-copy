@@ -796,12 +796,6 @@ describe("lifecycle: race again (#143)", () => {
     expect(seen2.welcome?.you).toBe(1);
     expect(seenBack.welcome?.you).toBe(2);
     expect((await hash(lobby)).ttl).toBeGreaterThan(ENDED_GRACE_TTL_S);
-    // Nobody else comes in after the end (late joiners are #732).
-    const late = booted.connect({
-      v: PROTOCOL_VERSION,
-      token: await booted.token({ lobby, sub: "usr_late", name: "Lou" }),
-    });
-    expect(await connectError(late)).toBe("in-progress");
 
     const ack = await start(host2);
     expect(ack).toEqual({ ok: true, raceId: expect.any(String) });

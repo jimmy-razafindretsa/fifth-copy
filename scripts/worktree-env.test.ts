@@ -125,7 +125,8 @@ const BAD_PORTS = new Set([
   6669, 6679, 6697, 10080,
 ]);
 
-const envVar = (out: string, name: string) => out.match(new RegExp(`^${name}="([^"]*)"$`, "m"))?.[1];
+const envVar = (out: string, name: string) =>
+  out.match(new RegExp(`^${name}="([^"]*)"$`, "m"))?.[1];
 
 const ports = (out: string) => ({
   web: Number(envVar(out, "PORT")),
@@ -165,7 +166,9 @@ describe("worktree.sh safe ports (#757)", () => {
   });
 
   it("replacement ports never collide with another slot's ports", () => {
-    const tested = [...badSlots, 629, 664, 670, 698, 1, 62, 567, 680].map((n) => ports(envFor(n).stdout));
+    const tested = [...badSlots, 629, 664, 670, 698, 1, 62, 567, 680].map((n) =>
+      ports(envFor(n).stdout),
+    );
     const all = tested.flatMap((p) => [p.web, p.pw, p.race]);
     // 697 and 1697 share slot 697 by design (n mod 1000); drop that duplicate pair before counting.
     expect(new Set(all).size).toBe(all.length - 3);

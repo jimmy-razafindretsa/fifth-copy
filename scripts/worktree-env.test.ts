@@ -114,3 +114,77 @@ describe("unit step Redis mapping (#680)", () => {
     if (process.env.REDIS_URL_TEST) expect(process.env.REDIS_URL).toBe(process.env.REDIS_URL_TEST);
   });
 });
+
+// #757: browsers (and Next.js dev) refuse the WHATWG fetch "bad ports"; slot 697 gave PW_PORT 6697.
+// https://fetch.spec.whatwg.org/#port-blocking
+const BAD_PORTS = new Set([
+  0, 1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102,
+  103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465,
+  512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993,
+  995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668,
+  6669, 6679, 6697, 10080,
+]);
+
+const envVar = (out: string, name: string) =>
+  out.match(new RegExp(`^${name}="([^"]*)"$`, "m"))?.[1];
+
+const ports = (out: string) => ({
+  web: Number(envVar(out, "PORT")),
+  pw: Number(envVar(out, "PW_PORT")),
+  race: Number(envVar(out, "RACE_SERVER_PORT")),
+});
+
+/** Ports named by the `worktree: ready` line. */
+const readyPorts = (line: string) => {
+  const m = line.match(/web :(\d+) \| playwright :(\d+) \| race :(\d+)/);
+  return m ? { web: Number(m[1]), pw: Number(m[2]), race: Number(m[3]) } : undefined;
+};
+
+describe("worktree.sh safe ports (#757)", () => {
+  const badSlots = [665, 666, 667, 668, 669, 697, 1697, 0, 60, 61, 566, 679];
+
+  it.each(badSlots)("card %i: no port is a browser bad port, and the picks are stable", (n) => {
+    const r = envFor(n);
+    expect(r.status, r.stderr).toBe(0);
+    const p = ports(r.stdout);
+    for (const port of [p.web, p.pw, p.race]) {
+      expect(Number.isInteger(port)).toBe(true);
+      expect(BAD_PORTS.has(port), `port ${port}`).toBe(false);
+    }
+    expect(new Set([p.web, p.pw, p.race]).size).toBe(3);
+    expect(ports(envFor(n).stdout)).toEqual(p);
+  });
+
+  it("slot 697 moves only its Playwright port, deterministically", () => {
+    expect(ports(envFor(697).stdout)).toEqual({ web: 5697, pw: 9697, race: 7697 });
+    expect(ports(envFor(666).stdout)).toEqual({ web: 5666, pw: 9666, race: 7666 });
+  });
+
+  it("other slots keep the 5000/6000/7000 + slot scheme", () => {
+    expect(ports(envFor(629).stdout)).toEqual({ web: 5629, pw: 6629, race: 7629 });
+    expect(ports(envFor(664).stdout)).toEqual({ web: 5664, pw: 6664, race: 7664 });
+  });
+
+  it("replacement ports never collide with another slot's ports", () => {
+    const tested = [...badSlots, 629, 664, 670, 698, 1, 62, 567, 680].map((n) =>
+      ports(envFor(n).stdout),
+    );
+    const all = tested.flatMap((p) => [p.web, p.pw, p.race]);
+    // 697 and 1697 share slot 697 by design (n mod 1000); drop that duplicate pair before counting.
+    expect(new Set(all).size).toBe(all.length - 3);
+  });
+
+  it.each([697, 665, 60, 629])("card %i: the ready line and the .env agree", (n) => {
+    const r = envFor(n);
+    expect(r.status, r.stderr).toBe(0);
+    const line = r.stderr.split("\n").find((l) => l.startsWith("worktree: ready"));
+    expect(line, r.stderr).toBeDefined();
+    const p = ports(r.stdout);
+    expect(readyPorts(line!)).toEqual(p);
+    expect(envVar(r.stdout, "SEE_BASE_URL")).toBe(`http://localhost:${p.web}`);
+    expect(envVar(r.stdout, "NEXT_PUBLIC_APP_URL")).toBe(`http://localhost:${p.web}`);
+    expect(envVar(r.stdout, "WEB_ORIGIN")).toBe(`http://localhost:${p.web}`);
+    expect(envVar(r.stdout, "NEXT_PUBLIC_RACE_SERVER_URL")).toBe(`http://localhost:${p.race}`);
+    expect(envVar(r.stdout, "RACE_SERVER_INTERNAL_URL")).toBe(`http://localhost:${p.race}`);
+  });
+});

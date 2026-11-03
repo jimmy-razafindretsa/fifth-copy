@@ -85,12 +85,18 @@ async function room({
       v: PROTOCOL_VERSION,
       token: await booted.token({ lobby, sub, name, role }),
     });
+  // Desks are seated in join-arrival order and `connect` resolves before the handshake lands, so
+  // each member waits for its own welcome before the next connects: host desk 1, then usr_p0 on
+  // desk 2, usr_p1 on desk 3... (#764: concurrent joins could swap the guests' desks).
   const host = await connectAs(HOST_SUB, "Ada", "host");
   const seenHost = watch(host);
+  await until(() => !!seenHost.welcome, WAIT_MS, "host welcome");
   const others: { client: Client; seen: Seen }[] = [];
   for (let i = 0; i < players; i++) {
     const client = await connectAs(`usr_p${i}`, `Clerk ${i}`);
-    others.push({ client, seen: watch(client) });
+    const seen = watch(client);
+    await until(() => !!seen.welcome, WAIT_MS, `usr_p${i} welcome`);
+    others.push({ client, seen });
   }
   await until(
     // The settings' bots are seated at open (#156) and count in the roster.

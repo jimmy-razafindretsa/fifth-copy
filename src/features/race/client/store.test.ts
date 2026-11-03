@@ -2040,7 +2040,11 @@ describe("#233 abandon, idle warning and asleep (C1)", () => {
     store.dispatch(abandon); // in flight
     expect(socket.sendAbandon).toHaveBeenCalledTimes(1);
     stop();
-    store.dispatch({ type: "rejected", payload: { v: PROTOCOL_VERSION, reason: "not-running" }, at: 1 } as RaceEvent);
+    store.dispatch({
+      type: "rejected",
+      payload: { v: PROTOCOL_VERSION, reason: "not-running" },
+      at: 1,
+    } as RaceEvent);
     store.dispatch(abandon);
     expect(socket.sendAbandon).toHaveBeenCalledTimes(1);
   });

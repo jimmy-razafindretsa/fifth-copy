@@ -33,7 +33,10 @@ const asleep = (labels = en.race.exit) =>
     />,
   );
 const text = (html: string) =>
-  html.replace(/<[^>]+>/g, "|").replace(/\|+/g, "|").replaceAll("&#x27;", "'");
+  html
+    .replace(/<[^>]+>/g, "|")
+    .replace(/\|+/g, "|")
+    .replaceAll("&#x27;", "'");
 
 describe("ReassignedNotice (#233 C3)", () => {
   it("is one docket named REASSIGNED, with the ink stamp at md", () => {

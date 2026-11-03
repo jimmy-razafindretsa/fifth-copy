@@ -330,6 +330,11 @@ export const en = {
         wordLength: { short: "SHORT", medium: "MEDIUM", long: "LONG" },
         punctuationDensity: { none: "NONE", light: "LIGHT", heavy: "HEAVY" },
         minutes: "MIN",
+        /** The BOTS row (#114): one sub-row per bot, its level's speed, the secondary buttons. */
+        bot: "BOT {n}",
+        wpm: "{n} WPM",
+        addBot: "ADD A BOT",
+        remove: "REMOVE",
         errors: {
           words: "Words take a whole number from {min} to {max}.",
           timer: "The timer takes a whole number of minutes from {min} to {max}.",

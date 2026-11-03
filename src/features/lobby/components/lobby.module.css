@@ -330,9 +330,11 @@
   width: calc(5ch + 40px);
 }
 
-/* TIMER: NO TIMER beside the minutes input and its MIN unit */
+/* TIMER: NO TIMER beside the minutes input and its MIN unit; a bot's sub-row (#114): its level, the
+   level's WPM in the same unit recipe, REMOVE */
 .timer,
-.minutes {
+.minutes,
+.botRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -344,6 +346,41 @@
   font-size: 11px;
   line-height: normal;
   letter-spacing: 0.16em;
+}
+
+/* the 7.1 secondary button (Oswald 600 .16em, transparent, 2px ink rule), row-sized like the segments
+   it sits beside (bible 14.3 "Bot rows", #114): ADD A BOT and REMOVE. On the newsprint docket its hover
+   is the paper ground, the hover newsprint would not show */
+.secondary {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  padding: 5px 12px;
+  border: 2px solid var(--color-fg);
+  background: transparent;
+  color: var(--color-fg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.secondary:hover:not([aria-disabled="true"]) {
+  background: var(--color-bg);
+}
+
+.secondary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.secondary[aria-disabled="true"] {
+  cursor: progress;
+}
+
+/* at the cap (MAX_BOTS bots, or 30 desks taken): the Button primitive's disabled recipe */
+.secondary[data-full] {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* unavailable (the minutes under NO TIMER): the Button primitive's disabled recipe; while a change is on
@@ -363,6 +400,7 @@
 /* bible 18: hit targets >= 44px on touch widths */
 @media (max-width: 768px) {
   .segment,
+  .secondary,
   .field {
     min-height: 44px;
   }

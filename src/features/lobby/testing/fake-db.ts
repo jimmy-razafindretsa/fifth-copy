@@ -3,7 +3,13 @@ import { vi } from "vitest";
 // Test-only in-memory User and Lobby tables with the real unique indexes (typistName, code).
 // Not imported by app code. Duplicates throw a plain Error: tests that need Prisma's P2002 inject it.
 type UserRow = { id: string; typistName: string; isGuest: boolean; avatarStatus: "NONE" };
-type LobbyRow = { id: string; code: string; status: "WAITING" | "CLOSED"; hostUserId: string };
+type LobbyRow = {
+  id: string;
+  code: string;
+  status: "WAITING" | "CLOSED";
+  hostUserId: string;
+  type?: "PUBLIC" | "PRIVATE";
+};
 
 const uniqueViolation = () => new Error("Unique constraint failed (fake db)");
 
@@ -30,13 +36,20 @@ export function fakeLobbyDb() {
   const lobby = {
     create: vi.fn(async ({ data }: { data: { code: string; hostUserId: string } }) => {
       if (lobbies.some((l) => l.code === data.code)) throw uniqueViolation();
-      const row: LobbyRow = { id: `lob${next++}`, status: "WAITING", ...data };
+      const row: LobbyRow = { id: `lob${next++}`, status: "WAITING", type: "PRIVATE", ...data };
       lobbies.push(row);
       return { id: row.id, code: row.code };
     }),
     findUnique: vi.fn(
       async ({ where }: { where: { code: string } }) =>
         lobbies.find((l) => l.code === where.code) ?? null,
+    ),
+    update: vi.fn(
+      async ({ where, data }: { where: { id: string }; data: Partial<Omit<LobbyRow, "id">> }) => {
+        const row = lobbies.find((l) => l.id === where.id);
+        if (!row) throw new Error("Record to update not found");
+        return Object.assign(row, data);
+      },
     ),
     delete: vi.fn(async ({ where }: { where: { id: string } }) => {
       const index = lobbies.findIndex((l) => l.id === where.id);
@@ -45,6 +58,6 @@ export function fakeLobbyDb() {
     }),
   };
   const seedLobby = (row: Omit<LobbyRow, "id"> & { id?: string }) =>
-    lobbies.push({ id: row.id ?? `lob${next++}`, ...row });
+    lobbies.push({ id: row.id ?? `lob${next++}`, type: "PRIVATE", ...row });
   return { users, lobbies, seedLobby, db: { user, lobby } };
 }

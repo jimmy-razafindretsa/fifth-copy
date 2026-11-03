@@ -327,6 +327,10 @@ export const fr = {
         wordLength: { short: "COURTS", medium: "MOYENS", long: "LONGS" },
         punctuationDensity: { none: "AUCUNE", light: "LÉGÈRE", heavy: "ABONDANTE" },
         minutes: "MIN",
+        bot: "BOT {n}",
+        wpm: "{n} MPM",
+        addBot: "AJOUTER UN BOT",
+        remove: "RETIRER",
         errors: {
           words: "Le nombre de mots est un nombre entier de {min} à {max}.",
           timer: "Le chrono prend un nombre entier de minutes de {min} à {max}.",

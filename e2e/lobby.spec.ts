@@ -741,3 +741,112 @@ test.describe("host settings form (#110)", () => {
     });
   }
 });
+
+// Contract of #114: the host's bot rows (one per bot: level, WPM, REMOVE; ADD A BOT) over #110's
+// `host:settings` path, and the LOBBY row's PUBLIC / PRIVATE toggle bound to the web action
+// `setLobbyType` (Postgres owns `Lobby.type`, ADR 0008). The C2 path stays at 4 patches in 10 s (#750).
+const addBot = (page: Page) =>
+  settingsDocket(page).getByRole("button", { name: "ADD A BOT", exact: true });
+const botSubRows = (page: Page) => settingsDocket(page).locator('[data-setting^="bots."]');
+
+test.describe("bot rows and lobby type (#114)", () => {
+  test.skip(
+    ({ viewport }) => (viewport?.width ?? 0) <= 480,
+    "phones hide the settings docket (#498)",
+  );
+
+  test("C2 the host adds Clerk and Major; both rolls show two BOT rows within 2 s; REMOVE drops one", async ({
+    page,
+    browser,
+  }) => {
+    const code = await createLobby(page);
+    const b = await joinAsGuest(browser, code);
+    await expect(rows(page)).toHaveCount(2, { timeout: scaled(5_000) });
+    await expect(setting(b.page, "BOTS")).toHaveText("NONE");
+
+    // a new bot files at Clerk: the first needs no level change
+    await addBot(page).click();
+    await expect(botSubRows(page)).toHaveCount(1, { timeout: scaled(2_000) });
+    await expect(segment(page, "BOT 1", "CLERK")).toHaveAttribute("aria-pressed", "true");
+    await expect(botSubRows(page).first()).toContainText("35 WPM");
+    await addBot(page).click();
+    await expect(botSubRows(page)).toHaveCount(2, { timeout: scaled(2_000) });
+    await segment(page, "BOT 2", "MAJOR").click();
+    await expect(segment(page, "BOT 2", "MAJOR")).toHaveAttribute("aria-pressed", "true", {
+      timeout: scaled(2_000),
+    });
+    await expect(botSubRows(page).nth(1)).toContainText("90 WPM");
+
+    for (const p of [page, b.page])
+      await expect(botRows(p)).toHaveCount(2, { timeout: scaled(2_000) });
+    await expect(setting(b.page, "BOTS")).toHaveText("2 BOTS · CLERK, MAJOR", {
+      timeout: scaled(2_000),
+    });
+    // the guest never gets a control
+    await expect(settingsDocket(b.page).getByRole("button")).toHaveCount(0);
+
+    await settingsDocket(page).getByRole("button", { name: "REMOVE BOT 1", exact: true }).click();
+    for (const p of [page, b.page])
+      await expect(botRows(p)).toHaveCount(1, { timeout: scaled(2_000) });
+    await expect(botSubRows(page)).toHaveCount(1);
+    await expect(setting(b.page, "BOTS")).toHaveText("1 BOT · MAJOR");
+    await b.context.close();
+  });
+
+  test("C3 C4 the host files PUBLIC: the kicker follows; the guest reads PUBLIC after a reload", async ({
+    page,
+    browser,
+  }) => {
+    const code = await createLobby(page);
+    const b = await joinAsGuest(browser, code);
+    await expect(kicker(page)).toHaveText("WAITING ROOM · PRIVATE RACE");
+    await expect(segment(page, "LOBBY", "PRIVATE")).toHaveAttribute("aria-pressed", "true");
+    await expect(setting(b.page, "LOBBY")).toHaveText("PRIVATE");
+
+    await segment(page, "LOBBY", "PUBLIC").click();
+    await expect(kicker(page)).toHaveText("WAITING ROOM · PUBLIC RACE", { timeout: scaled(5_000) });
+    await expect(segment(page, "LOBBY", "PUBLIC")).toHaveAttribute("aria-pressed", "true");
+    await expect(settingsDocket(page).locator('[data-setting="lobbyType"]')).not.toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    // the room stayed connected through the refresh: the roll still holds both typists
+    await expect(rows(page)).toHaveCount(2);
+
+    // no broadcast of the type (C4): the guest reads it from the row on the next load
+    await b.page.reload();
+    await expect(setting(b.page, "LOBBY")).toHaveText("PUBLIC", { timeout: scaled(5_000) });
+    await expect(kicker(b.page)).toHaveText("WAITING ROOM · PUBLIC RACE");
+    await expect(settingsDocket(b.page).getByRole("button")).toHaveCount(0);
+    await b.context.close();
+  });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C5 ${scheme}: bot rows and the lobby toggle labelled, 44px on touch, axe clean`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await createLobby(page);
+      await addBot(page).click();
+      await expect(botSubRows(page)).toHaveCount(1, { timeout: scaled(2_000) });
+      await expect(
+        settingsDocket(page).getByRole("button", { name: "REMOVE BOT 1", exact: true }),
+      ).toBeVisible();
+      await expect(settingsDocket(page).getByRole("group", { name: "LOBBY" })).toBeVisible();
+      const touch = test.info().project.name === "tablet";
+      const controls = settingsDocket(page).locator(
+        '[data-setting="bots"] button, [data-setting^="bots."] button, [data-setting="lobbyType"] button',
+      );
+      const n = await controls.count();
+      expect(n).toBe(1 + 5 + 1 + 2);
+      if (touch)
+        for (let i = 0; i < n; i++)
+          expect(
+            (await controls.nth(i).boundingBox())!.height,
+            `control ${i}`,
+          ).toBeGreaterThanOrEqual(44);
+      expect(await noSideScroll(page)).toBeLessThanOrEqual(0);
+      await expectNoA11yViolations(page);
+    });
+  }
+});

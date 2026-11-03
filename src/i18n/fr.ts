@@ -486,9 +486,9 @@ export const fr = {
       underReview: "EN VÉRIFICATION",
       medal: "HÉROS DE LA PAPERASSE",
       medalTitle: {
-        gold: "La médaille d'or, en 3D, glisse pour la tourner",
-        silver: "La médaille d'argent, en 3D, glisse pour la tourner",
-        bronze: "La médaille de bronze, en 3D, glisse pour la tourner",
+        gold: "Un commis, en 3D, portant la médaille d'or",
+        silver: "Un commis, en 3D, portant la médaille d'argent",
+        bronze: "Un commis, en 3D, portant la médaille de bronze",
       },
     },
     ranking: {

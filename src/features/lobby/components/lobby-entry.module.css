@@ -14,9 +14,10 @@
   margin: 0;
 }
 
-/* bible 7.1 secondary button */
+/* bible 7.1 secondary button; 44px tall at least (bible 18 hit targets; CREATE PRIVATE RACE, PRACTISE VS BOTS) */
 .secondary {
   @apply type-label;
+  min-height: 44px;
   font-size: 13px;
   line-height: normal;
   letter-spacing: 0.16em;

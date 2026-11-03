@@ -41,6 +41,11 @@ export const en = {
       searching: "FINDING A ROOM…",
       note: "Real typists first. Bots take the empty seats, so the room is never empty.",
     },
+    /** The practice entry (#367): a private race already seated with bots, under CREATE PRIVATE RACE. */
+    entries: {
+      practise: "PRACTISE VS BOTS",
+      practising: "OPENING YOUR DESK…",
+    },
     actions: {
       createPrivateRace: "CREATE PRIVATE RACE",
       creating: "CREATING…",

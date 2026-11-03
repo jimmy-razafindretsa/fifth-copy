@@ -42,6 +42,10 @@ export const fr = {
       searching: "RECHERCHE…",
       note: "D'abord de vrais joueurs. Les bots prennent les places vides : la salle n'est jamais vide.",
     },
+    entries: {
+      practise: "S'ENTRAÎNER CONTRE LES BOTS",
+      practising: "OUVERTURE DU BUREAU…",
+    },
     actions: {
       createPrivateRace: "CRÉER UNE COURSE PRIVÉE",
       creating: "CRÉATION…",

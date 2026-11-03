@@ -330,6 +330,8 @@
       "scope": [
         "packages/limiter/**",
         "src/server/limiter/**",
+        "src/server/redis.ts",
+        "src/server/internal-api/nonces.ts",
         "services/race-server/src/socket/rate-limit.ts"
       ],
       "supersedes": [],

@@ -493,7 +493,7 @@ Each threshold is the probe reading, interpolated, at which that preset's room h
 
 ### 14.1 Landing (`Fifth Copy Landing.dc.html`)
 Order:
-1. **Header:** FC icon + FIFTH COPY · nav `HOW TO TYPE É Ç « »` · EN/FR · NIGHT SHIFT toggle (gold dot when on) · guest docket (name + GUEST tag) · SIGN IN.
+1. **Header:** FC icon + FIFTH COPY · nav `HOW TO TYPE É Ç « »` · EN/FR · NIGHT SHIFT toggle (gold dot when on) · guest docket (name + GUEST tag) · SIGN IN. Extension (#696), phone rule: at <= 480px the header is two rows, brand with the toggles, then nav links and the docket; nothing hidden (no menu). Row 1 the brand (28px monogram, 16px name) left with EN/FR and NIGHT SHIFT right; row 2 the guide link, the guest docket and SIGN IN spread `space-between` like the 7.4 docket header row, `nowrap`; the docket name ellipses past 96px. To fit the French labels at 375 the toggles and row 2 track at `.08em`, the gutter is 16px, every target stays >= 44px (18) and the header stays under 120px. The same header (landing, waiting room, Dawn report, 404) follows it; from 481px it is the reference's wrapping row.
 2. **Hero:** halftone + 8° band, 4 stars. Left: kicker `MINISTRY OF TYPING · DESK 05 · 1978`, giant wordmark, tagline, pitch (`Thirty desks. One message. …`), typing strip, `QUICK RACE` + note (bots fill empty seats), `CREATE PRIVATE RACE`, code join. Right: **live feed** of the full lobby (section 7.8; in the app a recorded video loop of the scene, not real-time 3D) with a bobbing `ROOM {n} / 30 SEATS` stamp.
 3. **Ticker band** (current language only, scrolling, spinning red stars).
 4. **The story** (Moscow 1978, the countless ring rooms, the Major, "Somewhere, right now, a room is typing.") + the pull-quote stamp + a big faint star.

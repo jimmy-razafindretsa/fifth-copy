@@ -91,3 +91,93 @@
     min-height: 44px;
   }
 }
+
+/*
+ * Phone rule (bible 14.1 item 1, #696): at <= 480px two rows, nothing hidden. Row 1 the brand with the
+ * EN/FR and NIGHT SHIFT toggles right; row 2 the guide link, the guest docket and SIGN IN, spread like the
+ * 7.4 docket header row. The nav is laid out through (`display: contents`, as the NIGHT SHIFT form
+ * already is) so its items join the header's two flex lines; a zero-height break item ends row 1.
+ */
+@media (max-width: 480px) {
+  .header {
+    column-gap: 6px;
+    row-gap: 0;
+    padding: 8px 16px;
+  }
+
+  .header::before {
+    content: "";
+    order: 2;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .brand {
+    order: 1;
+    margin-right: auto;
+    min-height: 44px;
+    gap: 8px;
+  }
+
+  .monogram {
+    width: 28px;
+    height: 28px;
+  }
+
+  .brandName {
+    font-size: 16px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .nav {
+    display: contents;
+    white-space: nowrap;
+  }
+
+  /* row 1: EN/FR, then NIGHT SHIFT (its form is `display: contents`, the button is the item) */
+  .nav > form {
+    order: 1;
+  }
+
+  /* tightened so the French QUART DE NUIT still fits row 1 at 375 */
+  .nav > form > button {
+    order: 1;
+    gap: 6px;
+    padding-inline: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* row 2, tracked like the toggles so the docket name keeps room */
+  .navLink,
+  .docket,
+  .signIn {
+    order: 3;
+  }
+
+  .navLink,
+  .signIn,
+  .tag {
+    letter-spacing: 0.08em;
+  }
+
+  /* grows from 0 to its own width, so a long name ellipses instead of wrapping the row */
+  .docket {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: max-content;
+    padding: 5px 6px;
+    gap: 6px;
+  }
+
+  .docketName {
+    min-width: 0;
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tag {
+    flex: none;
+  }
+}

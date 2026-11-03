@@ -39,7 +39,9 @@ export async function LandingHeader() {
         <ThemeToggle theme={theme ?? "light"} label={t.header.nightShift} />
         {viewer ? (
           <div className={styles.docket}>
-            <span>{fill(t.header.honorific, { name: viewer.name })}</span>
+            <span className={styles.docketName}>
+              {fill(t.header.honorific, { name: viewer.name })}
+            </span>
             {viewer.isGuest ? <span className={styles.tag}>{t.header.guestTag}</span> : null}
           </div>
         ) : null}

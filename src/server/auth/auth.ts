@@ -1,7 +1,6 @@
 import "server-only";
 import NextAuth, { type NextAuthConfig, type User } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import type { NextRequest } from "next/server";
 import { env } from "@/env";
 import { db } from "@/server/db";
 import { logger } from "@/server/logger";
@@ -25,7 +24,7 @@ declare module "@auth/core/jwt" {
   }
 }
 
-/** 30 days, in seconds. The tokenVersion check against the DB is the session resolver's (next card). */
+/** 30 days, in seconds. The tokenVersion check against the DB is the session resolver's (session.ts). */
 export const SESSION_MAX_AGE = 2_592_000;
 
 /**
@@ -81,17 +80,6 @@ export const authConfig = {
 
 const nextAuth = NextAuth(authConfig);
 
-/**
- * Auth.js v5 answers a signed-out GET /api/auth/session with `null`; the contract (#786 C4) fixes `{}`.
- * Only that body changes: status, headers and cookies are kept.
- */
-async function GET(request: NextRequest): Promise<Response> {
-  const response = await nextAuth.handlers.GET(request);
-  if (!request.nextUrl.pathname.endsWith("/session")) return response;
-  if (!response.headers.get("content-type")?.startsWith("application/json")) return response;
-  if ((await response.clone().text()) !== "null") return response;
-  return new Response("{}", { status: response.status, headers: response.headers });
-}
-
-export const handlers = { GET, POST: nextAuth.handlers.POST };
+/** The raw Auth.js route handlers; `./handlers` wraps them for /api/auth (#786 C4, #787 C4). */
+export const nextAuthHandlers = nextAuth.handlers;
 export const { auth, signIn, signOut } = nextAuth;

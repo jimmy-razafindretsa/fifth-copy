@@ -17,7 +17,11 @@ const session = (id: string, tokenVersion: number): SessionClaims => ({
 function setup(claims: SessionClaims | null, row: AccountRow | null = account) {
   const getSession = vi.fn(async () => claims);
   const findAccountById = vi.fn(async (_id: string) => (row ? { ...row } : null));
-  return { resolve: createSessionResolver({ getSession, findAccountById }), getSession, findAccountById };
+  return {
+    resolve: createSessionResolver({ getSession, findAccountById }),
+    getSession,
+    findAccountById,
+  };
 }
 
 describe("createSessionResolver (C1)", () => {
@@ -89,7 +93,11 @@ describe("tokenVersion revocation (C3)", () => {
 
   it("a JWT minted with tokenVersion n resolves until User.tokenVersion becomes n + 1", async () => {
     const n = 5;
-    const jwt = await encode({ token: { sub: "u1", name: "Ada-0042", tokenVersion: n }, secret, salt });
+    const jwt = await encode({
+      token: { sub: "u1", name: "Ada-0042", tokenVersion: n },
+      secret,
+      salt,
+    });
     const row: AccountRow = { ...account, tokenVersion: n };
     // getSession decodes the cookie the way Auth.js does, then maps it like the session callback.
     const resolve = createSessionResolver({

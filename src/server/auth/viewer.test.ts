@@ -24,7 +24,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("@/env", () => ({ env: { AUTH_SECRET: "t".repeat(32), NODE_ENV: "test" } }));
 vi.mock("@/server/db", () => ({ db: { user: { findUnique } } }));
-vi.mock("./auth", () => ({ auth, handlers: {}, signIn: vi.fn(), signOut: vi.fn() }));
+vi.mock("./auth", () => ({ auth, nextAuthHandlers: {}, signIn: vi.fn(), signOut: vi.fn() }));
 
 beforeEach(() => {
   jar.clear();
@@ -74,19 +74,36 @@ describe("getViewer", () => {
 // #787 C2: the session resolver comes first, the guest cookie resolver last.
 describe("viewerResolvers (C2)", () => {
   const rows: Record<string, object> = {
-    acct: { id: "acct", typistName: "Ada-0042", isGuest: false, tokenVersion: 2, avatarStatus: "NONE" },
-    gst: { id: "gst", typistName: "Comrade-123", isGuest: true, tokenVersion: 0, avatarStatus: "NONE" },
+    acct: {
+      id: "acct",
+      typistName: "Ada-0042",
+      isGuest: false,
+      tokenVersion: 2,
+      avatarStatus: "NONE",
+    },
+    gst: {
+      id: "gst",
+      typistName: "Comrade-123",
+      isGuest: true,
+      tokenVersion: 0,
+      avatarStatus: "NONE",
+    },
   };
   const account: Viewer = { id: "acct", name: "Ada-0042", isGuest: false, hasAvatar: false };
   const guest: Viewer = { id: "gst", name: "Comrade-123", isGuest: true, hasAvatar: false };
 
   beforeEach(() => {
-    findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => rows[where.id] ?? null);
+    findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) => rows[where.id] ?? null,
+    );
   });
 
   function signIn(cookie = "authjs.session-token") {
     jar.set(cookie, "jwt");
-    auth.mockResolvedValue({ user: { id: "acct", name: "Ada-0042", tokenVersion: 2 }, expires: "x" });
+    auth.mockResolvedValue({
+      user: { id: "acct", name: "Ada-0042", tokenVersion: 2 },
+      expires: "x",
+    });
   }
 
   it("is [resolveSession, resolveGuest]", () => {

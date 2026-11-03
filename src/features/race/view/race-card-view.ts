@@ -214,7 +214,7 @@ export function raceCardViewFrom(source: RaceCardSource): RaceCardView {
 /** Bare guest names (bible 2: `<Animal>-<3 digits>`, the honorific is UI copy). */
 const ANIMALS = ["Sparrow", "Badger", "Heron", "Marmot", "Lynx", "Otter", "Crow", "Hedgehog"];
 
-type Seat = { desk: number; progress: number; status?: LaneStatus };
+type Seat = { desk: number; progress: number; status?: LaneStatus; name?: string };
 
 /** A specimen desk's marker: the allocator's identity (#156), as a live room would hand it. */
 const markerOf = (desk: number, youDesk: number): Lane["marker"] => {
@@ -228,7 +228,9 @@ function lanesOf(seats: Seat[], youDesk: number): Lane[] {
     .sort((a, b) => b.progress - a.progress || a.desk - b.desk)
     .map((s, i) => ({
       desk: s.desk,
-      name: `${ANIMALS[(s.desk - 1) % ANIMALS.length]}-${String(100 + ((s.desk * 137) % 900))}`,
+      name:
+        s.name ??
+        `${ANIMALS[(s.desk - 1) % ANIMALS.length]}-${String(100 + ((s.desk * 137) % 900))}`,
       // a specimen text of 100 characters
       cursor: Math.round(s.progress * 100),
       progress: s.progress,
@@ -290,10 +292,11 @@ export const raceCardViewFixtures = {
   "six-leading": six(1),
   "six-mid-field": six(4),
   "six-last": six(6),
-  // one lane per status: a finished copy, a cut line, a kicked and an abandoned typist
+  // one lane per status: a finished copy, a cut line, a kicked and an abandoned typist; the finished
+  // typist has a 24-character name, so the ellipsis gives way and FILED stays on the name row (#697)
   "six-statuses": viewOf(
     [
-      { desk: 1, progress: 1 },
+      { desk: 1, progress: 1, name: "Quartermaster-Penhaligon" },
       { desk: 2, progress: 0.71, status: "line-cut" },
       { desk: 3, progress: 0.58 },
       { desk: 4, progress: 0.36, status: "asleep" },

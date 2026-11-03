@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { contractHash, lockViolation } from "./kit";
 import { evaluateGate, latestPickup, trustedAuthors, type Comment, type GateFacts } from "./flow";
 import {
@@ -39,9 +41,7 @@ describe("parseBundleArg (C1)", () => {
 describe("bundleRefusals (C1)", () => {
   it("accepts 2..8 Ready cards without solo labels", () => {
     expect(bundleRefusals([ready(10), ready(11), ready(12)])).toEqual([]);
-    expect(bundleRefusals(Array.from({ length: MAX_BUNDLE }, (_, i) => ready(10 + i)))).toEqual(
-      [],
-    );
+    expect(bundleRefusals(Array.from({ length: MAX_BUNDLE }, (_, i) => ready(10 + i)))).toEqual([]);
   });
   it("refuses more than 8 cards", () => {
     const nine = Array.from({ length: 9 }, (_, i) => ready(10 + i));
@@ -206,5 +206,22 @@ describe("bundle gate (C3, C4)", () => {
       pr: { number: 7, state: "OPEN", cards: [] },
     };
     expect(evaluateGate(f)).toEqual([]);
+  });
+});
+
+describe("bundle docs (C5)", () => {
+  const read = (p: string) => fs.readFileSync(path.join(__dirname, "../..", p), "utf8");
+  it("AGENTS.md allows one card or one bundle per session and stays under 150 lines", () => {
+    const agents = read("AGENTS.md");
+    expect(agents).toContain("One card or one bundle per session (PROTOCOL bundle section)");
+    expect(agents).not.toContain("- One card per session.");
+    expect(agents.trimEnd().split("\n").length).toBeLessThan(150);
+  });
+  it("PROTOCOL documents eligibility, the size limit and every solo-only label", () => {
+    const protocol = read("agents/PROTOCOL.md");
+    const section = protocol.slice(protocol.indexOf("## 15. Bundle mode"));
+    expect(section).toMatch(/at most 8 cards/);
+    expect(section).toMatch(/Eligible:/);
+    for (const l of SOLO_LABELS) expect(section).toContain(`\`${l}\``);
   });
 });

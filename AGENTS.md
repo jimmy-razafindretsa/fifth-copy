@@ -42,7 +42,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - loop (mode C, parallel): `AGENT_CMD="claude -p" scripts/loop.sh [--parallel N] [--max-cards N]` · land a released card: `scripts/loop.sh --finish <n>`
 - card worktree (own branch, ports, DBs, deps): `scripts/worktree.sh <n>` · remove: `scripts/worktree.sh --remove <n>`
 - merge a card's PR (local merge queue; never merge around it): `scripts/merge.sh <n>`
-- gates/promotion (script-checked PROTOCOL 5): `npx tsx scripts/board.ts gate <n> "In Review"|QA|Done` · `promote` · `pickup <n>` · `locks <n>`
+- gates/promotion (script-checked PROTOCOL 5): `npx tsx scripts/board.ts gate <n> "In Review"|QA|Done` · `promote` · `pickup <n>` (bundle: `pickup <lead> --bundle <n,n>`) · `locks <n>`
 
 ## Where memory lives (write each fact to exactly ONE place)
 - Rules and hazards that must always apply: this file (add max 3 lines per card, via the card's PR).
@@ -71,7 +71,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 
 ## Hard rules
 - Design: every visual, motion, 3D, copy or UX choice comes from the design bible (section 0 precedence, section 18 checklist). Match its reference files 1:1; not covered = extend the closest bible pattern and add the decision to the bible in the same PR. Never invent a style.
-- One card per session. Do not widen scope. Out-of-scope findings become new Backlog cards labeled `discovered`.
+- One card or one bundle per session (PROTOCOL bundle section). Do not widen scope. Out-of-scope findings become new Backlog cards labeled `discovered`.
 - Never change a card's Contract section. If it is wrong, label `needs-replan` and stop.
 - If a change conflicts with an accepted ADR, stop. Write a `proposed` ADR in the PR and label `needs-human`. Do not choose architecture silently.
 - ADRs: agents propose; Deliver sets `status: accepted` in the card's PR when the ADR is consistent with `docs/architecture/ARCHITECTURE.md` and the accepted ADRs (roles/deliver.md 3b); conflicts go to `needs-human`.

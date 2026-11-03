@@ -126,6 +126,7 @@ describe.skipIf(!testDatabaseUrl)(
       bonusesSent: 0,
       bonusesReceived: 0,
       bonusLog: [],
+      overlay: null,
       flags: [],
       engineVersion: ENGINE_VERSION,
       trace: { encoding: "gzip+base64", data: gz([]), count: 0 },
@@ -214,6 +215,7 @@ describe.skipIf(!testDatabaseUrl)(
         durationMs: 48_210,
         finishedAtMs: 48_210,
         bonusLog: [],
+        overlay: null,
         engineVersion: ENGINE_VERSION,
       });
       expect(rows.keystrokes.map((k) => [k.desk, k.userId, k.count])).toEqual([

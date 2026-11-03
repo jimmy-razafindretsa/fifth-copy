@@ -224,6 +224,7 @@ describe("createWebApi.postResults (#189)", () => {
         bonusesSent: 0,
         bonusesReceived: 0,
         bonusLog: [],
+        overlay: null,
         flags: [],
         engineVersion: "1",
         trace: { encoding: "gzip+base64", data: "", count: 0 },

@@ -123,6 +123,7 @@ function result(d: Desk): InternalRaceResult {
     bonusesSent: 0,
     bonusesReceived: 0,
     bonusLog: [],
+    overlay: null,
     flags: d.suspicious ? [{ code: "e2e-review" }] : [],
     engineVersion: ENGINE_VERSION,
     trace: EMPTY_TRACE,

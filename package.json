@@ -26,7 +26,8 @@
     "board": "tsx scripts/board.ts",
     "see": "tsx scripts/see.ts",
     "postinstall": "prisma generate && tsx scripts/embeds.ts vendor",
-    "embeds": "tsx scripts/embeds.ts"
+    "embeds": "tsx scripts/embeds.ts",
+    "corpus": "tsx scripts/corpus-manifest.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

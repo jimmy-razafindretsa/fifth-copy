@@ -42,9 +42,9 @@ const render = (members: Member[], you: number | null = 1, labels = en.lobby.rin
 
 /** Each cell's opening tag and content, in desk order. */
 function cells(html: string): string[] {
-  return [...html.matchAll(/<span[^>]*data-desk="\d+"[\s\S]*?(?=<span[^>]*data-desk="|<\/div>$)/g)].map(
-    (m) => m[0],
-  );
+  return [
+    ...html.matchAll(/<span[^>]*data-desk="\d+"[\s\S]*?(?=<span[^>]*data-desk="|<\/div>$)/g),
+  ].map((m) => m[0]);
 }
 
 describe("SeatRing layout (C1)", () => {

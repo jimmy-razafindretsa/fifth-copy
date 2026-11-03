@@ -2,8 +2,11 @@
    The ring is square and as wide as its slot (max 500px); `--ring-r` is measured from its own width
    (container units), so the desks stay inside it at every width. Each desk is a one-cell 7.4 grid: the
    2px ink gap is its plate, the paper face inside; desks never touch, so nothing doubles. */
+@reference "../../../app/globals.css";
+
 .ring {
-  --cell: 34px;
+  /* 34px desks; under a 486px ring (481-520px screens) they shrink to stay apart (7cqi, min 30px) */
+  --cell: clamp(30px, 7cqi, 34px);
   --ring-r: calc(50cqi - var(--cell) / 2 - 2px);
   position: relative;
   container-type: inline-size;

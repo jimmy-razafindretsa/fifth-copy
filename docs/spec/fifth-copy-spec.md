@@ -232,7 +232,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 | **Bots** | Number + difficulty per bot |
 | **Lobby** | Public · Private |
 
-\* **Copyright:** use **public-domain** literature (Project Gutenberg, BAnQ / Gallica for French) and **teacher-written texts**. Film quotes only if short and licensed. In-world, texts are "intercepted cables".
+\* **Copyright:** use **public-domain** literature (Project Gutenberg, BAnQ / Gallica for French) and **teacher-written texts**. Film quotes are out of v1 (no licensed source). Sources, licences and attribution: `docs/texts/sources.md`; teacher texts: `docs/texts/teacher-texts.md`. In-world, texts are "intercepted cables".
 
 ---
 
@@ -487,7 +487,7 @@ Raw keystrokes are **rolled up** into daily per-character tables so stats stay f
 **Open questions for the teacher**
 1. Is a one-time recovery code acceptable, given "no forgot password"?
 2. Should the teacher get a class dashboard (all students' progress)?
-3. Are short film quotes required, or is public-domain literature enough?
+3. Are short film quotes required, or is public-domain literature enough? Settled (#342): public-domain literature and teacher texts only; no film quotes in v1.
 4. Which domain / server will host the site?
 
 ---

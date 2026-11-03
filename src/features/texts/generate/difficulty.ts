@@ -105,6 +105,34 @@ export function shuffled<T>(items: readonly T[], rng: Rng): T[] {
   return out;
 }
 
+/** The words of a frequency list a recipe draws from (the whole list when its filters leave none). */
+export function baseOf(
+  list: readonly string[],
+  recipe: Recipe,
+  language: RaceLanguage,
+): readonly string[] {
+  const key = `${language}:${recipe.top}:${recipe.maxLength}:${recipe.rare}`;
+  let byKey = bases.get(list);
+  if (!byKey) bases.set(list, (byKey = new Map()));
+  let base = byKey.get(key);
+  if (!base) byKey.set(key, (base = filterBase(list, recipe, language)));
+  return base;
+}
+
+/** Focus pools of a base (`drawWords`), kept across calls: a base array is cached by `baseOf`. */
+const focusPools = new WeakMap<readonly string[], Map<string, readonly string[]>>();
+
+/** Same list and filters, same array: the transforms' pools (`poolOf`) cache on it. */
+const bases = new WeakMap<readonly string[], Map<string, readonly string[]>>();
+
+function filterBase(list: readonly string[], recipe: Recipe, language: RaceLanguage) {
+  const base = list
+    .slice(0, recipe.top ?? list.length)
+    .filter((w) => recipe.maxLength === null || lettersOf(w).length <= recipe.maxLength)
+    .filter((w) => recipe.rare === "allow" || !hasRareLetter(w, language));
+  return base.length > 0 ? base : list;
+}
+
 /**
  * `count` words from a frequency list following `recipe`: the first `share * count` slots (rounded up)
  * of each focus overlap, the slots are shuffled, and each slot draws from the words passing all its
@@ -117,15 +145,12 @@ export function drawWords(
   language: RaceLanguage,
   rng: Rng,
 ): string[] {
-  const base0 = list
-    .slice(0, recipe.top ?? list.length)
-    .filter((w) => recipe.maxLength === null || lettersOf(w).length <= recipe.maxLength)
-    .filter((w) => recipe.rare === "allow" || !hasRareLetter(w, language));
-  const base = base0.length > 0 ? base0 : list;
-  const pools = new Map<string, readonly string[]>();
+  const base = baseOf(list, recipe, language);
+  let pools = focusPools.get(base);
+  if (!pools) focusPools.set(base, (pools = new Map()));
   const poolOf = (tests: readonly FocusTest[]): readonly string[] => {
     for (let n = tests.length; n > 0; n--) {
-      const key = tests.slice(0, n).join("+");
+      const key = `${language}:${tests.slice(0, n).join("+")}`;
       if (!pools.has(key))
         pools.set(
           key,

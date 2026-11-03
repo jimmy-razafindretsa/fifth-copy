@@ -9,10 +9,11 @@ import {
 } from "@fifth-copy/protocol";
 import { generateRaceText } from "../index";
 import { fileProvider } from "../corpus/files";
+import { drillStrategy } from "./drill";
 import { sentenceStrategy, STRATEGIES, wordStrategy } from "./strategies";
 import type { TextProvider } from "./types";
 
-// Contract of #351 C3, C4, C7 (and #199's exact count, carried over).
+// Contract of #351 C3, C4, C7 (and #199's exact count, carried over); #354 C6 at the end.
 
 const LANGUAGES: RaceLanguage[] = ["fr", "en"];
 const TEXT_TYPES: TextType[] = ["sentences", "words", "special-characters"];
@@ -72,12 +73,10 @@ describe("exact count (C4)", () => {
 });
 
 describe("strategy table and purity (C7)", () => {
-  it("dispatches each text type; special-characters types real sentences until #354", () => {
+  it("dispatches each text type; special-characters runs the drill (#354)", () => {
     expect(STRATEGIES.sentences).toBe(sentenceStrategy);
     expect(STRATEGIES.words).toBe(wordStrategy);
-    expect(STRATEGIES["special-characters"]).toBe(sentenceStrategy);
-    const source = fs.readFileSync("src/features/texts/generate/strategies.ts", "utf8");
-    expect(source).toMatch(/special-characters.*\n?.*#354|#354[^\n]*\n[^\n]*"special-characters"/);
+    expect(STRATEGIES["special-characters"]).toBe(drillStrategy);
   });
 
   for (const language of LANGUAGES) {
@@ -94,8 +93,13 @@ describe("strategy table and purity (C7)", () => {
     });
   }
 
-  it("defaults to Math.random, the file provider and the normal difficulty", () => {
-    const text = generateRaceText({ language: "en", textType: "words", wordCount: 10 });
+  it("defaults to Math.random and the file provider", () => {
+    const text = generateRaceText({
+      ...DEFAULT_RACE_SETTINGS,
+      language: "en",
+      textType: "words",
+      wordCount: 10,
+    });
     expect(wordCount(text.content)).toBe(10);
     expect(text.sourceRef).toBe(fileProvider.sourceRef("en"));
   });
@@ -142,5 +146,58 @@ describe("words mode draws from the frequency lists (C3)", () => {
   it("the corpus-vocabulary fallback is deleted", () => {
     const source = fs.readFileSync("src/features/texts/generate/generate.ts", "utf8");
     expect(source).not.toMatch(/function vocabulary/);
+  });
+});
+
+describe("#354 C6: exact count and purity after every transform", () => {
+  const PRESETS: Difficulty[] = [
+    { level: "easy" },
+    { level: "normal" },
+    { level: "hard" },
+    { level: "custom", wordLength: "long", rareLetters: true, punctuationDensity: "heavy" },
+  ];
+  const TOGGLES = {
+    on: {
+      accentEveryWord: true,
+      practiceLetters: ["e", "r"],
+      includeNumbers: true,
+      includeSymbols: true,
+      includePunctuation: true,
+    },
+    off: {
+      accentEveryWord: false,
+      practiceLetters: [],
+      includeNumbers: false,
+      includeSymbols: false,
+      includePunctuation: false,
+    },
+  } as const;
+
+  for (const language of LANGUAGES) {
+    for (const textType of ["words", "special-characters", "sentences"] as const) {
+      for (const [toggles, values] of Object.entries(TOGGLES)) {
+        it(`${language} ${textType}, toggles ${toggles}: 4 presets, 10 and 500 words, 50 rngs`, () => {
+          for (const difficulty of PRESETS) {
+            for (const count of [10, 500]) {
+              for (const seed of SEEDS) {
+                const s = {
+                  ...settings(language, count, textType, difficulty),
+                  ...values,
+                  practiceLetters: [...values.practiceLetters],
+                };
+                const { content } = generateRaceText(s, { rng: mulberry32(seed) });
+                if (wordCount(content) !== count || normalizeTypeable(content) !== content)
+                  expect({ difficulty, count, seed, content }).toBeNull();
+              }
+            }
+          }
+        }, 60_000);
+      }
+    }
+  }
+
+  it("generate.ts takes the full settings (no Pick)", () => {
+    const source = fs.readFileSync("src/features/texts/generate/generate.ts", "utf8");
+    expect(source).not.toMatch(/Pick<RaceSettings/);
   });
 });

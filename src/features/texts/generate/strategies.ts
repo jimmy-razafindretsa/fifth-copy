@@ -1,20 +1,15 @@
 import { normalizeTypeable, wordCount, type Rng } from "@fifth-copy/engine";
 import type { RaceSettings, TextType } from "@fifth-copy/protocol";
-import { drawWords, passagesFor, recipeOf, shuffled } from "./difficulty";
-import type { SeedSentence, TextProvider } from "./types";
+import { drawWords, MIN_BAND_PASSAGES, passagesFor, recipeOf, shuffled } from "./difficulty";
+import { drillStrategy } from "./drill";
+import { accentRatio } from "./transforms/accents";
+import { letterDensity, practiceLettersOf } from "./transforms/practice-letters";
+import type { SeedSentence, Strategy } from "./types";
 
-/** What a strategy gets: the host's settings, the injected rng and the text source. */
-export type StrategyInput = {
-  settings: Pick<RaceSettings, "language" | "wordCount" | "difficulty">;
-  rng: Rng;
-  provider: TextProvider;
-};
+export type { Strategy, StrategyInput } from "./types";
 
-/** Turns settings into one text of exactly `settings.wordCount` engine words, typeable as written. */
-export type Strategy = (input: StrategyInput) => string;
-
-/** Keeps leading tokens of a normalised text until it holds exactly `target` words (engine count). */
-function firstWords(tokens: readonly string[], target: number): string {
+/** Leading tokens of a normalised text holding exactly `target` words (engine count). */
+export function firstWords(tokens: readonly string[], target: number): string[] {
   const kept: string[] = [];
   let count = 0;
   for (const token of tokens) {
@@ -22,7 +17,7 @@ function firstWords(tokens: readonly string[], target: number): string {
     kept.push(token);
     count += wordCount(token);
   }
-  return kept.join(" ");
+  return kept;
 }
 
 /** Passages in an rng order, the whole pool reshuffled each time it runs out, until `target` words. */
@@ -41,23 +36,57 @@ function passageTokens(passages: readonly SeedSentence[], target: number, rng: R
   return tokens;
 }
 
-/** Real sentences: passages of the difficulty's band (C6), in a random order, cut at a word boundary. */
+/**
+ * The top band of `passages` by `score`: the best third, at least `MIN_BAND_PASSAGES` (all of them
+ * when there are fewer). Ties keep the corpus order.
+ */
+export function topBand<T extends { text: string }>(
+  passages: readonly T[],
+  score: (text: string) => number,
+): readonly T[] {
+  if (passages.length <= MIN_BAND_PASSAGES) return passages;
+  const size = Math.max(MIN_BAND_PASSAGES, Math.ceil(passages.length / 3));
+  return passages
+    .map((p, i) => ({ p, i, s: score(p.text) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .slice(0, size)
+    .map(({ p }) => p);
+}
+
+/**
+ * The passages a real-sentences text draws from: the difficulty's band (#351 C6), then for a French
+ * race with `accentEveryWord` its top band by accented-word ratio (best-effort, #354 Q24), then with
+ * practice letters its top band by their density (C2).
+ */
+export function sentencePassages<T extends { text: string }>(
+  passages: readonly T[],
+  settings: RaceSettings,
+): readonly T[] {
+  let pool = passagesFor(passages, settings.difficulty, settings.language);
+  if (settings.language === "fr" && settings.accentEveryWord) pool = topBand(pool, accentRatio);
+  const letters = practiceLettersOf(settings);
+  if (letters.length > 0) pool = topBand(pool, (t) => letterDensity(t, letters));
+  return pool;
+}
+
+/** Real sentences: passages of `sentencePassages`, in a random order, cut at a word boundary. */
 export const sentenceStrategy: Strategy = ({ settings, rng, provider }) => {
-  const { language, wordCount: target, difficulty } = settings;
-  const passages = passagesFor(provider.sentences(language), difficulty, language);
-  return firstWords(passageTokens(passages, target, rng), target);
+  const passages = sentencePassages(provider.sentences(settings.language), settings);
+  return firstWords(passageTokens(passages, settings.wordCount, rng), settings.wordCount);
 };
 
-/** Random words from the frequency list, following the difficulty's recipe (C5). */
+/** Random words from the frequency list, following the difficulty's recipe (#351 C5). */
 export const wordStrategy: Strategy = ({ settings, rng, provider }) => {
   const { language, wordCount: target, difficulty } = settings;
-  return drawWords(provider.words(language), target, recipeOf(difficulty), language, rng).join(" ");
+  const recipe = recipeOf(difficulty);
+  // `includePunctuation: false`: random words never add a mark (C4)
+  const punctuation = settings.includePunctuation ? recipe.punctuation : "none";
+  return drawWords(provider.words(language), target, { ...recipe, punctuation }, language, rng);
 };
 
-/** One strategy per text type: the extension point of #354 (drills and character controls). */
+/** One strategy per text type. */
 export const STRATEGIES: Readonly<Record<TextType, Strategy>> = {
   sentences: sentenceStrategy,
   words: wordStrategy,
-  // The special-characters drill is #354; until then it types real sentences.
-  "special-characters": sentenceStrategy,
+  "special-characters": drillStrategy,
 };

@@ -1,6 +1,7 @@
 import {
   engineSettingsOf,
   PLAYER_STATUSES,
+  type BonusKind,
   type Member,
   type Phase,
   type Snapshot,
@@ -11,6 +12,7 @@ import { raceCardViewFrom, type RaceCardView } from "../view/race-card-view";
 import { NO_TEXT_VIEW, typedViewFrom, type TypedView } from "../view/typed-view";
 import { bestOffset, clockOffset, remainingTo, type PongSample } from "./clock";
 import {
+  COOLDOWN_MS,
   createPrediction,
   typedText,
   type Keystroke,
@@ -36,6 +38,45 @@ export type RaceTokenError = "not-found" | "closed" | "generic";
 
 /** Why the page gave up: a handshake refusal (`transport` only reconnects) or a token error. */
 export type RaceLostReason = Exclude<ConnectErrorReason, "transport"> | RaceTokenError;
+
+/** How long the tray shows a refused play (`IMMUNE`, #236 C1). */
+export const REFUSAL_SHOW_MS = 1_200;
+
+/**
+ * Your desk's side of the bonus economy (#236, ADR 0016), as the server told it: the store keeps it and
+ * decides nothing (awarding, cooldown and immunity are #190's, in the engine and on the server). Times
+ * are this device's clock. Reset by every `welcome` and `countdown` (a reconnect loses the held card,
+ * the cooldown and the blur until the next `bonus-earned`: only the overlay comes back, `welcome.overlay`).
+ */
+export type BonusState = {
+  /** The card `bonus-earned` dealt you; `null` once `bonus-sent` says you played it. */
+  card: BonusKind | null;
+  /**
+   * When you may play again: set when you play (`COOLDOWN_MS`, the engine's constant, so a second
+   * Enter sends nothing while the first is in flight), confirmed by `bonus-sent`, rolled back by a
+   * refusal. The client never sends while it runs.
+   */
+  cooldownUntil: number | null;
+  /** A Smoke Break blurs your text until then (`bonus-hit.blurUntil` on this clock); `null` after. */
+  blurUntil: number | null;
+  /** The server refused your play (`rejected { no-bonus }` while a card is held): the tray says IMMUNE. */
+  refused: boolean;
+  /** When the refusal arrived (its 1.2 s run from here); `null` with `refused` false. */
+  refusedAt: number | null;
+  /** A play is in flight: the cooldown before it, to restore on a refusal. */
+  pending: { cooldownUntil: number | null } | null;
+  /** Plays sent so far on this page (never reset): `sendBonusPlays` emits one `bonus:play` per step. */
+  plays: number;
+};
+
+const NO_BONUS = {
+  card: null,
+  cooldownUntil: null,
+  blurUntil: null,
+  refused: false,
+  refusedAt: null,
+  pending: null,
+} as const satisfies Omit<BonusState, "plays">;
 
 export type RaceState = {
   phase: RacePhase;
@@ -88,6 +129,8 @@ export type RaceState = {
   ending: RoomEvents["ended"] | null;
   /** This device's clock when `ended` arrived (the `event.at` convention); `null` with `ending`. */
   endedAt: number | null;
+  /** Your card, cooldown, blur and refusal (#236); the overlay stays `overlay`. */
+  bonus: BonusState;
 };
 
 /**
@@ -122,6 +165,17 @@ export type RaceEvent =
   | { type: "ended"; payload: RoomEvents["ended"]; at: number }
   /** The visible stamp's time is up (scheduled by `watchStampExpiry`). */
   | { type: "stamp-expired"; id: number; at: number }
+  /**
+   * You asked to play your card (#236: Enter in the race input or the tray's button), `at` = device
+   * clock. The reducer takes it only while you hold a card, may type and are not cooling.
+   */
+  | { type: "bonus-play"; at: number }
+  /** The server refused a `keys`, `abandon` or `bonus:play` (#236 reads `no-bonus`). */
+  | { type: "rejected"; payload: RoomEvents["rejected"]; at: number }
+  /** The refusal that arrived at `refusedAt` has shown its 1.2 s (scheduled by `watchRefusalExpiry`). */
+  | { type: "refusal-expired"; refusedAt: number }
+  /** The blur until `blurUntil` is over (scheduled by `watchBlurExpiry`). */
+  | { type: "blur-expired"; blurUntil: number }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
@@ -149,6 +203,7 @@ export const initialRaceState: RaceState = {
   stampSeq: 0,
   ending: null,
   endedAt: null,
+  bonus: { ...NO_BONUS, plays: 0 },
 };
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -221,6 +276,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         stampSeq: state.stampSeq,
         ending: null,
         endedAt: null,
+        bonus: { ...NO_BONUS, plays: state.bonus.plays },
       };
     }
     case "clock":
@@ -230,24 +286,21 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     case "settings":
       return { ...state, settings: event.payload.settings };
     case "countdown":
+      // a new race: no overlay, no card yet (the server deals them once it runs)
       return {
         ...state,
         phase: "countdown",
         race: event.payload.race,
         room: state.room && { ...state.room, phase: "countdown" },
-        prediction: predictionOf(
-          event.payload.race,
-          state.you,
-          state.settings,
-          state.overlay,
-          null,
-        ),
+        overlay: null,
+        prediction: predictionOf(event.payload.race, state.you, state.settings, null, null),
         desks: [],
         ranks: [],
         lastKey: null,
         stamps: [],
         ending: null,
         endedAt: null,
+        bonus: { ...NO_BONUS, plays: state.bonus.plays },
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -289,6 +342,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         endedAt: event.at,
       };
     case "event": {
+      const bonus = reduceBonusEvent(state, event.payload, event.at);
+      if (bonus) return bonus;
       const stamp = stampFromEvent(event.payload, state.you, state.prediction?.state.errors ?? 0);
       if (!stamp) return state;
       const id = state.stampSeq + 1;
@@ -299,6 +354,47 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     case "stamp-expired": {
       const stamps = expireStamp(state.stamps, event.id, event.at);
       return stamps === state.stamps ? state : { ...state, stamps };
+    }
+    case "bonus-play": {
+      if (!mayPlayAt(state, event.at)) return state;
+      const { bonus } = state;
+      return {
+        ...state,
+        bonus: {
+          ...bonus,
+          cooldownUntil: event.at + COOLDOWN_MS,
+          pending: { cooldownUntil: bonus.cooldownUntil },
+          refused: false,
+          refusedAt: null,
+          plays: bonus.plays + 1,
+        },
+      };
+    }
+    case "rejected": {
+      // every refusal of a play is `no-bonus` on the wire (#190); the client never sends while cooling,
+      // so one while a card is held means the target is immune (or there is none)
+      const { bonus } = state;
+      if (event.payload.reason !== "no-bonus" || (!bonus.pending && !bonus.card)) return state;
+      return {
+        ...state,
+        bonus: {
+          ...bonus,
+          cooldownUntil: bonus.pending ? bonus.pending.cooldownUntil : bonus.cooldownUntil,
+          pending: null,
+          refused: true,
+          refusedAt: event.at,
+        },
+      };
+    }
+    case "refusal-expired": {
+      const { bonus } = state;
+      if (!bonus.refused || bonus.refusedAt !== event.refusedAt) return state;
+      return { ...state, bonus: { ...bonus, refused: false, refusedAt: null } };
+    }
+    case "blur-expired": {
+      const { bonus } = state;
+      if (bonus.blurUntil !== event.blurUntil) return state;
+      return { ...state, bonus: { ...bonus, blurUntil: null } };
     }
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
@@ -315,12 +411,94 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   }
 }
 
+/**
+ * The bonus events of your desk (#236), or `null` for any other event (the stamps read those):
+ * `bonus-earned` deals you the card, `bonus-sent` from you confirms the play (the card is gone, the
+ * cooldown runs from its arrival), `bonus-hit` on you brings the overlay (the prediction types the new
+ * effective text, `typedText`) and the Smoke Break's end on this device's clock.
+ */
+function reduceBonusEvent(
+  state: RaceState,
+  payload: RoomEvents["event"],
+  at: number,
+): RaceState | null {
+  const { bonus, you } = state;
+  switch (payload.kind) {
+    case "bonus-earned":
+      if (payload.desk !== you || bonus.card === payload.bonus) return state;
+      return { ...state, bonus: { ...bonus, card: payload.bonus } };
+    case "bonus-sent":
+      if (payload.from !== you) return state;
+      return {
+        ...state,
+        bonus: { ...bonus, card: null, cooldownUntil: at + COOLDOWN_MS, pending: null },
+      };
+    case "bonus-hit": {
+      if (payload.desk !== you || !state.race) return state;
+      const overlay = payload.overlay ?? state.overlay;
+      const prediction = state.prediction?.withText(typedText(state.race.text, overlay)) ?? null;
+      // race ms -> server clock (`t0`) -> this device's clock
+      const blurUntil =
+        payload.blurUntil === null
+          ? bonus.blurUntil
+          : state.race.t0 + payload.blurUntil - state.clockOffset;
+      return { ...state, overlay, prediction, bonus: { ...bonus, blurUntil } };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * A play at `at` (device clock) may go out: the race runs, you type, bonuses are on, you hold a card,
+ * no play is in flight and the cooldown is over. The server decides again (#190); this only keeps the
+ * client from sending what it knows is refused.
+ */
+function mayPlayAt(state: RaceState, at: number): boolean {
+  const { bonus } = state;
+  return (
+    selectCanType(state) &&
+    state.settings?.bonuses !== false &&
+    bonus.card !== null &&
+    bonus.pending === null &&
+    (bonus.cooldownUntil === null || at >= bonus.cooldownUntil)
+  );
+}
+
 /** You may type: the race runs, you have a desk, and you have not stopped (finished, asleep...). */
 export function selectCanType(state: RaceState): boolean {
   return state.phase === "running" && state.prediction?.state.status === "typing";
 }
 
-type ViewEntry = { text: string; jammed: boolean; typedAt: number | null; view: TypedView };
+/** What the tray and the typing surface show of your bonus (#236 C1): stable between changes. */
+export type BonusView = {
+  card: BonusKind | null;
+  cooldownUntil: number | null;
+  overlay: RaceState["overlay"];
+  blurUntil: number | null;
+  refused: boolean;
+};
+
+const bonusViews = new WeakMap<BonusState, { overlay: RaceState["overlay"]; view: BonusView }>();
+
+/** The viewer's bonus as `{ card, cooldownUntil, overlay, blurUntil, refused }`, memoised per change. */
+export function selectBonus(state: RaceState): BonusView {
+  const { bonus, overlay } = state;
+  const hit = bonusViews.get(bonus);
+  if (hit && hit.overlay === overlay) return hit.view;
+  const { card, cooldownUntil, blurUntil, refused } = bonus;
+  const view = { card, cooldownUntil, overlay, blurUntil, refused };
+  bonusViews.set(bonus, { overlay, view });
+  return view;
+}
+
+type ViewEntry = {
+  text: string;
+  jammed: boolean;
+  typedAt: number | null;
+  blurUntil: number | null;
+  view: TypedView;
+};
 const views = new WeakMap<PlayerState, ViewEntry>();
 
 /**
@@ -333,10 +511,20 @@ export function selectTypedView(state: RaceState): TypedView {
   const p = state.prediction;
   if (!p) return NO_TEXT_VIEW;
   const { text, jammed, typedAt } = p;
+  // the blur watcher clears `blurUntil` when it passes: no clock here (#236)
+  const { blurUntil } = state.bonus;
   const hit = views.get(p.state);
-  if (hit && hit.text === text && hit.jammed === jammed && hit.typedAt === typedAt) return hit.view;
-  const view = typedViewFrom(p.state, text, { jammed, typedAt });
-  views.set(p.state, { text, jammed, typedAt, view });
+  if (
+    hit &&
+    hit.text === text &&
+    hit.jammed === jammed &&
+    hit.typedAt === typedAt &&
+    hit.blurUntil === blurUntil
+  ) {
+    return hit.view;
+  }
+  const view = typedViewFrom(p.state, text, { jammed, typedAt, blurUntil });
+  views.set(p.state, { text, jammed, typedAt, blurUntil, view });
   return view;
 }
 
@@ -500,6 +688,7 @@ export function bindRaceSocket(
     socket.onSnapshot((payload) => dispatch({ type: "snapshot", payload })),
     socket.onEvent((payload) => dispatch({ type: "event", payload, at: timer.now() })),
     socket.onEnded((payload) => dispatch({ type: "ended", payload, at: timer.now() })),
+    socket.onRejected((payload) => dispatch({ type: "rejected", payload, at: timer.now() })),
     socket.onCountdown((payload) => {
       dispatch({ type: "countdown", payload });
       scheduleGo(payload.race.t0);
@@ -548,4 +737,80 @@ export function watchStampExpiry(store: RaceStore, timer: RaceTimer = deviceTime
     off();
     cancel();
   };
+}
+
+/**
+ * One timeout on the injected clock for a deadline the store holds (`pick`): each store change that
+ * brings a new deadline re-schedules it, and `fire` dispatches its expiry at that time. Returns the stop.
+ */
+function watchDeadline(
+  store: RaceStore,
+  timer: RaceTimer,
+  pick: (state: RaceState) => number | null,
+  fire: (deadline: number) => RaceEvent,
+  delay: (deadline: number) => number,
+): Off {
+  let watched: number | null = null;
+  let pending: unknown = null;
+  const cancel = () => {
+    if (pending !== null) timer.clearTimeout(pending);
+    pending = null;
+  };
+  const check = () => {
+    const deadline = pick(store.getState());
+    if (deadline === watched) return;
+    cancel();
+    watched = deadline;
+    if (deadline === null) return;
+    pending = timer.setTimeout(
+      () => {
+        pending = null;
+        store.dispatch(fire(deadline));
+      },
+      Math.max(0, delay(deadline) - timer.now()),
+    );
+  };
+  const off = store.subscribe(check);
+  check();
+  return () => {
+    off();
+    cancel();
+  };
+}
+
+/** Clears the tray's `IMMUNE` `REFUSAL_SHOW_MS` after the refusal arrived (#236 C1). */
+export function watchRefusalExpiry(store: RaceStore, timer: RaceTimer = deviceTimer): Off {
+  return watchDeadline(
+    store,
+    timer,
+    (s) => (s.bonus.refused ? s.bonus.refusedAt : null),
+    (refusedAt) => ({ type: "refusal-expired", refusedAt }),
+    (refusedAt) => refusedAt + REFUSAL_SHOW_MS,
+  );
+}
+
+/** Lifts a Smoke Break's blur at its `blurUntil` (#236 C2), so no selector reads the clock. */
+export function watchBlurExpiry(store: RaceStore, timer: RaceTimer = deviceTimer): Off {
+  return watchDeadline(
+    store,
+    timer,
+    (s) => s.bonus.blurUntil,
+    (blurUntil) => ({ type: "blur-expired", blurUntil }),
+    (blurUntil) => blurUntil,
+  );
+}
+
+/** The one send a bonus play needs (`RoomSocket.sendBonusPlay`). */
+export type BonusPlaySink = { sendBonusPlay(): void };
+
+/**
+ * Sends one `bonus:play` per play the store took (#236 C1): the reducer gates a `bonus-play` (a card,
+ * not cooling, no play in flight), so an Enter or a click it refused sends nothing. Returns the stop.
+ */
+export function sendBonusPlays(store: RaceStore, socket: BonusPlaySink): Off {
+  let sent = store.getState().bonus.plays;
+  return store.subscribe(() => {
+    const { plays } = store.getState().bonus;
+    for (; sent < plays; sent++) socket.sendBonusPlay();
+  });
 }

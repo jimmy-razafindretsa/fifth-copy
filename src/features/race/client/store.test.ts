@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { COOLDOWN_MS, effectiveText } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   PLAYER_STATUS_CODES,
@@ -29,10 +30,15 @@ const {
   createRaceStore,
   initialRaceState,
   reduceRace,
+  selectBonus,
   selectCanType,
   selectTypedView,
   selectVisibleStamp,
+  sendBonusPlays,
+  watchBlurExpiry,
+  watchRefusalExpiry,
   watchStampExpiry,
+  REFUSAL_SHOW_MS,
   PING_ROUND_COUNT,
   PING_ROUND_INTERVAL_MS,
 } = await import("./store");
@@ -108,6 +114,16 @@ describe("reduceRace (#561 C2)", () => {
       // #240: the server's end
       ending: null,
       endedAt: null,
+      // #236: your card, cooldown, blur and refusal
+      bonus: {
+        card: null,
+        cooldownUntil: null,
+        blurUntil: null,
+        refused: false,
+        refusedAt: null,
+        pending: null,
+        plays: 0,
+      },
     });
   });
 
@@ -372,6 +388,7 @@ describe("bindRaceSocket (#561 C3)", () => {
       "ended",
       "event",
       "pong",
+      "rejected",
       "roster",
       "settings",
       "snapshot",
@@ -1563,5 +1580,290 @@ describe("#240 ended and the finish stamp", () => {
     expect(dispatch.mock.calls.map(([e]) => e)).toEqual([{ type: "ended", payload, at: T + 42 }]);
     off();
     expect(listeners.get("ended")?.size ?? 0).toBe(0);
+  });
+});
+
+// Contract of #236 C1: the server's bonus events map to `bonus = { card, cooldownUntil, overlay,
+// blurUntil, refused }` for the viewer (snapshots carry no bonus field: protocol v7); a `bonus:play` goes
+// out on Enter or the tray's button only while a card is held and not cooling (`COOLDOWN_MS` from the
+// engine, the client decides nothing else); `refused` (set by `rejected { no-bonus }`) clears after 1.2 s.
+describe("#236 bonus state", () => {
+  const TEXT = "one two three four five six";
+  const T0 = 1_767_225_603_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "en" as const,
+    wordCount: 6,
+    t0: T0,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const NOW = T0 + 2_000;
+  const ev = (payload: Record<string, unknown>, at = NOW): RaceEvent =>
+    ({ type: "event", payload: { v: PROTOCOL_VERSION, ...payload }, at }) as RaceEvent;
+  const earned = (desk = 5, bonus = "extra-paperwork") => ev({ kind: "bonus-earned", desk, bonus });
+  const sent = (from = 5, at = NOW, to = [1]) =>
+    ev({ kind: "bonus-sent", from, to, bonus: "extra-paperwork" }, at);
+  const hit = (over: Record<string, unknown> = {}, at = NOW) =>
+    ev(
+      {
+        kind: "bonus-hit",
+        desk: 5,
+        bonus: "extra-paperwork",
+        overlay: null,
+        blurUntil: null,
+        ...over,
+      },
+      at,
+    );
+  const rejected = (reason = "no-bonus", at = NOW): RaceEvent =>
+    ({ type: "rejected", payload: { v: PROTOCOL_VERSION, reason }, at }) as RaceEvent;
+  const play = (at = NOW): RaceEvent => ({ type: "bonus-play", at });
+  const racing = (w = welcome()) =>
+    run(
+      { type: "welcome", payload: w },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      { type: "go" },
+    );
+
+  it("selectBonus reads { card, cooldownUntil, overlay, blurUntil, refused }, stable between changes", () => {
+    const s = racing();
+    expect(selectBonus(s)).toEqual({
+      card: null,
+      cooldownUntil: null,
+      overlay: null,
+      blurUntil: null,
+      refused: false,
+    });
+    expect(selectBonus(s)).toBe(selectBonus(s));
+    expect(selectBonus(reduceRace(s, { type: "key", keystroke: { t: 10, key: "o" } }))).toBe(
+      selectBonus(s),
+    );
+  });
+
+  it("a welcome mid-race seeds the overlay (welcome.overlay) and the prediction types it", () => {
+    const overlay = { extra: ["memo"], removed: [] };
+    const w = welcome({
+      room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+      race: RACE,
+      overlay,
+    });
+    const s = run({ type: "welcome", payload: w });
+    expect(selectBonus(s).overlay).toEqual(overlay);
+    expect(s.prediction?.text).toBe(effectiveText(TEXT, overlay));
+    // the next race starts clean
+    const next = reduceRace(s, { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } });
+    expect(selectBonus(next).overlay).toBeNull();
+    expect(next.prediction?.text).toBe(TEXT);
+  });
+
+  it("bonus-earned for your desk deals the card; another desk's changes nothing", () => {
+    const s = racing();
+    expect(reduceRace(s, earned(3))).toBe(s);
+    const mine = reduceRace(s, earned(5, "smoke-break"));
+    expect(selectBonus(mine).card).toBe("smoke-break");
+    // a spectator holds nothing
+    const spectator = racing(welcome({ role: "spectator", you: null }));
+    expect(reduceRace(spectator, earned(5))).toBe(spectator);
+  });
+
+  it("a play goes out only while a card is held and not cooling; bonus-sent confirms the cooldown", () => {
+    const s = racing();
+    // no card: nothing
+    expect(reduceRace(s, play())).toBe(s);
+    const held = reduceRace(s, earned());
+    const playing = reduceRace(held, play());
+    expect(playing.bonus.plays).toBe(1);
+    expect(selectBonus(playing).cooldownUntil).toBe(NOW + COOLDOWN_MS);
+    // a second Enter while the first is in flight sends nothing
+    expect(reduceRace(playing, play(NOW + 50))).toBe(playing);
+    const confirmed = reduceRace(playing, sent(5, NOW + 80));
+    expect(selectBonus(confirmed)).toMatchObject({
+      card: null,
+      cooldownUntil: NOW + 80 + COOLDOWN_MS,
+    });
+    expect(confirmed.bonus.pending).toBeNull();
+    // another desk's play is not yours
+    expect(reduceRace(playing, sent(3))).toBe(playing);
+    // the next card arrives while cooling: no play until the cooldown is over
+    const again = reduceRace(confirmed, earned());
+    expect(reduceRace(again, play(NOW + 80 + COOLDOWN_MS - 1))).toBe(again);
+    expect(reduceRace(again, play(NOW + 80 + COOLDOWN_MS)).bonus.plays).toBe(2);
+  });
+
+  it("no play before GO, after your finish, or with bonuses off", () => {
+    const counting = run(
+      { type: "welcome", payload: welcome() },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      earned(),
+    );
+    expect(reduceRace(counting, play())).toBe(counting);
+    const off = reduceRace(
+      racing(welcome({ settings: { ...DEFAULT_RACE_SETTINGS, bonuses: false } })),
+      earned(),
+    );
+    expect(reduceRace(off, play())).toBe(off);
+    const ended = reduceRace(reduceRace(racing(), earned()), {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "all-finished", ranking: [] },
+      at: NOW,
+    });
+    expect(reduceRace(ended, play())).toBe(ended);
+  });
+
+  it("rejected { no-bonus } while a card is held sets refused and rolls the optimistic cooldown back", () => {
+    const held = reduceRace(racing(), earned());
+    const playing = reduceRace(held, play());
+    const refused = reduceRace(playing, rejected("no-bonus", NOW + 40));
+    expect(selectBonus(refused)).toMatchObject({
+      card: "extra-paperwork",
+      cooldownUntil: null,
+      refused: true,
+    });
+    expect(refused.bonus.refusedAt).toBe(NOW + 40);
+    expect(refused.bonus.pending).toBeNull();
+    // the card is kept: the player may try again at once (the server re-checks)
+    expect(reduceRace(refused, play(NOW + 100)).bonus.plays).toBe(2);
+    // other refusals and a no-bonus with nothing held change nothing
+    expect(reduceRace(playing, rejected("rate-limit"))).toBe(playing);
+    const empty = racing();
+    expect(reduceRace(empty, rejected())).toBe(empty);
+  });
+
+  it("refused clears 1.2 s after it arrived (watchRefusalExpiry on the injected clock)", () => {
+    expect(REFUSAL_SHOW_MS).toBe(1_200);
+    let now = NOW;
+    const timers: { at: number; fn: () => void }[] = [];
+    const timer = {
+      now: () => now,
+      setTimeout: (fn: () => void, ms: number) => {
+        const t = { at: now + ms, fn };
+        timers.push(t);
+        return t;
+      },
+      clearTimeout: (h: unknown) => void timers.splice(timers.indexOf(h as never), 1),
+    };
+    const advance = (ms: number) => {
+      now += ms;
+      for (const t of [...timers].sort((a, b) => a.at - b.at)) {
+        if (t.at > now) continue;
+        timers.splice(timers.indexOf(t), 1);
+        t.fn();
+      }
+    };
+    const store = createRaceStore(reduceRace(reduceRace(racing(), earned()), play()));
+    const stop = watchRefusalExpiry(store, timer);
+    store.dispatch(rejected("no-bonus", now));
+    expect(selectBonus(store.getState()).refused).toBe(true);
+    advance(REFUSAL_SHOW_MS - 1);
+    expect(selectBonus(store.getState()).refused).toBe(true);
+    advance(1);
+    expect(selectBonus(store.getState()).refused).toBe(false);
+    // a late expiry of an older refusal clears nothing
+    store.dispatch(play(now));
+    store.dispatch(rejected("no-bonus", now));
+    const s = store.getState();
+    expect(reduceRace(s, { type: "refusal-expired", refusedAt: now - 5_000 })).toBe(s);
+    stop();
+    expect(timers).toHaveLength(0);
+  });
+
+  it("bonus-hit on you: the overlay changes the prediction's text; a Smoke Break blurs until its end", () => {
+    const s = reduceRace(racing(), { type: "key", keystroke: { t: 10, key: "o" } });
+    const overlay = { extra: ["memo", "form"], removed: [] };
+    const paper = reduceRace(s, hit({ overlay }));
+    expect(selectBonus(paper).overlay).toEqual(overlay);
+    expect(paper.prediction?.text).toBe(effectiveText(TEXT, overlay));
+    expect(paper.prediction?.state).toBe(s.prediction?.state);
+    expect(
+      selectTypedView(paper)
+        .chars.map((c) => c.ch)
+        .join(""),
+    ).toBe(`${TEXT} memo form`);
+    // another desk's hit is not yours
+    expect(reduceRace(s, hit({ desk: 3, overlay }))).toBe(s);
+    // smoke break: no overlay change, the blur end on this device's clock (race ms + t0 - offset)
+    const smoke = reduceRace(paper, hit({ bonus: "smoke-break", blurUntil: 7_000 }));
+    expect(selectBonus(smoke).overlay).toEqual(overlay);
+    expect(selectBonus(smoke).blurUntil).toBe(T0 + 7_000 - smoke.clockOffset);
+    expect(selectTypedView(smoke).blurred).toBe(true);
+    const clear = reduceRace(smoke, { type: "blur-expired", blurUntil: smoke.bonus.blurUntil! });
+    expect(selectTypedView(clear).blurred).toBeUndefined();
+    expect(reduceRace(smoke, { type: "blur-expired", blurUntil: 1 })).toBe(smoke);
+  });
+
+  it("watchBlurExpiry lifts the blur at blurUntil", () => {
+    let now = T0;
+    let pending: { at: number; fn: () => void } | null = null;
+    const timer = {
+      now: () => now,
+      setTimeout: (fn: () => void, ms: number) => (pending = { at: now + ms, fn }),
+      clearTimeout: () => void (pending = null),
+    };
+    const store = createRaceStore(racing());
+    const stop = watchBlurExpiry(store, timer);
+    store.dispatch(hit({ bonus: "smoke-break", blurUntil: 5_000 }));
+    const until = store.getState().bonus.blurUntil!;
+    expect(pending!.at).toBe(until);
+    now = until;
+    pending!.fn();
+    expect(store.getState().bonus.blurUntil).toBeNull();
+    stop();
+  });
+
+  it("a welcome (a reconnect) and a countdown reset the card, the cooldown and the blur", () => {
+    const s = reduceRace(
+      reduceRace(reduceRace(racing(), earned()), play()),
+      hit({ bonus: "smoke-break", blurUntil: 5_000 }),
+    );
+    const back = reduceRace(s, { type: "welcome", payload: welcome() });
+    expect(selectBonus(back)).toMatchObject({ card: null, cooldownUntil: null, blurUntil: null });
+    // the play counter never goes back (the sender counts on it)
+    expect(back.bonus.plays).toBe(1);
+  });
+
+  it("sendBonusPlays emits one bonus:play per play the store took, and nothing for a refused Enter", () => {
+    const store = createRaceStore(racing());
+    const socket = { sendBonusPlay: vi.fn() };
+    const stop = sendBonusPlays(store, socket);
+    store.dispatch(play()); // no card
+    expect(socket.sendBonusPlay).not.toHaveBeenCalled();
+    store.dispatch(earned());
+    store.dispatch(play());
+    store.dispatch(play(NOW + 10)); // in flight
+    expect(socket.sendBonusPlay).toHaveBeenCalledTimes(1);
+    stop();
+    store.dispatch(rejected());
+    store.dispatch(play(NOW + 20));
+    expect(socket.sendBonusPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it("bindRaceSocket turns a parsed `rejected` into a race event stamped with the device clock", () => {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    const room = connectToRoom("http://localhost:7236", "tok", { io });
+    const dispatch = vi.fn();
+    bindRaceSocket(room, dispatch, {
+      timer: { now: () => 42, setTimeout: () => 0, clearTimeout: () => {} },
+    });
+    for (const fn of listeners.get("rejected") ?? [])
+      fn({ v: PROTOCOL_VERSION, reason: "no-bonus" });
+    expect(dispatch.mock.calls.map(([e]) => e)).toContainEqual({
+      type: "rejected",
+      payload: { v: PROTOCOL_VERSION, reason: "no-bonus" },
+      at: 42,
+    });
+    room.sendBonusPlay();
+    expect(fake.emit).toHaveBeenCalledWith("bonus:play", { v: PROTOCOL_VERSION });
   });
 });

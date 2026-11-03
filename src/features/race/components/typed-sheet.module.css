@@ -32,6 +32,11 @@
   margin: 0;
 }
 
+/* bible 7.7 (#236): a Smoke Break blurs the typed lines like the strip's tape; static, also under reduce */
+.sheet[data-blur] .lines {
+  filter: blur(3px);
+}
+
 /* a slip stays on the copy, struck through with an x typed over it (bible 7.7a; a glyph, never a gradient) */
 .sheet [data-state="wrong"]::after {
   content: "×";

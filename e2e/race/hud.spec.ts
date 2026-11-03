@@ -151,6 +151,7 @@ test.describe("#560 race HUD on /design", () => {
       "tray-exemption",
       "tray-smoke-break",
       "tray-cooling",
+      "tray-refused",
       "tray-held-cooling",
     ]) {
       const tray = state(page, id).getByRole("region", { name: "SABOTAGE TRAY" });
@@ -200,6 +201,32 @@ test.describe("#560 race HUD on /design", () => {
     await expect(state(page, "abandon-confirm").getByRole("button")).toHaveCount(2);
   });
 
+  // #236 C3: the refused play's IMMUNE row, in a polite status region, shaking once on the urgent ground
+  test("#236 tray refused: IMMUNE in a status region, lkShake 0.4s on danger-surface, still under reduced motion", async ({
+    page,
+  }) => {
+    await open(page);
+    const refused = state(page, "tray-refused");
+    const tray = refused.getByRole("region", { name: "SABOTAGE TRAY" });
+    expect((await styleOf(tray)).border).toBe("2px solid");
+    await expect(tray.getByRole("status")).toHaveText("IMMUNE");
+    const row = tray.locator("[data-row=refused]");
+    const s = await styleOf(row);
+    expect(s.animation).toContain("lkShake");
+    expect(s.duration).toBe("0.4s");
+    expect(s.bg).toBe(await roleColour(page, "danger-surface"));
+    expect(s.color).toBe(await roleColour(page, "fg"));
+    // the card is kept and still ready
+    await expect(tray.locator("[data-slot]")).toContainText("EXTRA PAPERWORK");
+    await expect(tray.locator("[data-row=play] dd")).toHaveText("ENTER TO PLAY");
+    // every other tray has an empty status region
+    for (const id of ["tray-empty", "tray-smoke-break", "tray-cooling", "tray-held-cooling"]) {
+      await expect(state(page, id).locator("[data-refusal]"), id).toBeEmpty();
+    }
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect((await styleOf(row)).animation).toBe("none");
+  });
+
   test("C6 notices: status rows pulsing with lkPulse, still under reduced motion", async ({
     page,
   }) => {
@@ -234,7 +261,7 @@ test.describe("#560 race HUD on /design", () => {
         await expect(stamps.getByText(text)).toBeVisible();
       }
       await expect(stamps.locator('[data-stamp-tone="ink"]')).toContainText("PASSED −1");
-      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(27);
+      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(28);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
       );

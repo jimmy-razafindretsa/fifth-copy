@@ -2,7 +2,9 @@
  * Sabotage tray (#560, design bible 7.4, 7.6, spec 10): the earned catch-up card sits in the docket as a
  * 7.6 file card (newsprint, 2px ink rule, name in Courier Prime 700, effect in Courier Prime), the empty
  * tray as the 7.6 dashed empty slot (centred ink title, muted line). Rows and the cooldown pulse come from
- * hud-docket.module.css.
+ * hud-docket.module.css. #236: the refused play's `IMMUNE` row (the 7.4 notice row on the urgent ground of
+ * the idle warning, `danger-surface` under ink text) shakes once with lkShake (bible 8, 0.4s, the Locker's
+ * -6, 6, -4, 3 px), not at all under reduced motion; the ready card's `PLAY CARD` is the 7.1 ink button.
  */
 
 @reference "../../../app/globals.css";
@@ -64,4 +66,50 @@
 
 .hint {
   font-weight: 500;
+}
+
+/* bible 8: 0.4s horizontal shake for a denied action (the Locker's lkShake) */
+@keyframes lkShake {
+  0%,
+  100% {
+    translate: 0;
+  }
+  20% {
+    translate: -6px;
+  }
+  40% {
+    translate: 6px;
+  }
+  60% {
+    translate: -4px;
+  }
+  80% {
+    translate: 3px;
+  }
+}
+
+.refused {
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  background: var(--color-danger-surface);
+  color: var(--color-fg);
+  animation: lkShake 0.4s ease-in-out;
+}
+
+.actions {
+  padding: 0 12px 12px;
+}
+
+.play {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refused {
+    animation: none;
+  }
+}
+
+/* <html data-motion="reduce"> (tokens.css) or a scoped /design specimen: the row appears, still */
+[data-motion="reduce"] .refused {
+  animation: none;
 }

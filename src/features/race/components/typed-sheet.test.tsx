@@ -124,3 +124,14 @@ describe("TypedSheet styles (#558 C3)", () => {
     expect(chars).not.toContain("!important");
   });
 });
+
+// Contract of #236 C2: a Smoke Break blurs the sheet like the strip (`data-blur`, static `blur(3px)`).
+describe("TypedSheet blur (#236 C2)", () => {
+  it("carries data-blur only while the view is blurred, and blurs its lines 3px", () => {
+    expect(html(<TypedSheet view={F.racing} />)).not.toContain("data-blur");
+    const out = html(<TypedSheet view={{ ...F.racing, blurred: true }} />);
+    expect(out).toMatch(/^<div[^>]*data-sheet[^>]*data-blur="true"/);
+    expect(block(".sheet[data-blur] .lines", sheetCss)).toMatch(/filter: blur\(3px\)/);
+    expect(sheetCss).not.toMatch(/transition:[^;]*filter/);
+  });
+});

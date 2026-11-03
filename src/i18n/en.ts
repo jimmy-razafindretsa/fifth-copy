@@ -463,6 +463,9 @@ export const en = {
       play: "PLAY",
       cooldown: "COOLDOWN",
       seconds: "{n} S",
+      hint: "ENTER TO PLAY",
+      playButton: "PLAY CARD",
+      immune: "IMMUNE",
     },
   },
   /** The Dawn report (#300, bible 14.4): kicker, heading, the filing notice and the podium. */

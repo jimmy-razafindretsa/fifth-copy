@@ -404,3 +404,32 @@ describe("exact ack under a simulated network (#645 C2, C5)", () => {
     expect(keysTotal).toBeGreaterThan(20_000);
   });
 });
+
+// #236 C1: a `bonus-hit` hands the desk a new overlay; the prediction keeps typing on the new text.
+describe("withText (#236 C1)", () => {
+  it("keeps the base, the keys, the sends and the marks; the next keys type the new text", () => {
+    const base = "ab cd";
+    const p = createPrediction({ text: base, settings: CONTINUE })
+      .push({ t: 100, key: "a" })
+      .push({ t: 140, key: "b" })
+      .markSent(1);
+    const longer = typedText(base, { extra: ["ef"], removed: [] });
+    const q = p.withText(longer);
+    expect(q.text).toBe(longer);
+    expect(q.state).toBe(p.state);
+    expect(q.base).toBe(p.base);
+    expect(q.unacked).toBe(p.unacked);
+    expect(q.sent).toBe(1);
+    expect(q.typedAt).toBe(p.typedAt);
+    expect(p.text).toBe(base);
+    // typing the whole old text no longer finishes the desk
+    const done = Array.from(" cd").reduce((acc, key, i) => acc.push({ t: 200 + i * 40, key }), q);
+    expect(done.state.status).toBe("typing");
+    expect(done.state.cursor).toBe(Array.from(base).length);
+  });
+
+  it("returns the same prediction for the same text", () => {
+    const p = createPrediction({ text: TEXT, settings: CONTINUE }).push({ t: 100, key: "L" });
+    expect(p.withText(TEXT)).toBe(p);
+  });
+});

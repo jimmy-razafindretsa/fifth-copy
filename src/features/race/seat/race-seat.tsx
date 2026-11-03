@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { MintRaceToken } from "../client/connect-seat";
 import { RaceStoreProvider } from "../client/use-race-store";
-import { SabotageTray } from "../components/sabotage-tray";
+import { SabotageTrayLive } from "../components/sabotage-tray-live";
 import { SeatLayout } from "../components/seat-layout";
 import type { MachineSkinProps } from "../components/machine/skin";
 import { TypingMachineLive } from "../components/machine/typing-machine-live";
@@ -61,7 +61,7 @@ export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
         }
         sheet={<SeatSheet />}
         machine={<TypingMachineLive rows={rows} />}
-        tray={<SabotageTray card={null} cooldownS={0} hint={null} labels={labels.sabotageTray} />}
+        tray={<SabotageTrayLive labels={labels.sabotageTray} />}
         abandon={<SeatAbandon labels={labels.abandon} />}
         phones={labels.notice.phones}
         frame={SeatFrame}

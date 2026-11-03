@@ -7,6 +7,9 @@ import { connectSeat, type MintRaceToken } from "../client/connect-seat";
 import {
   selectCanType,
   selectVisibleStamp,
+  sendBonusPlays,
+  watchBlurExpiry,
+  watchRefusalExpiry,
   watchStampExpiry,
   type RaceLostReason,
   type RacePhase,
@@ -176,7 +179,8 @@ export function SeatFinish({ labels }: { labels: FinishLabels }) {
  * Its root carries the store's phase as `data-phase` (`countdown` until GO, `running` from GO: the gate
  * #559's input reads) and holds the countdown overlay and the polite announcer of 3, 2, 1, GO (#214;
  * the race announcer of #242 reuses it). It owns the typing path too (#559): the hidden `RaceInput`,
- * unlocked while you may type, feeds `createTyping` over the open socket.
+ * unlocked while you may type, feeds `createTyping` over the open socket. A bare Enter there plays your
+ * Sabotage card (#236): the store takes the play when it may go out and `sendBonusPlays` emits it.
  */
 export function RaceSeatLive({
   code,
@@ -201,6 +205,8 @@ export function RaceSeatLive({
   const finishWpm = useRaceStore(selectFinishWpm);
   const typing = useRef<Typing | null>(null);
   const press = useCallback((key: string) => typing.current?.press(key), []);
+  // #236: Enter plays your card; the store gates it and `sendBonusPlays` sends it
+  const play = useCallback(() => store.dispatch({ type: "bonus-play", at: Date.now() }), [store]);
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
   // guest cookie, and a cookie set in an action re-renders the page): read the latest one, never reconnect
   // for it.
@@ -219,7 +225,9 @@ export function RaceSeatLive({
       onSocket: (socket) => {
         const own = createTyping({ store, send: (batch) => socket.sendKeys(batch) });
         typing.current = own;
+        const stopPlays = sendBonusPlays(store, socket);
         return () => {
+          stopPlays();
           own.dispose();
           if (typing.current === own) typing.current = null;
         };
@@ -228,6 +236,9 @@ export function RaceSeatLive({
   }, [code, lobbyId, store]);
   // #232: the visible overtake stamp leaves 1.4 s after it shows
   useEffect(() => watchStampExpiry(store), [store]);
+  // #236: the IMMUNE row leaves 1.2 s after the refusal; a Smoke Break's blur lifts at its end
+  useEffect(() => watchRefusalExpiry(store), [store]);
+  useEffect(() => watchBlurExpiry(store), [store]);
 
   return (
     <div data-phase={phase} className={styles.live}>
@@ -242,6 +253,7 @@ export function RaceSeatLive({
       <RaceInput
         disabled={!canType}
         onKey={press}
+        onPlay={play}
         label={labels.input}
         mode={mode}
         backspace={backspace}

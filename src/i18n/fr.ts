@@ -454,6 +454,9 @@ export const fr = {
       play: "JOUER",
       cooldown: "RECHARGE",
       seconds: "{n} S",
+      hint: "ENTRÉE POUR JOUER",
+      playButton: "JOUER LA CARTE",
+      immune: "IMMUNISÉ",
     },
   },
   /** Le rapport de l'aube (#300, bible 14.4). */

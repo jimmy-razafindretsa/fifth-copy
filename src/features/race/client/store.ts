@@ -36,8 +36,15 @@ export type RacePhase = "connecting" | Phase | "reconnecting" | "lost";
 /** Why the mint of the race token failed (`mintRaceToken`), or `generic` for a failed request. */
 export type RaceTokenError = "not-found" | "closed" | "generic";
 
-/** Why the page gave up: a handshake refusal (`transport` only reconnects) or a token error. */
-export type RaceLostReason = Exclude<ConnectErrorReason, "transport"> | RaceTokenError;
+/**
+ * Why the page gave up: a handshake refusal (`transport` only reconnects), a token error, or
+ * `room-lost` (#235 C4): the room went away under a seated page (a voided race after a server restart
+ * or a Redis loss, #204, or a reconnect answered `no-room`).
+ */
+export type RaceLostReason =
+  | Exclude<ConnectErrorReason, "transport">
+  | RaceTokenError
+  | "room-lost";
 
 /** How long the tray shows a refused play (`IMMUNE`, #236 C1). */
 export const REFUSAL_SHOW_MS = 1_200;
@@ -295,6 +302,26 @@ const lost = (state: RaceState, reason: RaceLostReason): RaceState => ({
   stamps: [],
 });
 
+/**
+ * Your prediction after a welcome (#235 C1, ADR 0007): the welcome of a reconnect to the same race and
+ * desk reconciles the one you have onto the server's state of your desk (every key sent before the cut
+ * was applied or dropped by then; a key not yet sent is typed again on top), so a sheet the server
+ * agrees with keeps its very state; any other welcome starts over from the server's state.
+ */
+function predictionAfterWelcome(state: RaceState, w: Welcome): Prediction | null {
+  const { prediction } = state;
+  const sameDesk =
+    prediction !== null &&
+    w.race !== null &&
+    w.state !== null &&
+    w.you !== null &&
+    w.you === state.you &&
+    w.race.raceId === state.race?.raceId;
+  if (!sameDesk || !w.race || !w.state)
+    return predictionOf(w.race, w.you, w.settings, w.overlay, w.state);
+  return prediction.withText(typedText(w.race.text, w.overlay)).reconcile(w.state, prediction.sent);
+}
+
 export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   // Lost is terminal: the room refused this viewer and nothing later revives the page (the lost line
   // links back to the waiting room).
@@ -302,6 +329,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   switch (event.type) {
     case "welcome": {
       const w = event.payload;
+      const prediction = predictionAfterWelcome(state, w);
       const next: RaceState = {
         phase: w.room.phase,
         lost: null,
@@ -319,11 +347,13 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
           event.receivedAt === undefined
             ? state.clockOffset
             : clockOffset(w.serverNow, event.receivedAt),
-        // a (re)connect starts over from the server's state of your desk
-        prediction: predictionOf(w.race, w.you, w.settings, w.overlay, w.state),
+        // a connect starts from the server's state of your desk; a reconnect reconciles onto it (#235)
+        prediction,
         desks: state.desks,
         ranks: state.ranks,
-        lastKey: null,
+        // the struck cap stays when the reconcile kept your sheet as it was
+        lastKey:
+          prediction !== null && prediction.state === state.prediction?.state ? state.lastKey : null,
         stamps: [],
         stampSeq: state.stampSeq,
         ending: null,
@@ -397,8 +427,10 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       return withStatusExit({ ...state, desks, ranks, prediction });
     }
     case "ended":
-      // reason-agnostic (#240, #661): the phase, the server's ranking as sent and when it arrived; the
-      // visible stamp keeps its 1.4 s (a finish stamp may still be on screen)
+      // a voided race is the lost room (#235 C4, #204): nothing to rank, the way back to the lobby
+      if (event.payload.reason === "void") return lost(state, "room-lost");
+      // otherwise the phase, the server's ranking as sent and when it arrived (#240); the visible stamp
+      // keeps its 1.4 s (a finish stamp may still be on screen)
       return {
         ...state,
         phase: "ended",
@@ -476,9 +508,10 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     }
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
-      return event.reason === "transport"
-        ? { ...state, phase: "reconnecting" }
-        : lost(state, event.reason);
+      if (event.reason === "transport") return { ...state, phase: "reconnecting" };
+      // a reconnect after a welcome that finds no room: the room was lost under you (#235 C4)
+      if (event.reason === "no-room" && state.room !== null) return lost(state, "room-lost");
+      return lost(state, event.reason);
     case "reconnecting":
       return { ...state, phase: "reconnecting" };
     case "reconnected":

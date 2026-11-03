@@ -7,6 +7,15 @@ import type { RacePhase, RaceState } from "../client/store";
  * bounded clock and reads `selectPlace`'s primitives.
  */
 
+/**
+ * The phase the race clock follows (#235 C1, ARCHITECTURE 7.4: the clock never pauses): a cut line keeps
+ * the room's phase, so the nixie and the timer tube keep ticking from this device's clock; otherwise the
+ * page's phase.
+ */
+export function selectClockPhase(state: RaceState): RacePhase {
+  return state.phase === "reconnecting" && state.room ? state.room.phase : state.phase;
+}
+
 /** The phases in which your typing counts: from GO on (a cut line mid-race keeps your figure). */
 const COUNTING: ReadonlySet<RacePhase> = new Set(["running", "ended", "reconnecting"]);
 

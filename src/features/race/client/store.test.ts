@@ -47,6 +47,7 @@ const {
 } = await import("./store");
 const { RaceStoreProvider, useRaceStore } = await import("./use-race-store");
 const { connectToRoom } = await import("./socket");
+const { selectClockPhase } = await import("../view/counters");
 type RaceEvent = import("./store").RaceEvent;
 type RaceState = import("./store").RaceState;
 
@@ -206,7 +207,8 @@ describe("reduceRace (#561 C2)", () => {
     expect(reduceRace(again, { type: "reconnected" }).phase).toBe("waiting");
   });
 
-  it.each(["closed", "no-room", "bad-token", "version", "in-progress"] as const)(
+  // a `no-room` after a welcome is the lost room (#235 C4, below)
+  it.each(["closed", "bad-token", "version", "in-progress"] as const)(
     "a %s refusal is lost, from connecting and from waiting",
     (reason) => {
       expect(run({ type: "connect-error", reason })).toMatchObject({ phase: "lost", lost: reason });
@@ -1501,9 +1503,10 @@ describe("#240 ended and the finish stamp", () => {
     at: T + 9_000,
   });
 
-  it("sets phase ended with the server ranking as sent and the device time, for every reason", () => {
+  // a `void` end is the lost room since #235 C4 (its own describe, below)
+  it("sets phase ended with the server ranking as sent and the device time, for both ranked reasons", () => {
     const s = running();
-    for (const reason of ["all-finished", "timer", "void"] as const) {
+    for (const reason of ["all-finished", "timer"] as const) {
       const payload = endedPayload(reason);
       const next = reduceRace(s, ended(payload, T + 61_000));
       expect(next.phase).toBe("ended");
@@ -2047,5 +2050,190 @@ describe("#233 abandon, idle warning and asleep (C1)", () => {
     } as RaceEvent);
     store.dispatch(abandon);
     expect(socket.sendAbandon).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Contract of #235 C1 and C4 (ARCHITECTURE 7.4: the race clock never pauses; ADR 0007: the server's state
+// wins on the fresh welcome). A cut line keeps the race, your sheet, the GO instant and the settings;
+// the reconnect's welcome reconciles your prediction onto the server's state of your desk; a voided
+// race or a reconnect refused `no-room` is the lost room.
+describe("#235 line cut, reconnect and the lost room", () => {
+  const T = 1_767_225_600_000;
+  const TEXT = "ab cd ef";
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "en" as const,
+    wordCount: 3,
+    t0: T + 3_000,
+    timerS: 60,
+  };
+  const code = roomCodeSchema.parse("KGB-4821");
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const running = () => run({ type: "welcome", payload: welcome() }, countdown, { type: "go" });
+  const press = (s: RaceState, chars: string, from = 100) =>
+    Array.from(chars).reduce(
+      (acc, key, i) => reduceRace(acc, { type: "key", keystroke: { t: from + i * 100, key } }),
+      s,
+    );
+  /** The server's state of your desk after `n` correct keys (the welcome's `state`). */
+  const serverState = (n: number, lastT = 100 * n) => ({
+    cursor: n,
+    correct: n,
+    errors: 0,
+    total: n,
+    typed: Array<null>(n).fill(null),
+    status: "typing" as const,
+    lastT,
+    finishedAt: null,
+  });
+  const rewelcome = (n: number, over: Partial<Welcome> = {}): RaceEvent => ({
+    type: "welcome",
+    payload: welcome({
+      room: { code, phase: "running" },
+      race: RACE,
+      state: serverState(n),
+      ...over,
+    }),
+  });
+
+  describe("C1 reconnecting keeps the race alive", () => {
+    it("keeps the text, your prediction, GO and the settings; input is off; the race clock still runs", () => {
+      const typed = press(running(), "ab ");
+      const cut = reduceRace(typed, { type: "reconnecting" });
+      expect(cut.phase).toBe("reconnecting");
+      expect(cut.race).toBe(typed.race);
+      expect(cut.prediction).toBe(typed.prediction);
+      expect(cut.settings).toBe(typed.settings);
+      expect(cut.room).toEqual({ code, phase: "running" });
+      expect(selectTypedView(cut)).toBe(selectTypedView(typed));
+      // the nixie and the timer read the room's phase: running (ARCHITECTURE 7.4)
+      expect(selectClockPhase(cut)).toBe("running");
+      expect(selectClockPhase(typed)).toBe("running");
+      // input is disabled: no key is taken
+      expect(selectCanType(cut)).toBe(false);
+      expect(reduceRace(cut, { type: "key", keystroke: { t: 900, key: "c" } })).toBe(cut);
+    });
+
+    it("a cut during the countdown keeps the GO instant: the clock phase follows GO", () => {
+      const counting = run({ type: "welcome", payload: welcome() }, countdown);
+      const cut = reduceRace(counting, { type: "reconnecting" });
+      expect(selectClockPhase(cut)).toBe("countdown");
+      const gone = reduceRace(cut, { type: "go" });
+      expect(gone.phase).toBe("reconnecting");
+      expect(selectClockPhase(gone)).toBe("running");
+      expect(gone.race).toBe(counting.race);
+    });
+
+    it("the binder keeps a pending GO across a reconnect attempt", () => {
+      const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+      const emitter = () => ({
+        on: (event: string, fn: (...args: unknown[]) => void) => {
+          if (!listeners.has(event)) listeners.set(event, new Set());
+          listeners.get(event)!.add(fn);
+        },
+        off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      });
+      const deliver = (event: string, ...args: unknown[]) => {
+        for (const fn of [...(listeners.get(event) ?? [])]) fn(...args);
+      };
+      const fake = { ...emitter(), io: emitter(), emit: vi.fn(), disconnect: vi.fn(), connect: vi.fn() };
+      const room = connectToRoom("http://localhost:7235", "tok", {
+        io: vi.fn(() => fake) as unknown as IoFactory,
+      });
+      let now = T;
+      const due: { at: number; fn: () => void }[] = [];
+      const timer = {
+        now: () => now,
+        setTimeout: (fn: () => void, ms: number) => due.push({ at: now + ms, fn }),
+        clearTimeout: () => {},
+      };
+      const store = createRaceStore();
+      bindRaceSocket(room, store.dispatch, { timer });
+      deliver("welcome", welcome({ serverNow: T }));
+      deliver("countdown", { v: PROTOCOL_VERSION, race: RACE });
+      deliver("reconnect_attempt", 1);
+      expect(store.getState().phase).toBe("reconnecting");
+      now = RACE.t0;
+      for (const d of due.splice(0).filter((d) => d.at <= now)) d.fn();
+      expect(store.getState().room?.phase).toBe("running");
+      expect(selectClockPhase(store.getState())).toBe("running");
+    });
+
+    it("the fresh welcome reconciles your prediction onto the server's state instead of resetting it", () => {
+      const typed = reduceRace(press(running(), "ab "), { type: "sent", count: 3 });
+      const back = reduceRace(reduceRace(typed, { type: "reconnecting" }), { type: "reconnected" });
+      // the server applied the three keys: the shown state stands, same object, nothing re-renders
+      const s = reduceRace(back, rewelcome(3));
+      expect(s.phase).toBe("running");
+      expect(s.prediction?.state).toBe(typed.prediction?.state);
+      expect(s.prediction?.unacked).toEqual([]);
+      expect(selectTypedView(s)).toBe(selectTypedView(typed));
+      expect(s.lastKey).toEqual(typed.lastKey);
+      expect(selectCanType(s)).toBe(true);
+    });
+
+    it("keys the server never got give way to its state; a key not yet sent is typed again on top", () => {
+      // three keys sent, a fourth still in the 50 ms batch window at the cut
+      const typed = press(reduceRace(press(running(), "ab "), { type: "sent", count: 3 }), "c", 400);
+      const back = reduceRace(reduceRace(typed, { type: "reconnecting" }), { type: "reconnected" });
+      // the server dropped the third key (its desk was cut): cursor 2
+      const s = reduceRace(back, rewelcome(2));
+      expect(s.prediction?.base.cursor).toBe(2);
+      expect(s.prediction?.unacked).toEqual([{ t: 400, key: "c" }]);
+      // "ab" then the unsent "c" where the space was: an error at 2, no reset to 0
+      expect(s.prediction?.state).toMatchObject({ cursor: 3, errors: 1, total: 3 });
+    });
+
+    it("a welcome for another race, or for a spectator, still starts over from it", () => {
+      const typed = press(running(), "ab ");
+      const other = reduceRace(
+        typed,
+        rewelcome(1, { race: { ...RACE, raceId: "9b241101-e2bb-4255-8caf-4136c566a962" } }),
+      );
+      expect(other.prediction?.state.cursor).toBe(1);
+      expect(other.lastKey).toBeNull();
+      const watching = reduceRace(typed, rewelcome(1, { role: "spectator", you: null }));
+      expect(watching.prediction).toBeNull();
+    });
+  });
+
+  describe("C4 the lost room", () => {
+    const voided: Ended = { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "void", ranking: [] };
+
+    it("ended { void } is lost with the room-lost reason", () => {
+      const s = reduceRace(press(running(), "ab"), { type: "ended", payload: voided, at: T + 9_000 });
+      expect(s).toMatchObject({ phase: "lost", lost: "room-lost" });
+      expect(selectCanType(s)).toBe(false);
+      // terminal, like any lost
+      expect(reduceRace(s, rewelcome(2))).toBe(s);
+    });
+
+    it("an all-finished or timer end is still RACE OVER", () => {
+      const over = reduceRace(running(), {
+        type: "ended",
+        payload: { ...voided, reason: "timer" },
+        at: T + 63_000,
+      });
+      expect(over.phase).toBe("ended");
+    });
+
+    it("a reconnect answered no-room is the lost room; before any welcome it stays no-room", () => {
+      const cut = reduceRace(running(), { type: "reconnecting" });
+      expect(reduceRace(cut, { type: "connect-error", reason: "no-room" })).toMatchObject({
+        phase: "lost",
+        lost: "room-lost",
+      });
+      const waiting = run({ type: "welcome", payload: welcome() });
+      expect(reduceRace(waiting, { type: "connect-error", reason: "no-room" })).toMatchObject({
+        phase: "lost",
+        lost: "room-lost",
+        members: waiting.members,
+      });
+      expect(run({ type: "connect-error", reason: "no-room" })).toMatchObject({
+        phase: "lost",
+        lost: "no-room",
+      });
+    });
   });
 });

@@ -3,7 +3,8 @@ import { expect, expectNoA11yViolations, test } from "../fixtures";
 
 /**
  * #558 typing surface on /design#race-typing: the telex strip, the typed sheet and the teleprinter skin of
- * the typing machine in six race states (C2-C7). Runs in every viewport project (mobile, tablet, desktop).
+ * the typing machine in seven race states (C2-C7; #236 adds the Smoke Break blur). Runs in every viewport
+ * project (mobile, tablet, desktop).
  */
 const RED = "rgb(184, 29, 36)";
 const PAPER = "rgb(241, 232, 214)";
@@ -16,6 +17,7 @@ const STATES = [
   "continue-wrong",
   "block-jammed",
   "finished",
+  "smoke-break",
   "reduced-motion",
 ] as const;
 
@@ -122,6 +124,33 @@ test.describe("#558 typing surface", () => {
     await ready(page);
     await expect(specimen(page, "reduced-motion")).toHaveAttribute("data-motion", "reduce");
     await expectStill(specimen(page, "reduced-motion"));
+  });
+
+  // #236 C2: a Smoke Break blurs the tape and the typed lines 3px (static), never the rules or another specimen
+  test("#236 the Smoke Break specimen blurs the tape and the typed lines only, also under reduced motion", async ({
+    page,
+  }) => {
+    await ready(page);
+    const smoke = specimen(page, "smoke-break");
+    const blurOf = (l: Locator) => l.evaluate((el) => getComputedStyle(el).filter);
+    for (const part of ["[data-telex]", "[data-sheet]"]) {
+      await expect(smoke.locator(part)).toHaveAttribute("data-blur", "true");
+      // the frame keeps its crisp rule; the text layer inside it blurs
+      expect(await blurOf(smoke.locator(part)), `${part} frame`).toBe("none");
+    }
+    expect(await blurOf(smoke.locator("[data-telex-ready]"))).toBe("blur(3px)");
+    expect(await blurOf(smoke.locator("[data-sheet] > div"))).toBe("blur(3px)");
+    expect(await blurOf(smoke.locator("[data-machine]").first())).toBe("none");
+    for (const id of STATES.filter((s) => s !== "smoke-break")) {
+      await expect(specimen(page, id).locator("[data-blur]"), id).toHaveCount(0);
+    }
+    // the blur is no animation: reduced motion keeps it
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await blurOf(smoke.locator("[data-telex-ready]"))).toBe("blur(3px)");
+    const transition = await smoke
+      .locator("[data-telex-ready]")
+      .evaluate((el) => getComputedStyle(el).transitionProperty);
+    expect(transition).not.toContain("filter");
   });
 
   test("C3 a Continue-mode slip is red on the tape and struck with an x on the sheet", async ({

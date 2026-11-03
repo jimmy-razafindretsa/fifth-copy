@@ -54,6 +54,12 @@ export type SabotageTrayLabels = {
   play: string;
   cooldown: string;
   seconds: string;
+  /** How to play a ready card (#236): `ENTER TO PLAY`, the `PLAY` row's value. */
+  hint: string;
+  /** The pointer path's ink button (#236): `PLAY CARD`. */
+  playButton: string;
+  /** The refused play's row (#236; the server's `no-bonus` while a card is held): `IMMUNE`. */
+  immune: string;
 };
 
 export type AbandonLabels = {
@@ -122,6 +128,9 @@ export const hudLabelFixtures = {
       play: "PLAY",
       cooldown: "COOLDOWN",
       seconds: "{n} S",
+      hint: "ENTER TO PLAY",
+      playButton: "PLAY CARD",
+      immune: "IMMUNE",
     },
     abandon: { abandon: "ABANDON", confirm: "CONFIRM · REASSIGN ME" },
     notice: {
@@ -172,6 +181,9 @@ export const hudLabelFixtures = {
       play: "JOUER",
       cooldown: "RECHARGE",
       seconds: "{n} S",
+      hint: "ENTRÉE POUR JOUER",
+      playButton: "JOUER LA CARTE",
+      immune: "IMMUNISÉ",
     },
     abandon: { abandon: "ABANDONNER", confirm: "CONFIRMER · ME RÉAFFECTER" },
     notice: {

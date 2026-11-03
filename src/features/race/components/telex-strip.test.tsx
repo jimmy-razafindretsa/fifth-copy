@@ -123,3 +123,19 @@ describe("telexScrollLeft (#558 C2)", () => {
     expect(telexScrollLeft(2222, CH, W, once)).toBe(once);
   });
 });
+
+// Contract of #236 C2: a Smoke Break blurs the strip (`data-blur`, a static `filter: blur(3px)` on the
+// tape, so reduced motion keeps it).
+describe("TelexStrip blur (#236 C2)", () => {
+  it("carries data-blur only while the view is blurred", () => {
+    expect(html(<TelexStrip view={F.racing} labels={LABELS} />)).not.toContain("data-blur");
+    const out = html(<TelexStrip view={{ ...F.racing, blurred: true }} labels={LABELS} />);
+    expect(out).toMatch(/^<div[^>]*data-telex[^>]*data-blur="true"/);
+  });
+
+  it("blurs the tape 3px with no transition, under neither reduce selector undone", () => {
+    expect(block(".strip[data-blur] .viewport")).toMatch(/filter: blur\(3px\)/);
+    expect(css).not.toMatch(/transition:[^;]*filter/);
+    expect(css).not.toMatch(/filter: none/);
+  });
+});

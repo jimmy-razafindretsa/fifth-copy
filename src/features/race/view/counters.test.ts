@@ -109,7 +109,20 @@ describe("selectWpm (#225 C1)", () => {
 
   it("counts only base-text characters when an Extra Paperwork overlay adds words (ADR 0016)", () => {
     const overlay: TextOverlay = { extra: ["xy"], removed: [] };
-    const s = keys(`${TEXT} x`, 100).reduce(reduceRace, running(welcome({ overlay })));
+    // the overlay arrives with a `bonus-hit` (#236; a new countdown starts without one)
+    const hit: RaceEvent = {
+      type: "event",
+      payload: {
+        v: PROTOCOL_VERSION,
+        kind: "bonus-hit",
+        desk: welcome().you!,
+        bonus: "extra-paperwork",
+        overlay,
+        blurUntil: null,
+      },
+      at: T0,
+    };
+    const s = keys(`${TEXT} x`, 100).reduce(reduceRace, reduceRace(running(), hit));
     expect(s.prediction!.text).toBe(`${TEXT} xy`);
     expect(s.prediction!.state.status).toBe("typing");
     const { clean, adjusted } = cleanAndAdjustedWpm(s.prediction!.state, TEXT, overlay, 6_000);

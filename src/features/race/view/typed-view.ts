@@ -21,6 +21,11 @@ export type TypedView = {
   cursor: number;
   jammed: boolean;
   lastTypedAt: number | null;
+  /**
+   * A Smoke Break blurs your text (#236, bible 7.7): `true` while the server's `blurUntil` has not
+   * passed; absent otherwise. The strip and the sheet carry it as `data-blur`.
+   */
+  blurred?: true;
 };
 
 /**
@@ -57,23 +62,38 @@ export const NO_TEXT_VIEW: TypedView = { chars: [], cursor: 0, jammed: false, la
  * The view of a desk typing `text` (#559 C3): `done` / `wrong` before the cursor as the engine recorded
  * them, `next` at it, `remaining` after it; `jammed` and the pop stamp `typedAt` from the prediction
  * (#220: a state alone cannot tell a refused key or a Backspace); without `typedAt`, the last keystroke's
- * time keys the pop of the last typed char.
+ * time keys the pop of the last typed char. `text` is the desk's effective text (#236: the race text
+ * with its bonus overlay, `effectiveText`): added words read `remaining`, removed ones are simply gone.
+ * `blurred` while `blurUntil > now`; without `now`, any `blurUntil` blurs (the store clears it when it
+ * passes, so its selectors never read a clock).
  */
 export function typedViewFrom(
   state: TypedProgress,
   text: string,
-  { jammed = false, typedAt }: { jammed?: boolean; typedAt?: number | null } = {},
+  {
+    jammed = false,
+    typedAt,
+    blurUntil = null,
+    now,
+  }: {
+    jammed?: boolean;
+    typedAt?: number | null;
+    blurUntil?: number | null;
+    now?: number;
+  } = {},
 ): TypedView {
   const chars = Array.from(text, (ch, i): TypedChar => {
     if (i < state.cursor) return { ch, state: state.typed[i] == null ? "done" : "wrong" };
     return { ch, state: i === state.cursor ? "next" : "remaining" };
   });
-  return {
+  const view: TypedView = {
     chars,
     cursor: Math.min(state.cursor, chars.length),
     jammed,
     lastTypedAt: typedAt !== undefined ? typedAt : state.total > 0 ? state.lastT : null,
   };
+  if (blurUntil !== null && (now === undefined || blurUntil > now)) view.blurred = true;
+  return view;
 }
 
 /** The fixture text: French, with the accents and guillemets a race text carries (é ç ê « »). */

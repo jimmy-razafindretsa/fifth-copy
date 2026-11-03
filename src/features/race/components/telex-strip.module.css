@@ -36,6 +36,12 @@
   background: color-mix(in srgb, var(--color-typing-error) 12%, transparent);
 }
 
+/* bible 7.7 (#236): a Smoke Break blurs the tape, not its rule; a static filter (no transition), so it
+   reads the same under reduced motion */
+.strip[data-blur] .viewport {
+  filter: blur(3px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .viewport {
     scroll-behavior: auto;

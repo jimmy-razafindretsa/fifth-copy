@@ -11,6 +11,11 @@ import {
 import { MAX_LAG_MS } from "@fifth-copy/protocol";
 
 export type { EngineSettings, Keystroke, PlayerState } from "@fifth-copy/engine";
+/**
+ * The bonus cooldown (#236, ADR 0016): data, not a rule. The store sets the tray's cooldown from it
+ * when you play, so a second Enter sends nothing; whether a play lands stays the server's (#190).
+ */
+export { COOLDOWN_MS } from "@fifth-copy/engine";
 
 /**
  * The local prediction (#559, ADR 0007, ARCHITECTURE 7.3): the viewer's desk as the engine computes it
@@ -56,6 +61,12 @@ export type Prediction = {
    * state becomes the base and the remaining keys are applied again on top of it.
    */
   reconcile(server: ServerProgress | PlayerState, ackedCount: number): Prediction;
+  /**
+   * The same desk typing `text` instead (#236: a `bonus-hit` changed your overlay, ADR 0016): base,
+   * keys, sends and marks stand, since a bonus only touches text beyond the desk's reach; the same
+   * prediction when the text is unchanged.
+   */
+  withText(text: string): Prediction;
 };
 
 /**
@@ -139,16 +150,15 @@ export function createPrediction({
   apply = applyKeystroke,
   initial = initialState(),
 }: PredictionInput): Prediction {
-  const step = (state: PlayerState, keystroke: Keystroke) =>
-    apply(state, keystroke, text, settings);
-
   function make(
+    text: string,
     base: PlayerState,
     unacked: readonly Keystroke[],
     sent: number,
     state: PlayerState,
     mark: Mark,
   ): Prediction {
+    const step = (s: PlayerState, keystroke: Keystroke) => apply(s, keystroke, text, settings);
     const self: Prediction = {
       text,
       settings,
@@ -164,6 +174,7 @@ export function createPrediction({
         const next = step(state, keystroke);
         if (next === state) return self;
         return make(
+          text,
           base,
           [...unacked, keystroke],
           sent,
@@ -173,7 +184,7 @@ export function createPrediction({
       },
       markSent(count) {
         const n = clamp(sent + count, unacked.length);
-        return n === sent ? self : make(base, unacked, n, state, mark);
+        return n === sent ? self : make(text, base, unacked, n, state, mark);
       },
       ackedBy(server, at) {
         if (server.status !== "typing") return sent;
@@ -191,7 +202,7 @@ export function createPrediction({
         const sentLeft = Math.max(0, sent - n);
         if (sameProgress(predicted, server)) {
           // the server agrees: the shown state stands (same object, nothing re-renders)
-          return n === 0 ? self : make(predicted, rest, sentLeft, state, mark);
+          return n === 0 ? self : make(text, predicted, rest, sentLeft, state, mark);
         }
         // the server's state stands: no char of it was just typed, so nothing pops for it
         const authority = adopt(predicted, server);
@@ -202,11 +213,14 @@ export function createPrediction({
           if (after !== next) m = markOf(next, after, keystroke.t, m);
           next = after;
         }
-        return make(authority, rest, sentLeft, next, m);
+        return make(text, authority, rest, sentLeft, next, m);
+      },
+      withText(next) {
+        return next === text ? self : make(next, base, unacked, sent, state, mark);
       },
     };
     return self;
   }
 
-  return make(initial, [], 0, initial, NO_MARK);
+  return make(text, initial, [], 0, initial, NO_MARK);
 }

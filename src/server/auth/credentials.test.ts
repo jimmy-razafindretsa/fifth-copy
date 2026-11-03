@@ -14,7 +14,12 @@ const PASSWORD = "correct horse battery";
 beforeAll(async () => {
   const passwordHash = await hashPassword(PASSWORD);
   rows.set("ada", { id: "u-ada", typistName: "Ada-101", isGuest: false, passwordHash });
-  rows.set("sparrow-482", { id: "u-guest", typistName: "Sparrow-482", isGuest: true, passwordHash });
+  rows.set("sparrow-482", {
+    id: "u-guest",
+    typistName: "Sparrow-482",
+    isGuest: true,
+    passwordHash,
+  });
   rows.set("oauth-only", { id: "u-oauth", typistName: "Gh-7", isGuest: false, passwordHash: null });
 });
 
@@ -27,12 +32,15 @@ beforeEach(() => {
 });
 
 describe("verifyCredentials (C4)", () => {
-  it.each(["Ada", "ada", " ADA "])("returns the account for %j and the right password", async (username) => {
-    await expect(verifyCredentials({ username, password: PASSWORD })).resolves.toEqual({
-      id: "u-ada",
-      name: "Ada-101",
-    });
-  });
+  it.each(["Ada", "ada", " ADA "])(
+    "returns the account for %j and the right password",
+    async (username) => {
+      await expect(verifyCredentials({ username, password: PASSWORD })).resolves.toEqual({
+        id: "u-ada",
+        name: "Ada-101",
+      });
+    },
+  );
 
   it("looks the account up by usernameNormalized only, selecting no more than it needs", async () => {
     await verifyCredentials({ username: " ADA ", password: PASSWORD });

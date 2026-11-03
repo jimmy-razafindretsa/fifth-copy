@@ -20,6 +20,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - dev: `npm run dev` (web) · `npm run dev:race` (race server, `/health` on :4000) · build race server: `npm run build:race`
 - check (lint, types, boundaries, unit; prints <=20 lines): `scripts/check.sh`
   (unit step needs Redis: `npm run db:up` and `REDIS_URL` loaded from `.env`; race-server room tests fail without it)
+  (in a card worktree the unit step uses Redis db `REDIS_URL_TEST` from `.env`, the e2e race server `REDIS_URL`; no worktree/CI: db 0 for both)
 - e2e: `npx playwright test [path]`
   (`E2E_TIMEOUT_SCALE=<n>` multiplies e2e test waits via `e2e/timeouts.ts`, default 1; use 2-3 on a loaded machine; every spec wait goes through it, see its header, guarded by `src/lib/e2e-timeouts.test.ts`)
   (`PW_WORKERS=<n>` caps Playwright workers when parallel worktrees share the machine; unset = Playwright default)

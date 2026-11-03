@@ -57,7 +57,9 @@ export function bundleRefusals(cards: BundleCard[]): string[] {
 export const bundleLocks = (cards: { labels: string[] }[]) =>
   [
     ...new Set(
-      cards.flatMap((c) => c.labels.filter((l) => l.startsWith("area:") || l.startsWith("touches:"))),
+      cards.flatMap((c) =>
+        c.labels.filter((l) => l.startsWith("area:") || l.startsWith("touches:")),
+      ),
     ),
   ].sort();
 

@@ -148,15 +148,24 @@
     letter-spacing: 0.08em;
   }
 
-  /* row 2 */
+  /* row 2, tracked like the toggles so the docket name keeps room */
   .navLink,
   .docket,
   .signIn {
     order: 3;
   }
 
+  .navLink,
+  .signIn,
+  .tag {
+    letter-spacing: 0.08em;
+  }
+
+  /* grows from 0 to its own width, so a long name ellipses instead of wrapping the row */
   .docket {
+    flex: 1 1 0;
     min-width: 0;
+    max-width: max-content;
     padding: 5px 6px;
     gap: 6px;
   }

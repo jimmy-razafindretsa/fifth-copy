@@ -150,9 +150,9 @@ describe("resume key in the handshake (#561 C11)", () => {
     const io = vi.fn(() => fake) as unknown as IoFactory;
     let stored: string | null = KEY;
     connectToRoom("http://x", "tok", { io, version: 7, resumeKey: () => stored });
-    expect(handshake(io)).toEqual({ v: 7, token: "tok", resumeKey: KEY });
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "tok", resumeKey: KEY });
     stored = null;
-    expect(handshake(io)).toEqual({ v: 7, token: "tok" });
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "tok" });
   });
 
   it.each([undefined, null, ""])("sends no resumeKey field when the key is %j", (resumeKey) => {

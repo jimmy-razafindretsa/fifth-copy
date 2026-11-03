@@ -226,6 +226,13 @@ describe("reduceForm (C2)", () => {
     },
   );
 
+  it("rate-limited (#750) -> the timeout line on the pending row: no new copy", () => {
+    const pending: FormState = { status: "pending", key: "bonuses" };
+    expect(
+      reduceForm(pending, { type: "ack", result: { ok: false, error: "rate-limited" } }),
+    ).toEqual({ status: "error", key: "bonuses", error: "timeout" });
+  });
+
   it("not-host hides the controls for good", () => {
     const pending: FormState = { status: "pending", key: "language" };
     const hidden = reduceForm(pending, { type: "ack", result: { ok: false, error: "not-host" } });

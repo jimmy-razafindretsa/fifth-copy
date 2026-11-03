@@ -140,6 +140,7 @@ describe("socket schemas", () => {
     ["ack ok without settings", hostSettingsAckSchema, { ok: true }, false],
     ["ack not-host", hostSettingsAckSchema, { ok: false, error: "not-host" }, true],
     ["ack not-waiting", hostSettingsAckSchema, { ok: false, error: "not-waiting" }, true],
+    ["ack rate-limited (#750)", hostSettingsAckSchema, { ok: false, error: "rate-limited" }, true],
     ["ack invalid", hostSettingsAckSchema, { ok: false, error: "invalid" }, true],
     ["ack no-room", hostSettingsAckSchema, { ok: false, error: "no-room" }, true],
     ["ack unknown error", hostSettingsAckSchema, { ok: false, error: "teapot" }, false],

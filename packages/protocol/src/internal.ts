@@ -12,6 +12,7 @@ import {
   raceIdSchema,
   raceTextSchema,
   ratioSchema,
+  textOverlaySchema,
   wordCountSchema,
   wpmSchema,
 } from "./race";
@@ -147,6 +148,12 @@ export const internalRaceResultSchema = z.object({
   bonusLog: z
     .array(z.object({ t: raceMsSchema, kind: bonusKindSchema, from: deskSchema, to: deskSchema }))
     .max(1024),
+  /**
+   * The desk's final text overlay (#623, ADR 0016): the words Extra Paperwork appended and the base
+   * word indexes Exemption removed, verbatim from the desk state; `null` for a desk no text-changing
+   * bonus ever hit. A replay of `trace` runs on `effectiveText(base, overlay)`, not on the base.
+   */
+  overlay: textOverlaySchema.nullable(),
   /** Anti-cheat flags (ARCHITECTURE 7.7). */
   flags: z
     .array(z.object({ code: z.string().min(1).max(64), detail: z.string().max(256).optional() }))
@@ -206,11 +213,11 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   timestamp: "1767225600",
   nonce: "5f2b9c0e8a4d4e1b9f3a7c6d2e1b0a98",
   body:
-    '{"v":8,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":9,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "571f0f75399abf4429b0450e208f4945778b28e9c23b67b4004e03072fe98102",
+  signature: "78acbc9b566882c17272536f0a015375df376077af9fef40609a5ae37ad29107",
 } as const;

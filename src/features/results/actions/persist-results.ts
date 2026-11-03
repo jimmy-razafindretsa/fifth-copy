@@ -64,8 +64,9 @@ export const MAX_KEYSTROKE_JSON_BYTES = 32;
  * The most keystrokes a stored trace may hold for a race whose base text has `baseLength`
  * characters (#190): the race server caps each desk at `traceCapOf` of its effective text, which
  * Extra Paperwork lengthens by at most `MAX_OVERLAY_WORDS` words of `MAX_EXTRA_WORD_LENGTH`
- * characters plus a separator each (Exemption only shortens it). The web stores no overlay yet
- * (#623), so it bounds by the largest one the wire allows; the inflation cap of `decodeTrace`
+ * characters plus a separator each (Exemption only shortens it). The check runs before the
+ * result's own overlay is trusted, so it bounds by the largest one the wire allows (#623 stores the
+ * overlay; tightening this bound to it is ADR 0016's follow-up); the inflation cap of `decodeTrace`
  * follows from the count it admits.
  */
 export function maxStoredTraceKeys(baseLength: number): number {
@@ -124,7 +125,8 @@ const isKnownError = (err: unknown, code: string) =>
  * Stores one chunk of an ended race's results (ADR 0008 write path, ARCHITECTURE 9.3), in one
  * transaction: the race's end (`endedAt`, `endReason`, `lobbySize`; first write wins), one
  * `RaceResult` per desk and the `RaceKeystrokes` of each human desk with keystrokes, all upserted by
- * `(raceId, desk)` with no update, so a repeat is a no-op and answers the same. Numbers are stored
+ * `(raceId, desk)` with no update, so a repeat is a no-op and answers the same. Each result keeps the
+ * desk's final text `overlay` (`null` when untouched, #623). Numbers are stored
  * as sent: the race server ran the engine (ADR 0007), its anti-cheat flags included (`suspicious`,
  * `suspiciousReason` = the flag codes joined by `,`; #195). Refuses an unknown race (`not-found`) and an
  * incoherent chunk or a trace that does not inflate to `count` keystrokes within
@@ -195,6 +197,9 @@ export async function persistRaceResults(
             bonusesSent: r.bonusesSent,
             bonusesReceived: r.bonusesReceived,
             bonusLog: r.bonusLog,
+            // The desk's final text overlay (#623): what a replay of its trace must type. Prisma
+            // takes SQL NULL on a `Json?` column only as `DbNull`; it reads back as `null`.
+            overlay: r.overlay ?? Prisma.DbNull,
             // Flags from the race server's trace analysis (#195, ADR 0007): stored, never re-run.
             suspicious: r.flags.length > 0,
             suspiciousReason: r.flags.map((f) => f.code).join(",") || null,

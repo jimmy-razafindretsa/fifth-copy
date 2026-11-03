@@ -126,6 +126,7 @@ describe.skipIf(!testDatabaseUrl)(
       bonusesSent: 0,
       bonusesReceived: 0,
       bonusLog: [],
+      overlay: null,
       flags: [],
       engineVersion: ENGINE_VERSION,
       trace: { encoding: "gzip+base64", data: gz([]), count: 0 },
@@ -133,6 +134,8 @@ describe.skipIf(!testDatabaseUrl)(
     });
 
     const traces = { 1: keysOf("bonjour"), 2: keysOf("bon", 40) };
+    /** Desk 2's final text overlay (#623 C3): stored and read back verbatim. */
+    const OVERLAY = { extra: ["quota", "ration"], removed: [0] };
     const request = (raceId: string): RaceResultsRequest => ({
       v: PROTOCOL_VERSION,
       raceId,
@@ -149,6 +152,7 @@ describe.skipIf(!testDatabaseUrl)(
           status: "typing",
           progress: 0.4,
           finishedAtMs: null,
+          overlay: OVERLAY,
           trace: { encoding: "gzip+base64", data: gz(traces[2]), count: 3 },
         }),
         result({
@@ -214,8 +218,11 @@ describe.skipIf(!testDatabaseUrl)(
         durationMs: 48_210,
         finishedAtMs: 48_210,
         bonusLog: [],
+        overlay: null,
         engineVersion: ENGINE_VERSION,
       });
+      // #623 C3: the overlay reads back equal to the payload; an untouched desk stays null.
+      expect(rows.results.map((r) => r.overlay)).toEqual([null, OVERLAY, null]);
       expect(rows.keystrokes.map((k) => [k.desk, k.userId, k.count])).toEqual([
         [1, host.id, 7],
         [2, other.id, 3],

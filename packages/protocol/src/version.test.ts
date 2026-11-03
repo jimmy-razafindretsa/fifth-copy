@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { envelopeSchema, PROTOCOL_VERSION } from "./index";
 
 describe("version", () => {
-  it("is 8 (#750: host:settings ack `rate-limited`)", () => {
-    expect(PROTOCOL_VERSION).toBe(8);
+  it("is 9 (#623: stored results carry the desk's text overlay)", () => {
+    expect(PROTOCOL_VERSION).toBe(9);
   });
 
   it.each([

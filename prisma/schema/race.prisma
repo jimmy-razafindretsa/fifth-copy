@@ -88,6 +88,10 @@ model RaceResult {
   bonusesSent      Int
   bonusesReceived  Int
   bonusLog         Json
+  /// The desk's final text overlay `{ extra: string[], removed: int[] }` (@fifth-copy/protocol
+  /// textOverlaySchema, #623): replay the trace on effectiveText(base, overlay). Null when no
+  /// text-changing bonus hit the desk, and for rows stored before #623.
+  overlay          Json?
   suspicious       Boolean      @default(false)
   suspiciousReason String?
   engineVersion    String

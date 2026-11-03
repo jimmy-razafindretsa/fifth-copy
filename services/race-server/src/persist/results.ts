@@ -62,7 +62,8 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * `elapsedOf`, the gzip trace for a human desk (a bot's is empty). Chunked into requests of at most
  * `MAX_RESULTS_PER_REQUEST`. Bonuses (#190, ADR 0016): `cleanWpm`/`adjustedWpm` from the engine's
  * `cleanAndAdjustedWpm` over the desk's overlay (equal to `wpm` without one), `bonusesSent`,
- * `bonusesReceived` and `bonusLog` from its ledger. Flags (#195, ADR 0007): every human desk's in-memory trace goes through `analyseTrace`
+ * `bonusesReceived` and `bonusLog` from its ledger, `overlay` verbatim from its state (`null` when no
+ * text-changing bonus hit it, #623). Flags (#195, ADR 0007): every human desk's in-memory trace goes through `analyseTrace`
  * against its recorded counters and live `timingAnomalies`; a bot is never analysed. The analysis
  * runs on the trace as applied, before a trace over the wire bound is sent empty (logged) rather
  * than blocking the race's results forever. A `void` end builds nothing.
@@ -80,7 +81,10 @@ export function buildResults(
     const desk = byDesk.get(entry.desk);
     const state = room.states.get(entry.desk) ?? { ...initialState(), trace: [] };
     const isBot = desk?.isBot ?? entry.isBot;
-    const overlay = ("overlay" in state ? state.overlay : null) ?? EMPTY_OVERLAY;
+    // The desk's final overlay as the server holds it (#623): stored with the result so a later
+    // replay of the trace rebuilds the text it was scored on; null when never hit.
+    const storedOverlay = "overlay" in state ? state.overlay : null;
+    const overlay = storedOverlay ?? EMPTY_OVERLAY;
     const ledger = "ledger" in state ? state.ledger : EMPTY_LEDGER;
     const flags = isBot
       ? []
@@ -121,6 +125,9 @@ export function buildResults(
       bonusesSent: ledger.sent,
       bonusesReceived: ledger.received,
       bonusLog: ledger.log.slice(0, MAX_LOG_ENTRIES).map((e) => ({ ...e })),
+      overlay: storedOverlay
+        ? { extra: [...storedOverlay.extra], removed: [...storedOverlay.removed] }
+        : null,
       flags,
       engineVersion: ENGINE_VERSION,
       trace,

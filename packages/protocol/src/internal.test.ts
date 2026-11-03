@@ -16,6 +16,7 @@ import {
   startRaceRequestSchema,
   startRaceResponseSchema,
   internalRaceResultSchema,
+  MAX_OVERLAY_WORDS,
   MAX_RESULTS_PER_REQUEST,
 } from "./index";
 
@@ -68,6 +69,7 @@ const result = {
   bonusesSent: 1,
   bonusesReceived: 0,
   bonusLog: [{ t: 12000, kind: "exemption", from: 1, to: 2 }],
+  overlay: null,
   flags: [{ code: "timing-anomaly", detail: "3 clamped" }, { code: "burst" }],
   engineVersion: "0.3.0",
   trace: { encoding: "gzip+base64", data: "H4sIAAAAAAAAA4uOBQApu0wNAgAAAA==", count: 2 },
@@ -214,6 +216,44 @@ describe("internal API", () => {
       internalRaceResultSchema,
       { ...result, userId: null, isBot: true, status: "typing", finishedAtMs: null },
       true,
+    ],
+    // The desk's final text overlay (#623 C1): null when untouched, verbatim when overlaid.
+    [
+      "result overlay verbatim",
+      internalRaceResultSchema,
+      { ...result, overlay: { extra: ["quota", "ration"], removed: [0, 3] } },
+      true,
+    ],
+    [
+      "result overlay empty object",
+      internalRaceResultSchema,
+      { ...result, overlay: { extra: [], removed: [] } },
+      true,
+    ],
+    ["result overlay missing", internalRaceResultSchema, { ...result, overlay: undefined }, false],
+    [
+      "result overlay extra above MAX_OVERLAY_WORDS",
+      internalRaceResultSchema,
+      {
+        ...result,
+        overlay: { extra: Array.from({ length: MAX_OVERLAY_WORDS + 1 }, () => "w"), removed: [] },
+      },
+      false,
+    ],
+    [
+      "result overlay removed above MAX_OVERLAY_WORDS",
+      internalRaceResultSchema,
+      {
+        ...result,
+        overlay: { extra: [], removed: Array.from({ length: MAX_OVERLAY_WORDS + 1 }, (_, i) => i) },
+      },
+      false,
+    ],
+    [
+      "result overlay negative index",
+      internalRaceResultSchema,
+      { ...result, overlay: { extra: [], removed: [-1] } },
+      false,
     ],
     ["result missing trace", internalRaceResultSchema, { ...result, trace: undefined }, false],
     ["result wrong status", internalRaceResultSchema, { ...result, status: "timed-out" }, false],

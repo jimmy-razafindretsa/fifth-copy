@@ -5,6 +5,8 @@ export { startRace } from "./actions/start-race";
 export type { StartRaceResult } from "./actions/start-race";
 export { MAX_RESULTS_BODY_BYTES, persistRaceResults } from "./actions/persist-results";
 export type { PersistResultsResult } from "./actions/persist-results";
+// The text a stored result's trace replays on: base + the desk's stored overlay (#623).
+export { storedEffectiveText, type StoredReplayText } from "./replay-text";
 // The Dawn report (#300): read model, route screen, podium and the /design specimens.
 export { getDawnReport } from "./queries/get-dawn-report";
 export { DawnReportLayout, DawnReportScreen } from "./components/dawn-report-screen";

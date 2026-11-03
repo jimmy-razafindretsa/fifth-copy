@@ -181,9 +181,16 @@ test.describe("Dawn report podium (#300)", () => {
       !(await hasWebGL2(page)),
       "no WebGL2 in this browser (the no-WebGL path has its own test)",
     );
+    await expect(plinths(page)).toHaveCount(3, { timeout: HYDRATION_WAIT });
+    // the snapshots below compare the whole podium: let the mount queue (#688 C4) run dry first, every
+    // plinth frame mounted and drawn, or a later plinth's mount lands between them (#763)
+    await visitPlinths(page);
+    await expect
+      .poll(async () => JSON.stringify(await frameStates(page)), { timeout: scaled(30_000) })
+      .toBe(JSON.stringify([1, 2, 3].map(() => ({ mounted: true, ready: true }))));
     await plinth(page, 1).scrollIntoViewIfNeeded();
     const doc = clerkDoc(page, 1);
-    await expect(doc).toHaveAttribute("data-ready", "1", { timeout: scaled(30_000) });
+    await expect(doc).toHaveAttribute("data-ready", "1");
     await expect(doc).toHaveAttribute("data-motion", "full");
     const layout = () =>
       page.evaluate(() =>

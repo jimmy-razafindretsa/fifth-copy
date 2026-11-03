@@ -67,6 +67,14 @@ module.exports = {
       },
     },
     {
+      name: "feature-testing-only-from-tests",
+      comment:
+        "A feature's testing/ folder is test support (#682): only *.test.ts(x) files and other testing/ modules import it.",
+      severity: "error",
+      from: { pathNot: ["\\.test\\.tsx?$", "/testing/"] },
+      to: { path: "^src/features/.*/testing/" },
+    },
+    {
       name: "app-feature-public-api-only",
       comment: "Routes compose features through their index.ts only.",
       severity: "error",

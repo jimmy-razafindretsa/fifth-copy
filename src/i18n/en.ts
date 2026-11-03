@@ -244,6 +244,12 @@ export const en = {
     you: "YOU",
     /** The ink tag on a bot's roll row (#105, as the Dawn report's). */
     bot: "BOT",
+    /** The seat ring diagram (#731, bible 14.3): its accessible name, the centre tag, a bot desk's tag. */
+    ring: {
+      name: "Seat ring: {n} of {max} desks taken",
+      major: "THE MAJOR",
+      bot: "B",
+    },
     /** A non-host's 7.4 notice row at the top of the roll (#105). */
     waitingForHost: "WAITING FOR THE HOST",
     /** A late joiner's 7.4 notice row while the race runs (#732): held, seated at `ended`. */

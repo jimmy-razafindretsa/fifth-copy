@@ -247,6 +247,12 @@ export const fr = {
     host: "HÔTE",
     you: "TOI",
     bot: "BOT",
+    /** The seat ring diagram (#731, bible 14.3): its accessible name, the centre tag, a bot desk's tag. */
+    ring: {
+      name: "Anneau des bureaux : {n} bureaux sur {max} occupés",
+      major: "LE MAJOR",
+      bot: "B",
+    },
     waitingForHost: "EN ATTENTE DE L'HÔTE",
     raceInProgress: "COURSE EN COURS · TU SERAS PLACÉ À LA FIN",
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },

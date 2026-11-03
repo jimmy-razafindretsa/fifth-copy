@@ -18,6 +18,7 @@ import {
   type LobbyState,
 } from "./lobby-store";
 import { PlayerList, PlayerListSkeleton } from "./player-list";
+import { SeatRing } from "./seat-ring";
 import { InviteDocket } from "./invite-docket";
 import { ROOM_CODE_ID, RoomCodeDocket } from "./room-code-docket";
 import { hostForm } from "./settings-controls";
@@ -126,8 +127,17 @@ export function LobbyLiveView({
         ) : null}
       </div>
       <div className={styles.side}>
-        {/* the seat ring diagram (#731) */}
-        <div className={styles.ring} />
+        {/* the seat ring diagram (#731): drawn once the roster is known, empty (no room) before */}
+        <div className={styles.ring}>
+          {known ? (
+            <SeatRing
+              members={state.members}
+              you={state.you}
+              seats={ROOM_SEATS}
+              labels={labels.ring}
+            />
+          ) : null}
+        </div>
         <div className={styles.roll}>
           {state.phase === "reconnecting" ? (
             <p role="status" className={cn(styles.notice, styles.pulse)}>

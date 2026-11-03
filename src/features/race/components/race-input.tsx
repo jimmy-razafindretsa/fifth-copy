@@ -9,6 +9,7 @@ export const TYPING_SURFACE = "[data-telex], [data-sheet], [data-machine]";
 /** The fields of a `keydown` this input reads. */
 export type KeydownLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey"> & {
   isComposing?: boolean;
+  shiftKey?: boolean;
 };
 
 /**
@@ -22,6 +23,16 @@ export function keyOf(e: KeydownLike): string | null {
   if (e.key === "Backspace") return "Backspace";
   if (e.metaKey || (e.ctrlKey && !e.altKey)) return null;
   return Array.from(e.key).length === 1 ? e.key : null;
+}
+
+/**
+ * A bare `Enter` (#236): no modifier, no composition. It plays your Sabotage card; it types nothing
+ * (`keyOf` is `null` for it), so no keystroke is ever taken from the race.
+ */
+export function isPlayKey(e: KeydownLike): boolean {
+  return (
+    e.key === "Enter" && !e.isComposing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+  );
 }
 
 const inSurface = (node: Node | null | undefined) => {
@@ -42,6 +53,8 @@ export type RaceInputProps = {
   backspace?: boolean;
   /** Your desk's errors as the engine counted them (#220), as `data-errors`; absent without a desk. */
   errors?: number;
+  /** A bare Enter (#236, `isPlayKey`): play your Sabotage card. Absent: Enter does nothing. */
+  onPlay?: () => void;
 };
 
 /**
@@ -52,9 +65,18 @@ export type RaceInputProps = {
  * a virtual keyboard sends no key (`Unidentified`), from `beforeinput`; nothing is ever written into the
  * field. Paste, drop, and copying from the surface give nothing. Presentational: the seat view hands it
  * the lock and the key sink (the store, the engine and the socket stay out of components), and the live
- * error settings and errors it carries as data for tests and later cards (#220 C6).
+ * error settings and errors it carries as data for tests and later cards (#220 C6). A bare Enter plays the
+ * Sabotage card (#236, `onPlay`); Space and every printable key stay keystrokes.
  */
-export function RaceInput({ disabled, onKey, label, mode, backspace, errors }: RaceInputProps) {
+export function RaceInput({
+  disabled,
+  onKey,
+  label,
+  mode,
+  backspace,
+  errors,
+  onPlay,
+}: RaceInputProps) {
   const input = useRef<HTMLInputElement>(null);
   const sink = useRef(onKey);
   useEffect(() => {
@@ -134,13 +156,20 @@ export function RaceInput({ disabled, onKey, label, mode, backspace, errors }: R
   }, []);
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    const key = keyOf({
+    const like: KeydownLike = {
       key: e.key,
       ctrlKey: e.ctrlKey,
       metaKey: e.metaKey,
       altKey: e.altKey,
+      shiftKey: e.shiftKey,
       isComposing: e.nativeEvent.isComposing,
-    });
+    };
+    if (onPlay && isPlayKey(like)) {
+      e.preventDefault();
+      onPlay();
+      return;
+    }
+    const key = keyOf(like);
     if (key === null) return;
     e.preventDefault();
     onKey(key);

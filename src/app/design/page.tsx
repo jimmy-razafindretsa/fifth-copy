@@ -188,6 +188,8 @@ type TypingState = {
   view: TypedViewFixture;
   machine: Pick<TypingMachineProps, "pressed" | "wrong" | "disabledKeys">;
   reduce?: boolean;
+  /** A Smoke Break blurs the strip and the sheet (#236, bible 7.7). */
+  blurred?: boolean;
 };
 
 const TYPING_STATES: TypingState[] = [
@@ -229,6 +231,15 @@ const TYPING_STATES: TypingState[] = [
     machine: { disabledKeys: [...QWERTY.flat(), " "] },
   },
   {
+    id: "smoke-break",
+    title: "Smoke Break",
+    caption:
+      "A rival's Smoke Break: the tape and the typed lines blur 3px for a few seconds, the rules stay crisp. Static, also under reduced motion.",
+    view: "racing",
+    machine: {},
+    blurred: true,
+  },
+  {
     id: "reduced-motion",
     title: "Reduced motion",
     caption: "A solid red cell, no pop, and the tape jumps instead of gliding.",
@@ -240,7 +251,8 @@ const TYPING_STATES: TypingState[] = [
 
 /** One typing-surface state on its paper backdrop: strip on top, the sheet rising out of the machine. */
 function TypingSpecimen({ state }: { state: TypingState }) {
-  const view = typedViewFixtures[state.view];
+  const fixture = typedViewFixtures[state.view];
+  const view = state.blurred ? { ...fixture, blurred: true as const } : fixture;
   return (
     <figure
       data-typing-state={state.id}
@@ -889,6 +901,21 @@ export default async function DesignPage() {
                 cooldownS={12}
                 hint="ENTER TO PLAY"
                 labels={HUD.sabotageTray}
+              />
+            </div>
+          </HudSpecimen>
+          <HudSpecimen
+            id="tray-refused"
+            title="Refused"
+            caption="The target is immune: IMMUNE shakes once (still under reduced motion), then leaves after 1.2 s; the card is kept."
+          >
+            <div className="max-w-[320px]">
+              <SabotageTray
+                card="extra-paperwork"
+                cooldownS={0}
+                hint={HUD.sabotageTray.hint}
+                labels={HUD.sabotageTray}
+                refused
               />
             </div>
           </HudSpecimen>

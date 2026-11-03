@@ -91,3 +91,75 @@ describe("SabotageTray (#560 C4)", () => {
     expect(rows(quiet)).toEqual([]);
   });
 });
+
+// Contract of #236 C3 (markup and CSS; the computed shake and the click path run in e2e/race/bonus.spec.ts).
+describe("SabotageTray play and refusal (#236 C3)", () => {
+  const css = readFileSync(
+    path.join(process.cwd(), "src/features/race/components/sabotage-tray.module.css"),
+    "utf8",
+  );
+  const play = () => {};
+
+  it("the status region is always there; IMMUNE / IMMUNISÉ shows in it while refused", () => {
+    const quiet = html(
+      <SabotageTray card="extra-paperwork" cooldownS={0} hint={HINT} labels={EN} />,
+    );
+    expect(quiet).toMatch(/<div role="status" aria-atomic="true" data-refusal="true"><\/div>/);
+    const en = html(
+      <SabotageTray card="extra-paperwork" cooldownS={0} hint={HINT} labels={EN} refused />,
+    );
+    expect(en).toMatch(
+      /role="status"[^>]*data-refusal="true">\s*<p data-row="refused"[^>]*>IMMUNE<\/p>/,
+    );
+    const fr = html(
+      <SabotageTray card="extra-paperwork" cooldownS={0} hint={HINT} labels={FR} refused />,
+    );
+    expect(fr).toContain(">IMMUNISÉ<");
+  });
+
+  it("the IMMUNE row shakes once with lkShake (0.4s) on the urgent ground, and holds still under reduce", () => {
+    expect(css).toMatch(/@keyframes lkShake \{/);
+    expect(css).toMatch(/\.refused \{[^}]*animation: lkShake 0\.4s ease-in-out;/);
+    expect(css).toMatch(/\.refused \{[^}]*background: var\(--color-danger-surface\)/);
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.refused \{\s*animation: none;/,
+    );
+    expect(css).toMatch(/\[data-motion="reduce"\] \.refused \{\s*animation: none;/);
+    expect(css).not.toContain("!important");
+  });
+
+  it("a ready card with onPlay gets the PLAY CARD ink button; none while cooling, empty or static", () => {
+    const ready = html(
+      <SabotageTray card="smoke-break" cooldownS={0} hint={HINT} labels={EN} onPlay={play} />,
+    );
+    expect(ready).toMatch(
+      /<button type="button" data-play="true"[^>]*_ink_[^>]*>PLAY CARD<\/button>/,
+    );
+    expect(rows(ready)).toEqual([{ row: "play", label: "PLAY", value: HINT }]);
+    const fr = html(
+      <SabotageTray card="smoke-break" cooldownS={0} hint={FR.hint} labels={FR} onPlay={play} />,
+    );
+    expect(fr).toContain(">JOUER LA CARTE<");
+    expect(rows(fr)).toEqual([{ row: "play", label: "JOUER", value: "ENTRÉE POUR JOUER" }]);
+    for (const el of [
+      <SabotageTray
+        key="c"
+        card="smoke-break"
+        cooldownS={4}
+        hint={HINT}
+        labels={EN}
+        onPlay={play}
+      />,
+      <SabotageTray key="e" card={null} cooldownS={0} hint={HINT} labels={EN} onPlay={play} />,
+      <SabotageTray key="s" card="smoke-break" cooldownS={0} hint={HINT} labels={EN} />,
+    ]) {
+      expect(html(el)).not.toContain("data-play");
+    }
+  });
+
+  it("the copy is in both catalogs: ENTER TO PLAY / ENTRÉE POUR JOUER", () => {
+    expect(EN.hint).toBe("ENTER TO PLAY");
+    expect(FR.hint).toBe("ENTRÉE POUR JOUER");
+    expect([EN.immune, FR.immune]).toEqual(["IMMUNE", "IMMUNISÉ"]);
+  });
+});

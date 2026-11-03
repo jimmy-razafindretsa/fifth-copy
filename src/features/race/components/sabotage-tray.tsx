@@ -12,18 +12,36 @@ export type SabotageTrayProps = {
   /** How to play the card (`ENTER TO PLAY`, #236), shown while a card is ready. */
   hint: string | null;
   labels: SabotageTrayLabels;
+  /** The server refused your play (#236): the `IMMUNE` row shows and shakes once. */
+  refused?: boolean;
+  /**
+   * Plays the ready card (#236): the pointer path beside Enter, as the `PLAY CARD` ink button. Absent
+   * (the server render, the specimens): no button.
+   */
+  onPlay?: () => void;
 };
 
 /**
  * The Sabotage tray (#560, design bible 7.4, 7.6, spec 10): a 7.4 docket headed `SABOTAGE TRAY` holding
  * the earned catch-up card as a 7.6 file card (name, effect), its play hint and a cooldown row whose seconds
  * pulse with `lkPulse`. Empty, it shows the 7.6 dashed empty slot; while cooling without a card, only the
- * cooldown row. It shows what the server awarded and decides nothing (#236 wires the play, ADR 0007).
+ * cooldown row. It shows what the server awarded and decides nothing (ADR 0007). #236: a refused play
+ * shows the `IMMUNE` row under the header (a polite `status`, the 7.4 notice row on the urgent ground,
+ * shaking once with `lkShake`, still under reduced motion), and a ready card gets the `PLAY CARD` ink
+ * button, which never takes the focus from the race input (a mouse press keeps it there).
  */
-export function SabotageTray({ card, cooldownS, hint, labels }: SabotageTrayProps) {
+export function SabotageTray({
+  card,
+  cooldownS,
+  hint,
+  labels,
+  refused = false,
+  onPlay,
+}: SabotageTrayProps) {
   const seconds = Number.isFinite(cooldownS) ? Math.max(0, Math.ceil(cooldownS)) : 0;
   const cooling = seconds > 0;
   const info = card ? labels.cards[card] : null;
+  const ready = info !== null && !cooling;
   return (
     <section
       aria-label={labels.title}
@@ -34,6 +52,14 @@ export function SabotageTray({ card, cooldownS, hint, labels }: SabotageTrayProp
     >
       <div className={docket.head}>
         <span className={docket.tag}>{labels.title}</span>
+      </div>
+      {/* always present, so the refusal is announced when it lands */}
+      <div role="status" aria-atomic="true" data-refusal>
+        {refused ? (
+          <p data-row="refused" className={cn(docket.notice, styles.refused)}>
+            {labels.immune}
+          </p>
+        ) : null}
       </div>
       {info ? (
         <div data-slot className={styles.slot}>
@@ -47,13 +73,27 @@ export function SabotageTray({ card, cooldownS, hint, labels }: SabotageTrayProp
           <p className={styles.effect}>{labels.empty.body}</p>
         </div>
       ) : null}
-      {info && !cooling && hint ? (
+      {ready && hint ? (
         <dl className={styles.rows}>
           <div data-row="play" className={docket.row}>
             <dt className={docket.label}>{labels.play}</dt>
             <dd className={cn(docket.value, styles.hint)}>{hint}</dd>
           </div>
         </dl>
+      ) : null}
+      {ready && onPlay ? (
+        <div className={styles.actions}>
+          <button
+            type="button"
+            data-play
+            className={cn(docket.ink, styles.play)}
+            // the race input keeps the focus: a click plays, the next key still types
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onPlay}
+          >
+            {labels.playButton}
+          </button>
+        </div>
       ) : null}
       {cooling ? (
         <dl className={styles.rows}>

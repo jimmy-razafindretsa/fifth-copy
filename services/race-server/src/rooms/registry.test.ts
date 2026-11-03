@@ -22,7 +22,7 @@ import {
   traceKey,
   VOID_TTL_S,
 } from "./keys";
-import { createRoomRegistry, type RaceDesk, type RoomRegistry } from "./registry";
+import { createRoomRegistry, ROOM_SEATS, type RaceDesk, type RoomRegistry } from "./registry";
 
 // Integration tests against a real Redis (ADR 0008, ARCHITECTURE 10). They fail, never skip, when
 // Redis is missing: a card worktree loads REDIS_URL from its .env, CI from the `check` job service.
@@ -802,6 +802,45 @@ describe("room registry: race again (#143)", () => {
       ok: true,
       desk: 2,
     });
+  });
+
+  it("the room seats at most ROOM_SEATS typists: the next stranger is room-full, waiting and ended (#732)", async () => {
+    const { registry } = setup();
+    const waiting = await openRoom(registry);
+    for (let i = 1; i <= ROOM_SEATS; i++) {
+      expect(await registry.join(waiting, { userId: `u${i}`, name: `U${i}` })).toMatchObject({
+        ok: true,
+      });
+    }
+    expect(await registry.join(waiting, { userId: "extra", name: "X" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    expect(await registry.hasMember(waiting, "extra")).toBe(false);
+    // a member at the cap (a second tab) still comes in
+    expect(await registry.join(waiting, { userId: "u3", name: "U3" })).toMatchObject({
+      ok: true,
+      desk: 3,
+    });
+
+    const ended = await endedRoom(registry);
+    for (let i = 4; i <= ROOM_SEATS; i++) {
+      expect(await registry.join(ended, { userId: `l${i}`, name: `L${i}` })).toMatchObject({
+        ok: true,
+      });
+    }
+    expect(await registry.join(ended, { userId: "extra", name: "X" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    // a racer of the last race who left and came back while the room is full of others: still a seat
+    await registry.leave(ended, "b");
+    await registry.join(ended, { userId: "l99", name: "L99" });
+    expect(await registry.join(ended, { userId: "b", name: "Bob" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+    expect(await registry.join(ended, { userId: "c", name: "Cy" })).toMatchObject({ ok: true });
   });
 
   it("a started room still refuses a user who is not a member (in-progress)", async () => {

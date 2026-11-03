@@ -83,6 +83,7 @@ function fakeSocket() {
     onProtocolError: bind("protocolError"),
     onConnectError: bind("connectError"),
     onReconnecting: bind("reconnecting"),
+    onServerDisconnect: bind("serverDisconnect"),
     onReconnected: bind("reconnected"),
     close: vi.fn(),
   };
@@ -571,16 +572,22 @@ describe("spectating (#732 C1 C4)", () => {
     expect(run({ type: "connect-error", reason: "transport" }, refused).phase).toBe("spectating");
   });
 
-  it("C1: spectating keeps its phase on in-progress, room-full, transport and reconnect events", () => {
+  it("C1: spectating keeps its phase on in-progress, transport and reconnect events", () => {
     for (const event of [
       refused,
-      { type: "connect-error", reason: "room-full" },
       { type: "connect-error", reason: "transport" },
       { type: "reconnecting" },
       { type: "reconnected" },
     ] as const) {
       expect(run(refused, event).phase).toBe("spectating");
     }
+  });
+
+  it("a player join refused room-full (every desk taken) ends the hold in the generic error", () => {
+    expect(run(refused, { type: "connect-error", reason: "room-full" })).toMatchObject({
+      phase: "error",
+      error: "generic",
+    });
   });
 
   it("C1: a refusal that is not about the race still ends the hold in its error", () => {
@@ -759,6 +766,62 @@ describe("joinRoom: the late joiner's hold (#732 C2)", () => {
     await h.flush();
     h.sockets[3]!.fire("welcome", endedWelcome(3, [ada, bob, member(3, "Cyd", false)]));
     expect(h.state()).toMatchObject({ phase: "live", you: 3 });
+  });
+
+  it("a server disconnect before the first welcome holds as in-progress", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    const [player1] = h.sockets;
+    player1!.fire("serverDisconnect", undefined);
+    expect(h.state().phase).toBe("spectating");
+    expect(player1!.socket.close).toHaveBeenCalled();
+    expect(h.detach).toHaveBeenCalledTimes(1);
+    await h.flush();
+    expect(h.mint).toHaveBeenLastCalledWith({ spectator: true });
+    h.sockets[1]!.fire("ended", {
+      v: PROTOCOL_VERSION,
+      raceId: "r",
+      reason: "all-finished",
+      ranking: [],
+    });
+    await h.flush();
+    h.sockets[2]!.fire("welcome", endedWelcome(3, [ada, bob, member(3, "Cyd", false)]));
+    expect(h.state()).toMatchObject({ phase: "live", you: 3 });
+  });
+
+  it("a server disconnect after the seat is not the hold's", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("welcome", welcome(2, [ada, bob]));
+    h.sockets[0]!.fire("serverDisconnect", undefined);
+    await h.flush();
+    expect(h.state().phase).toBe("live");
+    expect(h.mint).toHaveBeenCalledTimes(1);
+  });
+
+  it("a full room at the seat ends the hold: no retry, the generic error", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("connectError", "room-full");
+    await h.flush();
+    expect(h.state()).toMatchObject({ phase: "error", error: "generic" });
+    expect(h.mint).toHaveBeenCalledTimes(1);
+    expect(h.timers).toEqual([]);
+  });
+
+  it("a server disconnect of the spectator socket retries the seat after LATE_JOIN_RETRY_MS", async () => {
+    const h = harness();
+    joinRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("connectError", "in-progress");
+    await h.flush();
+    h.sockets[1]!.fire("serverDisconnect", undefined);
+    expect(h.sockets[1]!.socket.close).toHaveBeenCalled();
+    expect(h.timers.map((t) => t.ms)).toEqual([LATE_JOIN_RETRY_MS]);
+    expect(h.state().phase).toBe("spectating");
   });
 
   it("a throttled mint during the hold waits LATE_JOIN_RETRY_MS instead of failing", async () => {

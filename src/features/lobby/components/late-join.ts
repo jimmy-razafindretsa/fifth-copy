@@ -34,7 +34,8 @@ export type JoinRoomDeps = {
  * longer racing), closes it and joins as a player again. A spectator refused `room-full` (#616) polls
  * the player join every `retryMs` instead. The store bound by `attach` reports the refusal itself
  * (phase `spectating`); a refused player socket is unbound and closed here, since a middleware
- * refusal never reconnects. The hold only reads a player socket's refusals until its first welcome:
+ * refusal never reconnects. A server disconnect before the first welcome (a join refused after the
+ * handshake) is held the same way. The hold only reads a player socket's refusals until its first welcome:
  * after that the socket is the page's. The spectator socket never reaches the store (its welcome has
  * `you: null`). Returns the cancel, which never closes an attached socket (the page parks or closes it).
  */
@@ -91,15 +92,27 @@ export function joinRoom({
     const stop = () => {
       for (const off of pending.splice(0)) off();
     };
+    const hold = () => {
+      stop();
+      detach();
+      socket.close();
+      if (polling) later(seat);
+      else void watch();
+    };
     pending = [
       socket.onWelcome(stop),
       socket.onConnectError((reason) => {
-        if (reason !== "in-progress" || cancelled) return;
-        stop();
-        detach();
-        socket.close();
-        if (polling) later(seat);
-        else void watch();
+        if (cancelled || reason === "transport") return;
+        // the bound store reports the refusal; any other reason is its terminal error
+        if (reason === "in-progress") hold();
+        else stop();
+      }),
+      // A join the room refused after the handshake (a START racing it, a desk taken meanwhile)
+      // closes the socket from the server with no reason and no reconnect: hold as for in-progress.
+      socket.onServerDisconnect(() => {
+        if (cancelled) return;
+        dispatch({ type: "connect-error", reason: "in-progress" });
+        hold();
       }),
     ];
   }
@@ -126,6 +139,12 @@ export function joinRoom({
           if (room.phase === "waiting" || room.phase === "ended") seatNow();
         }),
         socket.onEnded(seatNow),
+        // the server closed the watch (the room went away): try the seat again later
+        socket.onServerDisconnect(() => {
+          if (cancelled || watcher?.socket !== socket) return;
+          unwatch();
+          later(seat);
+        }),
         socket.onConnectError((reason) => {
           // socket.io retries a transport error by itself
           if (reason === "transport" || cancelled || watcher?.socket !== socket) return;

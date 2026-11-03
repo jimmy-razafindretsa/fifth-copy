@@ -28,6 +28,7 @@ function fakeRoom() {
     sendPing: vi.fn(),
     onConnectError: vi.fn(on),
     onReconnecting: vi.fn(on),
+    onServerDisconnect: vi.fn(on),
     onReconnected: vi.fn(on),
     close: vi.fn(),
   };

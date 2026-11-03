@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PROTOCOL_VERSION, RACE_TOKEN_TTL_S } from "@fifth-copy/protocol";
 import { boot, connectError, SECRET, type Booted } from "../testing/harness";
 import type { ResumeEntry } from "../players/resume-keys";
+import { ROOM_SEATS } from "../rooms/registry";
 import { authenticateHandshake } from "./handshake";
 
 let t: Booted | undefined;
@@ -91,6 +92,24 @@ describe("authenticateHandshake (C2)", () => {
     await registry.setPhase(lobby, "running");
     expect(await as("usr_b")).toEqual({ ok: false, reason: "in-progress" });
     expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
+  });
+
+  it("refuses a stranger room-full once ROOM_SEATS typists are seated; a member still passes (#732)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const { registry } = t.server;
+    for (let i = 1; i <= ROOM_SEATS; i++)
+      await registry.join(lobby, { userId: `usr_${i}`, name: "U" });
+    const deps = { secret: SECRET, registry, clock: t.clock };
+    const as = async (sub: string) =>
+      authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token({ lobby, sub }) }, deps);
+    expect(await as("usr_new")).toEqual({ ok: false, reason: "room-full" });
+    expect(await as("usr_2")).toMatchObject({ ok: true });
+    await registry.setPhase(lobby, "ended");
+    expect(await as("usr_new")).toEqual({ ok: false, reason: "room-full" });
+    expect(await as("usr_2")).toMatchObject({ ok: true });
+    await registry.leave(lobby, "usr_2");
+    expect(await as("usr_new")).toMatchObject({ ok: true });
   });
 
   it("accepts a well-formed resumeKey (restoring a desk is #178's)", async () => {

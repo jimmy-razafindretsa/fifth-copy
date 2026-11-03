@@ -251,6 +251,20 @@ describe("connection lifecycle (C3)", () => {
     expect(cb.mock.calls).toEqual([["transport"], ["transport"]]);
   });
 
+  it("onServerDisconnect fires only when the server closed the socket (#732)", () => {
+    const { fake, room } = setup();
+    const cb = vi.fn();
+    const off = room.onServerDisconnect(cb);
+    fake.deliver("disconnect", "transport close");
+    fake.deliver("disconnect", "io client disconnect");
+    expect(cb).not.toHaveBeenCalled();
+    fake.deliver("disconnect", "io server disconnect");
+    expect(cb).toHaveBeenCalledTimes(1);
+    off();
+    fake.deliver("disconnect", "io server disconnect");
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
   it("wraps the manager's reconnect_attempt and reconnect events", () => {
     const { fake, room } = setup();
     const onReconnecting = vi.fn();

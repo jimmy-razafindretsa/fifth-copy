@@ -4,6 +4,7 @@ import {
   botLevelSchema,
   deskIdentity,
   endReasonSchema,
+  MAX_BOTS,
   msSchema,
   phaseSchema,
   raceInfoSchema,
@@ -76,10 +77,11 @@ export type Rehydrated = { kept: string[]; voided: string[]; gone: string[] };
 /**
  * `in-progress`: a user who is not already a member while a race is on (`countdown`, `running`; #166).
  * `bot-id`: a user id in the bots' reserved `bot:` space (#156; web user ids are cuids).
+ * `room-full`: a user who is not a member while `ROOM_SEATS` typists are already seated (#732).
  */
 export type JoinResult =
   | { ok: true; desk: number; members: Member[]; room: Room }
-  | { ok: false; reason: "no-room" | "in-progress" | "bot-id" };
+  | { ok: false; reason: "no-room" | "in-progress" | "bot-id" | "room-full" };
 /**
  * `closed` is true only when this call removed the last human member and deleted the room's keys
  * (bots seated with no human left go with the room, ARCHITECTURE 7.1 "last human leaves").
@@ -88,6 +90,17 @@ export type JoinResult =
  * is left in this process's live race state.
  */
 export type LeaveResult = { members: Member[]; closed: boolean; kept: boolean };
+
+/** Desks in a room's ring (spec: thirty desks, one for the host; `MAX_BOTS` is the rest). */
+export const ROOM_SEATS = MAX_BOTS + 1;
+
+/**
+ * Whether a user who is not yet a member finds every desk taken (#732): `ROOM_SEATS` typists (bots
+ * aside, they have their own cap) are seated. A member (a second tab) is never refused by it.
+ */
+export function seatsFull(members: Pick<Member, "isBot">[], isMember: boolean): boolean {
+  return !isMember && members.filter((m) => !m.isBot).length >= ROOM_SEATS;
+}
 
 /**
  * Who may take a seat (#166, #143, #732), behind the verified race token: anyone while the room is
@@ -454,6 +467,8 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
         if (!mayRejoin({ phase }, seats.has(userId))) {
           return { ok: false, reason: "in-progress" };
         }
+        const seated = [...seats.values()].map((seat) => ({ isBot: seat.isBot ?? false }));
+        if (seatsFull(seated, seats.has(userId))) return { ok: false, reason: "room-full" };
         const taken = [...seats.values()].map((s) => s.desk);
         // A racer coming back after the end gets the desk it raced at when it is still free; a
         // newcomer in `ended` (#732) skips the last race's desks, so it never takes a racer's.

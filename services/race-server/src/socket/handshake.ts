@@ -7,7 +7,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import type { ResumeKeys } from "../players/resume-keys";
-import { mayRejoin, type RoomRegistry } from "../rooms/registry";
+import { mayRejoin, seatsFull, type RoomRegistry } from "../rooms/registry";
 import { verifyRaceToken } from "./race-token";
 import type { SpectatorSlots } from "./spectator-slots";
 
@@ -31,7 +31,8 @@ export type HandshakeResult =
  * Decides whether a Socket.IO handshake may proceed (ADR 0006, 0009). Order: protocol version, then
  * the auth shape and race token (any failure is `bad-token`), then the room of the token's `lobby`
  * claim, the only source of the room: a client never names one; then `in-progress` for a new user of
- * a room whose race is on (`countdown`, `running`); `waiting` and `ended` admit anyone (#143, #732).
+ * a room whose race is on (`countdown`, `running`); `waiting` and `ended` admit anyone (#143, #732)
+ * while a desk is free, else `room-full`.
  * Reads only; joining happens on connect.
  * A `spectator` token (#187, ADR 0006 point 8) needs only its room: it is let in in every phase,
  * member or not, and never resumes (its `resumeKey` is not even looked up): it never takes a desk.
@@ -60,6 +61,13 @@ export async function authenticateHandshake(
   const { sub, lobby } = verified.claims;
   const isMember = room.phase !== "waiting" && (await registry.hasMember(lobby, sub));
   if (!mayRejoin(room, isMember)) return { ok: false, reason: "in-progress" };
+  // Every desk taken: `registry.join` refuses the same under the room's queue (#732).
+  const members = (await registry.members(lobby)) ?? [];
+  if (
+    seatsFull(members, room.phase === "waiting" ? await registry.hasMember(lobby, sub) : isMember)
+  ) {
+    return { ok: false, reason: "room-full" };
+  }
   const { resumeKey } = parsed.data;
   const raceOn = room.phase === "countdown" || room.phase === "running";
   if (!resumeKey || !raceOn || !resumeKeys) {

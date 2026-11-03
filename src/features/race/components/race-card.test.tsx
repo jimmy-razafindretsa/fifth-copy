@@ -200,7 +200,8 @@ describe("RaceCard compact (#560 C3)", () => {
     for (const lane of lanes(full)) expect(lane.body).toMatch(/data-name/);
     expect(tags(compact, "data-tick")).toHaveLength(view.field.length);
     expect(tags(compact, "data-finish")).toHaveLength(1);
-    expect(rule('[data-compact="true"] .lane')).toMatch(/grid-template-columns:/);
+    // compact and full lanes share the 84px | 1fr rows since #758 (bible 7.4a)
+    expect(rule(".lane")).toMatch(/grid-template-columns:\s*84px minmax\(0, 1fr\)/);
   });
 });
 

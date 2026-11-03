@@ -8,7 +8,7 @@ import { z } from "zod";
 const server = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.url(),
-  /** Signs the guest cookie fc_guest (src/server/auth/guest-cookie.ts, ADR 0009) and, later, Auth.js sessions. */
+  /** Signs the guest cookie fc_guest (src/server/auth/guest-cookie.ts) and Auth.js session JWTs (src/server/auth/auth.ts), ADR 0009. */
   AUTH_SECRET: z.string().min(32),
   /** Signs race tokens and the internal HMAC API (ADR 0006, 0009). Shared with the race server. */
   RACE_TOKEN_SECRET: z.string().min(32),

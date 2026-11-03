@@ -22,7 +22,19 @@ const { SECRET, state } = vi.hoisted(() => ({
   SECRET: "internal-results-route-test-secret-0123456789",
   state: { db: null as unknown },
 }));
+const store = vi.hoisted(() => ({ seen: new Set<string>(), outage: false }));
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test", RACE_TOKEN_SECRET: SECRET } }));
+vi.mock("@/server/internal-api/nonces", () => ({
+  // #716: an in-memory replay store (the Redis one is src/server/internal-api/nonces.test.ts).
+  webNonceStore: () => ({
+    claim: async (nonce: string) => {
+      if (store.outage) return "unavailable";
+      if (store.seen.has(nonce)) return "replay";
+      store.seen.add(nonce);
+      return "claimed";
+    },
+  }),
+}));
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));
@@ -217,6 +229,31 @@ describe.skipIf(!testDatabaseUrl)(
       expect(again.status).toBe(200);
       expect(await again.json()).toEqual(answer);
       expect(await rowsOf(raceId)).toEqual(rows);
+    });
+
+    it("#716 C1: the same signed chunk twice: the second is 401 replay and changes nothing", async () => {
+      const raceId = await startedRace();
+      const rawBody = JSON.stringify(request(raceId));
+      const headers = internalHeaders({ rawBody, secret: SECRET, now: nowS() });
+      expect((await post(raceId, rawBody, headers)).status).toBe(200);
+      const rows = await rowsOf(raceId);
+      const again = await post(raceId, rawBody, headers);
+      expect(again.status).toBe(401);
+      expect(await again.json()).toEqual({ v: PROTOCOL_VERSION, error: "replay" });
+      expect(await rowsOf(raceId)).toEqual(rows);
+    });
+
+    it("#716 C3: nonce store unavailable: a bare 503 and no result row", async () => {
+      const raceId = await startedRace();
+      store.outage = true;
+      try {
+        const res = await signed(request(raceId));
+        expect(res.status).toBe(503);
+        expect(await res.text()).toBe("");
+        expect((await rowsOf(raceId)).results).toHaveLength(0);
+      } finally {
+        store.outage = false;
+      }
     });
 
     it("#195 C4: a flagged result is stored suspicious with its codes; an unflagged one is not", async () => {

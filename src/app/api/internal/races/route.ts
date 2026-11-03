@@ -6,7 +6,8 @@ import {
 } from "@fifth-copy/protocol";
 import { env } from "@/env";
 import { startRace } from "@/features/results";
-import { requireInternal } from "@/server/internal-api/verify";
+import { webNonceStore } from "@/server/internal-api/nonces";
+import { internalRefusalResponse, requireInternal } from "@/server/internal-api/verify";
 
 const refuse = (status: number, error: InternalError["error"]) =>
   Response.json({ v: PROTOCOL_VERSION, error } satisfies InternalError, { status });
@@ -21,12 +22,16 @@ const printableIds = (req: StartRaceRequest) =>
 /**
  * `POST /api/internal/races` (race server -> web on `host:start`, ADR 0006 point 6): verify the HMAC,
  * parse the protocol schema, then `startRace` creates the Race row with its text (idempotent on
- * `raceId`). Refusals: 401 bad-signature / stale-timestamp, 400 bad-body, 426 version, 404 not-found,
- * 409 conflict. Any other failure is a bare 500. Never logs a body or an error detail.
+ * `raceId`). Refusals: 401 bad-signature / stale-timestamp / replay, 400 bad-body, 426 version, 404
+ * not-found, 409 conflict; a bare 503 when the nonce store is unavailable (#716). Any other failure
+ * is a bare 500. Never logs a body or an error detail.
  */
 export async function POST(request: Request) {
-  const verified = await requireInternal(request, { secret: env.RACE_TOKEN_SECRET });
-  if (!verified.ok) return refuse(verified.status, verified.error);
+  const verified = await requireInternal(request, {
+    secret: env.RACE_TOKEN_SECRET,
+    nonces: webNonceStore(),
+  });
+  if (!verified.ok) return internalRefusalResponse(verified);
   const parsed = startRaceRequestSchema.safeParse(verified.body);
   if (!parsed.success || !printableIds(parsed.data)) return refuse(400, "bad-body");
   try {

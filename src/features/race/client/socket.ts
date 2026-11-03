@@ -94,6 +94,11 @@ export interface RoomSocket {
   onServerDisconnect(cb: () => void): Off;
   onReconnecting(cb: (attempt: number) => void): Off;
   onReconnected(cb: (attempt: number) => void): Off;
+  /**
+   * Connects this socket again after a handshake refusal (#235 C6: socket.io never retries one on its
+   * own), with the token and resume key read afresh; the same socket, so every listener stays bound.
+   */
+  reconnect(): void;
   /** Removes every listener registered here and disconnects. */
   close(): void;
 }
@@ -107,6 +112,7 @@ type Emitter = {
 type RawSocket = Emitter & {
   io: Emitter;
   emit(event: string, payload: unknown, ack?: (raw: unknown) => void): unknown;
+  connect(): unknown;
   disconnect(): unknown;
 };
 
@@ -136,14 +142,23 @@ export type ConnectOptions = {
   resumeKey?: string | null | (() => string | null);
 };
 
-export function connectToRoom(url: string, token: string, opts: ConnectOptions = {}): RoomSocket {
+/**
+ * `token`: the race token, or a function read before every handshake (#235 C6: the seat re-mints an
+ * expired token and reconnects the same socket with the new one).
+ */
+export function connectToRoom(
+  url: string,
+  token: string | (() => string),
+  opts: ConnectOptions = {},
+): RoomSocket {
   const io = opts.io ?? (realIo as unknown as IoFactory);
   // ADR 0009: the token and the resume key travel in the handshake auth only, never in the URL or a query.
   const v = opts.version ?? PROTOCOL_VERSION;
   const { resumeKey } = opts;
   const auth: HandshakeAuth = (cb) => {
     const key = typeof resumeKey === "function" ? resumeKey() : resumeKey;
-    cb(key ? { v, token, resumeKey: key } : { v, token });
+    const current = typeof token === "function" ? token() : token;
+    cb(key ? { v, token: current, resumeKey: key } : { v, token: current });
   };
   const socket = io(url, { auth, transports: ["websocket", "polling"], autoConnect: true });
 
@@ -264,6 +279,7 @@ export function connectToRoom(url: string, token: string, opts: ConnectOptions =
     onReconnecting: (cb) =>
       listen(socket.io, "reconnect_attempt", (attempt: number) => cb(attempt)),
     onReconnected: (cb) => listen(socket.io, "reconnect", (attempt: number) => cb(attempt)),
+    reconnect: () => void socket.connect(),
     close: () => {
       for (const [target, event, fn] of registered.splice(0)) target.off(event, fn);
       protocolErrorListeners.clear();

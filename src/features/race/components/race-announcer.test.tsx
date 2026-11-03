@@ -48,6 +48,7 @@ describe("#242 C2 RaceAnnouncer", () => {
               loading: cat.race.loading,
               notice: cat.race.notice,
               errors: cat.race.errors,
+              presence: cat.race.presence,
               countdown: cat.race.countdown,
               input: cat.race.telex.strip,
               stamps: cat.race.stamps,

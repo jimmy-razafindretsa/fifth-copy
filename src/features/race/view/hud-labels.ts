@@ -131,6 +131,7 @@ export const hudLabelFixtures = {
       lane: "Place {rank}, {name}{you}, desk {desk}, {progress}% typed{status}",
       status: {
         "line-cut": "LINE CUT",
+        expired: "EXPIRED",
         asleep: "ASLEEP AT DESK",
         abandoned: "REASSIGNED",
         finished: "FILED",
@@ -195,6 +196,7 @@ export const hudLabelFixtures = {
       lane: "Rang {rank}, {name}{you}, bureau {desk}, {progress} % tapé{status}",
       status: {
         "line-cut": "LIGNE COUPÉE",
+        expired: "EXPIRÉ",
         asleep: "ENDORMI AU BUREAU",
         abandoned: "RÉAFFECTÉ",
         finished: "CLASSÉ",

@@ -30,6 +30,7 @@
     "corpus": "tsx scripts/corpus-manifest.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "ioredis": "^5.11.1",

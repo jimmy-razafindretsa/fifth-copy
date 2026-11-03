@@ -115,7 +115,7 @@ test.describe("#560 race HUD on /design", () => {
     expect(line.find((t) => t.desk === 9)!.x).toBeCloseTo(1, 1);
     expect(line.find((t) => t.desk === 17)!.x).toBeCloseTo(0.61, 1);
     const statuses = state(page, "card-six-statuses");
-    for (const label of ["FILED", "LINE CUT", "ASLEEP AT DESK", "REASSIGNED"]) {
+    for (const label of ["FILED", "LINE CUT", "EXPIRED", "ASLEEP AT DESK", "REASSIGNED"]) {
       await expect(statuses.getByText(label, { exact: true })).toBeVisible();
     }
     // the allocator gives desks 1-12 circles, 13-24 squares, 25-30 triangles (#156)
@@ -322,6 +322,38 @@ test.describe("#697 race card lanes: name, YOU tag and status share one row", ()
           you.getByText("YOU", { exact: true }).evaluate((el) => el.getBoundingClientRect().top),
         ]);
         expect(Math.abs(tagTop - nameTop), `${width} YOU on the name row`).toBeLessThanOrEqual(2);
+      }
+    });
+  }
+});
+
+test.describe("#758 race card lanes: a 10-character name stays readable next to a long label", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C1 Marmot-648 next to ASLEEP AT DESK shows in full, on the name row (${scheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await open(page);
+      for (const width of [1280, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        const lane = state(page, "card-six-statuses").locator('[data-lane][data-status="asleep"]');
+        await expect(lane.locator("[data-status-label]")).toHaveText("ASLEEP AT DESK");
+        const m = await lane.evaluate((el) => {
+          const name = el.querySelector<HTMLElement>("[data-name]")!;
+          const chip = el.querySelector("[data-status-label]")!.getBoundingClientRect();
+          const n = name.getBoundingClientRect();
+          return {
+            text: name.textContent,
+            clipped: name.scrollWidth - name.clientWidth,
+            sameRow: Math.abs(chip.top - n.top),
+            gap: chip.left - n.right,
+          };
+        });
+        expect(m.text, `${width}`).toBe("Marmot-648");
+        expect(m.clipped, `${width} name shown in full`).toBeLessThanOrEqual(0);
+        // the #697 one-row rule still holds: the chip on the name row, after the name
+        expect(m.sameRow, `${width} chip on the name row`).toBeLessThanOrEqual(2);
+        expect(m.gap, `${width} chip after the name`).toBeGreaterThanOrEqual(0);
       }
     });
   }

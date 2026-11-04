@@ -27,7 +27,7 @@ Canadian copyright lasts the author's life plus 70 years since 30 December 2022;
 Every content file also states `licence`: `public domain` for the works above, `teacher-written` for teacher texts (or a named CC licence when a teacher releases one).
 
 ## How the v1 passages were verified
-For each content file, the Project Gutenberg plain text named in its `source` (`https://www.gutenberg.org/cache/epub/<n>/pg<n>.txt`) was fetched, its title and author lines checked against the file, and every passage checked as a verbatim substring of that text in comparison form (`normalizeTypeable`, `_` dropped, `--` read as `-`). All 184 passages matched (card #342). Authors and translators all died before 1972: the most recent is Alain-Fournier (died 1914) and, for translations, Constance Garnett (died 1946).
+For each content file, the Project Gutenberg plain text named in its `source` (`https://www.gutenberg.org/cache/epub/<n>/pg<n>.txt`) was fetched, its title and author lines checked against the file, and every passage checked as a verbatim substring of that text in comparison form (`normalizeTypeable`, `_` dropped, `--` read as `-`). All 184 passages matched (card #342). Authors and translators all died before 1972: the most recent are H. G. Wells and, as translator, Constance Garnett (both died 1946), then L. M. Montgomery (1942).
 
 | Language | Files (works) | Passages |
 |---|---|---|

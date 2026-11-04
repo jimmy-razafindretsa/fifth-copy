@@ -5,6 +5,7 @@
 import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import { createPrismaClient } from "../src/server/db-client";
+import { importCorpus } from "../scripts/import-texts";
 import { seedIdentity } from "./seed-identity";
 
 execFileSync("scripts/db-guard.sh", { stdio: "inherit" });
@@ -14,6 +15,9 @@ async function main() {
   try {
     // Add upserts here as models appear. Keep it idempotent.
     await seedIdentity(db);
+    // The text corpus (#346): the same licence-checked import as scripts/import-texts.ts.
+    const texts = await importCorpus(db);
+    console.log(`seed: texts ${texts.total} passages, ${texts.created} new`);
     console.log("seed: ok");
   } finally {
     await db.$disconnect();

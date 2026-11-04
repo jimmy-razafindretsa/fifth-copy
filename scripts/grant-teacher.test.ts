@@ -88,7 +88,9 @@ describe.skipIf(!testDatabaseUrl)("grant-teacher (needs TEST_DATABASE_URL)", () 
     const d = live();
     expect(await main([`${prefix}TEACH`], d)).toBe(0);
     expect(await flag("teach")).toBe(true);
-    const row = await db.user.findUniqueOrThrow({ where: { usernameNormalized: `${prefix}teach` } });
+    const row = await db.user.findUniqueOrThrow({
+      where: { usernameNormalized: `${prefix}teach` },
+    });
     expect(d.out).toEqual([`${row.id} teacher`]);
     expect([...d.out, ...d.err].join("\n")).not.toMatch(/argon2|postgresql/);
   });

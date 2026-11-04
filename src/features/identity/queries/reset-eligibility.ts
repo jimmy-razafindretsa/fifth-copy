@@ -2,16 +2,38 @@ import "server-only";
 import { db } from "@/server/db";
 
 /**
- * The one membership rule of the teacher reset (#788): `studentId` has a `RaceResult` in a race of a
- * lobby hosted by `hostId` (any of the host's lobbies). Durable, not live: the student who lost a
- * password cannot be in the room as their account. A host is never eligible for their own account.
- * A live-room check through the race server could replace this without touching the action.
+ * The account a host may issue a teacher reset code for (#788), in ONE query: an account (not a
+ * guest) named `usernameNormalized`, with a password, other than the host, holding a `RaceResult`
+ * in a race of any lobby hosted by `hostId`. Every refusal cause is the same `null` from the same
+ * round trip. Membership is durable, not live: the student who lost a password cannot be in the
+ * room as their account. A live-room check could replace this without touching the action.
  */
-export async function isEligibleForReset(hostId: string, studentId: string): Promise<boolean> {
-  if (hostId === studentId) return false;
-  const hit = await db.raceResult.findFirst({
-    where: { userId: studentId, race: { lobby: { hostUserId: hostId } } },
+export async function findResetTarget(
+  hostId: string,
+  usernameNormalized: string,
+): Promise<{ id: string } | null> {
+  return db.user.findFirst({
+    where: {
+      usernameNormalized,
+      isGuest: false,
+      passwordHash: { not: null },
+      id: { not: hostId },
+      raceResults: { some: { race: { lobby: { hostUserId: hostId } } } },
+    },
     select: { id: true },
   });
-  return hit !== null;
+}
+
+/**
+ * The lobby named `code` when `viewerId` is its host and that host is a teacher account (#788 C3,
+ * C8): `isTeacher`, and never a guest row, whatever the flag says.
+ */
+export async function findTeacherLobby(
+  code: string,
+  viewerId: string,
+): Promise<{ code: string } | null> {
+  return db.lobby.findFirst({
+    where: { code, hostUserId: viewerId, host: { isGuest: false, isTeacher: true } },
+    select: { code: true },
+  });
 }

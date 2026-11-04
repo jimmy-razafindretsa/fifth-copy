@@ -225,8 +225,16 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
       ["a guest viewer", () => viewerOf(ids.guest!, true), () => CODE_A],
       ["an account that is not the lobby's host", () => viewerOf(ids.otherHost!), () => CODE_A],
       ["the host's id flagged as a guest", () => viewerOf(ids.host!, true), () => CODE_A],
-      ["C8: the host of the lobby without the teacher flag", () => viewerOf(ids.plainHost!), () => CODE_PLAIN],
-      ["a guest row hosting the lobby, even flagged", () => viewerOf(ids.guestHost!), () => CODE_GUEST],
+      [
+        "C8: the host of the lobby without the teacher flag",
+        () => viewerOf(ids.plainHost!),
+        () => CODE_PLAIN,
+      ],
+      [
+        "a guest row hosting the lobby, even flagged",
+        () => viewerOf(ids.guestHost!),
+        () => CODE_GUEST,
+      ],
     ])("%s gets not-host, writes nothing and creates no guest", async (_n, viewer, code) => {
       state.viewer = viewer();
       const before = await counts();

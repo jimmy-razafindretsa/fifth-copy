@@ -1,3 +1,6 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "isTeacher" BOOLEAN NOT NULL DEFAULT false;
+
 -- CreateTable
 CREATE TABLE "PasswordReset" (
     "id" TEXT NOT NULL,

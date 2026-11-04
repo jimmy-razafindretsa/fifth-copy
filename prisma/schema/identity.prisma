@@ -20,6 +20,8 @@ model User {
   passwordHash       String?
   /// Bumped to revoke every JWT issued before (ADR 0009).
   tokenVersion       Int              @default(0)
+  /// May issue teacher password reset codes (#788). Set only out of band by `scripts/grant-teacher.ts`.
+  isTeacher          Boolean          @default(false)
   avatarKey          String?
   avatarStatus       AvatarStatus     @default(NONE)
   /// The clerk outfit config of bible 10.1, validated by outfitSchema; null = never saved

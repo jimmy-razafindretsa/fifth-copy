@@ -1,8 +1,17 @@
 {
   "language": "en",
-  "source": "Lewis Carroll, Alice's Adventures in Wonderland (1865)",
+  "source": "Lewis Carroll, Alice's Adventures in Wonderland (1865), Project Gutenberg eBook #11",
   "licence": "public domain",
   "authorType": "public-domain",
-  "reviewed": null,
-  "passages": ["Begin at the beginning, and go on till you come to the end: then stop."]
+  "reviewed": "2026-11-03",
+  "passages": [
+    "However, when they had been running half an hour or so, and were quite dry again, the Dodo suddenly called out \"The race is over!\" and they all crowded round it, panting, and asking, \"But who has won?\"",
+    "Presently the Rabbit came up to the door, and tried to open it; but, as the door opened inwards, and Alice's elbow was pressed hard against it, that attempt proved a failure.",
+    "It was opened by another footman in livery, with a round face, and large eyes like a frog; and both footmen, Alice noticed, had powdered hair that curled all over their heads.",
+    "\"Your hair wants cutting,\" said the Hatter. He had been looking at Alice for some time with great curiosity, and this was his first speech.",
+    "He moved on as he spoke, and the Dormouse followed him: the March Hare moved into the Dormouse's place, and Alice rather unwillingly took the place of the March Hare.",
+    "\"You can't think how glad I am to see you again, you dear old thing!\" said the Duchess, as she tucked her arm affectionately into Alice's, and they walked off together.",
+    "\"The game's going on rather better now,\" she said, by way of keeping up the conversation a little.",
+    "\"A cheap sort of present!\" thought Alice. \"I'm glad they don't give birthday presents like that!\" But she did not venture to say it out loud."
+  ]
 }

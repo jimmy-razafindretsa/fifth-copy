@@ -17,7 +17,8 @@ export type LimitAction =
   | "invite"
   | "clerk-outfit"
   | "set-lobby-type"
-  | "password-reset-issue";
+  | "password-reset-issue"
+  | "password-reset-redeem";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -33,7 +34,9 @@ export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
  * every two seconds for a whole minute, well above a person trying uniforms on. `set-lobby-type`
  * (#114) counts one host's PUBLIC / PRIVATE changes (`user:<id>`), on the same 30 a minute.
  * `password-reset-issue` (#788) counts the reset codes one host issues (`user:<id>`), refusals
- * included, so a host cannot probe accounts quickly: 5 an hour.
+ * included, so a host cannot probe accounts quickly: 5 an hour. `password-reset-redeem` (#789)
+ * counts the `/reset` attempts per account (`reset:<usernameNormalized>`) and per `requestSubject()`,
+ * both before any lookup: 5 an hour each, against a 40-bit code that lives 30 minutes.
  */
 export const LIMITS = {
   "join-by-code": { max: 120, windowMs: 60_000 },
@@ -46,6 +49,7 @@ export const LIMITS = {
   "clerk-outfit": { max: 30, windowMs: 60_000 },
   "set-lobby-type": { max: 30, windowMs: 60_000 },
   "password-reset-issue": { max: 5, windowMs: 60 * 60_000 },
+  "password-reset-redeem": { max: 5, windowMs: 60 * 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */

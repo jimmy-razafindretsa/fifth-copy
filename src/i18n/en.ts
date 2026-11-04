@@ -659,6 +659,48 @@ export const en = {
       alreadySignedIn: "You are already signed in. Sign out to open another file.",
       generic: "Something jammed. Try again.",
     },
+    /**
+     * `/reset` (#789, bible 14.3 "Password reset screen"): a student redeems the code a teacher
+     * issued (#788, #790). No email and no recovery code anywhere; errors never echo the input.
+     */
+    reset: {
+      kicker: "MINISTRY OF TYPING · FORM 1-C",
+      title: "NEW PASSWORD",
+      lede: "Your teacher gave you a reset code. Type it with your username and pick a new password.",
+      form: "FORM 1-C",
+      tag: "PASSWORD RESET",
+      fields: {
+        username: "USERNAME",
+        code: "RESET CODE",
+        codeHint: "The 8 letters and numbers your teacher gave you.",
+        password: "NEW PASSWORD",
+        passwordHint: "At least 8 characters.",
+      },
+      submit: "SET MY PASSWORD",
+      pending: "FILING…",
+      switchPrompt: "Remembered it?",
+      switchLink: "SIGN IN →",
+      done: {
+        title: "PASSWORD SET",
+        body: "Your new password is on file and your other sessions are signed out. Sign in with it.",
+        link: "SIGN IN →",
+      },
+      errors: {
+        prefix: "RETURNED ·",
+        usernameRequired: "Enter your username.",
+        usernameLength: "Use 3 to 20 characters.",
+        usernameChars: "Use only letters, numbers and _.",
+        codeRequired: "Enter the reset code.",
+        codeFormat: "Use the 8 letters and numbers your teacher gave you.",
+        passwordRequired: "Enter a new password.",
+        passwordLength: "Use 8 to 128 characters.",
+        fields: "Only a username, a code and a new password can be filed.",
+        invalid:
+          "Wrong username or code, or the code is used or expired. Ask your teacher for a new one.",
+        "rate-limited": "Too many tries. Try again in {m} min.",
+        generic: "Something jammed. Try again.",
+      },
+    },
     merge: {
       stamp: "FILED",
       carried: { zero: "0 RACES CARRIED", one: "1 RACE CARRIED", other: "{n} RACES CARRIED" },

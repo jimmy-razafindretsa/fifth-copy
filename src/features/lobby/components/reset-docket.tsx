@@ -91,7 +91,7 @@ export function ResetDocketView({
         <span className={styles.code}>{labels.name}</span>
         <span className={styles.tag}>{labels.tag}</span>
       </div>
-      <form onSubmit={onSubmit} noValidate>
+      <form method="post" onSubmit={onSubmit} noValidate>
         <div className={styles.row}>
           <label htmlFor={ids.input} className={styles.label}>
             {labels.student}

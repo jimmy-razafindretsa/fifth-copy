@@ -40,6 +40,9 @@ vi.mock("@/server/limiter", () => ({
     state.calls.push(`limit:${action}:${subject}`);
     return { ok: !state.limited, retryAfterMs: state.limited ? 42_000 : 0 };
   },
+  clearLimit: async (action: string, subject: string) => {
+    state.calls.push(`clear:${action}:${subject}`);
+  },
 }));
 
 const PREFIX = `test-reset-${randomUUID().slice(0, 8)}-`;
@@ -360,6 +363,25 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
     it("counts per user:<viewer id> after the host check and before the eligibility lookup", async () => {
       await issuePasswordReset({ code: CODE_A, username: name("never") });
       expect(state.calls).toEqual(["viewer", `limit:password-reset-issue:user:${ids.host}`]);
+    });
+
+    it("#789: a code issued clears the student's redeem budget, keyed by the stored normalized name", async () => {
+      const result = await issuePasswordReset({
+        code: CODE_A,
+        username: `  ${name("student").toUpperCase()} `,
+      });
+      expect(result.ok).toBe(true);
+      expect(state.calls.at(-1)).toBe(
+        `clear:password-reset-redeem-account:reset:${name("student").toLowerCase()}`,
+      );
+    });
+
+    it("#789: no refusal clears a redeem budget", async () => {
+      await issuePasswordReset({ code: CODE_A, username: name("never") });
+      await issuePasswordReset({ code: CODE_OTHER, username: name("student") });
+      state.limited = true;
+      await issuePasswordReset({ code: CODE_A, username: name("student") });
+      expect(state.calls.some((c) => c.startsWith("clear:"))).toBe(false);
     });
 
     it("a refused call returns rate-limited with retryAfterMs and writes nothing", async () => {

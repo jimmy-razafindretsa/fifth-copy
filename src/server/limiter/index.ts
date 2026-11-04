@@ -43,3 +43,8 @@ export function limitCode(
 ): Promise<LimitVerdict> {
   return webLimit().code(action, subject, code);
 }
+
+/** Forgets the calls `subject` spent on `action` (#789); fails open. See `core.ts`. */
+export function clearLimit(action: LimitAction, subject: string): Promise<void> {
+  return webLimit().clear(action, subject);
+}

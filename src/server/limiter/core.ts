@@ -18,7 +18,8 @@ export type LimitAction =
   | "clerk-outfit"
   | "set-lobby-type"
   | "password-reset-issue"
-  | "password-reset-redeem";
+  | "password-reset-redeem"
+  | "password-reset-redeem-account";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -34,9 +35,11 @@ export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
  * every two seconds for a whole minute, well above a person trying uniforms on. `set-lobby-type`
  * (#114) counts one host's PUBLIC / PRIVATE changes (`user:<id>`), on the same 30 a minute.
  * `password-reset-issue` (#788) counts the reset codes one host issues (`user:<id>`), refusals
- * included, so a host cannot probe accounts quickly: 5 an hour. `password-reset-redeem` (#789)
- * counts the `/reset` attempts per account (`reset:<usernameNormalized>`) and per `requestSubject()`,
- * both before any lookup: 5 an hour each, against a 40-bit code that lives 30 minutes.
+ * included, so a host cannot probe accounts quickly: 5 an hour. The `/reset` redeem (#789, owner
+ * decision 2026-11-04) has two budgets, both spent before any lookup: `password-reset-redeem`
+ * per client (`requestSubject()`, 30 an hour, so a class behind one address can still reset), then
+ * `password-reset-redeem-account` per account (`reset:<usernameNormalized>`, 5 an hour), counted only
+ * when the client budget admitted the attempt; issuing a new code clears the account budget.
  */
 export const LIMITS = {
   "join-by-code": { max: 120, windowMs: 60_000 },
@@ -49,7 +52,8 @@ export const LIMITS = {
   "clerk-outfit": { max: 30, windowMs: 60_000 },
   "set-lobby-type": { max: 30, windowMs: 60_000 },
   "password-reset-issue": { max: 5, windowMs: 60 * 60_000 },
-  "password-reset-redeem": { max: 5, windowMs: 60 * 60_000 },
+  "password-reset-redeem": { max: 30, windowMs: 60 * 60_000 },
+  "password-reset-redeem-account": { max: 5, windowMs: 60 * 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */
@@ -81,6 +85,11 @@ export type WebLimit = ((action: LimitAction, subject: string) => Promise<LimitV
    * against `action` per (subject, code). Fails open like `limit`.
    */
   code(action: CodeAction, subject: string, code: string | null): Promise<LimitVerdict>;
+  /**
+   * Forgets the calls `subject` spent on `action` (#789: a new reset code clears its account's
+   * redeem budget). Fails open like `limit`: a Redis error or timeout is one warning, never a throw.
+   */
+  clear(action: LimitAction, subject: string): Promise<void>;
 };
 type Warn = (msg: string, fields: Record<string, unknown>) => void;
 
@@ -115,7 +124,11 @@ export function createWebLimit({
       }
       return ALLOW;
     };
-    return Object.assign(disabled, { code: disabled, close: () => {} });
+    return Object.assign(disabled, {
+      code: disabled,
+      clear: async () => void (await disabled()),
+      close: () => {},
+    });
   }
 
   let redis: Redis | undefined;
@@ -196,5 +209,9 @@ export function createWebLimit({
     return (await count(`${action}:${pair}`, LIMITS[action])) ?? ALLOW;
   };
 
-  return Object.assign(limit, { code, close: () => redis?.disconnect() });
+  const clear = async (action: LimitAction, subject: string): Promise<void> => {
+    await guarded(() => client().clear(`${action}:${subjectKey(subject)}`));
+  };
+
+  return Object.assign(limit, { code, clear, close: () => redis?.disconnect() });
 }

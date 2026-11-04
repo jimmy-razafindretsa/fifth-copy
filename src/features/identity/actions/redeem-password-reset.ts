@@ -42,9 +42,10 @@ async function findTarget(usernameNormalized: string) {
 /**
  * The teacher reset, redeemed (#789, ADR 0009, owner decision 2026-11-03 on #445). Unauthenticated
  * by design. In order: the form is parsed (`parseResetForm`: username, code, new password; a refusal
- * names fields and reads nothing); the attempt is counted against `password-reset-redeem` for the
- * account (`reset:<usernameNormalized>`) and for the client (`requestSubject()`), both before any
- * lookup, and either refusal compares nothing; then ONE lookup and ONE Argon2id comparison against
+ * names fields and reads nothing); the attempt is counted against the client budget
+ * (`password-reset-redeem`, `requestSubject()`) and, only once that admitted it, the account budget
+ * (`password-reset-redeem-account`, `reset:<usernameNormalized>`, cleared when a new code is issued),
+ * both before any lookup, and either refusal compares nothing; then ONE lookup and ONE Argon2id comparison against
  * the newest reset row's hash (`DUMMY_HASH` when the account is unknown, a guest or has no row), so
  * every miss (no row, older row, expired, used, wrong code, unknown or guest username) is the same
  * `invalid` answer after the same work. A match hashes the new password, then one transaction
@@ -67,19 +68,19 @@ export async function redeemPasswordReset(form: FormData): Promise<ResetFormStat
   }
   const { usernameNormalized, code, password } = parsed;
 
-  const verdicts = await Promise.all([
-    limit("password-reset-redeem", `reset:${usernameNormalized}`),
-    requestSubject().then((subject) => limit("password-reset-redeem", subject)),
-  ]);
-  const blocked = verdicts.filter((v) => !v.ok);
-  if (blocked.length > 0) {
-    const retryAfterMs = Math.max(...blocked.map((v) => v.retryAfterMs));
-    const m = Math.max(1, Math.ceil(retryAfterMs / 60_000));
+  // The client budget first; the account budget is spent only on an attempt the client budget
+  // admitted, so one client cannot use up an account's attempts (owner decision 2026-11-04).
+  const client = await limit("password-reset-redeem", await requestSubject());
+  const verdict = client.ok
+    ? await limit("password-reset-redeem-account", `reset:${usernameNormalized}`)
+    : client;
+  if (!verdict.ok) {
+    const m = Math.max(1, Math.ceil(verdict.retryAfterMs / 60_000));
     return {
       status: "rate-limited",
       fieldErrors: {},
       formError: fill((await errors())["rate-limited"], { m }),
-      retryAfterMs,
+      retryAfterMs: verdict.retryAfterMs,
     };
   }
 

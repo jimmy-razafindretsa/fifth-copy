@@ -24,6 +24,8 @@ const state = vi.hoisted(() => ({
   /** Model delegate calls (`user.findUnique`), in order; `fail` makes the named one throw. */
   queries: [] as string[],
   fail: null as string | null,
+  /** The viewer `issuePasswordReset` sees (the teacher host of the C4 unlock test). */
+  viewer: null as { id: string; name: string; isGuest: boolean; hasAvatar: boolean } | null,
 }));
 
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test", AUTH_SECRET: "r".repeat(32) } }));
@@ -39,6 +41,7 @@ vi.mock("@/i18n", async () => {
 vi.mock("@/server/auth", async () => {
   const password = await import("@/server/auth/password");
   return {
+    getViewer: async () => state.viewer,
     DUMMY_HASH: password.DUMMY_HASH,
     hashPassword: password.hashPassword,
     verifyPassword: async (plain: string, phc: string) => {
@@ -51,13 +54,18 @@ vi.mock("@/server/limiter", async () => {
   const { LIMITS } = await import("@/server/limiter/core");
   return {
     requestSubject: async () => state.subject,
+    // As the sliding window: an allowed call is recorded, a refused one is not.
     limit: async (action: keyof typeof LIMITS, subject: string) => {
       const key = `${action}:${subject}`;
       state.limits.push(key);
-      const n = (state.counted.get(key) ?? 0) + 1;
-      state.counted.set(key, n);
-      const ok = n <= LIMITS[action].max;
+      const n = state.counted.get(key) ?? 0;
+      const ok = n < LIMITS[action].max;
+      if (ok) state.counted.set(key, n + 1);
       return { ok, retryAfterMs: ok ? 0 : 1_800_000 };
+    },
+    clearLimit: async (action: string, subject: string) => {
+      state.limits.push(`clear:${action}:${subject}`);
+      state.counted.delete(`${action}:${subject}`);
     },
   };
 });
@@ -426,31 +434,70 @@ describe.skipIf(!testDatabaseUrl)("redeemPasswordReset (needs TEST_DATABASE_URL)
     }, 60_000);
   });
 
-  describe("C4: limiter", () => {
-    it("counts per reset:<usernameNormalized> and per requestSubject() before any lookup", async () => {
+  describe("C4: limiter (amended by owner decision 2026-11-04)", () => {
+    const CLIENT = "password-reset-redeem";
+    const ACCOUNT = "password-reset-redeem-account";
+    const WRONG = "ZZZZ2222";
+
+    it("counts the client budget first, then the account budget, before any lookup", async () => {
       const username = await account();
       await issue(username);
       state.fail = "user.findUnique";
       await attempt(` ${username.toUpperCase()} `);
-      expect(state.limits).toEqual([
-        `password-reset-redeem:reset:${username}`,
-        `password-reset-redeem:${state.subject}`,
-      ]);
+      expect(state.limits).toEqual([`${CLIENT}:${state.subject}`, `${ACCOUNT}:reset:${username}`]);
     });
 
-    it("the sixth attempt on one account is refused, even from another client, and compares nothing", async () => {
+    it("30 attempts per client an hour: the 31st is refused, whatever the account, and compares nothing", async () => {
+      const names = await Promise.all([1, 2, 3, 4, 5, 6].map(() => account()));
+      for (let i = 0; i < 30; i++) {
+        expect((await attempt(names[i % 6]!, WRONG)).status).toBe("invalid");
+      }
+      state.compares = 0;
+      state.queries = [];
+      state.limits = [];
+      state.locale = "fr";
+      const fresh = await account();
+      await issue(fresh);
+      const before = await snapshot(fresh);
+      const refused = await attempt(fresh); // the right code
+      expect(refused).toEqual({
+        status: "rate-limited",
+        fieldErrors: {},
+        formError: "Trop d'essais. Réessaie dans 30 min.",
+        retryAfterMs: 1_800_000,
+      });
+      expect(state.limits).toEqual([`${CLIENT}:${state.subject}`]); // the account budget is untouched
+      expect(state.compares).toBe(0);
+      expect(state.queries).toEqual([]);
+      expect(await snapshot(fresh)).toEqual(before);
+    });
+
+    it("attempts a client's exhausted budget refuses never spend the account budget", async () => {
+      const victim = await account();
+      await issue(victim);
+      const other = await account();
+      for (let i = 0; i < 30; i++) await attempt(other, WRONG); // the client budget is spent
+      for (let i = 0; i < 20; i++) {
+        expect((await attempt(victim, WRONG)).status).toBe("rate-limited");
+      }
+      expect(state.counted.get(`${ACCOUNT}:reset:${victim}`)).toBeUndefined();
+      // the student, from their own client, still has all 5 attempts and the right code works
+      state.subject = "ip:192.0.2.200";
+      expect((await attempt(victim)).status).toBe("done");
+    });
+
+    it("5 wrong codes from 5 clients fill the account budget; the 6th, right code included, is refused", async () => {
       const username = await account();
       await issue(username);
       for (let i = 0; i < 5; i++) {
         state.subject = `ip:192.0.2.${i}`;
-        expect((await attempt(username, "ZZZZ2222")).status).toBe("invalid");
+        expect((await attempt(username, WRONG)).status).toBe("invalid");
       }
       state.subject = "ip:192.0.2.99";
       state.compares = 0;
       state.queries = [];
       const before = await snapshot(username);
-      const sixth = await attempt(username); // the right code
-      expect(sixth).toEqual({
+      expect(await attempt(username)).toEqual({
         status: "rate-limited",
         fieldErrors: {},
         formError: "Too many tries. Try again in 30 min.",
@@ -461,19 +508,76 @@ describe.skipIf(!testDatabaseUrl)("redeemPasswordReset (needs TEST_DATABASE_URL)
       expect(await snapshot(username)).toEqual(before);
     });
 
-    it("the sixth attempt from one client is refused, whatever the account", async () => {
-      const names = await Promise.all([1, 2, 3, 4, 5, 6].map(() => account()));
-      for (const u of names.slice(0, 5)) expect((await attempt(u)).status).toBe("invalid");
-      state.compares = 0;
-      state.queries = [];
-      state.locale = "fr";
-      const sixth = await attempt(names[5]!);
-      expect(sixth).toMatchObject({
-        status: "rate-limited",
-        formError: "Trop d'essais. Réessaie dans 30 min.",
+    it("a code newly issued by the teacher (issuePasswordReset) unlocks a filled account budget", async () => {
+      const { issuePasswordReset } = await import("./issue-password-reset");
+      const username = await account();
+      // a teacher host and a race of the student in one of their lobbies (#788 eligibility)
+      const host = await db.user.create({
+        data: {
+          typistName: `${PREFIX}_host${serial++}`,
+          isGuest: false,
+          isTeacher: true,
+          username: `${PREFIX}_h${serial}`,
+          usernameNormalized: `${PREFIX}_h${serial}`,
+          passwordHash: oldPasswordHash,
+        },
       });
-      expect(state.compares).toBe(0);
-      expect(state.queries).toEqual([]);
+      const lobbyCode = `QRV-${String(1000 + Math.floor(Math.random() * 9000))}`;
+      const lobby = await db.lobby.create({ data: { code: lobbyCode, hostUserId: host.id } });
+      const race = await db.race.create({
+        data: {
+          id: randomUUID(),
+          lobbyId: lobby.id,
+          textContent: "a b",
+          textLanguage: "EN",
+          textWordCount: 2,
+          settings: {},
+          startedAt: new Date(),
+          engineVersion: "test",
+          protocolVersion: 1,
+        },
+      });
+      const n = { wpm: 50, rawWpm: 50, cleanWpm: 50, adjustedWpm: 50, accuracy: 1, progress: 1 };
+      await db.raceResult.create({
+        data: {
+          raceId: race.id,
+          userId: ids[username]!,
+          desk: 1,
+          name: "Student",
+          isBot: false,
+          place: 1,
+          status: "FINISHED",
+          ...n,
+          correct: 3,
+          errors: 0,
+          total: 3,
+          durationMs: 1000,
+          bonusesSent: 0,
+          bonusesReceived: 0,
+          bonusLog: [],
+          engineVersion: "test",
+        },
+      });
+      try {
+        await issue(username);
+        for (let i = 0; i < 5; i++) {
+          state.subject = `ip:192.0.2.${i}`;
+          await attempt(username, WRONG);
+        }
+        expect((await attempt(username)).status).toBe("rate-limited");
+
+        state.viewer = { id: host.id, name: "Host", isGuest: false, hasAvatar: false };
+        const issued = await issuePasswordReset({ code: lobbyCode, username });
+        if (!issued.ok) throw new Error(`expected a code, got ${issued.error}`);
+        expect(state.limits).toContain(`clear:${ACCOUNT}:reset:${username}`);
+
+        state.subject = "ip:192.0.2.50";
+        expect((await attempt(username, issued.code)).status).toBe("done");
+      } finally {
+        state.viewer = null;
+        await db.race.delete({ where: { id: race.id } });
+        await db.lobby.delete({ where: { id: lobby.id } });
+      }
     });
   });
 });

@@ -18,9 +18,8 @@ vi.mock("next/headers", () => ({
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
 
 const { MergeStamp } = await import("./merge-stamp");
-const { MERGED_COOKIE, mergedRaces, mergePluralForm, parseMergedFlash } = await import(
-  "../merge/flash-cookie"
-);
+const { MERGED_COOKIE, mergedRaces, mergePluralForm, parseMergedFlash } =
+  await import("../merge/flash-cookie");
 
 async function render(): Promise<string> {
   const el = await MergeStamp();
@@ -80,9 +79,21 @@ describe("MergeStamp (#57 C1)", () => {
   });
 
   it.each([
-    ["0", "0 course et tes statistiques ont été versées à ton dossier du personnel.", "0 COURSE REPORTÉE"],
-    ["1", "1 course et tes statistiques ont été versées à ton dossier du personnel.", "1 COURSE REPORTÉE"],
-    ["7", "7 courses et tes statistiques ont été versées à ton dossier du personnel.", "7 COURSES REPORTÉES"],
+    [
+      "0",
+      "0 course et tes statistiques ont été versées à ton dossier du personnel.",
+      "0 COURSE REPORTÉE",
+    ],
+    [
+      "1",
+      "1 course et tes statistiques ont été versées à ton dossier du personnel.",
+      "1 COURSE REPORTÉE",
+    ],
+    [
+      "7",
+      "7 courses et tes statistiques ont été versées à ton dossier du personnel.",
+      "7 COURSES REPORTÉES",
+    ],
   ])("French, %s races", async (n, sentence, carried) => {
     locale = "fr";
     jar.set(MERGED_COOKIE, n);

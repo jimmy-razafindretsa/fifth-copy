@@ -22,14 +22,26 @@ export type MergeStampDocketProps = {
  * `Stamp` at `md` at its seeded angle slams in (still under reduced motion), clipped by its band; the
  * sentence; the secondary `DISMISS` closes it. The one-shot cookie is cleared once it has rendered.
  */
-export function MergeStampDocket({ races, title, carried, sentence, dismiss }: MergeStampDocketProps) {
+export function MergeStampDocket({
+  races,
+  title,
+  carried,
+  sentence,
+  dismiss,
+}: MergeStampDocketProps) {
   const [open, setOpen] = useState(true);
   useEffect(() => clearMergedFlash(), []);
   if (!open) return null;
   return (
     <section aria-label={title} data-merge-stamp={races} className={styles.docket}>
       <div className={styles.stamp}>
-        <Stamp size="md" tone="ink" rotation="auto" seed={`merge-${races}`} lines={[title, carried]} />
+        <Stamp
+          size="md"
+          tone="ink"
+          rotation="auto"
+          seed={`merge-${races}`}
+          lines={[title, carried]}
+        />
       </div>
       <p className={styles.sentence}>{sentence}</p>
       <div className={styles.actions}>

@@ -7,6 +7,8 @@
  * Prints one line per viewport: console errors, failed requests, axe serious/critical violations.
  * Exit 1 if any viewport has errors, failed requests or serious/critical violations.
  * Only localhost / preview URLs: anything else is refused.
+ * SEE_COOKIES="name=value; name2=value2" plants cookies on the base URL first (a one-shot state such as
+ * the merge stamp's `fc_merged`, #57).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -52,6 +54,14 @@ if (!allowedHosts.filter(Boolean).includes(host) && !host.endsWith(".localhost")
 const names = (flag("viewports") ?? Object.keys(VIEWPORTS).join(",")).split(
   ",",
 ) as (keyof typeof VIEWPORTS)[];
+const cookies = (process.env.SEE_COOKIES ?? "")
+  .split(";")
+  .map((pair) => pair.trim())
+  .filter((pair) => pair.includes("="))
+  .map((pair) => {
+    const i = pair.indexOf("=");
+    return { name: pair.slice(0, i), value: pair.slice(i + 1), url: base };
+  });
 const theme = (flag("theme") ?? "light") as "light" | "dark";
 const outDir = path.join(".eyes", issue);
 const slug = route.replace(/^\//, "").replace(/[^a-zA-Z0-9]+/g, "_") || "root";
@@ -69,6 +79,7 @@ async function main() {
         colorScheme: theme,
         reducedMotion: "reduce",
       });
+      if (cookies.length) await context.addCookies(cookies);
       const page = await context.newPage();
       const consoleErrors: string[] = [];
       const failed: string[] = [];

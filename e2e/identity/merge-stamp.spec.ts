@@ -39,23 +39,19 @@ test.describe("merge confirmation stamp (#57)", () => {
     await expect(docket(page)).toHaveCount(0);
   });
 
-  test("C1 plural forms for 0 and 1, and the French catalog", async ({ page, context }) => {
-    await plant(context, "1");
-    await page.goto("/");
-    await expect(docket(page)).toContainText(
-      "1 race and your stats were carried into your Personnel file.",
-      { timeout: HYDRATION_WAIT },
-    );
-    await expect.poll(() => flashCookie(context), { timeout: HYDRATION_WAIT }).toBeUndefined();
+  for (const [n, sentence] of [
+    ["1", "1 race and your stats were carried into your Personnel file."],
+    ["0", "0 races and your stats were carried into your Personnel file."],
+  ] as const) {
+    test(`C1 plural form for ${n}`, async ({ page, context }) => {
+      await plant(context, n);
+      await page.goto("/");
+      await expect(docket(page)).toContainText(sentence, { timeout: HYDRATION_WAIT });
+      await expect.poll(() => flashCookie(context), { timeout: HYDRATION_WAIT }).toBeUndefined();
+    });
+  }
 
-    await plant(context, "0");
-    await page.goto("/");
-    await expect(docket(page)).toContainText(
-      "0 races and your stats were carried into your Personnel file.",
-      { timeout: HYDRATION_WAIT },
-    );
-    await expect.poll(() => flashCookie(context), { timeout: HYDRATION_WAIT }).toBeUndefined();
-
+  test("C1 the French catalog", async ({ page, context }) => {
     await plant(context, "4", "fr");
     await page.goto("/");
     const fr = docket(page, "CLASSÉ");
@@ -64,6 +60,7 @@ test.describe("merge confirmation stamp (#57)", () => {
       { timeout: HYDRATION_WAIT },
     );
     await expect(fr).toContainText("4 COURSES REPORTÉES");
+    await expect.poll(() => flashCookie(context), { timeout: HYDRATION_WAIT }).toBeUndefined();
   });
 
   test("C1 DISMISS closes the docket by keyboard", async ({ page, context }) => {

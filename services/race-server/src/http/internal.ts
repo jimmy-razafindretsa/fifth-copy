@@ -21,10 +21,22 @@ export type InternalRoute = {
    * Called only after the timestamp, nonce and signature verified and the nonce was claimed; `body` is
    * parsed JSON, not yet a schema.
    */
-  handle(body: unknown): Promise<{ status: number; body: unknown }>;
+  handle(
+    body: unknown,
+  ): Promise<{ status: number; body: unknown; headers?: Record<string, string> }>;
 };
 
-type Deps = { registry: RoomRegistry; secret: string; clock: Clock; nonces: NonceStore };
+type Deps = {
+  registry: RoomRegistry;
+  secret: string;
+  clock: Clock;
+  nonces: NonceStore;
+  /** SIGTERM drain (#704): new rooms are refused with a retryable 503. */
+  draining?: () => boolean;
+};
+
+/** `Retry-After` of a room refused while draining (#704): the next deployment is already up. */
+export const DRAIN_RETRY_AFTER_S = 2;
 
 const error = (status: number, code: InternalError["error"]) => ({
   status,
@@ -35,7 +47,10 @@ const error = (status: number, code: InternalError["error"]) => ({
  * Web -> race server routes (ADR 0006 point 6). One entry per path: `PATCH /internal/rooms/:id/settings`
  * and `/close` land here later. Each handler parses its body with a protocol schema.
  */
-export function internalRoutes({ registry }: Pick<Deps, "registry">): InternalRoute[] {
+export function internalRoutes({
+  registry,
+  draining = () => false,
+}: Pick<Deps, "registry" | "draining">): InternalRoute[] {
   return [
     {
       method: "POST",
@@ -43,6 +58,14 @@ export function internalRoutes({ registry }: Pick<Deps, "registry">): InternalRo
       async handle(body) {
         const parsed = openRoomRequestSchema.safeParse(body);
         if (!parsed.success) return error(400, "bad-body");
+        // Outside the wire schemas like the router's 500: the web treats every non-200 as
+        // `race-server-unavailable`, and the retry reaches the next deployment (#704).
+        if (draining())
+          return {
+            status: 503,
+            body: { error: "draining" },
+            headers: { "retry-after": String(DRAIN_RETRY_AFTER_S) },
+          };
         const { lobbyId, code, hostUserId, settings } = parsed.data;
         const { created, room } = await registry.open({ lobbyId, code, hostUserId, settings });
         const res: OpenRoomResponse = {
@@ -81,8 +104,13 @@ function header(req: IncomingMessage, name: string) {
   return typeof value === "string" ? value : undefined;
 }
 
-function send(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "content-type": "application/json" });
+function send(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers?: Record<string, string>,
+) {
+  res.writeHead(status, { "content-type": "application/json", ...headers });
   res.end(JSON.stringify(body));
 }
 
@@ -99,10 +127,18 @@ export function createInternalHandler(deps: Deps, routes = internalRoutes(deps))
     const route = routes.find((r) => r.method === req.method && r.path === path);
     if (!route) return false;
 
-    const reply = ({ status, body }: { status: number; body: unknown }) => {
+    const reply = ({
+      status,
+      body,
+      headers,
+    }: {
+      status: number;
+      body: unknown;
+      headers?: Record<string, string>;
+    }) => {
       const outcome = (body as { error?: string }).error ?? "ok";
       console.log(JSON.stringify({ level: "info", msg: "internal", path, status, outcome }));
-      send(res, status, body);
+      send(res, status, body, headers);
     };
 
     const rawBody = await readBody(req);

@@ -72,7 +72,7 @@ export type RoomState = {
 };
 
 /** What `rehydrate` did, by lobby id (#204). */
-export type Rehydrated = { kept: string[]; voided: string[]; gone: string[] };
+export type Rehydrated = { kept: string[]; voided: string[]; gone: string[]; foreign: string[] };
 
 /**
  * `in-progress`: a user who is not already a member while a race is on (`countdown`, `running`; #166).
@@ -203,13 +203,22 @@ export type RoomRegistry = {
   /**
    * Boot (#204): for every id of the `rooms` index whose hash exists, `waiting`/`ended` rooms are
    * counted as they are, `countdown`/`running` ones are voided; ids whose hash is gone leave the index.
+   * A live race whose `owner` is another process still holding its lease (#704: the deployment being
+   * drained) is left alone and not counted (`foreign`) until `reconcile` finds that owner gone.
    * Reads only `room:<id>` (and the members through later calls), never the desks mirror.
    */
   rehydrate(): Promise<Rehydrated>;
-  /** Drops from `count()` and the index every open room whose hash no longer exists (#204). */
+  /**
+   * Drops from `count()` and the index every open room whose hash no longer exists (#204). A
+   * foreign room (#704) whose owner's lease is gone is voided if its race is live, adopted otherwise.
+   */
   reconcile(): Promise<void>;
   /** Rooms open on this process (ADR 0008 in-process cache); drives /health and the deploy drain. */
   count(): number;
+  /** The ids `count()` counts (#704: the drain walks them). */
+  ids(): string[];
+  /** In-process only (#704 drain): this process stops counting the room; Redis keeps it. */
+  release(lobbyId: string): void;
 };
 
 const log = (msg: string, fields: Record<string, unknown>) =>
@@ -247,9 +256,25 @@ const botsSchema = raceSettingsSchema.shape.bots;
  * this process keeps only the set of open room ids for count(). join/leave read-modify-write the
  * members hash, so calls on one room are serialised in-process (one race server per deployment).
  */
-export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Clock }): RoomRegistry {
+export function createRoomRegistry({
+  redis,
+  clock,
+  owner,
+}: {
+  redis: Redis;
+  clock: Clock;
+  /** This process's lease (#704): stamped on each race start, checked on boot for others' races. */
+  owner?: { id: string; alive(id: string): Promise<boolean> };
+}): RoomRegistry {
   const openRooms = new Set<string>();
+  /** Live races of another process still alive at boot (#704); not counted, not voided. */
+  const foreign = new Set<string>();
   const chains = new Map<string, Promise<unknown>>();
+
+  /** Whether `id` names another process that still holds its lease (#704). */
+  async function ownedElsewhere(id: string | undefined) {
+    return !!owner && !!id && id !== owner.id && (await owner.alive(id));
+  }
 
   function serial<T>(lobbyId: string, fn: () => Promise<T>): Promise<T> {
     const next = (chains.get(lobbyId) ?? Promise.resolve()).then(fn);
@@ -408,7 +433,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
           endReason: "void" satisfies EndReason,
           endedAt: String(clock.now()),
         })
-        .hdel(roomKey(lobbyId), "race", "t0", "endAt", "desks")
+        .hdel(roomKey(lobbyId), "race", "t0", "endAt", "desks", "owner")
         .del(...leftovers)
         .expire(roomKey(lobbyId), VOID_TTL_S)
         .expire(membersKey(lobbyId), VOID_TTL_S),
@@ -649,6 +674,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
           .del(desksKey(lobbyId), ...traces)
           .hset(roomKey(lobbyId), {
             phase: "countdown",
+            ...(owner ? { owner: owner.id } : {}),
             raceId: race.raceId,
             t0: String(race.t0),
             endAt: String(endAt),
@@ -665,7 +691,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     voidRoom,
 
     async rehydrate() {
-      const done: Rehydrated = { kept: [], voided: [], gone: [] };
+      const done: Rehydrated = { kept: [], voided: [], gone: [], foreign: [] };
       for (const lobbyId of await redis.smembers(ROOMS_KEY)) {
         try {
           await serial(lobbyId, async () => {
@@ -678,6 +704,10 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
             if (RECOVERY[parsePhase(room.phase)] === "keep") {
               openRooms.add(lobbyId);
               return void done.kept.push(lobbyId);
+            }
+            if (await ownedElsewhere(room.owner)) {
+              foreign.add(lobbyId);
+              return void done.foreign.push(lobbyId);
             }
             await voidRoom(lobbyId);
             done.voided.push(lobbyId);
@@ -692,6 +722,18 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     },
 
     async reconcile() {
+      for (const lobbyId of [...foreign]) {
+        await serial(lobbyId, async () => {
+          const room = await redis.hgetall(roomKey(lobbyId));
+          if (!room.openedAt) return void foreign.delete(lobbyId);
+          const live = RECOVERY[parsePhase(room.phase)] === "void";
+          if (live && (await ownedElsewhere(room.owner))) return;
+          foreign.delete(lobbyId);
+          if (!live) return void openRooms.add(lobbyId);
+          await voidRoom(lobbyId);
+          log("room voided", { lobby: lobbyId, cause: "owner gone" });
+        });
+      }
       for (const lobbyId of [...openRooms]) {
         await serial(lobbyId, async () => {
           if ((await redis.exists(roomKey(lobbyId))) === 1) return;
@@ -702,5 +744,7 @@ export function createRoomRegistry({ redis, clock }: { redis: Redis; clock: Cloc
     },
 
     count: () => openRooms.size,
+    ids: () => [...openRooms],
+    release: (lobbyId) => void openRooms.delete(lobbyId),
   };
 }

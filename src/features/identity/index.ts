@@ -28,3 +28,13 @@ export {
   type SaveClerkOutfitResult,
 } from "./actions/save-clerk-outfit";
 export { getClerkOutfit } from "./queries/clerk-outfit";
+// The guest merge (ADR 0009, #56): one transaction, then the guest row is deleted. Features that
+// store per-user rows register a step; merge/coverage.test.ts fails when one is missing.
+export { mergeGuestInto, type MergeCounts } from "./merge/merge-guest";
+export {
+  registerMergeStep,
+  type MergeContext,
+  type MergeStep,
+  type MergeTx,
+} from "./merge/registry";
+export { MergeGuestError } from "./merge/steps";

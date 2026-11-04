@@ -1,3 +1,5 @@
+// Registers the Lobby step of the guest merge (#56); mergeGuestInto refuses to run without it.
+import "./merge-step";
 export { createLobby } from "./actions/create-lobby";
 export { createPracticeLobby } from "./actions/create-practice-lobby";
 export { joinByCode } from "./actions/join-by-code";

@@ -12,6 +12,7 @@ import {
   type Comment,
   type GateFacts,
 } from "./flow";
+import { bundledInComment, bundlePickupComment, evaluateBundleGate } from "./bundle";
 
 const body = (boxes = "[ ]", est = "estimate 2 because x") =>
   `## Outcome\nX\n\n## Contract\n- ${boxes} C1 shows a list | verify: \`e2e/list.spec.ts\`\n\n## Size rationale\n${est}\n`;
@@ -31,6 +32,8 @@ const at = (body: string, t = "2026-10-04T11:00:00Z", author: string | null = OW
 /** The same comment written by someone outside BOARD_TRUSTED_AUTHORS. */
 const forged = (body: string, t = "2026-10-04T11:00:00Z") => at(body, t, "stranger");
 
+/** The Status each gate expects the card to be in (PROTOCOL 5: In Progress -> In Review -> QA -> Done). */
+const FROM = { "In Review": "In Progress", QA: "In Review", Done: "QA" } as const;
 const facts = (over: Partial<GateFacts>): GateFacts => ({
   n: 12,
   target: "In Review",
@@ -39,7 +42,7 @@ const facts = (over: Partial<GateFacts>): GateFacts => ({
   comments: [pickup],
   pr: { number: 3, state: "OPEN" },
   mainCi: null,
-  status: "In Progress",
+  status: FROM[over.target ?? "In Review"],
   trusted,
   ...over,
 });
@@ -200,6 +203,40 @@ describe("gate order: Done after QA, QA on a merged PR (#759)", () => {
     expect(evaluateGate(facts({ ...qa, body: body(), comments: [repick, deliver] }))).toContain(
       "contract not ticked by Deliver: C1",
     );
+  });
+
+  it("C1 QA requires In Review: any other status fails, named", () => {
+    const qa = { target: "QA" as const, body: body("[x]"), pr: merged, comments: [pickup, pass] };
+    for (const status of ["In Progress", "Ready", "QA", null]) {
+      expect(evaluateGate(facts({ ...qa, status }))).toContain(
+        `card is in ${status ?? "an unknown status"}, not In Review (run gate "In Review" first)`,
+      );
+    }
+    expect(evaluateGate(facts({ ...qa, status: "In Review" }))).toEqual([]);
+  });
+
+  it("C1 QA requires In Review for every card of a bundle, checked per card", () => {
+    const b = body("[x]");
+    const h = contractHash(b)!;
+    const lead: GateFacts = facts({
+      n: 10,
+      target: "QA",
+      body: b,
+      pr: { number: 7, state: "OPEN", cards: [10, 11] },
+      comments: [
+        at(bundlePickupComment(10, h, "10-x", [10, 11]), "2026-11-03T10:00:00Z"),
+        at("HANDOFF deliver 2026-11-03\nverdict: pass", "2026-11-03T12:00:00Z"),
+      ],
+    });
+    const member: GateFacts = {
+      ...lead,
+      n: 11,
+      comments: [at(bundledInComment(10, 11, h, "10-x"), "2026-11-03T10:00:01Z"), ...lead.comments],
+    };
+    expect(evaluateBundleGate([lead, member])).toEqual([]);
+    expect(evaluateBundleGate([lead, { ...member, status: "In Progress" }])).toEqual([
+      '#11: card is in In Progress, not In Review (run gate "In Review" first)',
+    ]);
   });
 
   it("QA still refuses a PR closed without merge, or no PR", () => {

@@ -359,7 +359,6 @@ export const en = {
         },
       },
     },
-    /** The invite rows of the room docket (#498, bible 7.1 ink button); #121 adds the link row. */
     /**
      * The host's PASSWORD RESET docket (#790, bible 14.3, 7.4): a teacher host issues a student's
      * single-use reset code (#788). Errors never echo the typed username.
@@ -381,6 +380,7 @@ export const en = {
         generic: "Something jammed. Try again.",
       },
     },
+    /** The invite rows of the room docket (#498, bible 7.1 ink button); #121 adds the link row. */
     invite: {
       label: "INVITE",
       copy: "COPY",

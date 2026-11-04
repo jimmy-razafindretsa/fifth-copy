@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
-import { Countdown, countdownStep, GO_STAMP_MS, nextStepIn } from "./countdown";
+import { atGo, Countdown, countdownStep, GO_STAMP_MS, nextStepIn } from "./countdown";
 
 // #214 C3 at unit level: the step the seat shows for the time left to GO (3, 2, 1, the GO stamp, then
 // nothing 1.2 s after GO), when it next changes, and the markup of each step. The live countdown on the
@@ -29,6 +29,19 @@ describe("countdownStep (#214 C3)", () => {
 
   it("the GO stamp stays 1.2 s", () => {
     expect(GO_STAMP_MS).toBe(1_200);
+  });
+});
+
+describe("atGo (#723): the GO stamp lands with the store's GO", () => {
+  it("holds 1 until the phase runs, and shows GO as soon as it does", () => {
+    expect(atGo("go", "countdown")).toBe(1);
+    for (const digit of [3, 2, 1] as const) {
+      expect(atGo(digit, "countdown")).toBe(digit);
+      expect(atGo(digit, "running")).toBe("go");
+    }
+    expect(atGo("go", "running")).toBe("go");
+    expect(atGo(null, "running")).toBeNull();
+    expect(atGo(null, "countdown")).toBeNull();
   });
 });
 

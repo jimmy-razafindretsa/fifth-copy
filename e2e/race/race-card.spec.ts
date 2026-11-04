@@ -165,7 +165,8 @@ test.describe("#564 race card wiring", () => {
       await page.setViewportSize({ width, height });
       if (compact) {
         await expect(card(page)).toHaveAttribute("data-compact", "true");
-        await expect(card(page).locator("[data-name]")).toHaveCount(0);
+        // #792: names stay in the compact card (bible 7.4a)
+        await expect(card(page).locator("[data-name]")).toHaveCount(8);
       } else {
         await expect(card(page)).not.toHaveAttribute("data-compact");
         await expect(card(page).locator("[data-name]")).toHaveCount(8);

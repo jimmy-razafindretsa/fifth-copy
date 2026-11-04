@@ -130,6 +130,22 @@ const raceIdIn = (frames: Frame[]) => {
   const frame = frames.find((f) => f.payload.startsWith('42["countdown"'));
   return frame ? /"raceId":"([^"]+)"/.exec(frame.payload)![1]! : null;
 };
+/**
+ * The page's clock offset (server time = local time + offset) from the pongs its socket received, the
+ * way the binder refines it (#643 `bestOffset`): the pong with the shortest round trip, server time at
+ * the midpoint. Frame times are this process's clock, the same machine clock as the page's `sent`.
+ */
+const pageOffset = (frames: Frame[]) => {
+  let best: { rtt: number; offset: number } | null = null;
+  for (const f of frames) {
+    const m = /^42\["pong",\{[^}]*"sent":(\d+),"serverNow":(\d+)/.exec(f.payload);
+    if (!m) continue;
+    const sent = Number(m[1]);
+    const rtt = f.t - sent;
+    if (!best || rtt < best.rtt) best = { rtt, offset: Number(m[2]) - (sent + f.t) / 2 };
+  }
+  return best?.offset ?? 0;
+};
 const disjoint = (a: Box, b: Box) =>
   a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
 const centre = (b: Box) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
@@ -288,7 +304,8 @@ test.describe("#214 countdown and GO stamp", () => {
   }) => {
     const room = await hostRoom(browser);
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.addInitScript(recorder);
+    const frames: Frame[] = [];
+    await prepare(page, frames);
     await page.goto(`/race/${room.lobbyId}`);
     await expect(
       page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
@@ -317,13 +334,36 @@ test.describe("#214 countdown and GO stamp", () => {
       expect(digit.anim).toMatch(/fcSlam$/);
       expect(digit.dur).toBe("0.35s");
     }
-    // one second apart on the server clock
+    // One second apart on the server clock (#723). The server sets GO (`t0`) 3 s after its START and
+    // only then sends the countdown; the page shows its 3 once the frame arrived and the seat view
+    // rendered the new race (a long task of up to ~200 ms on a loaded dev machine). The 3 therefore
+    // lasts one second less that delay, by design (the server owns GO, every desk starts together):
+    // the old 3-2 gap on the page's clock measured delivery and render, not the countdown, and fell
+    // below 850 ms. Each later step is checked on the page's corrected clock (local time + the offset
+    // of the pong with the shortest round trip, as the binder computes it, #643) against `t0`.
+    const countdownAt = frames.find((f) => f.payload.startsWith('42["countdown"'))!;
+    const t0 = Number(/"t0":(\d+)/.exec(countdownAt.payload)![1]);
+    const offset = pageOffset(frames);
+    const onServer = (s: Step) => s.t + offset;
+    for (const [s, at] of [
+      [two, t0 - 2_000],
+      [one, t0 - 1_000],
+      [go, t0],
+    ] as const) {
+      expect(Math.abs(onServer(s) - at), `${s.step} at its server instant`).toBeLessThanOrEqual(
+        150,
+      );
+    }
+    // the 3 never shows before the server's start, and only after the countdown reached the page
+    expect(onServer(three)).toBeGreaterThanOrEqual(t0 - COUNTDOWN_MS - 150);
+    expect(three.t).toBeGreaterThanOrEqual(countdownAt.t - 150);
     for (const [a, b] of [
       [three, two],
       [two, one],
       [one, go],
     ] as const) {
-      expect(b.t - a.t).toBeGreaterThanOrEqual(850);
+      // 3-2 is one second less the countdown's delivery, never more than one second
+      if (a !== three) expect(b.t - a.t).toBeGreaterThanOrEqual(850);
       expect(b.t - a.t).toBeLessThanOrEqual(1_150);
     }
     // GO: the red stamp, НАЧАЛИ · GO, a fixed -6 degrees, slamming, gone 1.2 s after GO

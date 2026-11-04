@@ -136,6 +136,26 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(warn).toHaveBeenCalledWith("rate limiter unavailable, allowing", { cause: "timeout" });
   });
 
+  it("a timed-out call is allowed, warned once per outage, and still counted when Redis answers late (#741)", async () => {
+    const warn = vi.fn();
+    const slow = make({ url: redisUrl, nodeEnv: "test", warn, timeoutMs: 0 });
+    const s = subject("late");
+    const rule = LIMITS["password-reset-issue"];
+    for (let i = 0; i < rule.max; i++) {
+      expect(await slow("password-reset-issue", s)).toEqual({ ok: true, retryAfterMs: 0 });
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith("rate limiter unavailable, allowing", { cause: "timeout" });
+    // The calls that lost the race still reach Redis: fail-open lets them through, it does not
+    // forgive them. Once they land, a limiter that waits for Redis refuses the next one.
+    const key = `${WEB_LIMITER_PREFIX}:rl:password-reset-issue:${subjectKey(s)}`;
+    await vi.waitFor(async () => expect(await redis.zcard(key)).toBe(rule.max));
+    const patient = make({ url: redisUrl, nodeEnv: "test", warn: vi.fn(), timeoutMs: 10_000 });
+    const verdict = await patient("password-reset-issue", s);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.retryAfterMs).toBeGreaterThan(0);
+  });
+
   it("without a URL: every call allowed, one warning in production, none elsewhere", async () => {
     const warnProd = vi.fn();
     const prod = make({ url: undefined, nodeEnv: "production", warn: warnProd });

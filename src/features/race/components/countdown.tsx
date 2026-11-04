@@ -32,6 +32,18 @@ export function nextStepIn(msToGo: number): number | null {
 }
 
 /**
+ * The GO stamp lands with the store's GO (#723): the step's own timer and the store's GO timer aim at
+ * the same instant, but a long task between them (a loaded page) used to show the stamp before the
+ * phase turned `running`, or a digit after it. The phase decides: `go` waits for `running`, and a digit
+ * still showing once the race runs reads `go`, in the same render as the phase.
+ */
+export function atGo(step: CountdownStep | null, phase: string): CountdownStep | null {
+  if (phase === "countdown" && step === "go") return 1;
+  if (phase === "running" && typeof step === "number") return "go";
+  return step;
+}
+
+/**
  * The countdown overlay (#214, bible 7.3, 4, 8, 14.3): `3`, `2`, `1` in the display-lg role, each
  * slamming in (`fcSlam` on `--motion-duration-slam`, upright), then the red `Stamp` `НАЧАЛИ · GO` at a
  * fixed -6 degrees. It fills the free space above the typing surface, centred, and clips the slam so it

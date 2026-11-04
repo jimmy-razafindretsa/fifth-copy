@@ -17,7 +17,13 @@ import {
 } from "../client/store";
 import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
-import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
+import {
+  atGo,
+  Countdown,
+  countdownStep,
+  nextStepIn,
+  type CountdownStep,
+} from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
 import notice from "../components/race-notice.module.css";
 import { AsleepAtDesk } from "../components/asleep-at-desk";
@@ -149,7 +155,7 @@ function useCountdownStep(): CountdownStep | null {
     handle = setTimeout(tick, 0);
     return () => clearTimeout(handle);
   }, [live, t0, offset]);
-  return live ? step : null;
+  return live ? atGo(step, phase) : null;
 }
 
 /**

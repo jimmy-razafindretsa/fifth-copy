@@ -42,6 +42,23 @@ vi.mock("next/headers", () => ({
   headers: async () => state.headers,
 }));
 vi.mock("@/env", () => ({ env: state.env }));
+// #741: the limiter fails open when Redis answers slower than LIMIT_TIMEOUT_MS (ADR 0020, kept on
+// purpose; covered in src/server/limiter/index.test.ts). Under parallel DB load the first call on a
+// fresh client (connect + script load) can take longer than 250 ms, and a refusal case then saw
+// `not-found`. These cases test the lobby actions' budgets, not the timeout policy, so the client
+// on the real test Redis waits long enough to always get Redis's answer. Other URLs (the closed
+// port case) keep the production timeout.
+vi.mock("@/server/limiter/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/limiter/core")>();
+  return {
+    ...actual,
+    createWebLimit: (opts: Parameters<typeof actual.createWebLimit>[0]) =>
+      actual.createWebLimit(
+        // eslint-disable-next-line no-restricted-properties
+        opts.url === process.env.REDIS_URL ? { ...opts, timeoutMs: 10_000 } : opts,
+      ),
+  };
+});
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));

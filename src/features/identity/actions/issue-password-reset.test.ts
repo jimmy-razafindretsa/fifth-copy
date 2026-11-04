@@ -14,6 +14,9 @@ const state = vi.hoisted(() => ({
   viewer: null as Viewer | null,
   limited: false,
   calls: [] as string[],
+  /** Model delegate calls (`user.findFirst`), in order; `fail` makes the named one throw. */
+  queries: [] as string[],
+  fail: null as string | null,
 }));
 
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test", AUTH_SECRET: "p".repeat(32) } }));
@@ -58,16 +61,19 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
   const CODE_A = `QRT-${digits}`;
   const CODE_B = `QRW-${digits}`;
   const CODE_OTHER = `QRX-${digits}`;
+  const CODE_PLAIN = `QRY-${digits}`; // hosted by an account without the teacher flag
+  const CODE_GUEST = `QRZ-${digits}`; // hosted by a guest row (flag forced on: defense in depth)
 
   const user = async (
     key: string,
-    opts: { isGuest?: boolean; password?: boolean; username?: string } = {},
+    opts: { isGuest?: boolean; password?: boolean; username?: string; teacher?: boolean } = {},
   ) => {
     const name = `${PREFIX}${key}`;
     const row = await db.user.create({
       data: {
         typistName: name,
         isGuest: opts.isGuest ?? false,
+        isTeacher: opts.teacher ?? false,
         username: opts.username ?? name,
         usernameNormalized: (opts.username ?? name).toLowerCase(),
         passwordHash: opts.password === false ? null : "$argon2id$v=19$m=19456,t=2,p=1$x$y",
@@ -133,11 +139,33 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
 
   beforeAll(async () => {
     db = createPrismaClient(testDatabaseUrl!);
-    state.db = db;
+    // The action's view of the database: records each delegate call and can make one throw.
+    state.db = new Proxy(db, {
+      get(target, model) {
+        const delegate = Reflect.get(target, model, target) as unknown;
+        if (typeof model !== "string" || model.startsWith("$") || typeof delegate !== "object") {
+          return typeof delegate === "function" ? delegate.bind(target) : delegate;
+        }
+        return new Proxy(delegate as object, {
+          get(d, method) {
+            const fn = Reflect.get(d, method, d) as unknown;
+            if (typeof method !== "string" || typeof fn !== "function") return fn;
+            return (...args: unknown[]) => {
+              const key = `${model}.${method}`;
+              state.queries.push(key);
+              if (state.fail === key) return Promise.reject(new Error("lookup failed"));
+              return (fn as (...a: unknown[]) => unknown).apply(d, args);
+            };
+          },
+        });
+      },
+    });
     ({ issuePasswordReset } = await import("./issue-password-reset"));
     ({ verifyPassword } = await import("@/server/auth/password"));
-    await user("host");
-    await user("otherHost");
+    await user("host", { teacher: true });
+    await user("otherHost", { teacher: true });
+    await user("plainHost"); // an account without the teacher flag
+    await user("guestHost", { isGuest: true, teacher: true });
     await user("student");
     await user("studentElsewhere"); // raced only under another host
     await user("studentB"); // raced only in the host's second lobby
@@ -147,12 +175,18 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
     const lobbyA = await db.lobby.create({ data: { code: CODE_A, hostUserId: ids.host! } });
     const lobbyB = await db.lobby.create({ data: { code: CODE_B, hostUserId: ids.host! } });
     const other = await db.lobby.create({ data: { code: CODE_OTHER, hostUserId: ids.otherHost! } });
+    const plain = await db.lobby.create({ data: { code: CODE_PLAIN, hostUserId: ids.plainHost! } });
+    const guestLobby = await db.lobby.create({
+      data: { code: CODE_GUEST, hostUserId: ids.guestHost! },
+    });
     await raced(lobbyA.id, ids.student!);
     await raced(lobbyA.id, ids.guest!);
     await raced(lobbyA.id, ids.noPassword!);
     await raced(lobbyA.id, ids.host!);
     await raced(lobbyB.id, ids.studentB!);
     await raced(other.id, ids.studentElsewhere!);
+    await raced(plain.id, ids.student!);
+    await raced(guestLobby.id, ids.student!);
   });
 
   afterAll(async () => {
@@ -164,6 +198,8 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
     state.viewer = viewerOf(ids.host!);
     state.limited = false;
     state.calls = [];
+    state.queries = [];
+    state.fail = null;
     await db.passwordReset.deleteMany({ where: { user: { typistName: { startsWith: PREFIX } } } });
   });
 
@@ -185,14 +221,16 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
     });
 
     it.each([
-      ["no viewer", () => null],
-      ["a guest viewer", () => viewerOf(ids.guest!, true)],
-      ["an account that is not the lobby's host", () => viewerOf(ids.otherHost!)],
-      ["the host's id flagged as a guest", () => viewerOf(ids.host!, true)],
-    ])("%s gets not-host, writes nothing and creates no guest", async (_n, viewer) => {
+      ["no viewer", () => null, () => CODE_A],
+      ["a guest viewer", () => viewerOf(ids.guest!, true), () => CODE_A],
+      ["an account that is not the lobby's host", () => viewerOf(ids.otherHost!), () => CODE_A],
+      ["the host's id flagged as a guest", () => viewerOf(ids.host!, true), () => CODE_A],
+      ["C8: the host of the lobby without the teacher flag", () => viewerOf(ids.plainHost!), () => CODE_PLAIN],
+      ["a guest row hosting the lobby, even flagged", () => viewerOf(ids.guestHost!), () => CODE_GUEST],
+    ])("%s gets not-host, writes nothing and creates no guest", async (_n, viewer, code) => {
       state.viewer = viewer();
       const before = await counts();
-      expect(await issuePasswordReset({ code: CODE_A, username: name("student") })).toEqual({
+      expect(await issuePasswordReset({ code: code(), username: name("student") })).toEqual({
         ok: false,
         error: "not-host",
       });
@@ -216,18 +254,20 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
       ["the host's own account", () => name("host")],
       ["an account that never raced", () => name("never")],
       ["an account that raced only under another host", () => name("studentElsewhere")],
-    ])("%s", async (_n, username) => {
+    ])("%s, in one query after the lobby check", async (_n, username) => {
       const before = await counts();
       expect(await issuePasswordReset({ code: CODE_A, username: username() })).toEqual({
         ok: false,
         error: "not-eligible",
       });
       expect(await counts()).toEqual(before);
+      expect(state.queries).toEqual(["lobby.findFirst", "user.findFirst"]);
     });
 
     it("a student who raced in any lobby of the host is eligible, not only the named one", async () => {
       const result = await issuePasswordReset({ code: CODE_A, username: name("studentB") });
       expect(result.ok).toBe(true);
+      expect(state.queries).toEqual(["lobby.findFirst", "user.findFirst", "passwordReset.create"]);
     });
 
     it("the username is matched case-insensitively (normalizeUsername)", async () => {
@@ -236,6 +276,39 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
         username: `  ${name("student").toUpperCase()} `,
       });
       expect(result.ok).toBe(true);
+    });
+  });
+
+  describe("C9: control characters and lookup errors", () => {
+    it.each([
+      ["a NUL", `${PREFIX}student\u0000`],
+      ["a unit separator", `stu\u001fdent`],
+      ["a leading tab", `\t${PREFIX}student`],
+      ["a newline", `${PREFIX}student\n`],
+    ])("a username with %s is invalid before anything is read", async (_n, username) => {
+      expect(await issuePasswordReset({ code: CODE_A, username })).toEqual({
+        ok: false,
+        error: "invalid",
+      });
+      expect(state.calls).toEqual([]);
+      expect(state.queries).toEqual([]);
+    });
+
+    it("a failing student lookup answers not-eligible and never throws", async () => {
+      state.fail = "user.findFirst";
+      const before = await counts();
+      await expect(
+        issuePasswordReset({ code: CODE_A, username: name("student") }),
+      ).resolves.toEqual({ ok: false, error: "not-eligible" });
+      expect(await counts()).toEqual(before);
+    });
+
+    it("a failing lobby lookup answers not-host and never throws", async () => {
+      state.fail = "lobby.findFirst";
+      await expect(
+        issuePasswordReset({ code: CODE_A, username: name("student") }),
+      ).resolves.toEqual({ ok: false, error: "not-host" });
+      expect(state.calls.some((c) => c.startsWith("limit:"))).toBe(false);
     });
   });
 

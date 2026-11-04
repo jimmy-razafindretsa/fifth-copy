@@ -37,3 +37,12 @@ export async function findTeacherLobby(
     select: { code: true },
   });
 }
+
+/**
+ * Whether `viewerId` may issue reset codes in the lobby `code` (#790): the waiting room renders the
+ * host's `PASSWORD RESET` docket only then. A convenience, never the check: `issuePasswordReset`
+ * re-checks the host, the teacher flag and the limiter itself (ADR 0009). A failed lookup is `false`.
+ */
+export function canIssueResetIn(code: string, viewerId: string): Promise<boolean> {
+  return findTeacherLobby(code, viewerId).then(Boolean, () => false);
+}

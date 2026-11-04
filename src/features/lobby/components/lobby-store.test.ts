@@ -137,6 +137,8 @@ describe("reduceLobby", () => {
     ["version", "generic"],
     // a seated viewer refused later (#732 C4): the generic error, never the late joiner's hold
     ["in-progress", "generic"],
+    // every desk taken (#678): its own sentence
+    ["room-full", "room-full"],
   ] as const)("connect-error %s is a terminal %s error", (reason, error) => {
     const state = run(
       { type: "welcome", payload: welcome(1, [ada]) },
@@ -587,10 +589,10 @@ describe("spectating (#732 C1 C4)", () => {
     }
   });
 
-  it("a player join refused room-full (every desk taken) ends the hold in the generic error", () => {
+  it("a player join refused room-full (every desk taken) ends the hold in its own error (#678)", () => {
     expect(run(refused, { type: "connect-error", reason: "room-full" })).toMatchObject({
       phase: "error",
-      error: "generic",
+      error: "room-full",
     });
   });
 
@@ -818,13 +820,13 @@ describe("joinRoom: the late joiner's hold (#732 C2)", () => {
     expect(h.mint).toHaveBeenCalledTimes(1);
   });
 
-  it("a full room at the seat ends the hold: no retry, the generic error", async () => {
+  it("a full room at the seat ends the hold: no retry, the room-full error (#678)", async () => {
     const h = harness();
     joinRoom(h.deps);
     await h.flush();
     h.sockets[0]!.fire("connectError", "room-full");
     await h.flush();
-    expect(h.state()).toMatchObject({ phase: "error", error: "generic" });
+    expect(h.state()).toMatchObject({ phase: "error", error: "room-full" });
     expect(h.mint).toHaveBeenCalledTimes(1);
     expect(h.timers).toEqual([]);
   });

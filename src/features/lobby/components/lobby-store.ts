@@ -5,7 +5,7 @@ import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "@/features
 export const ROOM_SEATS = 30;
 
 /** Why the waiting room cannot be shown; each maps to a landing error line. */
-export type LobbyError = "not-found" | "closed" | "generic";
+export type LobbyError = "not-found" | "closed" | "room-full" | "generic";
 
 export type LobbyState = {
   /**
@@ -66,9 +66,11 @@ function connectError(reason: ConnectErrorReason): LobbyError | null {
     case "version":
     // A viewer seated before (a member refused later): a late joiner holds instead (#732).
     case "in-progress":
-    // Every desk taken (#732); a spectator past its cap is the late-join hold's, never the store's.
-    case "room-full":
       return "generic";
+    // Every desk taken (#732), its own sentence (#678); a spectator past its cap is the late-join
+    // hold's, never the store's.
+    case "room-full":
+      return "room-full";
   }
 }
 

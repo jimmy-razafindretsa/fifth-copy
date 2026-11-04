@@ -58,6 +58,7 @@ export const en = {
       invalidFormat: "Enter a code like KGB-4821",
       notFound: "No race with that code",
       closed: "That race has already started or closed",
+      roomFull: "All 30 desks in this room are taken.",
       unavailable: "The ring rooms are not answering. Try again in a minute.",
       generic: "Something jammed. Try again.",
     },
@@ -358,6 +359,27 @@ export const en = {
         },
       },
     },
+    /**
+     * The host's PASSWORD RESET docket (#790, bible 14.3, 7.4): a teacher host issues a student's
+     * single-use reset code (#788). Errors never echo the typed username.
+     */
+    reset: {
+      name: "FORM 5-R",
+      tag: "PASSWORD RESET",
+      student: "STUDENT",
+      issue: "ISSUE A CODE",
+      pending: "ISSUING…",
+      issued: "CODE ISSUED",
+      expires: "EXPIRES IN {m} MIN",
+      handOver: "HAND IT OVER IN PRIVATE",
+      errors: {
+        invalid: "Type the student's username.",
+        "not-eligible": "That username is not one of your students.",
+        "not-host": "Only the teacher hosting this room can issue a code.",
+        "rate-limited": "Too many codes issued. Try again in {m} min.",
+        generic: "Something jammed. Try again.",
+      },
+    },
     /** The invite rows of the room docket (#498, bible 7.1 ink button); #121 adds the link row. */
     invite: {
       label: "INVITE",
@@ -419,6 +441,7 @@ export const en = {
       noRoom: "This room is no longer open.",
       inProgress: "This race started without you.",
       notFound: "This race is not on file.",
+      roomFull: "This room has reached its spectator limit.",
       generic: "Something jammed. Try again.",
       back: "BACK TO THE WAITING ROOM →",
     },

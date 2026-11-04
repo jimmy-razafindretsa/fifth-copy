@@ -10,7 +10,11 @@ export { normalizeUsername };
  * A username typed to look an account up (the rules of `verifyCredentials`, #38): at most 256
  * characters as typed, then `normalizeUsername`, non-empty. Parses to the normalized form.
  */
-export const usernameLookup = z.string().max(256).transform(normalizeUsername).pipe(z.string().min(1));
+export const usernameLookup = z
+  .string()
+  .max(256)
+  .transform(normalizeUsername)
+  .pipe(z.string().min(1));
 
 /**
  * `issuePasswordReset` input (#788): the room code the host issues from (exactly `ROOM_CODE_RE`, as

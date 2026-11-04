@@ -3,11 +3,7 @@
 import { getViewer, hashPassword } from "@/server/auth";
 import { db } from "@/server/db";
 import { limit } from "@/server/limiter";
-import {
-  RESET_CODE_TTL_MS,
-  formatResetCode,
-  generateResetCode,
-} from "../password-reset/code";
+import { RESET_CODE_TTL_MS, formatResetCode, generateResetCode } from "../password-reset/code";
 import { isEligibleForReset } from "../queries/reset-eligibility";
 import { issuePasswordResetInput } from "../schema";
 

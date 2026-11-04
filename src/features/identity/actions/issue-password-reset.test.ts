@@ -117,8 +117,12 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
 
   // Users are counted by this run's prefix only: other suites share the test database.
   const counts = async () => ({
-    resets: await db.passwordReset.count({ where: { user: { typistName: { startsWith: PREFIX } } } }),
-    issued: await db.passwordReset.count({ where: { issuedBy: { typistName: { startsWith: PREFIX } } } }),
+    resets: await db.passwordReset.count({
+      where: { user: { typistName: { startsWith: PREFIX } } },
+    }),
+    issued: await db.passwordReset.count({
+      where: { issuedBy: { typistName: { startsWith: PREFIX } } },
+    }),
     users: await db.user.count({ where: { typistName: { startsWith: PREFIX } } }),
   });
 
@@ -287,6 +291,5 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
       });
       expect(await counts()).toEqual(before);
     });
-
   });
 });

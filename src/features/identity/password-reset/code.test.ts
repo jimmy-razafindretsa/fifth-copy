@@ -31,7 +31,9 @@ describe("reset code (C2)", () => {
 
   it("formats as XXXX-XXXX", () => {
     expect(formatResetCode("ABCDEFGH")).toBe("ABCD-EFGH");
-    expect(formatResetCode(generateResetCode())).toMatch(/^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/);
+    expect(formatResetCode(generateResetCode())).toMatch(
+      /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/,
+    );
   });
 
   it("normalizes case, spaces and hyphens alike", () => {

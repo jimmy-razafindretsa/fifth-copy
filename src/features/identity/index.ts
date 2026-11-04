@@ -40,8 +40,5 @@ export {
 export { MergeGuestError } from "./merge/steps";
 // The teacher password reset (#788): the host issues a single-use code; the redeem (R2) and the host
 // control (R3) share the code helpers.
-export {
-  issuePasswordReset,
-  type IssuePasswordResetResult,
-} from "./actions/issue-password-reset";
+export { issuePasswordReset, type IssuePasswordResetResult } from "./actions/issue-password-reset";
 export { formatResetCode, normalizeResetCode } from "./password-reset/code";

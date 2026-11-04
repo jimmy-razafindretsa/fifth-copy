@@ -8,7 +8,7 @@
 export * from "./types";
 
 // text: normalisation to the typeable whitelist, word counting
-export { isTypeable, normalizeTypeable, TYPEABLE } from "./text/normalize";
+export { isTypeable, normalizeKey, normalizeTypeable, TYPEABLE } from "./text/normalize";
 export { wordCount } from "./text/word-count";
 export { charsOf } from "./text/chars";
 export {

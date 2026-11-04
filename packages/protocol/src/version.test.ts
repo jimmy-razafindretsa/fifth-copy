@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { envelopeSchema, PROTOCOL_VERSION } from "./index";
 
 describe("version", () => {
-  it("is 9 (#623: stored results carry the desk's text overlay)", () => {
-    expect(PROTOCOL_VERSION).toBe(9);
+  it("is 10 (#660: keys as the engine normalises them; #768: welcome carries the desk bonus)", () => {
+    expect(PROTOCOL_VERSION).toBe(10);
   });
 
   it.each([

@@ -213,11 +213,11 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   timestamp: "1767225600",
   nonce: "5f2b9c0e8a4d4e1b9f3a7c6d2e1b0a98",
   body:
-    '{"v":9,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":10,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "78acbc9b566882c17272536f0a015375df376077af9fef40609a5ae37ad29107",
+  signature: "f353af5b3a0d051b8fd45d1b4903da73aa3ee84664c99510c1d8ee415557bb16",
 } as const;

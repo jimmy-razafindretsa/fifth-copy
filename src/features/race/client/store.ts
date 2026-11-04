@@ -50,8 +50,8 @@ export const REFUSAL_SHOW_MS = 1_200;
 /**
  * Your desk's side of the bonus economy (#236, ADR 0016), as the server told it: the store keeps it and
  * decides nothing (awarding, cooldown and immunity are #190's, in the engine and on the server). Times
- * are this device's clock. Reset by every `welcome` and `countdown` (a reconnect loses the held card,
- * the cooldown and the blur until the next `bonus-earned`: only the overlay comes back, `welcome.overlay`).
+ * are this device's clock. Seeded by every `welcome` from `welcome.bonus` (#768: a reconnect gets back
+ * the held card, the cooldown end and the blur end, race ms converted here), reset by every `countdown`.
  */
 export type BonusState = {
   /** The card `bonus-earned` dealt you; `null` once `bonus-sent` says you played it. */
@@ -320,6 +320,24 @@ function predictionAfterWelcome(state: RaceState, w: Welcome): Prediction | null
   return prediction.withText(typedText(w.race.text, w.overlay)).reconcile(w.state, prediction.sent);
 }
 
+/**
+ * Your bonus after a welcome (#768): the server's `welcome.bonus` of your desk, its race ms (since
+ * `t0`, server clock) moved to this device's clock with the welcome's `offset`, like `bonus-hit`. No
+ * play is in flight and no refusal shows after a (re)connect; the play counter never goes back.
+ */
+function bonusFromWelcome(w: Welcome, offset: number, plays: number): BonusState {
+  const { bonus, race } = w;
+  if (!bonus || !race) return { ...NO_BONUS, plays };
+  const device = (ms: number | null) => (ms === null ? null : race.t0 + ms - offset);
+  return {
+    ...NO_BONUS,
+    card: bonus.card,
+    cooldownUntil: device(bonus.cooldownUntil),
+    blurUntil: device(bonus.blurUntil),
+    plays,
+  };
+}
+
 export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   // Lost is terminal: the room refused this viewer and nothing later revives the page (the lost line
   // links back to the waiting room).
@@ -328,6 +346,10 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     case "welcome": {
       const w = event.payload;
       const prediction = predictionAfterWelcome(state, w);
+      const offset =
+        event.receivedAt === undefined
+          ? state.clockOffset
+          : clockOffset(w.serverNow, event.receivedAt);
       const next: RaceState = {
         phase: w.room.phase,
         lost: null,
@@ -341,10 +363,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         overlay: w.overlay,
         resumeKey: w.resumeKey,
         serverNow: w.serverNow,
-        clockOffset:
-          event.receivedAt === undefined
-            ? state.clockOffset
-            : clockOffset(w.serverNow, event.receivedAt),
+        clockOffset: offset,
         // a connect starts from the server's state of your desk; a reconnect reconciles onto it (#235)
         prediction,
         desks: state.desks,
@@ -358,7 +377,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         stampSeq: state.stampSeq,
         ending: null,
         endedAt: null,
-        bonus: { ...NO_BONUS, plays: state.bonus.plays },
+        bonus: bonusFromWelcome(w, offset, state.bonus.plays),
         ...NO_EXIT,
         abandons: state.abandons,
       };

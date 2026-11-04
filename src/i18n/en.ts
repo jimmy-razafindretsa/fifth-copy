@@ -20,8 +20,6 @@ export const en = {
     languageLabel: "Language",
     nightShift: "NIGHT SHIFT",
     honorific: "Comrade {name}",
-    guestTag: "GUEST",
-    signIn: "SIGN IN",
   },
   landing: {
     kicker: "MINISTRY OF TYPING · DESK 05 · 1978",
@@ -211,7 +209,7 @@ export const en = {
       builtBy: "BUILT BY",
       builtByName: "AEGIS CORP.",
       copyright: "© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec",
-      privacyLine: "No email. No chat. Your typing stays yours.",
+      privacyLine: "No chat. Your typing stays yours.",
     },
   },
   system: {
@@ -569,8 +567,75 @@ export const en = {
       },
     },
   },
-  /** Accounts (#57): the merge stamp after a guest merge (ADR 0009, bible 7.3 ink tone); FILED is bible 2's canonical stamp. */
+  /**
+   * Accounts: the sign-in and sign-up screens, their actions' errors and the header account control
+   * (#36, bible 14.3 extension); the merge stamp after a guest merge (#57, bible 7.3 ink tone).
+   */
   auth: {
+    account: {
+      guestTag: "GUEST",
+      signIn: "SIGN IN",
+      signOut: "SIGN OUT",
+    },
+    signIn: {
+      kicker: "MINISTRY OF TYPING · FORM 1-A",
+      title: "SIGN IN",
+      lede: "Show your papers and get back to your desk.",
+      form: "FORM 1-A",
+      tag: "RETURNING TYPIST",
+      submit: "SIGN IN",
+      pending: "CHECKING PAPERS…",
+      switchPrompt: "No file yet?",
+      switchLink: "OPEN A FILE →",
+    },
+    signUp: {
+      kicker: "MINISTRY OF TYPING · FORM 1-B",
+      title: "OPEN A FILE",
+      lede: "Pick a username and a password. The ministry opens your file.",
+      form: "FORM 1-B",
+      tag: "NEW TYPIST",
+      submit: "OPEN MY FILE",
+      pending: "FILING…",
+      switchPrompt: "Already on file?",
+      switchLink: "SIGN IN →",
+    },
+    fields: {
+      username: "USERNAME",
+      password: "PASSWORD",
+      usernameHint: "3 to 20 characters: letters, numbers and _.",
+      passwordHint: "At least 8 characters.",
+    },
+    providers: {
+      or: "OR",
+      github: "CONTINUE WITH GITHUB",
+      discord: "CONTINUE WITH DISCORD",
+      google: "CONTINUE WITH GOOGLE",
+      age: "GitHub, Discord and Google are for ages 13 and up. Under 13? Use a username, or play as a guest.",
+    },
+    guest: {
+      title: "NO PAPERS?",
+      body: "Race right away. Your races stay with this browser until you open a file.",
+      cta: "PLAY AS GUEST →",
+    },
+    privacy: "Privacy: what we keep and why",
+    oauthError: {
+      title: "RETURNED",
+      body: "That sign-in did not go through. Try again, use your username, or play as a guest.",
+    },
+    errors: {
+      prefix: "RETURNED ·",
+      usernameRequired: "Enter a username.",
+      usernameLength: "Use 3 to 20 characters.",
+      usernameChars: "Use only letters, numbers and _.",
+      usernameTaken: "That username is already on file. Pick another one.",
+      usernameRefused: "That username is not allowed. Pick another one.",
+      passwordRequired: "Enter a password.",
+      passwordLength: "Use 8 to 128 characters.",
+      fields: "Only a username and a password can be filed.",
+      credentials: "Wrong username or password.",
+      alreadySignedIn: "You are already signed in. Sign out to open another file.",
+      generic: "Something jammed. Try again.",
+    },
     merge: {
       stamp: "FILED",
       carried: { zero: "0 RACES CARRIED", one: "1 RACE CARRIED", other: "{n} RACES CARRIED" },

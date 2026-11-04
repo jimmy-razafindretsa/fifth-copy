@@ -17,6 +17,7 @@ import {
   Star,
   Wordmark,
 } from "@/components/ui";
+import { AuthStates } from "@/features/identity";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -687,6 +688,18 @@ export default async function DesignPage() {
           <Alert tone="success" title="Saved" />
           <Alert title="Heads up">Informational message.</Alert>
         </div>
+      </section>
+
+      <section id="auth" aria-labelledby="auth-heading" className="flex flex-col gap-3">
+        <h2 id="auth-heading" className="type-display-md">
+          Sign-in and sign-up
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The username form of the two screens in each state: default, pending, a field refused by
+          the server, a server error, and the banner a failed GitHub, Discord or Google sign-in
+          returns to.
+        </p>
+        <AuthStates />
       </section>
 
       <section aria-labelledby="stamps" className="flex flex-col gap-3">

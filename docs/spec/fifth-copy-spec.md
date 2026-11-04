@@ -288,6 +288,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 | **Username + password** | Sign-up form | Yes |
 | **GitHub OAuth** | "Continue with GitHub" | Yes |
 | **Discord OAuth** | "Continue with Discord" | Yes |
+| **Google OAuth** | "Continue with Google" | Yes |
 
 - **No email** collected. **No "forgot password".**
 - **Guest → account upgrade:** when a guest creates an account, **all their guest stats and history are merged** into the new account.

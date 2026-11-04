@@ -79,3 +79,99 @@ export const outfitSchema = z.object({
   face: z.enum(OUTFIT_CATALOGUE.face),
   hairCol: z.enum(OUTFIT_CATALOGUE.hairCol),
 } satisfies Record<OutfitCategory | "hairCol", z.ZodType>);
+
+/** The characters a username may hold once lowercased (#36 C1): letters, digits and `_`. */
+export const USERNAME_RE = /^[a-z0-9_]+$/;
+export const USERNAME_MIN = 3;
+export const USERNAME_MAX = 20;
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 128;
+
+/**
+ * Why a sign-up field was refused; each code is a key of the catalogs' `auth.errors` (#36 C10). The
+ * action translates it in the viewer's locale; the code never carries what was typed.
+ */
+export type AuthFieldError =
+  "usernameRequired" | "usernameLength" | "usernameChars" | "passwordRequired" | "passwordLength";
+
+/**
+ * The OAuth providers the sign-in and sign-up screens offer, in button order (#36 C8; Google from the
+ * owner's C18 review). The flows themselves are #49's.
+ */
+export const OAUTH_PROVIDERS = ["github", "discord", "google"] as const;
+export type OAuthProviderId = (typeof OAUTH_PROVIDERS)[number];
+
+/** The fields of the sign-up and sign-in forms; nothing else is ever read or stored (no email, R152). */
+export type AuthField = "username" | "password";
+
+/** Form keys React adds to a server action form posted before hydration; never user input. */
+const isFrameworkKey = (key: string) => key.startsWith("$ACTION_");
+
+/**
+ * The `signUp` form (#36 C1): exactly `username` and `password`, each a single string. The username is
+ * NFKC-folded and trimmed (kept as typed for display) and must be 3-20 characters of `USERNAME_RE` once
+ * lowercased; the password 8-128 characters, untrimmed. Any other field fails the whole form.
+ */
+const signUpUsername = z
+  .string()
+  .max(256, "usernameLength")
+  .transform((raw) => raw.normalize("NFKC").trim())
+  .superRefine((name, ctx) => {
+    if (name === "") ctx.addIssue({ code: "custom", message: "usernameRequired" });
+    else if (name.length < USERNAME_MIN || name.length > USERNAME_MAX)
+      ctx.addIssue({ code: "custom", message: "usernameLength" });
+    else if (!USERNAME_RE.test(name.toLowerCase()))
+      ctx.addIssue({ code: "custom", message: "usernameChars" });
+  });
+
+const signUpPassword = z.string().superRefine((pw, ctx) => {
+  if (pw === "") ctx.addIssue({ code: "custom", message: "passwordRequired" });
+  else if (pw.length < PASSWORD_MIN || pw.length > PASSWORD_MAX)
+    ctx.addIssue({ code: "custom", message: "passwordLength" });
+});
+
+export type SignUpParse =
+  | { ok: true; username: string; usernameNormalized: string; password: string }
+  | { ok: false; fieldErrors: Partial<Record<AuthField, AuthFieldError>>; extraField: boolean };
+
+/** Parses the sign-up FormData (#36 C1). A field given twice, or as a file, is refused like a bad value. */
+export function parseSignUp(form: FormData): SignUpParse {
+  const keys = [...new Set([...form.keys()].filter((k) => !isFrameworkKey(k)))];
+  const extraField = keys.some((k) => k !== "username" && k !== "password");
+  const single = (key: AuthField) => {
+    const all = form.getAll(key);
+    return all.length === 1 && typeof all[0] === "string" ? all[0] : "";
+  };
+  const username = signUpUsername.safeParse(single("username"));
+  const password = signUpPassword.safeParse(single("password"));
+  const fieldErrors: Partial<Record<AuthField, AuthFieldError>> = {};
+  if (!username.success) fieldErrors.username = username.error.issues[0]!.message as AuthFieldError;
+  if (!password.success) fieldErrors.password = password.error.issues[0]!.message as AuthFieldError;
+  if (!username.success || !password.success || extraField) {
+    return { ok: false, fieldErrors, extraField };
+  }
+  return {
+    ok: true,
+    username: username.data,
+    usernameNormalized: normalizeUsername(username.data),
+    password: password.data,
+  };
+}
+
+/** The `signIn` form (#36 C5): username, password and the optional `callbackUrl`; bounds only. */
+export function parseSignIn(form: FormData): {
+  username: string;
+  password: string;
+  callbackUrl: string | null;
+} {
+  const text = (key: string) => {
+    const value = form.get(key);
+    return typeof value === "string" ? value : "";
+  };
+  const callbackUrl = form.get("callbackUrl");
+  return {
+    username: text("username"),
+    password: text("password"),
+    callbackUrl: typeof callbackUrl === "string" ? callbackUrl : null,
+  };
+}

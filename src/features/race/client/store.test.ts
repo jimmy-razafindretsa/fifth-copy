@@ -71,6 +71,7 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: KEY,
   serverNow: 1_767_225_600_000,
   ...over,

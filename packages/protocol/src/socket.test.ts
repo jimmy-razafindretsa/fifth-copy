@@ -7,6 +7,7 @@ import {
   handshakeAuthSchema,
   hostSettingsAckSchema,
   hostSettingsSchema,
+  MAX_RACE_MS,
   memberSchema,
   rejectReasonSchema,
   PROTOCOL_VERSION,
@@ -46,6 +47,7 @@ const welcome = {
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
 };
@@ -63,6 +65,7 @@ const running = {
   },
   state: initialState(),
   overlay: { extra: [], removed: [] },
+  bonus: { card: "smoke-break", cooldownUntil: 21_000, blurUntil: 9_500 },
   resumeKey: "0123456789abcdef".repeat(4),
 };
 
@@ -100,6 +103,37 @@ describe("socket schemas", () => {
     ["member oversize name", memberSchema, { ...member, name: "a".repeat(65) }, false],
     ["welcome example", welcomeSchema, welcome, true],
     ["welcome running", welcomeSchema, running, true],
+    [
+      "#768 welcome bonus all null",
+      welcomeSchema,
+      { ...running, bonus: { card: null, cooldownUntil: null, blurUntil: null } },
+      true,
+    ],
+    ["#768 welcome missing bonus", welcomeSchema, { ...running, bonus: undefined }, false],
+    [
+      "#768 welcome bonus wrong card",
+      welcomeSchema,
+      { ...running, bonus: { ...running.bonus, card: "vodka" } },
+      false,
+    ],
+    [
+      "#768 welcome bonus missing blur",
+      welcomeSchema,
+      { ...running, bonus: { card: null, cooldownUntil: null } },
+      false,
+    ],
+    [
+      "#768 welcome bonus cooldown past race max",
+      welcomeSchema,
+      { ...running, bonus: { ...running.bonus, cooldownUntil: MAX_RACE_MS + 1 } },
+      false,
+    ],
+    [
+      "#768 welcome bonus negative blur",
+      welcomeSchema,
+      { ...running, bonus: { ...running.bonus, blurUntil: -1 } },
+      false,
+    ],
     ["welcome spectator", welcomeSchema, { ...welcome, role: "spectator", you: null }, true],
     ["welcome wrong role", welcomeSchema, { ...welcome, role: "admin" }, false],
     ["welcome missing serverNow", welcomeSchema, { ...welcome, serverNow: undefined }, false],

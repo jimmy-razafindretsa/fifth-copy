@@ -43,6 +43,7 @@ function storeIn(errorMode: "continue" | "block", keys: string[] = []): RaceStor
       race: null,
       state: null,
       overlay: null,
+      bonus: null,
       resumeKey: null,
       serverNow: 1_767_225_600_000,
     },

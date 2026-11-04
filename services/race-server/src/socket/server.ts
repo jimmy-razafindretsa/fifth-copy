@@ -46,6 +46,8 @@ export type RacePort = {
   playBonus(lobbyId: string, desk: number): BonusPlayResult;
   /** The desk's text overlay while a race runs (`welcome.overlay`), else null. */
   overlayOf(lobbyId: string, desk: number): Welcome["overlay"];
+  /** The desk's card, cooldown end and blur end while a race runs (`welcome.bonus`, #768), else null. */
+  bonusOf(lobbyId: string, desk: number): Welcome["bonus"];
   /** The desk's engine state while a race runs (`welcome.state`), else null. */
   stateOf(lobbyId: string, desk: number): Welcome["state"];
 };
@@ -149,6 +151,7 @@ export function attachSocketServer(
           // The server's authority after a resume: the client reconciles from it (#215).
           state: race.stateOf(lobby, joined.desk),
           overlay: race.overlayOf(lobby, joined.desk),
+          bonus: race.bonusOf(lobby, joined.desk),
           resumeKey,
           serverNow: deps.clock.now(),
         });

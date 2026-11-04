@@ -40,6 +40,7 @@ const welcome = (you: number, members: Member[]): RoomEvents["welcome"] => ({
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
 });

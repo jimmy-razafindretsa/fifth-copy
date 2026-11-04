@@ -1,6 +1,7 @@
 import {
   applyBonus,
   canPlay,
+  COOLDOWN_MS,
   EMPTY_OVERLAY,
   eligibleBonus,
   isHostile,
@@ -16,6 +17,7 @@ import {
   type RaceEvent,
   type Rejected,
   type TextOverlay,
+  type WelcomeBonus,
 } from "@fifth-copy/protocol";
 import { withOverlay, type DesksState, type DeskState, type RoomRuntime } from "./desks-state";
 import { raceElapsed } from "./live-rank";
@@ -38,6 +40,12 @@ export type Bonuses = {
   play(lobbyId: string, desk: number, now: number): BonusPlayResult;
   /** The desk's overlay while its race runs (`welcome.overlay`), else null. */
   overlayOf(lobbyId: string, desk: number): TextOverlay | null;
+  /**
+   * The desk's bonus while its race runs (`welcome.bonus`, #768), else null: the card it holds, when
+   * its cooldown ends and when a blur on it lifts (ms since GO, `now` the server clock), each null
+   * once over.
+   */
+  bonusOf(lobbyId: string, desk: number, now: number): WelcomeBonus | null;
 };
 
 export type BonusEmit = {
@@ -183,6 +191,20 @@ export function createBonuses({
       const runtime = desksState.get(lobbyId);
       const overlay = runtime?.phase === "running" ? runtime.states.get(desk)?.overlay : null;
       return overlay ? wire(overlay) : null;
+    },
+
+    bonusOf(lobbyId, desk, now) {
+      const runtime = desksState.get(lobbyId);
+      const state = runtime?.phase === "running" ? runtime.states.get(desk) : undefined;
+      if (!runtime || !state) return null;
+      const elapsed = raceElapsed(runtime, now);
+      const cooldownUntil =
+        state.lastPlayedAt === null || canPlay(state.lastPlayedAt, elapsed)
+          ? null
+          : Math.min(MAX_RACE_MS, state.lastPlayedAt + COOLDOWN_MS);
+      const blurUntil =
+        state.blurUntil === null || state.blurUntil <= elapsed ? null : state.blurUntil;
+      return { card: state.held?.kind ?? null, cooldownUntil, blurUntil };
     },
   };
 }

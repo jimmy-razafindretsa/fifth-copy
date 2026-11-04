@@ -152,6 +152,7 @@ export function createRaceServer({
     abandon: idle.abandon,
     playBonus: (lobbyId, desk) => bonuses.play(lobbyId, desk, clock.now()),
     overlayOf: bonuses.overlayOf,
+    bonusOf: (lobbyId, desk) => bonuses.bonusOf(lobbyId, desk, clock.now()),
     stateOf: (lobbyId, desk) => {
       const state = desksState.states(lobbyId).get(desk);
       return state && desksState.get(lobbyId)?.phase === "running" ? playerStateOf(state) : null;

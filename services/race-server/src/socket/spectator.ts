@@ -57,6 +57,7 @@ export function attachSpectator(
         race: room.race,
         state: null,
         overlay: null,
+        bonus: null,
         resumeKey: null,
         serverNow: clock.now(),
       });

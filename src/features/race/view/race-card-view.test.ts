@@ -368,6 +368,7 @@ describe("raceCardViewFrom (#564 C3)", () => {
       race: null,
       state: null,
       overlay: null,
+      bonus: null,
       resumeKey: null,
       serverNow: 1_767_225_600_000,
     };

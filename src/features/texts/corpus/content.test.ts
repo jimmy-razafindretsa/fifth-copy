@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { contentFiles, manifestSource, MANIFEST } from "../../../../scripts/corpus-manifest";
+import {
+  contentFiles,
+  contentVersion,
+  manifestSource,
+  MANIFEST,
+} from "../../../../scripts/corpus-manifest";
 import fs from "node:fs";
-import { CONTENT_FILES } from "./manifest";
+import { CONTENT_FILES, CONTENT_VERSION } from "./manifest";
 import { fileProvider, parseContentFile, passagesOf } from "./files";
 import { contentFileSchema, issuesOf } from "./schema";
 
@@ -42,7 +47,32 @@ describe("content files (C1)", () => {
 
   it("fileProvider is the default provider and reads the passages", () => {
     expect(fileProvider.sentences("fr")).toBe(passagesOf("fr"));
-    expect(fileProvider.sourceRef("en")).toBe("files:en:v1");
+  });
+});
+
+// Contract of #342 C7: the provider's sourceRef is a version of the file set, so it changes with the content.
+describe("sourceRef follows the content (#342 C7)", () => {
+  it("is files:<language>:<hash of that language's files>", () => {
+    for (const language of ["en", "fr"] as const) {
+      expect(fileProvider.sourceRef(language)).toBe(
+        `files:${language}:${CONTENT_VERSION[language]}`,
+      );
+      expect(CONTENT_VERSION[language]).toBe(contentVersion(language, contentFiles()));
+      expect(CONTENT_VERSION[language]).toMatch(/^[0-9a-f]{12}$/);
+    }
+    expect(CONTENT_VERSION.en).not.toBe(CONTENT_VERSION.fr);
+  });
+
+  it("changes when a file is edited, added or removed, and only for its language", () => {
+    const files = ["en/a.json", "en/b.json", "fr/c.json"];
+    const bytes: Record<string, string> = { "en/a.json": "A", "en/b.json": "B", "fr/c.json": "C" };
+    const v = (lang: string, list = files, data = bytes) =>
+      contentVersion(lang, list, (f) => data[f]!);
+    const base = v("en");
+    expect(v("en", files, { ...bytes, "en/a.json": "A2" })).not.toBe(base);
+    expect(v("en", [...files, "en/d.json"], { ...bytes, "en/d.json": "D" })).not.toBe(base);
+    expect(v("en", files.slice(1))).not.toBe(base);
+    expect(v("en", files, { ...bytes, "fr/c.json": "C2" })).toBe(base);
   });
 });
 

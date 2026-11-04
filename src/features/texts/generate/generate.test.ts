@@ -88,7 +88,8 @@ describe("strategy table and purity (C7)", () => {
         );
         const b = generateRaceText(settings(language, 50, textType), { rng: mulberry32(2) });
         expect(a.content).not.toBe(b.content);
-        expect(a.sourceRef).toBe(`files:${language}:v1`);
+        expect(a.sourceRef).toBe(fileProvider.sourceRef(language));
+        expect(a.sourceRef).toMatch(new RegExp(`^files:${language}:[0-9a-f]{12}$`));
       }
     });
   }

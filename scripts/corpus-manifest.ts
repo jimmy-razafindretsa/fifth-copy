@@ -6,8 +6,11 @@
  *   npm run corpus            rewrite the manifest
  *   npm run corpus -- --check exit 1 when the committed manifest does not list the files on disk
  *
- * `src/features/texts/corpus/content.test.ts` runs the same check.
+ * `src/features/texts/corpus/content.test.ts` runs the same check. The manifest also carries a content
+ * version per language (#342 C7): a hash of that language's file names and bytes, so the file provider's
+ * `sourceRef` changes whenever the corpus does.
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -28,8 +31,26 @@ export function contentFiles(root = "."): string[] {
   });
 }
 
+/** A short, stable hash of one language's content files (names and bytes, in order). */
+export function contentVersion(
+  language: string,
+  files: readonly string[],
+  read: (file: string) => string | Buffer = (f) => fs.readFileSync(path.join(CONTENT_DIR, f)),
+): string {
+  const hash = createHash("sha256");
+  for (const f of files.filter((name) => name.startsWith(`${language}/`))) {
+    hash.update(`${f}\0`);
+    hash.update(read(f));
+    hash.update("\0");
+  }
+  return hash.digest("hex").slice(0, 12);
+}
+
 /** The manifest's source for `files`. */
-export function manifestSource(files: readonly string[]): string {
+export function manifestSource(
+  files: readonly string[],
+  version: (language: string) => string = (language) => contentVersion(language, files),
+): string {
   const name = (i: number) => `f${i}`;
   const imports = files.map((f, i) => `import ${name(i)} from "./content/${f}";`).join("\n");
   const entries = files.map((f, i) => `  ["${f}", ${name(i)}],`).join("\n");
@@ -40,6 +61,11 @@ ${imports}
 export const CONTENT_FILES: ReadonlyArray<readonly [string, unknown]> = [
 ${entries}
 ];
+
+/** Per language, a hash of its content files: changes whenever a file is added, removed or edited. */
+export const CONTENT_VERSION = {
+${LANGUAGES.map((language) => `  ${language}: "${version(language)}",`).join("\n")}
+} as const;
 `;
 }
 

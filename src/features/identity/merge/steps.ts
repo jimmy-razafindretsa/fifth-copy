@@ -31,15 +31,22 @@ export const preferenceStep: MergeStep = {
   },
 };
 
-/** A guest has no sign-in link and no recovery code: one present means the ids are wrong. */
-function guestHasNone(model: "OAuthAccount" | "RecoveryCode"): MergeStep {
+/**
+ * A guest has no sign-in link, no recovery code and no password reset (one is issued only for an
+ * account with a password, by a non-guest host, #788): one present means the ids are wrong.
+ */
+function guestHasNone(model: "OAuthAccount" | "RecoveryCode" | "PasswordReset"): MergeStep {
   return {
     model,
     async run(tx, guestId) {
       const owned =
         model === "OAuthAccount"
           ? await tx.oAuthAccount.count({ where: { userId: guestId } })
-          : await tx.recoveryCode.count({ where: { userId: guestId } });
+          : model === "RecoveryCode"
+            ? await tx.recoveryCode.count({ where: { userId: guestId } })
+            : await tx.passwordReset.count({
+                where: { OR: [{ userId: guestId }, { issuedByUserId: guestId }] },
+              });
       if (owned > 0) throw new MergeGuestError(`Guest owns ${model} rows`);
       return 0;
     },
@@ -89,6 +96,7 @@ export const IDENTITY_STEPS: readonly MergeStep[] = [
   preferenceStep,
   guestHasNone("OAuthAccount"),
   guestHasNone("RecoveryCode"),
+  guestHasNone("PasswordReset"),
   avatarStep,
 ];
 

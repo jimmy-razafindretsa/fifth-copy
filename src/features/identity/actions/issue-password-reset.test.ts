@@ -80,6 +80,7 @@ describe.skipIf(!testDatabaseUrl)("issuePasswordReset (needs TEST_DATABASE_URL)"
   const raced = async (lobbyId: string, userId: string) => {
     const race = await db.race.create({
       data: {
+        id: randomUUID(),
         lobbyId,
         textContent: "a b",
         textLanguage: "EN",

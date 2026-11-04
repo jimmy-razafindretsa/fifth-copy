@@ -1,8 +1,25 @@
 import { z } from "zod";
+import { ROOM_CODE_RE } from "@fifth-copy/protocol/room-code";
+import { normalizeUsername } from "@/lib/username";
 import { OUTFIT_CATALOGUE, type OutfitCategory } from "./clerk/outfit";
 
 // Lives in src/lib so src/server/auth can use it without importing a feature (ADR 0001).
-export { normalizeUsername } from "@/lib/username";
+export { normalizeUsername };
+
+/**
+ * A username typed to look an account up (the rules of `verifyCredentials`, #38): at most 256
+ * characters as typed, then `normalizeUsername`, non-empty. Parses to the normalized form.
+ */
+export const usernameLookup = z.string().max(256).transform(normalizeUsername).pipe(z.string().min(1));
+
+/**
+ * `issuePasswordReset` input (#788): the room code the host issues from (exactly `ROOM_CODE_RE`, as
+ * the host's waiting room holds it) and the student's username. Unknown keys are stripped.
+ */
+export const issuePasswordResetInput = z.object({
+  code: z.string().regex(ROOM_CODE_RE),
+  username: usernameLookup,
+});
 
 /** The square crop chosen in the dialog (#60), in displayed-image pixels; bounds are checked by storeAvatar. */
 export const cropSchema = z.object({

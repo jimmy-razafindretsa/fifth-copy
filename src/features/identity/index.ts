@@ -41,7 +41,9 @@ export { MergeGuestError } from "./merge/steps";
 // The teacher password reset (#788): the host issues a single-use code; the redeem (R2) and the host
 // control (R3) share the code helpers.
 export { issuePasswordReset, type IssuePasswordResetResult } from "./actions/issue-password-reset";
-export { formatResetCode, normalizeResetCode } from "./password-reset/code";
+export { formatResetCode, normalizeResetCode, RESET_CODE_TTL_MS } from "./password-reset/code";
+// The host control (#790): whether the viewer may issue codes in a lobby (the docket's render gate).
+export { canIssueResetIn } from "./queries/reset-eligibility";
 // The merge stamp (#57): merge callers leave the flash with `flashMerge(counts)`; the root layout mounts
 // `MergeStamp`, which shows it once.
 export { flashMerge } from "./merge/flash";

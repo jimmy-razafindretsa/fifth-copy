@@ -353,6 +353,23 @@ export const fr = {
         },
       },
     },
+    reset: {
+      name: "FORMULAIRE 5-R",
+      tag: "RÉINITIALISATION",
+      student: "ÉLÈVE",
+      issue: "ÉMETTRE UN CODE",
+      pending: "ÉMISSION…",
+      issued: "CODE ÉMIS",
+      expires: "EXPIRE DANS {m} MIN",
+      handOver: "À REMETTRE EN PRIVÉ",
+      errors: {
+        invalid: "Tape le nom d'utilisateur de l'élève.",
+        "not-eligible": "Ce nom d'utilisateur n'est pas celui d'un de tes élèves.",
+        "not-host": "Seul l'enseignant qui tient cette salle peut émettre un code.",
+        "rate-limited": "Trop de codes émis. Réessaie dans {m} min.",
+        generic: "Quelque chose a coincé. Réessaie.",
+      },
+    },
     invite: {
       label: "INVITATION",
       copy: "COPIER",

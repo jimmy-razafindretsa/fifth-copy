@@ -360,6 +360,27 @@ export const en = {
       },
     },
     /** The invite rows of the room docket (#498, bible 7.1 ink button); #121 adds the link row. */
+    /**
+     * The host's PASSWORD RESET docket (#790, bible 14.3, 7.4): a teacher host issues a student's
+     * single-use reset code (#788). Errors never echo the typed username.
+     */
+    reset: {
+      name: "FORM 5-R",
+      tag: "PASSWORD RESET",
+      student: "STUDENT",
+      issue: "ISSUE A CODE",
+      pending: "ISSUING…",
+      issued: "CODE ISSUED",
+      expires: "EXPIRES IN {m} MIN",
+      handOver: "HAND IT OVER IN PRIVATE",
+      errors: {
+        invalid: "Type the student's username.",
+        "not-eligible": "That username is not one of your students.",
+        "not-host": "Only the teacher hosting this room can issue a code.",
+        "rate-limited": "Too many codes issued. Try again in {m} min.",
+        generic: "Something jammed. Try again.",
+      },
+    },
     invite: {
       label: "INVITE",
       copy: "COPY",

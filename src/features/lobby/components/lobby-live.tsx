@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import type { RoomSocket } from "@/features/race";
@@ -58,6 +58,11 @@ type ViewProps = {
   form?: FormState;
   revision?: number;
   onSetting?: (key: FormKey, raw: RawValue) => void;
+  /**
+   * The host's `PASSWORD RESET` docket (#790), rendered by the server page for the lobby's teacher host
+   * only (never hidden here): placed under the settings docket, above START.
+   */
+  reset?: ReactNode;
 };
 
 /** The viewer's own row says whether they host (`Member.isHost`, protocol v4). */
@@ -80,6 +85,7 @@ export function LobbyLiveView({
   form = IDLE_FORM,
   revision = 0,
   onSetting,
+  reset = null,
 }: ViewProps) {
   const state: LobbyState =
     room.settings && lobbyType ? { ...room, settings: { ...room.settings, lobbyType } } : room;
@@ -115,6 +121,7 @@ export function LobbyLiveView({
         {state.phase === "error" ? null : (
           <SettingsDocket settings={state.settings} labels={labels.settings} {...edits} />
         )}
+        {reset}
         {canStart && !start.hidden ? (
           <StartControl
             seated={state.members.length}
@@ -190,6 +197,7 @@ export function LobbyLive({
   lobbyType,
   labels,
   errors,
+  reset,
 }: {
   code: string;
   /** The room's lobby id (`Lobby.id`): the resume key and the parked socket are keyed by it. */
@@ -198,6 +206,8 @@ export function LobbyLive({
   lobbyType: LobbyKind;
   labels: LobbyLabels;
   errors: EntryErrors;
+  /** The server-rendered reset docket slot (#790), passed through to the view. */
+  reset?: ReactNode;
 }) {
   const router = useRouter();
   const [state, dispatch] = useReducer(reduceLobby, initialLobbyState);
@@ -320,6 +330,7 @@ export function LobbyLive({
       form={form}
       revision={revision}
       onSetting={onSetting}
+      reset={reset}
     />
   );
 }

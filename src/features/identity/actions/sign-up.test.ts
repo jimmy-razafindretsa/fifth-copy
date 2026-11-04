@@ -33,6 +33,7 @@ const spies = vi.hoisted(() => ({
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test", AUTH_SECRET: "s".repeat(32) } }));
 vi.mock("next/headers", () => harnessModules.headers(h.harness));
 vi.mock("next/navigation", () => harnessModules.navigation());
+vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 vi.mock("@/server/db", () => harnessModules.db(h.harness));
 vi.mock("@/i18n", () => harnessModules.i18n(h.harness));
 vi.mock("@/server/auth", () => harnessModules.auth(h.harness));
@@ -95,11 +96,12 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
         en.auth.errors.passwordLength,
       ],
     ])("%j -> %s error, nothing created", async (fields, field, message) => {
-      const before = await db.user.count();
       const state = await signUp(form(fields));
       expect(state.fieldErrors).toEqual({ [field]: message });
       expect(state.formError).toBeNull();
-      expect(await db.user.count()).toBe(before);
+      // other test files write users in parallel: look for this username, not a global count
+      const key = fields.username.normalize("NFKC").trim().toLowerCase();
+      if (key) expect(await db.user.findUnique({ where: { usernameNormalized: key } })).toBeNull();
       expect(h.harness.signIns).toEqual([]);
     });
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { env } from "@/env";
 import { GUEST_COOKIE, verifyGuestCookie } from "@/server/auth";
@@ -27,6 +28,8 @@ export async function mergeGuestCookieInto(accountId: string): Promise<void> {
     const counts = await mergeGuestInto(guestId, accountId);
     await flashMerge(counts);
     jar.delete(GUEST_COOKIE);
+    // the root layout mounts the merge stamp (#57): render it again on the redirect target
+    revalidatePath("/", "layout");
   } catch (error) {
     logger.warn("guest merge on sign-in failed", {
       error: error instanceof Error ? error.name : "unknown",

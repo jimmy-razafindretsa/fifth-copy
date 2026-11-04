@@ -232,6 +232,9 @@ Design bible 14.4 (#300). The route renders `DawnReportScreen` (through `src/fea
 | `RankingTable` (#301) | `rows: RankingRow[]` (`rankingRowsFrom(entries, viewerDesk)`, `view/ranking.ts`), `labels: RankingLabels` (`rankingLabels`) | `div[role=region][tabindex=0][data-ranking]` (named by the caption) around a `table` with explicit roles: `caption`, one header row of six `th scope=col`, one `tr[data-place][data-desk][data-you][data-status]` per row (place, portrait, name + tags, desk, WPM, accuracy, status) | pure Server Component; one CSS grid per row, two lines under a 600px docket (container query), sticky header row, `max-height:60vh` scroll; portrait = `initialsOf(name)` or `<img alt="">` from `avatarUrl` (#65) (bible 14.4 "Ranking docket") |
 | `FilingNotice` (client leaf) | `labels`, `backHref` | the 7.4 notice row (`role="status"`, `lkPulse`), after 60 s the 7.4 error line plus a 7.1 secondary link | `startFilingPoll`: `router.refresh()` every 2 s for at most 60 s; `FilingNoticeView` renders either state without hooks |
 
+## Sign-in and sign-up (identity feature, `/sign-in`, `/sign-up`)
+Bible 14.3 "Sign-in and sign-up" (#36). `src/features/identity/components/`: `AuthScreen` (server: kicker, H1, the form docket, the guest docket, privacy link), `AuthForm` / `AuthFormView` (client leaf; `action` and `labels` props, every state from props for `/design`), `ProviderButtons` (forms posting `continueWithProvider`), `GuestCta`, `AccountControl` (the header's signed-out / guest / account states; the header passes its own classes) and `AuthStates` (the `/design` gallery, `data-auth-state`). Styles: `auth.module.css` (bible 7.1, 7.2, 7.4 recipes through roles). Tests: `e2e/auth/{screens,sign-up,sign-in,credentials}.spec.ts`.
+
 ## Screen states checklist (every `ui` card)
 empty (`EmptyState`), loading (`Skeleton`/`Spinner` inside an `aria-busy` region), error (`Alert tone="error"`), populated. Mobile, tablet, desktop. Light and dark.
 

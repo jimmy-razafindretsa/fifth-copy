@@ -150,7 +150,11 @@ export function AuthForm({
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_AUTH_STATE);
   // false on the server and during hydration, true after: no effect, no extra render
-  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const hydrated = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
   const [values, setValues] = useState<Record<AuthField, string>>({ username: "", password: "" });
   return (
     <AuthFormView

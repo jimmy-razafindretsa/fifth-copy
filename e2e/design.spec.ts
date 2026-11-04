@@ -88,7 +88,7 @@ test.describe("design system page", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Saving" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Saving" })).toHaveAttribute("aria-busy", "true");
-    await expect(page.getByRole("textbox", { name: "Name" })).toHaveAttribute(
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveAttribute(
       "aria-invalid",
       "true",
     );
@@ -530,7 +530,7 @@ test.describe("#15 printed look", () => {
         expect(email.borderColor).toBe(fg);
         expect(email.radius).toBe("0px");
         expect(email.shadow).toBe("none");
-        const invalid = await lookOf(page.getByRole("textbox", { name: "Name" }));
+        const invalid = await lookOf(page.getByRole("textbox", { name: "Name", exact: true }));
         expect(invalid.border).toEqual(TWO);
         expect(invalid.borderColor).toBe(await role("danger", "borderTopColor"));
 

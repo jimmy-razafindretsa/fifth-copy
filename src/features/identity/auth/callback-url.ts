@@ -10,7 +10,8 @@ const MAX_LENGTH = 512;
  * `/\t/evil` into `//evil`), and is at most 512 characters. Pure, so the proxy and the action share it.
  */
 export function safeCallbackUrl(raw: string | null | undefined): string {
-  if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_LENGTH) return DEFAULT_CALLBACK;
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_LENGTH)
+    return DEFAULT_CALLBACK;
   if (!raw.startsWith("/") || raw.startsWith("//")) return DEFAULT_CALLBACK;
   if (/[\\\s\u0000-\u001f\u007f]/.test(raw)) return DEFAULT_CALLBACK;
   // A parse against a dummy origin must keep that origin: catches anything the checks above missed.

@@ -5,12 +5,7 @@ export type EntryLabels = Messages["landing"]["actions"];
 export type EntryErrors = Messages["landing"]["errors"];
 
 export type EntryError =
-  | "invalid-format"
-  | "not-found"
-  | "closed"
-  | "room-full"
-  | "race-server-unavailable"
-  | "generic";
+  "invalid-format" | "not-found" | "closed" | "room-full" | "race-server-unavailable" | "generic";
 
 export function errorMessage(errors: EntryErrors, error: EntryError): string {
   switch (error) {

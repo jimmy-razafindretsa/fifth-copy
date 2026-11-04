@@ -1,7 +1,7 @@
 import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, SEAT_HUD, simulatedPlayers, warmRace } from "./helpers";
+import { hostRoom, phaseOf, SEAT_HUD, simulatedPlayers, startButton, warmRace } from "./helpers";
 
 /**
  * #560 seat view HUD dockets on /design#race-hud: nixie counters, race card, Sabotage tray, Abandon
@@ -375,82 +375,89 @@ test.describe("#792 seat view lane: a 10-character name stays readable next to A
     for (const context of opened.splice(0)) await context.close();
   });
 
+  /** One correct key every 3 s, so the server never puts this desk to sleep; `stop()` ends it. */
+  function keepAwake(p: Page) {
+    let awake = true;
+    const run = (async () => {
+      const text = Array.from(
+        (await p.locator("[data-telex] [data-state]").allTextContents()).join(""),
+      );
+      for (let i = 0; awake && i < text.length - 1; i++) {
+        await p.keyboard.type(text[i]!);
+        for (let w = 0; awake && w < 30; w++) await p.waitForTimeout(100);
+      }
+    })().catch(() => {});
+    return async () => {
+      awake = false;
+      await run;
+    };
+  }
+
+  /** The lane of `desk` at 1280x800 and 1024x768: its name in full, name and label inside the lane. */
+  async function expectNameInFull(p: Page, desk: number, asleep: string) {
+    const lane = SEAT_HUD.raceCard(p).locator(`[data-lane][data-desk="${desk}"]`);
+    await expect(lane.locator('[data-status-label="asleep"]')).toHaveText(asleep, {
+      timeout: scaled(KICK_MS + 10_000),
+    });
+    for (const [width, height] of [
+      [1280, 800],
+      [1024, 768],
+    ] as const) {
+      await p.setViewportSize({ width, height });
+      const m = await lane.evaluate((el) => {
+        const name = el.querySelector<HTMLElement>("[data-name]");
+        const chip = el.querySelector("[data-status-label]")!.getBoundingClientRect();
+        const box = el.getBoundingClientRect();
+        return name
+          ? {
+              text: name.textContent,
+              clipped: name.scrollWidth - name.clientWidth,
+              inside: name.getBoundingClientRect().right <= box.right && chip.right <= box.right,
+            }
+          : null;
+      });
+      const at = `${width} ${asleep}`;
+      expect(m, `${at}: the lane shows a name`).not.toBeNull();
+      expect(m!.text, at).toBe("Marmot-648");
+      expect(m!.clipped, `${at}: name shown in full`).toBeLessThanOrEqual(0);
+      expect(m!.inside, `${at}: name and label inside the lane`).toBe(true);
+    }
+  }
+
   test("C1 seat view lane: Marmot-648 ASLEEP AT DESK shows its name in full at 1280 and 1024, in English and French", async ({
     page,
   }) => {
     test.slow();
-    test.setTimeout(scaled(60_000 + KICK_MS * 2));
-    // the host reads French, the page under test English: both seat views carry the race card
+    test.setTimeout(scaled(90_000 + KICK_MS * 2));
     const room = await hostRoom(page.context().browser()!, opened);
-    await room.context.addCookies([
-      { name: "locale", value: "fr", url: test.info().project.use.baseURL! },
-    ]);
-    await room.host.reload();
+    // `next dev` compiles the seat view on its first request (this file's other tests only open /design)
+    await warmRace(page, room.lobbyId);
     await page.goto(`/race/${room.lobbyId}`);
-    await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/);
+    await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/, { timeout: scaled(10_000) });
     // a third typist named Marmot-648 who never types: the server puts it to sleep
     const [marmot] = await simulatedPlayers(1, room.lobbyId, { names: ["Marmot-648"] });
     try {
-      // the French host's START
-      const start = room.host.getByRole("button", { name: "DÉMARRER", exact: true });
-      await expect(start).toBeEnabled();
-      await warmRace(room.host, room.lobbyId);
-      await start.click();
-      await expect(room.host).toHaveURL(/\/race\/[0-9a-f-]{36}$/);
-      const pages = [
-        { p: page, asleep: "ASLEEP AT DESK" },
-        { p: room.host, asleep: "ENDORMI AU BUREAU" },
-      ];
-      for (const { p } of pages) {
+      await expect(startButton(room.host)).toBeEnabled();
+      await startButton(room.host).click();
+      for (const p of [page, room.host]) {
         await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", {
           timeout: scaled(10_000),
         });
       }
-      // both pages stay awake: one correct key every 3 s
-      let awake = true;
-      const keepAwake = pages.map(async ({ p }) => {
-        const text = Array.from(
-          (await p.locator("[data-telex] [data-state]").allTextContents()).join(""),
-        );
-        for (let i = 0; awake && i < text.length - 1; i++) {
-          await p.keyboard.type(text[i]!);
-          for (let w = 0; awake && w < 30; w++) await p.waitForTimeout(100);
-        }
-      });
+      const stops = [keepAwake(room.host), keepAwake(page)];
       try {
-        for (const { p, asleep } of pages) {
-          const lane = SEAT_HUD.raceCard(p).locator(`[data-lane][data-desk="${marmot!.desk}"]`);
-          await expect(lane.locator('[data-status-label="asleep"]')).toHaveText(asleep, {
-            timeout: scaled(KICK_MS + 10_000),
-          });
-          for (const [width, height] of [
-            [1280, 800],
-            [1024, 768],
-          ] as const) {
-            await p.setViewportSize({ width, height });
-            const m = await lane.evaluate((el) => {
-              const name = el.querySelector<HTMLElement>("[data-name]");
-              const chip = el.querySelector("[data-status-label]")!.getBoundingClientRect();
-              const lane = el.getBoundingClientRect();
-              return name
-                ? {
-                    text: name.textContent,
-                    clipped: name.scrollWidth - name.clientWidth,
-                    inside:
-                      name.getBoundingClientRect().right <= lane.right && chip.right <= lane.right,
-                  }
-                : null;
-            });
-            const at = `${width} ${asleep}`;
-            expect(m, `${at}: the lane shows a name`).not.toBeNull();
-            expect(m!.text, at).toBe("Marmot-648");
-            expect(m!.clipped, `${at}: name shown in full`).toBeLessThanOrEqual(0);
-            expect(m!.inside, `${at}: name and label inside the lane`).toBe(true);
-          }
-        }
+        await expectNameInFull(page, marmot!.desk, "ASLEEP AT DESK");
+        // French: the same seat view after a reload with the locale cookie (the desk resumes, #235)
+        await page
+          .context()
+          .addCookies([{ name: "locale", value: "fr", url: test.info().project.use.baseURL! }]);
+        await page.reload();
+        await expect(SEAT_HUD.kicker(page)).toHaveText(/^VUE DE TA PLACE · BUREAU \d{2}$/, {
+          timeout: scaled(10_000),
+        });
+        await expectNameInFull(page, marmot!.desk, "ENDORMI AU BUREAU");
       } finally {
-        awake = false;
-        await Promise.all(keepAwake.map((k) => k.catch(() => {})));
+        await Promise.all(stops.map((stop) => stop()));
       }
     } finally {
       marmot?.close();

@@ -1845,7 +1845,7 @@ describe("#236 bonus state", () => {
         payload: welcome({
           room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
           race: RACE,
-          state: initialState(),
+          state: { ...initialState(), typed: [] },
           bonus,
           serverNow: SERVER_NOW,
         }),
@@ -1872,7 +1872,7 @@ describe("#236 bonus state", () => {
         payload: welcome({
           room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
           race: RACE,
-          state: initialState(),
+          state: { ...initialState(), typed: [] },
           bonus: { card: "smoke-break", cooldownUntil: null, blurUntil: null },
           serverNow: SERVER_NOW,
         }),

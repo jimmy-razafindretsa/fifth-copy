@@ -1,4 +1,11 @@
-import { BACKSPACE, type Keystroke, type PlayerState, type PlayerStatus } from "@fifth-copy/engine";
+import {
+  BACKSPACE,
+  isTypeable,
+  normalizeKey,
+  type Keystroke,
+  type PlayerState,
+  type PlayerStatus,
+} from "@fifth-copy/engine";
 import { z } from "zod";
 import { raceLanguageSchema, raceSettingsSchema } from "./settings";
 
@@ -94,18 +101,38 @@ export const resumeKeySchema = z
   .max(64)
   .regex(/^[A-Za-z0-9_-]+$/);
 
+/** Longest `key` the wire carries, in UTF-16 units ("Backspace", a decomposed accent). */
+const MAX_KEY_LENGTH = 16;
+
 /**
- * "Backspace" or exactly one printable code point: a modifier name such as "Shift", a control or
- * format character, or a lone surrogate never crosses the wire.
+ * A keystroke's `key` (#660): "Backspace", or a key the engine applies, judged by the engine's own
+ * `normalizeKey` (ADR 0007): one code point once NFC-composed (so `e` + U+0301 is `é`), no control,
+ * format, surrogate, private-use or separator code point, and a non-empty normal form (a typeable
+ * character, a space, or a look-alike such as `…` -> `...`). A modifier or dead-key name ("Shift"),
+ * a lone combining mark, an emoji or any character the engine drops never crosses the wire.
  */
+function isWireKey(key: string): boolean {
+  if (key === BACKSPACE) return true;
+  if (key.length === 0 || key.length > MAX_KEY_LENGTH || UNPRINTABLE.test(key)) return false;
+  return [...key.normalize("NFC")].length === 1 && normalizeKey(key) !== "";
+}
+
 const keySchema = z
   .string()
   .min(1)
-  .max(16)
-  .refine(
-    (key) => key === BACKSPACE || ([...key].length === 1 && !UNPRINTABLE.test(key)),
-    "one printable character or Backspace",
-  );
+  .max(MAX_KEY_LENGTH)
+  .refine(isWireKey, "Backspace or one key the engine applies");
+
+/**
+ * One entry of `PlayerState.typed` (#660): the normalised wrong key the engine stored in Continue
+ * mode, so only typeable characters (the whitelist has no control or unprintable one), possibly
+ * several (a wrong `…` is stored as `"..."`).
+ */
+const typedEntrySchema = z
+  .string()
+  .min(1)
+  .max(MAX_KEY_LENGTH)
+  .refine((entry) => [...entry].every(isTypeable), "typeable characters only");
 
 /** Engine `Keystroke`: `t` is ms since GO on the sender's clock (ARCHITECTURE 7.3). */
 export const keystrokeSchema = z.object({
@@ -145,7 +172,7 @@ export const playerStateSchema = z.object({
   correct: z.int().min(0),
   errors: z.int().min(0),
   total: z.int().min(0),
-  typed: z.array(keySchema.nullable()).max(MAX_TEXT_LENGTH),
+  typed: z.array(typedEntrySchema.nullable()).max(MAX_TEXT_LENGTH),
   status: playerStatusSchema,
   lastT: raceMsSchema,
   finishedAt: raceMsSchema.nullable(),

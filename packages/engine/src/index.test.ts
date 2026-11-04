@@ -15,6 +15,7 @@ describe("@fifth-copy/engine", () => {
 
   it.each([
     "normalizeTypeable",
+    "normalizeKey",
     "isTypeable",
     "TYPEABLE",
     "wordCount",

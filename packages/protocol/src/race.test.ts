@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { initialState, type PlayerStatus } from "@fifth-copy/engine";
+import {
+  applyKeystroke,
+  BACKSPACE,
+  initialState,
+  mulberry32,
+  normalizeKey,
+  TYPEABLE,
+  type PlayerState,
+  type PlayerStatus,
+} from "@fifth-copy/engine";
 import {
   bonusKindSchema,
   DESK_COLORS,
@@ -75,7 +84,7 @@ describe("race value schemas", () => {
     ["resume key junk", resumeKeySchema, `${"a".repeat(31)}/`, false],
     ["keystroke example", keystrokeSchema, { t: 12345, key: "é" }, true],
     ["keystroke backspace", keystrokeSchema, { t: 0, key: "Backspace" }, true],
-    ["keystroke astral char", keystrokeSchema, { t: 1, key: "\u{1F600}" }, true],
+    ["keystroke astral char (normalises to nothing)", keystrokeSchema, { t: 1, key: "\u{1F600}" }, false],
     ["keystroke two chars", keystrokeSchema, { t: 1, key: "ab" }, false],
     ["keystroke modifier name", keystrokeSchema, { t: 1, key: "Shift" }, false],
     ["keystroke space", keystrokeSchema, { t: 1, key: " " }, true],
@@ -182,5 +191,116 @@ describe("deskIdentity", () => {
       Array.from({ length: 48 }, (_, i) => MARKERS[Math.floor(i / 12)]),
     );
     expect(deskIdentity(49)).toEqual(deskIdentity(1));
+  });
+});
+
+/** Every look-alike the engine maps to a keyboard form (`normalize.ts` CHAR_MAP). */
+const LOOK_ALIKES = [..."“”„‟″‘’‚‛′ʼ‹›‐‑‒–—―−…"];
+/** Space separators (`\p{Zs}`) the engine maps to " " (none is a control character). */
+const SPACES = [..."\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000"];
+/** Characters outside the whitelist with no keyboard form: the engine drops them. */
+const UNTYPEABLE = ["ß", "ñ", "Ł", "ø", "\u{1F600}", "\u0301", "\u0327", "中", "¿", "¡"];
+
+/** Every way a key can arrive: as typed, decomposed (NFD), look-alikes, spaces, untypeables. */
+const DOMAIN = [
+  ...new Set([
+    ...TYPEABLE,
+    ...TYPEABLE.map((ch) => ch.normalize("NFD")),
+    ...LOOK_ALIKES,
+    ...SPACES,
+    ...UNTYPEABLE,
+  ]),
+];
+
+const CONTINUE = { errorMode: "continue", backspace: true } as const;
+/** The engine applies `key`: the state it returns is a new one (a refused keystroke is the same ref). */
+function engineApplies(key: string): boolean {
+  const start = initialState();
+  return applyKeystroke(start, { t: 1, key }, "a", CONTINUE) !== start;
+}
+const UNPRINTABLE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/u;
+
+describe("#660 keys the engine normalises", () => {
+  it("C1 a wrong ellipsis in Continue mode stores \"...\", and the welcome state parses", () => {
+    const after = applyKeystroke(initialState(), { t: 5, key: "…" }, "a.", CONTINUE);
+    expect(after.typed).toEqual(["..."]);
+    expect(playerStateSchema.safeParse(after).success).toBe(true);
+  });
+
+  it("C1 every typed entry the engine produces from any accepted key parses", () => {
+    let s: PlayerState = initialState();
+    const text = "a".repeat(DOMAIN.length);
+    DOMAIN.forEach((key, i) => {
+      if (keystrokeSchema.safeParse({ t: i, key }).success) {
+        s = applyKeystroke(s, { t: i, key }, text, CONTINUE);
+      }
+    });
+    expect(s.typed.filter((e) => e !== null).length).toBeGreaterThan(100);
+    expect(s.typed).toContain("...");
+    expect(playerStateSchema.safeParse(s).success).toBe(true);
+  });
+
+  it.each([
+    ["NUL", "\u0000"],
+    ["newline", "a\n"],
+    ["tab", "\t"],
+    ["ESC", "\u001B"],
+    ["RLO", "\u202E"],
+    ["line separator", "\u2028"],
+    ["private use", "\uE000"],
+    ["lone surrogate", "\uD800"],
+    ["zero width joiner", "\u200D"],
+    ["empty", ""],
+    ["untypeable", "ß"],
+    ["oversize", "a".repeat(17)],
+  ])("C1 a typed entry with %s is refused", (_, entry) => {
+    expect(playerStateSchema.safeParse({ ...state, typed: [null, entry] }).success).toBe(false);
+  });
+
+  it.each([
+    ["e + combining acute", "e\u0301", "é"],
+    ["E + combining acute", "E\u0301", "É"],
+    ["c + combining cedilla", "c\u0327", "ç"],
+    ["a + combining grave", "a\u0300", "à"],
+    ["i + combining diaeresis", "i\u0308", "ï"],
+  ])("C2 %s passes and the engine counts it as %s", (_, key, nfc) => {
+    expect(keystrokeSchema.safeParse({ t: 1, key }).success).toBe(true);
+    expect(normalizeKey(key)).toBe(nfc);
+    const right = applyKeystroke(initialState(), { t: 1, key }, nfc, CONTINUE);
+    expect(right).toMatchObject({ correct: 1, errors: 0 });
+  });
+
+  it.each([
+    ["a lone combining acute", "\u0301"],
+    ["an emoji", "\u{1F600}"],
+    ["sharp s", "ß"],
+    ["n tilde", "ñ"],
+    ["a CJK ideograph", "中"],
+    ["a modifier name", "Shift"],
+    ["a dead key name", "Dead"],
+    ["two typeable characters", "ab"],
+  ])("C2 %s is refused", (_, key) => {
+    expect(keystrokeSchema.safeParse({ t: 1, key }).success).toBe(false);
+  });
+
+  it("C3 property: over the typeable set and its look-alikes, the wire accepts a key exactly when the engine applies it", () => {
+    expect(DOMAIN.length).toBeGreaterThan(TYPEABLE.length);
+    for (const key of DOMAIN) {
+      const accepted = keystrokeSchema.safeParse({ t: 1, key }).success;
+      expect({ key, accepted }).toEqual({ key, accepted: engineApplies(key) });
+    }
+    // Backspace is the one named key, and the engine applies it
+    expect(keystrokeSchema.safeParse({ t: 1, key: BACKSPACE }).success).toBe(true);
+  });
+
+  it("C3 property: any single code point is accepted exactly when it is printable and the engine applies it", () => {
+    const rng = mulberry32(660);
+    for (let i = 0; i < 5_000; i++) {
+      const cp = Math.floor(rng() * 0x30000);
+      const key = String.fromCodePoint(cp);
+      const accepted = keystrokeSchema.safeParse({ t: 1, key }).success;
+      const expected = !UNPRINTABLE.test(key) && normalizeKey(key) !== "" && engineApplies(key);
+      expect({ cp, accepted }).toEqual({ cp, accepted: expected });
+    }
   });
 });

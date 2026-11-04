@@ -1,5 +1,6 @@
 import { AuthScreen, safeCallbackUrl } from "@/features/identity";
 import { LandingHeader } from "@/features/landing";
+import "../merge-steps";
 
 /**
  * `/sign-in` (#36, ADR 0009): the site header and the sign-in screen. `callbackUrl` (set by proxy.ts) is

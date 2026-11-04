@@ -94,6 +94,13 @@ export const PASSWORD_MAX = 128;
 export type AuthFieldError =
   "usernameRequired" | "usernameLength" | "usernameChars" | "passwordRequired" | "passwordLength";
 
+/**
+ * The OAuth providers the sign-in and sign-up screens offer, in button order (#36 C8; Google from the
+ * owner's C18 review). The flows themselves are #49's.
+ */
+export const OAUTH_PROVIDERS = ["github", "discord", "google"] as const;
+export type OAuthProviderId = (typeof OAUTH_PROVIDERS)[number];
+
 /** The fields of the sign-up and sign-in forms; nothing else is ever read or stored (no email, R152). */
 export type AuthField = "username" | "password";
 

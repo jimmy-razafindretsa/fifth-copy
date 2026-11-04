@@ -17,6 +17,7 @@ const COPY = {
     submit: { "/sign-in": "SIGN IN", "/sign-up": "OPEN MY FILE" },
     github: "CONTINUE WITH GITHUB",
     discord: "CONTINUE WITH DISCORD",
+    google: "CONTINUE WITH GOOGLE",
     other: { "/sign-in": "OPEN A FILE →", "/sign-up": "SIGN IN →" },
     privacy: "Privacy: what we keep and why",
   },
@@ -28,6 +29,7 @@ const COPY = {
     submit: { "/sign-in": "CONNEXION", "/sign-up": "OUVRIR MON DOSSIER" },
     github: "CONTINUER AVEC GITHUB",
     discord: "CONTINUER AVEC DISCORD",
+    google: "CONTINUER AVEC GOOGLE",
     other: { "/sign-in": "OUVRIR UN DOSSIER →", "/sign-up": "CONNEXION →" },
     privacy: "Confidentialité : ce qu'on garde et pourquoi",
   },
@@ -61,8 +63,19 @@ test.describe("auth screens (#36)", () => {
           "password",
         );
         await expect(form.getByRole("button", { name: c.submit[path], exact: true })).toBeVisible();
-        await expect(main.getByRole("button", { name: c.github })).toBeVisible();
-        await expect(main.getByRole("button", { name: c.discord })).toBeVisible();
+        // GitHub, Discord and Google, each led by its decorative monochrome mark: the accessible name
+        // stays the label alone, the mark is aria-hidden and painted in the button's own text colour
+        for (const id of ["github", "discord", "google"] as const) {
+          const button = main.getByRole("button", { name: c[id], exact: true });
+          await expect(button).toBeVisible();
+          const mark = button.locator(`svg[data-provider-mark="${id}"]`);
+          await expect(mark).toHaveAttribute("aria-hidden", "true");
+          const [fill, color] = await button.evaluate((el) => [
+            getComputedStyle(el.querySelector("path")!).fill,
+            getComputedStyle(el).color,
+          ]);
+          expect(fill).toBe(color);
+        }
         const other = path === "/sign-in" ? "/sign-up" : "/sign-in";
         await expect(main.getByRole("link", { name: c.other[path] })).toHaveAttribute(
           "href",
@@ -78,6 +91,8 @@ test.describe("auth screens (#36)", () => {
         await expect(page.locator("body")).not.toContainText(
           /forgot|oubli|reset (your|my) password|réinitialis/i,
         );
+        // the owner's C18 review: the copy makes no email claim (whether accounts store one is open)
+        await expect(page.locator("body")).not.toContainText(/no email|courriel/i);
         expect(await form.locator("input:not([type=hidden])").count()).toBe(2);
         await expectNoA11yViolations(page);
       });
@@ -93,6 +108,18 @@ test.describe("auth screens (#36)", () => {
     });
     await page.getByRole("button", { name: "CONTINUE WITH GITHUB" }).click();
     await expect(page).toHaveURL(/\/sign-in\?error=/, { timeout: HYDRATION_WAIT });
+    await expect(
+      page.getByRole("alert").filter({ hasText: "That sign-in did not go through" }),
+    ).toBeVisible();
+  });
+
+  test("C8 the Google press fails the same way until #49 wires the provider", async ({ page }) => {
+    await page.goto("/sign-up");
+    await expect(authForm(page)).toHaveAttribute("data-hydrated", "true", {
+      timeout: HYDRATION_WAIT,
+    });
+    await page.getByRole("button", { name: "CONTINUE WITH GOOGLE" }).click();
+    await expect(page).toHaveURL(/\/sign-in\?error=OAuthSignin/, { timeout: HYDRATION_WAIT });
     await expect(
       page.getByRole("alert").filter({ hasText: "That sign-in did not go through" }),
     ).toBeVisible();

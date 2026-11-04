@@ -33,8 +33,8 @@ export function authFormLabels(t: Messages, mode: AuthMode): AuthFormLabels {
 /**
  * `/sign-in` and `/sign-up` (#36 C8, bible 14.3 extension "Sign-in and sign-up"): the red kicker and the
  * Stardos H1, one sentence, then one paper docket (header row `FORM 1-A` + ink tag; the OAuth callback
- * error banner when the provider sent the visitor back; the username form; OR; GitHub and Discord with
- * the age line; the link to the other screen), the guest docket and the privacy link. No email field,
+ * error banner when the provider sent the visitor back; the username form; OR; GitHub, Discord and Google
+ * with the age line; the link to the other screen), the guest docket and the privacy link. No email field,
  * no forgot-password path (R152, R153).
  */
 export async function AuthScreen({

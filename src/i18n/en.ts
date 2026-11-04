@@ -209,7 +209,7 @@ export const en = {
       builtBy: "BUILT BY",
       builtByName: "AEGIS CORP.",
       copyright: "© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec",
-      privacyLine: "No email. No chat. Your typing stays yours.",
+      privacyLine: "No chat. Your typing stays yours.",
     },
   },
   system: {
@@ -591,7 +591,7 @@ export const en = {
     signUp: {
       kicker: "MINISTRY OF TYPING · FORM 1-B",
       title: "OPEN A FILE",
-      lede: "Pick a username and a password. No email, ever.",
+      lede: "Pick a username and a password. The ministry opens your file.",
       form: "FORM 1-B",
       tag: "NEW TYPIST",
       submit: "OPEN MY FILE",
@@ -609,7 +609,8 @@ export const en = {
       or: "OR",
       github: "CONTINUE WITH GITHUB",
       discord: "CONTINUE WITH DISCORD",
-      age: "GitHub and Discord are for ages 13 and up. Under 13? Use a username, or play as a guest.",
+      google: "CONTINUE WITH GOOGLE",
+      age: "GitHub, Discord and Google are for ages 13 and up. Under 13? Use a username, or play as a guest.",
     },
     guest: {
       title: "NO PAPERS?",

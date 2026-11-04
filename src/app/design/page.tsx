@@ -696,7 +696,8 @@ export default async function DesignPage() {
         </h2>
         <p className="type-body max-w-prose text-fg">
           The username form of the two screens in each state: default, pending, a field refused by
-          the server, a server error, and the banner a failed GitHub or Discord sign-in returns to.
+          the server, a server error, and the banner a failed GitHub, Discord or Google sign-in
+          returns to.
         </p>
         <AuthStates />
       </section>

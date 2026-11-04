@@ -210,7 +210,7 @@ export const fr = {
       builtBy: "CONÇU PAR",
       builtByName: "AEGIS CORP.",
       copyright: "© 2026 Fifth Copy · Conçu par Aegis Corp. · Fait au Québec",
-      privacyLine: "Pas de courriel. Pas de clavardage. Ta frappe t'appartient.",
+      privacyLine: "Pas de clavardage. Ta frappe t'appartient.",
     },
   },
   system: {
@@ -573,7 +573,7 @@ export const fr = {
     signUp: {
       kicker: "MINISTÈRE DE LA DACTYLO · FORMULAIRE 1-B",
       title: "OUVRIR UN DOSSIER",
-      lede: "Choisis un nom d'utilisateur et un mot de passe. Jamais de courriel.",
+      lede: "Choisis un nom d'utilisateur et un mot de passe. Le ministère ouvre ton dossier.",
       form: "FORMULAIRE 1-B",
       tag: "NOUVEAU DACTYLO",
       submit: "OUVRIR MON DOSSIER",
@@ -591,7 +591,8 @@ export const fr = {
       or: "OU",
       github: "CONTINUER AVEC GITHUB",
       discord: "CONTINUER AVEC DISCORD",
-      age: "GitHub et Discord sont réservés aux 13 ans et plus. Moins de 13 ans ? Prends un nom d'utilisateur ou joue en invité.",
+      google: "CONTINUER AVEC GOOGLE",
+      age: "GitHub, Discord et Google sont réservés aux 13 ans et plus. Moins de 13 ans ? Prends un nom d'utilisateur ou joue en invité.",
     },
     guest: {
       title: "PAS DE PAPIERS ?",

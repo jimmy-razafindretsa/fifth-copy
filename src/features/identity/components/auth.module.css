@@ -222,10 +222,14 @@
   margin: 0;
 }
 
-/* bible 7.1 secondary, full width, 44px+ */
+/* bible 7.1 secondary, full width, 44px+; the provider mark leads the centred label (7.1 extension) */
 .secondary {
   width: 100%;
   min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   @apply type-label;
   font-size: 13px;
   line-height: normal;
@@ -239,6 +243,13 @@
 
 .secondary:hover {
   background: var(--color-surface);
+}
+
+/* bible 7.1 provider mark: an 18px monochrome glyph in the button's own text colour */
+.mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
 
 .note {

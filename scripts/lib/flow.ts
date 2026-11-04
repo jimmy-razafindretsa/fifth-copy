@@ -102,7 +102,7 @@ export type GateFacts = {
   trusted: ReadonlySet<string>;
   /** `cards`: the cards the PR body references (bundle.ts prCards); checked for bundle cards only. */
   pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED"; cards?: number[] } | null;
-  /** The card's current Project Status (null = unknown or not on the board). Done requires QA. */
+  /** The card's current Project Status (null = unknown or not on the board). QA requires In Review, Done requires QA. */
   status: string | null;
   /** Conclusion of the CI run on main for the PR's merge commit (Done gate only). */
   mainCi: "success" | "failure" | "pending" | "missing" | null;
@@ -140,6 +140,11 @@ export function evaluateGate(facts: GateFacts): string[] {
       out.push("PENTEST reports blockers");
   }
   if (f.target === "QA") {
+    // PROTOCOL 5: only In Review -> QA; a card still In Progress must pass the In Review gate first (#801).
+    if (f.status !== "In Review")
+      out.push(
+        `card is in ${f.status ?? "an unknown status"}, not In Review (run gate "In Review" first)`,
+      );
     // A merged PR still owes the QA gate (a re-picked card whose PR merged early, #651); a closed one does not pass.
     if (f.pr?.state !== "OPEN" && f.pr?.state !== "MERGED")
       out.push("PR is neither open nor merged");

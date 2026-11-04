@@ -52,6 +52,7 @@ import {
 } from "@/features/results";
 import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
+import { ExitSpecimen } from "./exit-demo";
 import demo from "./motion-demo.module.css";
 import { StampReplay } from "./stamp-demo";
 
@@ -973,6 +974,24 @@ export default async function DesignPage() {
           </HudSpecimen>
         </div>
 
+        <h3 className="type-label text-fg">Exit dockets</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          <HudSpecimen
+            id="exit-reassigned"
+            title="Reassigned"
+            caption="After CONFIRM · REASSIGN ME: your stats frozen at your last key, placed last."
+          >
+            <ExitSpecimen kind="abandoned" labels={HUD.exit} />
+          </HudSpecimen>
+          <HudSpecimen
+            id="exit-asleep"
+            title="Asleep at desk"
+            caption="After the idle kick at 60 s: no place row, the race card keeps the lane."
+          >
+            <ExitSpecimen kind="asleep" labels={HUD.exit} />
+          </HudSpecimen>
+        </div>
+
         <h3 className="type-label text-fg">Notices</h3>
         <div className="grid gap-6 md:grid-cols-2">
           {RACE_NOTICES.map((kind) => (
@@ -980,7 +999,11 @@ export default async function DesignPage() {
               key={kind}
               id={`notice-${kind}`}
               title={kind}
-              caption="Pulses with lkPulse."
+              caption={
+                kind === "idle-warning"
+                  ? "The urgent tone, from the server's warning at 45 s until your next key; pulses with lkPulse."
+                  : "Pulses with lkPulse."
+              }
             >
               <RaceNotice kind={kind} labels={HUD.notice} />
             </HudSpecimen>

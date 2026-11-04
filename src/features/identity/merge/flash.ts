@@ -6,7 +6,7 @@ import type { MergeCounts } from "./merge-guest";
 
 /**
  * Leaves the merge flash for the next render (#57): call it from the Server Action or Route Handler that
- * just ran `mergeGuestInto` (sign-up #39, sign-in #40, OAuth #50), with its counts, before redirecting.
+ * just ran `mergeGuestInto` (sign-up and sign-in #36, OAuth #49), with its counts, before redirecting.
  * Readable by scripts on purpose: the stamp clears it in the browser once shown (./flash-cookie.ts).
  */
 export async function flashMerge(counts: MergeCounts): Promise<void> {

@@ -4,8 +4,9 @@ import { expect, expectNoA11yViolations, test } from "../fixtures";
 
 // Contract of #57 (design bible 7.3 ink tone, 7.4 docket): right after a merge the next render shows the
 // ink FILED stamp and "N races and your stats were carried into your Personnel file", read from the
-// one-shot `fc_merged` cookie, which is gone once the page has rendered. The merge callers (#39, #40,
-// #50) set the cookie through `flashMerge`; here the cookie is planted the way they leave it.
+// one-shot `fc_merged` cookie, which is gone once the page has rendered. The merge callers (#36, #49;
+// #55 proves it end to end) set the cookie through `flashMerge`; here the cookie is planted the way
+// they leave it.
 const COOKIE = "fc_merged";
 
 async function plant(context: BrowserContext, value: string, locale?: "fr") {

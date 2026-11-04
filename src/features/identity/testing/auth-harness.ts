@@ -116,7 +116,10 @@ export const harnessModules = {
       },
       // Auth.js's Credentials callback: verifyCredentials, then the session cookie, else a throw.
       signIn: vi.fn(
-        async (provider: string, opts: { username: unknown; password: unknown; redirect: unknown }) => {
+        async (
+          provider: string,
+          opts: { username: unknown; password: unknown; redirect: unknown },
+        ) => {
           h.signIns.push({ provider, username: opts.username, redirect: opts.redirect });
           const account = await credentials.verifyCredentials(opts);
           if (!account) throw new Error("CredentialsSignin");

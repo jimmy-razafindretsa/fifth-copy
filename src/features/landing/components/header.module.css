@@ -82,6 +82,17 @@
   text-decoration: none;
 }
 
+/* SIGN OUT (#36) is the same label as a button in a `display: contents` form */
+button.signIn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
 /* bible 18: hit targets >= 44px on touch */
 @media (max-width: 768px) {
   .navLink,
@@ -146,6 +157,12 @@
     gap: 6px;
     padding-inline: 8px;
     letter-spacing: 0.08em;
+  }
+
+  /* SIGN OUT's form is a form of the nav too: keep its button on row 2 with the docket */
+  .nav > form > .signIn {
+    order: 3;
+    padding-inline: 0;
   }
 
   /* row 2, tracked like the toggles so the docket name keeps room */

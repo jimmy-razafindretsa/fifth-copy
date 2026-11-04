@@ -46,3 +46,16 @@ export { formatResetCode, normalizeResetCode } from "./password-reset/code";
 // `MergeStamp`, which shows it once.
 export { flashMerge } from "./merge/flash";
 export { MergeStamp } from "./components/merge-stamp";
+// Sign-up, sign-in and sign-out (#36): the actions, the two screens and the header account control.
+export { signUp, signUpAction } from "./actions/sign-up";
+export { signIn, signInAction } from "./actions/sign-in";
+export { signOut } from "./actions/sign-out";
+export type { AuthFormState } from "./actions/auth-form-state";
+export { AuthScreen, AUTH_LINKS, type AuthMode } from "./components/auth-screen";
+export {
+  AccountControl,
+  type AccountClasses,
+  type AccountLabels,
+} from "./components/account-control";
+export { safeCallbackUrl } from "./auth/callback-url";
+export { AuthStates } from "./components/auth-states";

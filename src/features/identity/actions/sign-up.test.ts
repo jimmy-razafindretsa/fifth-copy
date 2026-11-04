@@ -89,7 +89,11 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
       [{ username: "x y z", password: PASSWORD }, "username", en.auth.errors.usernameChars],
       [{ username: "okname", password: "" }, "password", en.auth.errors.passwordRequired],
       [{ username: "okname", password: "1234567" }, "password", en.auth.errors.passwordLength],
-      [{ username: "okname", password: "p".repeat(129) }, "password", en.auth.errors.passwordLength],
+      [
+        { username: "okname", password: "p".repeat(129) },
+        "password",
+        en.auth.errors.passwordLength,
+      ],
     ])("%j -> %s error, nothing created", async (fields, field, message) => {
       const before = await db.user.count();
       const state = await signUp(form(fields));
@@ -123,7 +127,7 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
       for (const [username, password] of [
         ["Ab_", "p".repeat(8)],
         ["a".repeat(20), "p".repeat(128)],
-      ]) {
+      ] as const) {
         expect(parseSignUp(form({ username, password }))).toMatchObject({
           ok: true,
           username,

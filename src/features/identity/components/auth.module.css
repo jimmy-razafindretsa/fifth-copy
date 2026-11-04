@@ -1,0 +1,343 @@
+/*
+ * Sign-in and sign-up (#36, design bible 14.3 extension "Sign-in and sign-up"). Composed only from bible
+ * components: the red Oswald kicker and the Stardos H1 (4), a paper docket with its header row and ink
+ * tag (7.4), the 7.2 inputs, the 7.1 primary stamp button (submit), secondary buttons (providers) and the
+ * ink button (guest), the 7.4 inline error line. Colours are roles from docs/design/tokens.css only.
+ */
+@reference "../../../app/globals.css";
+
+.screen {
+  --gutter: clamp(16px, 4vw, 48px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+  padding: 48px var(--gutter) 80px;
+  background: var(--color-bg);
+}
+
+.column {
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.kicker {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+/* the section H2 scale (bible 4); the misregistration motif (6) is the `ink-misregister` utility */
+.title {
+  margin: 0;
+  @apply type-display-lg;
+  font-size: clamp(36px, 4.4vw, 60px);
+  line-height: 0.98;
+  letter-spacing: 0.04em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin: 0;
+  @apply type-body;
+  font-size: 17px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* bible 7.4 docket: paper, 2px ink, no radius, no shadow */
+.docket {
+  background: var(--color-bg);
+  border: 2px solid var(--color-fg);
+  min-width: 0;
+}
+
+.docketHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.docketForm {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+/* the YOU-tag recipe (7.4): Oswald 600 10px .16em on ink, paper text */
+.tag {
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 18px;
+}
+
+.section + .section {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* bible 7.2: IBM Plex Mono 500 on paper inside a 2px ink rule; focus = 2px ink outline */
+.input {
+  width: 100%;
+  min-height: 44px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  padding: 8px 12px;
+  @apply type-typing;
+  font-size: 17px;
+  line-height: normal;
+  font-weight: 500;
+}
+
+.input:focus {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.hint {
+  margin: 0;
+  @apply type-body;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-fg-muted);
+}
+
+/* bible 7.4 inline error line: newsprint, 2px ink, Courier 15px in the red text role, RETURNED · prefix */
+.errorLine {
+  margin: 0;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+  text-wrap: pretty;
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* bible 7.1 primary stamp button, full docket width; pending = its label, disabled, no spinner (7.2) */
+.submit {
+  width: 100%;
+  margin: 4px 6px 6px 0;
+  @apply type-display-md;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 3px solid var(--color-fg);
+  padding: 16px 20px;
+  cursor: pointer;
+  box-shadow: 6px 6px 0 var(--color-fg);
+  text-wrap: balance;
+}
+
+.submit:hover {
+  background: var(--color-primary-hover);
+}
+
+.submit:active {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0 var(--color-fg);
+}
+
+.submit:disabled {
+  cursor: progress;
+  transform: none;
+  box-shadow: 6px 6px 0 var(--color-fg);
+}
+
+/* OR between the form and the providers: an Oswald label on the dashed docket rule */
+.or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.or::before,
+.or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+/* bible 7.1 secondary, full width, 44px+ */
+.secondary {
+  width: 100%;
+  min-height: 44px;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background: transparent;
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  padding: 12px 18px;
+  cursor: pointer;
+}
+
+.secondary:hover {
+  background: var(--color-surface);
+}
+
+.note {
+  margin: 0;
+  @apply type-body;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-fg-muted);
+  text-wrap: pretty;
+}
+
+.switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 14px 18px;
+  border-top: 2px solid var(--color-fg);
+  @apply type-body;
+  font-size: 15px;
+  line-height: normal;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* the guest docket: newsprint, title, one sentence, the 7.1 ink button as a link */
+.guest {
+  background: var(--color-surface);
+  border: 2px solid var(--color-fg);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guestTitle {
+  margin: 0;
+  @apply type-display-sm;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.guestBody {
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.inkButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+.inkButton:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.privacy {
+  @apply type-body;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+@media (max-width: 480px) {
+  .screen {
+    padding-top: 28px;
+  }
+
+  .submit {
+    font-size: 26px;
+  }
+}

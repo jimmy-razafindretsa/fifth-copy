@@ -92,11 +92,7 @@ export const PASSWORD_MAX = 128;
  * action translates it in the viewer's locale; the code never carries what was typed.
  */
 export type AuthFieldError =
-  | "usernameRequired"
-  | "usernameLength"
-  | "usernameChars"
-  | "passwordRequired"
-  | "passwordLength";
+  "usernameRequired" | "usernameLength" | "usernameChars" | "passwordRequired" | "passwordLength";
 
 /** The fields of the sign-up and sign-in forms; nothing else is ever read or stored (no email, R152). */
 export type AuthField = "username" | "password";
@@ -121,13 +117,11 @@ const signUpUsername = z
       ctx.addIssue({ code: "custom", message: "usernameChars" });
   });
 
-const signUpPassword = z
-  .string()
-  .superRefine((pw, ctx) => {
-    if (pw === "") ctx.addIssue({ code: "custom", message: "passwordRequired" });
-    else if (pw.length < PASSWORD_MIN || pw.length > PASSWORD_MAX)
-      ctx.addIssue({ code: "custom", message: "passwordLength" });
-  });
+const signUpPassword = z.string().superRefine((pw, ctx) => {
+  if (pw === "") ctx.addIssue({ code: "custom", message: "passwordRequired" });
+  else if (pw.length < PASSWORD_MIN || pw.length > PASSWORD_MAX)
+    ctx.addIssue({ code: "custom", message: "passwordLength" });
+});
 
 export type SignUpParse =
   | { ok: true; username: string; usernameNormalized: string; password: string }

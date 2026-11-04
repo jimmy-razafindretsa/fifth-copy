@@ -17,7 +17,7 @@ import {
   Star,
   Wordmark,
 } from "@/components/ui";
-import { AuthStates } from "@/features/identity";
+import { AuthStates, ResetStates } from "@/features/identity";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -700,6 +700,11 @@ export default async function DesignPage() {
           returns to.
         </p>
         <AuthStates />
+        <p className="type-body max-w-prose text-fg">
+          The password reset form of /reset in each state: default, pending, a refused field, the
+          one generic answer, rate-limited, and the success row that links to sign-in.
+        </p>
+        <ResetStates />
       </section>
 
       <section aria-labelledby="stamps" className="flex flex-col gap-3">

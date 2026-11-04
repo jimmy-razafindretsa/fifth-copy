@@ -61,3 +61,8 @@ export {
 } from "./components/account-control";
 export { safeCallbackUrl } from "./auth/callback-url";
 export { AuthStates } from "./components/auth-states";
+// The teacher reset, redeemed (#789): the action and the `/reset` screen and its `/design` states.
+export { redeemPasswordReset, redeemPasswordResetAction } from "./actions/redeem-password-reset";
+export type { ResetFormState } from "./actions/reset-form-state";
+export { ResetScreen } from "./components/reset-screen";
+export { ResetStates } from "./components/reset-states";

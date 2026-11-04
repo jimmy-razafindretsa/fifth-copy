@@ -668,7 +668,8 @@ export const fr = {
         codeFormat: "Utilise les 8 lettres et chiffres remis par ton enseignant.",
         passwordRequired: "Entre un nouveau mot de passe.",
         passwordLength: "Utilise 8 à 128 caractères.",
-        fields: "Seuls un nom d'utilisateur, un code et un nouveau mot de passe peuvent être classés.",
+        fields:
+          "Seuls un nom d'utilisateur, un code et un nouveau mot de passe peuvent être classés.",
         invalid:
           "Nom d'utilisateur ou code incorrect, ou code déjà utilisé ou expiré. Demande un nouveau code à ton enseignant.",
         "rate-limited": "Trop d'essais. Réessaie dans {m} min.",

@@ -223,9 +223,11 @@ export function parseResetForm(form: FormData): ResetParse {
   const code = resetCode.safeParse(single("code"));
   const password = signUpPassword.safeParse(single("password"));
   const fieldErrors: Partial<Record<ResetField, ResetFieldError>> = {};
-  if (!username.success) fieldErrors.username = username.error.issues[0]!.message as ResetFieldError;
+  if (!username.success)
+    fieldErrors.username = username.error.issues[0]!.message as ResetFieldError;
   if (!code.success) fieldErrors.code = code.error.issues[0]!.message as ResetFieldError;
-  if (!password.success) fieldErrors.password = password.error.issues[0]!.message as ResetFieldError;
+  if (!password.success)
+    fieldErrors.password = password.error.issues[0]!.message as ResetFieldError;
   if (!username.success || !code.success || !password.success || extraField) {
     return { ok: false, fieldErrors, extraField };
   }

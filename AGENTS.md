@@ -128,7 +128,7 @@ prisma/schema/                   data model, one .prisma per feature
 e2e/                             Playwright, derived from card contracts
 docs/{spec,adr,design,architecture}/  work/log/  scripts/  agents/
 ```
-Import rules: app -> features -> server/lib. A feature imports another feature only through its `index.ts`. `components/ui` imports nothing from features. `packages/engine` imports nothing; `packages/protocol` only zod + engine; `services/*` never import `src/`; `src/` never imports `services/`; workspace packages are imported by name. Enforced in `scripts/check.sh` (dependency-cruiser over `src packages services`, ESLint).
+Import rules: app -> features -> server/lib. A feature imports another feature only through its `index.ts` (or its server-only `server.ts`, ADR 0021). `components/ui` imports nothing from features. `packages/engine` imports nothing; `packages/protocol` only zod + engine; `services/*` never import `src/`; `src/` never imports `services/`; workspace packages are imported by name. Enforced in `scripts/check.sh` (dependency-cruiser over `src packages services`, ESLint).
 
 ## Real-time hazards
 - Race rules live only in `@fifth-copy/engine` (pure, injected time and RNG). Never reimplement scoring in a component or on the server.

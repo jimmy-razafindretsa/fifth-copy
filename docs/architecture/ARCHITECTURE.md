@@ -204,7 +204,7 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 ```
 
 Boundary rules (all enforced by `scripts/check.sh`: dependency-cruiser over `src packages services`, ESLint):
-- `app -> features -> server/lib`; a feature imports another only through its `index.ts`; `components/ui` imports no features or server code.
+- `app -> features -> server/lib`; a feature imports another only through its `index.ts` (client-safe) or its server-only `server.ts` (ADR 0021); `components/ui` imports no features or server code.
 - Prisma client only in `src/server/**`, `src/features/*/{queries,actions,jobs}/**` and `src/worker/**`.
 - `packages/engine` imports nothing outside itself. `packages/protocol` imports only zod and the engine. `packages/limiter` imports nothing outside itself; only `src/server/limiter` and `services/race-server` use it (ADR 0020).
 - `services/race-server` never imports `src/`, Next, React or Prisma. `src/` never imports `services/`. Workspace packages are imported by name (`@fifth-copy/engine`), never by path.
@@ -293,7 +293,7 @@ Projector and phones join the room on the `spectator` channel with a `role: spec
 ### 8.2 Features and their public API (`index.ts`)
 - `identity`: `getViewer`, `requireViewer`, `ensureGuest`, `signUp`, `signIn`, `signOut`, `redeemRecoveryCode`, `mergeGuestInto`, `updatePreferences`, `uploadAvatar`, `deleteMyData`.
 - `lobby`: `createLobby`, `joinByCode`, `consumeInvite`, `createInvite`, `updateSettings` (host only), `mintRaceToken`, `openRoom`/`closeRoom` (internal calls), `recordHostTransfer`.
-- `texts`: `generateRaceText(settings)` (exact word count, accents, practice letters, numbers/symbols/punctuation, difficulty), `importCorpus`, `isClean(text)`.
+- `texts`: `generateRaceText(settings)` (exact word count, accents, practice letters, numbers/symbols/punctuation, difficulty), `isClean(text)`; server-only through `server.ts` (ADR 0021): `loadCorpusProvider(db, language)` (#346, `Text` rows or the content files). `importCorpus` lives in `scripts/import-texts.ts` (also run by `prisma/seed.ts`).
 - `race` (client): `RaceClient`, `useRaceStore`, HUD components (telex, sheet, keyboard, nixie counters, race card, stamps, sabotage tray, abandon), spectator views.
 - `race-3d` (client, lazy): `RaceScene` (mounts `/3d/seat.html` in an `EmbedFrame`, driven by `fc-race-*` messages, [ADR 0017](../adr/0017-seat-scene-delivery.md)), `OverviewScene`, `benchmarkGpu` (inside the embed); the scene reads only `selectSceneView` from `@/features/race`.
 - `results`: internal `persistRaceResults`, `getDawnReport(raceId, viewer)`, podium/ranking/personal card components.

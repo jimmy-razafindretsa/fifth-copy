@@ -203,4 +203,45 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
     );
     await expectNoA11yViolations(page);
   });
+
+  // Contract of #768 C3: the welcome of a reload carries the desk's bonus (the server deals no second
+  // card while one is held, so only the welcome can bring it back), then its cooldown.
+  test("#768 C3 a guest holding a card reloads mid-race: the tray shows the card, and after a play the cooldown", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(scaled(120_000));
+    const { room, sent } = await race(page, browser, { before: 0, after: 1 });
+    await expect(tray(page)).toHaveAttribute("data-card", "extra-paperwork", {
+      timeout: scaled(5_000),
+    });
+
+    await page.reload();
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(15_000),
+    });
+    await expect(tray(page)).toHaveAttribute("data-card", "extra-paperwork", {
+      timeout: scaled(5_000),
+    });
+    await expect(tray(page).locator("[data-row=play] dd")).toHaveText("ENTER TO PLAY");
+
+    // the held card still plays after the reload
+    const before = await chars(room.host).count();
+    await expect(input(page)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(tray(page)).toHaveAttribute("data-cooling", "true", { timeout: scaled(5_000) });
+    await expect
+      .poll(() => chars(room.host).count(), { timeout: scaled(5_000) })
+      .toBeGreaterThan(before);
+    expect(sent).toHaveLength(1);
+
+    // a reload while cooling: the tray counts the cooldown down, it does not read ready
+    await page.reload();
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(15_000),
+    });
+    await expect(tray(page)).toHaveAttribute("data-cooling", "true", { timeout: scaled(5_000) });
+    await expect(tray(page).locator("[data-row=cooldown] dd")).toHaveText(/^\d{1,2} S$/);
+    await expect(tray(page).locator("[data-row=play]")).toHaveCount(0);
+  });
 });

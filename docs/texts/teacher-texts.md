@@ -1,6 +1,6 @@
 # Teacher-written texts
 
-How a teacher submits race texts of their own. In v1 there is no upload screen: a teacher sends the text to the Fifth Copy team, who adds it as a content file (later, the database corpus of #346). Licence background: `docs/texts/sources.md`.
+How a teacher submits race texts of their own. In v1 there is no upload screen: a teacher sends the text to the Fifth Copy team, who adds it as a content file and loads it into the database corpus with `scripts/import-texts.ts` (`docs/ops/runbook.md` "Import texts", #346). Licence background: `docs/texts/sources.md`.
 
 ## What a teacher may submit
 - **Their own writing**, in English or French, which they agree to let Fifth Copy use in races.

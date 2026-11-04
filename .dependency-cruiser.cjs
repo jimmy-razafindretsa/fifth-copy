@@ -1,7 +1,7 @@
 /**
  * Import boundaries from AGENTS.md "Architecture map":
  *   app -> features -> server/lib
- *   a feature imports another feature only through its index.ts
+ *   a feature imports another feature only through its index.ts (or its server-only server.ts, ADR 0021)
  *   components/ui imports nothing from features
  *   Prisma client only in src/server/**, src/features/*\/{queries,actions,jobs} and src/worker/**
  * Workspace boundaries (docs/adr/0005, 0006, 0007):
@@ -58,13 +58,34 @@ module.exports = {
     },
     {
       name: "feature-public-api-only",
-      comment: "Cross-feature imports must go through the other feature's index.ts.",
+      comment:
+        "Cross-feature imports must go through the other feature's index.ts, or its server-only server.ts (ADR 0021).",
       severity: "error",
       from: { path: "^src/features/([^/]+)/" },
       to: {
         path: "^src/features/([^/]+)/.+",
-        pathNot: ["^src/features/$1/", "^src/features/[^/]+/index\\.tsx?$"],
+        pathNot: [
+          "^src/features/$1/",
+          "^src/features/[^/]+/index\\.tsx?$",
+          "^src/features/[^/]+/server\\.ts$",
+        ],
       },
+    },
+    {
+      name: "feature-server-entry-not-in-components",
+      comment:
+        "A feature's server.ts is server-only (ADR 0021): no component (src/components, src/features/*/components) imports one.",
+      severity: "error",
+      from: { path: ["^src/components/", "^src/features/[^/]+/components/"] },
+      to: { path: "^src/features/[^/]+/server\\.ts$" },
+    },
+    {
+      name: "feature-index-not-server-entry",
+      comment:
+        "A feature's index.ts stays client-safe (ADR 0021): it never imports or re-exports a server.ts, its own or another feature's.",
+      severity: "error",
+      from: { path: "^src/features/[^/]+/index\\.tsx?$" },
+      to: { path: "^src/features/[^/]+/server\\.ts$" },
     },
     {
       name: "feature-testing-only-from-tests",
@@ -76,12 +97,13 @@ module.exports = {
     },
     {
       name: "app-feature-public-api-only",
-      comment: "Routes compose features through their index.ts only.",
+      comment:
+        "Routes compose features through their index.ts (server code also through server.ts, ADR 0021).",
       severity: "error",
       from: { path: "^src/app/" },
       to: {
         path: "^src/features/[^/]+/.+",
-        pathNot: "^src/features/[^/]+/index\\.tsx?$",
+        pathNot: ["^src/features/[^/]+/index\\.tsx?$", "^src/features/[^/]+/server\\.ts$"],
       },
     },
     {

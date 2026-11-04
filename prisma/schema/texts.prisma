@@ -1,0 +1,32 @@
+// Text corpus (#346, ADR 0008): durable race passages, owned by src/features/texts.
+// Loaded by scripts/import-texts.ts from the attributed content files (src/features/texts/corpus/content)
+// and read by loadCorpusProvider (src/features/texts/queries/corpus-provider.ts). The race server
+// never reads texts. No relation from Race: a race stores its own text snapshot and a free
+// `textSourceRef` (`db:<rows>:<newest createdAt>`), so it never needs a row to exist.
+// Non-personal (docs/privacy/inventory.md): `source` names a work or a school, never a person.
+
+/// Who wrote a passage: a public-domain work, or a teacher's own writing (docs/texts/teacher-texts.md).
+enum TextAuthor {
+  PUBLIC_DOMAIN
+  TEACHER
+}
+
+/// One typeable passage (12 to 80 engine words) with its attribution and licence.
+model Text {
+  id          String       @id @default(cuid())
+  language    RaceLanguage
+  /// NFC and typeable as written: the engine's normalizeTypeable output (ADR 0007).
+  content     String
+  /// sha256 (hex) of `content`: the import upserts on it, so a passage is stored once.
+  contentHash String       @unique
+  /// Engine wordCount of `content`.
+  wordCount   Int
+  /// `<author, title (year)>` of the work, or the school for a teacher text; never a person's name.
+  source      String
+  /// `public domain`, a CC licence, or `teacher-written`.
+  licence     String
+  authorType  TextAuthor
+  createdAt   DateTime     @default(now())
+
+  @@index([language])
+}

@@ -84,7 +84,12 @@ describe("race value schemas", () => {
     ["resume key junk", resumeKeySchema, `${"a".repeat(31)}/`, false],
     ["keystroke example", keystrokeSchema, { t: 12345, key: "é" }, true],
     ["keystroke backspace", keystrokeSchema, { t: 0, key: "Backspace" }, true],
-    ["keystroke astral char (normalises to nothing)", keystrokeSchema, { t: 1, key: "\u{1F600}" }, false],
+    [
+      "keystroke astral char (normalises to nothing)",
+      keystrokeSchema,
+      { t: 1, key: "\u{1F600}" },
+      false,
+    ],
     ["keystroke two chars", keystrokeSchema, { t: 1, key: "ab" }, false],
     ["keystroke modifier name", keystrokeSchema, { t: 1, key: "Shift" }, false],
     ["keystroke space", keystrokeSchema, { t: 1, key: " " }, true],
@@ -197,7 +202,9 @@ describe("deskIdentity", () => {
 /** Every look-alike the engine maps to a keyboard form (`normalize.ts` CHAR_MAP). */
 const LOOK_ALIKES = [..."“”„‟″‘’‚‛′ʼ‹›‐‑‒–—―−…"];
 /** Space separators (`\p{Zs}`) the engine maps to " " (none is a control character). */
-const SPACES = [..."\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000"];
+const SPACES = [
+  ..."\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000",
+];
 /** Characters outside the whitelist with no keyboard form: the engine drops them. */
 const UNTYPEABLE = ["ß", "ñ", "Ł", "ø", "\u{1F600}", "\u0301", "\u0327", "中", "¿", "¡"];
 
@@ -221,7 +228,7 @@ function engineApplies(key: string): boolean {
 const UNPRINTABLE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/u;
 
 describe("#660 keys the engine normalises", () => {
-  it("C1 a wrong ellipsis in Continue mode stores \"...\", and the welcome state parses", () => {
+  it('C1 a wrong ellipsis in Continue mode stores "...", and the welcome state parses', () => {
     const after = applyKeystroke(initialState(), { t: 5, key: "…" }, "a.", CONTINUE);
     expect(after.typed).toEqual(["..."]);
     expect(playerStateSchema.safeParse(after).success).toBe(true);

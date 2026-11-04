@@ -89,7 +89,8 @@ module.exports = {
     },
     {
       name: "app-feature-public-api-only",
-      comment: "Routes compose features through their index.ts (server code also through server.ts, ADR 0021).",
+      comment:
+        "Routes compose features through their index.ts (server code also through server.ts, ADR 0021).",
       severity: "error",
       from: { path: "^src/app/" },
       to: {

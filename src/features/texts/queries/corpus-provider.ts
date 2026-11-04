@@ -35,8 +35,14 @@ async function load(db: CorpusDb, language: RaceLanguage): Promise<TextProvider>
   });
   if (rows.length < CORPUS_MIN_ROWS) return fileProvider;
 
-  const newest = rows.reduce((max, r) => (r.createdAt > max ? r.createdAt : max), rows[0]!.createdAt);
-  const sentences: readonly SeedSentence[] = rows.map((r) => ({ text: r.content, source: r.source }));
+  const newest = rows.reduce(
+    (max, r) => (r.createdAt > max ? r.createdAt : max),
+    rows[0]!.createdAt,
+  );
+  const sentences: readonly SeedSentence[] = rows.map((r) => ({
+    text: r.content,
+    source: r.source,
+  }));
   const ref = `db:${rows.length}:${newest.toISOString()}`;
   return {
     sourceRef: (lang) => (lang === language ? ref : fileProvider.sourceRef(lang)),

@@ -93,7 +93,9 @@ describe.skipIf(!testDatabaseUrl)("startRace text source (needs TEST_DATABASE_UR
           const result = await startRace(request(), { db: tx });
           if (!result.ok) throw new Error("startRace refused");
           const stored = await tx.race.findUnique({ where: { id: result.response.raceId } });
-          throw new Rollback(JSON.stringify({ text: result.response.text, ref: stored?.textSourceRef }));
+          throw new Rollback(
+            JSON.stringify({ text: result.response.text, ref: stored?.textSourceRef }),
+          );
         },
         { timeout: 60_000, maxWait: 30_000 },
       )

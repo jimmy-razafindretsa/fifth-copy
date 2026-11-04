@@ -62,7 +62,9 @@ export function readCorpus(dir: string): { files: number; rows: TextRow[] } {
   for (const language of raceLanguageSchema.options) {
     let names: string[];
     try {
-      names = readdirSync(path.join(dir, language)).filter((n) => n.endsWith(".json")).sort();
+      names = readdirSync(path.join(dir, language))
+        .filter((n) => n.endsWith(".json"))
+        .sort();
     } catch {
       continue; // no folder for this language
     }
@@ -72,7 +74,9 @@ export function readCorpus(dir: string): { files: number; rows: TextRow[] } {
       try {
         raw = JSON.parse(readFileSync(path.join(dir, name), "utf8"));
       } catch (error) {
-        throw new Error(`${name}: not valid JSON (${error instanceof Error ? error.name : "error"})`);
+        throw new Error(
+          `${name}: not valid JSON (${error instanceof Error ? error.name : "error"})`,
+        );
       }
       const file = parseContentFile(name, raw);
       files++;

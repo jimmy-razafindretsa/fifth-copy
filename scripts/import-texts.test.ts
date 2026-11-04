@@ -87,7 +87,9 @@ describe("readCorpus", () => {
         authorType: "teacher",
         licence: "teacher-written",
         source: "teacher-written",
-        passages: [`Le chat dort sur le mur et le chien “regarde” les oiseaux qui chantent dans le grand jardin.`],
+        passages: [
+          `Le chat dort sur le mur et le chien “regarde” les oiseaux qui chantent dans le grand jardin.`,
+        ],
       },
     });
     // Curly quotes are refused by the schema (not typeable as written): the file is refused.
@@ -99,7 +101,9 @@ describe("readCorpus", () => {
         authorType: "teacher",
         licence: "teacher-written",
         source: "teacher-written",
-        passages: ["Le chat dort sur le mur et le chien regarde les oiseaux qui chantent dans le jardin."],
+        passages: [
+          "Le chat dort sur le mur et le chien regarde les oiseaux qui chantent dans le jardin.",
+        ],
       },
     });
     const [row] = readCorpus(ok).rows;
@@ -134,7 +138,10 @@ describe("import-texts CLI", () => {
   it("exits 1 naming the bad file, before the guard or any connection", async () => {
     const bad = { ...valid, source: undefined };
     const dir = corpusDir({ "en/good.json": valid, "en/no-source.json": bad });
-    for (const argv of [["--dir", dir], ["--validate", "--dir", dir]]) {
+    for (const argv of [
+      ["--dir", dir],
+      ["--validate", "--dir", dir],
+    ]) {
       const d = deps();
       expect(await main(argv, d)).toBe(1);
       expect(d.err.join("\n")).toMatch(/en\/no-source\.json/);
@@ -203,7 +210,10 @@ describe.skipIf(!testDatabaseUrl)("importTexts (needs TEST_DATABASE_URL)", () =>
 
   it("writes nothing when a file is refused", async () => {
     const before = await db.text.count();
-    const dir = corpusDir({ "en/good.json": valid, "en/no-licence.json": { ...valid, licence: "" } });
+    const dir = corpusDir({
+      "en/good.json": valid,
+      "en/no-licence.json": { ...valid, licence: "" },
+    });
     const d = deps({ databaseUrl: testDatabaseUrl, connect: createPrismaClient });
     expect(await main(["--dir", dir], d)).toBe(1);
     expect(await db.text.count({ where: { contentHash: contentHashOf(PASSAGE) } })).toBe(0);

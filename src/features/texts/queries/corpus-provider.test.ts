@@ -21,7 +21,9 @@ const rowsOf = (n: number, language: "FR" | "EN" = "EN"): (Row & { language: str
 
 function fakeDb(rows: (Row & { language: string })[]) {
   const findMany = vi.fn(async ({ where }: { where: { language: string } }) =>
-    rows.filter((r) => r.language === where.language).map(({ language: _l, ...r }) => r),
+    rows
+      .filter((r) => r.language === where.language)
+      .map((r) => ({ content: r.content, source: r.source, createdAt: r.createdAt })),
   );
   return { db: { text: { findMany } } as unknown as CorpusDb, findMany };
 }
@@ -66,7 +68,13 @@ describe("loadCorpusProvider", () => {
     await loadCorpusProvider(db, "fr", { now });
     expect(findMany).toHaveBeenCalledTimes(2);
 
-    rows.push(...rowsOf(1).map((r) => ({ ...r, content: `${r.content} Again.`, createdAt: new Date(Date.UTC(2026, 10, 2)) })));
+    rows.push(
+      ...rowsOf(1).map((r) => ({
+        ...r,
+        content: `${r.content} Again.`,
+        createdAt: new Date(Date.UTC(2026, 10, 2)),
+      })),
+    );
     t += 1;
     const reloaded = await loadCorpusProvider(db, "en", { now });
     expect(findMany).toHaveBeenCalledTimes(3);

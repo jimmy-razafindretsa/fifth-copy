@@ -80,6 +80,14 @@ module.exports = {
       to: { path: "^src/features/[^/]+/server\\.ts$" },
     },
     {
+      name: "feature-index-not-server-entry",
+      comment:
+        "A feature's index.ts stays client-safe (ADR 0021): it never imports or re-exports a server.ts, its own or another feature's.",
+      severity: "error",
+      from: { path: "^src/features/[^/]+/index\\.tsx?$" },
+      to: { path: "^src/features/[^/]+/server\\.ts$" },
+    },
+    {
       name: "feature-testing-only-from-tests",
       comment:
         "A feature's testing/ folder is test support (#682): only *.test.ts(x) files and other testing/ modules import it.",

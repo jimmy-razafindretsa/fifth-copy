@@ -342,7 +342,7 @@
     {
       "id": "0021",
       "title": "A feature may expose a server-only public entry, server.ts, beside index.ts",
-      "status": "proposed",
+      "status": "accepted",
       "category": "architecture",
       "scope": [
         "src/features/*/index.ts",

@@ -1,7 +1,7 @@
 ---
 id: "0021"
 title: A feature may expose a server-only public entry, server.ts, beside index.ts
-status: proposed
+status: accepted
 category: architecture
 scope: ["src/features/*/index.ts", "src/features/*/server.ts", ".dependency-cruiser.cjs"]
 supersedes: []
@@ -16,7 +16,7 @@ ADR 0001 makes `index.ts` the only door into a feature. `src/features/texts/inde
 ## Decision
 - A feature may add a second public entry, `src/features/<f>/server.ts`, that starts with `import "server-only"` and re-exports the feature's server-side API (queries, actions meant for other features).
 - `index.ts` stays client-safe: no `server-only`, no Prisma, no server entry re-export.
-- Dependency-cruiser accepts `server.ts` as a cross-feature and route target (`feature-public-api-only`, `app-feature-public-api-only`) and forbids it from components (`feature-server-entry-not-in-components`); `server-only` makes a client import fail the build.
+- Dependency-cruiser accepts `server.ts` as a cross-feature and route target (`feature-public-api-only`, `app-feature-public-api-only`) and forbids it from components (`feature-server-entry-not-in-components`) and from any feature's `index.ts` (`feature-index-not-server-entry`); `server-only` makes a client import elsewhere (a `"use client"` file outside `components/`) fail the build.
 - This extends ADR 0001 (public entries only, enforced by `.dependency-cruiser.cjs`); it does not supersede it.
 
 ## Consequences

@@ -64,6 +64,8 @@ export type SeatErrorLabels = {
   noRoom: string;
   inProgress: string;
   notFound: string;
+  /** A spectator past the room's cap (#616, #678). */
+  roomFull: string;
   generic: string;
   /** The link back to `/lobby/[code]`. */
   back: string;

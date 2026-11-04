@@ -830,3 +830,74 @@ test.describe("#26 stamps", () => {
     expect(fonts.some((f) => /Oswald/i.test(f.familyName))).toBe(true);
   });
 });
+
+test.describe("#777 exit dockets and the idle row on /design#race-hud", () => {
+  const spec = (page: Page, id: string) => page.locator(`[data-hud-state="${id}"]`);
+  const stampAnimation = (page: Page, kind: string) =>
+    page
+      .locator(`[data-exit="${kind}"] [data-stamp-tone]`)
+      .evaluate((el) => getComputedStyle(el).animationName);
+
+  test("C1 REASSIGNED (three rows) and ASLEEP AT DESK (two rows, LEAVE →), plus the urgent idle row", async ({
+    page,
+  }) => {
+    await page.goto("/design#race-hud");
+    const reassigned = spec(page, "exit-reassigned").locator('[data-exit="abandoned"]');
+    await expect(reassigned).toHaveAttribute("aria-label", "REASSIGNED");
+    await expect(reassigned.locator("[data-stamp-tone]")).toHaveText("REASSIGNED");
+    await expect(reassigned.locator("[data-stamp-tone]")).toHaveAttribute("data-stamp-tone", "ink");
+    await expect(reassigned.locator("[data-row]")).toHaveText([
+      "WPM42",
+      "ACCURACY93 %",
+      "PLACELAST",
+    ]);
+    await expect(
+      reassigned.getByRole("link", { name: "BACK TO THE WAITING ROOM →", exact: true }),
+    ).toHaveAttribute("href", "/lobby/DEMO");
+
+    const asleep = spec(page, "exit-asleep").locator('[data-exit="asleep"]');
+    await expect(asleep.locator("[data-stamp-tone]")).toHaveText("ASLEEP AT DESK");
+    await expect(asleep.locator("[data-row]")).toHaveText(["WPM42", "ACCURACY93 %"]);
+    await expect(asleep.getByRole("link", { name: "LEAVE →", exact: true })).toHaveAttribute(
+      "href",
+      "/lobby/DEMO",
+    );
+
+    // KEEP WATCHING is a no-op on the page: the docket stays (no dialog, no focus trap)
+    for (const docket of [reassigned, asleep]) {
+      await expect(docket.getByRole("dialog")).toHaveCount(0);
+      await docket.getByRole("button", { name: "KEEP WATCHING", exact: true }).click();
+      await expect(docket).toBeVisible();
+    }
+
+    const idle = spec(page, "notice-idle-warning").getByRole("status");
+    await expect(idle).toHaveText("THE MAJOR IS LOOKING AT YOU. TYPE.");
+    await expect(idle).toHaveAttribute("data-tone", "urgent");
+  });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C2 ${scheme}: the stamps slam, then stand still under both reduced-motion switches; axe clean, no sideways scroll`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/design#race-hud");
+      for (const kind of ["abandoned", "asleep"]) {
+        expect(await stampAnimation(page, kind)).toMatch(/Slam/);
+      }
+      await page.evaluate(() => document.documentElement.setAttribute("data-motion", "reduce"));
+      for (const kind of ["abandoned", "asleep"]) {
+        expect(await stampAnimation(page, kind)).toBe("none");
+      }
+      await page.evaluate(() => document.documentElement.removeAttribute("data-motion"));
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      for (const kind of ["abandoned", "asleep"]) {
+        expect(await stampAnimation(page, kind)).toBe("none");
+      }
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      );
+      expect(overflow).toBe(false);
+      await expectNoA11yViolations(page);
+    });
+  }
+});

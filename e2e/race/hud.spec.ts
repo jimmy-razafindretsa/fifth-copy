@@ -263,7 +263,8 @@ test.describe("#560 race HUD on /design", () => {
         await expect(stamps.getByText(text)).toBeVisible();
       }
       await expect(stamps.locator('[data-stamp-tone="ink"]')).toContainText("PASSED −1");
-      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(28);
+      // 28 states of #560 and later cards, plus the two exit dockets of #777
+      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(30);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
       );

@@ -2,7 +2,8 @@
 # Regenerates visual baselines inside the SAME pinned Playwright image CI uses, from the committed tree (HEAD).
 # Baseline changes need the PR label `visual-change` and a note in the PR body. Never run this to make a diff pass.
 # Mirrors the CI `visual` job (.github/workflows/ci.yml): same CI-only, non-secret env literals, Postgres + Redis,
-# `npm run build` and `npm run build:race` (Playwright starts the race server). The local .env is never forwarded.
+# `scripts/test-db.sh` (migrations; the lobby shots of #624 write rows), `npm run build` and `npm run build:race`
+# (Playwright starts the race server). The local .env is never forwarded.
 #   scripts/visual-baselines.sh            update baselines (writes e2e/__screenshots__)
 #   scripts/visual-baselines.sh --check    run visual tests only, no update
 # Portable: GNU/Linux and macOS mktemp. Behind an HTTPS proxy (HTTPS_PROXY set) the proxy vars are forwarded
@@ -40,6 +41,7 @@ echo "visual: $IMAGE on network $NETWORK (${MODE:-check only}${PROXY:+, via prox
 docker run --rm "${NET_ARGS[@]}" \
   -e CI=1 -e PW_VISUAL=1 -e NEXT_TELEMETRY_DISABLED=1 \
   -e DATABASE_URL="postgresql://app:app@$DB_HOST:5432/app?schema=public" \
+  -e TEST_DATABASE_URL="postgresql://app:app@$DB_HOST:5432/app?schema=public" \
   -e RACE_TOKEN_SECRET=ci-only-race-token-secret-0123456789abcdef0123456789abcdef \
   -e AUTH_SECRET=ci-only-auth-secret-0123456789abcdef0123456789abcdef \
   -e REDIS_URL=redis://$REDIS_HOST:6379/0 -e RACE_SERVER_PORT=$RACE_PORT -e PW_PORT=$WEB_PORT -e WEB_ORIGIN=http://localhost:$WEB_PORT \
@@ -49,6 +51,7 @@ docker run --rm "${NET_ARGS[@]}" \
     set -e; mkdir /app && cd /app && tar -xf /src.tar
     cp -r /out/. e2e/__screenshots__/ 2>/dev/null || true
     npm ci --no-audit --no-fund >/dev/null
+    scripts/test-db.sh >/dev/null
     npm run build >/dev/null
     npm run build:race >/dev/null
     npx playwright test --grep @visual $MODE --reporter=line

@@ -28,6 +28,7 @@ const ROWS = [
   ["a", "s", "d", "l"],
 ];
 const TEXT = "Le reçu";
+const RACE_ID = "3b241101-e2bb-4255-8caf-4136c566a962";
 
 function storeIn(errorMode: "continue" | "block", keys: string[] = []): RaceStore {
   const store = createRaceStore();
@@ -53,7 +54,7 @@ function storeIn(errorMode: "continue" | "block", keys: string[] = []): RaceStor
     payload: {
       v: PROTOCOL_VERSION,
       race: {
-        raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+        raceId: RACE_ID,
         text: TEXT,
         language: "fr",
         wordCount: 2,
@@ -167,6 +168,36 @@ describe("TypingMachineLive (#220 C2)", () => {
     );
     expect(out.match(/data-disabled="true"/g)).toHaveLength(rows.flat().length + 1);
     expect(out).not.toContain("data-pressed");
+  });
+
+  it("#724 C1 race ended before you finished (any reason): every key and the space bar disabled, nothing pressed or struck", () => {
+    for (const reason of ["timer", "all-finished"] as const) {
+      const store = storeIn("continue", ["L", "x"]);
+      store.dispatch({
+        type: "ended",
+        payload: { v: PROTOCOL_VERSION, raceId: RACE_ID, reason, ranking: [] },
+        at: 1_767_225_660_000,
+      });
+      const state = store.getState();
+      expect(state.phase).toBe("ended");
+      expect(state.prediction?.state.status).not.toBe("finished");
+      expect(selectMachineProps(state)).toMatchObject({ finished: false, ended: true });
+      const out = live(store);
+      expect(out, reason).toBe(
+        renderToStaticMarkup(
+          <TypingMachine
+            rows={ROWS}
+            pressed={null}
+            wrong={null}
+            jammed={false}
+            disabledKeys={[...ROWS.flat(), " "]}
+          />,
+        ),
+      );
+      expect(out.match(/data-disabled="true"/g)).toHaveLength(ROWS.flat().length + 1);
+      expect(out).not.toContain("data-pressed");
+      expect(out).not.toContain("data-wrong");
+    }
   });
 
   it("is a client leaf that reaches the machine only through the skin seam", () => {

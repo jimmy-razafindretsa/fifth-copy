@@ -35,8 +35,8 @@ function holdOf(root: HTMLElement | null): number {
  * - `wrong`: the key the engine counted as an error, until the next key; a second wrong press of the same
  *   key drops it for one frame, so the skin's wrong-key animation starts again;
  * - `jammed`: the Block-mode jam, as the view has it;
- * - `disabledKeys`: every key of `rows` and the space bar once your desk is finished (nothing pressed or
- *   struck then).
+ * - `disabledKeys`: every key of `rows` and the space bar once your desk is finished or the race ended,
+ *   finished or not (#724: the input is off then too); nothing pressed or struck then.
  * The server renders the before-start machine (the store's server snapshot); each keystroke re-renders it.
  */
 export function TypingMachineLive({
@@ -44,7 +44,8 @@ export function TypingMachineLive({
   skin,
 }: Pick<MachineSkinProps, "rows"> & { skin?: MachineSkinId }) {
   const props = useRaceStore(selectMachineProps);
-  const { pressed, wrong, jammed, finished } = props;
+  const { pressed, wrong, jammed } = props;
+  const off = props.finished || props.ended;
   const root = useRef<HTMLDivElement>(null);
 
   // The press: shown from the keystroke until its hold ends (`released` names the keystroke let go). The
@@ -104,18 +105,15 @@ export function TypingMachineLive({
     };
   }, [cue]);
 
-  const disabledKeys = useMemo(
-    () => (finished ? [...rows.flat(), " "] : NO_KEYS),
-    [finished, rows],
-  );
+  const disabledKeys = useMemo(() => (off ? [...rows.flat(), " "] : NO_KEYS), [off, rows]);
 
   return (
     <TypingMachine
       ref={root}
       rows={rows}
       skin={skin}
-      pressed={!finished && motion && released !== props ? pressed : null}
-      wrong={finished || cue.replay ? null : wrong}
+      pressed={!off && motion && released !== props ? pressed : null}
+      wrong={off || cue.replay ? null : wrong}
       jammed={jammed}
       disabledKeys={disabledKeys}
     />

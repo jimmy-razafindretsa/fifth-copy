@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useId, useState } from "react";
+import { useActionState, useId, useState, useSyncExternalStore } from "react";
 import { INITIAL_AUTH_STATE, type AuthFormState } from "../actions/auth-form-state";
 import type { AuthField } from "../schema";
 import styles from "./auth.module.css";
@@ -28,7 +28,11 @@ type ViewProps = {
   callbackUrl?: string | null;
   onChange?: (field: AuthField, value: string) => void;
   action?: (form: FormData) => void;
+  /** True once the live form has hydrated (`data-hydrated`, for e2e). */
+  hydrated?: boolean;
 };
+
+const noSubscribe = () => () => {};
 
 function ErrorLine({ id, prefix, children }: { id?: string; prefix: string; children: string }) {
   return (
@@ -54,6 +58,7 @@ export function AuthFormView({
   callbackUrl,
   onChange,
   action,
+  hydrated,
 }: ViewProps) {
   const id = useId();
   const field = (name: AuthField, label: string, hint: string | undefined) => {
@@ -111,6 +116,7 @@ export function AuthFormView({
       action={action}
       aria-label={labels.formName}
       aria-busy={pending || undefined}
+      data-hydrated={hydrated || undefined}
       className={styles.form}
       noValidate
     >
@@ -143,6 +149,8 @@ export function AuthForm({
   action: AuthAction;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_AUTH_STATE);
+  // false on the server and during hydration, true after: no effect, no extra render
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   const [values, setValues] = useState<Record<AuthField, string>>({ username: "", password: "" });
   return (
     <AuthFormView
@@ -152,6 +160,7 @@ export function AuthForm({
       values={values}
       onChange={(name, value) => setValues((v) => ({ ...v, [name]: value }))}
       action={formAction}
+      hydrated={hydrated}
     />
   );
 }

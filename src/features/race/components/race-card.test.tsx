@@ -184,16 +184,16 @@ describe("RaceCard lanes (#560 C2)", () => {
   });
 });
 
-describe("RaceCard compact (#560 C3)", () => {
-  it("hides the names and keeps markers, desk numbers and the field line", () => {
+describe("RaceCard compact (#560 C3, #792)", () => {
+  it("keeps the names (#792), markers, desk numbers and the field line", () => {
     const view = F["thirty-mid-field"];
     const full = html(<RaceCard view={view} labels={EN} />);
     const compact = html(<RaceCard view={view} labels={EN} compact />);
     expect(compact).toMatch(/^<section[^>]*data-compact="true"/);
     expect(full).not.toContain("data-compact");
     for (const lane of lanes(compact)) {
-      // names stay for assistive tech in the lane's label, never as visible text
-      expect(lane.body).not.toMatch(/data-name/);
+      // #792: a 10-character name fits the compact main column, so names show there too
+      expect(lane.body).toMatch(/data-name/);
       expect(lane.body).toMatch(/<svg[^>]*data-marker=/);
       expect(lane.body).toMatch(/DESK \d\d/);
     }
@@ -202,6 +202,9 @@ describe("RaceCard compact (#560 C3)", () => {
     expect(tags(compact, "data-finish")).toHaveLength(1);
     // compact and full lanes share the 80px | 1fr rows since #758 (bible 7.4a)
     expect(rule(".lane")).toMatch(/grid-template-columns:\s*80px minmax\(0, 1fr\)/);
+    // #792: the name keeps 11ch before it gives way; the tag and the label wrap under it instead
+    expect(rule(".name")).toMatch(/flex:\s*1 0 min\(11ch, 100%\)/);
+    expect(rule(".line")).toMatch(/flex-wrap:\s*wrap/);
   });
 });
 

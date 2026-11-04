@@ -159,8 +159,8 @@
   min-width: 0;
 }
 
-/* name, YOU tag and status label share one row (bible 7.4a, #697) while 11ch of name fits beside them;
-   past 11ch the name gives way with its ellipsis. Where the row cannot hold 11ch beside the tag and the
+/* name, YOU tag and status label share one row (bible 7.4a, #697) while 10ch of name fits beside them;
+   past 10ch the name gives way with its ellipsis. Where the row cannot hold 10ch beside the tag and the
    label (the seat-view gutters next to ASLEEP AT DESK, #792), the tag and then the label move to a second
    line under the name, above the track: a 10-character name always shows in full */
 .line {
@@ -186,7 +186,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1 0 min(11ch, 100%);
+  flex: 1 0 min(10ch, 100%);
   min-width: 0;
 }
 

@@ -202,8 +202,8 @@ describe("RaceCard compact (#560 C3, #792)", () => {
     expect(tags(compact, "data-finish")).toHaveLength(1);
     // compact and full lanes share the 80px | 1fr rows since #758 (bible 7.4a)
     expect(rule(".lane")).toMatch(/grid-template-columns:\s*80px minmax\(0, 1fr\)/);
-    // #792: the name keeps 11ch before it gives way; the tag and the label wrap under it instead
-    expect(rule(".name")).toMatch(/flex:\s*1 0 min\(11ch, 100%\)/);
+    // #792: the name keeps 10ch (a monospace 10-character name) before it gives way; the tag and the label wrap under it instead
+    expect(rule(".name")).toMatch(/flex:\s*1 0 min\(10ch, 100%\)/);
     expect(rule(".line")).toMatch(/flex-wrap:\s*wrap/);
   });
 });

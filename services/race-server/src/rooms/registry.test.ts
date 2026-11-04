@@ -676,7 +676,15 @@ describe("room registry: recovery writes (#204 C6)", () => {
       "endedAt",
       String(clock.now()),
     ]);
-    expect(commands).toContainEqual(["hdel", roomKey(lobbyId), "race", "t0", "endAt", "desks"]);
+    expect(commands).toContainEqual([
+      "hdel",
+      roomKey(lobbyId),
+      "race",
+      "t0",
+      "endAt",
+      "desks",
+      "owner",
+    ]);
     expect(commands).toContainEqual(["expire", roomKey(lobbyId), String(VOID_TTL_S)]);
     expect(commands).toContainEqual(["expire", membersKey(lobbyId), String(VOID_TTL_S)]);
 

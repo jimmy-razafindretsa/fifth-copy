@@ -310,6 +310,7 @@
       "scope": [
         "railway.json",
         "railway.toml",
+        "services/race-server/railway.json",
         ".github/workflows/**",
         "scripts/deploy-smoke.sh",
         "src/env.ts",

@@ -82,7 +82,7 @@ The problem has ten independent decisions. For each, the options were scored aga
 ### 2.8 Hosting
 | Option | Verdict |
 |---|---|
-| **Railway: web, race-server, Postgres, Redis as four services, built from `main` on push** (ADR 0019) | No server to run or patch; TLS, restarts and deploys handled; race-server deploy-when-idle is the open gap (#704) |
+| **Railway: web, race-server, Postgres, Redis as four services, built from `main` on push** (ADR 0019) | No server to run or patch; TLS, restarts and deploys handled; race-server deploys drain on SIGTERM instead of deploy-when-idle (#704) |
 | One VPS, Docker Compose, Caddy, CI-built images, deploy-when-idle for the race server (ADR 0012, superseded by 0019) | Full control, but someone has to run the server; the free VPS could not be created |
 | Vercel web + VPS sockets | Two hosts, cross-origin cookies, data on a third party |
 | Kubernetes | Too much surface |
@@ -381,6 +381,8 @@ Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis
 | `REDIS_URL` | race-server, web | live state; web (required in production, #716): shared rate limiter (fails open) and internal-request nonce store `web:internal:nonce:*` (fails closed) (ADR 0020) |
 | `WEB_RATE_LIMIT`, `PLAYWRIGHT_E2E` | web | `off` turns only the web rate limiter off; in production only with `PLAYWRIGHT_E2E=1` (set by `playwright.config.ts`); both unset on Railway (ADR 0020) |
 | `RACE_SERVER_PORT` | race-server | listen port |
+| `RACE_DRAIN_CAP_S` | race-server | longest drain after SIGTERM, default 900 (#704, ADR 0019) |
+| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS`, `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` | race-server (Railway) | Railway's SIGTERM-to-SIGKILL time (930) and overlap (0); the race server warns at boot when the draining time is below its cap (#704) |
 | `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (the race-server's own Railway domain in production, ADR 0019) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |
 | `RACE_TOKEN_SECRET` | web, race-server | race tokens and internal HMAC |
@@ -413,7 +415,7 @@ Suggested order for Iteration 1 technical cards, by dependency:
 |---|---|---|
 | Auth.js adapter assumes an `email` column | Verify in card #38; custom adapter wrapper if needed (ADR 0009 consequence) | builder of #38 |
 | School network blocks WebSocket | Socket.IO polling fallback on; card #443 verifies on a real school network | #442, #443 |
-| A deploy cuts a live race during a class | Railway redeploys race-server on every matching push (ADR 0019); until #704 lands, merge race-server or `packages/**` changes outside class time | #704 |
+| A deploy cuts a live race during a class | Railway redeploys race-server on every matching push (ADR 0019). The old deployment drains on SIGTERM (new rooms refused with 503, live races finish, exit at `rooms == 0` or `RACE_DRAIN_CAP_S`), an owner lease keeps the new boot from voiding them, Railway's draining time is above the cap (`services/race-server/railway.json`). Residual: a desk that reconnects during the drain cannot resume; untimed races beyond the cap; WebSocket survival unconfirmed until the owner's live test (#704 C4) | #704 |
 | Text-changing bonuses vs fairness | Overlay model and clean/adjusted WPM (ADR 0007); teacher confirms values (open question 14) | #198, #445 |
 | Chromebook 3D performance | Quality presets, LODs, HTML text, 2D fallback, CI fps gate (ADR 0013) | #273-#279 |
 | Redis loss during a race | Rooms void, nothing durable lost (ADR 0008); Redis is a Railway service on the private network (ADR 0019) | #204-#206 |

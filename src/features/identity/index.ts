@@ -38,3 +38,7 @@ export {
   type MergeTx,
 } from "./merge/registry";
 export { MergeGuestError } from "./merge/steps";
+// The merge stamp (#57): merge callers leave the flash with `flashMerge(counts)`; the root layout mounts
+// `MergeStamp`, which shows it once.
+export { flashMerge } from "./merge/flash";
+export { MergeStamp } from "./components/merge-stamp";

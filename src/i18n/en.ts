@@ -569,6 +569,19 @@ export const en = {
       },
     },
   },
+  /** Accounts (#57): the merge stamp after a guest merge (ADR 0009, bible 7.3 ink tone); FILED is bible 2's canonical stamp. */
+  auth: {
+    merge: {
+      stamp: "FILED",
+      carried: { zero: "0 RACES CARRIED", one: "1 RACE CARRIED", other: "{n} RACES CARRIED" },
+      sentence: {
+        zero: "0 races and your stats were carried into your Personnel file.",
+        one: "1 race and your stats were carried into your Personnel file.",
+        other: "{n} races and your stats were carried into your Personnel file.",
+      },
+      dismiss: "DISMISS",
+    },
+  },
 };
 
 export type Messages = typeof en;

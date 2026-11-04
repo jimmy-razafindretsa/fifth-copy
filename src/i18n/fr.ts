@@ -555,4 +555,16 @@ export const fr = {
       },
     },
   },
+  auth: {
+    merge: {
+      stamp: "CLASSÉ",
+      carried: { zero: "0 COURSE REPORTÉE", one: "1 COURSE REPORTÉE", other: "{n} COURSES REPORTÉES" },
+      sentence: {
+        zero: "0 course et tes statistiques ont été versées à ton dossier du personnel.",
+        one: "1 course et tes statistiques ont été versées à ton dossier du personnel.",
+        other: "{n} courses et tes statistiques ont été versées à ton dossier du personnel.",
+      },
+      dismiss: "FERMER",
+    },
+  },
 } satisfies Messages;

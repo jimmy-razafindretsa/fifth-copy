@@ -82,7 +82,16 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(verdicts).toEqual([...Array<boolean>(10).fill(true), false]);
   });
 
-  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114) and the rules #90, #120 and #121 will wire", () => {
+  it("password-reset-issue (#788): the 6th within an hour is refused, with retryAfterMs", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const verdicts = [];
+    for (let i = 0; i < 6; i++) verdicts.push(await limit("password-reset-issue", subject("pr")));
+    expect(verdicts.map((v) => v.ok)).toEqual([...Array<boolean>(5).fill(true), false]);
+    expect(verdicts[5]!.retryAfterMs).toBeGreaterThan(0);
+    expect(verdicts[5]!.retryAfterMs).toBeLessThanOrEqual(3_600_000);
+  });
+
+  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset issuance rule (#788) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
       "clerk-outfit",
       "invite",
@@ -90,6 +99,7 @@ describe("createWebLimit (C3, real Redis)", () => {
       "lobby-codes",
       "mint-race-token",
       "mint-race-token-new-guest",
+      "password-reset-issue",
       "recovery",
       "set-lobby-type",
       "sign-in",
@@ -100,6 +110,7 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(LIMITS["lobby-codes"]).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS["clerk-outfit"]).toEqual({ max: 30, windowMs: 60_000 });
     expect(LIMITS["set-lobby-type"]).toEqual({ max: 30, windowMs: 60_000 });
+    expect(LIMITS["password-reset-issue"]).toEqual({ max: 5, windowMs: 3_600_000 });
   });
 
   it("fails open on a closed port with one warning, never the URL", async () => {

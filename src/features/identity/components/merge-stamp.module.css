@@ -1,0 +1,45 @@
+/*
+ * The merge stamp docket (#57, design bible 7.3, 7.4 extension): a 7.4 docket (2px ink rule, paper ground,
+ * themed) `min(480px, 100% - 32px)` wide, pinned 16px above the bottom of the viewport and centred, above
+ * the page. The ink stamp sits in its own band, the slam clipped by it (the exit dockets' recipe); the
+ * sentence is a Courier Prime 15px row under a dashed separator; DISMISS closes it under a 2px ink rule.
+ */
+
+@reference "../../../app/globals.css";
+
+.docket {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 16px;
+  z-index: 40;
+  width: min(480px, calc(100% - 32px));
+  margin-inline: auto;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.stamp {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 20px 12px;
+}
+
+.sentence {
+  @apply type-body;
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  font-size: 15px;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 2px solid var(--color-fg);
+}

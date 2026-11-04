@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
     "healthcheckPath": "/health",
-    "overlapSeconds": "0",
-    "drainingSeconds": "930"
+    "overlapSeconds": 0,
+    "drainingSeconds": 930
   }
 }

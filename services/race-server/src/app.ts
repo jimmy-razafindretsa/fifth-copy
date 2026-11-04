@@ -286,7 +286,20 @@ export function createRaceServer({
   const reconcileEvery = () => {
     reconcileTimer = scheduler.setTimeout(() => {
       reconcileEvery();
-      registry.reconcile().catch((err: unknown) => log("reconcile failed", { err: String(err) }));
+      registry.reconcile().then(
+        // A race whose process is gone (#704): the sockets that reconnected here hear it is over.
+        (voided) => {
+          for (const { lobbyId, raceId } of voided) {
+            to(audience(lobbyId))?.emit("ended", {
+              v: PROTOCOL_VERSION,
+              raceId,
+              reason: "void",
+              ranking: [],
+            });
+          }
+        },
+        (err: unknown) => log("reconcile failed", { err: String(err) }),
+      );
     }, RECONCILE_MS);
   };
 

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Redis } from "ioredis";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_RACE_SETTINGS } from "@fifth-copy/protocol";
-import { boot, connectRedis, HOST_SUB, until, type Booted } from "../testing/harness";
+import { DEFAULT_RACE_SETTINGS, PROTOCOL_VERSION } from "@fifth-copy/protocol";
+import { boot, connectRedis, HOST_SUB, track, until, type Booted } from "../testing/harness";
 import { instanceKey, roomKey } from "./keys";
 import { LEASE_TTL_MS } from "./owner";
 import { RECONCILE_MS } from "./registry";
@@ -83,6 +83,43 @@ describe("room owner lease (#704 C1)", () => {
       phase: "ended",
       endReason: "void",
     });
+  });
+
+  it("voids a race another process started after this boot once that owner is gone, and tells this process's sockets", async () => {
+    const { bootOne, redis } = await space();
+    const old = await bootOne();
+    const lobby = await old.openRoom("OWN-0002", { ...DEFAULT_RACE_SETTINGS, timerS: null });
+    // The new deployment boots while the room waits: it counts it as its own.
+    const fresh = await bootOne();
+    expect(fresh.server.registry.count()).toBe(1);
+    const client = fresh.connect({
+      v: PROTOCOL_VERSION,
+      token: await fresh.token({ lobby, sub: HOST_SUB, role: "host" }),
+    });
+    const host = track(client);
+    const ended: { reason: string; raceId: string }[] = [];
+    client.on("ended", (e) => void ended.push(e));
+    await until(() => !!host.welcome, 3_000, "welcome");
+
+    // The draining process starts the race (its own host socket), then dies at its cap or is killed.
+    await old.server.registry.join(lobby, { userId: "usr_o2", name: "Ola" });
+    expect((await old.server.lifecycle.start(lobby, { sub: HOST_SUB, role: "host" })).ok).toBe(
+      true,
+    );
+    const raceId = await redis.hget(roomKey(lobby), "raceId");
+    fresh.clock.advance(RECONCILE_MS);
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await redis.hgetall(roomKey(lobby))).phase).toBe("countdown");
+
+    await redis.del(instanceKey(old.server.instanceId));
+    fresh.clock.advance(RECONCILE_MS);
+    await until(() => ended.length > 0, 3_000, "void heard");
+    expect(ended[0]).toMatchObject({ reason: "void", raceId });
+    expect(await redis.hgetall(roomKey(lobby))).toMatchObject({
+      phase: "ended",
+      endReason: "void",
+    });
+    client.disconnect();
   });
 
   it("a closed process gives its lease up, so a restart voids its races as before", async () => {

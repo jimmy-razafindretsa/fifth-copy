@@ -11,9 +11,14 @@ import { DEFAULT_DRAIN_CAP_S } from "../services/race-server/src/env";
 
 const config = JSON.parse(readFileSync("services/race-server/railway.json", "utf8")) as {
   $schema: string;
-  deploy: Record<string, string>;
+  deploy: Record<string, unknown>;
 };
-const seconds = (key: string) => Number(config.deploy[key]);
+/** Railway's schema types these as numbers (a string fails its validation). */
+const seconds = (key: string) => {
+  const value = config.deploy[key];
+  expect(typeof value).toBe("number");
+  return value as number;
+};
 
 /** Time between the drain's own exit at the cap and Railway's SIGKILL: closing sockets and Redis. */
 const MARGIN_S = 30;

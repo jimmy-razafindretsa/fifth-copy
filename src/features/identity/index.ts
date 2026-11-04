@@ -38,6 +38,10 @@ export {
   type MergeTx,
 } from "./merge/registry";
 export { MergeGuestError } from "./merge/steps";
+// The teacher password reset (#788): the host issues a single-use code; the redeem (R2) and the host
+// control (R3) share the code helpers.
+export { issuePasswordReset, type IssuePasswordResetResult } from "./actions/issue-password-reset";
+export { formatResetCode, normalizeResetCode } from "./password-reset/code";
 // The merge stamp (#57): merge callers leave the flash with `flashMerge(counts)`; the root layout mounts
 // `MergeStamp`, which shows it once.
 export { flashMerge } from "./merge/flash";

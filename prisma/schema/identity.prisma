@@ -20,6 +20,8 @@ model User {
   passwordHash       String?
   /// Bumped to revoke every JWT issued before (ADR 0009).
   tokenVersion       Int              @default(0)
+  /// May issue teacher password reset codes (#788). Set only out of band by `scripts/grant-teacher.ts`.
+  isTeacher          Boolean          @default(false)
   avatarKey          String?
   avatarStatus       AvatarStatus     @default(NONE)
   /// The clerk outfit config of bible 10.1, validated by outfitSchema; null = never saved
@@ -32,6 +34,8 @@ model User {
   oauthAccounts      OAuthAccount[]
   recoveryCode       RecoveryCode?
   preference         Preference?
+  passwordResets     PasswordReset[]
+  issuedResets       PasswordReset[]  @relation("PasswordResetIssuer")
 }
 
 enum OAuthProvider {
@@ -60,6 +64,27 @@ model RecoveryCode {
   codeHash  String
   createdAt DateTime  @default(now())
   rotatedAt DateTime?
+}
+
+/// A host-issued single-use password reset code (#788, owner decision 2026-11-03 on #445). Only the
+/// Argon2id hash of the code is stored; the row is also the audit record (who issued it, for whom,
+/// from which room, when, used when). The newest unused, unexpired row of a user is the redeemable one.
+model PasswordReset {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash       String
+  /// The host who issued it; kept null when that account is deleted, so the audit row survives.
+  issuedByUserId String?
+  issuedBy       User?     @relation("PasswordResetIssuer", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+  /// Room code of the lobby the host issued it from (ROOM_CODE_RE).
+  lobbyCode      String
+  issuedAt       DateTime  @default(now())
+  expiresAt      DateTime
+  usedAt         DateTime?
+
+  @@index([userId, issuedAt])
+  @@index([issuedByUserId])
 }
 
 enum KeyboardLayout {

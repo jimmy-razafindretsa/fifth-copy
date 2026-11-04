@@ -136,10 +136,10 @@ test.describe("#226 race card, 30 typists", () => {
     await expectNoA11yViolations(page);
     await page.emulateMedia({ colorScheme: "light" });
 
-    // 768 px: compact (names gone, markers and desk numbers kept), disjoint from the typewriter
+    // 768 px: compact (names kept since #792, markers and desk numbers), disjoint from the typewriter
     await page.setViewportSize({ width: 768, height: 1024 });
     await expect(card(page)).toHaveAttribute("data-compact", "true");
-    await expect(card(page).locator("[data-name]")).toHaveCount(0);
+    await expect(card(page).locator("[data-name]")).toHaveCount(7);
     await expect(lanes(page)).toHaveCount(7);
     await expect(lanes(page).locator("svg[data-marker]")).toHaveCount(7);
     await expect(card(page).locator("[data-tick]")).toHaveCount(30);

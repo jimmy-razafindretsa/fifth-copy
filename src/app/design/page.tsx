@@ -817,7 +817,7 @@ export default async function DesignPage() {
           <HudSpecimen
             id="card-thirty-compact"
             title="30 typists, compact"
-            caption="Tablets and small laptops: no names; markers, desks and the field line stay."
+            caption="Tablets and small laptops: names, markers, desks and the field line stay; a label that leaves no room for a 10-character name goes under it."
           >
             <div className="w-full max-w-[208px]">
               <RaceCard

@@ -637,6 +637,45 @@ export const fr = {
       alreadySignedIn: "Tu es déjà connecté. Déconnecte-toi pour ouvrir un autre dossier.",
       generic: "Quelque chose a coincé. Réessaie.",
     },
+    reset: {
+      kicker: "MINISTÈRE DE LA DACTYLO · FORMULAIRE 1-C",
+      title: "NOUVEAU MOT DE PASSE",
+      lede: "Ton enseignant t'a remis un code de réinitialisation. Tape-le avec ton nom d'utilisateur et choisis un nouveau mot de passe.",
+      form: "FORMULAIRE 1-C",
+      tag: "RÉINITIALISATION",
+      fields: {
+        username: "NOM D'UTILISATEUR",
+        code: "CODE DE RÉINITIALISATION",
+        codeHint: "Les 8 lettres et chiffres remis par ton enseignant.",
+        password: "NOUVEAU MOT DE PASSE",
+        passwordHint: "Au moins 8 caractères.",
+      },
+      submit: "CHANGER MON MOT DE PASSE",
+      pending: "CLASSEMENT…",
+      switchPrompt: "Ça te revient ?",
+      switchLink: "CONNEXION →",
+      done: {
+        title: "MOT DE PASSE CHANGÉ",
+        body: "Ton nouveau mot de passe est au dossier et tes autres sessions sont fermées. Connecte-toi avec lui.",
+        link: "CONNEXION →",
+      },
+      errors: {
+        prefix: "RETOURNÉ ·",
+        usernameRequired: "Entre ton nom d'utilisateur.",
+        usernameLength: "Utilise 3 à 20 caractères.",
+        usernameChars: "Utilise seulement des lettres, des chiffres et _.",
+        codeRequired: "Entre le code de réinitialisation.",
+        codeFormat: "Utilise les 8 lettres et chiffres remis par ton enseignant.",
+        passwordRequired: "Entre un nouveau mot de passe.",
+        passwordLength: "Utilise 8 à 128 caractères.",
+        fields:
+          "Seuls un nom d'utilisateur, un code et un nouveau mot de passe peuvent être classés.",
+        invalid:
+          "Nom d'utilisateur ou code incorrect, ou code déjà utilisé ou expiré. Demande un nouveau code à ton enseignant.",
+        "rate-limited": "Trop d'essais. Réessaie dans {m} min.",
+        generic: "Quelque chose a coincé. Réessaie.",
+      },
+    },
     merge: {
       stamp: "CLASSÉ",
       carried: {

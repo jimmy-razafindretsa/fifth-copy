@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ROOM_CODE_RE } from "@fifth-copy/protocol/room-code";
 import { normalizeUsername } from "@/lib/username";
 import { OUTFIT_CATALOGUE, type OutfitCategory } from "./clerk/outfit";
+import { RESET_CODE_ALPHABET, RESET_CODE_LENGTH, normalizeResetCode } from "./password-reset/code";
 
 // Lives in src/lib so src/server/auth can use it without importing a feature (ADR 0001).
 export { normalizeUsername };
@@ -173,5 +174,67 @@ export function parseSignIn(form: FormData): {
     username: text("username"),
     password: text("password"),
     callbackUrl: typeof callbackUrl === "string" ? callbackUrl : null,
+  };
+}
+
+/** The fields of the `/reset` form (#789); nothing else is ever read. */
+export type ResetField = "username" | "code" | "password";
+
+/** Why a `/reset` field was refused; each is a key of the catalogs' `auth.reset.errors` (#789 C1). */
+export type ResetFieldError =
+  | "usernameRequired"
+  | "usernameLength"
+  | "usernameChars"
+  | "codeRequired"
+  | "codeFormat"
+  | "passwordRequired"
+  | "passwordLength";
+
+/** A normalized reset code: exactly `RESET_CODE_LENGTH` Crockford base32 characters (#788). */
+const RESET_CODE_RE = new RegExp(`^[${RESET_CODE_ALPHABET}]{${RESET_CODE_LENGTH}}$`);
+
+const resetCode = z
+  .string()
+  .max(64, "codeFormat")
+  .transform(normalizeResetCode)
+  .superRefine((code, ctx) => {
+    if (code === "") ctx.addIssue({ code: "custom", message: "codeRequired" });
+    else if (!RESET_CODE_RE.test(code)) ctx.addIssue({ code: "custom", message: "codeFormat" });
+  });
+
+export type ResetParse =
+  | { ok: true; usernameNormalized: string; code: string; password: string }
+  | { ok: false; fieldErrors: Partial<Record<ResetField, ResetFieldError>>; extraField: boolean };
+
+/**
+ * The `/reset` form (#789 C1): `username` (the sign-up rules of #36, then `normalizeUsername`), `code`
+ * (`normalizeResetCode`, then exactly 8 Crockford characters) and `password` (the sign-up rules),
+ * each a single string. A field given twice or as a file is refused like a bad value; any other
+ * field refuses the whole form (`extraField`).
+ */
+export function parseResetForm(form: FormData): ResetParse {
+  const keys = [...new Set([...form.keys()].filter((k) => !isFrameworkKey(k)))];
+  const extraField = keys.some((k) => k !== "username" && k !== "code" && k !== "password");
+  const single = (key: ResetField) => {
+    const all = form.getAll(key);
+    return all.length === 1 && typeof all[0] === "string" ? all[0] : "";
+  };
+  const username = signUpUsername.safeParse(single("username"));
+  const code = resetCode.safeParse(single("code"));
+  const password = signUpPassword.safeParse(single("password"));
+  const fieldErrors: Partial<Record<ResetField, ResetFieldError>> = {};
+  if (!username.success)
+    fieldErrors.username = username.error.issues[0]!.message as ResetFieldError;
+  if (!code.success) fieldErrors.code = code.error.issues[0]!.message as ResetFieldError;
+  if (!password.success)
+    fieldErrors.password = password.error.issues[0]!.message as ResetFieldError;
+  if (!username.success || !code.success || !password.success || extraField) {
+    return { ok: false, fieldErrors, extraField };
+  }
+  return {
+    ok: true,
+    usernameNormalized: normalizeUsername(username.data),
+    code: code.data,
+    password: password.data,
   };
 }

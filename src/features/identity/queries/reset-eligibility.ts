@@ -11,7 +11,7 @@ import { db } from "@/server/db";
 export async function findResetTarget(
   hostId: string,
   usernameNormalized: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; usernameNormalized: string | null } | null> {
   return db.user.findFirst({
     where: {
       usernameNormalized,
@@ -20,7 +20,8 @@ export async function findResetTarget(
       id: { not: hostId },
       raceResults: { some: { race: { lobby: { hostUserId: hostId } } } },
     },
-    select: { id: true },
+    // the stored form keys the redeem budget the issuance clears (#789)
+    select: { id: true, usernameNormalized: true },
   });
 }
 

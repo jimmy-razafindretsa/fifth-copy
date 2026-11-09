@@ -3,11 +3,14 @@ import {
   INTERNAL_HEADERS,
   PROTOCOL_VERSION,
   openRoomRequestSchema,
+  roomStatusRequestSchema,
   type InternalError,
   type OpenRoomResponse,
+  type RoomStatus,
+  type RoomStatusResponse,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
-import type { RoomRegistry } from "../rooms/registry";
+import { ROOM_SEATS, type RoomRegistry } from "../rooms/registry";
 import { verifyInternalRequest } from "./hmac";
 import type { NonceStore } from "./nonces";
 
@@ -44,8 +47,8 @@ const error = (status: number, code: InternalError["error"]) => ({
 });
 
 /**
- * Web -> race server routes (ADR 0006 point 6). One entry per path: `PATCH /internal/rooms/:id/settings`
- * and `/close` land here later. Each handler parses its body with a protocol schema.
+ * Web -> race server routes (ADR 0006 point 6). One entry per path: `POST /internal/rooms` (open),
+ * `POST /internal/rooms/status` (#806); `PATCH /internal/rooms/:id/settings` and `/close` land here later. Each handler parses its body with a protocol schema.
  */
 export function internalRoutes({
   registry,
@@ -73,6 +76,42 @@ export function internalRoutes({
           roomId: room.roomId,
           phase: room.phase,
           created,
+        };
+        return { status: 200, body: res };
+      },
+    },
+    {
+      // Room status lookup (#806): read only, so it answers while draining too. Counts only: the
+      // body never carries names, user ids or settings.
+      method: "POST",
+      path: "/internal/rooms/status",
+      async handle(body) {
+        const parsed = roomStatusRequestSchema.safeParse(body);
+        if (!parsed.success) return error(400, "bad-body");
+        const lobbyIds = [...new Set(parsed.data.lobbyIds)];
+        const found = await Promise.all(
+          lobbyIds.map(async (lobbyId): Promise<RoomStatus | null> => {
+            // A corrupt room hash is not joinable: left out like a missing room, never a 500
+            // for the whole list. The log names the error class only (a parse error quotes values).
+            const room = await registry.room(lobbyId).catch((err: unknown) => {
+              const kind = err instanceof Error ? err.name : "unknown";
+              console.log(JSON.stringify({ level: "warn", msg: "room status unreadable", kind }));
+              return null;
+            });
+            if (!room) return null;
+            const bots = room.seated.filter((desk) => desk.isBot).length;
+            return {
+              lobbyId,
+              phase: room.phase,
+              typists: room.seated.length - bots,
+              bots,
+              seats: ROOM_SEATS,
+            };
+          }),
+        );
+        const res: RoomStatusResponse = {
+          v: PROTOCOL_VERSION,
+          rooms: found.filter((room) => room !== null),
         };
         return { status: 200, body: res };
       },

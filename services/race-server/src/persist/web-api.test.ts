@@ -5,6 +5,7 @@ import {
   DEFAULT_RACE_SETTINGS,
   INTERNAL_HEADERS,
   PROTOCOL_VERSION,
+  type CloseLobbyRequest,
   type RaceResultsRequest,
   type StartRaceRequest,
   type StartRaceResponse,
@@ -269,7 +270,11 @@ describe("createWebApi.postResults (#189)", () => {
 });
 
 describe("createWebApi.closeLobby (#734)", () => {
-  const close = { v: PROTOCOL_VERSION, lobbyId: "lob_1/x", closedAt: 1_767_225_600_000 };
+  const close: CloseLobbyRequest = {
+    v: PROTOCOL_VERSION,
+    lobbyId: "lob_1/x",
+    closedAt: 1_767_225_600_000,
+  };
 
   it("POSTs the signed close to /api/internal/lobbies/:id/close (id encoded) and parses the answer", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});

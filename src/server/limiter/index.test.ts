@@ -127,7 +127,7 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset rules (#788, #789) and the rules #90, #120 and #121 will wire", () => {
+  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset rules (#788, #789), the recovery redeem rules (#46) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
       "clerk-outfit",
       "invite",
@@ -139,6 +139,8 @@ describe("createWebLimit (C3, real Redis)", () => {
       "password-reset-redeem",
       "password-reset-redeem-account",
       "recovery",
+      "recovery-redeem",
+      "recovery-redeem-account",
       "set-lobby-type",
       "sign-in",
     ]);
@@ -151,6 +153,8 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(LIMITS["password-reset-issue"]).toEqual({ max: 5, windowMs: 3_600_000 });
     expect(LIMITS["password-reset-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
     expect(LIMITS["password-reset-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
+    expect(LIMITS["recovery-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
+    expect(LIMITS["recovery-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
   });
 
   it("fails open on a closed port with one warning, never the URL", async () => {

@@ -17,7 +17,7 @@ import {
   Star,
   Wordmark,
 } from "@/components/ui";
-import { AuthStates, ResetStates } from "@/features/identity";
+import { AuthStates, RecoverStates, ResetStates } from "@/features/identity";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -706,6 +706,11 @@ export default async function DesignPage() {
           one generic answer, rate-limited, and the success row that links to sign-in.
         </p>
         <ResetStates />
+        <p className="type-body max-w-prose text-fg">
+          The one-time recovery code: the reveal card after sign-up, the reveal once shown, and the
+          /recover form in each state, its success revealing the new code once.
+        </p>
+        <RecoverStates />
       </section>
 
       <section aria-labelledby="stamps" className="flex flex-col gap-3">

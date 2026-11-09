@@ -19,7 +19,9 @@ export type LimitAction =
   | "set-lobby-type"
   | "password-reset-issue"
   | "password-reset-redeem"
-  | "password-reset-redeem-account";
+  | "password-reset-redeem-account"
+  | "recovery-redeem"
+  | "recovery-redeem-account";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -54,6 +56,10 @@ export const LIMITS = {
   "password-reset-issue": { max: 5, windowMs: 60 * 60_000 },
   "password-reset-redeem": { max: 30, windowMs: 60 * 60_000 },
   "password-reset-redeem-account": { max: 5, windowMs: 60 * 60_000 },
+  // The recovery code redeem (#46) takes the same two budgets, client first, then the account
+  // (`recovery:<usernameNormalized>`); a success clears the account budget.
+  "recovery-redeem": { max: 30, windowMs: 60 * 60_000 },
+  "recovery-redeem-account": { max: 5, windowMs: 60 * 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */

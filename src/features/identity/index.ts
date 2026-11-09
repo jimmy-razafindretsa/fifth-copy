@@ -66,3 +66,10 @@ export { redeemPasswordReset, redeemPasswordResetAction } from "./actions/redeem
 export type { ResetFormState } from "./actions/reset-form-state";
 export { ResetScreen } from "./components/reset-screen";
 export { ResetStates } from "./components/reset-states";
+// The one-time recovery code (#46, ADR 0009): issued at sign-up, revealed once, redeemed on `/recover`.
+export { issueRecoveryCode } from "./actions/issue-recovery-code";
+export { redeemRecoveryCode, redeemRecoveryCodeAction } from "./actions/redeem-recovery-code";
+export { takeReveal as takeRecoveryReveal } from "./recovery/reveal";
+export { RecoverScreen } from "./components/recover-screen";
+export { RecoveryRevealScreen } from "./components/recovery-reveal-screen";
+export { RecoverStates } from "./components/recover-states";

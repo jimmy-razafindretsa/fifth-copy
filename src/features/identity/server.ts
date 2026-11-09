@@ -7,6 +7,8 @@ import { refreshPreferenceCookies } from "./preferences/cookies";
 
 // After sign-in the account's stored theme and locale replace the browser's cookies (#66 C3).
 export { refreshPreferenceCookies };
+// The Auth.js credentials callback spends the sign-in action's budgets (#87 C5).
+export { withCredentialsThrottle } from "./auth/throttle";
 
 /**
  * What Auth.js's OAuth sign-in needs from identity (#49): the name screen of sign-up for a provider

@@ -13,7 +13,7 @@ import {
 // `env.REDIS_URL` on the first call; fails open (see `core.ts`).
 
 export { LIMITS, type CodeAction, type LimitAction, type LimitVerdict } from "./core";
-export { isGuestSubject, requestSubject } from "./subject";
+export { isGuestSubject, requestIpSubject, requestSubject } from "./subject";
 
 let current: { url: string | undefined; limit: WebLimit & { close(): void } } | undefined;
 

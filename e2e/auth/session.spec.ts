@@ -10,7 +10,8 @@ import { expect, test } from "../fixtures";
 // session cookie yields {} and the docket falls back to the guest. Rows are seeded into the DB the web
 // server reads (DATABASE_URL), like e2e/auth/session-endpoint.spec.ts.
 
-const SESSION_COOKIE = "authjs.session-token"; // http: no __Secure- prefix
+// `__Secure-` prefixed when the server runs in production (#87 C1), so matched by suffix.
+const SESSION_COOKIE = "authjs.session-token";
 const PASSWORD = `pw-${randomBytes(8).toString("hex")}`;
 const tag = randomBytes(4).toString("hex");
 const account = { id: `e2e_${tag}_acct`, username: `e2e-sess-${tag}`, typistName: `Ada-S${tag}` };
@@ -89,7 +90,7 @@ test.describe("Session viewer resolver (#787)", () => {
       maxRedirects: 0,
     });
     expect(signIn.status()).toBe(302);
-    const session = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
+    const session = (await context.cookies()).find((c) => c.name.endsWith(SESSION_COOKIE));
     expect(session, "session cookie").toBeDefined();
 
     const signedIn = await request.get("/api/auth/session");
@@ -110,20 +111,20 @@ test.describe("Session viewer resolver (#787)", () => {
 
     // The same cookie, sent explicitly, yields {} and is expired rather than refreshed.
     const revoked = await request.get("/api/auth/session", {
-      headers: { cookie: `${SESSION_COOKIE}=${session!.value}` },
+      headers: { cookie: `${session!.name}=${session!.value}` },
     });
     expect(revoked.status()).toBe(200);
     expect(await revoked.json()).toEqual({});
     const expiry = revoked
       .headersArray()
       .filter(
-        (h) => h.name.toLowerCase() === "set-cookie" && h.value.startsWith(`${SESSION_COOKIE}=`),
+        (h) => h.name.toLowerCase() === "set-cookie" && h.value.startsWith(`${session!.name}=`),
       );
     expect(expiry.map((h) => h.value)).toEqual([expect.stringMatching(/Max-Age=0/)]);
 
     // The page with the same (stale) session cookie back next to fc_guest: the guest path again.
-    await context.addCookies([{ name: SESSION_COOKIE, value: session!.value, url: baseURL! }]);
-    expect((await context.cookies()).some((c) => c.name === SESSION_COOKIE)).toBe(true);
+    await context.addCookies([session!]);
+    expect((await context.cookies()).some((c) => c.name === session!.name)).toBe(true);
     await page.goto("/");
     await expect(header).toContainText(guest.typistName);
     await expect(header.getByText("GUEST", { exact: true })).toBeVisible();

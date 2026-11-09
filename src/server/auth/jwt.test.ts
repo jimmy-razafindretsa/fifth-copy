@@ -115,3 +115,48 @@ describe("Credentials authorize (C3)", () => {
     expect(verifyCredentials).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("session JWT lifetime and revocation (#87 C3, C8)", () => {
+  const SALT = "authjs.session-token";
+  const claims = { sub: "u1", name: "Ada", tokenVersion: 2 };
+
+  it("a session JWT decodes for 30 days and not after", async () => {
+    const { encode, decode } = await import("@auth/core/jwt");
+    const start = new Date("2026-11-01T00:00:00Z");
+    vi.useFakeTimers({ now: start, toFake: ["Date"] });
+    try {
+      const token = await encode({
+        token: claims,
+        secret: secret.value,
+        salt: SALT,
+        maxAge: authConfig.session!.maxAge,
+      });
+      vi.setSystemTime(new Date(start.getTime() + 2_592_000_000 - 60_000));
+      await expect(decode({ token, secret: secret.value, salt: SALT })).resolves.toMatchObject(
+        claims,
+      );
+      vi.setSystemTime(new Date(start.getTime() + 2_592_000_000 + 60_000));
+      // Auth.js treats a token that fails to decode as no session
+      await expect(decode({ token, secret: secret.value, salt: SALT })).rejects.toMatchObject({
+        code: "ERR_JWT_EXPIRED",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a cookie captured before a password reset, recovery or sign-out no longer resolves", async () => {
+    const { accountViewer } = await import("./session");
+    const captured = { user: { id: "u1", name: "Ada", tokenVersion: 2 } };
+    const row = (tokenVersion: number) => async () => ({
+      typistName: "Ada",
+      isGuest: false,
+      tokenVersion,
+      avatarStatus: "NONE" as const,
+    });
+    // before: the row's version matches the token's
+    await expect(accountViewer(captured, row(2))).resolves.toMatchObject({ id: "u1" });
+    // after any bump (redeemPasswordReset, redeemRecoveryCode, signOut: `tokenVersion + 1`)
+    await expect(accountViewer(captured, row(3))).resolves.toBeNull();
+  });
+});

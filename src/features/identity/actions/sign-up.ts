@@ -7,6 +7,7 @@ import { getT } from "@/i18n";
 import { getViewer, hashPassword, signIn as authSignIn } from "@/server/auth";
 import { db } from "@/server/db";
 import { logger } from "@/server/logger";
+import { throttledMessage, throttleSignUp } from "../auth/throttle";
 import { mergeGuestCookieInto } from "../merge/merge-on-sign-in";
 import { REVEAL_PATH, stashReveal } from "../recovery/reveal";
 import { issueRecoveryCode } from "./issue-recovery-code";
@@ -46,6 +47,7 @@ function isUniqueViolation(error: unknown) {
 /**
  * Username sign-up (#36 C1-C4, ADR 0009, R147, R149, R152, R154, R161). In order: a signed-in account
  * is refused (no second account); the form is parsed (`parseSignUp`: exactly username and password);
+ * the client's sign-up budget is spent (#87, 10 per hour; refused: the generic "try again" line);
  * the profanity filter, then the case-insensitive availability check, run here on the server only;
  * the account and its recovery code are created in one transaction (Argon2id hashes, `isGuest=false`,
  * `typistName=username`, `issueRecoveryCode` #46; a concurrent insert of the same name reads as taken),
@@ -59,6 +61,11 @@ export async function signUp(form: FormData): Promise<AuthFormState> {
   const parsed = parseSignUp(form);
   if (!parsed.ok) return refuse(parsed.fieldErrors, parsed.extraField ? "fields" : undefined);
   const { username, usernameNormalized, password } = parsed;
+
+  // #87 C5: 10 sign-ups per hour per client, spent before the filter and the availability lookup
+  const verdict = await throttleSignUp();
+  if (!verdict.ok)
+    return { fieldErrors: {}, formError: await throttledMessage(verdict.retryAfterMs) };
 
   if (!isClean(username)) return refuse({ username: "usernameRefused" });
   if (await isTaken(username, usernameNormalized)) return refuse({ username: "usernameTaken" });

@@ -268,7 +268,7 @@ sequenceDiagram
 Clock: `welcome` carries `serverNow`; the client keeps an offset from `ping/pong` (card #172); keystroke `t` outside `[serverElapsed - 2 s, serverElapsed + 0.2 s]` is clamped and counted as a timing anomaly.
 
 ### 7.4 Presence, reconnection, idle (spec 4.5, 7.4)
-Disconnect -> `line-cut`, desk keeps progress, Redis `resume:<key>` (2 min TTL) maps to (room, desk). Socket.IO reconnects with the same race token plus `resumeKey`; the server restores the desk and sends a fresh `welcome`. Grace expiry -> `expired`, ranked by progress at disconnect. Idle is decided only while connected (socket state decides, R57). The race clock never pauses.
+Disconnect -> `line-cut`, desk keeps progress, Redis `resume:<key>` (2 min TTL) maps to (room, desk). Socket.IO reconnects with the same race token plus `resumeKey`; the server restores the desk and sends a fresh `welcome`. Grace expiry -> `expired`, ranked by progress at disconnect. Idle is decided only while connected (socket state decides, R57), from the last accepted key: a resume keeps the idle clock, so a desk back past 45 s or 60 s of silence is warned, or warned and put asleep, at the next tick (#609). The race clock never pauses.
 
 ### 7.5 Bots (spec 9)
 A bot is a server-side participant with a desk, a `botProfile` and a scheduler that asks the engine for its next keystroke and feeds it through the same `keys` path as humans. Levels Recruit 20 / Clerk 35 / Officer 50 / Commissar 70 / Major 90+. Bots fill Quick-race seats, provide the minimum of two, and drive load tests (`scripts/load-test.ts` opens a room with N bots).

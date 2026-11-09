@@ -21,10 +21,11 @@ Spec section 12: guests get an identity automatically (R145, R146); username + p
 - **Race token:** `features/lobby` mints an HS256 JWT (`jose`) per join: `sub` (user id), `name`, `lobby`, `role` (host|player|spectator), `avatar` (boolean), `exp` 5 min. The race server verifies it with `RACE_TOKEN_SECRET`. Tokens are fetched by the lobby page through a server action, never embedded in URLs.
 - **Authorization:** inside every server action and route handler (`requireViewer()`, `requireHost(lobby)`), never only in the UI. `proxy.ts` only redirects signed-out users away from `/profile` and `/settings` and sets the locale cookie (ADR 0010).
 - **Hardening:** `SameSite=Lax`, `Secure` in production, CSRF through Auth.js and server actions' origin check, sign-in and recovery throttled by the shared limiter (card #90), usernames pass the profanity filter (R161), under-13 copy next to the OAuth buttons (R164).
+- **Sign-out revokes every device** (amendment, human decision 2026-10-04, card #87): the sign-out action bumps `User.tokenVersion` before Auth.js deletes the cookie, so every session JWT of the account, on every device, stops resolving (`accountViewer` compares the token's `tokenVersion` with the row's). A password reset or a recovery-code redeem bumps it the same way.
 - **Avatars:** stored as files under a private directory served through a route that checks lobby membership (R163); the storage backend is a separate ADR (card #59).
 
 ## Consequences
-- No session table, so sign-out is cookie deletion and tokens expire naturally; password changes rotate the JWT secret claim (`tokenVersion` on the user) to invalidate old sessions.
+- No session table, so tokens expire naturally after 30 days; sign-out bumps `tokenVersion` (amended by #87: it signs the account out on every device, not only this browser), and password resets and recovery-code redeems bump it too, so old session cookies stop resolving.
 - Guests who clear cookies lose their history (spec open question 20); the privacy page says so.
 - Auth.js adapter expectations about `email` must be handled by a custom adapter wrapper or nullable column; this is a known rough edge to verify in card #38.
 

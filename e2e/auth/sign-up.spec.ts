@@ -11,7 +11,7 @@ import {
 } from "./auth-helpers";
 
 // #36 C13: the sign-up form in a browser: pending while the action runs, the action's field errors
-// with aria-invalid and linked messages, then signed in on success.
+// with aria-invalid and linked messages, then signed in on success (landing on the #46 recovery reveal).
 
 test.describe("sign-up form (#36)", () => {
   test("C13 pending, field errors from the action, then signed in", async ({ page, context }) => {
@@ -54,7 +54,7 @@ test.describe("sign-up form (#36)", () => {
     await expect(form).toHaveAttribute("aria-busy", "true");
     release();
 
-    await expect(page).toHaveURL(/\/$/, { timeout: ACTION_WAIT });
+    await expect(page).toHaveURL(/\/sign-up\/recovery$/, { timeout: ACTION_WAIT });
     await expect(header(page)).toContainText(name, { timeout: ACTION_WAIT });
     expect(await sessionCookie(context)).toBeDefined();
   });
@@ -66,7 +66,7 @@ test.describe("sign-up form (#36)", () => {
     await openForm(firstPage, "/sign-up");
     await fill(firstPage, name, PASSWORD);
     await authForm(firstPage).getByRole("button", { name: "OPEN MY FILE" }).click();
-    await expect(firstPage).toHaveURL(/\/$/, { timeout: ACTION_WAIT });
+    await expect(firstPage).toHaveURL(/\/sign-up\/recovery$/, { timeout: ACTION_WAIT });
     await first.close();
 
     await openForm(page, "/sign-up");

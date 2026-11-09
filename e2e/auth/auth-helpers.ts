@@ -42,12 +42,12 @@ export const header = (page: Page) => page.getByRole("banner");
 export const signOutButton = (page: Page) =>
   header(page).getByRole("button", { name: "SIGN OUT", exact: true });
 
-/** Signs up through the form and waits for the landing with the name in the header. */
+/** Signs up through the form and waits for the recovery code reveal (#46) with the name in the header. */
 export async function signUpThroughForm(page: Page, username: string, password: string) {
   await openForm(page, "/sign-up");
   await fill(page, username, password);
   await authForm(page).getByRole("button", { name: "OPEN MY FILE" }).click();
-  await expect(page).toHaveURL(/\/$/, { timeout: HYDRATION_WAIT });
+  await expect(page).toHaveURL(/\/sign-up\/recovery$/, { timeout: HYDRATION_WAIT });
   await expect(header(page)).toContainText(username, { timeout: HYDRATION_WAIT });
 }
 

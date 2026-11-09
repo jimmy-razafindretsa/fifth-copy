@@ -193,7 +193,9 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
   describe("C3 success", () => {
     it("creates the account, signs in, and redirects; no guest cookie means no merge", async () => {
       const username = `SU${RUN}_Ok`;
-      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe("/");
+      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe(
+        "/sign-up/recovery",
+      );
       const row = await db.user.findUniqueOrThrow({
         where: { usernameNormalized: username.toLowerCase() },
       });
@@ -204,6 +206,11 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
         tokenVersion: 0,
       });
       expect(row.passwordHash).toMatch(/^\$argon2id\$/);
+      // #46 C1, C2: the recovery code is stored hashed in the same transaction, the words sealed for the reveal
+      const code = await db.recoveryCode.findUniqueOrThrow({ where: { userId: row.id } });
+      expect(code.codeHash).toMatch(/^\$argon2id\$/);
+      const sealed = h.harness.jar.get("fc_recovery");
+      expect(sealed).toMatch(/^[\w-]+(\.[\w-]*){4}$/);
       expect(h.harness.jar.get(SESSION)).toBe(`jwt-for-${row.id}`);
       expect(h.harness.signIns).toEqual([{ provider: "credentials", username, redirect: false }]);
       expect(spies.merge).toEqual([]);
@@ -214,7 +221,9 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
       h.harness.viewer = { id: guest.id, name: guest.typistName, isGuest: true, hasAvatar: false };
       h.harness.jar.set("fc_guest", signGuestCookie(guest.id, AUTH_SECRET));
       const username = name("merged");
-      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe("/");
+      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe(
+        "/sign-up/recovery",
+      );
       const account = await db.user.findUniqueOrThrow({ where: { usernameNormalized: username } });
       expect(spies.merge).toEqual([[guest.id, account.id]]);
       expect(spies.flashed).toEqual([{ RaceResult: 2 }]);
@@ -225,7 +234,9 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
     it("a forged guest cookie is cleared without a merge", async () => {
       h.harness.jar.set("fc_guest", "someone-else.AAAA");
       const username = name("forged");
-      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe("/");
+      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe(
+        "/sign-up/recovery",
+      );
       expect(spies.merge).toEqual([]);
       expect(h.harness.deleted).toContain("fc_guest");
     });
@@ -235,7 +246,9 @@ describe.skipIf(!testDatabaseUrl)("signUp (needs TEST_DATABASE_URL)", () => {
       h.harness.jar.set("fc_guest", signGuestCookie(guest.id, AUTH_SECRET));
       spies.mergeFails = true;
       const username = name("mergefail");
-      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe("/");
+      expect(await redirectOf(() => signUp(form({ username, password: PASSWORD })))).toBe(
+        "/sign-up/recovery",
+      );
       expect(h.harness.jar.has("fc_guest")).toBe(true);
       expect(h.harness.jar.has(SESSION)).toBe(true);
       expect(spies.flashed).toEqual([]);

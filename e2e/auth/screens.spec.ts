@@ -85,7 +85,7 @@ test.describe("auth screens (#36)", () => {
           "href",
           "/privacy",
         );
-        // no email field, no forgot-password path (R152, R153)
+        // no email field (R152); the only lost-password path is the recovery code link (#46)
         await expect(page.locator('input[type="email"], input[name*="mail" i]')).toHaveCount(0);
         await expect(page.getByLabel(/e-?mail|courriel/i)).toHaveCount(0);
         await expect(page.locator("body")).not.toContainText(

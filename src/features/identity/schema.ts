@@ -3,6 +3,7 @@ import { ROOM_CODE_RE } from "@fifth-copy/protocol/room-code";
 import { normalizeUsername } from "@/lib/username";
 import { OUTFIT_CATALOGUE, type OutfitCategory } from "./clerk/outfit";
 import { RESET_CODE_ALPHABET, RESET_CODE_LENGTH, normalizeResetCode } from "./password-reset/code";
+import { canonicalRecoveryCode } from "./recovery/generate";
 
 // Lives in src/lib so src/server/auth can use it without importing a feature (ADR 0001).
 export { normalizeUsername };
@@ -221,6 +222,49 @@ export function parseResetForm(form: FormData): ResetParse {
   };
   const username = signUpUsername.safeParse(single("username"));
   const code = resetCode.safeParse(single("code"));
+  const password = signUpPassword.safeParse(single("password"));
+  const fieldErrors: Partial<Record<ResetField, ResetFieldError>> = {};
+  if (!username.success)
+    fieldErrors.username = username.error.issues[0]!.message as ResetFieldError;
+  if (!code.success) fieldErrors.code = code.error.issues[0]!.message as ResetFieldError;
+  if (!password.success)
+    fieldErrors.password = password.error.issues[0]!.message as ResetFieldError;
+  if (!username.success || !code.success || !password.success || extraField) {
+    return { ok: false, fieldErrors, extraField };
+  }
+  return {
+    ok: true,
+    usernameNormalized: normalizeUsername(username.data),
+    code: code.data,
+    password: password.data,
+  };
+}
+
+/** A recovery code as typed (#46 C3): at most 400 characters, then exactly 10 words of the list. */
+const recoveryCode = z
+  .string()
+  .max(400, "codeFormat")
+  .transform((raw) => ({ raw, canonical: canonicalRecoveryCode(raw) }))
+  .superRefine(({ raw, canonical }, ctx) => {
+    if (raw.trim() === "") ctx.addIssue({ code: "custom", message: "codeRequired" });
+    else if (canonical === null) ctx.addIssue({ code: "custom", message: "codeFormat" });
+  })
+  .transform(({ canonical }) => canonical!);
+
+/**
+ * The `/recover` form (#46 C3): the `/reset` fields (`username`, `code`, `password`) with the recovery
+ * code rules: 10 words of the list, order, case and accents ignored (`canonicalRecoveryCode`); the
+ * username and new password follow sign-up. Same refusals as `parseResetForm`.
+ */
+export function parseRecoverForm(form: FormData): ResetParse {
+  const keys = [...new Set([...form.keys()].filter((k) => !isFrameworkKey(k)))];
+  const extraField = keys.some((k) => k !== "username" && k !== "code" && k !== "password");
+  const single = (key: ResetField) => {
+    const all = form.getAll(key);
+    return all.length === 1 && typeof all[0] === "string" ? all[0] : "";
+  };
+  const username = signUpUsername.safeParse(single("username"));
+  const code = recoveryCode.safeParse(single("code"));
   const password = signUpPassword.safeParse(single("password"));
   const fieldErrors: Partial<Record<ResetField, ResetFieldError>> = {};
   if (!username.success)

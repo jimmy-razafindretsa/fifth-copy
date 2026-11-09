@@ -10,7 +10,12 @@ import { ProviderButtons } from "./provider-buttons";
 export type AuthMode = "sign-in" | "sign-up";
 
 /** The routes of the two screens and the privacy page (ARCHITECTURE 8.1; `/privacy` is post-v1). */
-export const AUTH_LINKS = { signIn: "/sign-in", signUp: "/sign-up", privacy: "/privacy" } as const;
+export const AUTH_LINKS = {
+  signIn: "/sign-in",
+  signUp: "/sign-up",
+  recover: "/recover",
+  privacy: "/privacy",
+} as const;
 
 type Messages = Awaited<ReturnType<typeof getT>>;
 
@@ -76,6 +81,14 @@ export async function AuthScreen({
               callbackUrl={mode === "sign-in" ? callbackUrl : null}
               action={mode === "sign-in" ? signInAction : signUpAction}
             />
+            {mode === "sign-in" ? (
+              <p className={styles.recoverRow}>
+                <span>{t.auth.signIn.recoverPrompt}</span>
+                <a href={AUTH_LINKS.recover} className={styles.link}>
+                  {t.auth.signIn.recoverLink}
+                </a>
+              </p>
+            ) : null}
           </div>
           <div className={styles.section}>
             <ProviderButtons labels={t.auth.providers} callbackUrl={callbackUrl} />

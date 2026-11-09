@@ -352,3 +352,97 @@
     font-size: 26px;
   }
 }
+
+/* the recovery code (#46, bible 14.3 "Recovery code"): 7.4 multi-cell grid, gap 2px on ink, paper cells */
+.words {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  /* two columns when a 12-letter word fits, else one: a word never breaks */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: 2px;
+  background: var(--color-fg);
+  border: 2px solid var(--color-fg);
+}
+
+.word {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  background: var(--color-bg);
+  padding: 10px 12px;
+}
+
+.wordIndex {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.wordText {
+  @apply type-typing;
+  font-size: 18px;
+  line-height: normal;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+/* the 7.2 checkbox row: a 24px box in a 2px ink rule, focus a 2px ink outline */
+.ack {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  @apply type-body;
+  font-size: 17px;
+  line-height: normal;
+  cursor: pointer;
+}
+
+.ack input {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--color-fg);
+}
+
+.ack input:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+.submit[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.stampSlot {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px 0 4px;
+}
+
+.submitLink {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* the /recover link under the sign-in form (#46, owner decision 2026-11-09): the switch row recipe
+   (Courier 15px prompt + link-role Oswald link) without its ink rule */
+.recoverRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: normal;
+}

@@ -6,13 +6,16 @@ import {
   INTERNAL_MAX_SKEW_S,
   INTERNAL_NONCE_TTL_S,
   PROTOCOL_VERSION,
+  DEFAULT_RACE_SETTINGS,
   internalErrorSchema,
   openRoomResponseSchema,
+  roomStatusResponseSchema,
 } from "@fifth-copy/protocol";
 import { createHmac, randomBytes } from "node:crypto";
 import { createRaceServer, type RaceServer } from "../app";
 import { createFakeClock, createFakeScheduler } from "../clock";
-import { membersKey, nonceKey, roomKey } from "../rooms/keys";
+import { desksKey, membersKey, nonceKey, roomKey } from "../rooms/keys";
+import { ROOM_SEATS } from "../rooms/registry";
 import { connectRedis, fixtureWebApi } from "../testing/harness";
 import { MAX_INTERNAL_BODY_BYTES } from "./internal";
 
@@ -53,7 +56,7 @@ async function start(skewS = 0, redisOverride?: (redis: Redis) => Redis) {
 
 const freshNonce = () => randomBytes(16).toString("hex");
 
-function sign(body: string, nonce: string, timestamp = V.timestamp) {
+function sign(body: string, nonce: string, timestamp: string = V.timestamp) {
   return createHmac("sha256", V.secret).update(`${timestamp}.${nonce}.${body}`).digest("hex");
 }
 
@@ -65,9 +68,10 @@ function post(
     timestamp = V.timestamp as string,
     nonce = V.nonce as string | null,
     signature = V.signature as string,
+    path = "/internal/rooms",
   } = {},
 ) {
-  return fetch(`${base}/internal/rooms`, {
+  return fetch(`${base}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -80,9 +84,9 @@ function post(
 }
 
 /** `body` signed with a fresh nonce at the vector timestamp. */
-function postSigned(base: string, body: string) {
+function postSigned(base: string, body: string, path?: string) {
   const nonce = freshNonce();
-  return post(base, { body, nonce, signature: sign(body, nonce) });
+  return post(base, { body, nonce, signature: sign(body, nonce), path });
 }
 
 async function expectError(res: Response, status: number, error: string) {
@@ -254,5 +258,127 @@ describe("internal route logs (C4)", () => {
       expect(line).not.toContain(V.signature);
       expect(line).not.toContain("usr_test");
     }
+  });
+});
+
+describe("POST /internal/rooms/status (#806 C2)", () => {
+  const STATUS = "/internal/rooms/status";
+  // Ids unique per run: the shared test db holds other files' rooms.
+  const run = randomBytes(4).toString("hex");
+  const ids = { waiting: `lob_s_${run}_w`, running: `lob_s_${run}_r`, gone: `lob_s_${run}_g` };
+  const statusBody = (lobbyIds: string[]) => JSON.stringify({ v: PROTOCOL_VERSION, lobbyIds });
+
+  afterEach(async () => {
+    const redis = await connectRedis(process.env.REDIS_URL);
+    await redis.del(
+      ...Object.values(ids).flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]),
+    );
+    await redis.srem("rooms", ...Object.values(ids));
+    redis.disconnect();
+  });
+
+  async function seed() {
+    const registry = server!.registry;
+    const open = (lobbyId: string, bots: number) =>
+      registry.open({
+        lobbyId,
+        code: "KGB-4821",
+        hostUserId: "usr_host",
+        settings: {
+          ...DEFAULT_RACE_SETTINGS,
+          bots: Array.from({ length: bots }, () => ({ level: "clerk" as const })),
+        },
+      });
+    await open(ids.waiting, 2);
+    await registry.join(ids.waiting, { userId: "usr_host", name: "Ada" });
+    await registry.join(ids.waiting, { userId: "usr_b", name: "Grace" });
+    await registry.join(ids.waiting, { userId: "usr_c", name: "Linus" });
+    await open(ids.running, 0);
+    await registry.join(ids.running, { userId: "usr_d", name: "Ken" });
+    await registry.withRoom(ids.running, () => registry.setPhase(ids.running, "running"));
+  }
+
+  it("answers phase, human and bot desks and ROOM_SEATS per room found; an id without a room is left out", async () => {
+    const base = await start();
+    await seed();
+    const res = await postSigned(base, statusBody([ids.waiting, ids.gone, ids.running]), STATUS);
+    expect(res.status).toBe(200);
+    const json = roomStatusResponseSchema.parse(await res.clone().json());
+    expect(json).toEqual({
+      v: PROTOCOL_VERSION,
+      rooms: [
+        { lobbyId: ids.waiting, phase: "waiting", typists: 3, bots: 2, seats: ROOM_SEATS },
+        { lobbyId: ids.running, phase: "running", typists: 1, bots: 0, seats: ROOM_SEATS },
+      ],
+    });
+    // Exactly these fields on the wire: no names, user ids or settings.
+    const raw = JSON.stringify(await res.json());
+    for (const leak of ["Ada", "Grace", "usr_", "settings", "KGB-4821", "clerk"])
+      expect(raw).not.toContain(leak);
+  });
+
+  it("a lookup reads only: it opens no room and joins no one", async () => {
+    const base = await start();
+    const res = await postSigned(base, statusBody([ids.gone]), STATUS);
+    expect(roomStatusResponseSchema.parse(await res.json()).rooms).toEqual([]);
+    expect(await server!.registry.room(ids.gone)).toBeNull();
+  });
+
+  it("sits behind the same signature, nonce, timestamp and version checks", async () => {
+    const base = await start();
+    await seed();
+    const body = statusBody([ids.waiting]);
+    const nonce = freshNonce();
+    // Unsigned or wrongly signed: 401, nothing listed.
+    await expectError(
+      await post(base, { path: STATUS, body, nonce, signature: "0".repeat(64) }),
+      401,
+      "bad-signature",
+    );
+    await expectError(
+      await post(base, { path: STATUS, body, nonce: null, signature: sign(body, nonce) }),
+      401,
+      "bad-signature",
+    );
+    // A body changed after signing.
+    await expectError(
+      await post(base, {
+        path: STATUS,
+        body: statusBody([ids.running]),
+        nonce,
+        signature: sign(body, nonce),
+      }),
+      401,
+      "bad-signature",
+    );
+    // Stale timestamp.
+    const old = String(Number(V.timestamp) - INTERNAL_MAX_SKEW_S - 1);
+    const n2 = freshNonce();
+    await expectError(
+      await post(base, {
+        path: STATUS,
+        body,
+        nonce: n2,
+        timestamp: old,
+        signature: sign(body, n2, old),
+      }),
+      401,
+      "stale-timestamp",
+    );
+    // Replay.
+    const n3 = freshNonce();
+    const signed = { path: STATUS, body, nonce: n3, signature: sign(body, n3) };
+    expect((await post(base, signed)).status).toBe(200);
+    await expectError(await post(base, signed), 401, "replay");
+    // Version and schema.
+    await expectError(
+      await postSigned(base, JSON.stringify({ v: 1, lobbyIds: [ids.waiting] }), STATUS),
+      426,
+      "version",
+    );
+    for (const lobbyIds of [[], Array.from({ length: 51 }, (_, i) => `lob_${i}`), [""]])
+      await expectError(await postSigned(base, statusBody(lobbyIds), STATUS), 400, "bad-body");
+    // GET is not routed.
+    expect((await fetch(`${base}${STATUS}`)).status).toBe(404);
   });
 });

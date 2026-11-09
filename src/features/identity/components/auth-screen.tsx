@@ -23,12 +23,12 @@ export const AUTH_LINKS = {
 type Messages = Awaited<ReturnType<typeof getT>>;
 
 /**
- * The provider buttons on show (#49 C2): GitHub and Discord only when their env vars are set; Google
- * (owner's #36 review) stays, on the OAuth error path, until an ADR adds the provider to ADR 0009.
+ * The provider buttons on show (#49 C2, #828): GitHub, Discord and Google, each only when its env vars
+ * are set (ADR 0009), in button order.
  */
 function shownProviders(): OAuthProviderId[] {
   const enabled: readonly string[] = enabledOAuthProviders(env);
-  return OAUTH_PROVIDERS.filter((p) => p === "google" || enabled.includes(p));
+  return OAUTH_PROVIDERS.filter((p) => enabled.includes(p));
 }
 
 /**

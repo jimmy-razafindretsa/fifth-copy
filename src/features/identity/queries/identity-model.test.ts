@@ -22,7 +22,7 @@ describe("normalizeUsername", () => {
 
 describe("identity enums (#486)", () => {
   it("exports exactly the contract values", () => {
-    expect(Object.values(OAuthProvider)).toEqual(["GITHUB", "DISCORD"]);
+    expect(Object.values(OAuthProvider)).toEqual(["GITHUB", "DISCORD", "GOOGLE"]);
     expect(Object.values(KeyboardLayout)).toEqual(["CSA", "FR_CA", "US_QWERTY", "AZERTY"]);
     expect(Object.values(Theme)).toEqual(["LIGHT", "DARK", "SYSTEM"]);
     expect(Object.values(Locale)).toEqual(["FR", "EN"]);

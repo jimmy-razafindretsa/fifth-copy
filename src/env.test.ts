@@ -146,4 +146,13 @@ describe("env", () => {
     expect(set.AUTH_GITHUB_ID).toBe("gh-id");
     expect(set.AUTH_GITHUB_SECRET).toBe("gh-secret");
   });
+
+  it("#828 C3: AUTH_GOOGLE_ID/SECRET are optional; empty counts as unset", async () => {
+    const unset = await loadEnv({ AUTH_GOOGLE_ID: undefined, AUTH_GOOGLE_SECRET: "" });
+    expect(unset.AUTH_GOOGLE_ID).toBeUndefined();
+    expect(unset.AUTH_GOOGLE_SECRET).toBeUndefined();
+    const set = await loadEnv({ AUTH_GOOGLE_ID: "go-id", AUTH_GOOGLE_SECRET: "go-secret" });
+    expect(set.AUTH_GOOGLE_ID).toBe("go-id");
+    expect(set.AUTH_GOOGLE_SECRET).toBe("go-secret");
+  });
 });

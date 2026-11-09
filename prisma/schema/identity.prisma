@@ -41,9 +41,10 @@ model User {
 enum OAuthProvider {
   GITHUB
   DISCORD
+  GOOGLE
 }
 
-/// A sign-in link to GitHub or Discord (#486). Only the provider and its account id are kept:
+/// A sign-in link to GitHub, Discord or Google (#486, #828). Only the provider and its account id are kept:
 /// sessions are JWTs (ADR 0009), so nothing else from the provider is stored.
 model OAuthAccount {
   id                String        @id @default(cuid())

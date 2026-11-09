@@ -10,7 +10,7 @@ import {
   registerOAuthSignInHooks,
   type OAuthSignInHooks,
 } from "./oauth-signin";
-import { discordProfile, githubProfile } from "./providers";
+import { discordProfile, githubProfile, googleProfile } from "./providers";
 import { createTypistNameFor } from "./typist-name";
 
 // auth.ts reads the validated env and the app's db client at import; neither is used by these tests
@@ -48,7 +48,7 @@ describe.skipIf(!testDatabaseUrl)("OAuth sign-in (needs TEST_DATABASE_URL)", () 
   const jwt = () => authConfig.callbacks!.jwt as JwtCallback;
 
   type Fixture = { id: number; login: string; avatar_url?: string | null };
-  type Provider = "github" | "discord";
+  type Provider = "github" | "discord" | "google";
 
   /**
    * One Auth.js OAuth callback; returns the signed-in user, whether it was new, and the JWT claims.
@@ -62,10 +62,13 @@ describe.skipIf(!testDatabaseUrl)("OAuth sign-in (needs TEST_DATABASE_URL)", () 
     const profile =
       provider === "github"
         ? githubProfile(raw as Parameters<typeof githubProfile>[0])
-        : discordProfile(raw as Parameters<typeof discordProfile>[0]);
+        : provider === "discord"
+          ? discordProfile(raw as Parameters<typeof discordProfile>[0])
+          : googleProfile(raw as Parameters<typeof googleProfile>[0]);
     const account = {
       provider,
-      type: "oauth" as const,
+      // Google is OpenID Connect: Auth.js links it with type "oidc" (#828).
+      type: provider === "google" ? ("oidc" as const) : ("oauth" as const),
       providerAccountId: profile.id,
       access_token: "dropped",
     };
@@ -125,6 +128,39 @@ describe.skipIf(!testDatabaseUrl)("OAuth sign-in (needs TEST_DATABASE_URL)", () 
       expect.objectContaining({ provider: "GITHUB", providerAccountId: String(providerId) }),
     ]);
     expect(mergeGuest).toHaveBeenCalledExactlyOnceWith(user.id);
+  });
+
+  it("#828 C4 a first Google sign-in creates the account under the first name, links GOOGLE, merges the guest and imports the picture", async () => {
+    const sub = `${Number.parseInt(randomBytes(4).toString("hex"), 16)}`;
+    const picture = `https://lh3.googleusercontent.com/a/${PREFIX}pic=s96-c`;
+    const claims = {
+      sub,
+      name: `${PREFIX}gg Lovelace`,
+      given_name: `${PREFIX}gg`,
+      family_name: "Lovelace",
+      picture,
+    };
+    const first = await oauthSignIn("google", claims);
+    expect(first.isNewUser).toBe(true);
+    const row = await db.user.findUniqueOrThrow({
+      where: { id: first.user.id },
+      include: { oauthAccounts: true },
+    });
+    expect(row).toMatchObject({ isGuest: false, typistName: `${PREFIX}gg` });
+    expect(row.oauthAccounts).toEqual([
+      expect.objectContaining({ provider: "GOOGLE", providerAccountId: sub }),
+    ]);
+    expect(JSON.stringify(row)).not.toContain("Lovelace");
+    expect(mergeGuest).toHaveBeenCalledExactlyOnceWith(first.user.id);
+    await vi.waitFor(() =>
+      expect(importAvatar).toHaveBeenCalledExactlyOnceWith(first.user.id, picture),
+    );
+    expect(JSON.stringify(first.token)).not.toContain("googleusercontent");
+
+    const again = await oauthSignIn("google", claims);
+    expect(again).toMatchObject({ isNewUser: false, user: { id: first.user.id } });
+    expect(mergeGuest).toHaveBeenCalledTimes(2);
+    expect(importAvatar).toHaveBeenCalledOnce();
   });
 
   it("a second sign-in reuses the account (no new row, same id) and merges again", async () => {

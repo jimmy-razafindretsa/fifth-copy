@@ -1,5 +1,5 @@
 import type { Account, Profile, User } from "next-auth";
-import { discordProfile, githubProfile, type OAuthUser } from "./providers";
+import { discordProfile, githubProfile, googleProfile, type OAuthUser } from "./providers";
 
 /**
  * What OAuth sign-in needs from the identity feature (#49), injected because src/server never imports
@@ -31,6 +31,7 @@ const OAUTH_TYPES = new Set(["oauth", "oidc"]);
 const PROFILE_MAPPERS = new Map<string, (raw: never) => OAuthUser>([
   ["github", githubProfile],
   ["discord", discordProfile],
+  ["google", googleProfile],
 ]);
 
 /** The picture URL the provider's profile() maps from the raw profile; null when there is none. */

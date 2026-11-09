@@ -17,7 +17,7 @@ They are the project's choices, not legal advice.
 | Data | Period | Enforced by |
 |---|---|---|
 | Inactive guest accounts and everything attached to them | 12 months (365 days) without any activity (no race, sign-in or settings change) | #86 weekly worker job (ADR 0011), through the deletion of #81 |
-| Accounts (username or GitHub/Discord sign-in) and everything attached to them: results, stats, personal bests, achievements, preferences, avatar | Until the student deletes the account, or it is deleted on request through the teacher or school | #81 (self-service and assisted deletion) |
+| Accounts (username or GitHub/Discord/Google sign-in) and everything attached to them: results, stats, personal bests, achievements, preferences, avatar | Until the student deletes the account, or it is deleted on request through the teacher or school | #81 (self-service and assisted deletion) |
 | Guest cookie in the browser | At most 1 year; it identifies nothing once the guest account is deleted | `src/server/auth/guest-cookie.ts` (cookie expiry), #81 clears it |
 | Session cookie | Until sign-out or expiry | #38 (Auth.js JWT, ADR 0009), #81 clears it |
 | Avatars | Until replaced, rejected or the account is deleted; rejected files are deleted at once | ADR 0014, #64, #81 |

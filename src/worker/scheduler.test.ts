@@ -44,7 +44,7 @@ describe.skipIf(!testDatabaseUrl)("scheduler (needs TEST_DATABASE_URL)", () => {
     const rows = await db.jobRun.findMany({ where: { name: job.name } });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: "OK", error: null });
-    expect(rows[0].finishedAt).not.toBeNull();
+    expect(rows[0]!.finishedAt).not.toBeNull();
     // Released: another session takes the same lock at once.
     const other = locks();
     expect(await other.tryLock(job.name)).toBe(true);
@@ -81,7 +81,11 @@ describe.skipIf(!testDatabaseUrl)("scheduler (needs TEST_DATABASE_URL)", () => {
   it("runs the job again only once `every` has passed", async () => {
     let runs = 0;
     let clock = new Date("2026-11-09T12:00:00Z");
-    const job: Job = { name: jobName("every"), every: { minutes: 5 }, run: async () => void runs++ };
+    const job: Job = {
+      name: jobName("every"),
+      every: { minutes: 5 },
+      run: async () => void runs++,
+    };
     const s = createScheduler({ db, locks: locks(), jobs: [job], log: silent, now: () => clock });
     await s.tick();
     clock = new Date("2026-11-09T12:04:59Z");
@@ -102,8 +106,18 @@ describe.skipIf(!testDatabaseUrl)("scheduler (needs TEST_DATABASE_URL)", () => {
         throw new Error("boom: disk full");
       },
     };
-    const good: Job = { name: jobName("good"), every: { minutes: 1 }, run: async () => void okRuns++ };
-    const s = createScheduler({ db, locks: locks(), jobs: [bad, good], log: silent, now: () => clock });
+    const good: Job = {
+      name: jobName("good"),
+      every: { minutes: 1 },
+      run: async () => void okRuns++,
+    };
+    const s = createScheduler({
+      db,
+      locks: locks(),
+      jobs: [bad, good],
+      log: silent,
+      now: () => clock,
+    });
 
     await s.tick();
     clock = new Date("2026-11-09T13:01:00Z");

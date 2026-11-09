@@ -15,15 +15,31 @@ export type AdvisoryLocks = {
 const key = (name: string) => `fifth-copy:job:${name}`;
 
 export function createPgAdvisoryLocks(connectionString: string): AdvisoryLocks {
-  const client = new Client({ connectionString });
-  let connected: Promise<void> | null = null;
-  const ready = () => (connected ??= client.connect());
-  // A dropped connection already released its locks; surface it on the next call, never crash the process.
-  client.on("error", () => undefined);
+  // One session at a time. A dropped connection already released its locks on the server: forget
+  // it, and the next call opens a fresh session (the scheduler logs the failed call and retries).
+  let session: { client: Client; ready: Promise<Client> } | null = null;
+  const connect = () => {
+    if (session) return session.ready;
+    const client = new Client({ connectionString });
+    const drop = () => {
+      if (session?.client === client) session = null;
+    };
+    client.on("error", drop);
+    client.on("end", drop);
+    const ready = client.connect().then(
+      () => client,
+      (err: unknown) => {
+        drop();
+        throw err;
+      },
+    );
+    session = { client, ready };
+    return ready;
+  };
 
   return {
     async tryLock(name) {
-      await ready();
+      const client = await connect();
       const res = await client.query<{ locked: boolean }>(
         "SELECT pg_try_advisory_lock(hashtext($1)) AS locked",
         [key(name)],
@@ -31,11 +47,13 @@ export function createPgAdvisoryLocks(connectionString: string): AdvisoryLocks {
       return res.rows[0]?.locked === true;
     },
     async unlock(name) {
-      await ready();
+      const client = await connect();
       await client.query("SELECT pg_advisory_unlock(hashtext($1))", [key(name)]);
     },
     async close() {
-      if (connected) await client.end();
+      const current = session;
+      session = null;
+      if (current) await (await current.ready.catch(() => null))?.end();
     },
   };
 }

@@ -30,7 +30,10 @@ export type Job = {
 
 export function durationMs(d: Duration): number {
   const ms =
-    ((d.days ?? 0) * 24 * 60 * 60 + (d.hours ?? 0) * 60 * 60 + (d.minutes ?? 0) * 60 + (d.seconds ?? 0)) *
+    ((d.days ?? 0) * 24 * 60 * 60 +
+      (d.hours ?? 0) * 60 * 60 +
+      (d.minutes ?? 0) * 60 +
+      (d.seconds ?? 0)) *
     1000;
   if (!Number.isFinite(ms) || ms <= 0) throw new Error("job duration must be positive");
   return ms;

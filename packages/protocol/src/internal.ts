@@ -228,6 +228,27 @@ export const raceResultsResponseSchema = z.object({
 });
 export type RaceResultsResponse = z.infer<typeof raceResultsResponseSchema>;
 
+/**
+ * `POST /api/internal/lobbies/:id/close` (race server -> web, #734): the last human left the
+ * waiting room (or the room was found gone on boot), so the `Lobby` row becomes `CLOSED` at
+ * `closedAt` (server ms epoch). Idempotent: a lobby already closed answers `changed: false`. Sent
+ * through the race server's outbox, retried like results.
+ */
+export const closeLobbyRequestSchema = z.object({
+  v: versionSchema,
+  lobbyId: idSchema,
+  closedAt: msSchema,
+});
+export type CloseLobbyRequest = z.infer<typeof closeLobbyRequestSchema>;
+
+export const closeLobbyResponseSchema = z.object({
+  v: versionSchema,
+  lobbyId: idSchema,
+  /** True when this call wrote `CLOSED`; false when the lobby was already closed. */
+  changed: z.boolean(),
+});
+export type CloseLobbyResponse = z.infer<typeof closeLobbyResponseSchema>;
+
 export const internalErrorSchema = z.object({
   v: versionSchema,
   error: z.enum([
@@ -251,11 +272,11 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   timestamp: "1767225600",
   nonce: "5f2b9c0e8a4d4e1b9f3a7c6d2e1b0a98",
   body:
-    '{"v":11,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":12,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "6c56ebd5f82252947b90b83cdf86824940cc20c14eb29e5f96f89f0c7f2adfbd",
+  signature: "5702f7360c074dfb0814c45764ddb2e8a8d19f38cb833333321693fb7fe3f7ca",
 } as const;

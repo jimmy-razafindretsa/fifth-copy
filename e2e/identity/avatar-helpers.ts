@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import type { Locator, Page } from "@playwright/test";
 import sharp from "sharp";
 import { expect, test } from "../fixtures";
-import { HYDRATION_WAIT } from "../timeouts";
+import { HYDRATION_WAIT, scaled } from "../timeouts";
 
 // Shared steps of the #60 picture specs: generated fixtures (no binary files in the repo) and the
 // dialog as a person drives it.
@@ -55,7 +55,7 @@ export async function openPictureDialog(page: Page) {
   const dialog = pictureDialog(page);
   await expect(async () => {
     await trigger(page).click();
-    await expect(dialog).toBeVisible({ timeout: 1_000 });
+    await expect(dialog).toBeVisible({ timeout: scaled(1_000) });
   }).toPass({ timeout: HYDRATION_WAIT });
   return dialog;
 }

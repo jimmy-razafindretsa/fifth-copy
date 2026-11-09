@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { deleteUsers, plantGuest } from "../auth/auth-helpers";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { scaled } from "../timeouts";
 import {
   BLUE,
   choose,
@@ -155,7 +156,7 @@ test.describe("#60 picture dialog", () => {
     await expect(async () => {
       await trigger(page).focus();
       await page.keyboard.press("Enter");
-      await expect(pictureDialog(page)).toBeVisible({ timeout: 1_000 });
+      await expect(pictureDialog(page)).toBeVisible({ timeout: scaled(1_000) });
     }).toPass();
     const dialog = pictureDialog(page);
     await choose(dialog, await colourJpeg("keys.jpg", 900, 600, GREEN));

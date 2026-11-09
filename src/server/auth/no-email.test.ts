@@ -58,8 +58,11 @@ describe("no-email guard (#87 C4)", () => {
     };
     for (const provider of providers) {
       const user = (await provider.options.profile(raw)) as Record<string, unknown>;
-      expect(Object.keys(user).filter((k) => EMAIL.test(k)), provider.id).toEqual([]);
-      expect(JSON.stringify(user), provider.id).not.toContain("example.test\"");
+      expect(
+        Object.keys(user).filter((k) => EMAIL.test(k)),
+        provider.id,
+      ).toEqual([]);
+      expect(JSON.stringify(user), provider.id).not.toContain('example.test"');
       expect(JSON.stringify(user), provider.id).not.toContain("ada@");
     }
   });

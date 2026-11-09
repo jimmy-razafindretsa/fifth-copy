@@ -38,13 +38,15 @@ const server = z.object({
    */
   WEB_RATE_LIMIT: z.enum(["on", "off"]).default("on"),
   /**
-   * OAuth apps (ADR 0009, #49): each provider is registered only when both its id and secret are set
+   * OAuth apps (ADR 0009, #49, Google #828): each provider is registered only when both its id and secret are set
    * (src/server/auth/providers.ts), so development without secrets runs; empty counts as unset.
    */
   AUTH_GITHUB_ID: optionalSecret,
   AUTH_GITHUB_SECRET: optionalSecret,
   AUTH_DISCORD_ID: optionalSecret,
   AUTH_DISCORD_SECRET: optionalSecret,
+  AUTH_GOOGLE_ID: optionalSecret,
+  AUTH_GOOGLE_SECRET: optionalSecret,
   /** Set to `1` by playwright.config.ts only: the one run where a production build may take `WEB_RATE_LIMIT=off`. */
   PLAYWRIGHT_E2E: z.literal("1").optional(),
 });
@@ -98,6 +100,8 @@ function parse() {
     AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
     AUTH_DISCORD_ID: process.env.AUTH_DISCORD_ID,
     AUTH_DISCORD_SECRET: process.env.AUTH_DISCORD_SECRET,
+    AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
+    AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_RACE_SERVER_URL: process.env.NEXT_PUBLIC_RACE_SERVER_URL,
   });

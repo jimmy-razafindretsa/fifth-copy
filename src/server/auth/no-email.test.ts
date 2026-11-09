@@ -44,10 +44,15 @@ describe("no-email guard (#87 C4)", () => {
       AUTH_GITHUB_SECRET: "secret",
       AUTH_DISCORD_ID: "id",
       AUTH_DISCORD_SECRET: "secret",
+      AUTH_GOOGLE_ID: "id",
+      AUTH_GOOGLE_SECRET: "secret",
     }) as unknown as Array<{ id: string; options: { profile: (p: unknown) => unknown } }>;
-    expect(providers.map((p) => p.id).sort()).toEqual(["discord", "github"]);
+    expect(providers.map((p) => p.id).sort()).toEqual(["discord", "github", "google"]);
     const raw = {
       id: "42",
+      sub: "42",
+      given_name: "Ada",
+      picture: "https://lh3.example.test/42",
       login: "ada",
       username: "ada",
       name: "Ada Lovelace",

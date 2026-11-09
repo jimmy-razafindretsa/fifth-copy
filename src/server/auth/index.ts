@@ -2,6 +2,13 @@ export { UnauthenticatedError } from "./errors";
 export type { Viewer, ViewerResolver } from "./types";
 export { getViewer, requireViewer } from "./viewer";
 export {
+  cookieFlags,
+  SECURE_SESSION_COOKIE_NAME,
+  SESSION_COOKIE_NAME,
+  sessionCookieName,
+  type NodeEnv,
+} from "./cookies";
+export {
   GUEST_COOKIE,
   guestCookieOptions,
   signGuestCookie,

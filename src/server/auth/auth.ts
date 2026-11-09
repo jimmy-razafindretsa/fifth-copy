@@ -6,6 +6,7 @@ import { db } from "@/server/db";
 import { logger } from "@/server/logger";
 import { createAuthAdapter } from "./adapter";
 import { createAuthLogger } from "./auth-logger";
+import { secureCookiesFor } from "./cookies";
 import { verifyCredentials } from "./credentials";
 import { createOAuthSignInEvent, oauthSignInHooks } from "./oauth-signin";
 import { oauthProviders } from "./providers";
@@ -50,6 +51,9 @@ export const authConfig = {
   // Railway's proxy sets the host; a production build refuses every request (UntrustedHost) otherwise.
   // Callback URLs stay checked against the request origin.
   trustHost: true,
+  // Production cookies are always Secure and `__Secure-` prefixed, whatever scheme the proxy forwards
+  // (#87 C1, ./cookies); HttpOnly, SameSite=Lax and Path=/ are Auth.js's session-cookie defaults.
+  useSecureCookies: secureCookiesFor(env.NODE_ENV),
   // JSON lines through the app logger, not Auth.js's console output (ARCHITECTURE 10).
   logger: createAuthLogger(logger),
   session: { strategy: "jwt", maxAge: SESSION_MAX_AGE },

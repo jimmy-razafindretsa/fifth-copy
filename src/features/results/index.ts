@@ -11,6 +11,8 @@ export type { PersistResultsResult } from "./actions/persist-results";
 export { storedEffectiveText, type StoredReplayText } from "./replay-text";
 // The Dawn report (#300): read model, route screen, podium and the /design specimens.
 export { getDawnReport } from "./queries/get-dawn-report";
+// The races stats and results count (#613): never a voided or open one.
+export { COUNTED_RACE } from "./queries/counted-races";
 export { DawnReportLayout, DawnReportScreen } from "./components/dawn-report-screen";
 export { filingLabels, podiumLabels, rankingLabels } from "./view/report-labels";
 export { FilingNoticeView } from "./components/filing-notice-view";

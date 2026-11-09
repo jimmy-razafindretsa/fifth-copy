@@ -14,7 +14,7 @@ const raceIdSchema = z.uuid();
 /**
  * The Dawn report of one race (#300 C1, ADR 0008, ARCHITECTURE 8.2): `null` for an id that is not a uuid
  * or names no race, `filing` while the race has no `RaceResult` row yet (the race server posts them after
- * `ended`, ARCHITECTURE 9.3), else the race and every desk in place order with the viewer's desk. One
+ * `ended`, ARCHITECTURE 9.3), `null` for a voided race too (#613), else the race and every desk in place order with the viewer's desk. One
  * query; the WPM is `cleanWpm` (ADR 0016), `adjustedWpm` is never read. Suspicious rows are kept and
  * flagged: the podium shows them under review (ARCHITECTURE 7.7). Each entry's clerk outfit (#688) comes
  * from the same query (the result's `user.outfit`): the saved outfit when the catalogue accepts it, else
@@ -55,7 +55,8 @@ export async function getDawnReport(
       },
     },
   });
-  if (!race) return null;
+  // #613 C2: a voided race (race.void job) has no report, not even a filing notice.
+  if (!race || race.endReason === "VOID") return null;
   const lobbyCode = race.lobby?.code ?? null;
   if (race.results.length === 0) return { kind: "filing", raceId: race.id, lobbyCode };
 

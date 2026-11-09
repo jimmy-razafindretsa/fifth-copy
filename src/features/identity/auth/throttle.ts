@@ -1,11 +1,11 @@
 import "server-only";
 import { fill, getT } from "@/i18n";
 import { normalizeUsername } from "@/lib/username";
-import { limit, type LimitVerdict, requestSubject } from "@/server/limiter";
+import { limit, type LimitVerdict, requestIpSubject } from "@/server/limiter";
 
 // Throttles of the account entry points (#87 C5, ADR 0009 "Hardening", ADR 0020): every budget is
-// spent before any lookup or Argon2id comparison. "Per client" is `requestSubject()` (the guest of a
-// valid guest cookie, else the client IP), as for the /reset and /recover budgets (#789, #46).
+// spent before any lookup or Argon2id comparison. "Per client" is the client IP
+// (`requestIpSubject()`), never the guest cookie: a fresh guest cookie must not reset a budget.
 
 /**
  * One sign-in attempt for `username`: the client budget (`sign-in`, 30 per 15 min) first, then, only
@@ -13,14 +13,14 @@ import { limit, type LimitVerdict, requestSubject } from "@/server/limiter";
  * username), so one client cannot spend another student's budget beyond its own.
  */
 export async function throttleSignIn(username: string): Promise<LimitVerdict> {
-  const client = await limit("sign-in", await requestSubject());
+  const client = await limit("sign-in", await requestIpSubject());
   if (!client.ok) return client;
   return limit("sign-in-account", `signin:${normalizeUsername(username)}`);
 }
 
 /** One sign-up attempt of this client (`sign-up`, 10 per hour). */
 export async function throttleSignUp(): Promise<LimitVerdict> {
-  return limit("sign-up", await requestSubject());
+  return limit("sign-up", await requestIpSubject());
 }
 
 /** One avatar upload of this viewer (`avatar-upload`, 5 per minute). */

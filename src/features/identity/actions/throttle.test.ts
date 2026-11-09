@@ -32,7 +32,7 @@ vi.mock("@/i18n", async () => {
 vi.mock("@/server/limiter", async () => {
   const { LIMITS } = await import("@/server/limiter/core");
   return {
-    requestSubject: async () => s.subject,
+    requestIpSubject: async () => s.subject,
     limit: async (action: keyof typeof LIMITS, subject: string) => {
       const key = `${action}:${subject}`;
       const n = s.counted.get(key) ?? 0;

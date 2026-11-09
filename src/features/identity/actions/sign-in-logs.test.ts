@@ -34,7 +34,7 @@ vi.mock("@/server/auth", () => ({
   },
 }));
 vi.mock("@/server/limiter", () => ({
-  requestSubject: async () => "ip:203.0.113.5",
+  requestIpSubject: async () => "ip:203.0.113.5",
   limit: async () => ({ ok: true, retryAfterMs: 0 }),
 }));
 vi.mock("next/navigation", () => ({

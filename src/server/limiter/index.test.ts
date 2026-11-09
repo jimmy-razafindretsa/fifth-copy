@@ -275,6 +275,13 @@ describe("requestSubject", () => {
     expect(await (await load())()).toBe("guest:usr_abc");
   });
 
+  it("requestIpSubject ignores a valid guest cookie (#87: a fresh guest never resets an IP budget)", async () => {
+    state.cookie = signGuestCookie("usr_abc", "a".repeat(32));
+    state.headers = new Headers({ "x-forwarded-for": "1.2.3.4, 203.0.113.9" });
+    const { requestIpSubject } = await import("./subject");
+    expect(await requestIpSubject()).toBe("ip:203.0.113.9");
+  });
+
   it("is the last X-Forwarded-For hop otherwise (the proxy's; earlier hops are client-supplied)", async () => {
     state.cookie = signGuestCookie("usr_abc", "b".repeat(32)); // forged: wrong secret
     state.headers = new Headers({ "x-forwarded-for": "1.2.3.4, 198.51.100.7" });

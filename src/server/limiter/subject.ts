@@ -35,6 +35,14 @@ function ipLiteral(value: string | null | undefined): string | null {
 export async function requestSubject(): Promise<string> {
   const guest = verifyGuestCookie((await cookies()).get(GUEST_COOKIE)?.value, env.AUTH_SECRET);
   if (guest) return `guest:${guest}`;
+  return requestIpSubject();
+}
+
+/**
+ * The client IP subject of `requestSubject()` (`ip:<address>` or `ip:unknown`), whatever cookies the
+ * request carries: for budgets a fresh guest cookie must not reset (#87: sign-in per client, sign-up).
+ */
+export async function requestIpSubject(): Promise<string> {
   const h = await headers();
   const forwarded = h.get("x-forwarded-for");
   const hop = forwarded ? forwarded.split(",").at(-TRUSTED_PROXY_HOPS) : h.get("x-real-ip");

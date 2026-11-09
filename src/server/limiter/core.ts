@@ -51,9 +51,9 @@ export const LIMITS = {
   "mint-race-token": { max: 10, windowMs: 60_000 },
   "mint-race-token-new-guest": { max: 120, windowMs: 60_000 },
   "lobby-codes": { max: 20, windowMs: 60_000 },
-  // Account entry points (#87, ADR 0009 "Hardening"): sign-in 30 per 15 min per client, then 10 per
+  // Account entry points (#87, ADR 0009 "Hardening"): sign-in 30 per 15 min per client IP, then 10 per
   // 15 min per account (`signin:<usernameNormalized>`, counted only when the client was admitted; the
-  // action and the Auth.js credentials callback both spend them); sign-up 10 per hour per client;
+  // action and the Auth.js credentials callback both spend them); sign-up 10 per hour per client IP;
   // avatar upload 5 per minute per viewer (`user:<id>`).
   "sign-in": { max: 30, windowMs: 15 * 60_000 },
   "sign-in-account": { max: 10, windowMs: 15 * 60_000 },

@@ -1,8 +1,11 @@
 import "server-only";
 import {
   openRoomResponseSchema,
+  roomStatusResponseSchema,
   type OpenRoomRequest,
   type OpenRoomResponse,
+  type RoomStatusRequest,
+  type RoomStatusResponse,
 } from "@fifth-copy/protocol";
 import { internalHeaders } from "./sign";
 
@@ -13,6 +16,8 @@ export type InternalCallResult<T> =
 
 export type InternalApiClient = {
   openRoom(request: OpenRoomRequest): Promise<InternalCallResult<OpenRoomResponse>>;
+  /** Which of these lobbies have a live room, its phase and desk counts (#806). Read only. */
+  roomStatus(request: RoomStatusRequest): Promise<InternalCallResult<RoomStatusResponse>>;
 };
 
 type ClientOptions = {
@@ -61,5 +66,7 @@ export function createInternalApiClient({
   return {
     openRoom: (request) =>
       post("/internal/rooms", request, (json) => openRoomResponseSchema.parse(json)),
+    roomStatus: (request) =>
+      post("/internal/rooms/status", request, (json) => roomStatusResponseSchema.parse(json)),
   };
 }

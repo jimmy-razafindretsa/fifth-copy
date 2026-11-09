@@ -50,3 +50,37 @@ describe("race-server Railway deploy config (#704 C2)", () => {
     ]);
   });
 });
+
+// #733 C5: the worker service (ADR 0011, 0019 amendment). It listens on nothing, so no health check
+// and no domain; one replica (the advisory locks would also make a second one safe); a draining time
+// so SIGTERM lets the running job finish (src/worker/main.ts).
+describe("worker Railway config (#733 C5)", () => {
+  const worker = JSON.parse(readFileSync("src/worker/railway.json", "utf8")) as {
+    $schema: string;
+    build: Record<string, unknown>;
+    deploy: Record<string, unknown>;
+  };
+  const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+    scripts: Record<string, string>;
+  };
+
+  it("builds and starts the worker scripts of the web package", () => {
+    expect(worker.$schema).toBe("https://railway.com/railway.schema.json");
+    expect(worker.build.buildCommand).toBe("npm run build:worker");
+    expect(worker.deploy.startCommand).toBe("npm run start:worker");
+    expect(pkg.scripts["start:worker"]).toBe("node dist/worker/main.mjs");
+  });
+
+  it("exposes nothing: no health check path, one replica, a draining time for the running job", () => {
+    expect(worker.deploy.healthcheckPath).toBeUndefined();
+    expect(worker.deploy.numReplicas).toBe(1);
+    expect(typeof worker.deploy.drainingSeconds).toBe("number");
+    expect(worker.deploy.drainingSeconds as number).toBeGreaterThanOrEqual(60);
+  });
+
+  it("rebuilds when worker, job or server code changes", () => {
+    expect(worker.build.watchPatterns).toEqual(
+      expect.arrayContaining(["src/worker/**", "src/features/**", "src/server/**", "prisma/**"]),
+    );
+  });
+});

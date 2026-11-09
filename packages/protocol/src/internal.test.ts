@@ -18,6 +18,9 @@ import {
   internalRaceResultSchema,
   MAX_OVERLAY_WORDS,
   MAX_RESULTS_PER_REQUEST,
+  MAX_ROOM_STATUS_IDS,
+  roomStatusRequestSchema,
+  roomStatusResponseSchema,
 } from "./index";
 
 const v = PROTOCOL_VERSION;
@@ -301,5 +304,83 @@ describe("internal API", () => {
     ["persisted missing raceId", raceResultsResponseSchema, { v, persisted: [1] }, false],
   ] as const)("%s", (_, schema, payload, ok) => {
     expect(schema.safeParse(payload).success).toBe(ok);
+  });
+});
+
+describe("room status lookup (#806 C1)", () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `lob_${i}`);
+  const room = { lobbyId: "lob_1", phase: "waiting", typists: 2, bots: 1, seats: 30 };
+
+  it("caps a lookup at 50 lobby ids", () => {
+    expect(MAX_ROOM_STATUS_IDS).toBe(50);
+  });
+
+  it.each([
+    ["request example", roomStatusRequestSchema, { v, lobbyIds: ["lob_1"] }, true],
+    ["request 50 ids", roomStatusRequestSchema, { v, lobbyIds: ids(50) }, true],
+    ["request 51 ids", roomStatusRequestSchema, { v, lobbyIds: ids(51) }, false],
+    ["request no id", roomStatusRequestSchema, { v, lobbyIds: [] }, false],
+    ["request empty id", roomStatusRequestSchema, { v, lobbyIds: [""] }, false],
+    ["request oversize id", roomStatusRequestSchema, { v, lobbyIds: ["l".repeat(129)] }, false],
+    ["request missing ids", roomStatusRequestSchema, { v }, false],
+    ["request previous v", roomStatusRequestSchema, { v: v - 1, lobbyIds: ["lob_1"] }, false],
+    ["response example", roomStatusResponseSchema, { v, rooms: [room] }, true],
+    ["response no room found", roomStatusResponseSchema, { v, rooms: [] }, true],
+    ["response previous v", roomStatusResponseSchema, { v: v - 1, rooms: [room] }, false],
+    [
+      "response every phase",
+      roomStatusResponseSchema,
+      {
+        v,
+        rooms: (["waiting", "countdown", "running", "ended"] as const).map((phase) => ({
+          ...room,
+          phase,
+        })),
+      },
+      true,
+    ],
+    [
+      "response unknown phase",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, phase: "racing" }] },
+      false,
+    ],
+    [
+      "response negative typists",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, typists: -1 }] },
+      false,
+    ],
+    [
+      "response fractional bots",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, bots: 1.5 }] },
+      false,
+    ],
+    ["response no seats", roomStatusResponseSchema, { v, rooms: [{ ...room, seats: 0 }] }, false],
+    [
+      "response missing lobbyId",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, lobbyId: undefined }] },
+      false,
+    ],
+    [
+      "response 51 rooms",
+      roomStatusResponseSchema,
+      { v, rooms: ids(51).map((lobbyId) => ({ ...room, lobbyId })) },
+      false,
+    ],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("a room entry carries only lobbyId, phase and the desk counts (no names, users or settings)", () => {
+    const parsed = roomStatusResponseSchema.parse({
+      v,
+      rooms: [{ ...room, hostUserId: "usr_1", names: ["Ada"], settings: {} }],
+    });
+    expect(Object.keys(parsed.rooms[0]!).sort()).toEqual(
+      ["bots", "lobbyId", "phase", "seats", "typists"].sort(),
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { cookieFlags, type NodeEnv } from "./cookies";
 
 // Guest identity cookie (ADR 0009). Format fixed by #32:
 // `<userId>.<base64url(HMAC-SHA256(userId, AUTH_SECRET))>`. Pure: no IO, the
@@ -31,12 +32,6 @@ export function verifyGuestCookie(value: string | undefined, secret: string): st
   return timingSafeEqual(given, expected) ? userId : null;
 }
 
-export function guestCookieOptions(nodeEnv: "development" | "test" | "production") {
-  return {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: ONE_YEAR_SECONDS,
-    secure: nodeEnv === "production",
-  };
+export function guestCookieOptions(nodeEnv: NodeEnv) {
+  return { ...cookieFlags(nodeEnv), maxAge: ONE_YEAR_SECONDS };
 }

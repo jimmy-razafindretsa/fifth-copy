@@ -82,7 +82,7 @@ The problem has ten independent decisions. For each, the options were scored aga
 ### 2.8 Hosting
 | Option | Verdict |
 |---|---|
-| **Railway: web, race-server, Postgres, Redis as four services, built from `main` on push** (ADR 0019) | No server to run or patch; TLS, restarts and deploys handled; race-server deploys drain on SIGTERM instead of deploy-when-idle (#704) |
+| **Railway: web, race-server, worker, Postgres, Redis as five services, built from `main` on push** (ADR 0019) | No server to run or patch; TLS, restarts and deploys handled; race-server deploys drain on SIGTERM instead of deploy-when-idle (#704) |
 | One VPS, Docker Compose, Caddy, CI-built images, deploy-when-idle for the race server (ADR 0012, superseded by 0019) | Full control, but someone has to run the server; the free VPS could not be created |
 | Vercel web + VPS sockets | Two hosts, cross-origin cookies, data on a third party |
 | Kubernetes | Too much surface |
@@ -104,7 +104,7 @@ The problem has ten independent decisions. For each, the options were scored aga
 ### 2.11 The composite
 The chosen architecture stitches the bold rows together:
 
-> **A feature-sliced Next.js modular monolith** (web + worker entry points) that owns identity, lobbies, texts, results, statistics and all persistence, **plus one server-authoritative Socket.IO race service** that owns live rooms in Redis, **both running the same pure race engine** from a shared workspace package and speaking a **single zod-declared protocol**, deployed as **four Railway services** (web, race-server, Postgres, Redis; ADR 0019) built from `main` on push.
+> **A feature-sliced Next.js modular monolith** (web + worker entry points) that owns identity, lobbies, texts, results, statistics and all persistence, **plus one server-authoritative Socket.IO race service** that owns live rooms in Redis, **both running the same pure race engine** from a shared workspace package and speaking a **single zod-declared protocol**, deployed as **five Railway services** (web, race-server, worker, Postgres, Redis; ADR 0019) built from `main` on push.
 
 It is the best fit because every force in section 1 maps to exactly one mechanism, no mechanism exists without a force, and each container can be built and verified by an agent in isolation: the engine by unit tests, the race server by bot rooms, the web app by Playwright, the deploy by the smoke script.
 
@@ -137,7 +137,7 @@ flowchart TB
   subgraph vps["Railway project (ADR 0019)"]
     web["web: Next.js 16<br/>routes, server actions, Auth.js, Prisma<br/>internal API /api/internal/*"]
     race["race-server: Node + Socket.IO<br/>rooms, authority (@fifth-copy/engine),<br/>bots, bonuses, presence, anti-cheat"]
-    worker["worker: src/worker (planned, no Railway service yet)<br/>rollups, purges, expiry"]
+    worker["worker: src/worker (running, #733; no domain, no port)<br/>advisory-lock scheduler, JobRun<br/>heartbeat; rollups, purges, expiry"]
     pg[("PostgreSQL 17<br/>system of record")]
     redis[("Redis 7<br/>live rooms, presence,<br/>resume keys, invites, limits")]
   end
@@ -160,7 +160,7 @@ Shared packages (`@fifth-copy/engine`, `@fifth-copy/protocol`) are compiled into
 |---|---|---|---|
 | **web** (root package) | Next.js 16, Node 24 | routes, layouts, server actions, route handlers, Auth.js, guest identity, lobby records, invites, text generation, race records, result persistence, statistics queries, profile, settings, privacy, i18n, theming, HUD and 3D client code, race-token minting, internal API for the race server | hold sockets; compute race state during a race |
 | **race-server** (`services/race-server`) | Node 24, Socket.IO, ioredis | live rooms and membership, host powers at runtime, countdown and clock, keystroke validation through the engine, 10 Hz snapshots, overtakes, bonuses, idle and grace timers, bots, anti-cheat flags, spectator channel, result outbox | touch Postgres or Prisma; read session cookies; generate texts; decide persistence rules |
-| **worker** (`src/worker`) | Node 24 (web image) | daily char-stat rollup, keystroke purge, lobby expiry, guest retention, deletion follow-ups | serve HTTP; hold sockets |
+| **worker** (`src/worker`, running since #733) | Node 24, Railway service `worker` from the repo root (`npm run start:worker`, esbuild bundle of `src/worker/main.ts`, no domain) | the job scheduler (`scheduler.ts`: one run per job across replicas through `pg_try_advisory_lock`, every run in `JobRun`), the job list (`registry.ts`, `heartbeat` every 5 min today); next: daily char-stat rollup, keystroke purge, lobby expiry, guest retention, deletion follow-ups | serve HTTP or listen on any port; hold sockets; import `src/` outside `src/worker`, `src/features/*/jobs`, `src/server` and `src/env.ts` (dependency-cruiser `worker-imports`) |
 | **postgres** | PostgreSQL 17 | all durable data (`prisma/schema/*.prisma`) | live state |
 | **redis** | Redis 7, no persistence | rooms, presence, resume keys, invite tokens, rate limits, result outbox; every key has a TTL | anything that must survive a restart |
 | Railway edge | Railway (ADR 0019) | TLS and one public domain per app (no reverse proxy of ours) | auth, CSP (web sets headers) |
@@ -292,7 +292,7 @@ Projector and phones join the room on the `spectator` channel with a `role: spec
 
 ### 8.2 Features and their public API (`index.ts`)
 - `identity`: `getViewer`, `requireViewer`, `ensureGuest`, `signUp`, `signIn`, `signOut`, `redeemRecoveryCode`, `mergeGuestInto`, `updatePreferences`, `uploadAvatar`, `deleteMyData`.
-- `lobby`: `createLobby`, `joinByCode`, `consumeInvite`, `createInvite`, `updateSettings` (host only), `mintRaceToken`, `openRoom`/`closeRoom` (internal calls), `recordHostTransfer`.
+- `lobby`: `createLobby`, `joinByCode`, `consumeInvite`, `createInvite`, `updateSettings` (host only), `mintRaceToken`, `openRoom`/`closeRoom` (internal calls), `recordHostTransfer`; `server.ts`: `listOpenLobbies` (public rooms joinable now, asked of the race server through `POST /internal/rooms/status`, #806).
 - `texts`: `generateRaceText(settings)` (exact word count, accents, practice letters, numbers/symbols/punctuation, difficulty), `isClean(text)`; server-only through `server.ts` (ADR 0021): `loadCorpusProvider(db, language)` (#346, `Text` rows or the content files). `importCorpus` lives in `scripts/import-texts.ts` (also run by `prisma/seed.ts`).
 - `race` (client): `RaceClient`, `useRaceStore`, HUD components (telex, sheet, keyboard, nixie counters, race card, stamps, sabotage tray, abandon), spectator views.
 - `race-3d` (client, lazy): `RaceScene` (mounts `/3d/seat.html` in an `EmbedFrame`, driven by `fc-race-*` messages, [ADR 0017](../adr/0017-seat-scene-delivery.md)), `OverviewScene`, `benchmarkGpu` (inside the embed); the scene reads only `selectSceneView` from `@/features/race`.
@@ -366,27 +366,29 @@ flowchart LR
   subgraph rw["Railway project (ADR 0019)"]
     web["web :8080<br/>pre-deploy: prisma migrate deploy"]
     race["race-server :4000"]
+    worker["worker (no port)<br/>npm run start:worker"]
     web --> pg[("Postgres")]
+    worker --> pg
     race --> redis[("Redis")]
     web -->|private network| race
   end
   railway --> rw
 ```
-Environments: local (`npm run dev`, `npm run dev:race`, compose Postgres + Redis), CI (service containers), production (Railway project, ADR 0019). A preview/staging environment is optional (another Railway environment).
+Environments: local (`npm run dev`, `npm run dev:race`, `npm run dev:worker`, compose Postgres + Redis), CI (service containers), production (Railway project, ADR 0019). A preview/staging environment is optional (another Railway environment).
 
 ### 11.2 Environment variables (names only)
 | Name | Process | Purpose |
 |---|---|---|
 | `DATABASE_URL`, `TEST_DATABASE_URL` | web, worker | Postgres (ADR 0002, 0003) |
-| `REDIS_URL` | race-server, web | live state; web (required in production, #716): shared rate limiter (fails open) and internal-request nonce store `web:internal:nonce:*` (fails closed) (ADR 0020) |
+| `REDIS_URL` | race-server, web, worker | live state; web (required in production, #716): shared rate limiter (fails open) and internal-request nonce store `web:internal:nonce:*` (fails closed) (ADR 0020) |
 | `WEB_RATE_LIMIT`, `PLAYWRIGHT_E2E` | web | `off` turns only the web rate limiter off; in production only with `PLAYWRIGHT_E2E=1` (set by `playwright.config.ts`); both unset on Railway (ADR 0020) |
 | `RACE_SERVER_PORT` | race-server | listen port |
 | `RACE_DRAIN_CAP_S` | race-server | longest drain after SIGTERM, default 900 (#704, ADR 0019) |
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS`, `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` | race-server (Railway) | Railway's SIGTERM-to-SIGKILL time (930) and overlap (0); the race server warns at boot when the draining time is below its cap (#704) |
 | `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (the race-server's own Railway domain in production, ADR 0019) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |
-| `RACE_TOKEN_SECRET` | web, race-server | race tokens and internal HMAC |
-| `AUTH_SECRET`, `AUTH_GITHUB_ID/SECRET`, `AUTH_DISCORD_ID/SECRET` | web | Auth.js |
+| `RACE_TOKEN_SECRET` | web, race-server, worker (validated by `src/env.ts`, unused) | race tokens and internal HMAC |
+| `AUTH_SECRET`, `AUTH_GITHUB_ID/SECRET`, `AUTH_DISCORD_ID/SECRET` | web (`AUTH_SECRET` also worker: validated by `src/env.ts`) | Auth.js |
 | `NEXT_PUBLIC_APP_URL` | web | absolute links |
 | `AVATAR_DIR` | web | avatar files root (ADR 0014); default `.data/avatars`, `/data/avatars` volume in production |
 

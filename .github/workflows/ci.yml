@@ -98,6 +98,8 @@ jobs:
         run: sed -E 's/\x1b\[[0-9;]*m//g' .cache/check/unit.log | grep -E '^ *(Test Files|Tests) '
       - name: Race server bundles (docs/adr/0006)
         run: npm run build:race
+      - name: Worker bundles (docs/adr/0011, #733)
+        run: npm run build:worker
       - name: Show failing logs
         if: failure()
         run: tail -n 60 .cache/check/*.log
@@ -207,8 +209,12 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: scripts/retry.sh 2 150 npx playwright install chromium
         timeout-minutes: 6
+      # A killed attempt's `sudo apt-get` survives in its own session and keeps the dpkg lock, as do the
+      # runner's boot-time apt jobs: apt waits for the lock instead of failing at once (exit 100).
+      - name: apt waits for the dpkg lock
+        run: echo 'DPkg::Lock::Timeout "120";' | sudo tee /etc/apt/apt.conf.d/90-lock-timeout
       - name: Playwright OS deps
-        run: scripts/retry.sh 3 100 npx playwright install-deps chromium
+        run: scripts/retry.sh 2 150 npx playwright install-deps chromium
         timeout-minutes: 6
       - run: scripts/test-db.sh
       - run: npm run build

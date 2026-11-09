@@ -16,3 +16,10 @@ export type RaceTokenResult =
 export type SetLobbyTypeResult =
   | { ok: true }
   | { ok: false; error: "invalid" | "not-found" | "not-host" | "closed" | "rate-limited" };
+
+/** A public room a visitor can join right now (#806): counts only, never names or user ids. */
+export type OpenLobby = { code: string; typists: number; bots: number; seats: number };
+
+/** listOpenLobbies' answer (#806); the landing's open-rooms docket renders it (#807). */
+export type ListOpenLobbiesResult =
+  { ok: true; lobbies: OpenLobby[] } | { ok: false; error: "race-server-unavailable" };

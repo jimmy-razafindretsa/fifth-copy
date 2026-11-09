@@ -53,6 +53,19 @@ export const en = {
       join: "JOIN →",
       joining: "JOINING…",
     },
+    /** The open-rooms docket under the code join (#807, bible 14.1): public rooms joinable right now. */
+    rooms: {
+      title: "OPEN ROOMS",
+      live: "LIVE",
+      listName: "Open rooms",
+      loading: "Looking for open rooms…",
+      typists: { zero: "0 TYPISTS", one: "1 TYPIST", other: "{n} TYPISTS" },
+      bots: { zero: "0 BOTS", one: "1 BOT", other: "{n} BOTS" },
+      count: "{typists} · {bots}",
+      join: "JOIN →",
+      joinName: "Join room {code}",
+      empty: "NO OPEN ROOM · PRESS QUICK RACE",
+    },
     errors: {
       prefix: "RETURNED ·",
       invalidFormat: "Enter a code like KGB-4821",

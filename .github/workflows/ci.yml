@@ -98,6 +98,8 @@ jobs:
         run: sed -E 's/\x1b\[[0-9;]*m//g' .cache/check/unit.log | grep -E '^ *(Test Files|Tests) '
       - name: Race server bundles (docs/adr/0006)
         run: npm run build:race
+      - name: Worker bundles (docs/adr/0011, #733)
+        run: npm run build:worker
       - name: Show failing logs
         if: failure()
         run: tail -n 60 .cache/check/*.log

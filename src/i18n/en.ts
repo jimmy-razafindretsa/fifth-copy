@@ -647,6 +647,10 @@ export const en = {
     oauthError: {
       title: "RETURNED",
       body: "That sign-in did not go through. Try again, use your username, or play as a guest.",
+      denied: "That sign-in was not allowed. Use your username, or play as a guest.",
+      notLinked: "That account is already on another file. Sign in the way you did before.",
+      unavailable:
+        "That sign-in is not available right now. Use your username, or play as a guest.",
     },
     errors: {
       prefix: "RETURNED ·",

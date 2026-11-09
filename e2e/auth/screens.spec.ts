@@ -99,21 +99,9 @@ test.describe("auth screens (#36)", () => {
     }
   }
 
-  test("C8 a provider press returns to /sign-in with the OAuth callback error banner", async ({
+  test("C8 the Google press returns to the OAuth error banner (no provider under ADR 0009)", async ({
     page,
   }) => {
-    await page.goto("/sign-in");
-    await expect(authForm(page)).toHaveAttribute("data-hydrated", "true", {
-      timeout: HYDRATION_WAIT,
-    });
-    await page.getByRole("button", { name: "CONTINUE WITH GITHUB" }).click();
-    await expect(page).toHaveURL(/\/sign-in\?error=/, { timeout: HYDRATION_WAIT });
-    await expect(
-      page.getByRole("alert").filter({ hasText: "That sign-in did not go through" }),
-    ).toBeVisible();
-  });
-
-  test("C8 the Google press fails the same way until #49 wires the provider", async ({ page }) => {
     await page.goto("/sign-up");
     await expect(authForm(page)).toHaveAttribute("data-hydrated", "true", {
       timeout: HYDRATION_WAIT,

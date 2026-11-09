@@ -70,7 +70,16 @@ export default defineConfig({
           // REDIS_URL stays inherited: the production build requires it for the internal nonce
           // store (#716), which the race server's calls then exercise end to end.
           // PLAYWRIGHT_E2E marks this run: src/env.ts refuses WEB_RATE_LIMIT=off in production otherwise.
-          env: { WEB_RATE_LIMIT: "off", PLAYWRIGHT_E2E: "1" },
+          // Placeholder OAuth apps (#49): GitHub and Discord register, so /sign-in shows their buttons and
+          // e2e/auth/oauth.spec.ts intercepts the authorize redirect; no provider is ever reached.
+          env: {
+            WEB_RATE_LIMIT: "off",
+            PLAYWRIGHT_E2E: "1",
+            AUTH_GITHUB_ID: "e2e-github-client",
+            AUTH_GITHUB_SECRET: "e2e-github-placeholder",
+            AUTH_DISCORD_ID: "e2e-discord-client",
+            AUTH_DISCORD_SECRET: "e2e-discord-placeholder",
+          },
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
         },

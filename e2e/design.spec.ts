@@ -802,11 +802,8 @@ test.describe("#26 stamps", () => {
   test("C6 Replay remounts the stamp", async ({ page }) => {
     await page.goto("/design");
     const demo = page.locator("[data-stamp-demo]");
-    await page.waitForFunction(() =>
-      Object.keys(document.querySelector("[data-stamp-demo]") ?? {}).some((k) =>
-        k.startsWith("__reactFiber"),
-      ),
-    );
+    // the demo sets "ready" after its hydration commit (#822); a fiber key alone appears mid-hydration
+    await expect(demo).toHaveAttribute("data-stamp-demo", "ready");
     await demo.locator("[data-stamp-tone]").evaluate((el) => el.setAttribute("data-old", ""));
     await demo.getByRole("button", { name: "Replay" }).click();
     await expect(demo).toHaveAttribute("data-stamp-run", "1");

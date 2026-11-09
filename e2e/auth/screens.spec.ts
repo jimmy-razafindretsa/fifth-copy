@@ -99,19 +99,7 @@ test.describe("auth screens (#36)", () => {
     }
   }
 
-  test("C8 the Google press returns to the OAuth error banner (no provider under ADR 0009)", async ({
-    page,
-  }) => {
-    await page.goto("/sign-up");
-    await expect(authForm(page)).toHaveAttribute("data-hydrated", "true", {
-      timeout: HYDRATION_WAIT,
-    });
-    await page.getByRole("button", { name: "CONTINUE WITH GOOGLE" }).click();
-    await expect(page).toHaveURL(/\/sign-in\?error=OAuthSignin/, { timeout: HYDRATION_WAIT });
-    await expect(
-      page.getByRole("alert").filter({ hasText: "That sign-in did not go through" }),
-    ).toBeVisible();
-  });
+  // The Google press now starts Google's OAuth flow (#828, ADR 0009 amendment): e2e/auth/oauth.spec.ts.
 
   test("C9 every form state is on /design", async ({ page }) => {
     await page.goto("/design");

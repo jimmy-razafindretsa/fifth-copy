@@ -134,6 +134,8 @@ describe("the status slot, phase by phase (#561 C4)", () => {
     ["no-room", "This room is no longer open."],
     ["in-progress", "This race started without you."],
     ["not-found", "This race is not on file."],
+    // a spectator past the room's cap (#616): its own sentence (#678)
+    ["room-full", "This room has reached its spectator limit."],
     ["bad-token", "Something jammed. Try again."],
     ["version", "Something jammed. Try again."],
     ["generic", "Something jammed. Try again."],

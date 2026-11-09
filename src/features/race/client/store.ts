@@ -37,12 +37,14 @@ export type RacePhase = "connecting" | Phase | "reconnecting" | "lost";
 export type RaceTokenError = "not-found" | "closed" | "generic";
 
 /**
- * Why the page gave up: a handshake refusal (`transport` only reconnects), a token error, or
+ * Why the page gave up: a handshake refusal (`transport` only reconnects), a token error,
  * `room-lost` (#235 C4): the room went away under a seated page (a voided race after a server restart
- * or a Redis loss, #204, or a reconnect answered `no-room`).
+ * or a Redis loss, #204, or a reconnect answered `no-room`), or `server-disconnect` (#661): the race
+ * server closed the socket (`io server disconnect`: a join refused after the handshake, an abusive
+ * client), which socket.io never reconnects.
  */
 export type RaceLostReason =
-  Exclude<ConnectErrorReason, "transport"> | RaceTokenError | "room-lost";
+  Exclude<ConnectErrorReason, "transport"> | RaceTokenError | "room-lost" | "server-disconnect";
 
 /** How long the tray shows a refused play (`IMMUNE`, #236 C1). */
 export const REFUSAL_SHOW_MS = 1_200;
@@ -50,8 +52,8 @@ export const REFUSAL_SHOW_MS = 1_200;
 /**
  * Your desk's side of the bonus economy (#236, ADR 0016), as the server told it: the store keeps it and
  * decides nothing (awarding, cooldown and immunity are #190's, in the engine and on the server). Times
- * are this device's clock. Reset by every `welcome` and `countdown` (a reconnect loses the held card,
- * the cooldown and the blur until the next `bonus-earned`: only the overlay comes back, `welcome.overlay`).
+ * are this device's clock. Seeded by every `welcome` from `welcome.bonus` (#768: a reconnect gets back
+ * the held card, the cooldown end and the blur end, race ms converted here), reset by every `countdown`.
  */
 export type BonusState = {
   /** The card `bonus-earned` dealt you; `null` once `bonus-sent` says you played it. */
@@ -155,6 +157,11 @@ export type RaceState = {
   abandoning: boolean;
   /** Abandon intents sent so far on this page (never reset): `sendAbandons` emits one per step. */
   abandons: number;
+  /**
+   * The line was cut (#661 C2): from the drop until the next `welcome`, input is off and no `keys` batch
+   * leaves (`createTyping` holds them), so none reaches the server before the reconnect's seat exists.
+   */
+  keysHeld: boolean;
 };
 
 /**
@@ -207,6 +214,10 @@ export type RaceEvent =
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
+  /** The line dropped (`transport close`, `ping timeout`...: #661 C2), before socket.io's first retry. */
+  | { type: "disconnected" }
+  /** The server closed the socket (`io server disconnect`, #661 C1): final. */
+  | { type: "server-disconnect" }
   | { type: "token-error"; error: RaceTokenError };
 
 export const initialRaceState: RaceState = {
@@ -237,6 +248,7 @@ export const initialRaceState: RaceState = {
   lampTarget: null,
   abandoning: false,
   abandons: 0,
+  keysHeld: false,
 };
 
 /** No exit, no warning, no lamp, nothing in flight: a (re)connect or a new race (#233). */
@@ -320,6 +332,24 @@ function predictionAfterWelcome(state: RaceState, w: Welcome): Prediction | null
   return prediction.withText(typedText(w.race.text, w.overlay)).reconcile(w.state, prediction.sent);
 }
 
+/**
+ * Your bonus after a welcome (#768): the server's `welcome.bonus` of your desk, its race ms (since
+ * `t0`, server clock) moved to this device's clock with the welcome's `offset`, like `bonus-hit`. No
+ * play is in flight and no refusal shows after a (re)connect; the play counter never goes back.
+ */
+function bonusFromWelcome(w: Welcome, offset: number, plays: number): BonusState {
+  const { bonus, race } = w;
+  if (!bonus || !race) return { ...NO_BONUS, plays };
+  const device = (ms: number | null) => (ms === null ? null : race.t0 + ms - offset);
+  return {
+    ...NO_BONUS,
+    card: bonus.card,
+    cooldownUntil: device(bonus.cooldownUntil),
+    blurUntil: device(bonus.blurUntil),
+    plays,
+  };
+}
+
 export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   // Lost is terminal: the room refused this viewer and nothing later revives the page (the lost line
   // links back to the waiting room).
@@ -328,6 +358,10 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     case "welcome": {
       const w = event.payload;
       const prediction = predictionAfterWelcome(state, w);
+      const offset =
+        event.receivedAt === undefined
+          ? state.clockOffset
+          : clockOffset(w.serverNow, event.receivedAt);
       const next: RaceState = {
         phase: w.room.phase,
         lost: null,
@@ -341,10 +375,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         overlay: w.overlay,
         resumeKey: w.resumeKey,
         serverNow: w.serverNow,
-        clockOffset:
-          event.receivedAt === undefined
-            ? state.clockOffset
-            : clockOffset(w.serverNow, event.receivedAt),
+        clockOffset: offset,
         // a connect starts from the server's state of your desk; a reconnect reconciles onto it (#235)
         prediction,
         desks: state.desks,
@@ -358,9 +389,11 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         stampSeq: state.stampSeq,
         ending: null,
         endedAt: null,
-        bonus: { ...NO_BONUS, plays: state.bonus.plays },
+        bonus: bonusFromWelcome(w, offset, state.bonus.plays),
         ...NO_EXIT,
         abandons: state.abandons,
+        // the reconnect's seat exists: held keys may leave (#661 C2)
+        keysHeld: false,
       };
       // a reload after your exit: the server's status brings the docket back
       return withStatusExit(next);
@@ -508,15 +541,18 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     }
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
-      if (event.reason === "transport") return { ...state, phase: "reconnecting" };
+      if (event.reason === "transport") return { ...state, phase: "reconnecting", keysHeld: true };
       // a reconnect after a welcome that finds no room: the room was lost under you (#235 C4)
       if (event.reason === "no-room" && state.room !== null) return lost(state, "room-lost");
       return lost(state, event.reason);
     case "reconnecting":
-      return { ...state, phase: "reconnecting" };
+    case "disconnected":
+      return { ...state, phase: "reconnecting", keysHeld: true };
     case "reconnected":
-      // the fresh `welcome` that follows a reconnect sets the real phase
+      // the fresh `welcome` that follows a reconnect sets the real phase and lets the keys go
       return { ...state, phase: state.room?.phase ?? "connecting" };
+    case "server-disconnect":
+      return lost(state, "server-disconnect");
     case "token-error":
       return lost(state, event.error);
   }
@@ -597,10 +633,16 @@ function mayPlayAt(state: RaceState, at: number): boolean {
   );
 }
 
-/** You may type: the race runs, you have a desk, and you have not stopped (finished, asleep...). */
+/**
+ * You may type: the race runs, you have a desk, you have not stopped (finished, asleep...), and no cut
+ * line waits for its reconnect's welcome (#661 C2, bible 14.2: input is off until it).
+ */
 export function selectCanType(state: RaceState): boolean {
   return (
-    state.phase === "running" && state.prediction?.state.status === "typing" && state.exit === null
+    state.phase === "running" &&
+    state.prediction?.state.status === "typing" &&
+    state.exit === null &&
+    !state.keysHeld
   );
 }
 
@@ -842,8 +884,10 @@ export function bindRaceSocket(
       scheduleGo(payload.race.t0);
     }),
     socket.onConnectError((reason) => dispatch({ type: "connect-error", reason })),
+    socket.onTransportDisconnect(() => dispatch({ type: "disconnected" })),
     socket.onReconnecting(() => dispatch({ type: "reconnecting" })),
     socket.onReconnected(() => dispatch({ type: "reconnected" })),
+    socket.onServerDisconnect(() => dispatch({ type: "server-disconnect" })),
   ];
   return () => {
     cancelGo();

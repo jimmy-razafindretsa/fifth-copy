@@ -59,6 +59,7 @@ const welcome: Welcome = {
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: SERVER_NOW,
 };

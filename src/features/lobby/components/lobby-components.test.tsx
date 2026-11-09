@@ -98,6 +98,8 @@ describe("LobbyLiveView states", () => {
   it.each([
     ["closed", errors.closed],
     ["not-found", errors.notFound],
+    // every desk taken (#678): "All 30 desks in this room are taken."
+    ["room-full", errors.roomFull],
     ["generic", errors.generic],
   ] as const)("error %s: an InlineError line, no list", (error, message) => {
     const html = view({ ...initialLobbyState, phase: "error", error });

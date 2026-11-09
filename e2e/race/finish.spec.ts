@@ -143,6 +143,15 @@ test.describe("#240 race timer and finished waiting view", () => {
       await expect(tube(page, "timer")).toHaveText("00:00");
       await expect(tube(room.host, "timer")).toHaveText("00:00");
       await expect(room.host.getByRole("textbox", { name: "Text to type" })).toBeDisabled();
+      // #724 C1: the host never finished, yet its teleprinter keys read disabled after the end, as the
+      // finished guest's do
+      for (const p of [room.host, page]) {
+        const keys = SEAT_HUD.machine(p).locator("[data-key]");
+        expect(await keys.count()).toBeGreaterThan(30);
+        await expect(
+          SEAT_HUD.machine(p).locator('[data-key]:not([data-disabled="true"])'),
+        ).toHaveCount(0);
+      }
 
       // the DAWN REPORT ink link to the results route, which resolves
       const link = room.host.getByRole("link", { name: "DAWN REPORT →" });

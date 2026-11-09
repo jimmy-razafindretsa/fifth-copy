@@ -1,11 +1,15 @@
 import type { Member, RaceSettings } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "@/features/race";
+import type { EntryError } from "./entry-errors";
 
 /** Desks in a waiting room (spec: thirty desks, one message). */
 export const ROOM_SEATS = 30;
 
-/** Why the waiting room cannot be shown; each maps to a landing error line. */
-export type LobbyError = "not-found" | "closed" | "generic";
+/**
+ * Why the waiting room cannot be shown; each maps to a landing error line. `server-disconnect`: the race
+ * server closed a seated viewer's socket (#661), which socket.io never reconnects (the generic line).
+ */
+export type LobbyError = "not-found" | "closed" | "room-full" | "server-disconnect" | "generic";
 
 export type LobbyState = {
   /**
@@ -40,6 +44,8 @@ export type LobbyEvent =
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
+  /** The server closed the socket (`io server disconnect`, #661): final, no reconnect follows. */
+  | { type: "server-disconnect" }
   | { type: "token-error"; error: LobbyError };
 
 export const initialLobbyState: LobbyState = {
@@ -66,10 +72,20 @@ function connectError(reason: ConnectErrorReason): LobbyError | null {
     case "version":
     // A viewer seated before (a member refused later): a late joiner holds instead (#732).
     case "in-progress":
-    // Every desk taken (#732); a spectator past its cap is the late-join hold's, never the store's.
-    case "room-full":
       return "generic";
+    // Every desk taken (#732), its own sentence (#678); a spectator past its cap is the late-join
+    // hold's, never the store's.
+    case "room-full":
+      return "room-full";
   }
+}
+
+/**
+ * The landing error line of a lobby error: a server-side close reads the generic sentence (bible 14.3,
+ * the 7.4 inline error line: something jammed), so no new copy.
+ */
+export function lobbyErrorCopy(error: LobbyError | null): EntryError {
+  return error === null || error === "server-disconnect" ? "generic" : error;
 }
 
 export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
@@ -113,6 +129,13 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
     case "reconnected":
       if (state.phase === "spectating") return state;
       return { ...state, phase: state.you === null ? "loading" : "live" };
+    case "server-disconnect": {
+      // Never seated (loading, spectating): a join refused after the handshake, the late-join hold's
+      // to decide (#732). Seated: the page would wait forever, so it ends on the error line.
+      const neverSeated = state.you === null && state.phase !== "starting";
+      if (neverSeated || state.phase === "spectating") return state;
+      return { ...state, phase: "error", error: "server-disconnect" };
+    }
     case "token-error":
       return { ...state, phase: "error", error: event.error };
   }
@@ -200,6 +223,7 @@ export function bindRoomSocket(
     }),
     socket.onReconnecting(() => dispatch({ type: "reconnecting" })),
     socket.onReconnected(() => dispatch({ type: "reconnected" })),
+    socket.onServerDisconnect(() => dispatch({ type: "server-disconnect" })),
   ];
   return () => {
     for (const off of offs.splice(0)) off();

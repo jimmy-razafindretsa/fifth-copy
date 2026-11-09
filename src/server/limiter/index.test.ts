@@ -91,7 +91,43 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(verdicts[5]!.retryAfterMs).toBeLessThanOrEqual(3_600_000);
   });
 
-  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset issuance rule (#788) and the rules #90, #120 and #121 will wire", () => {
+  it("password-reset-redeem (#789): 30 per client an hour, the 31st refused with retryAfterMs", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const verdicts = [];
+    for (let i = 0; i < 31; i++) verdicts.push(await limit("password-reset-redeem", subject("rr")));
+    expect(verdicts.map((v) => v.ok)).toEqual([...Array<boolean>(30).fill(true), false]);
+    expect(verdicts[30]!.retryAfterMs).toBeGreaterThan(0);
+    expect(verdicts[30]!.retryAfterMs).toBeLessThanOrEqual(3_600_000);
+  });
+
+  it("password-reset-redeem-account (#789): 5 an hour, and clear gives the subject a fresh window", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const account = subject("reset:acct");
+    const verdicts = [];
+    for (let i = 0; i < 6; i++)
+      verdicts.push(await limit("password-reset-redeem-account", account));
+    expect(verdicts.map((v) => v.ok)).toEqual([...Array<boolean>(5).fill(true), false]);
+    const other = subject("reset:other");
+    await limit("password-reset-redeem-account", other);
+    await limit.clear("password-reset-redeem-account", account);
+    expect((await limit("password-reset-redeem-account", account)).ok).toBe(true);
+    // only that action and subject are cleared
+    const key = `${WEB_LIMITER_PREFIX}:rl:password-reset-redeem-account:${subjectKey(other)}`;
+    expect(await redis.zcard(key)).toBe(1);
+  });
+
+  it("clear fails open: no URL, or Redis down, never throws", async () => {
+    const off = make({ url: undefined, nodeEnv: "test" });
+    await expect(off.clear("password-reset-redeem-account", subject("x"))).resolves.toBeUndefined();
+    const warn = vi.fn();
+    const down = make({ url: `redis://127.0.0.1:${await closedPort()}/0`, nodeEnv: "test", warn });
+    await expect(
+      down.clear("password-reset-redeem-account", subject("x")),
+    ).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset rules (#788, #789), the recovery redeem rules (#46) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
       "clerk-outfit",
       "invite",
@@ -100,7 +136,11 @@ describe("createWebLimit (C3, real Redis)", () => {
       "mint-race-token",
       "mint-race-token-new-guest",
       "password-reset-issue",
+      "password-reset-redeem",
+      "password-reset-redeem-account",
       "recovery",
+      "recovery-redeem",
+      "recovery-redeem-account",
       "set-lobby-type",
       "sign-in",
     ]);
@@ -111,6 +151,10 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(LIMITS["clerk-outfit"]).toEqual({ max: 30, windowMs: 60_000 });
     expect(LIMITS["set-lobby-type"]).toEqual({ max: 30, windowMs: 60_000 });
     expect(LIMITS["password-reset-issue"]).toEqual({ max: 5, windowMs: 3_600_000 });
+    expect(LIMITS["password-reset-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
+    expect(LIMITS["password-reset-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
+    expect(LIMITS["recovery-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
+    expect(LIMITS["recovery-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
   });
 
   it("fails open on a closed port with one warning, never the URL", async () => {
@@ -134,6 +178,26 @@ describe("createWebLimit (C3, real Redis)", () => {
     const verdict = await limit("join-by-code", subject("slow"));
     expect(verdict.ok).toBe(true);
     expect(warn).toHaveBeenCalledWith("rate limiter unavailable, allowing", { cause: "timeout" });
+  });
+
+  it("a timed-out call is allowed, warned once per outage, and still counted when Redis answers late (#741)", async () => {
+    const warn = vi.fn();
+    const slow = make({ url: redisUrl, nodeEnv: "test", warn, timeoutMs: 0 });
+    const s = subject("late");
+    const rule = LIMITS["password-reset-issue"];
+    for (let i = 0; i < rule.max; i++) {
+      expect(await slow("password-reset-issue", s)).toEqual({ ok: true, retryAfterMs: 0 });
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith("rate limiter unavailable, allowing", { cause: "timeout" });
+    // The calls that lost the race still reach Redis: fail-open lets them through, it does not
+    // forgive them. Once they land, a limiter that waits for Redis refuses the next one.
+    const key = `${WEB_LIMITER_PREFIX}:rl:password-reset-issue:${subjectKey(s)}`;
+    await vi.waitFor(async () => expect(await redis.zcard(key)).toBe(rule.max));
+    const patient = make({ url: redisUrl, nodeEnv: "test", warn: vi.fn(), timeoutMs: 10_000 });
+    const verdict = await patient("password-reset-issue", s);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.retryAfterMs).toBeGreaterThan(0);
   });
 
   it("without a URL: every call allowed, one warning in production, none elsewhere", async () => {

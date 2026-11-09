@@ -17,7 +17,7 @@ export type Typing = {
 };
 
 export type TypingOptions = {
-  store: Pick<RaceStore, "getState" | "dispatch">;
+  store: Pick<RaceStore, "getState" | "dispatch" | "subscribe">;
   /** `RoomSocket.sendKeys`. */
   send: (batch: Keystroke[]) => void;
   timer?: RaceTimer;
@@ -31,20 +31,34 @@ export type TypingOptions = {
  * desk is not typing (`selectCanType`); the finishing key leaves at once, and a snapshot that brings
  * the desk back to typing (the server never got that key, #645) opens it again. A key the wire would
  * refuse (`keystrokeSchema`) is never applied, so every applied key is sent. Each batch sent is told
- * to the store (`sent`), which bounds what a snapshot can acknowledge.
+ * to the store (`sent`), which bounds what a snapshot can acknowledge. While a cut line waits for its
+ * reconnect's welcome (`keysHeld`, #661 C2) batches are held, not sent: socket.io would deliver its send
+ * buffer before the new seat exists, where the server drops them. The welcome reconciles them as unsent
+ * (typed again on top), then they leave in order and only then count as `sent`.
  */
 export function createTyping({ store, send, timer = deviceTimer, flushMs }: TypingOptions): Typing {
   const elapsed = () => {
     const { race, clockOffset } = store.getState();
     return race ? timer.now() + clockOffset - race.t0 : -Infinity;
   };
+  const deliver = (batch: Keystroke[]) => {
+    send(batch);
+    store.dispatch({ type: "sent", count: batch.length });
+  };
+  let held: Keystroke[][] = [];
   const batcher: KeyBatcher = createKeyBatcher(
     (batch) => {
-      send(batch);
-      store.dispatch({ type: "sent", count: batch.length });
+      if (store.getState().keysHeld) held.push(batch);
+      else deliver(batch);
     },
     { flushMs, now: elapsed, timer },
   );
+  const unsubscribe = store.subscribe(() => {
+    if (held.length === 0 || store.getState().keysHeld) return;
+    const batches = held;
+    held = [];
+    for (const batch of batches) deliver(batch);
+  });
 
   return {
     press(key) {
@@ -64,6 +78,9 @@ export function createTyping({ store, send, timer = deviceTimer, flushMs }: Typi
       // the finish leaves at once; the gate above, not a closed batcher, stops later keys (#645 C3)
       if (after.state.status !== "typing") batcher.flush();
     },
-    dispose: () => batcher.close(),
+    dispose: () => {
+      batcher.close();
+      unsubscribe();
+    },
   };
 }

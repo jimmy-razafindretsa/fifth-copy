@@ -45,6 +45,7 @@ describe("waiting room over Socket.IO (C1)", () => {
       race: null,
       state: null,
       overlay: null,
+      bonus: null,
       // #178: every welcome carries the user's resume key (32 random bytes hex).
       resumeKey: expect.stringMatching(/^[0-9a-f]{64}$/),
       serverNow: t.clock.now(),
@@ -114,6 +115,7 @@ describe("waiting room over Socket.IO (C1)", () => {
         race: null,
         state: null,
         overlay: null,
+        bonus: null,
         resumeKey: expect.stringMatching(/^[0-9a-f]{64}$/),
       });
       expect(Math.abs(welcome.serverNow - t.clock.now())).toBeLessThanOrEqual(1_000);

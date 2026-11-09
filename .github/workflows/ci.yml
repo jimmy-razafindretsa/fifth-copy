@@ -193,15 +193,23 @@ jobs:
           cache: npm
       - run: npm ci
       # Chromium from a cache keyed by the installed @playwright/test version (#602): uncached downloads
-      # sometimes stalled until the shard timeout. On a hit the install step only installs OS packages.
+      # sometimes stalled until the shard timeout. The download runs only on a miss; OS packages (apt,
+      # the stall seen in #819) install every run. Both go through scripts/retry.sh: each attempt has
+      # its own timeout, so a stall is killed and retried inside the shard (scripts/ci-workflow.test.ts).
       - id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - id: playwright-cache
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - run: npx playwright install --with-deps chromium
-        timeout-minutes: 5
+      - name: Chromium download (cache miss only)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: scripts/retry.sh 2 150 npx playwright install chromium
+        timeout-minutes: 6
+      - name: Playwright OS deps
+        run: scripts/retry.sh 3 100 npx playwright install-deps chromium
+        timeout-minutes: 6
       - run: scripts/test-db.sh
       - run: npm run build
       - run: npm run build:race

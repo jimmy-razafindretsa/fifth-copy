@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
@@ -243,7 +244,8 @@ describe("CI e2e shards install Chromium from a cache (card #602)", () => {
   const at = (s: Step | undefined) => (s ? steps.indexOf(s) : -1);
   const version = steps.find((s) => s.run?.includes("@playwright/test/package.json"));
   const cache = steps.find((s) => s.uses?.startsWith("actions/cache@"));
-  const install = steps.find((s) => s.run === "npx playwright install --with-deps chromium");
+  // #819 split the old `install --with-deps` step: browser download (cache miss) + OS deps (retried).
+  const install = steps.find((s) => s.run?.includes("playwright install-deps chromium"));
 
   it("C1 a step with an id writes the installed @playwright/test version to $GITHUB_OUTPUT", () => {
     expect(version?.id).toBeTruthy();
@@ -260,7 +262,7 @@ describe("CI e2e shards install Chromium from a cache (card #602)", () => {
     expect(cache?.with?.key).toContain(`steps.${version?.id}.outputs.version`);
   });
 
-  it("C1 the cache is restored after the version step and before the unchanged install step", () => {
+  it("C1 the cache is restored after the version step and before the install steps", () => {
     expect(install).toBeDefined();
     expect(at(version)).toBeGreaterThanOrEqual(0);
     expect(at(version)).toBeLessThan(at(cache));
@@ -269,6 +271,87 @@ describe("CI e2e shards install Chromium from a cache (card #602)", () => {
 
   it("C1 a stalled install fails fast instead of eating the shard's time budget", () => {
     expect(install?.["timeout-minutes"]).toBeGreaterThan(0);
-    expect(install?.["timeout-minutes"]).toBeLessThanOrEqual(5);
+    expect(install?.["timeout-minutes"]).toBeLessThanOrEqual(6);
+  });
+});
+
+// Card #819: on a browser-cache hit the shard only installs OS packages, and that apt step (the stall
+// seen on PRs #810-#817) runs under scripts/retry.sh: each attempt has its own timeout and a stalled
+// attempt is killed and retried inside the shard instead of eating the step timeout once.
+describe("CI e2e shards retry a stalled Playwright dependency install (card #819)", () => {
+  type ShardJob = Job & { strategy?: { matrix?: { shard?: unknown } } };
+  const shard = Object.values(workflow.jobs).find(
+    (job) => (job as ShardJob).strategy?.matrix?.shard,
+  );
+  const steps = shard?.steps ?? [];
+  const cache = steps.find((s) => s.uses?.startsWith("actions/cache@"));
+  const pwSteps = steps.filter((s) => /playwright install/.test(s.run ?? ""));
+  const download = pwSteps.find((s) => /playwright install chromium/.test(s.run ?? ""));
+  const deps = pwSteps.find((s) => /playwright install-deps chromium/.test(s.run ?? ""));
+  const retry = (s: Step | undefined) =>
+    /^scripts\/retry\.sh (\d+) (\d+) /
+      .exec(s?.run ?? "")
+      ?.slice(1)
+      .map(Number) ?? [];
+
+  it("C1 no step runs the full `playwright install --with-deps` path", () => {
+    expect(pwSteps.length).toBeGreaterThan(0);
+    for (const s of pwSteps) expect(s.run).not.toContain("--with-deps");
+  });
+
+  it("C1 the browser download runs only on a cache miss", () => {
+    expect(cache?.id).toBeTruthy();
+    expect(download?.if?.replace(/\s+/g, " ")).toBe(
+      `steps.${cache?.id}.outputs.cache-hit != 'true'`,
+    );
+  });
+
+  it("C1 OS deps are installed by their own step on every run (hit or miss)", () => {
+    expect(deps).toBeDefined();
+    expect(deps?.if).toBeUndefined();
+    expect(steps.indexOf(cache!)).toBeLessThan(steps.indexOf(deps!));
+  });
+
+  it.each([
+    ["download", download],
+    ["OS deps", deps],
+  ])("C2 the %s step retries with a per-attempt timeout inside its step timeout", (_n, step) => {
+    const [attempts, seconds] = retry(step);
+    expect(attempts).toBeGreaterThanOrEqual(2);
+    expect(seconds).toBeGreaterThan(0);
+    // every attempt fits in the step budget, with a minute of slack for kill + backoff
+    expect(attempts! * seconds!).toBeLessThanOrEqual(((step?.["timeout-minutes"] ?? 0) - 1) * 60);
+  });
+
+  const run = (args: string[], timeout = 20_000) =>
+    spawnSync("scripts/retry.sh", args, {
+      cwd: root,
+      encoding: "utf8",
+      timeout,
+      env: { ...process.env, RETRY_BACKOFF_SECONDS: "0" },
+    });
+
+  it("C2 retry.sh kills a stalled attempt at its timeout and succeeds on the retry", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "retry-"));
+    const mark = path.join(dir, "first");
+    // first attempt stalls (sleeps past the 1 s per-attempt timeout), second succeeds at once
+    const cmd = `if [ -e ${mark} ]; then echo ok; else touch ${mark}; sleep 30; fi`;
+    const t0 = Date.now();
+    const r = run(["2", "1", "bash", "-c", cmd]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("ok");
+    expect(r.stderr).toMatch(/attempt 1\/2/);
+    expect(Date.now() - t0).toBeLessThan(15_000);
+  }, 20_000);
+
+  it("C2 retry.sh fails after the last attempt with the command's failure", () => {
+    const r = run(["3", "5", "bash", "-c", "echo try >&2; exit 7"]);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr.match(/^try$/gm)?.length).toBe(3);
+  });
+
+  it("C2 retry.sh rejects a missing attempt count or timeout", () => {
+    expect(run(["x", "5", "true"]).status).toBe(2);
+    expect(run(["2"]).status).toBe(2);
   });
 });

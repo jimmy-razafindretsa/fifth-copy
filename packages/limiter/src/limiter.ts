@@ -36,6 +36,11 @@ export type WindowLimiter = Limiter & {
    * without counting one and without writing anything. Rejects when Redis fails.
    */
   count(key: string, windowMs: number, now?: number): Promise<number>;
+  /**
+   * Forgets every call counted for `key` (#789: a new reset code clears its account's redeem
+   * budget), so the next `limit` starts a fresh window. Rejects when Redis fails.
+   */
+  clear(key: string): Promise<void>;
 };
 
 /**
@@ -104,6 +109,9 @@ redis.call('PEXPIRE', budget, window)
 return { 0, 0, tonumber(oldest[2]) + window - now }
 `;
 
+/** KEYS[1] = `${prefix}:rl:${key}`; deletes it. Returns the number of keys removed (0 or 1). */
+export const CLEAR_LUA = `return redis.call('DEL', KEYS[1])`;
+
 const isPositiveInt = (n: number) => Number.isSafeInteger(n) && n > 0;
 
 export function createLimiter(redis: EvalClient, opts: { prefix: string }): WindowLimiter {
@@ -148,6 +156,10 @@ export function createLimiter(redis: EvalClient, opts: { prefix: string }): Wind
         member(at),
       );
       return toResult(reply, rule);
+    },
+    async clear(key) {
+      if (!key) throw new RangeError("limiter key must not be empty");
+      await redis.eval(CLEAR_LUA, 1, `${opts.prefix}:rl:${key}`);
     },
     async count(key, windowMs, now = Date.now()) {
       if (!key) throw new RangeError("limiter key must not be empty");

@@ -92,6 +92,12 @@ export interface RoomSocket {
    * join the registry refused after the handshake passed ends this way, before any `welcome`.
    */
   onServerDisconnect(cb: () => void): Off;
+  /**
+   * The line dropped under this socket (`transport close`, `transport error`, `ping timeout`, `parse
+   * error`, #661): socket.io reconnects it by itself, but only fires `reconnect_attempt` after its first
+   * delay. Neither the server's close nor this client's own `close()` fires it.
+   */
+  onTransportDisconnect(cb: () => void): Off;
   onReconnecting(cb: (attempt: number) => void): Off;
   onReconnected(cb: (attempt: number) => void): Off;
   /**
@@ -275,6 +281,10 @@ export function connectToRoom(
     onServerDisconnect: (cb) =>
       listen(socket, "disconnect", (reason: unknown) => {
         if (reason === "io server disconnect") cb();
+      }),
+    onTransportDisconnect: (cb) =>
+      listen(socket, "disconnect", (reason: unknown) => {
+        if (reason !== "io server disconnect" && reason !== "io client disconnect") cb();
       }),
     onReconnecting: (cb) =>
       listen(socket.io, "reconnect_attempt", (attempt: number) => cb(attempt)),

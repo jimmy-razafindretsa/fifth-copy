@@ -2,7 +2,8 @@
  * The typing machine's live props (#220, bible 7.7a, ADR 0013): what the skin seam `TypingMachine` draws
  * from the race store, and nothing else. Pure data mapping, like `typed-view.ts`: the engine decided the
  * struck key and the jam (ADR 0007), this module only carries them. The live wrapper times the press
- * (`pressed` is held for the `--motion-duration-fast` token) and disables the keys once you finish (#224).
+ * (`pressed` is held for the `--motion-duration-fast` token) and disables the keys once you finish (#224)
+ * or the race ended (#724).
  */
 
 /**
@@ -25,6 +26,8 @@ export type MachineProps = {
   readonly jammed: boolean;
   /** Your desk typed the whole text (the wrapper disables every key, #224). */
   readonly finished: boolean;
+  /** The server ended the race (any reason): the wrapper disables every key too, finished or not (#724). */
+  readonly ended: boolean;
 };
 
 /**
@@ -32,6 +35,7 @@ export type MachineProps = {
  * (#558 C10): the race store's `RaceState` fits it.
  */
 export type MachineSource = {
+  readonly phase: string;
   readonly lastKey: LastKey | null;
   readonly prediction: {
     readonly jammed: boolean;
@@ -39,7 +43,7 @@ export type MachineSource = {
   } | null;
 };
 
-/** One cache entry per `lastKey` record (or none), one object per jam and finish combination. */
+/** One cache entry per `lastKey` record (or none), one object per jam, finish and end combination. */
 const cache = new WeakMap<object, MachineProps[]>();
 const NO_KEY = {};
 
@@ -54,15 +58,17 @@ export function selectMachineProps(state: MachineSource): MachineProps {
   const { lastKey, prediction } = state;
   const jammed = prediction?.jammed ?? false;
   const finished = prediction?.state.status === "finished";
+  const ended = state.phase === "ended";
   const ref = lastKey ?? NO_KEY;
   let entries = cache.get(ref);
   if (!entries) cache.set(ref, (entries = []));
-  const slot = (jammed ? 2 : 0) + (finished ? 1 : 0);
+  const slot = (ended ? 4 : 0) + (jammed ? 2 : 0) + (finished ? 1 : 0);
   const key = lastKey ? lastKey.key.toLowerCase() : null;
   return (entries[slot] ??= {
     pressed: key,
     wrong: lastKey?.wrong ? key : null,
     jammed,
     finished,
+    ended,
   });
 }

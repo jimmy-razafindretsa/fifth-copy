@@ -407,6 +407,71 @@
   }
 }
 
+/* the host's PASSWORD RESET docket (#790, bible 14.3, 7.4): the newsprint docket under the settings
+   docket; its submit row right-aligned under a dashed separator, the issued 7.4 success alert row */
+.resetActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+/* the 7.1 secondary button (Oswald 600 13px .16em, transparent, 2px ink rule, padding 12px 18px), at
+   least 44px (bible 18); on the newsprint docket its hover is the paper ground (as ADD A BOT, #114) */
+.resetButton {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  min-height: 44px;
+  padding: 12px 18px;
+  border: 2px solid var(--color-fg);
+  background: transparent;
+  color: var(--color-fg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.resetButton:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
+.resetButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* pending (aria-busy): disabled at full strength, no spinner (bible 7.2 pending, printed) */
+.resetButton:disabled {
+  cursor: progress;
+}
+
+.resetIssued {
+  padding: 0 12px 12px;
+}
+
+/* the code: IBM Plex Mono 500 (bible 4: codes), ink at the 7.2 room-code tracking */
+.resetCode {
+  display: block;
+  margin: 4px 0 8px;
+  @apply type-typing;
+  font-size: 24px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--color-fg);
+}
+
+/* the expiry and the hand-over: 7.4 label lines (Oswald 600 11px .16em), ink */
+.resetNote {
+  display: block;
+  @apply type-label;
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: 0.16em;
+  color: var(--color-fg);
+}
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -468,7 +533,8 @@
   }
 
   .settings,
-  .invite {
+  .invite,
+  .reset {
     display: none;
   }
 }

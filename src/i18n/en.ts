@@ -20,8 +20,6 @@ export const en = {
     languageLabel: "Language",
     nightShift: "NIGHT SHIFT",
     honorific: "Comrade {name}",
-    guestTag: "GUEST",
-    signIn: "SIGN IN",
   },
   landing: {
     kicker: "MINISTRY OF TYPING · DESK 05 · 1978",
@@ -60,6 +58,7 @@ export const en = {
       invalidFormat: "Enter a code like KGB-4821",
       notFound: "No race with that code",
       closed: "That race has already started or closed",
+      roomFull: "All 30 desks in this room are taken.",
       unavailable: "The ring rooms are not answering. Try again in a minute.",
       generic: "Something jammed. Try again.",
     },
@@ -211,7 +210,7 @@ export const en = {
       builtBy: "BUILT BY",
       builtByName: "AEGIS CORP.",
       copyright: "© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec",
-      privacyLine: "No email. No chat. Your typing stays yours.",
+      privacyLine: "No chat. Your typing stays yours.",
     },
   },
   system: {
@@ -360,6 +359,27 @@ export const en = {
         },
       },
     },
+    /**
+     * The host's PASSWORD RESET docket (#790, bible 14.3, 7.4): a teacher host issues a student's
+     * single-use reset code (#788). Errors never echo the typed username.
+     */
+    reset: {
+      name: "FORM 5-R",
+      tag: "PASSWORD RESET",
+      student: "STUDENT",
+      issue: "ISSUE A CODE",
+      pending: "ISSUING…",
+      issued: "CODE ISSUED",
+      expires: "EXPIRES IN {m} MIN",
+      handOver: "HAND IT OVER IN PRIVATE",
+      errors: {
+        invalid: "Type the student's username.",
+        "not-eligible": "That username is not one of your students.",
+        "not-host": "Only the teacher hosting this room can issue a code.",
+        "rate-limited": "Too many codes issued. Try again in {m} min.",
+        generic: "Something jammed. Try again.",
+      },
+    },
     /** The invite rows of the room docket (#498, bible 7.1 ink button); #121 adds the link row. */
     invite: {
       label: "INVITE",
@@ -421,6 +441,7 @@ export const en = {
       noRoom: "This room is no longer open.",
       inProgress: "This race started without you.",
       notFound: "This race is not on file.",
+      roomFull: "This room has reached its spectator limit.",
       generic: "Something jammed. Try again.",
       back: "BACK TO THE WAITING ROOM →",
     },
@@ -569,8 +590,190 @@ export const en = {
       },
     },
   },
-  /** Accounts (#57): the merge stamp after a guest merge (ADR 0009, bible 7.3 ink tone); FILED is bible 2's canonical stamp. */
+  /**
+   * Accounts: the sign-in and sign-up screens, their actions' errors and the header account control
+   * (#36, bible 14.3 extension); the merge stamp after a guest merge (#57, bible 7.3 ink tone).
+   */
   auth: {
+    account: {
+      guestTag: "GUEST",
+      signIn: "SIGN IN",
+      signOut: "SIGN OUT",
+    },
+    signIn: {
+      kicker: "MINISTRY OF TYPING · FORM 1-A",
+      title: "SIGN IN",
+      lede: "Show your papers and get back to your desk.",
+      form: "FORM 1-A",
+      tag: "RETURNING TYPIST",
+      submit: "SIGN IN",
+      pending: "CHECKING PAPERS…",
+      switchPrompt: "No file yet?",
+      switchLink: "OPEN A FILE →",
+      /** The link to `/recover` (#46, owner decision 2026-11-09). */
+      recoverPrompt: "Lost your password?",
+      recoverLink: "USE YOUR RECOVERY CODE →",
+    },
+    signUp: {
+      kicker: "MINISTRY OF TYPING · FORM 1-B",
+      title: "OPEN A FILE",
+      lede: "Pick a username and a password. The ministry opens your file.",
+      form: "FORM 1-B",
+      tag: "NEW TYPIST",
+      submit: "OPEN MY FILE",
+      pending: "FILING…",
+      switchPrompt: "Already on file?",
+      switchLink: "SIGN IN →",
+    },
+    fields: {
+      username: "USERNAME",
+      password: "PASSWORD",
+      usernameHint: "3 to 20 characters: letters, numbers and _.",
+      passwordHint: "At least 8 characters.",
+    },
+    providers: {
+      or: "OR",
+      github: "CONTINUE WITH GITHUB",
+      discord: "CONTINUE WITH DISCORD",
+      google: "CONTINUE WITH GOOGLE",
+      age: "GitHub, Discord and Google are for ages 13 and up. Under 13? Use a username, or play as a guest.",
+    },
+    guest: {
+      title: "NO PAPERS?",
+      body: "Race right away. Your races stay with this browser until you open a file.",
+      cta: "PLAY AS GUEST →",
+    },
+    privacy: "Privacy: what we keep and why",
+    oauthError: {
+      title: "RETURNED",
+      body: "That sign-in did not go through. Try again, use your username, or play as a guest.",
+      denied: "That sign-in was not allowed. Use your username, or play as a guest.",
+      notLinked: "That account is already on another file. Sign in the way you did before.",
+      unavailable:
+        "That sign-in is not available right now. Use your username, or play as a guest.",
+    },
+    errors: {
+      prefix: "RETURNED ·",
+      usernameRequired: "Enter a username.",
+      usernameLength: "Use 3 to 20 characters.",
+      usernameChars: "Use only letters, numbers and _.",
+      usernameTaken: "That username is already on file. Pick another one.",
+      usernameRefused: "That username is not allowed. Pick another one.",
+      passwordRequired: "Enter a password.",
+      passwordLength: "Use 8 to 128 characters.",
+      fields: "Only a username and a password can be filed.",
+      credentials: "Wrong username or password.",
+      alreadySignedIn: "You are already signed in. Sign out to open another file.",
+      generic: "Something jammed. Try again.",
+    },
+    /**
+     * `/reset` (#789, bible 14.3 "Password reset screen"): a student redeems the code a teacher
+     * issued (#788, #790). No email and no recovery code anywhere; errors never echo the input.
+     */
+    reset: {
+      kicker: "MINISTRY OF TYPING · FORM 1-C",
+      title: "NEW PASSWORD",
+      lede: "Your teacher gave you a reset code. Type it with your username and pick a new password.",
+      form: "FORM 1-C",
+      tag: "PASSWORD RESET",
+      fields: {
+        username: "USERNAME",
+        code: "RESET CODE",
+        codeHint: "The 8 letters and numbers your teacher gave you.",
+        password: "NEW PASSWORD",
+        passwordHint: "At least 8 characters.",
+      },
+      submit: "SET MY PASSWORD",
+      pending: "FILING…",
+      switchPrompt: "Remembered it?",
+      switchLink: "SIGN IN →",
+      done: {
+        title: "PASSWORD SET",
+        body: "Your new password is on file and your other sessions are signed out. Sign in with it.",
+        link: "SIGN IN →",
+      },
+      errors: {
+        prefix: "RETURNED ·",
+        usernameRequired: "Enter your username.",
+        usernameLength: "Use 3 to 20 characters.",
+        usernameChars: "Use only letters, numbers and _.",
+        codeRequired: "Enter the reset code.",
+        codeFormat: "Use the 8 letters and numbers your teacher gave you.",
+        passwordRequired: "Enter a new password.",
+        passwordLength: "Use 8 to 128 characters.",
+        fields: "Only a username, a code and a new password can be filed.",
+        invalid:
+          "Wrong username or code, or the code is used or expired. Ask your teacher for a new one.",
+        "rate-limited": "Too many tries. Try again in {m} min.",
+        generic: "Something jammed. Try again.",
+      },
+    },
+    /** The one-time recovery code (#46, ADR 0009): the reveal after sign-up and `/recover`. */
+    recovery: {
+      reveal: {
+        kicker: "MINISTRY OF TYPING · FORM 1-D",
+        title: "RECOVERY CODE",
+        lede: "Write these 10 words on paper and keep them somewhere safe. They are the only way back into your file if you forget your password.",
+        form: "FORM 1-D",
+        tag: "SHOWN ONCE",
+        listName: "Your recovery code, 10 words",
+        stamp: "ISSUED",
+        warning: {
+          title: "LOST CODE, LOST FILE",
+          primary:
+            "There is no email and no other way back: if you lose your password and this code, your file is gone.",
+          other:
+            "Il n'y a ni courriel ni autre moyen : si tu perds ton mot de passe et ce code, ton dossier est perdu.",
+          otherLang: "fr",
+        },
+        copy: "COPY",
+        copied: "COPIED",
+        copiedStatus: "Recovery code copied",
+        selectedStatus: "Recovery code selected: copy it with your keyboard",
+        ack: "I wrote it down",
+        continue: "CONTINUE →",
+        gone: {
+          title: "ALREADY SHOWN",
+          body: "A recovery code is shown only once. If you did not write it down, keep your password safe: it is now your only key.",
+          link: "BACK TO THE MINISTRY →",
+        },
+      },
+      kicker: "MINISTRY OF TYPING · FORM 1-E",
+      title: "RECOVER MY FILE",
+      lede: "Lost your password? Type your username and the 10 words of your recovery code, then pick a new password.",
+      form: "FORM 1-E",
+      tag: "RECOVERY",
+      fields: {
+        username: "USERNAME",
+        code: "RECOVERY CODE",
+        codeHint: "The 10 words you wrote down, in any order.",
+        password: "NEW PASSWORD",
+        passwordHint: "At least 8 characters.",
+      },
+      submit: "RECOVER MY FILE",
+      pending: "FILING…",
+      switchPrompt: "Remembered it?",
+      switchLink: "SIGN IN →",
+      done: {
+        title: "PASSWORD SET",
+        body: "Your new password is on file and your other sessions are signed out. Your old code no longer works: write down the new one below, then sign in.",
+        link: "SIGN IN →",
+      },
+      errors: {
+        prefix: "RETURNED ·",
+        usernameRequired: "Enter your username.",
+        usernameLength: "Use 3 to 20 characters.",
+        usernameChars: "Use only letters, numbers and _.",
+        codeRequired: "Enter your recovery code.",
+        codeFormat: "Type the 10 words of your recovery code.",
+        passwordRequired: "Enter a new password.",
+        passwordLength: "Use 8 to 128 characters.",
+        fields: "Only a username, a code and a new password can be filed.",
+        invalid: "Wrong username or recovery code.",
+        "rate-limited": "Too many tries. Try again in {m} min.",
+        generic: "Something jammed. Try again.",
+      },
+    },
     merge: {
       stamp: "FILED",
       carried: { zero: "0 RACES CARRIED", one: "1 RACE CARRIED", other: "{n} RACES CARRIED" },

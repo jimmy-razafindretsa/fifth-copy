@@ -17,6 +17,7 @@ import {
   Star,
   Wordmark,
 } from "@/components/ui";
+import { AuthStates, RecoverStates, ResetStates } from "@/features/identity";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -51,6 +52,7 @@ import {
 } from "@/features/results";
 import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
+import { ExitSpecimen } from "./exit-demo";
 import demo from "./motion-demo.module.css";
 import { StampReplay } from "./stamp-demo";
 
@@ -689,6 +691,28 @@ export default async function DesignPage() {
         </div>
       </section>
 
+      <section id="auth" aria-labelledby="auth-heading" className="flex flex-col gap-3">
+        <h2 id="auth-heading" className="type-display-md">
+          Sign-in and sign-up
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The username form of the two screens in each state: default, pending, a field refused by
+          the server, a server error, and the banner a failed GitHub, Discord or Google sign-in
+          returns to.
+        </p>
+        <AuthStates />
+        <p className="type-body max-w-prose text-fg">
+          The password reset form of /reset in each state: default, pending, a refused field, the
+          one generic answer, rate-limited, and the success row that links to sign-in.
+        </p>
+        <ResetStates />
+        <p className="type-body max-w-prose text-fg">
+          The one-time recovery code: the reveal card after sign-up, the reveal once shown, and the
+          /recover form in each state, its success revealing the new code once.
+        </p>
+        <RecoverStates />
+      </section>
+
       <section aria-labelledby="stamps" className="flex flex-col gap-3">
         <h2 id="stamps" className="type-display-md">
           Stamps
@@ -804,7 +828,7 @@ export default async function DesignPage() {
           <HudSpecimen
             id="card-thirty-compact"
             title="30 typists, compact"
-            caption="Tablets and small laptops: no names; markers, desks and the field line stay."
+            caption="Tablets and small laptops: names, markers, desks and the field line stay; a label that leaves no room for a 10-character name goes under it."
           >
             <div className="w-full max-w-[208px]">
               <RaceCard
@@ -960,6 +984,24 @@ export default async function DesignPage() {
           </HudSpecimen>
         </div>
 
+        <h3 className="type-label text-fg">Exit dockets</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          <HudSpecimen
+            id="exit-reassigned"
+            title="Reassigned"
+            caption="After CONFIRM · REASSIGN ME: your stats frozen at your last key, placed last."
+          >
+            <ExitSpecimen kind="abandoned" labels={HUD.exit} />
+          </HudSpecimen>
+          <HudSpecimen
+            id="exit-asleep"
+            title="Asleep at desk"
+            caption="After the idle kick at 60 s: no place row, the race card keeps the lane."
+          >
+            <ExitSpecimen kind="asleep" labels={HUD.exit} />
+          </HudSpecimen>
+        </div>
+
         <h3 className="type-label text-fg">Notices</h3>
         <div className="grid gap-6 md:grid-cols-2">
           {RACE_NOTICES.map((kind) => (
@@ -967,7 +1009,11 @@ export default async function DesignPage() {
               key={kind}
               id={`notice-${kind}`}
               title={kind}
-              caption="Pulses with lkPulse."
+              caption={
+                kind === "idle-warning"
+                  ? "The urgent tone, from the server's warning at 45 s until your next key; pulses with lkPulse."
+                  : "Pulses with lkPulse."
+              }
             >
               <RaceNotice kind={kind} labels={HUD.notice} />
             </HudSpecimen>

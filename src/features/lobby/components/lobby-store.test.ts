@@ -10,6 +10,7 @@ import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race
 import {
   bindRoomSocket,
   initialLobbyState,
+  lobbyErrorCopy,
   reduceLobby,
   VERSION_RELOAD_KEY,
   type LobbyEvent,
@@ -40,6 +41,7 @@ const welcome = (you: number, members: Member[]): RoomEvents["welcome"] => ({
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
 });
@@ -86,6 +88,7 @@ function fakeSocket() {
     onConnectError: bind("connectError"),
     onReconnecting: bind("reconnecting"),
     onServerDisconnect: bind("serverDisconnect"),
+    onTransportDisconnect: bind("transportDisconnect"),
     onReconnected: bind("reconnected"),
     reconnect: vi.fn(),
     close: vi.fn(),
@@ -136,6 +139,8 @@ describe("reduceLobby", () => {
     ["version", "generic"],
     // a seated viewer refused later (#732 C4): the generic error, never the late joiner's hold
     ["in-progress", "generic"],
+    // every desk taken (#678): its own sentence
+    ["room-full", "room-full"],
   ] as const)("connect-error %s is a terminal %s error", (reason, error) => {
     const state = run(
       { type: "welcome", payload: welcome(1, [ada]) },
@@ -188,6 +193,7 @@ describe("bindRoomSocket", () => {
         "reconnected",
         "reconnecting",
         "roster",
+        "serverDisconnect",
         "settings",
         "welcome",
       ].sort(),
@@ -312,6 +318,50 @@ describe("bindRoomSocket version skew", () => {
 // `bindRoomSocket(socket, dispatch, { lobbyId })` stores every `welcome.resumeKey` with the race
 // feature's `storeResumeKey` (#561), injected from the lazily loaded race module (card 536: no static
 // value import of `@/features/race` in the lobby's first load).
+// #661 C1: the server closing a seated viewer's socket (`io server disconnect`) is final: socket.io never
+// reconnects it, so the page leaves its live or reconnecting state for the terminal error instead of
+// waiting forever. Before the first seat the late-join hold owns that close (#732), so the store waits.
+describe("server disconnect (#661 C1)", () => {
+  const seated = () =>
+    reduceLobby(initialLobbyState, { type: "welcome", payload: welcome(1, [ada]) });
+
+  it("a seated viewer: terminal error with the server's reason, the roll kept", () => {
+    const next = reduceLobby(seated(), { type: "server-disconnect" });
+    expect(next).toMatchObject({ phase: "error", error: "server-disconnect", you: 1 });
+    expect(next.members).toEqual([ada]);
+  });
+
+  it("while reconnecting, too; and nothing later revives it", () => {
+    const cut = reduceLobby(seated(), { type: "reconnecting" });
+    const gone = reduceLobby(cut, { type: "server-disconnect" });
+    expect(gone).toMatchObject({ phase: "error", error: "server-disconnect" });
+    expect(reduceLobby(gone, { type: "reconnected" })).toBe(gone);
+    expect(reduceLobby(gone, { type: "welcome", payload: welcome(1, [ada]) })).toBe(gone);
+  });
+
+  it("never seated (loading, spectating): left to the late-join hold", () => {
+    expect(reduceLobby(initialLobbyState, { type: "server-disconnect" })).toBe(initialLobbyState);
+    const held = reduceLobby(initialLobbyState, { type: "connect-error", reason: "in-progress" });
+    expect(reduceLobby(held, { type: "server-disconnect" })).toBe(held);
+  });
+
+  it("reads the generic error line", () => {
+    expect(lobbyErrorCopy("server-disconnect")).toBe("generic");
+    expect(lobbyErrorCopy(null)).toBe("generic");
+    expect(lobbyErrorCopy("room-full")).toBe("room-full");
+  });
+
+  it("bindRoomSocket dispatches it; a transport drop is not it", () => {
+    const { socket, fire } = fakeSocket();
+    const dispatch = vi.fn();
+    bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps });
+    fire("transportDisconnect", undefined);
+    expect(dispatch).not.toHaveBeenCalled();
+    fire("serverDisconnect", undefined);
+    expect(dispatch.mock.calls).toEqual([[{ type: "server-disconnect" }]]);
+  });
+});
+
 describe("countdown and the resume key (#214 C2)", () => {
   const LOBBY = "cmuvut8r2000106r7wf01vr30";
   const KEY = "k".repeat(40);
@@ -401,6 +451,7 @@ describe("countdown and the resume key (#214 C2)", () => {
         "reconnected",
         "reconnecting",
         "roster",
+        "serverDisconnect",
         "settings",
         "welcome",
       ].sort(),
@@ -586,10 +637,10 @@ describe("spectating (#732 C1 C4)", () => {
     }
   });
 
-  it("a player join refused room-full (every desk taken) ends the hold in the generic error", () => {
+  it("a player join refused room-full (every desk taken) ends the hold in its own error (#678)", () => {
     expect(run(refused, { type: "connect-error", reason: "room-full" })).toMatchObject({
       phase: "error",
-      error: "generic",
+      error: "room-full",
     });
   });
 
@@ -806,24 +857,25 @@ describe("joinRoom: the late joiner's hold (#732 C2)", () => {
     expect(h.timers).toEqual([]);
   });
 
-  it("a server disconnect after the seat is not the hold's", async () => {
+  it("a server disconnect after the seat is not the hold's: the store's terminal error (#661 C1)", async () => {
     const h = harness();
     joinRoom(h.deps);
     await h.flush();
     h.sockets[0]!.fire("welcome", welcome(2, [ada, bob]));
     h.sockets[0]!.fire("serverDisconnect", undefined);
     await h.flush();
-    expect(h.state().phase).toBe("live");
+    expect(h.state()).toMatchObject({ phase: "error", error: "server-disconnect" });
     expect(h.mint).toHaveBeenCalledTimes(1);
+    expect(h.timers).toEqual([]);
   });
 
-  it("a full room at the seat ends the hold: no retry, the generic error", async () => {
+  it("a full room at the seat ends the hold: no retry, the room-full error (#678)", async () => {
     const h = harness();
     joinRoom(h.deps);
     await h.flush();
     h.sockets[0]!.fire("connectError", "room-full");
     await h.flush();
-    expect(h.state()).toMatchObject({ phase: "error", error: "generic" });
+    expect(h.state()).toMatchObject({ phase: "error", error: "room-full" });
     expect(h.mint).toHaveBeenCalledTimes(1);
     expect(h.timers).toEqual([]);
   });

@@ -57,7 +57,8 @@ test.describe("Auth.js endpoints (#786)", () => {
 
     const providers = await request.get("/api/auth/providers");
     expect(providers.status()).toBe(200);
-    expect(Object.keys(await providers.json())).toEqual(["credentials"]);
+    // GitHub and Discord register from playwright.config.ts's placeholder OAuth apps (#49).
+    expect(Object.keys(await providers.json())).toEqual(["credentials", "github", "discord"]);
 
     expect((await csrfToken(request)).length).toBeGreaterThan(16);
   });

@@ -16,6 +16,7 @@ import {
 import {
   DESK_COLORS,
   deskIdentity,
+  bonusKindSchema,
   deskSchema,
   markerSchema,
   MAX_DESKS,
@@ -24,6 +25,7 @@ import {
   phaseSchema,
   playerStateSchema,
   raceInfoSchema,
+  raceMsSchema,
   raceRoleSchema,
   resumeKeySchema,
   textOverlaySchema,
@@ -80,6 +82,18 @@ const membersSchema = z.array(memberSchema).max(MAX_DESKS);
  * First event after a successful handshake (and after a resume): who you are, the room, everyone in
  * it, the settings, and, once a race exists, the race, your authoritative state and overlay.
  */
+/**
+ * Your desk's bonus as the server holds it (#768, ADR 0016), sent in `welcome` while its race runs so
+ * a reconnect gets it back: the card you hold, when your cooldown ends and when a Smoke Break's blur
+ * on you lifts, both in ms since GO; each `null` when there is none (or it is over).
+ */
+export const welcomeBonusSchema = z.object({
+  card: bonusKindSchema.nullable(),
+  cooldownUntil: raceMsSchema.nullable(),
+  blurUntil: raceMsSchema.nullable(),
+});
+export type WelcomeBonus = z.infer<typeof welcomeBonusSchema>;
+
 export const welcomeSchema = z.object({
   v: versionSchema,
   role: raceRoleSchema,
@@ -91,6 +105,8 @@ export const welcomeSchema = z.object({
   race: raceInfoSchema.nullable(),
   state: playerStateSchema.nullable(),
   overlay: textOverlaySchema.nullable(),
+  /** `null` outside a running race and for a spectator (#768). */
+  bonus: welcomeBonusSchema.nullable(),
   resumeKey: resumeKeySchema.nullable(),
   /** Server clock (ms epoch) when sent: the client's first clock offset. */
   serverNow: msSchema,

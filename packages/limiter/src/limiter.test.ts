@@ -60,6 +60,20 @@ describe("createLimiter (C1, real Redis)", () => {
     });
   });
 
+  it("clear forgets a key's calls, so the next call starts a fresh window (#789)", async () => {
+    const rule = { max: 2, windowMs: 60_000 };
+    await limiter.limit("clr", rule, T0);
+    await limiter.limit("clr", rule, T0 + 1);
+    expect((await limiter.limit("clr", rule, T0 + 2)).ok).toBe(false);
+    await limiter.limit("other-clr", rule, T0);
+    await limiter.clear("clr");
+    expect(await redis.exists(`${prefix}:rl:clr`)).toBe(0);
+    expect(await limiter.limit("clr", rule, T0 + 3)).toMatchObject({ ok: true, remaining: 1 });
+    // other keys keep their counts
+    expect(await limiter.count("other-clr", 60_000, T0 + 3)).toBe(1);
+    await expect(limiter.clear("")).rejects.toThrow(RangeError);
+  });
+
   it("refused calls do not count against the window", async () => {
     const rule = { max: 1, windowMs: 1_000 };
     expect((await limiter.limit("c", rule, T0)).ok).toBe(true);

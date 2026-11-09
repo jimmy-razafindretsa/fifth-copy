@@ -17,7 +17,13 @@ import {
 } from "../client/store";
 import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
-import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
+import {
+  atGo,
+  Countdown,
+  countdownStep,
+  nextStepIn,
+  type CountdownStep,
+} from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
 import notice from "../components/race-notice.module.css";
 import { AsleepAtDesk } from "../components/asleep-at-desk";
@@ -49,11 +55,13 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
   "not-found": "notFound",
   "bad-token": "generic",
   version: "generic",
-  // A spectator past the room's cap (#616): no dedicated copy yet.
-  "room-full": "generic",
+  // A spectator past the room's cap (#616): its own sentence (#678).
+  "room-full": "roomFull",
   generic: "generic",
   // The lost room shows its own notice row (#235 C4); this sentence is never read.
   "room-lost": "noRoom",
+  // The server closed the socket (#661): something jammed (bible 14.2 lost line).
+  "server-disconnect": "generic",
 };
 
 type ViewProps = {
@@ -149,7 +157,7 @@ function useCountdownStep(): CountdownStep | null {
     handle = setTimeout(tick, 0);
     return () => clearTimeout(handle);
   }, [live, t0, offset]);
-  return live ? step : null;
+  return live ? atGo(step, phase) : null;
 }
 
 /**

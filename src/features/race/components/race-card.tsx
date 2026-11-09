@@ -46,15 +46,7 @@ export function IdentityMarker({ shape, ink }: { shape: MarkerShape; ink: Marker
   return <Marker shape={shape} ink={ink} />;
 }
 
-function LaneRow({
-  lane,
-  labels,
-  compact,
-}: {
-  lane: Lane;
-  labels: RaceCardLabels;
-  compact: boolean;
-}) {
+function LaneRow({ lane, labels }: { lane: Lane; labels: RaceCardLabels }) {
   const status = lane.status === "typing" ? null : labels.status[lane.status];
   const words = fill(labels.lane, {
     rank: lane.rank,
@@ -81,11 +73,9 @@ function LaneRow({
       </span>
       <span className={styles.main} aria-hidden="true">
         <span className={styles.line}>
-          {compact ? null : (
-            <span data-name className={styles.name}>
-              {lane.name}
-            </span>
-          )}
+          <span data-name className={styles.name}>
+            {lane.name}
+          </span>
           {lane.you ? <span className={docket.tag}>{labels.you}</span> : null}
           {status ? (
             <span data-status-label={lane.status} className={styles.status}>
@@ -106,7 +96,10 @@ function LaneRow({
 export type RaceCardProps = {
   view: RaceCardView;
   labels: RaceCardLabels;
-  /** Tablets and small laptops: names hidden, markers, desk numbers and the field line kept. */
+  /**
+   * Tablets and small laptops (`data-compact`, the ~208px card): the same lanes, names included since
+   * #792 (a 10-character name fits the main column, the label goes under it; bible 7.4a).
+   */
   compact?: boolean;
 };
 
@@ -152,7 +145,7 @@ export function RaceCard({ view, labels, compact = false }: RaceCardProps) {
       </div>
       <ol aria-label={labels.lanes} className={styles.lanes}>
         {view.lanes.map((lane) => (
-          <LaneRow key={lane.desk} lane={lane} labels={labels} compact={compact} />
+          <LaneRow key={lane.desk} lane={lane} labels={labels} />
         ))}
       </ol>
     </section>

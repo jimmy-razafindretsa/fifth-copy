@@ -11,7 +11,7 @@ import { db } from "@/server/db";
 export async function findResetTarget(
   hostId: string,
   usernameNormalized: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; usernameNormalized: string | null } | null> {
   return db.user.findFirst({
     where: {
       usernameNormalized,
@@ -20,7 +20,8 @@ export async function findResetTarget(
       id: { not: hostId },
       raceResults: { some: { race: { lobby: { hostUserId: hostId } } } },
     },
-    select: { id: true },
+    // the stored form keys the redeem budget the issuance clears (#789)
+    select: { id: true, usernameNormalized: true },
   });
 }
 
@@ -36,4 +37,13 @@ export async function findTeacherLobby(
     where: { code, hostUserId: viewerId, host: { isGuest: false, isTeacher: true } },
     select: { code: true },
   });
+}
+
+/**
+ * Whether `viewerId` may issue reset codes in the lobby `code` (#790): the waiting room renders the
+ * host's `PASSWORD RESET` docket only then. A convenience, never the check: `issuePasswordReset`
+ * re-checks the host, the teacher flag and the limiter itself (ADR 0009). A failed lookup is `false`.
+ */
+export function canIssueResetIn(code: string, viewerId: string): Promise<boolean> {
+  return findTeacherLobby(code, viewerId).then(Boolean, () => false);
 }

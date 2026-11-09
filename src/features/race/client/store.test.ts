@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { COOLDOWN_MS, effectiveText } from "@fifth-copy/engine";
+import { COOLDOWN_MS, effectiveText, initialState } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   PLAYER_STATUS_CODES,
@@ -71,6 +71,7 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: KEY,
   serverNow: 1_767_225_600_000,
   ...over,
@@ -134,6 +135,8 @@ describe("reduceRace (#561 C2)", () => {
       lampTarget: null,
       abandoning: false,
       abandons: 0,
+      // #661 C2: no cut line waiting for its welcome
+      keysHeld: false,
     });
   });
 
@@ -396,6 +399,8 @@ describe("bindRaceSocket (#561 C3)", () => {
     expect([...fake.listeners.keys()].sort()).toEqual([
       "connect_error",
       "countdown",
+      // #661: the server's close and the transport drop
+      "disconnect",
       "ended",
       "event",
       "pong",
@@ -1823,7 +1828,7 @@ describe("#236 bonus state", () => {
     stop();
   });
 
-  it("a welcome (a reconnect) and a countdown reset the card, the cooldown and the blur", () => {
+  it("a welcome without a bonus (no race running) resets the card, the cooldown and the blur", () => {
     const s = reduceRace(
       reduceRace(reduceRace(racing(), earned()), play()),
       hit({ bonus: "smoke-break", blurUntil: 5_000 }),
@@ -1832,6 +1837,89 @@ describe("#236 bonus state", () => {
     expect(selectBonus(back)).toMatchObject({ card: null, cooldownUntil: null, blurUntil: null });
     // the play counter never goes back (the sender counts on it)
     expect(back.bonus.plays).toBe(1);
+  });
+
+  // #768 C2: a reconnect's welcome brings the desk's bonus back, race ms -> this device's clock
+  describe("#768 C2 the welcome seeds the bonus", () => {
+    const SERVER_NOW = T0 + 9_000;
+    const RECEIVED_AT = SERVER_NOW - 250; // this device runs 250 ms behind the server
+    const reload = (bonus: Welcome["bonus"]) =>
+      reduceRace(initialRaceState, {
+        type: "welcome",
+        payload: welcome({
+          room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+          race: RACE,
+          state: { ...initialState(), typed: [] },
+          bonus,
+          serverNow: SERVER_NOW,
+        }),
+        receivedAt: RECEIVED_AT,
+      });
+
+    it("the card, the cooldown end and the blur end land on the device clock", () => {
+      const s = reload({ card: "exemption", cooldownUntil: 20_000, blurUntil: 11_000 });
+      expect(s.clockOffset).toBe(250);
+      expect(s.bonus).toMatchObject({
+        card: "exemption",
+        cooldownUntil: T0 + 20_000 - 250,
+        blurUntil: T0 + 11_000 - 250,
+        refused: false,
+        pending: null,
+      });
+      expect(selectBonus(s)).toMatchObject({ card: "exemption", blurUntil: T0 + 10_750 });
+    });
+
+    it("a reconnect of a page that held nothing seeds it; the play counter is kept", () => {
+      const before = reduceRace(reduceRace(racing(), earned()), play());
+      const back = reduceRace(before, {
+        type: "welcome",
+        payload: welcome({
+          room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+          race: RACE,
+          state: { ...initialState(), typed: [] },
+          bonus: { card: "smoke-break", cooldownUntil: null, blurUntil: null },
+          serverNow: SERVER_NOW,
+        }),
+        receivedAt: RECEIVED_AT,
+      });
+      expect(back.bonus).toMatchObject({ card: "smoke-break", cooldownUntil: null, pending: null });
+      expect(back.bonus.plays).toBe(1);
+    });
+
+    it("the seeded cooldown gates a play until its end; a seeded card plays after", () => {
+      const s = reload({ card: "extra-paperwork", cooldownUntil: 20_000, blurUntil: null });
+      const end = s.bonus.cooldownUntil!;
+      expect(reduceRace(s, play(end - 1)).bonus.plays).toBe(0);
+      expect(reduceRace(s, play(end)).bonus.plays).toBe(1);
+    });
+
+    it("an all-null bonus or none leaves nothing held", () => {
+      for (const bonus of [null, { card: null, cooldownUntil: null, blurUntil: null }]) {
+        expect(reload(bonus).bonus).toMatchObject({
+          card: null,
+          cooldownUntil: null,
+          blurUntil: null,
+        });
+      }
+    });
+
+    it("watchBlurExpiry lifts a seeded blur at its end", () => {
+      let now = RECEIVED_AT;
+      let pending: { at: number; fn: () => void } | null = null;
+      const timer = {
+        now: () => now,
+        setTimeout: (fn: () => void, ms: number) => (pending = { at: now + ms, fn }),
+        clearTimeout: () => void (pending = null),
+      };
+      const store = createRaceStore(reload({ card: null, cooldownUntil: null, blurUntil: 11_000 }));
+      const stop = watchBlurExpiry(store, timer);
+      const until = store.getState().bonus.blurUntil!;
+      expect(pending!.at).toBe(until);
+      now = until;
+      pending!.fn();
+      expect(store.getState().bonus.blurUntil).toBeNull();
+      stop();
+    });
   });
 
   it("sendBonusPlays emits one bonus:play per play the store took, and nothing for a refused Enter", () => {
@@ -2221,6 +2309,21 @@ describe("#235 line cut, reconnect and the lost room", () => {
       expect(selectCanType(s)).toBe(false);
       // terminal, like any lost
       expect(reduceRace(s, rewelcome(2))).toBe(s);
+    });
+
+    // #661 C3: a voided race never leaves the page frozen on `running`, even when it arrives on a
+    // cut line (the `ended` a reconnect's welcome is followed by, #204)
+    it("#661 C3: ended { void } moves the store out of running, from running or reconnecting", () => {
+      const live = running();
+      expect(live.phase).toBe("running");
+      const voidOf = (s: RaceState) =>
+        reduceRace(s, { type: "ended", payload: voided, at: T + 9_000 });
+      for (const from of [live, reduceRace(live, { type: "disconnected" })]) {
+        const s = voidOf(from);
+        expect(s.phase).not.toBe("running");
+        expect(s).toMatchObject({ phase: "lost", lost: "room-lost", keysHeld: from.keysHeld });
+        expect(selectCanType(s)).toBe(false);
+      }
     });
 
     it("an all-finished or timer end is still RACE OVER", () => {

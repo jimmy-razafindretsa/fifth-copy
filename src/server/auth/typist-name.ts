@@ -21,19 +21,25 @@ function clean(name: string | null | undefined): string {
 }
 
 /**
- * The default mapper (#786): the profile name when given and free, else the name (or "Typist") with a
- * random 3-digit suffix, like guest names. #49 swaps in the profanity-checked mapper. A free name can
- * still be taken by a concurrent insert; the adapter retries on the unique violation.
+ * The mapper of OAuth sign-up (#786, #49): the provider login when it passes `isClean` (profanity screen,
+ * injected: src/server never imports features) and is free, else the login (or "Typist" for an unclean
+ * or empty one) with a random 3-digit suffix, like guest names. Without `isClean` every login counts as
+ * unclean (fail closed). A free name can still be taken by a concurrent insert; the adapter retries on
+ * the unique violation.
  */
 export function createTypistNameFor(
   db: Pick<PrismaClient, "user">,
-  suffix: () => number = () => randomInt(0, 1000),
+  {
+    isClean = () => false,
+    suffix = () => randomInt(0, 1000),
+  }: { isClean?: (name: string) => boolean; suffix?: () => number } = {},
 ): TypistNameFor {
   const isFree = async (typistName: string) =>
     (await db.user.findUnique({ where: { typistName }, select: { id: true } })) === null;
 
   return async ({ name }) => {
-    const base = clean(name);
+    const cleaned = clean(name);
+    const base = cleaned && isClean(cleaned) ? cleaned : "";
     if (base && (await isFree(base))) return base;
     const stem = base || FALLBACK;
     for (let i = 0; i < ATTEMPTS; i++) {

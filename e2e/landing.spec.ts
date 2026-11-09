@@ -383,7 +383,9 @@ test.describe("landing page (#497)", () => {
     await expect(
       footer.getByText("© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec"),
     ).toBeVisible();
-    await expect(footer.getByText("No email. No chat. Your typing stays yours.")).toBeVisible();
+    await expect(
+      footer.getByText("No chat. Your typing stays yours.", { exact: true }),
+    ).toBeVisible();
     expect(await footer.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("14px");
   });
 

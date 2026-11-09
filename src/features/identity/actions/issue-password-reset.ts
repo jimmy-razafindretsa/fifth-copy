@@ -2,7 +2,7 @@
 
 import { getViewer, hashPassword } from "@/server/auth";
 import { db } from "@/server/db";
-import { limit } from "@/server/limiter";
+import { clearLimit, limit } from "@/server/limiter";
 import { RESET_CODE_TTL_MS, formatResetCode, generateResetCode } from "../password-reset/code";
 import { findResetTarget, findTeacherLobby } from "../queries/reset-eligibility";
 import { issuePasswordResetInput } from "../schema";
@@ -24,7 +24,9 @@ const orNull = <T>(lookup: Promise<T | null>): Promise<T | null> => lookup.catch
  * limit (refusals count too); then ONE student lookup, so every refusal is the same `not-eligible`
  * from the same round trip. A failed lookup refuses, never throws. The code is returned once and
  * only its Argon2id hash is stored; the row is the audit record. A new issuance adds a row (the
- * newest one is redeemable, R2); the student's recovery code is never touched.
+ * newest one is redeemable, R2) and clears the student's `password-reset-redeem-account` budget
+ * (#789), so a code issued after attempts were spent can still be redeemed; the student's recovery
+ * code is never touched.
  */
 export async function issuePasswordReset(input: {
   code: string;
@@ -59,5 +61,10 @@ export async function issuePasswordReset(input: {
       expiresAt,
     },
   });
+  // A fresh code gets a fresh set of redeem attempts (#789, owner decision 2026-11-04).
+  await clearLimit(
+    "password-reset-redeem-account",
+    `reset:${student.usernameNormalized ?? username}`,
+  );
   return { ok: true, code: formatResetCode(plain), expiresAt };
 }

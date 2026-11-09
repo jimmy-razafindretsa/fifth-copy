@@ -11,6 +11,8 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { connectToRoom, HOST_START_TIMEOUT_MS, type HandshakeAuth, type IoFactory } from "./socket";
+import { bindRaceSocket, createRaceStore, type RaceTimer } from "./store";
+import { createTyping } from "./typing";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -68,6 +70,7 @@ const welcome: Welcome = {
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
 };
@@ -570,5 +573,132 @@ describe("boundaries (C5)", () => {
   it("has no use client directive and no window/document access", () => {
     expect(source).not.toMatch(/use client/);
     expect(source).not.toMatch(/\b(window|document)\b/);
+  });
+});
+
+// Contract of #661: the server closing the socket (`io server disconnect`, never reconnected by
+// socket.io) ends the race page on the lost line (C1); a transport drop marks it reconnecting at once
+// and no `keys` batch leaves until the reconnect's `welcome` (C2), so none reaches the server before
+// the new seat exists.
+describe("#661 server-side disconnect and the cut line", () => {
+  const T0 = 1_767_225_603_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "ab cd",
+    language: "en" as const,
+    wordCount: 2,
+    t0: T0,
+    timerS: 60,
+  };
+  const desk = (n: number) => ({
+    cursor: n,
+    correct: n,
+    errors: 0,
+    total: n,
+    typed: Array<null>(n).fill(null),
+    status: "typing" as const,
+    lastT: 100 * n,
+    finishedAt: null,
+  });
+  const runningWelcome = (typed = 0): Welcome => ({
+    ...welcome,
+    role: "player",
+    room: { ...welcome.room, phase: "running" },
+    race: RACE,
+    state: desk(typed),
+    serverNow: T0 + 1_000,
+  });
+
+  function bound() {
+    const { fake, room } = setup();
+    const store = createRaceStore();
+    let now = T0 + 1_000;
+    const due: (() => void)[] = [];
+    const timer: RaceTimer = {
+      now: () => now,
+      setTimeout: (fn) => due.push(fn),
+      clearTimeout: () => {},
+    };
+    bindRaceSocket(room, store.dispatch, { timer });
+    const typing = createTyping({ store, send: (batch) => room.sendKeys(batch), timer });
+    /** Runs the batcher's pending flushes (and the ping round's timers). */
+    const flush = () => {
+      now += 60;
+      for (const fn of due.splice(0)) fn();
+    };
+    const keysSent = () =>
+      fake.emit.mock.calls.filter(([event]) => event === "keys").map(([, p]) => p.batch);
+    return { fake, store, typing, flush, keysSent };
+  }
+
+  it("onTransportDisconnect fires on a dropped line, never on either side's own close", () => {
+    const { fake, room } = setup();
+    const cb = vi.fn();
+    const off = room.onTransportDisconnect(cb);
+    fake.deliver("disconnect", "io server disconnect");
+    fake.deliver("disconnect", "io client disconnect");
+    expect(cb).not.toHaveBeenCalled();
+    for (const reason of ["transport close", "transport error", "ping timeout", "parse error"])
+      fake.deliver("disconnect", reason);
+    expect(cb).toHaveBeenCalledTimes(4);
+    off();
+    fake.deliver("disconnect", "transport close");
+    expect(cb).toHaveBeenCalledTimes(4);
+  });
+
+  it("C1: a server disconnect is the terminal lost state with the server's reason", () => {
+    const { fake, store } = bound();
+    fake.deliver("welcome", runningWelcome());
+    fake.deliver("disconnect", "io server disconnect");
+    expect(store.getState()).toMatchObject({ phase: "lost", lost: "server-disconnect" });
+    // nothing later revives it: socket.io does not reconnect, and a stray event changes nothing
+    const lost = store.getState();
+    fake.io.deliver("reconnect", 1);
+    fake.deliver("welcome", runningWelcome());
+    expect(store.getState()).toBe(lost);
+  });
+
+  it("C1: a join refused after the handshake (no welcome yet) leaves the skeleton for the lost line", () => {
+    const { fake, store } = bound();
+    expect(store.getState().phase).toBe("connecting");
+    fake.deliver("disconnect", "io server disconnect");
+    expect(store.getState()).toMatchObject({ phase: "lost", lost: "server-disconnect" });
+  });
+
+  it("C2: a transport drop is reconnecting at once, before socket.io's first reconnect_attempt", () => {
+    const { fake, store } = bound();
+    fake.deliver("welcome", runningWelcome());
+    expect(store.getState()).toMatchObject({ phase: "running", keysHeld: false });
+    fake.deliver("disconnect", "transport close");
+    expect(store.getState()).toMatchObject({ phase: "reconnecting", keysHeld: true });
+  });
+
+  it("C2: no keys leave between the drop and the next welcome; the held ones leave after it", () => {
+    const { fake, store, typing, flush, keysSent } = bound();
+    fake.deliver("welcome", runningWelcome());
+    typing.press("a");
+    flush();
+    expect(keysSent()).toHaveLength(1);
+    // a key queued in the batch window when the line drops
+    typing.press("b");
+    fake.deliver("disconnect", "transport close");
+    flush();
+    expect(keysSent()).toHaveLength(1);
+    // the reconnect: socket.io is connected again, but the seat does not exist until the welcome
+    fake.io.deliver("reconnect", 1);
+    expect(store.getState().phase).toBe("running");
+    typing.press(" ");
+    flush();
+    expect(keysSent()).toHaveLength(1);
+    expect(store.getState().prediction!.state.cursor).toBe(2);
+    // the welcome: the server applied `a`; `b` was never sent, so it is typed again on top and leaves
+    fake.deliver("welcome", runningWelcome(1));
+    expect(store.getState().keysHeld).toBe(false);
+    expect(keysSent()).toEqual([[{ t: 1_000, key: "a" }], [{ t: 1_060, key: "b" }]]);
+    expect(store.getState().prediction!.state.cursor).toBe(2);
+    // and typing goes on
+    typing.press(" ");
+    flush();
+    expect(keysSent()).toHaveLength(3);
   });
 });

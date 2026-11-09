@@ -41,8 +41,35 @@ export { MergeGuestError } from "./merge/steps";
 // The teacher password reset (#788): the host issues a single-use code; the redeem (R2) and the host
 // control (R3) share the code helpers.
 export { issuePasswordReset, type IssuePasswordResetResult } from "./actions/issue-password-reset";
-export { formatResetCode, normalizeResetCode } from "./password-reset/code";
+export { formatResetCode, normalizeResetCode, RESET_CODE_TTL_MS } from "./password-reset/code";
+// The host control (#790): whether the viewer may issue codes in a lobby (the docket's render gate).
+export { canIssueResetIn } from "./queries/reset-eligibility";
 // The merge stamp (#57): merge callers leave the flash with `flashMerge(counts)`; the root layout mounts
 // `MergeStamp`, which shows it once.
 export { flashMerge } from "./merge/flash";
 export { MergeStamp } from "./components/merge-stamp";
+// Sign-up, sign-in and sign-out (#36): the actions, the two screens and the header account control.
+export { signUp, signUpAction } from "./actions/sign-up";
+export { signIn, signInAction } from "./actions/sign-in";
+export { signOut } from "./actions/sign-out";
+export type { AuthFormState } from "./actions/auth-form-state";
+export { AuthScreen, AUTH_LINKS, type AuthMode } from "./components/auth-screen";
+export {
+  AccountControl,
+  type AccountClasses,
+  type AccountLabels,
+} from "./components/account-control";
+export { safeCallbackUrl } from "./auth/callback-url";
+export { AuthStates } from "./components/auth-states";
+// The teacher reset, redeemed (#789): the action and the `/reset` screen and its `/design` states.
+export { redeemPasswordReset, redeemPasswordResetAction } from "./actions/redeem-password-reset";
+export type { ResetFormState } from "./actions/reset-form-state";
+export { ResetScreen } from "./components/reset-screen";
+export { ResetStates } from "./components/reset-states";
+// The one-time recovery code (#46, ADR 0009): issued at sign-up, revealed once, redeemed on `/recover`.
+export { issueRecoveryCode } from "./actions/issue-recovery-code";
+export { redeemRecoveryCode, redeemRecoveryCodeAction } from "./actions/redeem-recovery-code";
+export { takeReveal as takeRecoveryReveal } from "./recovery/reveal";
+export { RecoverScreen } from "./components/recover-screen";
+export { RecoveryRevealScreen } from "./components/recovery-reveal-screen";
+export { RecoverStates } from "./components/recover-states";

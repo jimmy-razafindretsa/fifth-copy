@@ -30,14 +30,16 @@ export async function headerTypist(page: Page): Promise<string> {
 /** Chooses a radio in a section and waits for its save state to read FILED (or CLASSÉ). */
 export async function choose(page: Page, section: string | RegExp, option: string) {
   const radios = group(settingsDocket(page), section);
-  const radio = radios.getByRole("radio", { name: option, exact: true });
   // the radio is visually hidden inside its label: a person clicks the label (segment or card)
   await radios
     .locator("label")
     .filter({ has: page.getByRole("radio", { name: option, exact: true }) })
     .click();
+  // After the click, find the radio and its section through the docket, not the section name: saving a
+  // language re-renders the page in that language and renames the group (LANGUAGE -> LANGUE) whenever
+  // the refresh lands (#66, CI flake). Option names are unique in the docket and do not change with it.
+  const radio = settingsDocket(page).getByRole("radio", { name: option, exact: true });
   await expect(radio).toBeChecked();
-  // found by its chosen radio: a language change renames the section itself
   const region = settingsDocket(page)
     .locator("section")
     .filter({ has: page.getByRole("radio", { name: option, exact: true }) });

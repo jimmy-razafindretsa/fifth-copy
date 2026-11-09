@@ -138,6 +138,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 - **No keystroke for 60 seconds** while connected → player is **kicked** from the race (marked "Asleep at desk").
 - Warning at 45 s (the Major's lamp turns to the player).
 - **Disconnection is not idle** (see §7.4).
+- **Reconnecting never resets the idle timer**: the 60 s count from the last accepted keystroke, not from the reconnection (owner decision 2026-11-04, #609). A player who comes back past 45 s or 60 s of silence is warned, or warned and kicked, at once.
 
 ---
 

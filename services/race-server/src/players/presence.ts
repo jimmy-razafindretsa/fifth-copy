@@ -1,5 +1,5 @@
 import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
-import type { Clock, Scheduler, TimerHandle } from "../clock";
+import type { Scheduler, TimerHandle } from "../clock";
 import type { DesksState } from "../rooms/desks-state";
 import type { Durations } from "../rooms/durations";
 import type { RoomRegistry } from "../rooms/registry";
@@ -73,7 +73,6 @@ export function createPresence({
   registry,
   desksState,
   resumeKeys,
-  clock,
   scheduler,
   durations,
   emit,
@@ -81,7 +80,6 @@ export function createPresence({
   registry: RoomRegistry;
   desksState: DesksState;
   resumeKeys: ResumeKeys;
-  clock: Clock;
   scheduler: Scheduler;
   durations: Pick<Durations, "GRACE_MS">;
   /** `event` to the room (`line-cut`, `resumed`). */
@@ -114,9 +112,9 @@ export function createPresence({
     const runtime = desksState.get(lobbyId);
     const state = runtime?.states.get(desk);
     if (runtime?.phase !== "running" || state?.status !== from) return;
-    // `lastKeyAt` restarts at the resume, so idle (#183) never counts the time away.
-    const lastKeyAt = to === "typing" ? clock.now() : state.lastKeyAt;
-    desksState.set(lobbyId, desk, { ...state, status: to, lastKeyAt });
+    // `lastKeyAt` is kept across the cut (#609, owner decision 2026-11-04): only an accepted key
+    // moves it, so cycling disconnect and resume never dodges the idle warning and kick (#183).
+    desksState.set(lobbyId, desk, { ...state, status: to });
   }
 
   /** Line-cut -> expired with the frozen progress; the key goes. Caller is in the room's queue. */

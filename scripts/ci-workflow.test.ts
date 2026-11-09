@@ -323,6 +323,19 @@ describe("CI e2e shards retry a stalled Playwright dependency install (card #819
     expect(attempts! * seconds!).toBeLessThanOrEqual(((step?.["timeout-minutes"] ?? 0) - 1) * 60);
   });
 
+  it("C1 (lock) apt waits for a held dpkg lock before the OS deps step", () => {
+    const lock = steps.find((s) => /DPkg::Lock::Timeout "\d+"/.test(s.run ?? ""));
+    expect(lock?.run).toMatch(/\/etc\/apt\/apt\.conf\.d\//);
+    expect(steps.indexOf(lock!)).toBeGreaterThanOrEqual(0);
+    expect(steps.indexOf(lock!)).toBeLessThan(steps.indexOf(deps!));
+  });
+
+  it("C2 (lock) each OS deps attempt has time to wait out the lock", () => {
+    const [attempts, seconds] = retry(deps);
+    expect(attempts).toBeGreaterThanOrEqual(2);
+    expect(seconds).toBeGreaterThanOrEqual(150);
+  });
+
   const run = (args: string[], timeout = 20_000) =>
     spawnSync("scripts/retry.sh", args, {
       cwd: root,

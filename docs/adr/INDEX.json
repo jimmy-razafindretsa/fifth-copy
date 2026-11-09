@@ -311,6 +311,8 @@
         "railway.json",
         "railway.toml",
         "services/race-server/railway.json",
+        "src/worker/railway.json",
+        "src/worker/main.ts",
         ".github/workflows/**",
         "scripts/deploy-smoke.sh",
         "src/env.ts",
@@ -320,7 +322,7 @@
         "0012"
       ],
       "supersededBy": [],
-      "rule": "Production is the Railway project with four services (web = Next.js from the repo root, race-server = the services/race-server workspace, Railway Postgres, Railway Redis); Railway builds from main on push, web runs prisma migrate deploy as its pre-deploy command, secrets live only in Railway variables (generated, never printed or committed), and every new env var is added to the matching Railway service in the same PR.",
+      "rule": "Production is the Railway project with five services (web = Next.js from the repo root, race-server = the services/race-server workspace, worker = src/worker from the repo root with no domain (ADR 0011,",
       "file": "docs/adr/0019-railway-hosting.md"
     },
     {

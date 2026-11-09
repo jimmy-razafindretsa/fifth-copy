@@ -70,6 +70,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "src/generated/**",
     ".eyes/**",
+    "dist/**",
     "packages/*/dist/**",
     "services/*/dist/**",
     ".worktrees/**",

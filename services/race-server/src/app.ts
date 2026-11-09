@@ -127,7 +127,6 @@ export function createRaceServer({
     registry,
     desksState,
     resumeKeys,
-    clock,
     scheduler,
     durations,
     emit: roomEvent,

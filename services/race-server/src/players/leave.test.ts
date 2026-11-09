@@ -49,6 +49,7 @@ function deps({
       dropped: () => dropped,
     },
     onRoomClosed: vi.fn(),
+    onLobbyClosed: vi.fn(),
     announce: vi.fn(),
   } satisfies LeaveDeps;
   return d;
@@ -77,6 +78,37 @@ describe("leaveRoom (#143)", () => {
     expect(plain.onRoomClosed).not.toHaveBeenCalled();
     expect(plain.presence.left).toHaveBeenCalledWith("lob", "b");
     expect(plain.announce).toHaveBeenCalledWith("lob", [bot]);
+  });
+});
+
+describe("leaveRoom closes the lobby (#734 C2)", () => {
+  it("the leave that closes the room queues the lobby close, once, after freeing it", async () => {
+    const d = deps({
+      phase: "waiting",
+      result: () => ({ members: [], closed: true, kept: false }),
+    });
+    await leaveRoom(d, "lob", "host");
+    expect(d.onLobbyClosed).toHaveBeenCalledExactlyOnceWith("lob");
+    expect(d.onRoomClosed).toHaveBeenCalledOnce();
+  });
+
+  it("a kept ended room (Race again) and a plain leave never close the lobby", async () => {
+    const kept = deps({ result: () => ({ members: [bot], closed: false, kept: true }) });
+    await leaveRoom(kept, "lob", "host");
+    expect(kept.onLobbyClosed).not.toHaveBeenCalled();
+    const plain = deps({ result: () => ({ members: [bot], closed: false, kept: false }) });
+    await leaveRoom(plain, "lob", "b");
+    expect(plain.onLobbyClosed).not.toHaveBeenCalled();
+  });
+
+  it("a web outage never blocks the leave: the close is fire and forget", async () => {
+    const d = deps({
+      phase: "waiting",
+      result: () => ({ members: [], closed: true, kept: false }),
+    });
+    // An enqueue that never settles (Redis or web stalled) still lets the leave resolve.
+    d.onLobbyClosed.mockImplementation(() => void new Promise(() => {}));
+    await expect(leaveRoom(d, "lob", "host")).resolves.toMatchObject({ closed: true });
   });
 });
 

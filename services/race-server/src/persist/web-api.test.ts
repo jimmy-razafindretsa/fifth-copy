@@ -11,7 +11,12 @@ import {
 } from "@fifth-copy/protocol";
 import { createFakeClock, createFakeScheduler } from "../clock";
 import { verifyInternalRequest } from "../http/hmac";
-import { createWebApi, MAX_WEB_RESPONSE_BYTES, WEB_API_TIMEOUT_MS } from "./web-api";
+import {
+  createWebApi,
+  MAX_WEB_RESPONSE_BYTES,
+  WEB_API_TIMEOUT_MS,
+  WebApiStatusError,
+} from "./web-api";
 
 const SECRET = "web-api-test-secret-0123456789abcdef";
 const RACE_ID = "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60";
@@ -260,5 +265,46 @@ describe("createWebApi.postResults (#189)", () => {
     const refused = setup((async () =>
       json(400, { error: "bad-body" })) as unknown as typeof fetch);
     await expect(refused.api.postResults(results)).rejects.toThrow(/status 400/);
+  });
+});
+
+describe("createWebApi.closeLobby (#734)", () => {
+  const close = { v: PROTOCOL_VERSION, lobbyId: "lob_1/x", closedAt: 1_767_225_600_000 };
+
+  it("POSTs the signed close to /api/internal/lobbies/:id/close (id encoded) and parses the answer", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchImpl = vi.fn(async () =>
+      json(200, { v: PROTOCOL_VERSION, lobbyId: close.lobbyId, changed: true }),
+    );
+    const { api, clock } = setup(fetchImpl as unknown as typeof fetch);
+    expect(await api.closeLobby(close)).toEqual({
+      v: PROTOCOL_VERSION,
+      lobbyId: close.lobbyId,
+      changed: true,
+    });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(url)).toBe("http://web.test:5199/api/internal/lobbies/lob_1%2Fx/close");
+    const headers = init.headers as Record<string, string>;
+    expect(JSON.parse(init.body as string)).toEqual(close);
+    expect(
+      verifyInternalRequest({
+        secret: SECRET,
+        timestamp: headers[INTERNAL_HEADERS.timestamp],
+        nonce: headers[INTERNAL_HEADERS.nonce],
+        signature: headers[INTERNAL_HEADERS.signature],
+        rawBody: init.body as string,
+        nowMs: clock.now(),
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("a non-200 rejects with a WebApiStatusError carrying the status; a bad body rejects", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const notFound = setup((async () =>
+      json(404, { v: PROTOCOL_VERSION, error: "not-found" })) as unknown as typeof fetch);
+    await expect(notFound.api.closeLobby(close)).rejects.toEqual(new WebApiStatusError(404));
+    await expect(notFound.api.closeLobby(close)).rejects.toMatchObject({ status: 404 });
+    const bad = setup((async () => json(200, { v: PROTOCOL_VERSION })) as unknown as typeof fetch);
+    await expect(bad.api.closeLobby(close)).rejects.toThrow();
   });
 });

@@ -3,6 +3,8 @@ import type { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
+  PROTOCOL_VERSION,
+  type CloseLobbyRequest,
   type RaceResultsRequest,
   type RankingEntry,
 } from "@fifth-copy/protocol";
@@ -13,10 +15,14 @@ import {
   connectRedis,
   fixtureWebApi,
   startedRace,
+  track,
   until,
   type Booted,
 } from "../testing/harness";
+import { membersKey, roomKey } from "../rooms/keys";
+import { closeLobbyRequest, lobbyCloseOutboxId, sendOutboxEntry } from "./lobby-close";
 import { createOutbox, retryDelayMs } from "./outbox";
+import { WebApiStatusError, type WebApi } from "./web-api";
 import { buildResults, sendResults } from "./results";
 
 // #189 C2, C3: the results outbox on real Redis, in a key space of its own (ioredis keyPrefix), so
@@ -287,5 +293,104 @@ describe("outbox across a restart (C3)", () => {
     expect(posts).toBe(0);
     expect(await pendingIn(raceId)).toEqual({ length: 0, listed: false });
     expect(await redis.exists(outboxKey(raceId))).toBe(0);
+  });
+});
+
+describe("lobby close through the outbox (#734 C2)", () => {
+  let booted: Booted | undefined;
+  afterEach(async () => {
+    await booted?.stop();
+    booted = undefined;
+  });
+
+  /** A web whose close call fails `down` times (web outage), then acknowledges. */
+  function closingWeb(clock: { now(): number }, down = 0) {
+    const web = fixtureWebApi(clock);
+    const closes: { at: number; request: CloseLobbyRequest }[] = [];
+    let failures = down;
+    const api: WebApi = {
+      ...web.api,
+      closeLobby: async (request) => {
+        closes.push({ at: clock.now(), request });
+        if (failures > 0) {
+          failures -= 1;
+          throw new Error("web down");
+        }
+        return { v: PROTOCOL_VERSION, lobbyId: request.lobbyId, changed: true };
+      },
+    };
+    return { api, closes };
+  }
+
+  it("sendOutboxEntry: a close entry goes to closeLobby, a results entry to postResults", async () => {
+    const calls: string[] = [];
+    const web = fixtureWebApi({ now: () => 0 });
+    const send = sendOutboxEntry({
+      postResults: async (req) => {
+        calls.push(`results ${req.raceId}`);
+        return web.api.postResults(req);
+      },
+      closeLobby: async (req) => {
+        calls.push(`close ${req.lobbyId}`);
+        return { v: PROTOCOL_VERSION, lobbyId: req.lobbyId, changed: false };
+      },
+    });
+    const [chunk] = results(1);
+    expect(await send(closeLobbyRequest("lob_1", 5))).toBe(true);
+    expect(await send(chunk)).toBe(true);
+    expect(calls).toEqual(["close lob_1", `results ${chunk!.raceId}`]);
+  });
+
+  it("sendOutboxEntry: a 404 (no such lobby) is acknowledged; a 500 or another lobby's answer is retried", async () => {
+    const answer = (fn: WebApi["closeLobby"]) =>
+      sendOutboxEntry({ postResults: () => Promise.reject(new Error("unused")), closeLobby: fn });
+    const entry = closeLobbyRequest("lob_1", 5);
+    expect(await answer(() => Promise.reject(new WebApiStatusError(404)))(entry)).toBe(true);
+    await expect(answer(() => Promise.reject(new WebApiStatusError(500)))(entry)).rejects.toThrow();
+    expect(
+      await answer(async () => ({ v: PROTOCOL_VERSION, lobbyId: "lob_2", changed: true }))(entry),
+    ).toBe(false);
+  });
+
+  it("the last human leaving a waiting room queues the close; a web outage is retried and never blocks the leave", async () => {
+    const holder: { web?: ReturnType<typeof closingWeb> } = {};
+    const clockRef = { now: () => booted!.clock.now() };
+    holder.web = closingWeb(clockRef, 1);
+    booted = await boot(url, { webApi: holder.web.api, redisPrefix: prefix });
+    const lobby = await booted.openRoom("CLS-0001");
+    const host = booted.connect({ v: PROTOCOL_VERSION, token: await booted.token({ lobby }) });
+    const seen = track(host);
+    await until(() => !!seen.welcome, 2_000, "welcome");
+    const leftAt = booted.clock.now();
+    host.disconnect();
+
+    const closes = holder.web.closes;
+    await until(() => closes.length === 1, 2_000, "first close call");
+    // The leave completed (keys gone) even though the web is down.
+    expect(await redis.exists(roomKey(lobby), membersKey(lobby))).toBe(0);
+    expect(closes[0]!.request).toEqual({ v: PROTOCOL_VERSION, lobbyId: lobby, closedAt: leftAt });
+    await settle();
+    const id = lobbyCloseOutboxId(lobby);
+    expect(await pendingIn(id)).toEqual({ length: 1, listed: true });
+    expect(await redis.ttl(outboxKey(id))).toBeGreaterThan(0);
+
+    booted.clock.advance(1_000);
+    await until(() => closes.length === 2, 2_000, "retried close call");
+    await settle();
+    expect(closes[1]!.request).toEqual(closes[0]!.request);
+    expect(await pendingIn(id)).toEqual({ length: 0, listed: false });
+  });
+
+  it("a room found gone on rehydrate (#204) has its lobby closed on boot", async () => {
+    const web = fixtureWebApi({ now: () => Date.now() });
+    booted = await boot(url, { webApi: web.api, redisPrefix: prefix, recovery: true });
+    const gone = await booted.openRoom("GON-0734");
+    const live = await booted.openRoom("LIV-0734");
+    await redis.del(roomKey(gone), membersKey(gone));
+    booted = await booted.restart();
+    await until(() => web.closes.some((c) => c.lobbyId === gone), 3_000, "gone lobby closed");
+    expect(web.closes.map((c) => c.lobbyId)).not.toContain(live);
+    await settle();
+    expect(await pendingIn(lobbyCloseOutboxId(gone))).toEqual({ length: 0, listed: false });
   });
 });

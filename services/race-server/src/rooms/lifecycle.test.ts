@@ -23,6 +23,7 @@ import {
   connectError,
   connectRedis,
   FIXTURE_TEXT,
+  ackClose,
   ackResults,
   fixtureWebApi,
   HOST_SUB,
@@ -369,6 +370,7 @@ describe("lifecycle: text from the web app over the signed internal API (#199 C5
     const webApi: WebApi = {
       startRace: (req) => wired.api!.startRace(req),
       postResults: ackResults,
+      closeLobby: ackClose,
     };
     const { booted, lobby, host, seenHost, others, connectAs } = await room({ players: 2, webApi });
     wired.api = createWebApi({
@@ -458,6 +460,7 @@ describe("lifecycle: refusals (C2)", () => {
     const webApi: WebApi = {
       startRace: (req) => (fail ? Promise.reject(new Error("500")) : web.api.startRace(req)),
       postResults: ackResults,
+      closeLobby: ackClose,
     };
     const { host, lobby, seenHost } = await room({ webApi });
     expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
@@ -477,6 +480,7 @@ describe("lifecycle: refusals (C2)", () => {
         return new Promise(() => {});
       },
       postResults: ackResults,
+      closeLobby: ackClose,
     };
     const { booted, host, lobby } = await room({ webApi });
     const ack = start(host);
@@ -494,6 +498,7 @@ describe("lifecycle: refusals (C2)", () => {
         raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
       }),
       postResults: ackResults,
+      closeLobby: ackClose,
     };
     const { host } = await room({ webApi });
     expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
@@ -729,6 +734,7 @@ describe("lifecycle: race again (#143)", () => {
     const webApi: WebApi = {
       startRace: (req) => (fail ? Promise.reject(new Error("500")) : web.api.startRace(req)),
       postResults: ackResults,
+      closeLobby: ackClose,
     };
     const { host, lobby, seenHost, others } = await endedRoom({ webApi });
 

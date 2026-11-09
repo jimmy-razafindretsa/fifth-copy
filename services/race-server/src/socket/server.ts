@@ -77,6 +77,8 @@ export function attachSocketServer(
     presence: Presence;
     /** The shared Redis limiter behind the per-identity buckets (#207, `rate-limit.ts`). */
     limiter: Limiter;
+    /** Queues the web's lobby close when a leave closes the room (#734, `LeaveDeps.onLobbyClosed`). */
+    onLobbyClosed: (lobbyId: string) => void;
   },
 ): RaceIo {
   const { registry, lifecycle, race, presence } = deps;
@@ -84,6 +86,7 @@ export function attachSocketServer(
     registry,
     presence,
     onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
+    onLobbyClosed: deps.onLobbyClosed,
     announce: (lobbyId, members) =>
       void io.to(audience(lobbyId)).emit("roster", { v: PROTOCOL_VERSION, members }),
   };

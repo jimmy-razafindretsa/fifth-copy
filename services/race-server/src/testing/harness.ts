@@ -70,10 +70,22 @@ export const ackResults: WebApi["postResults"] = async (request) => ({
  * A `WebApi` that accepts every start with `FIXTURE_TEXT` and acknowledges every results chunk;
  * `calls` records each start request, `results` each results request.
  */
+/** The web's answer to a lobby close (#734): closed now. */
+export const ackClose: WebApi["closeLobby"] = async (request) => ({
+  v: PROTOCOL_VERSION,
+  lobbyId: request.lobbyId,
+  changed: true,
+});
+
 export function fixtureWebApi(clock: { now(): number }) {
   const calls: Parameters<WebApi["startRace"]>[0][] = [];
   const results: Parameters<WebApi["postResults"]>[0][] = [];
+  const closes: Parameters<WebApi["closeLobby"]>[0][] = [];
   const api: WebApi = {
+    closeLobby: async (request) => {
+      closes.push(request);
+      return ackClose(request);
+    },
     postResults: (request) => {
       results.push(request);
       return ackResults(request);
@@ -89,7 +101,7 @@ export function fixtureWebApi(clock: { now(): number }) {
       };
     },
   };
-  return { api, calls, results };
+  return { api, calls, results, closes };
 }
 
 export type Booted = {
@@ -281,6 +293,7 @@ export function textWebApi(
 ): WebApi {
   return {
     postResults,
+    closeLobby: ackClose,
     startRace: async (request) => ({
       v: PROTOCOL_VERSION,
       raceId: request.raceId,

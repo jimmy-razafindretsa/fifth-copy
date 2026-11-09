@@ -8,11 +8,13 @@ import { getViewer, hashPassword, signIn as authSignIn } from "@/server/auth";
 import { db } from "@/server/db";
 import { logger } from "@/server/logger";
 import { mergeGuestCookieInto } from "../merge/merge-on-sign-in";
+import { REVEAL_PATH, stashReveal } from "../recovery/reveal";
+import { issueRecoveryCode } from "./issue-recovery-code";
 import { type AuthField, parseSignUp } from "../schema";
 import type { AuthFormState } from "./auth-form-state";
 
-/** Where a new account lands until the recovery-code reveal (#46) is appended after creation. */
-const AFTER_SIGN_UP = "/";
+/** Where a new account lands: the one-time recovery code reveal (#46). */
+const AFTER_SIGN_UP = REVEAL_PATH;
 
 type ErrorKey = keyof Awaited<ReturnType<typeof getT>>["auth"]["errors"];
 
@@ -45,9 +47,10 @@ function isUniqueViolation(error: unknown) {
  * Username sign-up (#36 C1-C4, ADR 0009, R147, R149, R152, R154, R161). In order: a signed-in account
  * is refused (no second account); the form is parsed (`parseSignUp`: exactly username and password);
  * the profanity filter, then the case-insensitive availability check, run here on the server only;
- * the account is created (Argon2id hash, `isGuest=false`, `typistName=username`; a concurrent insert of
- * the same name reads as taken), signed in through Auth.js (JWT cookie), the guest cookie's history
- * merged and the cookie cleared; then the redirect. Errors come back in the viewer's locale.
+ * the account and its recovery code are created in one transaction (Argon2id hashes, `isGuest=false`,
+ * `typistName=username`, `issueRecoveryCode` #46; a concurrent insert of the same name reads as taken),
+ * signed in through Auth.js (JWT cookie), the guest cookie's history
+ * merged and the cookie cleared; the words left for the one-shot reveal; then the redirect there. Errors come back in the viewer's locale.
  */
 export async function signUp(form: FormData): Promise<AuthFormState> {
   const viewer = await getViewer();
@@ -61,16 +64,15 @@ export async function signUp(form: FormData): Promise<AuthFormState> {
   if (await isTaken(username, usernameNormalized)) return refuse({ username: "usernameTaken" });
 
   let accountId: string;
+  let recoveryWords: string[];
   try {
-    ({ id: accountId } = await db.user.create({
-      data: {
-        isGuest: false,
-        typistName: username,
-        username,
-        usernameNormalized,
-        passwordHash: await hashPassword(password),
-      },
-      select: { id: true },
+    const passwordHash = await hashPassword(password);
+    ({ accountId, recoveryWords } = await db.$transaction(async (tx) => {
+      const { id } = await tx.user.create({
+        data: { isGuest: false, typistName: username, username, usernameNormalized, passwordHash },
+        select: { id: true },
+      });
+      return { accountId: id, recoveryWords: await issueRecoveryCode(id, tx) };
     }));
   } catch (error) {
     if (isUniqueViolation(error)) return refuse({ username: "usernameTaken" });
@@ -79,6 +81,7 @@ export async function signUp(form: FormData): Promise<AuthFormState> {
 
   if (!(await startSession(username, password))) return refuse({}, "generic");
   await mergeGuestCookieInto(accountId);
+  await stashReveal(accountId, recoveryWords);
   redirect(AFTER_SIGN_UP);
 }
 

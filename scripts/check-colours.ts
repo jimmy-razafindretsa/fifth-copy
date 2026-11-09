@@ -18,8 +18,9 @@ export const OWNERSHIP: readonly Ownership[] = [
       "src/app/design/**",
       "src/features/landing/components/sections.module.css",
       "src/components/ui/star.module.css",
+      "src/features/identity/components/auth.module.css",
     ],
-    why: "/design shows every role as a swatch (#16 C6); bible 7.4 multi-cell grids gap 2px on an ink ground; bible 6 ink stars",
+    why: "/design shows every role as a swatch (#16 C6); bible 7.4 multi-cell grids gap 2px on an ink ground (the #46 recovery words); bible 6 ink stars",
   },
   {
     rule: "reward",

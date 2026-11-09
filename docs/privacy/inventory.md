@@ -59,6 +59,9 @@ what the student's own sign-in sends them; see [pia.md](pia.md) for every flow.
 Prisma models that hold no personal information. A model moves to the table above as soon as it gets a field that
 points to a person.
 
+- `JobRun`: one row per background job run (ADR 0011, #733): job name, start and finish times, status and the error
+  message of a failed run. Jobs act on personal data (purges, expiry) but a run row never names a person; job code must not
+  put personal data in its error messages.
 - `Text`: race texts and passages with language, source and licence (#346). Texts come from public-domain sources and
   teachers; they record a source, not the account that added them. If a teacher's name is ever stored as an author,
   add a row above.

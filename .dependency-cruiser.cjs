@@ -9,6 +9,7 @@
  *   packages/protocol imports only zod and the engine
  *   packages/limiter imports only itself; only src/server/limiter and services/race-server use it (ADR 0020)
  *   services/race-server never imports the Next.js app (src/) and never Prisma
+ *   src/worker imports only src/worker, src/features/*\/jobs, src/server and src/env.ts (ADR 0011)
  *   src/ never imports services/
  * Run via scripts/check.sh (depcruise src packages services).
  */
@@ -208,6 +209,23 @@ module.exports = {
         pathNot: [
           "^packages/[^/]+/src/index\\.ts$",
           "^packages/protocol/src/room-code-format\\.ts$",
+        ],
+      },
+    },
+    {
+      name: "worker-imports",
+      comment:
+        "The worker (ADR 0011, #733) runs jobs: it imports only itself, feature jobs/ folders, src/server and the validated env.",
+      severity: "error",
+      from: { path: "^src/worker/", pathNot: "\\.test\\.ts$" },
+      to: {
+        path: "^src/",
+        pathNot: [
+          "^src/worker/",
+          "^src/features/[^/]+/jobs/",
+          "^src/server/",
+          "^src/env\\.ts$",
+          "^src/generated/prisma/",
         ],
       },
     },

@@ -22,6 +22,8 @@ const SLOW_FILES = [
   "scripts/deploy-smoke.test.ts",
   "scripts/merged-migrations.test.ts",
   "scripts/see.test.ts",
+  // Boots the worker with tsx against the test database (#733 C3).
+  "src/worker/main.test.ts",
   "services/race-server/src/rooms/lifecycle.test.ts",
   "services/race-server/src/players/presence.test.ts",
   "services/race-server/src/rooms/snapshot.bench.test.ts",

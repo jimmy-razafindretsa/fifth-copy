@@ -33,7 +33,7 @@ export const MERGE_IGNORED_MODELS: readonly string[] = ["User"];
  * Models with neither a `userId` field nor a relation to User: nothing of the guest lives there.
  * coverage.test.ts checks this list against the schema, so it cannot go stale.
  */
-export const MODELS_WITHOUT_USER: readonly string[] = ["Race", "Text"];
+export const MODELS_WITHOUT_USER: readonly string[] = ["JobRun", "Race", "Text"];
 
 const steps: MergeStep[] = [];
 

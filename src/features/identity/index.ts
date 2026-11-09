@@ -73,3 +73,14 @@ export { takeReveal as takeRecoveryReveal } from "./recovery/reveal";
 export { RecoverScreen } from "./components/recover-screen";
 export { RecoveryRevealScreen } from "./components/recovery-reveal-screen";
 export { RecoverStates } from "./components/recover-states";
+// The viewer's settings (#66): the read, the save and the shape the settings screen and the header
+// toggles (#373) share; the screen itself and its `/design` states.
+export { getPreferences } from "./queries/get-preferences";
+export {
+  updatePreferences,
+  type UpdatePreferences,
+  type UpdatePreferencesResult,
+} from "./actions/update-preferences";
+export type { Preferences, PreferenceTheme } from "./schema";
+export { SettingsScreen } from "./components/settings/settings-screen";
+export { SettingsStates } from "./components/settings/settings-states";

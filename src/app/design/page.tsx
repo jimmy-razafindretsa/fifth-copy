@@ -17,7 +17,7 @@ import {
   Star,
   Wordmark,
 } from "@/components/ui";
-import { AuthStates, RecoverStates, ResetStates } from "@/features/identity";
+import { AuthStates, RecoverStates, ResetStates, SettingsStates } from "@/features/identity";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -54,6 +54,7 @@ import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
 import { ExitSpecimen } from "./exit-demo";
 import demo from "./motion-demo.module.css";
+import { fileSpecimenPreference } from "./settings-demo-action";
 import { StampReplay } from "./stamp-demo";
 
 export const metadata: Metadata = { title: "Design system" };
@@ -711,6 +712,17 @@ export default async function DesignPage() {
           /recover form in each state, its success revealing the new code once.
         </p>
         <RecoverStates />
+      </section>
+
+      <section id="settings" aria-labelledby="settings-heading" className="flex flex-col gap-3">
+        <h2 id="settings-heading" className="type-display-md">
+          Settings
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The /settings docket for a guest and for an account, then its controls while a change is
+          on its way, once it is filed, and when it is returned.
+        </p>
+        <SettingsStates action={fileSpecimenPreference} />
       </section>
 
       <section aria-labelledby="stamps" className="flex flex-col gap-3">

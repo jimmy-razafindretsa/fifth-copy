@@ -561,6 +561,50 @@ export const fr = {
     },
   },
   settings: {
+    kicker: "MINISTÈRE DE LA DACTYLO · FORMULAIRE 1-F",
+    title: "RÉGLAGES",
+    lede: "Ton bureau, à ta façon. Chaque changement est classé dès que tu le fais.",
+    form: "FORMULAIRE 1-F",
+    tag: "RÉGLAGES DU BUREAU",
+    sections: {
+      layout: "DISPOSITION DU CLAVIER",
+      theme: "THÈME",
+      language: "LANGUE",
+      sound: "SON",
+      account: "COMPTE",
+    },
+    layout: {
+      hint: "Choisis le clavier de ton bureau. Ses touches accentuées sont marquées à l'encre.",
+      names: {
+        CSA: "FRANÇAIS CANADIEN (CSA)",
+        FR_CA: "FRANÇAIS (CANADA)",
+        US_QWERTY: "QWERTY AMÉRICAIN",
+        AZERTY: "AZERTY",
+      },
+    },
+    theme: { LIGHT: "CLAIR", DARK: "SOMBRE", SYSTEM: "SYSTÈME" },
+    language: { en: "ENGLISH", fr: "FRANÇAIS" },
+    sound: {
+      on: "OUI",
+      off: "NON",
+      hint: "Le cliquetis des touches et la cloche du chariot pendant une course.",
+    },
+    status: {
+      pending: "CLASSEMENT…",
+      saved: "CLASSÉ",
+      errorPrefix: "RETOURNÉ ·",
+      error: "Ce changement n'a pas été classé. Réessaie.",
+    },
+    account: {
+      typist: "DACTYLO",
+      username: "NOM D'UTILISATEUR",
+      guestTag: "INVITÉ",
+      keep: "Crée un compte pour garder ton dossier",
+      signUp: "OUVRIR UN DOSSIER →",
+      picture: "CHANGER DE PHOTO",
+      deleteData: "SUPPRIMER MES DONNÉES",
+      soon: "Bientôt.",
+    },
     avatar: {
       moderation: {
         pending:

@@ -31,6 +31,12 @@ describe("worker registry", () => {
     expect(durationMs(hb!.every)).toBe(5 * 60 * 1000);
     expect(new Set(jobs.map((j) => j.name)).size).toBe(jobs.length);
   });
+
+  it("registers race.void every 10 minutes (#613)", () => {
+    const sweep = jobs.find((j) => j.name === "race.void");
+    expect(sweep).toBeDefined();
+    expect(durationMs(sweep!.every)).toBe(10 * 60 * 1000);
+  });
 });
 
 describe("runWorker", () => {

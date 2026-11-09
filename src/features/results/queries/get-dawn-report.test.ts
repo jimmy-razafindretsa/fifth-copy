@@ -31,7 +31,7 @@ type RaceRow = {
   id: string;
   textLanguage: "FR" | "EN";
   endedAt: Date | null;
-  endReason: "ALL_FINISHED" | "TIMER" | null;
+  endReason: "ALL_FINISHED" | "TIMER" | "VOID" | null;
   lobby: { code: string; status: "WAITING" | "CLOSED" } | null;
   results: Row[];
 };
@@ -39,6 +39,7 @@ type RaceRow = {
 const RACE_ID = "3b241101-e2bb-4255-8caf-4136c566a962";
 const FILING_ID = "9c5b94b1-35ad-49bb-b118-8e8fc24abf80";
 const UNKNOWN_ID = "16fd2706-8baf-433b-82eb-8c7fada847da";
+const VOID_ID = "5f0c3a1e-2b7d-4c9e-8a61-0d4e7b9f2c13";
 const ENDED = new Date("2026-10-08T08:14:00Z");
 
 const row = (over: Partial<Row>): Row => ({
@@ -87,6 +88,8 @@ const RACES: RaceRow[] = [
     ],
   },
   { id: FILING_ID, textLanguage: "EN", endedAt: null, endReason: null, lobby: null, results: [] },
+  // #613 C2: a race the race server voided, closed by the race.void job
+  { id: VOID_ID, textLanguage: "FR", endedAt: ENDED, endReason: "VOID", lobby: null, results: [] },
   {
     // #688 C1: one of each outfit case, six desks
     id: OUTFITS_ID,
@@ -148,6 +151,13 @@ describe("getDawnReport (#300 C1)", () => {
   it("answers null for an unknown race", async () => {
     const { db } = fakeDb();
     await expect(getDawnReport(UNKNOWN_ID, null, { db })).resolves.toBeNull();
+  });
+
+  it("answers null for a voided race (#613 C2): never a report, never filing", async () => {
+    const { db } = fakeDb();
+    await expect(getDawnReport(VOID_ID, { id: "u-lynx" }, { db })).resolves.toBeNull();
+    const withRows = RACES.map((r) => (r.id === VOID_ID ? { ...r, results: [row({})] } : r));
+    await expect(getDawnReport(VOID_ID, null, { db: fakeDb(withRows).db })).resolves.toBeNull();
   });
 
   it("lobbyOpen is true only while the race's lobby is WAITING (#143 C4)", async () => {

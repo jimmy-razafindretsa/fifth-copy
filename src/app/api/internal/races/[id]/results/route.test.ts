@@ -239,6 +239,22 @@ describe.skipIf(!testDatabaseUrl)(
       expect(await rowsOf(raceId)).toEqual(rows);
     });
 
+    it("#613: results arriving after the void sweep replace its VOID end with the real one", async () => {
+      // The sweep (race.void) guesses VOID for a race open past VOID_AFTER_MS; a race the race server
+      // voided never posts results (ADR 0008), so a late chunk (outbox retry) proves it really ended.
+      const raceId = await startedRace();
+      await db.race.update({
+        where: { id: raceId },
+        data: { endedAt: new Date(), endReason: "VOID" },
+      });
+      const body = request(raceId);
+      expect((await signed(body)).status).toBe(200);
+      const rows = await rowsOf(raceId);
+      expect(rows.race?.endReason).toBe("TIMER");
+      expect(rows.race?.endedAt?.getTime()).toBe(body.endedAt);
+      expect(rows.results).toHaveLength(3);
+    });
+
     it("#716 C1: the same signed chunk twice: the second is 401 replay and changes nothing", async () => {
       const raceId = await startedRace();
       const rawBody = JSON.stringify(request(raceId));

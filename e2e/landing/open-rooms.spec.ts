@@ -27,6 +27,18 @@ async function landing(page: Page) {
   });
 }
 
+/**
+ * Loads the landing until the docket lists `code`. The docket shows the 5 busiest rooms, and parallel
+ * workers open public rooms too, so the test's own room is found by its code, reloading while busier
+ * rooms of other tests crowd it out.
+ */
+async function landingListing(page: Page, code: string) {
+  await expect(async () => {
+    await landing(page);
+    await expect(joinLink(page, code)).toBeVisible({ timeout: scaled(500) });
+  }).toPass({ timeout: ACTION_WAIT });
+}
+
 /** Opens a public room with QUICK RACE once the landing is hydrated (landing.spec.ts `ready`). */
 async function quickRace(page: Page): Promise<string> {
   await page.goto("/");
@@ -56,7 +68,7 @@ test.describe("open rooms docket (#807)", () => {
   }) => {
     const code = await quickRace(page);
     const b = await freshContext(browser);
-    await landing(b.page);
+    await landingListing(b.page, code);
     await expect(docket(b.page).getByRole("heading", { level: 2 })).toHaveText("OPEN ROOMS");
     await expect(docket(b.page).getByText("LIVE", { exact: true })).toBeVisible();
     const link = joinLink(b.page, code);
@@ -89,7 +101,7 @@ test.describe("open rooms docket (#807)", () => {
     const a = await freshContext(browser);
     const code = await quickRace(a.page);
     const b = await freshContext(browser);
-    await landing(b.page);
+    await landingListing(b.page, code);
     await expect(joinLink(b.page, code)).toBeVisible();
 
     // the last human's socket closes: the race server closes the waiting room (#145)
@@ -116,7 +128,7 @@ test.describe("open rooms docket (#807)", () => {
           { name: "theme", value: "dark", url: test.info().project.use.baseURL! },
         ]);
       }
-      await landing(b.page);
+      await landingListing(b.page, code);
       if (scheme === "dark")
         await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
       const link = joinLink(b.page, code);

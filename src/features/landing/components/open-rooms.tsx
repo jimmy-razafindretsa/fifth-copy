@@ -21,28 +21,32 @@ function counted(forms: OpenRoomsLabels["typists"], n: number): string {
 
 /**
  * The landing's open-rooms docket (#807, bible 14.1 "Open rooms docket", 7.4): a header row (mono
- * title, Oswald `LIVE` tag) over the rows. It streams in its own `Suspense` boundary, so the rest of the
- * landing never waits for the race server; `load` is the lobby feature's `listOpenLobbies`, passed by
- * the route (a component never imports a feature's server entry, ADR 0021). It only shows the answer:
- * what is joinable is the query's decision.
+ * title, Oswald `LIVE` tag) over the rows. Only the rows stream, in their own `Suspense` boundary, so
+ * the rest of the landing never waits for the race server; the docket shell (its landmark and the
+ * title's id) sits outside the boundary, so it exists once even while React swaps the streamed rows
+ * in (the resolved content waits in a hidden node beside the fallback until then). `load` is the lobby
+ * feature's `listOpenLobbies`, passed by the route (a component never imports a feature's server
+ * entry, ADR 0021). It only shows the answer: what is joinable is the query's decision.
  */
 export function OpenRooms({
   load,
   ...labels
 }: Labels & { load: () => Promise<ListOpenLobbiesResult> }) {
   return (
-    <Suspense fallback={<OpenRoomsSkeleton labels={labels.labels} />}>
-      <OpenRoomsLoaded load={load} {...labels} />
-    </Suspense>
+    <Docket labels={labels.labels}>
+      <Suspense fallback={<SkeletonRows labels={labels.labels} />}>
+        <OpenRoomsLoaded load={load} {...labels} />
+      </Suspense>
+    </Docket>
   );
 }
 
-/** Awaits the query, then renders its answer (exported for the unit tests). */
+/** Awaits the query, then renders its answer's rows (exported for the unit tests). */
 export async function OpenRoomsLoaded({
   load,
   ...labels
 }: Labels & { load: () => Promise<ListOpenLobbiesResult> }) {
-  return <OpenRoomsDocket result={await load()} {...labels} />;
+  return <OpenRoomsBody result={await load()} {...labels} />;
 }
 
 function Docket({ labels, children }: { labels: OpenRoomsLabels; children: React.ReactNode }) {
@@ -60,9 +64,9 @@ function Docket({ labels, children }: { labels: OpenRoomsLabels; children: React
 }
 
 /** Loading: three 7.4 skeleton rows, flat newsprint blocks, the list `aria-busy`. */
-export function OpenRoomsSkeleton({ labels }: { labels: OpenRoomsLabels }) {
+function SkeletonRows({ labels }: { labels: OpenRoomsLabels }) {
   return (
-    <Docket labels={labels}>
+    <>
       <ul className={styles.list} aria-label={labels.listName} aria-busy="true">
         {[0, 1, 2].map((i) => (
           <li key={i} className={styles.row} aria-hidden="true" data-skeleton>
@@ -72,7 +76,7 @@ export function OpenRoomsSkeleton({ labels }: { labels: OpenRoomsLabels }) {
         ))}
       </ul>
       <p className="sr-only">{labels.loading}</p>
-    </Docket>
+    </>
   );
 }
 
@@ -100,35 +104,30 @@ function OpenRoomRow({ room, labels }: { room: OpenLobby; labels: OpenRoomsLabel
   );
 }
 
-/** The populated, empty and error states of the docket for one answer of the query. */
-export function OpenRoomsDocket({
-  result,
-  labels,
-  errors,
-}: Labels & { result: ListOpenLobbiesResult }) {
+/** The populated, empty and error rows for one answer of the query. */
+function OpenRoomsBody({ result, labels, errors }: Labels & { result: ListOpenLobbiesResult }) {
   if (!result.ok) {
     return (
-      <Docket labels={labels}>
-        <p role="alert" className={styles.error}>
-          <span className={styles.errorPrefix}>{errors.prefix}</span> {errors.unavailable}
-        </p>
-      </Docket>
+      <p role="alert" className={styles.error}>
+        <span className={styles.errorPrefix}>{errors.prefix}</span> {errors.unavailable}
+      </p>
     );
   }
-  if (result.lobbies.length === 0) {
-    return (
-      <Docket labels={labels}>
-        <p className={styles.notice}>{labels.empty}</p>
-      </Docket>
-    );
-  }
+  if (result.lobbies.length === 0) return <p className={styles.notice}>{labels.empty}</p>;
   return (
-    <Docket labels={labels}>
-      <ul className={styles.list} aria-label={labels.listName}>
-        {result.lobbies.slice(0, OPEN_ROOMS_MAX).map((room) => (
-          <OpenRoomRow key={room.code} room={room} labels={labels} />
-        ))}
-      </ul>
+    <ul className={styles.list} aria-label={labels.listName}>
+      {result.lobbies.slice(0, OPEN_ROOMS_MAX).map((room) => (
+        <OpenRoomRow key={room.code} room={room} labels={labels} />
+      ))}
+    </ul>
+  );
+}
+
+/** The whole docket for one answer of the query (the unit tests' entry for the settled states). */
+export function OpenRoomsDocket(props: Labels & { result: ListOpenLobbiesResult }) {
+  return (
+    <Docket labels={props.labels}>
+      <OpenRoomsBody {...props} />
     </Docket>
   );
 }

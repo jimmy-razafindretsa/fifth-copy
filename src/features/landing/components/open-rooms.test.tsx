@@ -1,4 +1,4 @@
-import { renderToStaticMarkup, renderToString } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup, renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ListOpenLobbiesResult, OpenLobby } from "@/features/lobby";
 import { en } from "@/i18n/en";
@@ -27,6 +27,20 @@ describe("OpenRooms (#807)", () => {
     expect(html).not.toContain("JOIN");
     // flat blocks: no gradient anywhere in the fallback
     expect(html).not.toContain("gradient");
+  });
+
+  it("C2 streamed: one docket and one title id, the rows swapped in under it", async () => {
+    let answer!: (result: ListOpenLobbiesResult) => void;
+    const pending = new Promise<ListOpenLobbiesResult>((resolve) => (answer = resolve));
+    const stream = await renderToReadableStream(<OpenRooms load={() => pending} {...labels} />);
+    answer({ ok: true, lobbies: [room("KGB-4821", 2, 1)] });
+    const html = await new Response(stream).text();
+    // the fallback rows and the streamed rows coexist until the swap; the shell never does
+    expect(html.match(/data-open-rooms/g)).toHaveLength(1);
+    expect(html.match(/id="open-rooms-title"/g)).toHaveLength(1);
+    expect(html.match(/<h2/g)).toHaveLength(1);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('aria-label="Join room KGB-4821"');
   });
 
   it("C1 populated: one row per room, code | counts then JOIN → to its waiting room", async () => {

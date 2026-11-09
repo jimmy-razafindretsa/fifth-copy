@@ -1,0 +1,157 @@
+/*
+ * The picture dialog (#60; bible 7.4 "Docket dialog" extension): the 256 px frame (2px ink rule, the
+ * picture positioned under it), the 64 px preview, the ZOOM slider, the file chooser as a 7.1
+ * secondary label button, and the review row (the 7.4 alert row's info tone). Roles only.
+ */
+@reference "../../../app/globals.css";
+
+.work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.frame,
+.small {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  box-sizing: content-box;
+}
+
+.frame {
+  width: 256px;
+  height: 256px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.frame:active {
+  cursor: grabbing;
+}
+
+.frame:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.small {
+  width: 64px;
+  height: 64px;
+}
+
+.picture {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 160px;
+}
+
+.zoom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zoom input {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--color-fg);
+}
+
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* visually hidden, still focusable: the label below is its button */
+.file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* the 7.1 secondary label button (the Button primitive's secondary at lg) */
+.choose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 2px solid var(--color-fg);
+  @apply type-label;
+  font-size: 16px;
+  line-height: normal;
+  cursor: pointer;
+}
+
+.choose:hover {
+  background: var(--color-surface);
+}
+
+.file:focus-visible + .choose {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.file:disabled + .choose {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* the 7.4 alert row, info tone: a flagged picture waits for a person; not an error */
+.review {
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface-muted);
+  padding: 12px 14px;
+}
+
+.reviewTitle {
+  margin: 0;
+  @apply type-display-sm;
+  font-size: 20px;
+}
+
+.reviewText {
+  margin: 4px 0 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+@media (max-width: 480px) {
+  .side {
+    flex-direction: row;
+    align-items: flex-end;
+    width: 100%;
+  }
+
+  .zoom {
+    flex: 1;
+  }
+}

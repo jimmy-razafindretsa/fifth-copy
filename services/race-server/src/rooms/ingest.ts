@@ -24,7 +24,7 @@ const DROPPED: IngestResult = { terminal: false };
 /**
  * The one entry for a desk's keystrokes (ADR 0006 point 3, 0007; ARCHITECTURE 7.3). Synchronous and
  * Redis-free: the runtime is the authority, `tick` mirrors it. No runtime yet means the room is
- * waiting or counting down (`before-go`); an ended runtime is `not-running`. A desk outside the race
+ * waiting or counting down (`before-go`); an ended or ending runtime is `not-running`. A desk outside the race
  * or not `typing` is dropped silently. Each `t` (ms since GO, client clock) is clamped into
  * `[elapsed - MAX_LAG_MS, min(elapsed + MAX_LEAD_MS, MAX_RACE_MS)]`, then raised to the desk's
  * `lastT` (the engine ignores an older `t`); a clamp, a decrease within the batch or a raise counts
@@ -41,7 +41,10 @@ export function ingest(
   now: number,
 ): IngestResult {
   if (!runtime) return { rejected: "before-go", terminal: false };
-  if (runtime.phase !== "running") return { rejected: "not-running", terminal: false };
+  // `ending` (#609): `endRace` started, the ranking may already be taken; no key may change it.
+  if (runtime.phase !== "running" || runtime.ending) {
+    return { rejected: "not-running", terminal: false };
+  }
   const start = runtime.states.get(desk);
   if (start?.status !== "typing") return DROPPED;
 

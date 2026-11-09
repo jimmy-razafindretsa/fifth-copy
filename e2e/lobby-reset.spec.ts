@@ -176,6 +176,8 @@ test.describe("teacher password reset docket (#790)", () => {
     context,
   }) => {
     test.skip(test.info().project.name === "mobile", "phones hide the docket (bible 14.3, 18)");
+    // sign-in, a raced pupil, two axe scans and a reload overran the 30 s budget on CI (#847)
+    test.slow();
     const host = await account(STEM, true);
     const pupil = await account(STEM);
     await signIn(page, host);

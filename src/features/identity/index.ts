@@ -9,6 +9,10 @@ export { avatarStore } from "./avatars/default-store";
 export type { AvatarStore, AvatarSize } from "./avatars/store";
 export type { AvatarErrorCode } from "./avatars/errors";
 export { avatarNotice } from "./avatars/moderation/notice";
+// One avatar everywhere (#60): the stored picture or the stamped portrait, and the viewer's version.
+export { Avatar, avatarSrc, type AvatarUser, type AvatarDisplaySize } from "./avatars/avatar";
+export { DefaultPortrait, portraitVariant } from "./avatars/default-portrait";
+export { getAvatarUser } from "./queries/avatar-user";
 export { avatarQuery, normalizeUsername } from "./schema";
 // The keyboard layouts (R179, #224): pure data the race machine, the settings picker (#66) and the heatmap read.
 export { keyboardLayoutIds, layouts, type KeyboardLayoutId } from "./keyboard/layouts";
@@ -84,3 +88,6 @@ export {
 export type { Preferences, PreferenceTheme } from "./schema";
 export { SettingsScreen } from "./components/settings/settings-screen";
 export { SettingsStates } from "./components/settings/settings-states";
+// The first-race keyboard prompt (#70): the lobby mounts it; `/design?dialog=layout` shows it open.
+export { FirstRaceLayoutPrompt } from "./components/first-race-layout-prompt";
+export { LayoutPrompt, LAYOUT_PROMPT_KEY } from "./components/layout-prompt";

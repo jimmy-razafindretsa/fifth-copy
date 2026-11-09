@@ -96,5 +96,7 @@ export async function plantGuest(context: BrowserContext, typistName: string): P
 }
 
 export async function deleteUsers(prefix: string): Promise<void> {
+  // A LIKE prefix: an empty one (a hook whose name was never set) would delete every user.
+  if (prefix.length < 3) throw new Error(`deleteUsers: refusing the prefix "${prefix}"`);
   await withDb((db) => db.query(`DELETE FROM "User" WHERE "typistName" LIKE $1`, [`${prefix}%`]));
 }

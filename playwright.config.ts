@@ -81,6 +81,10 @@ export default defineConfig({
             AUTH_DISCORD_SECRET: "e2e-discord-placeholder",
             AUTH_GOOGLE_ID: "e2e-google-client",
             AUTH_GOOGLE_SECRET: "e2e-google-placeholder",
+            // The colour-driven test moderator (ADR 0015, #60 C11): src/env.ts refuses it in production,
+            // so only the local dev server takes it; CI's production build keeps the heuristic and the
+            // moderation-verdict tests of e2e/identity/avatar.spec.ts skip there.
+            ...(process.env.CI ? {} : { AVATAR_MODERATOR: "fake" }),
           },
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

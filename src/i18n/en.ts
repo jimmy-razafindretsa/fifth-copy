@@ -624,7 +624,44 @@ export const en = {
       deleteData: "DELETE MY DATA",
       soon: "Coming soon.",
     },
+    /** The first-race keyboard prompt (#70): a docket dialog in the lobby while no layout is on file. */
+    layoutPrompt: {
+      form: "FORM 1-K",
+      tag: "FIRST RACE",
+      title: "WHICH KEYBOARD IS ON YOUR DESK?",
+      body: "Pick the one you type on, so your heatmap marks the right keys. You can change it later in Settings.",
+      later: "ASK ME LATER",
+    },
     avatar: {
+      /** The picture dialog (#60): choose, frame, preview, file. Errors map `AvatarErrorCode`. */
+      dialog: {
+        form: "FORM 1-P",
+        tag: "ID PICTURE",
+        title: "CHANGE PICTURE",
+        body: "Choose a picture, then frame your face in the square. Drag it, zoom with the slider or the wheel, nudge it with the arrow keys.",
+        rules: "JPEG, PNG, WebP or GIF, up to 5 MB, at least 64 × 64 pixels.",
+        choose: "CHOOSE A PICTURE",
+        chooseAnother: "CHOOSE ANOTHER",
+        crop: "Picture frame: drag or use the arrow keys to move the picture",
+        zoom: "ZOOM",
+        current: "ON FILE",
+        preview: "PREVIEW",
+        save: "SIGN & FILE",
+        saving: "FILING…",
+        cancel: "CANCEL",
+        close: "CLOSE",
+        saved: "FILED",
+        reviewTitle: "UNDER REVIEW",
+      },
+      errors: {
+        TooLarge: "That file is over 5 MB. Choose a smaller picture.",
+        WrongType: "That file is not a picture we take. Use JPEG, PNG, WebP or GIF.",
+        TooSmall: "That picture is too small. It needs at least 64 × 64 pixels.",
+        Undecodable: "That picture could not be read. Try another file.",
+        BadCrop: "That frame did not fit the picture. Move it and try again.",
+        Rejected: "That picture was refused.",
+        failed: "That picture was not filed. Try again.",
+      },
       moderation: {
         pending:
           "Your picture is being reviewed. Until a person checks it, everyone sees the default portrait, you too.",

@@ -31,7 +31,10 @@ describe.skipIf(!testDatabaseUrl)(
 
     beforeAll(() => {
       db = createPrismaClient(testDatabaseUrl!);
-      adapter = createAuthAdapter({ db, typistNameFor: createTypistNameFor(db) });
+      adapter = createAuthAdapter({
+        db,
+        typistNameFor: createTypistNameFor(db, { isClean: () => true }),
+      });
     });
     beforeEach(cleanup);
     afterAll(async () => {

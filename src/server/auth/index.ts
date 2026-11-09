@@ -18,3 +18,5 @@ export { verifyCredentials, CredentialsLookupError, type CredentialsAccount } fr
 export { auth, signIn, signOut } from "./auth";
 export { handlers } from "./handlers";
 export { resolveSession } from "./resolvers";
+export { registerOAuthSignInHooks, type OAuthSignInHooks } from "./oauth-signin";
+export { enabledOAuthProviders, type OAuthProviderKey } from "./providers";

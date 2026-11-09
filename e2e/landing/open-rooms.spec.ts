@@ -96,7 +96,7 @@ test.describe("open rooms docket (#807)", () => {
     await a.context.close();
     await expect(async () => {
       await landing(b.page);
-      await expect(joinLink(b.page, code)).toHaveCount(0, { timeout: 500 });
+      await expect(joinLink(b.page, code)).toHaveCount(0, { timeout: scaled(500) });
     }).toPass({ timeout: ACTION_WAIT });
     await b.context.close();
   });
@@ -117,7 +117,8 @@ test.describe("open rooms docket (#807)", () => {
         ]);
       }
       await landing(b.page);
-      if (scheme === "dark") await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
+      if (scheme === "dark")
+        await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
       const link = joinLink(b.page, code);
       await link.scrollIntoViewIfNeeded();
       await expect(link).toBeVisible();

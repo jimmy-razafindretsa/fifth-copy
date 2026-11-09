@@ -588,6 +588,8 @@ export const fr = {
       pending: "VÉRIFICATION…",
       switchPrompt: "Pas encore de dossier ?",
       switchLink: "OUVRIR UN DOSSIER →",
+      recoverPrompt: "Mot de passe perdu ?",
+      recoverLink: "UTILISE TON CODE DE RÉCUPÉRATION →",
     },
     signUp: {
       kicker: "MINISTÈRE DE LA DACTYLO · FORMULAIRE 1-B",

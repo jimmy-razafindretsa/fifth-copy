@@ -610,6 +610,9 @@ export const en = {
       pending: "CHECKING PAPERS…",
       switchPrompt: "No file yet?",
       switchLink: "OPEN A FILE →",
+      /** The link to `/recover` (#46, owner decision 2026-11-09). */
+      recoverPrompt: "Lost your password?",
+      recoverLink: "USE YOUR RECOVERY CODE →",
     },
     signUp: {
       kicker: "MINISTRY OF TYPING · FORM 1-B",

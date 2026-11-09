@@ -433,3 +433,16 @@
   text-align: center;
   text-decoration: none;
 }
+
+/* the /recover link under the sign-in form (#46, owner decision 2026-11-09): the switch row recipe
+   (Courier 15px prompt + link-role Oswald link) without its ink rule */
+.recoverRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: normal;
+}

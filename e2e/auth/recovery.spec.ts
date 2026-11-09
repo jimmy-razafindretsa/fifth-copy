@@ -107,6 +107,25 @@ test.describe("one-time recovery code (#46)", () => {
     await expect(header(page)).toContainText(username, { timeout: ACTION_WAIT });
   });
 
+  for (const [locale, link, heading] of [
+    ["en", "USE YOUR RECOVERY CODE →", "RECOVER MY FILE"],
+    ["fr", "UTILISE TON CODE DE RÉCUPÉRATION →", "RÉCUPÉRER MON DOSSIER"],
+  ] as const) {
+    test(`owner decision 2026-11-09: /sign-in links to /recover (${locale}), /sign-up does not`, async ({
+      page,
+      context,
+    }) => {
+      const url = test.info().project.use.baseURL!;
+      await context.addCookies([{ name: "locale", value: locale, url }]);
+      await openForm(page, "/sign-up");
+      await expect(page.getByRole("main").getByRole("link", { name: link })).toHaveCount(0);
+      await openForm(page, "/sign-in");
+      await page.getByRole("main").getByRole("link", { name: link }).click();
+      await expect(page).toHaveURL(/\/recover$/);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+    });
+  }
+
   test("C3 a wrong code gets the one generic answer; every state is on /design", async ({
     page,
   }) => {

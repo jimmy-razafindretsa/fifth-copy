@@ -73,6 +73,7 @@ flowchart LR
 | Backups | Postgres, avatar volume -> bucket | A full copy of the database and pictures | Off the server, 14-day rotation; encryption at rest stated by #81 | ADR 0012, #403, [backup-retention.md](backup-retention.md) |
 | GitHub sign-in | Browser <-> GitHub, web <-> GitHub | Provider id, login, profile picture URL; no email requested or stored | OAuth, picture fetched only from the provider's CDN | ADR 0009, #49, #539 |
 | Discord sign-in | Browser <-> Discord, web <-> Discord | Same as GitHub | Same as GitHub | ADR 0009, #49, #539 |
+| Google sign-in | Browser <-> Google, web <-> Google | Provider id (`sub`), first name (seeds the typist name), profile picture URL; scopes `openid profile`, no email requested or stored; full name dropped | Same as GitHub; picture fetched only from `lh3.googleusercontent.com` | ADR 0009, #828 |
 | Deployment | GitHub Actions, GHCR -> server | No user data; images and migrations only | Secrets in CI settings, never in images or logs | ADR 0012, #408 |
 
 No analytics, advertising or tracking service receives anything. Fonts are bundled with the app at build time, so
@@ -89,7 +90,7 @@ a picture, or exposure of who they are.
 | 2 | Avatar misuse: a picture of another student, sexual or violent content, or a picture showing a school or address | Medium | High | Pictures re-encoded, held hidden while checked, refused or reviewed; teacher removal; moderation procedure | ADR 0014, card #64 (avatar check), [moderation.md](moderation.md) |
 | 3 | Avatar copying: lobby members screenshot a student's picture | Medium | Medium | Pictures optional, visible only to lobby members and, when held for review or reported, to the operator only to check them against the rules; own face discouraged in the conduct rules | ADR 0014, #91 |
 | 4 | Hidden data in pictures (location, camera, date in the file) | Medium | Medium | Every picture is re-encoded and its metadata stripped before storage | ADR 0014 |
-| 5 | OAuth data: the provider sends more than needed, or a student under 13 signs in with GitHub or Discord | Medium | Medium | Only id, login and picture kept, no email scope; under-13 notice on the buttons; picture goes through the same check | ADR 0009, #49, #539 |
+| 5 | OAuth data: the provider sends more than needed, or a student under 13 signs in with GitHub, Discord or Google | Medium | Medium | Only id, login and picture kept, no email scope; under-13 notice on the buttons; picture goes through the same check | ADR 0009, #49, #539 |
 | 6 | Hosting location: the server or the backup bucket is outside Québec (s. 17) | Medium | Medium | Provider not chosen yet; the stack runs on any Docker host so a Québec or Canadian host stays possible; s. 17 assessment before launch | ADR 0012, #445 |
 | 7 | Backups keep a deleted student's data, or the bucket leaks | Low | High | 14-day rotation, off the server, purged on the same schedule as deletions; encryption at rest stated by #81 | ADR 0012, #403, #81 |
 | 8 | Insider access: the operator is a student who may know the users and can read the database | Medium | Medium | Operator scripts run `scripts/db-guard.sh` and print ids only; moderation log has no names; conflicts declared to the teacher; no other person has access | [moderation.md](moderation.md), #81, #528 |

@@ -100,7 +100,7 @@ export type AuthFieldError =
 
 /**
  * The OAuth providers the sign-in and sign-up screens offer, in button order (#36 C8; Google from the
- * owner's C18 review). The flows themselves are #49's.
+ * owner's C18 review). The flows themselves are #49's (GitHub, Discord) and #828's (Google).
  */
 export const OAUTH_PROVIDERS = ["github", "discord", "google"] as const;
 export type OAuthProviderId = (typeof OAUTH_PROVIDERS)[number];

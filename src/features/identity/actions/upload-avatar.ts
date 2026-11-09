@@ -3,13 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { requireViewer } from "@/server/auth";
 import { db } from "@/server/db";
+import { throttleAvatarUpload, throttledMessage } from "../auth/throttle";
 import { AvatarError, type AvatarErrorCode } from "../avatars/errors";
 import { MAX_AVATAR_BYTES, storeAvatar, type StoredAvatarStatus } from "../avatars/store-avatar";
 import { uploadAvatarInput } from "../schema";
 
 /** `status` PENDING: stored but hidden behind the default portrait until reviewed (ADR 0015). */
 export type UploadAvatarResult =
-  { ok: true; version: number; status: StoredAvatarStatus } | { ok: false; code: AvatarErrorCode };
+  | { ok: true; version: number; status: StoredAvatarStatus }
+  | { ok: false; code: AvatarErrorCode }
+  /** Over the viewer's upload budget (#87 C5): the generic bilingual "try again in {m} min". */
+  | { ok: false; code: "RateLimited"; retryAfterMs: number; message: string };
 
 /**
  * Sets the viewer's own avatar (ADR 0014). Guests allowed. Reads only the `file` and `crop` fields:
@@ -20,6 +24,17 @@ export type UploadAvatarResult =
  */
 export async function uploadAvatar(formData: FormData): Promise<UploadAvatarResult> {
   const viewer = await requireViewer();
+  // #87 C5: 5 uploads per minute per viewer, spent before the bytes are read or decoded
+  const verdict = await throttleAvatarUpload(viewer.id);
+  if (!verdict.ok) {
+    const { retryAfterMs } = verdict;
+    return {
+      ok: false,
+      code: "RateLimited",
+      retryAfterMs,
+      message: await throttledMessage(retryAfterMs),
+    };
+  }
 
   const file = formData.get("file");
   if (!(file instanceof Blob)) return { ok: false, code: "WrongType" };

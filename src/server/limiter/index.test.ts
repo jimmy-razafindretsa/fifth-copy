@@ -168,6 +168,7 @@ describe("createWebLimit (C3, real Redis)", () => {
 
   it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset rules (#788, #789), the recovery redeem rules (#46) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
+      "avatar-upload",
       "clerk-outfit",
       "invite",
       "join-by-code",
@@ -182,6 +183,8 @@ describe("createWebLimit (C3, real Redis)", () => {
       "recovery-redeem-account",
       "set-lobby-type",
       "sign-in",
+      "sign-in-account",
+      "sign-up",
     ]);
     expect(LIMITS["join-by-code"]).toEqual({ max: 120, windowMs: 60_000 });
     expect(LIMITS["mint-race-token"]).toEqual({ max: 10, windowMs: 60_000 });
@@ -194,6 +197,11 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(LIMITS["password-reset-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
     expect(LIMITS["recovery-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
     expect(LIMITS["recovery-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
+    // #87 C5
+    expect(LIMITS["sign-in"]).toEqual({ max: 30, windowMs: 900_000 });
+    expect(LIMITS["sign-in-account"]).toEqual({ max: 10, windowMs: 900_000 });
+    expect(LIMITS["sign-up"]).toEqual({ max: 10, windowMs: 3_600_000 });
+    expect(LIMITS["avatar-upload"]).toEqual({ max: 5, windowMs: 60_000 });
   });
 
   it("fails open on a closed port with one warning, never the URL", async () => {

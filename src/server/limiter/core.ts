@@ -13,6 +13,9 @@ export type LimitAction =
   | "mint-race-token-new-guest"
   | "lobby-codes"
   | "sign-in"
+  | "sign-in-account"
+  | "sign-up"
+  | "avatar-upload"
   | "recovery"
   | "invite"
   | "clerk-outfit"
@@ -31,8 +34,8 @@ export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
  * actions (#699, ADR 0020 amendment) let a class behind one address share one code:
  * `join-by-code` and `mint-race-token-new-guest` (a mint without a guest cookie) count per
  * (subject, code), sized above a class of 100; `lobby-codes` counts the distinct codes a subject
- * tries, so guessing stays slow; `mint-race-token` counts per guest. `sign-in`, `recovery` and
- * `invite` are defined for #90, #120 and #121, which wire them. `clerk-outfit` (#687) counts the
+ * tries, so guessing stays slow; `mint-race-token` counts per guest. `recovery` and `invite` are
+ * defined for #120 and #121, which wire them; the sign-in, sign-up and avatar rows are #87's. `clerk-outfit` (#687) counts the
  * clerk outfit saves of one viewer (`user:<id>`): one per REISSUE UNIFORM, 30 a minute is a click
  * every two seconds for a whole minute, well above a person trying uniforms on. `set-lobby-type`
  * (#114) counts one host's PUBLIC / PRIVATE changes (`user:<id>`), on the same 30 a minute.
@@ -48,7 +51,14 @@ export const LIMITS = {
   "mint-race-token": { max: 10, windowMs: 60_000 },
   "mint-race-token-new-guest": { max: 120, windowMs: 60_000 },
   "lobby-codes": { max: 20, windowMs: 60_000 },
-  "sign-in": { max: 10, windowMs: 10 * 60_000 },
+  // Account entry points (#87, ADR 0009 "Hardening"): sign-in 30 per 15 min per client, then 10 per
+  // 15 min per account (`signin:<usernameNormalized>`, counted only when the client was admitted; the
+  // action and the Auth.js credentials callback both spend them); sign-up 10 per hour per client;
+  // avatar upload 5 per minute per viewer (`user:<id>`).
+  "sign-in": { max: 30, windowMs: 15 * 60_000 },
+  "sign-in-account": { max: 10, windowMs: 15 * 60_000 },
+  "sign-up": { max: 10, windowMs: 60 * 60_000 },
+  "avatar-upload": { max: 5, windowMs: 60_000 },
   recovery: { max: 5, windowMs: 60 * 60_000 },
   invite: { max: 20, windowMs: 60_000 },
   "clerk-outfit": { max: 30, windowMs: 60_000 },

@@ -1,0 +1,371 @@
+/*
+ * The settings screen (#66, design bible 14.3 "Settings"): the form-screen family of #36 (kicker, Stardos
+ * H1, one sentence, one paper docket), its sections split by the dashed docket rule (7.4), the 7.1
+ * segmented toggle as radio groups, the layout cards with IBM Plex Mono key caps (4), the 7.4 rows of the
+ * account section and the save states (7.2 pending, the FILED label, the 7.4 inline error line). Colours
+ * are roles from docs/design/tokens.css only.
+ */
+@reference "../../../../app/globals.css";
+
+.screen {
+  --gutter: clamp(16px, 4vw, 48px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  padding: 48px var(--gutter) 80px;
+  background: var(--color-bg);
+}
+
+/* wider than the sign-in column: the four keyboard previews sit two by two from tablet up */
+.column {
+  width: min(760px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.kicker {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+.title {
+  margin: 0;
+  @apply type-display-lg;
+  font-size: clamp(36px, 4.4vw, 60px);
+  line-height: 0.98;
+  letter-spacing: 0.04em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin: 0;
+  @apply type-body;
+  font-size: 17px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.docket {
+  background: var(--color-bg);
+  border: 2px solid var(--color-fg);
+  min-width: 0;
+}
+
+.docketHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.docketForm {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.tag {
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 18px;
+  min-width: 0;
+}
+
+.section + .section {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-height: 24px;
+}
+
+/* the section name: the 7.4 docket label (Oswald 600 .16em) at the kicker size */
+.sectionTitle {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.hint {
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-fg-muted);
+  text-wrap: pretty;
+}
+
+/* the save state beside the section name: Oswald 600 11px .16em; FILED in the fg role (neutral paperwork) */
+.status {
+  margin: 0;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.status[data-status="saved"] {
+  color: var(--color-fg);
+}
+
+/* bible 7.4 inline error line */
+.errorLine {
+  margin: 0;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+  text-wrap: pretty;
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* bible 7.1 segmented toggle as a radio group: 2px ink rule, Oswald 600 12px, checked = ink + paper */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  border: 2px solid var(--color-fg);
+  max-width: 100%;
+}
+
+.segment {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  color: var(--color-fg);
+  cursor: pointer;
+}
+
+.segment + .segment {
+  border-left: 2px solid var(--color-fg);
+}
+
+.segment:hover {
+  background: var(--color-surface);
+}
+
+.segment:has(input:checked) {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.segment:has(input:focus-visible),
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  z-index: 1;
+}
+
+/* the radio itself stays in the accessibility tree and takes the keyboard; the label is the target */
+.radio {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.group[aria-busy="true"] .segment,
+.group[aria-busy="true"] .option {
+  cursor: progress;
+}
+
+/* the layout cards: bible 7.10 fluid grid; each a newsprint 7.6-style card in a 2px ink rule */
+.layouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+
+.option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+/* the card's name strip: the segmented recipe, inverted when chosen */
+.optionName {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 2px solid var(--color-fg);
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+}
+
+.option:has(input:checked) .optionName {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.option:hover .optionName {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* the three-row preview: IBM Plex Mono key caps (4) on paper; accent keys in ink with paper text */
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 3px;
+}
+
+.row:nth-child(2) {
+  padding-inline-start: 4%;
+}
+
+.row:nth-child(3) {
+  padding-inline-start: 9%;
+}
+
+.key {
+  flex: 0 1 22px;
+  min-width: 0;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-fg);
+  background: var(--color-bg);
+  @apply type-typing;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.key[data-accent] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the account section: 7.4 rows `120px | 1fr` */
+.rows {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+}
+
+.rows dt,
+.rows dd {
+  margin: 0;
+  padding: 10px 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rows dt {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.name {
+  @apply type-typing;
+  font-size: 18px;
+  line-height: normal;
+  overflow-wrap: anywhere;
+}
+
+.keep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .screen {
+    padding-top: 28px;
+  }
+
+  .rows {
+    grid-template-columns: 96px 1fr;
+  }
+}

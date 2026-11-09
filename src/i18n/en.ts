@@ -579,7 +579,51 @@ export const en = {
       EXPIRED: "EXPIRED",
     },
   },
+  /**
+   * The settings screen (#66, bible 14.3 "Settings"): the form-screen family head, one docket of five
+   * sections, the save states and the account section's placeholders.
+   */
   settings: {
+    kicker: "MINISTRY OF TYPING · FORM 1-F",
+    title: "SETTINGS",
+    lede: "Your desk, your way. Each change is filed the moment you make it.",
+    form: "FORM 1-F",
+    tag: "DESK SETTINGS",
+    sections: {
+      layout: "KEYBOARD LAYOUT",
+      theme: "THEME",
+      language: "LANGUAGE",
+      sound: "SOUND",
+      account: "ACCOUNT",
+    },
+    layout: {
+      hint: "Pick the keyboard on your desk. Its accent keys are marked in ink.",
+      names: {
+        CSA: "CANADIAN FRENCH (CSA)",
+        FR_CA: "FRENCH CANADA",
+        US_QWERTY: "US QWERTY",
+        AZERTY: "AZERTY",
+      },
+    },
+    theme: { LIGHT: "LIGHT", DARK: "DARK", SYSTEM: "SYSTEM" },
+    language: { en: "ENGLISH", fr: "FRANÇAIS" },
+    sound: { on: "ON", off: "OFF", hint: "Key clacks and the carriage bell during a race." },
+    status: {
+      pending: "FILING…",
+      saved: "FILED",
+      errorPrefix: "RETURNED ·",
+      error: "That change was not filed. Try again.",
+    },
+    account: {
+      typist: "TYPIST",
+      username: "USERNAME",
+      guestTag: "GUEST",
+      keep: "Create an account to keep your file",
+      signUp: "OPEN A FILE →",
+      picture: "CHANGE PICTURE",
+      deleteData: "DELETE MY DATA",
+      soon: "Coming soon.",
+    },
     avatar: {
       moderation: {
         pending:

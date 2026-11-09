@@ -6,6 +6,7 @@ import { signIn as authSignIn, verifyCredentials } from "@/server/auth";
 import { logger } from "@/server/logger";
 import { safeCallbackUrl } from "../auth/callback-url";
 import { mergeGuestCookieInto } from "../merge/merge-on-sign-in";
+import { refreshPreferenceCookies } from "../preferences/cookies";
 import { parseSignIn } from "../schema";
 import type { AuthFormState } from "./auth-form-state";
 
@@ -17,7 +18,7 @@ const failed = (name: string) => logger.warn(name, {});
  * `auth.errors.credentials` message, after the same single Argon2id comparison (`verifyCredentials`,
  * #38), so nothing tells whether a username exists. On success Auth.js sets the 30-day JWT cookie, the
  * guest cookie's history is merged into the account and the cookie cleared, then the viewer lands on
- * `callbackUrl` when it is a same-origin path, else on `/`. Throttling is #87's.
+ * `callbackUrl` when it is a same-origin path (theme and locale cookies refreshed from the account, #66), else on `/`. Throttling is #87's.
  */
 export async function signIn(form: FormData): Promise<AuthFormState> {
   const { username, password, callbackUrl } = parseSignIn(form);
@@ -49,6 +50,8 @@ export async function signIn(form: FormData): Promise<AuthFormState> {
     return { fieldErrors: {}, formError: errors.credentials };
   }
   await mergeGuestCookieInto(account.id);
+  // the account's stored theme and locale win over this browser's cookies (#66 C3)
+  await refreshPreferenceCookies(account.id);
   redirect(safeCallbackUrl(callbackUrl));
 }
 

@@ -29,6 +29,9 @@ Thirty to one hundred students type at once; positions must update live (R40, R6
 - Any change to a wire shape is a change to `@fifth-copy/protocol` plus both sides; the version bump makes stale clients reload instead of misbehaving.
 - Load tests are server bots in a room (R128); no browser needed.
 
+## Amendments
+- 2026-11-09, #734 (proposed in the card's PR; Deliver accepts): point 6 gains a race -> web route, `POST /api/internal/lobbies/:id/close` (zod `closeLobbyRequestSchema` `{ v, lobbyId, closedAt }`, `PROTOCOL_VERSION` 12). The race server sends it when a leave closes a room (the last human left, keys deleted) and for each room `rehydrate` finds gone on boot (#204); it rides the results outbox (`persist/lobby-close.ts`, outbox id `lobby:<lobbyId>`), so a web outage never blocks the leave. The web verifies the HMAC and nonce like `/api/internal/races` and writes `Lobby.status = CLOSED, closedAt` once (`closeLobbies`, idempotent: a repeat answers `changed: false`, an unknown id 404, which the outbox treats as delivered). Rooms that expire without the call are swept by the `lobby.expire` worker job (ADR 0011). The rest of this ADR is unchanged.
+
 ## Alternatives considered
 - **Colyseus:** rooms, state sync and reconnection come built in, but its binary schema sync fights per-player text overlays and the "all text in HTML" rule, it has no long-polling fallback, and its matchmaker duplicates the lobby model we must keep in Postgres. Rejected.
 - **Raw `ws`:** smallest dependency, but we would rewrite reconnection, acknowledgements, rooms and the polling fallback. Rejected.

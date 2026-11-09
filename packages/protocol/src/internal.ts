@@ -8,6 +8,7 @@ import {
   msSchema,
   raceMsSchema,
   nameSchema,
+  phaseSchema,
   playerStatusSchema,
   raceIdSchema,
   raceTextSchema,
@@ -73,6 +74,43 @@ export const openRoomResponseSchema = z.object({
   created: z.boolean(),
 });
 export type OpenRoomResponse = z.infer<typeof openRoomResponseSchema>;
+
+/** Lobby ids per `POST /internal/rooms/status` call (#806): the open-rooms list asks for at most 50. */
+export const MAX_ROOM_STATUS_IDS = 50;
+
+/**
+ * `POST /internal/rooms/status` (web -> race server, #806): which of these lobbies have a live room,
+ * in which phase, and how many desks are taken. Read only; an id with no room is left out.
+ */
+export const roomStatusRequestSchema = z.object({
+  v: versionSchema,
+  lobbyIds: z.array(idSchema).min(1).max(MAX_ROOM_STATUS_IDS),
+});
+export type RoomStatusRequest = z.infer<typeof roomStatusRequestSchema>;
+
+const deskCountSchema = z.int().min(0).max(MAX_DESKS);
+
+/**
+ * One live room: counts only, never names, user ids or settings. Extension point: later fields
+ * (language, host name) are additive.
+ */
+export const roomStatusSchema = z.object({
+  lobbyId: idSchema,
+  phase: phaseSchema,
+  /** Human desks seated. */
+  typists: deskCountSchema,
+  /** Bot desks seated. */
+  bots: deskCountSchema,
+  /** Desks the room holds, typists and bots together (`ROOM_SEATS`). */
+  seats: z.int().min(1).max(MAX_DESKS),
+});
+export type RoomStatus = z.infer<typeof roomStatusSchema>;
+
+export const roomStatusResponseSchema = z.object({
+  v: versionSchema,
+  rooms: z.array(roomStatusSchema).max(MAX_ROOM_STATUS_IDS),
+});
+export type RoomStatusResponse = z.infer<typeof roomStatusResponseSchema>;
 
 /**
  * `POST /api/internal/races` (race server -> web, on `host:start`): create the Race row and pick the
@@ -213,11 +251,11 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   timestamp: "1767225600",
   nonce: "5f2b9c0e8a4d4e1b9f3a7c6d2e1b0a98",
   body:
-    '{"v":10,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":11,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "f353af5b3a0d051b8fd45d1b4903da73aa3ee84664c99510c1d8ee415557bb16",
+  signature: "6c56ebd5f82252947b90b83cdf86824940cc20c14eb29e5f96f89f0c7f2adfbd",
 } as const;

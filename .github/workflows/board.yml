@@ -45,8 +45,8 @@ permissions:
 
 env:
   NEXT_TELEMETRY_DISABLED: "1"
-  # Repo variables (Settings > Variables) override these: WIP limit (3 = owner decision 2026-11-02, parallel mode) and the optional focus label (PROTOCOL 6, 7).
-  BOARD_WIP_LIMIT: ${{ vars.BOARD_WIP_LIMIT || '3' }}
+  # Repo variables (Settings > Variables) override these: WIP limit (5 = owner decision 2026-11-09, v1 push; was 3) and the optional focus label (PROTOCOL 6, 7).
+  BOARD_WIP_LIMIT: ${{ vars.BOARD_WIP_LIMIT || '5' }}
   BOARD_FOCUS_LABEL: ${{ vars.BOARD_FOCUS_LABEL || '' }}
 
 jobs:

@@ -1,5 +1,5 @@
 import { continueWithProvider } from "../actions/continue-with-provider";
-import { OAUTH_PROVIDERS } from "../schema";
+import type { OAuthProviderId } from "../schema";
 import styles from "./auth.module.css";
 import { ProviderMark } from "./provider-marks";
 
@@ -19,9 +19,12 @@ export type ProviderLabels = {
  */
 export function ProviderButtons({
   labels,
+  providers,
   callbackUrl,
 }: {
   labels: ProviderLabels;
+  /** The providers to offer, in button order (#49 C2: an unconfigured one is hidden). */
+  providers: readonly OAuthProviderId[];
   callbackUrl?: string | null;
 }) {
   return (
@@ -30,7 +33,7 @@ export function ProviderButtons({
         {labels.or}
       </p>
       <div className={styles.providers}>
-        {OAUTH_PROVIDERS.map((provider) => (
+        {providers.map((provider) => (
           <form key={provider} action={continueWithProvider}>
             <input type="hidden" name="provider" value={provider} />
             {callbackUrl ? <input type="hidden" name="callbackUrl" value={callbackUrl} /> : null}

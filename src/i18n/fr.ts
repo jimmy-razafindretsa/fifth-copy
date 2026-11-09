@@ -624,6 +624,12 @@ export const fr = {
     oauthError: {
       title: "RETOURNÉ",
       body: "Cette connexion n'a pas abouti. Réessaie, utilise ton nom d'utilisateur ou joue en invité.",
+      denied:
+        "Cette connexion n'a pas été acceptée. Utilise ton nom d'utilisateur ou joue en invité.",
+      notLinked:
+        "Ce compte est déjà rattaché à un autre dossier. Connecte-toi comme la dernière fois.",
+      unavailable:
+        "Cette connexion n'est pas disponible pour l'instant. Utilise ton nom d'utilisateur ou joue en invité.",
     },
     errors: {
       prefix: "RETOURNÉ ·",

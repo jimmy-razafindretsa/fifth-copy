@@ -7,6 +7,8 @@ import { logger } from "@/server/logger";
 import { createAuthAdapter } from "./adapter";
 import { createAuthLogger } from "./auth-logger";
 import { verifyCredentials } from "./credentials";
+import { createOAuthSignInEvent, oauthSignInHooks } from "./oauth-signin";
+import { oauthProviders } from "./providers";
 import { createTypistNameFor } from "./typist-name";
 
 // What the JWT and session.user carry (ADR 0009): no email, no picture.
@@ -38,8 +40,10 @@ export async function authorizeCredentials(
 }
 
 /**
- * Auth.js wiring (#786, ADR 0009). Extension points: `providers` (#49 appends GitHub and Discord with
- * their profile() mappers), `callbacks.signIn` (#49 runs the guest merge there).
+ * Auth.js wiring (#786, ADR 0009). Providers: Credentials, then GitHub and Discord when their env vars are
+ * set (#49, `./providers`). OAuth sign-in merges the current guest in `events.signIn` (`./oauth-signin`:
+ * the `signIn` callback runs before the account row exists). Every sign-in failure lands on `/sign-in`
+ * with `?error=<code>` (bilingual banner, #49 C4).
  */
 export const authConfig = {
   secret: env.AUTH_SECRET,
@@ -49,7 +53,13 @@ export const authConfig = {
   // JSON lines through the app logger, not Auth.js's console output (ARCHITECTURE 10).
   logger: createAuthLogger(logger),
   session: { strategy: "jwt", maxAge: SESSION_MAX_AGE },
-  adapter: createAuthAdapter({ db, typistNameFor: createTypistNameFor(db) }),
+  adapter: createAuthAdapter({
+    db,
+    typistNameFor: createTypistNameFor(db, {
+      isClean: (name) => oauthSignInHooks()?.isCleanName(name) ?? false,
+    }),
+  }),
+  pages: { signIn: "/sign-in", error: "/sign-in" },
   providers: [
     Credentials({
       credentials: {
@@ -58,7 +68,9 @@ export const authConfig = {
       },
       authorize: authorizeCredentials,
     }),
+    ...oauthProviders(env),
   ],
+  events: { signIn: createOAuthSignInEvent(oauthSignInHooks) },
   callbacks: {
     // On sign-in a fresh token from the row: sub, name, tokenVersion and nothing else.
     jwt({ token, user }) {

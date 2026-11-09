@@ -1,10 +1,13 @@
 import { Alert } from "@/components/ui";
+import { env } from "@/env";
 import { getT } from "@/i18n";
+import { enabledOAuthProviders } from "@/server/auth";
 import { signInAction } from "../actions/sign-in";
 import { signUpAction } from "../actions/sign-up";
 import { AuthForm, type AuthFormLabels } from "./auth-form";
 import styles from "./auth.module.css";
 import { GuestCta } from "./guest-cta";
+import { OAUTH_PROVIDERS, type OAuthProviderId } from "../schema";
 import { ProviderButtons } from "./provider-buttons";
 
 export type AuthMode = "sign-in" | "sign-up";
@@ -18,6 +21,28 @@ export const AUTH_LINKS = {
 } as const;
 
 type Messages = Awaited<ReturnType<typeof getT>>;
+
+/**
+ * The provider buttons on show (#49 C2): GitHub and Discord only when their env vars are set; Google
+ * (owner's #36 review) stays, on the OAuth error path, until an ADR adds the provider to ADR 0009.
+ */
+function shownProviders(): OAuthProviderId[] {
+  const enabled: readonly string[] = enabledOAuthProviders(env);
+  return OAUTH_PROVIDERS.filter((p) => p === "google" || enabled.includes(p));
+}
+
+/**
+ * The banner sentence for an Auth.js `?error=` code (#49 C4): refused by the sign-in check, an OAuth
+ * account already on another file, a provider not configured; every other code (OAuthCallbackError,
+ * OAuthSignin, a cancelled consent...) gets the general one. The code itself is never shown.
+ */
+export function oauthErrorMessage(t: Messages, code: string): string {
+  const copy = t.auth.oauthError;
+  if (code === "AccessDenied") return copy.denied;
+  if (code === "OAuthAccountNotLinked") return copy.notLinked;
+  if (code === "Configuration") return copy.unavailable;
+  return copy.body;
+}
 
 /** The form labels of one screen, from the `auth` namespace (#36 C10). */
 export function authFormLabels(t: Messages, mode: AuthMode): AuthFormLabels {
@@ -45,11 +70,12 @@ export function authFormLabels(t: Messages, mode: AuthMode): AuthFormLabels {
 export async function AuthScreen({
   mode,
   callbackUrl,
-  oauthError = false,
+  oauthError = null,
 }: {
   mode: AuthMode;
   callbackUrl?: string | null;
-  oauthError?: boolean;
+  /** The `?error=` code a failed provider sign-in came back with, or null. */
+  oauthError?: string | null;
 }) {
   const t = await getT();
   const screen = mode === "sign-in" ? t.auth.signIn : t.auth.signUp;
@@ -67,10 +93,10 @@ export async function AuthScreen({
             <span className={styles.docketForm}>{screen.form}</span>
             <span className={styles.tag}>{screen.tag}</span>
           </div>
-          {oauthError ? (
+          {oauthError !== null ? (
             <div className={styles.section}>
               <Alert tone="error" title={t.auth.oauthError.title}>
-                {t.auth.oauthError.body}
+                {oauthErrorMessage(t, oauthError)}
               </Alert>
             </div>
           ) : null}
@@ -91,7 +117,11 @@ export async function AuthScreen({
             ) : null}
           </div>
           <div className={styles.section}>
-            <ProviderButtons labels={t.auth.providers} callbackUrl={callbackUrl} />
+            <ProviderButtons
+              labels={t.auth.providers}
+              providers={shownProviders()}
+              callbackUrl={callbackUrl}
+            />
           </div>
           <p className={styles.switch}>
             <span>{screen.switchPrompt}</span>

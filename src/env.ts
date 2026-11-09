@@ -5,6 +5,11 @@ import { z } from "zod";
  * The only place that reads process.env (see AGENTS.md, Next.js hazards).
  * Browser-exposed values must be prefixed NEXT_PUBLIC_ and declared in `client`.
  */
+const optionalSecret = z.preprocess(
+  (v) => (v === "" ? undefined : v),
+  z.string().min(1).optional(),
+);
+
 const server = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.url(),
@@ -32,6 +37,14 @@ const server = z.object({
    * refused in production without `PLAYWRIGHT_E2E=1`.
    */
   WEB_RATE_LIMIT: z.enum(["on", "off"]).default("on"),
+  /**
+   * OAuth apps (ADR 0009, #49): each provider is registered only when both its id and secret are set
+   * (src/server/auth/providers.ts), so development without secrets runs; empty counts as unset.
+   */
+  AUTH_GITHUB_ID: optionalSecret,
+  AUTH_GITHUB_SECRET: optionalSecret,
+  AUTH_DISCORD_ID: optionalSecret,
+  AUTH_DISCORD_SECRET: optionalSecret,
   /** Set to `1` by playwright.config.ts only: the one run where a production build may take `WEB_RATE_LIMIT=off`. */
   PLAYWRIGHT_E2E: z.literal("1").optional(),
 });
@@ -81,6 +94,10 @@ function parse() {
     REDIS_URL: process.env.REDIS_URL,
     WEB_RATE_LIMIT: process.env.WEB_RATE_LIMIT,
     PLAYWRIGHT_E2E: process.env.PLAYWRIGHT_E2E,
+    AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
+    AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
+    AUTH_DISCORD_ID: process.env.AUTH_DISCORD_ID,
+    AUTH_DISCORD_SECRET: process.env.AUTH_DISCORD_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_RACE_SERVER_URL: process.env.NEXT_PUBLIC_RACE_SERVER_URL,
   });

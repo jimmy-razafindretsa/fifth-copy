@@ -5,7 +5,8 @@ import { DefaultPortrait, portraitVariant } from "./default-portrait";
 // #60 C1: the stamped portrait is a pure function of its seed: same seed, same SVG; the variant is
 // hash(seed) mod 4; every colour is a token role (`var(--color-...)`), never a raw value.
 
-const html = (seed: string, size = 64) => renderToStaticMarkup(<DefaultPortrait seed={seed} size={size} />);
+const html = (seed: string, size = 64) =>
+  renderToStaticMarkup(<DefaultPortrait seed={seed} size={size} />);
 
 describe("DefaultPortrait", () => {
   it("renders the same inline SVG for the same seed", () => {
@@ -17,7 +18,8 @@ describe("DefaultPortrait", () => {
     const seeds = Array.from({ length: 64 }, (_, i) => `user-${i}`);
     const variants = new Set(seeds.map(portraitVariant));
     expect([...variants].sort()).toEqual([0, 1, 2, 3]);
-    for (const seed of seeds) expect(html(seed)).toContain(`data-variant="${portraitVariant(seed)}"`);
+    for (const seed of seeds)
+      expect(html(seed)).toContain(`data-variant="${portraitVariant(seed)}"`);
   });
 
   it("differs across seeds of different variants", () => {

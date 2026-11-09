@@ -84,16 +84,36 @@ export function DefaultPortrait({
       data-variant={variant}
       {...a11y}
     >
-      <rect x="1" y="1" width="62" height="62" fill={ground} stroke="var(--color-fg)" strokeWidth="2" />
+      <rect
+        x="1"
+        y="1"
+        width="62"
+        height="62"
+        fill={ground}
+        stroke="var(--color-fg)"
+        strokeWidth="2"
+      />
       {/* shoulders and the open shirt collar */}
       <path d="M8 63C8 50 19 44 32 44C45 44 56 50 56 63Z" fill={ink} />
-      <path d="M24 44L32 55L40 44Z" fill={ground} stroke={ink} strokeWidth="2" strokeLinejoin="round" />
+      <path
+        d="M24 44L32 55L40 44Z"
+        fill={ground}
+        stroke={ink}
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
       {/* the big head, sunk into the shoulders */}
       <circle cx="32" cy="31" r="15" fill={ground} stroke={ink} strokeWidth="2.5" />
       <circle cx="26.5" cy="31" r="2" fill={ink} />
       <circle cx="37.5" cy="31" r="2" fill={ink} />
       <circle cx="32" cy="36" r="2.4" fill={ink} />
-      <path d="M27 40.5Q32 43 37 40.5" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M27 40.5Q32 43 37 40.5"
+        fill="none"
+        stroke={ink}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
       <Cap variant={variant} ink={ink} ground={ground} />
     </svg>
   );

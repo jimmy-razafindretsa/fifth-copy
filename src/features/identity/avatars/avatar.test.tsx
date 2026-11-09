@@ -5,7 +5,12 @@ import { Avatar, avatarSrc } from "./avatar";
 // #60 C2: a stored, approved picture is the route's image at the matching file size; anyone else gets
 // the stamped portrait named by the typist name. Sizes 32, 64, 128.
 
-const stored = { id: "u_1", name: "comrade_lynx", hasAvatar: true, avatarVersion: 1_700_000_000_123 };
+const stored = {
+  id: "u_1",
+  name: "comrade_lynx",
+  hasAvatar: true,
+  avatarVersion: 1_700_000_000_123,
+};
 const none = { id: "u_2", name: "Lynx-101", hasAvatar: false, avatarVersion: null };
 
 describe("Avatar", () => {
@@ -23,16 +28,21 @@ describe("Avatar", () => {
     expect(avatarSrc(stored, size)).toBe(`/api/avatars/u_1?size=${file}&v=1700000000123`);
   });
 
-  it.each([32, 64, 128] as const)("size %i without a picture shows the labelled portrait", (size) => {
-    const out = renderToStaticMarkup(<Avatar user={none} size={size} />);
-    expect(out).toMatch(/^<svg /);
-    expect(out).toContain('role="img"');
-    expect(out).toContain('aria-label="Lynx-101"');
-    expect(out).toContain(`width="${size}"`);
-  });
+  it.each([32, 64, 128] as const)(
+    "size %i without a picture shows the labelled portrait",
+    (size) => {
+      const out = renderToStaticMarkup(<Avatar user={none} size={size} />);
+      expect(out).toMatch(/^<svg /);
+      expect(out).toContain('role="img"');
+      expect(out).toContain('aria-label="Lynx-101"');
+      expect(out).toContain(`width="${size}"`);
+    },
+  );
 
   it("falls back to the portrait when the version is unknown", () => {
-    const out = renderToStaticMarkup(<Avatar user={{ ...stored, avatarVersion: null }} size={64} />);
+    const out = renderToStaticMarkup(
+      <Avatar user={{ ...stored, avatarVersion: null }} size={64} />,
+    );
     expect(out).toMatch(/^<svg /);
   });
 

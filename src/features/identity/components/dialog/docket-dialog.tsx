@@ -48,7 +48,8 @@ export function DocketDialog({
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
-      returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      returnTo.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();

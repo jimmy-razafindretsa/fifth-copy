@@ -24,7 +24,10 @@ async function newSession(context: BrowserContext, page: Page): Promise<Page> {
   const next = await page
     .context()
     .browser()!
-    .newContext({ baseURL: test.info().project.use.baseURL, storageState: { cookies: state.cookies, origins: [] } });
+    .newContext({
+      baseURL: test.info().project.use.baseURL,
+      storageState: { cookies: state.cookies, origins: [] },
+    });
   return next.newPage();
 }
 
@@ -100,8 +103,6 @@ test.describe("#70 first-race keyboard layout prompt", { tag: "@layout-prompt" }
     expect(await inside()).toBe(false);
     // the page is live again: the keyboard reaches the header
     await page.keyboard.press("Tab");
-    expect(
-      await page.evaluate(() => !!document.activeElement?.closest("header, main")),
-    ).toBe(true);
+    expect(await page.evaluate(() => !!document.activeElement?.closest("header, main"))).toBe(true);
   });
 });

@@ -1,22 +1,46 @@
 import { Button } from "@/components/ui";
 import { fill, type Messages } from "@/i18n";
 import type { Viewer } from "@/server/auth";
+import type { UploadAvatarResult } from "../../actions/upload-avatar";
+import type { AvatarUser } from "../../avatars/avatar";
 import { AUTH_LINKS } from "../auth-screen";
+import { AvatarDialog, type AvatarDialogLabels } from "../avatar-dialog";
 import styles from "./settings.module.css";
 
 /**
  * The account section (#66 C6): a guest (or a visitor not yet on file) reads their typist name with the
  * `GUEST` tag and the way to an account; an account reads its username and the picture and data entries,
- * placeholders until the avatar dialog (#60) and the delete action (#81) land.
+ * placeholder until the delete action (#81) lands. With `avatar` (the real screen), guests and accounts
+ * both get CHANGE PICTURE, the picture dialog (#60); `/design` specimens leave it out and keep the
+ * disabled button.
  */
+export type AccountAvatar = {
+  user: AvatarUser;
+  action: (form: FormData) => Promise<UploadAvatarResult>;
+  /** `?dialog=avatar` outside production (#60 C9): the dialog starts open. */
+  open?: boolean;
+};
+
+function dialogLabels(t: Messages): AvatarDialogLabels {
+  const avatar = t.settings.avatar;
+  return {
+    ...avatar.dialog,
+    trigger: t.settings.account.picture,
+    errorPrefix: t.settings.status.errorPrefix,
+    errors: avatar.errors,
+    moderation: avatar.moderation,
+  };
+}
 export function AccountSection({
   viewer,
   t,
   idPrefix,
+  avatar,
 }: {
   viewer: Viewer | null;
   t: Messages;
   idPrefix: string;
+  avatar?: AccountAvatar;
 }) {
   const titleId = `${idPrefix}-account`;
   const soonId = `${idPrefix}-soon`;
@@ -43,9 +67,18 @@ export function AccountSection({
       {account ? (
         <>
           <div className={styles.actions}>
-            <Button variant="secondary" size="lg" disabled aria-describedby={soonId}>
-              {a.picture}
-            </Button>
+            {avatar ? (
+              <AvatarDialog
+                action={avatar.action}
+                user={avatar.user}
+                labels={dialogLabels(t)}
+                initialOpen={avatar.open}
+              />
+            ) : (
+              <Button variant="secondary" size="lg" disabled aria-describedby={soonId}>
+                {a.picture}
+              </Button>
+            )}
             <Button variant="secondary" size="lg" disabled aria-describedby={soonId}>
               {a.deleteData}
             </Button>
@@ -55,12 +88,24 @@ export function AccountSection({
           </p>
         </>
       ) : (
-        <p className={styles.keep}>
-          <span>{a.keep}</span>
-          <a href={AUTH_LINKS.signUp} className={styles.link}>
-            {a.signUp}
-          </a>
-        </p>
+        <>
+          {avatar && (
+            <div className={styles.actions}>
+              <AvatarDialog
+                action={avatar.action}
+                user={avatar.user}
+                labels={dialogLabels(t)}
+                initialOpen={avatar.open}
+              />
+            </div>
+          )}
+          <p className={styles.keep}>
+            <span>{a.keep}</span>
+            <a href={AUTH_LINKS.signUp} className={styles.link}>
+              {a.signUp}
+            </a>
+          </p>
+        </>
       )}
     </section>
   );

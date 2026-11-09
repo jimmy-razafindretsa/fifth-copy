@@ -79,6 +79,10 @@ export default defineConfig({
             AUTH_GITHUB_SECRET: "e2e-github-placeholder",
             AUTH_DISCORD_ID: "e2e-discord-client",
             AUTH_DISCORD_SECRET: "e2e-discord-placeholder",
+            // The colour-driven test moderator (ADR 0015, #60 C11): src/env.ts refuses it in production,
+            // so only the local dev server takes it; CI's production build keeps the heuristic and the
+            // moderation-verdict tests of e2e/identity/avatar.spec.ts skip there.
+            ...(process.env.CI ? {} : { AVATAR_MODERATOR: "fake" }),
           },
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

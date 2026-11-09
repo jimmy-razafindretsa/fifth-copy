@@ -31,7 +31,8 @@ type Phase =
   | { name: "idle" }
   | { name: "chosen" }
   | { name: "pending" }
-  | { name: "error"; code: ErrorKey }
+  // `message`: the server's own localized line (the #87 upload throttle, with its retry delay)
+  | { name: "error"; code: ErrorKey; message?: string }
   | { name: "review" };
 
 export type AvatarDialogLabels = {
@@ -176,7 +177,11 @@ export function AvatarDialog({
         return;
       }
       if (!result.ok) {
-        setPhase({ name: "error", code: result.code });
+        setPhase(
+          result.code === "RateLimited"
+            ? { name: "error", code: "failed", message: result.message }
+            : { name: "error", code: result.code },
+        );
         return;
       }
       router.refresh();
@@ -229,7 +234,7 @@ export function AvatarDialog({
       ? []
       : phase.code === "Rejected"
         ? [labels.moderation.rejected, labels.moderation.appeal]
-        : [labels.errors[phase.code]];
+        : [phase.message ?? labels.errors[phase.code]];
 
   return (
     <>

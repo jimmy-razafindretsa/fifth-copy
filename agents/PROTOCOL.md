@@ -246,7 +246,7 @@ In every mode the durable handoff is the board + repo, never the conversation.
 
 ## 14. Velocity mode (owner decision 2026-11-02)
 The owner asked for more throughput with lighter pen test, QA and CI. Until revoked:
-- WIP 3 (`BOARD_WIP_LIMIT` defaults to 3 in `board.yml`; locks of section 7 still apply).
+- WIP 5 (owner decision 2026-11-09, v1 push; `BOARD_WIP_LIMIT` defaults to 5 in `board.yml`; locks of section 7 still apply).
 - Explorer: skipped for tier lite, estimate <= 1 and `discovered` bug cards; the Builder runs a short pass and posts the BRIEF itself.
 - Pen test: only when the card changes the security model (5a item 4: auth, sessions, tokens, HMAC, uploads, privacy flows). Time-boxed, targeted at the diff; everything else is `no pentest` in the BRIEF.
 - Builder: runs `scripts/check.sh` and the card's own new or changed e2e once; CI runs the rest. No repeated flake runs unless a spec is new and timing-sensitive (then 2).

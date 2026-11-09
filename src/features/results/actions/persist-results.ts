@@ -123,7 +123,8 @@ const isKnownError = (err: unknown, code: string) =>
 
 /**
  * Stores one chunk of an ended race's results (ADR 0008 write path, ARCHITECTURE 9.3), in one
- * transaction: the race's end (`endedAt`, `endReason`, `lobbySize`; first write wins), one
+ * transaction: the race's end (`endedAt`, `endReason`, `lobbySize`; first write wins, over a VOID set
+ * by the `race.void` sweep too, #613), one
  * `RaceResult` per desk and the `RaceKeystrokes` of each human desk with keystrokes, all upserted by
  * `(raceId, desk)` with no update, so a repeat is a no-op and answers the same. Each result keeps the
  * desk's final text `overlay` (`null` when untouched, #623). Numbers are stored
@@ -164,7 +165,8 @@ export async function persistRaceResults(
     const stored = request.results.filter((r) => r.userId === null || known.has(r.userId));
     await db.$transaction(async (tx) => {
       await tx.race.updateMany({
-        where: { id: request.raceId, endedAt: null },
+        // First real end wins; a VOID end is the race.void sweep's guess (#613) and gives way.
+        where: { id: request.raceId, OR: [{ endedAt: null }, { endReason: "VOID" }] },
         data: {
           endedAt: new Date(request.endedAt),
           endReason: REASON_TO_DB[request.reason],

@@ -5,9 +5,9 @@ import { expect, test } from "../fixtures";
 import { HYDRATION_WAIT } from "../timeouts";
 import { openForm } from "./auth-helpers";
 
-// #49 C4-C7: GitHub and Discord sign-in on /sign-in. playwright.config.ts gives the web server
-// placeholder provider credentials, so both buttons show and the GitHub press reaches the authorize
-// redirect, intercepted here: no request ever leaves for a provider.
+// #49 C4-C7: GitHub and Discord sign-in on /sign-in; #828 C4: Google. playwright.config.ts gives the
+// web server placeholder provider credentials, so every button shows and a press reaches the provider's
+// authorize redirect, intercepted here: no request ever leaves for a provider.
 
 const CATALOGS = { en, fr } as const;
 
@@ -27,7 +27,7 @@ async function setLocale(context: BrowserContext, locale: "en" | "fr") {
 for (const locale of ["en", "fr"] as const) {
   const t = CATALOGS[locale].auth;
 
-  test(`C5 C6 /sign-in shows GitHub, Discord and the under-13 line (${locale})`, async ({
+  test(`C5 C6 /sign-in shows GitHub, Discord, Google and the under-13 line (${locale})`, async ({
     page,
     context,
   }) => {
@@ -37,6 +37,7 @@ for (const locale of ["en", "fr"] as const) {
     const discord = page.getByRole("button", { name: t.providers.discord });
     await expect(github).toBeVisible();
     await expect(discord).toBeVisible();
+    await expect(page.getByRole("button", { name: t.providers.google })).toBeVisible();
     const age = page.getByText(t.providers.age, { exact: true });
     await expect(age).toBeVisible();
     // next to the buttons: in the same docket section, right after them
@@ -81,6 +82,40 @@ test("C7 the GitHub press redirects to github.com authorize with scope read:user
   expect(url.searchParams.get("redirect_uri")).toMatch(/\/api\/auth\/callback\/github$/);
   // The server action's own request is aborted by the navigation to the provider: expected here only.
   await page.waitForURL(/^https:\/\/github\.com\/login\/oauth\/authorize/, {
+    timeout: HYDRATION_WAIT,
+  });
+  const aborted = (e: string) => /^requestfailed: POST .*\/sign-in net::ERR_ABORTED$/.test(e);
+  pageErrors.splice(0, pageErrors.length, ...pageErrors.filter((e) => !aborted(e)));
+});
+
+test("#828 C4 the Google press redirects to Google's authorize URL with openid profile, state and PKCE", async ({
+  page,
+  pageErrors,
+}) => {
+  const authorize: string[] = [];
+  await page.route(
+    /^https:\/\/(accounts\.google\.com|oauth2\.googleapis\.com)\//,
+    async (route) => {
+      authorize.push(route.request().url());
+      await route.fulfill({ status: 200, contentType: "text/plain", body: "intercepted" });
+    },
+  );
+  await openForm(page, "/sign-in");
+  await page.getByRole("button", { name: en.auth.providers.google }).click();
+  await expect.poll(() => authorize.length, { timeout: HYDRATION_WAIT }).toBeGreaterThan(0);
+
+  // Not the sign-in error banner: the press left for Google with only the minimal scopes.
+  const url = new URL(authorize[0]!);
+  expect(`${url.origin}${url.pathname}`).toBe("https://accounts.google.com/o/oauth2/v2/auth");
+  expect(url.searchParams.get("scope")).toBe("openid profile");
+  expect(url.search).not.toContain("email");
+  expect(url.searchParams.get("response_type")).toBe("code");
+  expect(url.searchParams.get("client_id")).toBe("e2e-google-client");
+  expect(url.searchParams.get("state")).toBeTruthy();
+  expect(url.searchParams.get("code_challenge")).toBeTruthy();
+  expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  expect(url.searchParams.get("redirect_uri")).toMatch(/\/api\/auth\/callback\/google$/);
+  await page.waitForURL(/^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/, {
     timeout: HYDRATION_WAIT,
   });
   const aborted = (e: string) => /^requestfailed: POST .*\/sign-in net::ERR_ABORTED$/.test(e);

@@ -70,7 +70,7 @@ export default defineConfig({
           // REDIS_URL stays inherited: the production build requires it for the internal nonce
           // store (#716), which the race server's calls then exercise end to end.
           // PLAYWRIGHT_E2E marks this run: src/env.ts refuses WEB_RATE_LIMIT=off in production otherwise.
-          // Placeholder OAuth apps (#49): GitHub and Discord register, so /sign-in shows their buttons and
+          // Placeholder OAuth apps (#49, #828): GitHub, Discord and Google register, so /sign-in shows their buttons and
           // e2e/auth/oauth.spec.ts intercepts the authorize redirect; no provider is ever reached.
           env: {
             WEB_RATE_LIMIT: "off",
@@ -79,6 +79,8 @@ export default defineConfig({
             AUTH_GITHUB_SECRET: "e2e-github-placeholder",
             AUTH_DISCORD_ID: "e2e-discord-client",
             AUTH_DISCORD_SECRET: "e2e-discord-placeholder",
+            AUTH_GOOGLE_ID: "e2e-google-client",
+            AUTH_GOOGLE_SECRET: "e2e-google-placeholder",
             // The colour-driven test moderator (ADR 0015, #60 C11): src/env.ts refuses it in production,
             // so only the local dev server takes it; CI's production build keeps the heuristic and the
             // moderation-verdict tests of e2e/identity/avatar.spec.ts skip there.

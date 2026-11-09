@@ -4,14 +4,12 @@ import { env } from "@/env";
 import { db } from "@/server/db";
 import { createInternalApiClient, type InternalApiClient } from "@/server/internal-api/client";
 import { openLobbyWhere } from "./open-lobby-filter";
+import type { ListOpenLobbiesResult, OpenLobby } from "../types";
 
 export { OPEN_LOBBY_MAX_AGE_MS } from "./open-lobby-filter";
 
-/** A public room a visitor can join right now: counts only, never names or user ids. */
-export type OpenLobby = { code: string; typists: number; bots: number; seats: number };
-
-export type ListOpenLobbiesResult =
-  { ok: true; lobbies: OpenLobby[] } | { ok: false; error: "race-server-unavailable" };
+// The shapes live in ../types so the landing's docket (#807) can type its rows from the client-safe index.
+export type { ListOpenLobbiesResult, OpenLobby } from "../types";
 
 type Options = {
   /** Injected in tests; defaults to the signed client of the app env. */

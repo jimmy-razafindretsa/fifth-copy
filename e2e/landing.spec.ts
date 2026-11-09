@@ -116,6 +116,8 @@ test.describe("landing page (#497)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     const h2s = await page.getByRole("heading", { level: 2 }).allTextContents();
     expect(h2s).toEqual([
+      // the open-rooms docket's title, in the hero's actions column (#807)
+      "OPEN ROOMS",
       STORY,
       "THIS IS YOUR CLERK.",
       "A LITTLE HISTORY",

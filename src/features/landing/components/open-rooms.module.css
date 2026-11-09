@@ -1,0 +1,165 @@
+/*
+ * The open-rooms docket (#807, bible 14.1 "Open rooms docket", 7.4): the lobby's docket and roll-row
+ * recipes (src/features/lobby/components/lobby.module.css; CSS modules do not cross features), on paper
+ * like the roll so the skeleton blocks can be newsprint.
+ */
+
+@reference "../../../app/globals.css";
+
+.docket {
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* header row: mono title plus the Oswald tag on ink, 2px ink rule under it */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.title {
+  margin: 0;
+  @apply type-typing;
+  font-size: 18px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.tag {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* rows: grid 120px | 1fr, dashed separators (bible 7.4) */
+.row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 0 12px;
+  padding: 8px 12px;
+  margin: 0;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+/* the room code recipe (7.2 input, the lobby docket's code): IBM Plex Mono 500 18px .08em */
+.code {
+  @apply type-typing;
+  font-size: 18px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* the counts then JOIN →; JOIN wraps under the counts when the row is narrow */
+.cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.count {
+  @apply type-typing;
+  font-size: 16px;
+  line-height: normal;
+}
+
+/* the 7.1 ink button as a link: Oswald 600 13px .16em, ink ground and paper text, hover red, 44px */
+.join {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.join:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.join:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* skeleton rows: newsprint blocks in the row grid, no shimmer and no gradient (bible 6, 7.4) */
+.block {
+  display: block;
+  height: 14px;
+  background: var(--color-surface);
+}
+
+.blockWide {
+  width: min(220px, 100%);
+  height: 18px;
+}
+
+/* the empty statement: the 7.4 notice row without the pulse (a statement stays still) */
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* the 7.4 inline error line as the docket's row: newsprint, Courier Prime 15px in the red text role,
+   the Oswald RETURNED · prefix; the docket's own 2px rule is its border */
+.error {
+  margin: 0;
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+  text-wrap: pretty;
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}

@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { form, harnessModules, redirectOf } from "../testing/auth-harness";
 
-// #36 C8, #49: a configured provider (GitHub, Discord) starts Auth.js's OAuth flow with the safe
+// #36 C8, #49, #828: a configured provider (GitHub, Discord, Google) starts Auth.js's OAuth flow with the safe
 // callbackUrl; any other provider press returns to /sign-in with the OAuth error banner; an unknown
 // provider is a Configuration error.
 vi.mock("next/navigation", () => harnessModules.navigation());
 const signIn = vi.fn<(provider: string, opts: { redirectTo: string }) => Promise<undefined>>(
   async () => undefined,
 );
-const enabled = vi.fn((): string[] => ["github", "discord"]);
+const enabled = vi.fn((): string[] => ["github", "discord", "google"]);
 vi.mock("@/server/auth", () => ({ signIn, enabledOAuthProviders: () => enabled() }));
 vi.mock("@/env", () => ({ env: {} }));
 
@@ -18,14 +18,14 @@ const { OAUTH_PROVIDERS } = await import("../schema");
 describe("continueWithProvider (#36 C8, #49)", () => {
   beforeEach(() => {
     signIn.mockClear();
-    enabled.mockReturnValue(["github", "discord"]);
+    enabled.mockReturnValue(["github", "discord", "google"]);
   });
 
   it("offers GitHub, Discord and Google, in that order", () => {
     expect(OAUTH_PROVIDERS).toEqual(["github", "discord", "google"]);
   });
 
-  it.each(["github", "discord"])("%s starts the Auth.js OAuth flow", async (provider) => {
+  it.each(["github", "discord", "google"])("%s starts the Auth.js OAuth flow", async (provider) => {
     await continueWithProvider(form({ provider, callbackUrl: "/locker" }));
     expect(signIn).toHaveBeenCalledExactlyOnceWith(provider, { redirectTo: "/locker" });
   });
@@ -43,7 +43,8 @@ describe("continueWithProvider (#36 C8, #49)", () => {
     expect(signIn).not.toHaveBeenCalled();
   });
 
-  it("Google (no provider under ADR 0009) keeps a safe callbackUrl and drops an off-site one", async () => {
+  it("an unconfigured Google keeps a safe callbackUrl and drops an off-site one", async () => {
+    enabled.mockReturnValue(["github", "discord"]);
     expect(
       await redirectOf(() =>
         continueWithProvider(form({ provider: "google", callbackUrl: "/locker" })),

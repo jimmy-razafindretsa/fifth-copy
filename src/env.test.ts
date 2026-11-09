@@ -131,4 +131,19 @@ describe("env", () => {
   it("C6: an empty AVATAR_DIR is rejected, naming the variable", async () => {
     await expect(loadEnv({ AVATAR_DIR: "" })).rejects.toThrow(/AVATAR_DIR/);
   });
+
+  it("#49 C2: the OAuth provider variables are optional; empty counts as unset", async () => {
+    const unset = await loadEnv({
+      AUTH_GITHUB_ID: undefined,
+      AUTH_GITHUB_SECRET: "",
+      AUTH_DISCORD_ID: undefined,
+      AUTH_DISCORD_SECRET: undefined,
+    });
+    expect(unset.AUTH_GITHUB_ID).toBeUndefined();
+    expect(unset.AUTH_GITHUB_SECRET).toBeUndefined();
+    expect(unset.AUTH_DISCORD_ID).toBeUndefined();
+    const set = await loadEnv({ AUTH_GITHUB_ID: "gh-id", AUTH_GITHUB_SECRET: "gh-secret" });
+    expect(set.AUTH_GITHUB_ID).toBe("gh-id");
+    expect(set.AUTH_GITHUB_SECRET).toBe("gh-secret");
+  });
 });

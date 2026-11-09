@@ -109,11 +109,13 @@ enum Locale {
 
 /// One settings row per user; defaults match #66 C2 so a bare row reads as "not chosen yet".
 model Preference {
-  userId    String          @unique
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  layout    KeyboardLayout?
-  theme     Theme           @default(SYSTEM)
-  locale    Locale?
-  sound     Boolean         @default(true)
-  updatedAt DateTime        @updatedAt
+  userId      String          @unique
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  layout      KeyboardLayout?
+  theme       Theme           @default(SYSTEM)
+  locale      Locale?
+  sound       Boolean         @default(true)
+  /// The seat-view machine skin (#638): an id of `machineSkinIds` (bible 7.7a), checked by the zod schema.
+  machineSkin String          @default("teleprinter")
+  updatedAt   DateTime        @updatedAt
 }

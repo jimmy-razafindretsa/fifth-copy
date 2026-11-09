@@ -22,7 +22,7 @@ export const preferenceStep: MergeStep = {
       await tx.preference.update({ where: { userId: guestId }, data: { userId: accountId } });
       return 1;
     }
-    // theme and sound are never null: the account's value always wins there.
+    // theme, sound and machineSkin are never null: the account's value always wins there.
     await tx.preference.update({
       where: { userId: accountId },
       data: { layout: account.layout ?? guest.layout, locale: account.locale ?? guest.locale },

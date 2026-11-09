@@ -3,6 +3,8 @@
 Short procedures for the operator of the Railway project (ADR 0019). Never paste a connection URL, password or
 Railway credential into this file, an issue or a commit: the commands below read them from the environment.
 
+One-time procedures: [region move from `sfo` to `us-east`](region-move.md) (#781).
+
 ## Import texts
 
 The race text corpus lives in the `Text` table (`prisma/schema/texts.prisma`, #346). `startRace` reads it through

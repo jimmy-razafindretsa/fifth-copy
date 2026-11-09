@@ -292,7 +292,7 @@ Projector and phones join the room on the `spectator` channel with a `role: spec
 
 ### 8.2 Features and their public API (`index.ts`)
 - `identity`: `getViewer`, `requireViewer`, `ensureGuest`, `signUp`, `signIn`, `signOut`, `redeemRecoveryCode`, `mergeGuestInto`, `updatePreferences`, `uploadAvatar`, `deleteMyData`.
-- `lobby`: `createLobby`, `joinByCode`, `consumeInvite`, `createInvite`, `updateSettings` (host only), `mintRaceToken`, `openRoom`/`closeRoom` (internal calls), `recordHostTransfer`.
+- `lobby`: `createLobby`, `joinByCode`, `consumeInvite`, `createInvite`, `updateSettings` (host only), `mintRaceToken`, `openRoom`/`closeRoom` (internal calls), `recordHostTransfer`; `server.ts`: `listOpenLobbies` (public rooms joinable now, asked of the race server through `POST /internal/rooms/status`, #806).
 - `texts`: `generateRaceText(settings)` (exact word count, accents, practice letters, numbers/symbols/punctuation, difficulty), `isClean(text)`; server-only through `server.ts` (ADR 0021): `loadCorpusProvider(db, language)` (#346, `Text` rows or the content files). `importCorpus` lives in `scripts/import-texts.ts` (also run by `prisma/seed.ts`).
 - `race` (client): `RaceClient`, `useRaceStore`, HUD components (telex, sheet, keyboard, nixie counters, race card, stamps, sabotage tray, abandon), spectator views.
 - `race-3d` (client, lazy): `RaceScene` (mounts `/3d/seat.html` in an `EmbedFrame`, driven by `fc-race-*` messages, [ADR 0017](../adr/0017-seat-scene-delivery.md)), `OverviewScene`, `benchmarkGpu` (inside the embed); the scene reads only `selectSceneView` from `@/features/race`.

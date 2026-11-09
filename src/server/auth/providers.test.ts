@@ -161,6 +161,11 @@ describe("Google provider (#828 C3)", () => {
     });
     expect(googleProfile({ sub: "2" })).toEqual({ id: "2", name: "", image: null });
   });
+
+  it("refuses claims without a subject, so two sign-ins can never share an empty id", () => {
+    expect(() => googleProfile({ sub: "" })).toThrow();
+    expect(() => googleProfile({} as never)).toThrow();
+  });
 });
 
 describe("OAuth providers from the env (#49 C2)", () => {

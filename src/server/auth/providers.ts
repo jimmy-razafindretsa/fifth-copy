@@ -45,7 +45,10 @@ export function googleProfile(profile: GoogleProfile): OAuthUser {
   const name = typeof profile.given_name === "string" ? profile.given_name : "";
   const image =
     typeof profile.picture === "string" && profile.picture !== "" ? profile.picture : null;
-  return { id: String(profile.sub), name, image };
+  // oauth4webapi already requires `sub`; refuse an empty one rather than link every such sign-in to one id.
+  if (typeof profile.sub !== "string" || profile.sub === "")
+    throw new Error("Google profile without sub");
+  return { id: profile.sub, name, image };
 }
 
 const GITHUB_USER = "https://api.github.com/user";

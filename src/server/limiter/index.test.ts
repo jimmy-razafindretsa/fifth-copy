@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:net";
+import { connect, createServer, type Server, type Socket } from "node:net";
 import { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { signGuestCookie } from "../auth/guest-cookie";
@@ -47,6 +47,45 @@ async function closedPort(): Promise<number> {
   const { port } = server.address() as { port: number };
   await new Promise<void>((r) => server.close(() => r()));
   return port;
+}
+
+/**
+ * A TCP proxy to the test Redis that holds every reply until `release()` (#830): a client behind
+ * it is late for certain, whatever the machine load. A `timeoutMs: 0` limiter is not: its 1 ms
+ * timer can lose to a fast local Redis, and a call that wins ends the outage (a second warning).
+ */
+async function heldRedis(): Promise<{ url: string; release(): void; close(): void }> {
+  const upstream = new URL(redisUrl!);
+  let held = true;
+  const queued: (() => void)[] = [];
+  const sockets: Socket[] = [];
+  const server = createServer((client) => {
+    const redisSide = connect(Number(upstream.port || 6379), upstream.hostname);
+    sockets.push(client, redisSide);
+    client.on("error", () => {});
+    redisSide.on("error", () => {});
+    client.pipe(redisSide);
+    redisSide.on("data", (chunk) => {
+      const write = () => void client.write(chunk);
+      if (held) queued.push(write);
+      else write();
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const proxied = new URL(redisUrl!);
+  proxied.hostname = "127.0.0.1";
+  proxied.port = String((server.address() as { port: number }).port);
+  return {
+    url: proxied.toString(),
+    release: () => {
+      held = false;
+      queued.splice(0).forEach((write) => write());
+    },
+    close: () => {
+      sockets.forEach((s) => s.destroy());
+      server.close();
+    },
+  };
 }
 
 describe("createWebLimit (C3, real Redis)", () => {
@@ -182,7 +221,9 @@ describe("createWebLimit (C3, real Redis)", () => {
 
   it("a timed-out call is allowed, warned once per outage, and still counted when Redis answers late (#741)", async () => {
     const warn = vi.fn();
-    const slow = make({ url: redisUrl, nodeEnv: "test", warn, timeoutMs: 0 });
+    const held = await heldRedis();
+    limits.push(held);
+    const slow = make({ url: held.url, nodeEnv: "test", warn, timeoutMs: 20 });
     const s = subject("late");
     const rule = LIMITS["password-reset-issue"];
     for (let i = 0; i < rule.max; i++) {
@@ -192,6 +233,7 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(warn).toHaveBeenCalledWith("rate limiter unavailable, allowing", { cause: "timeout" });
     // The calls that lost the race still reach Redis: fail-open lets them through, it does not
     // forgive them. Once they land, a limiter that waits for Redis refuses the next one.
+    held.release();
     const key = `${WEB_LIMITER_PREFIX}:rl:password-reset-issue:${subjectKey(s)}`;
     await vi.waitFor(async () => expect(await redis.zcard(key)).toBe(rule.max));
     const patient = make({ url: redisUrl, nodeEnv: "test", warn: vi.fn(), timeoutMs: 10_000 });

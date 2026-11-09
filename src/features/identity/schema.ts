@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { ROOM_CODE_RE } from "@fifth-copy/protocol/room-code";
+import { LOCALES, type Locale } from "@/i18n/locale";
 import { normalizeUsername } from "@/lib/username";
+import { keyboardLayoutIds, type KeyboardLayoutId } from "./keyboard/layouts";
 import { OUTFIT_CATALOGUE, type OutfitCategory } from "./clerk/outfit";
 import { RESET_CODE_ALPHABET, RESET_CODE_LENGTH, normalizeResetCode } from "./password-reset/code";
 import { canonicalRecoveryCode } from "./recovery/generate";
@@ -282,3 +284,30 @@ export function parseRecoverForm(form: FormData): ResetParse {
     password: password.data,
   };
 }
+
+/** The stored theme choice (`Preference.theme`); `SYSTEM` follows `prefers-color-scheme`. */
+export const PREFERENCE_THEMES = ["LIGHT", "DARK", "SYSTEM"] as const;
+export type PreferenceTheme = (typeof PREFERENCE_THEMES)[number];
+
+/**
+ * `updatePreferences` input (#66 C1): the single list of preference keys. Every key is optional, a
+ * `null` layout clears the choice, and unknown keys are refused (`strict`): the target is always the
+ * viewer, never an id from the input. Adding a preference is one line here plus its column.
+ */
+export const preferencesPatch = z
+  .object({
+    layout: z.enum(keyboardLayoutIds).nullable().optional(),
+    theme: z.enum(PREFERENCE_THEMES).optional(),
+    locale: z.enum(LOCALES).optional(),
+    sound: z.boolean().optional(),
+  })
+  .strict();
+export type PreferencesPatch = z.infer<typeof preferencesPatch>;
+
+/** The viewer's settings as the screen reads them (#66 C2): every key resolved, defaults filled in. */
+export type Preferences = {
+  layout: KeyboardLayoutId | null;
+  theme: PreferenceTheme;
+  locale: Locale;
+  sound: boolean;
+};

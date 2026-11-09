@@ -1,6 +1,7 @@
 import { fill } from "@/i18n/format";
 import type { Viewer } from "@/server/auth";
 import { signOut } from "../actions/sign-out";
+import { Avatar, type AvatarUser } from "../avatars/avatar";
 
 export type AccountLabels = {
   honorific: string;
@@ -15,6 +16,8 @@ export type AccountClasses = {
   docketName: string | undefined;
   tag: string | undefined;
   signIn: string | undefined;
+  /** The 32 px ID picture at the docket's left edge (#60). */
+  avatar?: string | undefined;
 };
 
 export const SIGN_IN_HREF = "/sign-in";
@@ -23,14 +26,17 @@ export const SIGN_IN_HREF = "/sign-in";
  * The header account control (#36 C12, bible 14.1 item 1): signed out, `SIGN IN`; a guest, the docket
  * (name + `GUEST` tag) and `SIGN IN`; an account, the docket (name) and `SIGN OUT`, a form posting the
  * `signOut` action (works before hydration). Renders its items bare (no wrapper) so the header lays
- * them out; reused by the lobby and settings headers.
+ * them out; reused by the lobby and settings headers. The docket leads with the viewer's avatar (#60).
  */
 export function AccountControl({
   viewer,
   labels,
   classes,
+  avatar = null,
 }: {
   viewer: Viewer | null;
+  /** The viewer's avatar (#60, `getAvatarUser`); shown in the docket, decorative beside the name. */
+  avatar?: AvatarUser | null;
   labels: AccountLabels;
   classes: AccountClasses;
 }) {
@@ -38,6 +44,7 @@ export function AccountControl({
     <>
       {viewer ? (
         <div className={classes.docket}>
+          {avatar ? <Avatar user={avatar} size={32} decorative className={classes.avatar} /> : null}
           <span className={classes.docketName}>
             {fill(labels.honorific, { name: viewer.name })}
           </span>

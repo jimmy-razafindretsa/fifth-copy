@@ -65,7 +65,8 @@ test.describe("#66 settings screen", () => {
     await expect(account).toContainText("USERNAME");
     await expect(account).toContainText(username);
     await expect(account).not.toContainText("GUEST");
-    await expect(account.getByRole("button", { name: "CHANGE PICTURE" })).toBeDisabled();
+    // #60 wires the picture entry: it now opens the picture dialog (e2e/identity/avatar-crop.spec.ts).
+    await expect(account.getByRole("button", { name: "CHANGE PICTURE" })).toBeEnabled();
     await expect(account.getByRole("button", { name: "DELETE MY DATA" })).toBeDisabled();
     await deleteUsers(username);
   });

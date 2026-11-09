@@ -67,6 +67,13 @@
   line-height: normal;
 }
 
+/* The viewer's 32 px ID picture (#60), flush with the docket's left edge, ruled off like a pasted photo. */
+.avatar {
+  flex: none;
+  margin: -5px 0 -5px -10px;
+  border-right: 2px solid var(--color-fg);
+}
+
 .tag {
   @apply type-label;
   font-size: 10px;
@@ -186,6 +193,10 @@ button.signIn {
     max-width: max-content;
     padding: 5px 6px;
     gap: 6px;
+  }
+
+  .avatar {
+    margin-left: -6px;
   }
 
   .docketName {

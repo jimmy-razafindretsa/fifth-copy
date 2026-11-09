@@ -179,6 +179,27 @@ function sceneWanted(): boolean {
  * Shared fixture: every test fails on console errors or failed requests (UI role rule:
  * zero console errors, zero failed requests). Use `expectNoA11yViolations` for axe.
  */
+/**
+ * The first-race keyboard prompt (#70) is a modal on every lobby page while no layout is on file, so it
+ * would block the lobby and race specs' fresh guests. It stays snoozed ("Ask me later" for the browser
+ * session, `fc_layout_prompt` in sessionStorage) unless a test carries the `@layout-prompt` tag
+ * (`e2e/identity/layout-prompt.spec.ts`).
+ */
+function promptWanted(): boolean {
+  try {
+    return base.info().tags.includes("@layout-prompt");
+  } catch {
+    return false;
+  }
+}
+const snoozeLayoutPrompt = () => {
+  try {
+    window.sessionStorage.setItem("fc_layout_prompt", "later");
+  } catch {
+    // opaque origins (about:blank) have no storage
+  }
+};
+
 export const test = base.extend<
   { pageErrors: string[]; raceSceneGate: void },
   { raceSceneContexts: void }
@@ -190,6 +211,7 @@ export const test = base.extend<
       browser.newContext = async (...args) => {
         const context = await newContext(...args);
         if (!sceneWanted()) await context.addInitScript(noRaceScene);
+        if (!promptWanted()) await context.addInitScript(snoozeLayoutPrompt);
         return context;
       };
       await use();
@@ -201,6 +223,7 @@ export const test = base.extend<
   raceSceneGate: [
     async ({ context }, use) => {
       if (!sceneWanted()) await context.addInitScript(noRaceScene);
+      if (!promptWanted()) await context.addInitScript(snoozeLayoutPrompt);
       await use();
     },
     { auto: true },

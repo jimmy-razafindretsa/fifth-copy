@@ -53,6 +53,7 @@ import {
 import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
 import { ExitSpecimen } from "./exit-demo";
+import { AvatarSpecimens, DesignDialogs } from "./identity-demo";
 import demo from "./motion-demo.module.css";
 import { fileSpecimenPreference } from "./settings-demo-action";
 import { StampReplay } from "./stamp-demo";
@@ -365,10 +366,12 @@ const PODIUM_STATES: { id: DawnReportFixture; title: string; caption: string; re
   ];
 
 /** Living inventory of src/components/ui (see docs/design/components.md). Used by e2e + visual tests. */
-export default async function DesignPage() {
-  const [t, theme] = await Promise.all([getT(), getTheme()]);
+export default async function DesignPage({ searchParams }: PageProps<"/design">) {
+  const [t, theme, query] = await Promise.all([getT(), getTheme(), searchParams]);
+  const dialog = typeof query.dialog === "string" ? query.dialog : undefined;
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-4 py-10 md:px-8">
+      <DesignDialogs dialog={dialog} t={t} />
       <header className="flex flex-col gap-3">
         <h1 className="type-display-lg text-fg">Design system</h1>
         <p data-intro className="type-body max-w-prose text-fg">
@@ -723,6 +726,17 @@ export default async function DesignPage() {
           on its way, once it is filed, and when it is returned.
         </p>
         <SettingsStates action={fileSpecimenPreference} />
+      </section>
+
+      <section id="avatars" aria-labelledby="avatars-heading" className="flex flex-col gap-3">
+        <h2 id="avatars-heading" className="type-display-md">
+          Avatars
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The stamped portrait every typist gets until a picture is on file: four variants chosen
+          from the typist&apos;s id, at 32, 64 and 128 px, on paper and on newsprint.
+        </p>
+        <AvatarSpecimens />
       </section>
 
       <section aria-labelledby="stamps" className="flex flex-col gap-3">

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { AccountControl, getViewer } from "@/features/identity";
+import { AccountControl, getAvatarUser, getViewer } from "@/features/identity";
 import { getTheme, LocaleToggle, ThemeToggle } from "@/features/preferences";
 import { getLocale, getT } from "@/i18n";
 import { LINKS } from "../links";
@@ -17,6 +17,7 @@ export async function LandingHeader() {
     getTheme(),
     getViewer(),
   ]);
+  const avatar = viewer ? await getAvatarUser(viewer) : null;
   return (
     <header className={styles.header}>
       <a href={LINKS.home} className={styles.brand}>
@@ -39,12 +40,14 @@ export async function LandingHeader() {
         <ThemeToggle theme={theme ?? "light"} label={t.header.nightShift} />
         <AccountControl
           viewer={viewer}
+          avatar={avatar}
           labels={{ honorific: t.header.honorific, ...t.auth.account }}
           classes={{
             docket: styles.docket,
             docketName: styles.docketName,
             tag: styles.tag,
             signIn: styles.signIn,
+            avatar: styles.avatar,
           }}
         />
       </nav>

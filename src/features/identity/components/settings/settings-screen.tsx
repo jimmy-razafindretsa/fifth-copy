@@ -2,7 +2,7 @@ import { getT } from "@/i18n";
 import type { Viewer } from "@/server/auth";
 import type { UpdatePreferences } from "../../actions/update-preferences";
 import type { Preferences } from "../../schema";
-import { AccountSection } from "./account-section";
+import { AccountSection, type AccountAvatar } from "./account-section";
 import { LanguagePicker } from "./language-picker";
 import { LayoutPicker } from "./layout-picker";
 import { SoundToggle } from "./sound-toggle";
@@ -23,6 +23,7 @@ export async function SettingsDocket({
   action,
   initialStatus = {},
   idPrefix = "settings",
+  avatar,
 }: {
   viewer: Viewer | null;
   preferences: Preferences;
@@ -30,6 +31,8 @@ export async function SettingsDocket({
   initialStatus?: Partial<Record<SectionKey, SaveStatus>>;
   /** Unique per docket on a page (`/design` shows several). */
   idPrefix?: string;
+  /** The picture dialog's data (#60); absent on `/design` specimens. */
+  avatar?: AccountAvatar;
 }) {
   const t = await getT();
   const s = t.settings;
@@ -73,7 +76,7 @@ export async function SettingsDocket({
         action={action}
         initialStatus={initialStatus.sound}
       />
-      <AccountSection viewer={viewer} t={t} idPrefix={idPrefix} />
+      <AccountSection viewer={viewer} t={t} idPrefix={idPrefix} avatar={avatar} />
     </div>
   );
 }
@@ -86,10 +89,12 @@ export async function SettingsScreen({
   viewer,
   preferences,
   action,
+  avatar,
 }: {
   viewer: Viewer | null;
   preferences: Preferences;
   action: UpdatePreferences;
+  avatar?: AccountAvatar;
 }) {
   const t = await getT();
   return (
@@ -100,7 +105,7 @@ export async function SettingsScreen({
           {t.settings.title}
         </h1>
         <p className={styles.lede}>{t.settings.lede}</p>
-        <SettingsDocket viewer={viewer} preferences={preferences} action={action} />
+        <SettingsDocket viewer={viewer} preferences={preferences} action={action} avatar={avatar} />
       </div>
     </section>
   );

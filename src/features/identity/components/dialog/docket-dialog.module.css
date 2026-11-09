@@ -1,0 +1,65 @@
+/*
+ * The docket dialog (#70, #60; bible 7.4 extension "Docket dialog"): one 7.4 docket as a native modal.
+ * Paper ground, 2px ink rule, the 7.1 print offset (6px 6px 0 ink), no radius, over a press-ink veil;
+ * at 480px and under a full-screen sheet. Colours are roles from docs/design/tokens.css only.
+ */
+@reference "../../../../app/globals.css";
+
+.dialog {
+  margin: auto;
+  padding: 0;
+  width: min(760px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  box-shadow: 6px 6px 0 var(--color-fg);
+}
+
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--color-band) 60%, transparent);
+}
+
+/* the title: the form-screen H1 recipe at docket size */
+.title {
+  margin: 0;
+  @apply type-display-md;
+  font-size: clamp(24px, 3.4vw, 34px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-wrap: balance;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 18px;
+}
+
+/* the closing row under a 2px ink rule, right-aligned (the exit dockets' recipe, bible 7.4) */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 2px solid var(--color-fg);
+}
+
+@media (max-width: 480px) {
+  .dialog {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-width: 0;
+    box-shadow: none;
+  }
+
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}

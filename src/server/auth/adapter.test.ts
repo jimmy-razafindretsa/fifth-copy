@@ -122,6 +122,24 @@ describe.skipIf(!testDatabaseUrl)(
         ).resolves.toBeNull();
       });
 
+      it("links a Google (OIDC) account as GOOGLE (#828)", async () => {
+        const user = await adapter.createUser!(profile(`${PREFIX}gus`));
+        const providerAccountId = `go-${randomBytes(4).toString("hex")}`;
+        await adapter.linkAccount!({
+          userId: user.id,
+          type: "oidc",
+          provider: "google",
+          providerAccountId,
+          id_token: "never-stored",
+        });
+        const rows = await db.oAuthAccount.findMany({ where: { userId: user.id } });
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ provider: "GOOGLE", providerAccountId });
+        await expect(
+          adapter.getUserByAccount!({ provider: "google", providerAccountId }),
+        ).resolves.toEqual({ id: user.id, name: `${PREFIX}gus`, tokenVersion: 0 });
+      });
+
       it("refuses a provider outside OAuthProvider", async () => {
         const user = await adapter.createUser!(profile(`${PREFIX}dee`));
         await expect(
@@ -129,8 +147,8 @@ describe.skipIf(!testDatabaseUrl)(
             adapter.linkAccount!({
               userId: user.id,
               type: "oauth",
-              provider: "google",
-              providerAccountId: "g-1",
+              provider: "twitch",
+              providerAccountId: "tw-1",
             }))(),
         ).rejects.toBeInstanceOf(Unsupported);
         await expect(db.oAuthAccount.count({ where: { userId: user.id } })).resolves.toBe(0);

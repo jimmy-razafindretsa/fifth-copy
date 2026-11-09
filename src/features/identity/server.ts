@@ -2,6 +2,7 @@
 import "server-only";
 import { isClean } from "@/features/texts";
 import type { OAuthSignInHooks } from "@/server/auth";
+import { importOauthAvatar } from "./avatars/import-oauth-avatar";
 import { mergeGuestCookieInto } from "./merge/merge-on-sign-in";
 import { refreshPreferenceCookies } from "./preferences/cookies";
 
@@ -13,7 +14,8 @@ export { withCredentialsThrottle } from "./auth/throttle";
 /**
  * What Auth.js's OAuth sign-in needs from identity (#49): the name screen of sign-up for a provider
  * login, and the guest upgrade of the request's signed `fc_guest` cookie (merge, stamp, cookie cleared),
- * then the preference cookies refreshed from the account's row (#66).
+ * then the preference cookies refreshed from the account's row (#66), and a new account's provider
+ * picture imported through the upload pipeline (#52, #539; never rejects, never stores the URL).
  */
 export const oauthSignInHooks: OAuthSignInHooks = {
   isCleanName: isClean,
@@ -22,4 +24,5 @@ export const oauthSignInHooks: OAuthSignInHooks = {
     await mergeGuestCookieInto(accountId);
     await refreshPreferenceCookies(accountId);
   },
+  importAvatar: (accountId, imageUrl) => importOauthAvatar(accountId, imageUrl),
 };

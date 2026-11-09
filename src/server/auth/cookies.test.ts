@@ -5,12 +5,13 @@ import {
   SECURE_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
   sessionCookieName,
-  useSecureCookies,
+  secureCookiesFor,
 } from "./cookies";
 import { guestCookieOptions } from "./guest-cookie";
 import { SESSION_COOKIES } from "./resolvers";
 
-// #87 C1: the cookie policy (ADR 0009). The browser-side flags are checked by e2e/auth/hardening.spec.ts.
+// #87 C1: the cookie policy (ADR 0009); `locale` and `theme` take it through
+// src/features/preferences/cookie.ts. The flags the browser receives: e2e/auth/hardening.spec.ts.
 const env = vi.hoisted(() => ({ NODE_ENV: "production" as string, AUTH_SECRET: "" }));
 vi.mock("@/env", () => {
   env.AUTH_SECRET = randomBytes(32).toString("hex");
@@ -37,18 +38,9 @@ describe("cookie policy (#87 C1)", () => {
     }
   });
 
-  it("locale and theme carry the policy", async () => {
-    const { preferenceCookieOptions } = await import("@/features/preferences/cookie");
-    for (const nodeEnv of ["production", "development"]) {
-      env.NODE_ENV = nodeEnv;
-      expect(preferenceCookieOptions()).toMatchObject(cookieFlags(nodeEnv as "production"));
-    }
-    env.NODE_ENV = "production";
-  });
-
   it("the session cookie is __Secure- prefixed and Secure in production only", () => {
-    expect(useSecureCookies("production")).toBe(true);
-    expect(useSecureCookies("development")).toBe(false);
+    expect(secureCookiesFor("production")).toBe(true);
+    expect(secureCookiesFor("development")).toBe(false);
     expect(sessionCookieName("production")).toBe("__Secure-authjs.session-token");
     expect(sessionCookieName("development")).toBe("authjs.session-token");
     // the resolver and proxy look for both names

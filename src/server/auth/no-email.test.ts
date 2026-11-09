@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { oauthProviders } from "./providers";
 
 // #87 C4, ADR 0009 "no email is ever stored": a guard that fails the build if an email can enter the
@@ -68,66 +68,27 @@ describe("no-email guard (#87 C4)", () => {
   });
 });
 
-// The sign-in action's every outcome, with an email-shaped username: nothing logged may carry it.
-const s = vi.hoisted(() => ({
-  logs: [] as unknown[][],
-  lookup: "miss" as "miss" | "throw" | "hit",
-}));
-vi.mock("server-only", () => ({}));
-vi.mock("@/env", () => ({ env: { NODE_ENV: "test", AUTH_SECRET: "e".repeat(32) } }));
-vi.mock("@/server/logger", () => ({
-  logger: new Proxy(
-    {},
-    {
-      get:
-        (_t, level) =>
-        (...args: unknown[]) =>
-          s.logs.push([level, ...args]),
-    },
-  ),
-}));
-vi.mock("@/i18n", async () => {
-  const { en } = await import("@/i18n/en");
-  const { fill } = await import("@/i18n/format");
-  return { fill, getT: async () => en };
-});
-vi.mock("@/server/auth", () => ({
-  verifyCredentials: async () => {
-    if (s.lookup === "throw") throw new Error("lookup failed for ada@example.test");
-    return s.lookup === "hit" ? { id: "u1", name: "Ada", tokenVersion: 0 } : null;
-  },
-  signIn: async () => {
-    throw new Error("CredentialsSignin ada@example.test");
-  },
-}));
-vi.mock("@/server/limiter", () => ({
-  requestSubject: async () => "ip:203.0.113.5",
-  limit: async () => ({ ok: true, retryAfterMs: 0 }),
-}));
-vi.mock("next/navigation", () => ({
-  redirect: () => {
-    throw new Error("NEXT_REDIRECT");
-  },
-}));
-vi.mock("@/features/identity/merge/merge-on-sign-in", () => ({ mergeGuestCookieInto: vi.fn() }));
-vi.mock("@/features/identity/preferences/cookies", () => ({ refreshPreferenceCookies: vi.fn() }));
+// The sign-in action's logs (src/server may not import a feature, so read as source): every logger call
+// names the event only and never passes what was typed. Behaviour with an email-shaped username, for
+// every outcome: src/features/identity/actions/sign-in-logs.test.ts.
+describe("sign-in never logs the username (#87 C4)", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/features/identity/actions/sign-in.ts"),
+    "utf8",
+  );
+  /** The argument text of every call to `logger.*(...)` or the local `failed(...)`. */
+  const logCalls = [...source.matchAll(/\b(?:logger\.\w+|failed)\(([^)]*)\)/g)].map((m) => m[1]!);
 
-describe("sign-in never logs an email-shaped username (#87 C4)", () => {
-  beforeEach(() => {
-    s.logs = [];
+  it("finds the action's log calls", () => {
+    expect(logCalls.length).toBeGreaterThanOrEqual(3);
   });
 
-  it.each(["miss", "throw", "hit"] as const)("lookup %s", async (lookup) => {
-    s.lookup = lookup;
-    const { signIn } = await import("@/features/identity/actions/sign-in");
-    const form = new FormData();
-    form.set("username", "ada@example.test");
-    form.set("password", "correct horse");
-    await signIn(form).catch(() => undefined);
-    const logged = JSON.stringify(s.logs, (_k, v: unknown) =>
-      v instanceof Error ? `${v.name}: ${v.message}` : v,
-    );
-    expect(logged).not.toMatch(/ada@example\.test|ada%40/i);
-    if (lookup !== "miss") expect(s.logs.length).toBeGreaterThan(0); // the failure paths do log
+  it("no log call carries the username, the password or the form", () => {
+    for (const args of logCalls) {
+      const code = args.replace(/"[^"]*"/g, '""'); // event names are fixed strings
+      expect(code).not.toMatch(/\b(username|password|form|parsed)\b/);
+    }
+    // the helper logs a fixed name with empty fields
+    expect(source).toMatch(/const failed = \(name: string\) => logger\.warn\(name, \{\}\);/);
   });
 });

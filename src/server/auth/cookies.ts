@@ -23,11 +23,11 @@ export function cookieFlags(nodeEnv: NodeEnv) {
  * Auth.js `useSecureCookies`: on in production whatever the request scheme says, so a proxy that
  * forwards plain http never downgrades the session cookie (Secure flag and `__Secure-` name).
  */
-export function useSecureCookies(nodeEnv: NodeEnv): boolean {
+export function secureCookiesFor(nodeEnv: NodeEnv): boolean {
   return nodeEnv === "production";
 }
 
 /** The session cookie's name in `nodeEnv`. */
 export function sessionCookieName(nodeEnv: NodeEnv): string {
-  return useSecureCookies(nodeEnv) ? SECURE_SESSION_COOKIE_NAME : SESSION_COOKIE_NAME;
+  return secureCookiesFor(nodeEnv) ? SECURE_SESSION_COOKIE_NAME : SESSION_COOKIE_NAME;
 }

@@ -6,7 +6,7 @@ import { db } from "@/server/db";
 import { logger } from "@/server/logger";
 import { createAuthAdapter } from "./adapter";
 import { createAuthLogger } from "./auth-logger";
-import { useSecureCookies } from "./cookies";
+import { secureCookiesFor } from "./cookies";
 import { verifyCredentials } from "./credentials";
 import { createOAuthSignInEvent, oauthSignInHooks } from "./oauth-signin";
 import { oauthProviders } from "./providers";
@@ -53,7 +53,7 @@ export const authConfig = {
   trustHost: true,
   // Production cookies are always Secure and `__Secure-` prefixed, whatever scheme the proxy forwards
   // (#87 C1, ./cookies); HttpOnly, SameSite=Lax and Path=/ are Auth.js's session-cookie defaults.
-  useSecureCookies: useSecureCookies(env.NODE_ENV),
+  useSecureCookies: secureCookiesFor(env.NODE_ENV),
   // JSON lines through the app logger, not Auth.js's console output (ARCHITECTURE 10).
   logger: createAuthLogger(logger),
   session: { strategy: "jwt", maxAge: SESSION_MAX_AGE },

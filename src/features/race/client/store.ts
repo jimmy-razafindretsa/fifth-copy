@@ -37,12 +37,14 @@ export type RacePhase = "connecting" | Phase | "reconnecting" | "lost";
 export type RaceTokenError = "not-found" | "closed" | "generic";
 
 /**
- * Why the page gave up: a handshake refusal (`transport` only reconnects), a token error, or
+ * Why the page gave up: a handshake refusal (`transport` only reconnects), a token error,
  * `room-lost` (#235 C4): the room went away under a seated page (a voided race after a server restart
- * or a Redis loss, #204, or a reconnect answered `no-room`).
+ * or a Redis loss, #204, or a reconnect answered `no-room`), or `server-disconnect` (#661): the race
+ * server closed the socket (`io server disconnect`: a join refused after the handshake, an abusive
+ * client), which socket.io never reconnects.
  */
 export type RaceLostReason =
-  Exclude<ConnectErrorReason, "transport"> | RaceTokenError | "room-lost";
+  Exclude<ConnectErrorReason, "transport"> | RaceTokenError | "room-lost" | "server-disconnect";
 
 /** How long the tray shows a refused play (`IMMUNE`, #236 C1). */
 export const REFUSAL_SHOW_MS = 1_200;
@@ -155,6 +157,11 @@ export type RaceState = {
   abandoning: boolean;
   /** Abandon intents sent so far on this page (never reset): `sendAbandons` emits one per step. */
   abandons: number;
+  /**
+   * The line was cut (#661 C2): from the drop until the next `welcome`, input is off and no `keys` batch
+   * leaves (`createTyping` holds them), so none reaches the server before the reconnect's seat exists.
+   */
+  keysHeld: boolean;
 };
 
 /**
@@ -207,6 +214,10 @@ export type RaceEvent =
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
+  /** The line dropped (`transport close`, `ping timeout`...: #661 C2), before socket.io's first retry. */
+  | { type: "disconnected" }
+  /** The server closed the socket (`io server disconnect`, #661 C1): final. */
+  | { type: "server-disconnect" }
   | { type: "token-error"; error: RaceTokenError };
 
 export const initialRaceState: RaceState = {
@@ -237,6 +248,7 @@ export const initialRaceState: RaceState = {
   lampTarget: null,
   abandoning: false,
   abandons: 0,
+  keysHeld: false,
 };
 
 /** No exit, no warning, no lamp, nothing in flight: a (re)connect or a new race (#233). */
@@ -380,6 +392,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         bonus: bonusFromWelcome(w, offset, state.bonus.plays),
         ...NO_EXIT,
         abandons: state.abandons,
+        // the reconnect's seat exists: held keys may leave (#661 C2)
+        keysHeld: false,
       };
       // a reload after your exit: the server's status brings the docket back
       return withStatusExit(next);
@@ -527,15 +541,18 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     }
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
-      if (event.reason === "transport") return { ...state, phase: "reconnecting" };
+      if (event.reason === "transport") return { ...state, phase: "reconnecting", keysHeld: true };
       // a reconnect after a welcome that finds no room: the room was lost under you (#235 C4)
       if (event.reason === "no-room" && state.room !== null) return lost(state, "room-lost");
       return lost(state, event.reason);
     case "reconnecting":
-      return { ...state, phase: "reconnecting" };
+    case "disconnected":
+      return { ...state, phase: "reconnecting", keysHeld: true };
     case "reconnected":
-      // the fresh `welcome` that follows a reconnect sets the real phase
+      // the fresh `welcome` that follows a reconnect sets the real phase and lets the keys go
       return { ...state, phase: state.room?.phase ?? "connecting" };
+    case "server-disconnect":
+      return lost(state, "server-disconnect");
     case "token-error":
       return lost(state, event.error);
   }
@@ -616,10 +633,16 @@ function mayPlayAt(state: RaceState, at: number): boolean {
   );
 }
 
-/** You may type: the race runs, you have a desk, and you have not stopped (finished, asleep...). */
+/**
+ * You may type: the race runs, you have a desk, you have not stopped (finished, asleep...), and no cut
+ * line waits for its reconnect's welcome (#661 C2, bible 14.2: input is off until it).
+ */
 export function selectCanType(state: RaceState): boolean {
   return (
-    state.phase === "running" && state.prediction?.state.status === "typing" && state.exit === null
+    state.phase === "running" &&
+    state.prediction?.state.status === "typing" &&
+    state.exit === null &&
+    !state.keysHeld
   );
 }
 
@@ -861,8 +884,10 @@ export function bindRaceSocket(
       scheduleGo(payload.race.t0);
     }),
     socket.onConnectError((reason) => dispatch({ type: "connect-error", reason })),
+    socket.onTransportDisconnect(() => dispatch({ type: "disconnected" })),
     socket.onReconnecting(() => dispatch({ type: "reconnecting" })),
     socket.onReconnected(() => dispatch({ type: "reconnected" })),
+    socket.onServerDisconnect(() => dispatch({ type: "server-disconnect" })),
   ];
   return () => {
     cancelGo();

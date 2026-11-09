@@ -66,6 +66,7 @@ export function fakeRoomSocket() {
     onProtocolError: on("onProtocolError"),
     onConnectError: on("onConnectError"),
     onServerDisconnect: on("onServerDisconnect"),
+    onTransportDisconnect: on("onTransportDisconnect"),
     onReconnecting: on("onReconnecting"),
     onReconnected: on("onReconnected"),
     reconnect: vi.fn<RoomSocket["reconnect"]>(),

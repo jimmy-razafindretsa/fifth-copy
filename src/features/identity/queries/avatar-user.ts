@@ -2,12 +2,7 @@ import "server-only";
 import type { Viewer } from "@/server/auth";
 import { db } from "@/server/db";
 import type { AvatarUser } from "../avatars/avatar";
-
-/** The version part of `avatarKey` (`<userId>/<version>`, ADR 0014), or null. */
-export function versionOf(key: string | null | undefined): number | null {
-  const version = Number(key?.slice(key.lastIndexOf("/") + 1));
-  return key && Number.isSafeInteger(version) && version > 0 ? version : null;
-}
+import { versionOf } from "./avatar-version";
 
 /**
  * What `Avatar` needs for the viewer (#60): the viewer plus the stored version. Reads the row only when

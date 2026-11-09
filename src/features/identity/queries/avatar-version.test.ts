@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { versionOf } from "./avatar-user";
+import { versionOf } from "./avatar-version";
 
 describe("versionOf (#60)", () => {
   it("reads the version of an avatar key", () => {

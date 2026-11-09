@@ -7,6 +7,7 @@ import {
   PROTOCOL_VERSION,
   roomStatusRequestSchema,
   type OpenRoomRequest,
+  type RoomStatusRequest,
   type RoomCode,
 } from "@fifth-copy/protocol";
 import { createInternalApiClient } from "./client";
@@ -100,7 +101,7 @@ describe("internal API client: openRoom", () => {
 
 describe("internal API client: roomStatus (#806 C3)", () => {
   let stub: RaceServerStub;
-  const lookup = { v: PROTOCOL_VERSION, lobbyIds: ["lob_1", "lob_2"] };
+  const lookup: RoomStatusRequest = { v: PROTOCOL_VERSION, lobbyIds: ["lob_1", "lob_2"] };
   const status = {
     v: PROTOCOL_VERSION,
     rooms: [{ lobbyId: "lob_1", phase: "waiting", typists: 2, bots: 1, seats: 30 }],

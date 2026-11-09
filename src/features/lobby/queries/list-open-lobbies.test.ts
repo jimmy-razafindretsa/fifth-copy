@@ -34,19 +34,21 @@ function stubClient(
   return {
     calls,
     openRoom: vi.fn(),
-    roomStatus: vi.fn(async (request): Promise<InternalCallResult<RoomStatusResponse>> => {
-      calls.push(request);
-      if (fail) return { ok: false, error: "race-server-unavailable" };
-      return {
-        ok: true,
-        data: {
-          v: PROTOCOL_VERSION,
-          rooms: request.lobbyIds.flatMap((lobbyId) =>
-            rooms[lobbyId] ? [{ lobbyId, ...rooms[lobbyId] }] : [],
-          ),
-        },
-      };
-    }),
+    roomStatus: vi.fn(
+      async (request: RoomStatusRequest): Promise<InternalCallResult<RoomStatusResponse>> => {
+        calls.push(request);
+        if (fail) return { ok: false, error: "race-server-unavailable" };
+        return {
+          ok: true,
+          data: {
+            v: PROTOCOL_VERSION,
+            rooms: request.lobbyIds.flatMap((lobbyId) =>
+              rooms[lobbyId] ? [{ lobbyId, ...rooms[lobbyId] }] : [],
+            ),
+          },
+        };
+      },
+    ),
   };
 }
 
@@ -145,8 +147,8 @@ describe("listOpenLobbies (#806)", () => {
   it("C4: an answer for an id that was not asked is ignored", async () => {
     seed("1", 1);
     const client = stubClient({});
-    client.roomStatus = vi.fn(async () => ({
-      ok: true as const,
+    client.roomStatus = vi.fn(async (): Promise<InternalCallResult<RoomStatusResponse>> => ({
+      ok: true,
       data: {
         v: PROTOCOL_VERSION,
         rooms: [
@@ -173,7 +175,7 @@ describe("listOpenLobbies (#806)", () => {
   it("C5: a client that rejects is race-server-unavailable too", async () => {
     seed("1", 1);
     const client = stubClient({});
-    client.roomStatus = vi.fn(async () => {
+    client.roomStatus = vi.fn(async (): Promise<InternalCallResult<RoomStatusResponse>> => {
       throw new Error("boom");
     });
     await expect(listOpenLobbies({ client, now: () => NOW })).resolves.toEqual({

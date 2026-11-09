@@ -110,7 +110,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Colours: follow `docs/design/components.md` "Colour usage rules" (no raw hex, no `--brand-*`, ink grounds carry paper text, gold and device colours only where owned); `scripts/check-colours.ts` (check.sh `colours`) enforces them.
 
 ## Architecture map
-Production is a Railway project (ADR 0019): **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: rollups, purges; planned), plus Railway Postgres and Redis. Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.
+Production is a Railway project (ADR 0019): **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: advisory-lock job scheduler, `JobRun`; jobs in `src/features/*/jobs` listed in `src/worker/registry.ts`), plus Railway Postgres and Redis. Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.
 ```
 src/app/                         routes, thin (compose features); api/internal/* = HMAC routes for the race server
 src/features/<feature>/          components/ actions/ queries/ jobs/ schema.ts index.ts

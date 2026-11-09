@@ -53,6 +53,19 @@ export const fr = {
       join: "ENTRER →",
       joining: "ENTRÉE…",
     },
+    /** Le registre des salles ouvertes sous le code (#807, bible 14.1). */
+    rooms: {
+      title: "SALLES OUVERTES",
+      live: "EN DIRECT",
+      listName: "Salles ouvertes",
+      loading: "Recherche des salles ouvertes…",
+      typists: { zero: "0 DACTYLO", one: "1 DACTYLO", other: "{n} DACTYLOS" },
+      bots: { zero: "0 BOT", one: "1 BOT", other: "{n} BOTS" },
+      count: "{typists} · {bots}",
+      join: "REJOINDRE →",
+      joinName: "Rejoindre la salle {code}",
+      empty: "AUCUNE SALLE OUVERTE · APPUIE SUR COURSE RAPIDE",
+    },
     errors: {
       prefix: "RETOURNÉ ·",
       invalidFormat: "Entre un code comme KGB-4821",

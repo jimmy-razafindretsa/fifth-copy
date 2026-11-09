@@ -3,6 +3,7 @@ import { MAX_ROOM_STATUS_IDS, PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import { env } from "@/env";
 import { db } from "@/server/db";
 import { createInternalApiClient, type InternalApiClient } from "@/server/internal-api/client";
+import type { ListOpenLobbiesResult, OpenLobby } from "../types";
 
 /**
  * How far back a `Lobby` row may still have a room: the race server's `ROOM_TTL_S` (2 h). An older
@@ -10,11 +11,8 @@ import { createInternalApiClient, type InternalApiClient } from "@/server/intern
  */
 export const OPEN_LOBBY_MAX_AGE_MS = 2 * 3600 * 1000;
 
-/** A public room a visitor can join right now: counts only, never names or user ids. */
-export type OpenLobby = { code: string; typists: number; bots: number; seats: number };
-
-export type ListOpenLobbiesResult =
-  { ok: true; lobbies: OpenLobby[] } | { ok: false; error: "race-server-unavailable" };
+// The shapes live in ../types so the landing's docket (#807) can type its rows from the client-safe index.
+export type { ListOpenLobbiesResult, OpenLobby } from "../types";
 
 type Options = {
   /** Injected in tests; defaults to the signed client of the app env. */

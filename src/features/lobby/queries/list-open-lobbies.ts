@@ -3,13 +3,10 @@ import { MAX_ROOM_STATUS_IDS, PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import { env } from "@/env";
 import { db } from "@/server/db";
 import { createInternalApiClient, type InternalApiClient } from "@/server/internal-api/client";
+import { openLobbyWhere } from "./open-lobby-filter";
 import type { ListOpenLobbiesResult, OpenLobby } from "../types";
 
-/**
- * How far back a `Lobby` row may still have a room: the race server's `ROOM_TTL_S` (2 h). An older
- * room is gone from Redis (#806). Mirrored here because `src/` never imports `services/` (ADR 0005).
- */
-export const OPEN_LOBBY_MAX_AGE_MS = 2 * 3600 * 1000;
+export { OPEN_LOBBY_MAX_AGE_MS } from "./open-lobby-filter";
 
 // The shapes live in ../types so the landing's docket (#807) can type its rows from the client-safe index.
 export type { ListOpenLobbiesResult, OpenLobby } from "../types";
@@ -24,8 +21,8 @@ type Options = {
 /**
  * The one definition of "joinable" (#806): a PUBLIC, WAITING `Lobby` row of the last 2 h whose
  * live room, asked of the race server (ADR 0008: the web never reads the room's Redis keys), is in
- * phase `waiting` with a free desk. Busiest first, then newest. `Lobby.status` never reaches
- * `CLOSED` yet (#734), so the race server's answer is what filters gone, started and full rooms.
+ * phase `waiting` with a free desk. Busiest first, then newest. A lobby whose room closed is CLOSED
+ * (#734); the race server's answer still filters rooms gone without a close, started and full.
  * When the race server does not answer, nothing is listed: a lobby is never shown unchecked.
  */
 export async function listOpenLobbies({
@@ -33,11 +30,7 @@ export async function listOpenLobbies({
   now = Date.now,
 }: Options = {}): Promise<ListOpenLobbiesResult> {
   const rows = await db.lobby.findMany({
-    where: {
-      type: "PUBLIC",
-      status: "WAITING",
-      createdAt: { gte: new Date(now() - OPEN_LOBBY_MAX_AGE_MS) },
-    },
+    where: openLobbyWhere(now()),
     orderBy: { createdAt: "desc" },
     take: MAX_ROOM_STATUS_IDS,
     select: { id: true, code: true },

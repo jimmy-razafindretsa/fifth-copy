@@ -10,9 +10,11 @@ import { createInternalHandler } from "./http/internal";
 import { createNonceStore } from "./http/nonces";
 import { createHttpHandler } from "./http/router";
 import { createOutbox, type Outbox } from "./persist/outbox";
-import { buildResults, sendResults } from "./persist/results";
+import { closeLobbyRequest, lobbyCloseOutboxId, sendOutboxEntry } from "./persist/lobby-close";
+import { buildResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
 import { createIdle } from "./players/idle";
+import { createLastLeave } from "./players/last-leave";
 import { releaseDropped, type LeaveDeps } from "./players/leave";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
@@ -174,8 +176,8 @@ export function createRaceServer({
   };
   // Results (#189, ADR 0008 write path): built from the in-process states and traces before
   // `release` frees them, then queued in Redis and posted; pending entries of a previous process
-  // are re-sent now.
-  const outbox = createOutbox({ redis, clock, scheduler, send: sendResults(webApi) });
+  // are re-sent now. The lobby close calls (#734) ride the same queue.
+  const outbox = createOutbox({ redis, clock, scheduler, send: sendOutboxEntry(webApi) });
   const persist = (ended: RaceEnded) => {
     if (ended.reason === "void") return;
     const runtime = desksState.get(ended.lobbyId);
@@ -190,11 +192,20 @@ export function createRaceServer({
       );
   };
   outbox.drain().catch((err: unknown) => log("outbox drain failed", { err: String(err) }));
+  // The room is gone for good (#734): the web closes the `Lobby` row. Never awaited by the leave.
+  const closeLobby = (lobbyId: string) => {
+    outbox
+      .enqueue(lobbyCloseOutboxId(lobbyId), [closeLobbyRequest(lobbyId, clock.now())])
+      .catch((err: unknown) =>
+        log("lobby close enqueue failed", { lobby: lobbyId, err: String(err) }),
+      );
+  };
 
   const leaveDeps: LeaveDeps = {
     registry,
     presence,
     onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
+    onLobbyClosed: closeLobby,
     announce: (lobbyId, members) =>
       void to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members }),
   };
@@ -332,6 +343,8 @@ export function createRaceServer({
       }),
     }),
   );
+  // A reload of the lobby page keeps the room and its lobby open (#734).
+  const lastLeave = createLastLeave({ registry, scheduler, sockets: presence.sockets });
   const io = attachSocketServer(httpServer, {
     registry,
     lifecycle,
@@ -344,6 +357,8 @@ export function createRaceServer({
     spectators,
     // Per-identity buckets (#207): fails closed, a message Redis cannot count is dropped.
     limiter: createLimiter(redis, { prefix: RACE_LIMITER_PREFIX }),
+    onLobbyClosed: closeLobby,
+    lastLeave,
   });
   sockets.io = io;
 
@@ -362,6 +377,8 @@ export function createRaceServer({
       if (recovery) {
         await lease.start();
         const { kept, voided, gone, foreign } = await registry.rehydrate();
+        // A room whose keys expired while no process ran (#204): its lobby is closed too (#734).
+        for (const lobbyId of gone) closeLobby(lobbyId);
         log("rooms rehydrated", {
           kept: kept.length,
           voided: voided.length,
@@ -401,6 +418,7 @@ export function createRaceServer({
       await lease.stop();
       lifecycle.close();
       presence.close();
+      lastLeave.close();
       bots.close();
       ticker.close();
       outbox.close();

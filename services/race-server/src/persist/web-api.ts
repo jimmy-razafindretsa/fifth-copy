@@ -1,5 +1,8 @@
 import {
+  closeLobbyResponseSchema,
   raceResultsResponseSchema,
+  type CloseLobbyRequest,
+  type CloseLobbyResponse,
   startRaceResponseSchema,
   type RaceResultsRequest,
   type RaceResultsResponse,
@@ -22,7 +25,20 @@ export type WebApi = {
    * (race, desk); the outbox (`persist/outbox.ts`) is the retry.
    */
   postResults(request: RaceResultsRequest): Promise<RaceResultsResponse>;
+  /**
+   * `POST /api/internal/lobbies/:id/close` (#734): the room's last human left, so the `Lobby` row
+   * becomes CLOSED. Idempotent; the outbox (`persist/lobby-close.ts`) is the retry.
+   */
+  closeLobby(request: CloseLobbyRequest): Promise<CloseLobbyResponse>;
 };
+
+/** A non-200 answer from the web; `status` lets a sender tell a final 404 from a retryable failure. */
+export class WebApiStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`web api status ${status}`);
+    this.name = "WebApiStatusError";
+  }
+}
 
 export const WEB_API_TIMEOUT_MS = 5_000;
 /** Same cap as inbound internal bodies: a start answer is a few kB of text and settings, a results
@@ -102,7 +118,7 @@ export function createWebApi({
       status = response.status;
       if (status !== 200) {
         await response.body?.cancel().catch(() => {});
-        throw new Error(`web api status ${status}`);
+        throw new WebApiStatusError(status);
       }
       return parse(JSON.parse(await readCapped(response, MAX_WEB_RESPONSE_BYTES)));
     };
@@ -124,6 +140,10 @@ export function createWebApi({
     postResults: (request) =>
       post(`/api/internal/races/${encodeURIComponent(request.raceId)}/results`, request, (json) =>
         raceResultsResponseSchema.parse(json),
+      ),
+    closeLobby: (request) =>
+      post(`/api/internal/lobbies/${encodeURIComponent(request.lobbyId)}/close`, request, (json) =>
+        closeLobbyResponseSchema.parse(json),
       ),
   };
 }

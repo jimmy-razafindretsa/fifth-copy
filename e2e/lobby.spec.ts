@@ -5,6 +5,7 @@ import {
   createLobby,
   hostRoom,
   joinAsGuest,
+  lobbyStatusOf,
   phaseOf,
   recordRaceTokens,
   setHostSettings,
@@ -83,6 +84,35 @@ test.describe("lobby waiting room (#107)", () => {
       form.getByRole("alert").filter({ hasText: "No race with that code" }),
     ).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
+  });
+
+  test("#734 C5 the host closes the tab: the lobby row reads CLOSED within 10 s, a join gets the closed line", async ({
+    browser,
+  }) => {
+    const host = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    const page = await host.newPage();
+    const code = await createLobby(page);
+    await expect(rows(page)).toHaveCount(1);
+    expect(await lobbyStatusOf(code)).toBe("WAITING");
+
+    // Last human leaves: the race server closes the room and tells the web through its outbox.
+    await host.close();
+    await expect.poll(() => lobbyStatusOf(code), { timeout: scaled(10_000) }).toBe("CLOSED");
+
+    const visitor = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    try {
+      const other = await visitor.newPage();
+      await other.goto("/");
+      const form = other.getByRole("form", { name: "Join with code" });
+      await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);
+      await form.getByRole("button", { name: "JOIN →", exact: true }).click();
+      await expect(
+        form.getByRole("alert").filter({ hasText: "That race has already started or closed" }),
+      ).toBeVisible();
+      await expect(other).toHaveURL(/\/$/);
+    } finally {
+      await visitor.close();
+    }
   });
 
   test("C4 the race token stays out of the URL, the HTML and cookies", async ({ page }) => {

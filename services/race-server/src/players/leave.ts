@@ -7,6 +7,12 @@ export type LeaveDeps = {
   registry: Pick<RoomRegistry, "leave" | "room" | "withRoom">;
   presence: Pick<Presence, "left" | "sockets" | "dropped">;
   onRoomClosed: (lobbyId: string) => void;
+  /**
+   * The room is gone for good (last human left, keys deleted, #734): the web is told to close the
+   * `Lobby` row through the outbox. Fire and forget: never awaited, so a web outage never blocks
+   * the leave. Not called for a kept ended room ("Race again" may still reopen it).
+   */
+  onLobbyClosed: (lobbyId: string) => void;
   /** Sends the room's new roster to its members and spectators. */
   announce: (lobbyId: string, members: Member[]) => void;
 };
@@ -23,6 +29,7 @@ export async function leaveRoom(
 ): Promise<{ members: Member[]; closed: boolean; kept: boolean }> {
   const { members, closed, kept } = await deps.registry.leave(lobbyId, userId);
   if (closed || kept) deps.onRoomClosed(lobbyId);
+  if (closed) deps.onLobbyClosed(lobbyId);
   else await deps.presence.left(lobbyId, userId);
   if (!closed) deps.announce(lobbyId, members);
   return { members, closed, kept };

@@ -71,6 +71,17 @@ export function lobbyIdOf(code: string): Promise<string> {
   });
 }
 
+/** The `Lobby.status` behind a room code (#734: CLOSED once the race server's close call lands). */
+export function lobbyStatusOf(code: string): Promise<string | null> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ status: string }>(
+      `SELECT status FROM "Lobby" WHERE code = $1`,
+      [code],
+    );
+    return rows[0]?.status ?? null;
+  });
+}
+
 /** Marks a lobby closed, as a race start or the retention sweep leaves it (its token mint answers `closed`). */
 export function closeLobby(code: string): Promise<void> {
   return withDb(async (db) => {

@@ -21,6 +21,9 @@ import {
   MAX_ROOM_STATUS_IDS,
   roomStatusRequestSchema,
   roomStatusResponseSchema,
+  closeLobbyRequestSchema,
+  closeLobbyResponseSchema,
+  raceResultsRequestSchema as resultsSchema,
 } from "./index";
 
 const v = PROTOCOL_VERSION;
@@ -382,5 +385,45 @@ describe("room status lookup (#806 C1)", () => {
     expect(Object.keys(parsed.rooms[0]!).sort()).toEqual(
       ["bots", "lobbyId", "phase", "seats", "typists"].sort(),
     );
+  });
+});
+
+describe("lobby close (#734 C6)", () => {
+  const close = { v, lobbyId: "lob_1", closedAt: 1_767_225_600_000 };
+
+  it.each([
+    ["request example", closeLobbyRequestSchema, close, true],
+    ["request closedAt 0", closeLobbyRequestSchema, { ...close, closedAt: 0 }, true],
+    ["request negative closedAt", closeLobbyRequestSchema, { ...close, closedAt: -1 }, false],
+    ["request fractional closedAt", closeLobbyRequestSchema, { ...close, closedAt: 1.5 }, false],
+    ["request empty lobbyId", closeLobbyRequestSchema, { ...close, lobbyId: "" }, false],
+    [
+      "request oversize lobbyId",
+      closeLobbyRequestSchema,
+      { ...close, lobbyId: "l".repeat(129) },
+      false,
+    ],
+    ["request missing closedAt", closeLobbyRequestSchema, { v, lobbyId: "lob_1" }, false],
+    ["request previous v", closeLobbyRequestSchema, { ...close, v: v - 1 }, false],
+    ["response closed now", closeLobbyResponseSchema, { v, lobbyId: "lob_1", changed: true }, true],
+    [
+      "response already closed",
+      closeLobbyResponseSchema,
+      { v, lobbyId: "lob_1", changed: false },
+      true,
+    ],
+    ["response missing changed", closeLobbyResponseSchema, { v, lobbyId: "lob_1" }, false],
+    [
+      "response previous v",
+      closeLobbyResponseSchema,
+      { v: v - 1, lobbyId: "lob_1", changed: true },
+      false,
+    ],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("a close request never parses as a results request (the race server's outbox tells them apart)", () => {
+    expect(resultsSchema.safeParse(close).success).toBe(false);
   });
 });

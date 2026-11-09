@@ -2316,7 +2316,8 @@ describe("#235 line cut, reconnect and the lost room", () => {
     it("#661 C3: ended { void } moves the store out of running, from running or reconnecting", () => {
       const live = running();
       expect(live.phase).toBe("running");
-      const voidOf = (s: RaceState) => reduceRace(s, { type: "ended", payload: voided, at: T + 9_000 });
+      const voidOf = (s: RaceState) =>
+        reduceRace(s, { type: "ended", payload: voided, at: T + 9_000 });
       for (const from of [live, reduceRace(live, { type: "disconnected" })]) {
         const s = voidOf(from);
         expect(s.phase).not.toBe("running");

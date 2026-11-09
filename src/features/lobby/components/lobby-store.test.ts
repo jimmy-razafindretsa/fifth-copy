@@ -322,7 +322,8 @@ describe("bindRoomSocket version skew", () => {
 // reconnects it, so the page leaves its live or reconnecting state for the terminal error instead of
 // waiting forever. Before the first seat the late-join hold owns that close (#732), so the store waits.
 describe("server disconnect (#661 C1)", () => {
-  const seated = () => reduceLobby(initialLobbyState, { type: "welcome", payload: welcome(1, [ada]) });
+  const seated = () =>
+    reduceLobby(initialLobbyState, { type: "welcome", payload: welcome(1, [ada]) });
 
   it("a seated viewer: terminal error with the server's reason, the roll kept", () => {
     const next = reduceLobby(seated(), { type: "server-disconnect" });

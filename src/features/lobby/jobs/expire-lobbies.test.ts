@@ -26,7 +26,8 @@ describe.skipIf(!testDatabaseUrl)(
     let db: ReturnType<typeof createPrismaClient>;
     const PREFIX = "test-expire-lobby-";
     const CODE_PREFIX = "EXP-";
-    const NOW = new Date("2026-11-09T12:00:00Z");
+    // Older than any real row: the job sweeps the whole table, so other test files' lobbies never match.
+    const NOW = new Date("2020-01-01T12:00:00Z");
     const ago = (ms: number) => new Date(NOW.getTime() - ms);
     const OLD = ago(EXPIRE_AFTER_MS + 60_000);
     let hostUserId: string;

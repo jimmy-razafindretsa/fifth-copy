@@ -135,6 +135,8 @@ describe("reduceRace (#561 C2)", () => {
       lampTarget: null,
       abandoning: false,
       abandons: 0,
+      // #661 C2: no cut line waiting for its welcome
+      keysHeld: false,
     });
   });
 
@@ -397,6 +399,8 @@ describe("bindRaceSocket (#561 C3)", () => {
     expect([...fake.listeners.keys()].sort()).toEqual([
       "connect_error",
       "countdown",
+      // #661: the server's close and the transport drop
+      "disconnect",
       "ended",
       "event",
       "pong",
@@ -2305,6 +2309,21 @@ describe("#235 line cut, reconnect and the lost room", () => {
       expect(selectCanType(s)).toBe(false);
       // terminal, like any lost
       expect(reduceRace(s, rewelcome(2))).toBe(s);
+    });
+
+    // #661 C3: a voided race never leaves the page frozen on `running`, even when it arrives on a
+    // cut line (the `ended` a reconnect's welcome is followed by, #204)
+    it("#661 C3: ended { void } moves the store out of running, from running or reconnecting", () => {
+      const live = running();
+      expect(live.phase).toBe("running");
+      const voidOf = (s: RaceState) =>
+        reduceRace(s, { type: "ended", payload: voided, at: T + 9_000 });
+      for (const from of [live, reduceRace(live, { type: "disconnected" })]) {
+        const s = voidOf(from);
+        expect(s.phase).not.toBe("running");
+        expect(s).toMatchObject({ phase: "lost", lost: "room-lost", keysHeld: from.keysHeld });
+        expect(selectCanType(s)).toBe(false);
+      }
     });
 
     it("an all-finished or timer end is still RACE OVER", () => {

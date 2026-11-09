@@ -60,6 +60,8 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
   generic: "generic",
   // The lost room shows its own notice row (#235 C4); this sentence is never read.
   "room-lost": "noRoom",
+  // The server closed the socket (#661): something jammed (bible 14.2 lost line).
+  "server-disconnect": "generic",
 };
 
 type ViewProps = {

@@ -13,6 +13,7 @@ import { playersLabel, type LobbyLabels } from "./lobby-labels";
 import {
   bindRoomSocket,
   initialLobbyState,
+  lobbyErrorCopy,
   reduceLobby,
   ROOM_SEATS,
   type LobbyState,
@@ -169,7 +170,7 @@ export function LobbyLiveView({
           {state.phase === "error" ? (
             <div className={styles.error}>
               <InlineError prefix={errors.prefix}>
-                {errorMessage(errors, state.error ?? "generic")}
+                {errorMessage(errors, lobbyErrorCopy(state.error))}
               </InlineError>
             </div>
           ) : null}

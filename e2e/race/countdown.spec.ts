@@ -39,13 +39,28 @@ type Said = {
   role: string | null;
   live: string | null;
 };
-type Log = { phases: Phase[]; steps: Step[]; said: Said[] };
+/** A main-thread task of 50 ms or more (Long Tasks API), on the page's `Date.now()` clock. */
+type Task = { start: number; end: number };
+type Log = { phases: Phase[]; steps: Step[]; said: Said[]; tasks: Task[] };
 type Frame = { t: number; payload: string };
 
-/** Runs in the page before any of its scripts: logs every phase, countdown step and announcement. */
+/**
+ * Runs in the page before any of its scripts: logs every phase, countdown step and announcement, and
+ * every long task (#818: the task that commits a step, see `begunAt`).
+ */
 function recorder() {
-  const log: Log = { phases: [], steps: [], said: [] };
+  const log: Log = { phases: [], steps: [], said: [], tasks: [] };
   (window as unknown as { __countdown: Log }).__countdown = log;
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        const start = performance.timeOrigin + e.startTime;
+        log.tasks.push({ start, end: start + e.duration });
+      }
+    }).observe({ type: "longtask", buffered: true });
+  } catch {
+    // no Long Tasks API: every step is read at its commit (`begunAt` falls back to `t`)
+  }
   let phase: string | null = null;
   let step: string | null = null;
   let said: string | null = null;
@@ -158,6 +173,17 @@ async function warm(page: Page, lobbyId: string) {
   await page.request.get(`/race/${lobbyId}`);
   await page.request.post("/api/internal/races", { data: {} });
 }
+
+/**
+ * When the page began showing a step (#818): the start of the long task that committed it, else its
+ * commit time. The store's GO timer fires on time and dispatches GO; the seat view then renders the
+ * running race in that same task, which on a loaded machine running `next dev` takes up to ~250 ms, so
+ * the stamp's commit time measured the page's render, not the countdown. A step fired at the wrong
+ * instant moves its task's start just as much, so the server-instant checks still catch it. The 1 ms
+ * margin covers `Date.now()`'s whole milliseconds against the timeline's fractional ones.
+ */
+const begunAt = (log: Log, t: number) =>
+  log.tasks.find((task) => task.start - 1 <= t && t <= task.end + 1)?.start ?? t;
 
 /** The steps a page showed on one path, in order (the recorder logs changes only). */
 const stepsOn = (log: Log, path: string) => log.steps.filter((s) => s.path === path);
@@ -344,7 +370,9 @@ test.describe("#214 countdown and GO stamp", () => {
     const countdownAt = frames.find((f) => f.payload.startsWith('42["countdown"'))!;
     const t0 = Number(/"t0":(\d+)/.exec(countdownAt.payload)![1]);
     const offset = pageOffset(frames);
-    const onServer = (s: Step) => s.t + offset;
+    // each step's instant is when its task began (`begunAt`, #818), not when its render ended
+    const at = (s: Step) => begunAt(log, s.t);
+    const onServer = (s: Step) => at(s) + offset;
     for (const [s, at] of [
       [two, t0 - 2_000],
       [one, t0 - 1_000],
@@ -363,8 +391,8 @@ test.describe("#214 countdown and GO stamp", () => {
       [one, go],
     ] as const) {
       // 3-2 is one second less the countdown's delivery, never more than one second
-      if (a !== three) expect(b.t - a.t).toBeGreaterThanOrEqual(850);
-      expect(b.t - a.t).toBeLessThanOrEqual(1_150);
+      if (a !== three) expect(at(b) - at(a)).toBeGreaterThanOrEqual(850);
+      expect(at(b) - at(a)).toBeLessThanOrEqual(1_150);
     }
     // GO: the red stamp, НАЧАЛИ · GO, a fixed -6 degrees, slamming, gone 1.2 s after GO
     expect(go.text).toBe("НАЧАЛИ · GO");
@@ -373,13 +401,13 @@ test.describe("#214 countdown and GO stamp", () => {
     expect(go.angle).toBe("-6");
     expect(go.fontSize).toBe("56px");
     expect(go.anim).toMatch(/fcSlam$/);
-    expect(gone.t - go.t).toBeGreaterThanOrEqual(GO_STAMP_MS - 150);
-    expect(gone.t - go.t).toBeLessThanOrEqual(GO_STAMP_MS + 150);
-    // GO is the instant the phase turns running
+    expect(at(gone) - at(go)).toBeGreaterThanOrEqual(GO_STAMP_MS - 150);
+    expect(at(gone) - at(go)).toBeLessThanOrEqual(GO_STAMP_MS + 150);
+    // GO is the instant the phase turns running (the same commit: both read at their commit time)
     const runningAt = log.phases.find((e) => e.path === path && e.phase === "running")!.t;
     expect(Math.abs(go.t - runningAt)).toBeLessThanOrEqual(150);
     // the whole countdown fits the server's 3 s (the offset from the welcome is off by the latency)
-    expect(go.t - three.t).toBeLessThanOrEqual(COUNTDOWN_MS + 150);
+    expect(at(go) - at(three)).toBeLessThanOrEqual(COUNTDOWN_MS + 150);
 
     // centred over the scene area: on the typing surface's axis, between the strip and the sheet,
     // and the overlay never covers either

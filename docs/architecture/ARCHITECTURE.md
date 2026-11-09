@@ -119,6 +119,7 @@ flowchart LR
   FC["FIFTH COPY<br/>fifthcopy.example (own domain, HTTPS)"]
   FC -->|OAuth: id, login, avatar only| gh["GitHub"]
   FC -->|OAuth: id, login, avatar only| dc["Discord"]
+  FC -->|OAuth: id, first name, picture only| gg["Google"]
   FC -->|seed corpus, offline| pd["Public-domain texts<br/>(Gutenberg, BAnQ/Gallica)"]
   ci["GitHub Actions"] -->|checks; Railway builds main on push| FC
 ```
@@ -388,7 +389,7 @@ Environments: local (`npm run dev`, `npm run dev:race`, `npm run dev:worker`, co
 | `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (the race-server's own Railway domain in production, ADR 0019) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |
 | `RACE_TOKEN_SECRET` | web, race-server, worker (validated by `src/env.ts`, unused) | race tokens and internal HMAC |
-| `AUTH_SECRET`, `AUTH_GITHUB_ID/SECRET`, `AUTH_DISCORD_ID/SECRET` | web (`AUTH_SECRET` also worker: validated by `src/env.ts`) | Auth.js |
+| `AUTH_SECRET`, `AUTH_GITHUB_ID/SECRET`, `AUTH_DISCORD_ID/SECRET`, `AUTH_GOOGLE_ID/SECRET` | web (`AUTH_SECRET` also worker: validated by `src/env.ts`) | Auth.js |
 | `NEXT_PUBLIC_APP_URL` | web | absolute links |
 | `AVATAR_DIR` | web | avatar files root (ADR 0014); default `.data/avatars`, `/data/avatars` volume in production |
 

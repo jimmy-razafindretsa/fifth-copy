@@ -14,6 +14,7 @@ import { closeLobbyRequest, lobbyCloseOutboxId, sendOutboxEntry } from "./persis
 import { buildResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
 import { createIdle } from "./players/idle";
+import { createLastLeave } from "./players/last-leave";
 import { releaseDropped, type LeaveDeps } from "./players/leave";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
@@ -342,6 +343,8 @@ export function createRaceServer({
       }),
     }),
   );
+  // A reload of the lobby page keeps the room and its lobby open (#734).
+  const lastLeave = createLastLeave({ registry, scheduler, sockets: presence.sockets });
   const io = attachSocketServer(httpServer, {
     registry,
     lifecycle,
@@ -355,6 +358,7 @@ export function createRaceServer({
     // Per-identity buckets (#207): fails closed, a message Redis cannot count is dropped.
     limiter: createLimiter(redis, { prefix: RACE_LIMITER_PREFIX }),
     onLobbyClosed: closeLobby,
+    lastLeave,
   });
   sockets.io = io;
 
@@ -414,6 +418,7 @@ export function createRaceServer({
       await lease.stop();
       lifecycle.close();
       presence.close();
+      lastLeave.close();
       bots.close();
       ticker.close();
       outbox.close();

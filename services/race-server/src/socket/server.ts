@@ -19,6 +19,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import type { AbandonResult } from "../players/idle";
+import type { LastLeave } from "../players/last-leave";
 import { leaveRoom, type LeaveDeps } from "../players/leave";
 import type { BonusPlayResult } from "../rooms/bonus-step";
 import type { Presence } from "../players/presence";
@@ -79,6 +80,8 @@ export function attachSocketServer(
     limiter: Limiter;
     /** Queues the web's lobby close when a leave closes the room (#734, `LeaveDeps.onLobbyClosed`). */
     onLobbyClosed: (lobbyId: string) => void;
+    /** The grace before the last human's leave closes a waiting room (#734: a reload keeps it). */
+    lastLeave: LastLeave;
   },
 ): RaceIo {
   const { registry, lifecycle, race, presence } = deps;
@@ -271,8 +274,15 @@ export function attachSocketServer(
         .then(async (closed) => {
           // A new socket of the user queued its join meanwhile: it keeps the desk.
           if (closed !== "leave" || presence.sockets(lobby, sub) > 0) return;
-          const { members, closed: roomClosed } = await leaveRoom(leaveDeps, lobby, sub);
-          log("left", { lobby, members: members.length, closed: roomClosed });
+          const leave = async () => {
+            const { members, closed: roomClosed } = await leaveRoom(leaveDeps, lobby, sub);
+            log("left", { lobby, members: members.length, closed: roomClosed });
+          };
+          // The last human of a waiting room (#734): a reload must not close the room or its
+          // lobby, so the leave waits out the grace and is dropped if a socket of the user is back.
+          if (await deps.lastLeave.closes(lobby, sub))
+            return deps.lastLeave.defer(lobby, sub, leave);
+          await leave();
         })
         .catch(() => log("leave failed", { lobby }));
     });

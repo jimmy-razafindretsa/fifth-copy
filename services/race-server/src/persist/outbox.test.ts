@@ -20,6 +20,7 @@ import {
   type Booted,
 } from "../testing/harness";
 import { membersKey, roomKey } from "../rooms/keys";
+import { LAST_LEAVE_GRACE_MS } from "../players/last-leave";
 import { closeLobbyRequest, lobbyCloseOutboxId, sendOutboxEntry } from "./lobby-close";
 import { createOutbox, retryDelayMs } from "./outbox";
 import { WebApiStatusError, type WebApi } from "./web-api";
@@ -352,23 +353,29 @@ describe("lobby close through the outbox (#734 C2)", () => {
     ).toBe(false);
   });
 
-  it("the last human leaving a waiting room queues the close; a web outage is retried and never blocks the leave", async () => {
-    const holder: { web?: ReturnType<typeof closingWeb> } = {};
+  it("the last human leaving a waiting room queues the close after the grace; a web outage is retried and never blocks the leave", async () => {
     const clockRef = { now: () => booted!.clock.now() };
-    holder.web = closingWeb(clockRef, 1);
-    booted = await boot(url, { webApi: holder.web.api, redisPrefix: prefix });
+    const web = closingWeb(clockRef, 1);
+    booted = await boot(url, { webApi: web.api, redisPrefix: prefix });
     const lobby = await booted.openRoom("CLS-0001");
     const host = booted.connect({ v: PROTOCOL_VERSION, token: await booted.token({ lobby }) });
     const seen = track(host);
     await until(() => !!seen.welcome, 2_000, "welcome");
-    const leftAt = booted.clock.now();
     host.disconnect();
+    await settle(100);
+    // Inside the grace (#734: a reload): the room stands, nothing is sent.
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1);
+    await settle();
+    expect(web.closes).toHaveLength(0);
+    expect(await redis.exists(roomKey(lobby))).toBe(1);
 
-    const closes = holder.web.closes;
+    booted.clock.advance(1);
+    const leftAt = booted.clock.now();
+    const closes = web.closes;
     await until(() => closes.length === 1, 2_000, "first close call");
+    expect(closes[0]!.request).toEqual({ v: PROTOCOL_VERSION, lobbyId: lobby, closedAt: leftAt });
     // The leave completed (keys gone) even though the web is down.
     expect(await redis.exists(roomKey(lobby), membersKey(lobby))).toBe(0);
-    expect(closes[0]!.request).toEqual({ v: PROTOCOL_VERSION, lobbyId: lobby, closedAt: leftAt });
     await settle();
     const id = lobbyCloseOutboxId(lobby);
     expect(await pendingIn(id)).toEqual({ length: 1, listed: true });
@@ -379,6 +386,35 @@ describe("lobby close through the outbox (#734 C2)", () => {
     await settle();
     expect(closes[1]!.request).toEqual(closes[0]!.request);
     expect(await pendingIn(id)).toEqual({ length: 0, listed: false });
+  });
+
+  it("host reload does not close: a new socket of the host within the grace keeps the room and its lobby", async () => {
+    const web = fixtureWebApi({ now: () => Date.now() });
+    booted = await boot(url, { webApi: web.api, redisPrefix: prefix });
+    const lobby = await booted.openRoom("RLD-0734");
+    const sub = "usr_reloading_host";
+    const first = booted.connect({
+      v: PROTOCOL_VERSION,
+      token: await booted.token({ lobby, sub }),
+    });
+    const seenFirst = track(first);
+    await until(() => !!seenFirst.welcome, 2_000, "first welcome");
+    first.disconnect();
+    await settle(100);
+    booted.clock.advance(1_500);
+
+    const again = booted.connect({
+      v: PROTOCOL_VERSION,
+      token: await booted.token({ lobby, sub }),
+    });
+    const seenAgain = track(again);
+    await until(() => !!seenAgain.welcome, 2_000, "welcome after the reload");
+    expect(seenAgain.welcome?.you).toBe(seenFirst.welcome?.you);
+    booted.clock.advance(LAST_LEAVE_GRACE_MS * 2);
+    await settle();
+    expect(web.closes).toHaveLength(0);
+    expect(await redis.exists(roomKey(lobby))).toBe(1);
+    expect(await pendingIn(lobbyCloseOutboxId(lobby))).toEqual({ length: 0, listed: false });
   });
 
   it("a room found gone on rehydrate (#204) has its lobby closed on boot", async () => {

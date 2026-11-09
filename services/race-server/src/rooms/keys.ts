@@ -8,9 +8,10 @@ export const ROOM_TTL_S = 2 * 3600;
 /**
  * Hash: `code`, `hostUserId`, `phase` (protocol `Phase`), `openedAt`, `settings` (JSON
  * `RaceSettings`, parsed on read); from `host:start` on (#166): `raceId`, `t0` and `endAt` (server ms
- * epoch of GO and of the timed end), `race` (JSON `RaceInfo`) and `desks` (JSON desks at start).
+ * epoch of GO and of the timed end), `race` (JSON `RaceInfo`), `desks` (JSON desks at start) and
+ * `owner` (instance id of the process running the race, #704; `instanceKey`).
  * A room voided by a restart (#204) is `phase: ended` with `endReason: void` and `endedAt` (server ms
- * epoch), keeps `raceId` and loses `race`, `t0`, `endAt` and `desks`. A new start ("Race again",
+ * epoch), keeps `raceId` and loses `race`, `t0`, `endAt`, `desks` and `owner`. A new start ("Race again",
  * #143) rewrites the race fields and drops `endReason` and `endedAt`.
  */
 export const roomKey = (lobbyId: string) => `room:${lobbyId}`;
@@ -86,3 +87,11 @@ export const resumeIndexKey = (lobbyId: string) => `room:${lobbyId}:resume`;
  * makes the same request a replay (`http/nonces.ts`).
  */
 export const nonceKey = (nonce: string) => `internal:nonce:${nonce}`;
+
+/**
+ * String `1`: the liveness lease of one race-server process (#704, `rooms/owner.ts`), `id` = its
+ * random instance id. TTL `LEASE_TTL_MS`, refreshed by its process; deleted when it closes. A room
+ * hash's `owner` names the process that runs its race: a boot voids a live race only once that
+ * owner's lease is gone (Railway boots the new deployment before it stops the old one).
+ */
+export const instanceKey = (id: string) => `instance:${id}`;

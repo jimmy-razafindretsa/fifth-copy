@@ -48,8 +48,9 @@ export function fakeLobbyDb() {
       return { id: row.id, code: row.code };
     }),
     findUnique: vi.fn(
-      async ({ where }: { where: { code: string } }) =>
-        lobbies.find((l) => l.code === where.code) ?? null,
+      async ({ where }: { where: { code: string } | { id: string } }) =>
+        lobbies.find((l) => ("code" in where ? l.code === where.code : l.id === where.id)) ??
+        null,
     ),
     // The subset listOpenLobbies uses (#806): equality on type/status, createdAt gte, newest first, take.
     findMany: vi.fn(

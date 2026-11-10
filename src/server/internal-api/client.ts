@@ -2,10 +2,13 @@ import "server-only";
 import {
   openRoomResponseSchema,
   roomStatusResponseSchema,
+  roomTypeResponseSchema,
   type OpenRoomRequest,
   type OpenRoomResponse,
   type RoomStatusRequest,
   type RoomStatusResponse,
+  type RoomTypeRequest,
+  type RoomTypeResponse,
 } from "@fifth-copy/protocol";
 import { internalHeaders } from "./sign";
 
@@ -18,6 +21,11 @@ export type InternalApiClient = {
   openRoom(request: OpenRoomRequest): Promise<InternalCallResult<OpenRoomResponse>>;
   /** Which of these lobbies have a live room, its phase and desk counts (#806). Read only. */
   roomStatus(request: RoomStatusRequest): Promise<InternalCallResult<RoomStatusResponse>>;
+  /**
+   * The host filed PUBLIC or PRIVATE (#815): the room's answer (`ok`, `no-room`, `not-waiting`) before
+   * the web writes `Lobby.type`.
+   */
+  setRoomType(request: RoomTypeRequest): Promise<InternalCallResult<RoomTypeResponse>>;
 };
 
 type ClientOptions = {
@@ -68,5 +76,7 @@ export function createInternalApiClient({
       post("/internal/rooms", request, (json) => openRoomResponseSchema.parse(json)),
     roomStatus: (request) =>
       post("/internal/rooms/status", request, (json) => roomStatusResponseSchema.parse(json)),
+    setRoomType: (request) =>
+      post("/internal/rooms/type", request, (json) => roomTypeResponseSchema.parse(json)),
   };
 }

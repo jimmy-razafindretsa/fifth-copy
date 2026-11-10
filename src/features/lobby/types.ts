@@ -21,9 +21,13 @@ export type RaceTokenResult =
   | { ok: false; error: "not-found" | "closed" | "rate-limited" };
 
 /** setLobbyType's answer (#114): the host's lobby is now `type`, or why not. */
+/** `unavailable`: the race server did not answer (#815); nothing was written, the host retries. */
 export type SetLobbyTypeResult =
   | { ok: true }
-  | { ok: false; error: "invalid" | "not-found" | "not-host" | "closed" | "rate-limited" };
+  | {
+      ok: false;
+      error: "invalid" | "not-found" | "not-host" | "closed" | "rate-limited" | "unavailable";
+    };
 
 /** A public room a visitor can join right now (#806): counts only, never names or user ids. */
 export type OpenLobby = { code: string; typists: number; bots: number; seats: number };

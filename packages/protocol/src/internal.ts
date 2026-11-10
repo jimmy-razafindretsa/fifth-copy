@@ -297,5 +297,5 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "b4639637cd45169ae5f89816247d06fe05e0b2d0467040725b109c77dbb2abe0",
+  signature: "8866d3ad5ed383ebfd0d456cdcd42791bfebab944899e8541d30606d49ab279e",
 } as const;

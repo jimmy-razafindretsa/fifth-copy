@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { createLobby } from "../actions/create-lobby";
+import { quickRace } from "../actions/quick-race";
 import { InlineError } from "./inline-error";
 import styles from "./lobby-entry.module.css";
 import { errorMessage, type EntryError, type EntryErrors } from "./entry-errors";
@@ -12,16 +12,18 @@ export type QuickRaceLabels = { cta: string; searching: string };
 export type QuickRaceState = { error: EntryError | null };
 
 /**
- * Form action: QUICK RACE opens a public room and seats the player in it (matchmaking into an existing
- * open room is card 128); failures become an error line.
+ * Form action: QUICK RACE seats the player in the busiest open public room, or a new one seated with
+ * bots (#128, `quickRace`); failures become the error line and the button is enabled again (retry).
  */
 export function makeQuickRaceAction(navigate: (href: string) => void) {
-  return async function quickRace(): Promise<QuickRaceState> {
+  return async function quickRaceAction(): Promise<QuickRaceState> {
     try {
-      const result = await createLobby({ settings: { lobbyType: "public" } });
-      // invalid-settings cannot come from this fixed call: no catalog line of its own.
+      const result = await quickRace();
+      // rate-limited and invalid-settings have no catalog line of their own (as join-by-code).
       if (!result.ok)
-        return { error: result.error === "invalid-settings" ? "generic" : result.error };
+        return {
+          error: result.error === "race-server-unavailable" ? result.error : "generic",
+        };
       navigate(`/lobby/${result.code}`);
       return { error: null };
     } catch {
@@ -65,7 +67,7 @@ export function QuickRaceButtonView({
   );
 }
 
-/** bible 7.1 primary stamp button, `QUICK RACE` -> `FINDING A ROOM…` while the room opens (bible 2). */
+/** bible 7.1 primary stamp button, `QUICK RACE` -> `FINDING A ROOM…` while a room is found (bible 2). */
 export function QuickRaceButton({
   labels,
   errors,

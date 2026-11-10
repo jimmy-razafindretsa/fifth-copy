@@ -4,6 +4,14 @@ export type CreateLobbyResult =
   | { ok: true; code: RoomCode }
   | { ok: false; error: "race-server-unavailable" | "invalid-settings" };
 
+/**
+ * quickRace's answer (#128): the room to go to, `joined` when it is an open room the query returned,
+ * else a new public room the caller hosts; or why not.
+ */
+export type QuickRaceResult =
+  | { ok: true; code: RoomCode; joined: boolean }
+  | { ok: false; error: "race-server-unavailable" | "invalid-settings" | "rate-limited" };
+
 export type JoinByCodeResult =
   | { ok: true; code: RoomCode }
   | { ok: false; error: "invalid-format" | "not-found" | "closed" | "rate-limited" };

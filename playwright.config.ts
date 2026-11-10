@@ -18,6 +18,13 @@ const WORKERS = /^[1-9]\d*$/.test(process.env.PW_WORKERS ?? "")
   ? Number(process.env.PW_WORKERS)
   : undefined;
 
+/**
+ * Tests that press QUICK RACE or open a PUBLIC room (#128: QUICK RACE seats a visitor in any open
+ * public room). They run in the `matchmaking` project only, one at a time, so no other test's public
+ * room is ever joinable while one runs. Tag every new test that does either.
+ */
+const MATCHMAKING = /@matchmaking/;
+const PARALLEL_GREP_INVERT = process.env.PW_VISUAL ? MATCHMAKING : /@visual|@matchmaking/;
 export const VIEWPORTS = {
   mobile: { width: 375, height: 812 },
   tablet: { width: 768, height: 1024 },
@@ -45,10 +52,21 @@ export default defineConfig({
     timezoneId: "UTC",
     locale: "en-US",
   },
-  projects: Object.entries(VIEWPORTS).map(([name, viewport]) => ({
-    name,
-    use: { ...devices["Desktop Chrome"], viewport },
-  })),
+  projects: [
+    ...Object.entries(VIEWPORTS).map(([name, viewport]) => ({
+      name,
+      use: { ...devices["Desktop Chrome"], viewport },
+      grepInvert: PARALLEL_GREP_INVERT,
+    })),
+    // the @matchmaking tests (see MATCHMAKING), desktop, one at a time
+    {
+      name: "matchmaking",
+      grep: MATCHMAKING,
+      workers: 1,
+      fullyParallel: false,
+      use: { ...devices["Desktop Chrome"], viewport: VIEWPORTS.desktop },
+    },
+  ],
   webServer: process.env.PW_BASE_URL
     ? undefined
     : [

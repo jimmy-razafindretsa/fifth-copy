@@ -63,7 +63,11 @@ vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));
 
-const { joinByCode, mintRaceToken } = await import("../index");
+// #128 C3: the matchmaking behind the limiter is stubbed (it needs the race server); the budget is real.
+const matchmaking = vi.hoisted(() => ({ runQuickRace: vi.fn() }));
+vi.mock("../internal/quick-race", () => matchmaking);
+
+const { joinByCode, mintRaceToken, quickRace } = await import("../index");
 const { ensureGuest } = await import("@/features/identity");
 
 const PREFIX = `test-rl-${randomUUID().slice(0, 8)}-`;
@@ -283,6 +287,24 @@ describe.skipIf(!testDatabaseUrl)(
       });
       await refused.expectNothingCreated();
       expect(state.jar.size).toBe(0);
+    });
+
+    it("#128 C3: the 21st quickRace of one subject within 60 s is refused before any write", async () => {
+      matchmaking.runQuickRace.mockResolvedValue({ ok: true, code: CODE, joined: true });
+      ip();
+      for (let i = 0; i < 20; i++) {
+        await expect(quickRace()).resolves.toEqual({ ok: true, code: CODE, joined: true });
+      }
+      expect(matchmaking.runQuickRace).toHaveBeenCalledTimes(20);
+      const refused = await refusedCalls();
+      await expect(quickRace()).resolves.toEqual({ ok: false, error: "rate-limited" });
+      expect(matchmaking.runQuickRace).toHaveBeenCalledTimes(20);
+      await refused.expectNothingCreated();
+      expect(state.jar.size).toBe(0);
+      // A guest is its own subject: its first press is admitted whatever its IP spent.
+      await ensureGuest();
+      await expect(quickRace()).resolves.toEqual({ ok: true, code: CODE, joined: true });
+      matchmaking.runQuickRace.mockReset();
     });
 
     it("with REDIS_URL on a closed port both actions still succeed and one warning is logged", async () => {

@@ -92,6 +92,25 @@ export function closeLobby(code: string): Promise<void> {
 }
 
 /**
+ * Files a lobby PUBLIC, as the host's LOBBY toggle does (`setLobbyType`, #114; Postgres owns the type,
+ * ADR 0008), so a test hosts its own listed public room: QUICK RACE would seat it in any open one (#128).
+ */
+export function makePublic(code: string): Promise<void> {
+  return withDb(async (db) => {
+    await db.query(`UPDATE "Lobby" SET type = 'PUBLIC' WHERE code = $1`, [code]);
+  });
+}
+
+/** Closes every waiting public lobby, so the next QUICK RACE opens a room (`@matchmaking` tests only). */
+export function closeOpenPublicLobbies(): Promise<void> {
+  return withDb(async (db) => {
+    await db.query(
+      `UPDATE "Lobby" SET status = 'CLOSED', "closedAt" = now() WHERE type = 'PUBLIC' AND status = 'WAITING'`,
+    );
+  });
+}
+
+/**
  * A waiting lobby row the race server never opened a room for (as after its last typist left): same
  * host as `code`, a fresh code and cuid-shaped id. Returns both.
  */

@@ -1,10 +1,17 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
-import { createLobby } from "../race/helpers";
-import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "../timeouts";
+import { createLobby, makePublic } from "../race/helpers";
+import { ACTION_WAIT, scaled } from "../timeouts";
 
 // Contract of #807: the landing's open-rooms docket (bible 14.1 "Open rooms docket", 7.4). Parallel
 // workers open public rooms too, so every assertion targets this test's own room code.
+
+/** The viewport projects' sizes (playwright.config.ts `VIEWPORTS`), for C6's visitor. */
+const VIEWPORTS = {
+  mobile: { width: 375, height: 812 },
+  tablet: { width: 768, height: 1024 },
+  desktop: { width: 1280, height: 800 },
+} as const;
 
 const docket = (page: Page) => page.locator("section[data-open-rooms]");
 const joinLink = (page: Page, code: string) =>
@@ -39,19 +46,16 @@ async function landingListing(page: Page, code: string) {
   }).toPass({ timeout: ACTION_WAIT });
 }
 
-/** Opens a public room with QUICK RACE once the landing is hydrated (landing.spec.ts `ready`). */
-async function quickRace(page: Page): Promise<string> {
-  await page.goto("/");
-  await expect(page.locator("section#play video[aria-hidden='true']")).toHaveAttribute(
-    "data-feed",
-    /^(armed|near)$/,
-    { timeout: HYDRATION_WAIT },
-  );
-  await page.locator("section#play").getByRole("button", { name: "QUICK RACE" }).click();
-  await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/, { timeout: ACTION_WAIT });
+/**
+ * Hosts a fresh public room: a private race filed PUBLIC (#114's toggle, written to the row). Not
+ * QUICK RACE, which seats a visitor in any open public room (#128), another worker's included.
+ */
+async function hostPublicRoom(page: Page): Promise<string> {
+  const code = await createLobby(page);
   // seated: the roll shows the host, so the race server has the room
   await expect(typistRows(page)).toHaveCount(1, { timeout: ACTION_WAIT });
-  return /\/lobby\/([A-Z]{3}-\d{4})$/.exec(new URL(page.url()).pathname)![1]!;
+  await makePublic(code);
+  return code;
 }
 
 async function freshContext(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
@@ -59,14 +63,15 @@ async function freshContext(browser: Browser): Promise<{ context: BrowserContext
   return { context, page: await context.newPage() };
 }
 
-test.describe("open rooms docket (#807)", () => {
+// Public rooms are joinable by any QUICK RACE (#128): this file runs in the `matchmaking` project.
+test.describe("open rooms docket (#807) @matchmaking", () => {
   test.beforeEach(() => test.slow());
 
   test("C1 a visitor sees a public room, follows JOIN → and both rolls show two typists", async ({
     page,
     browser,
   }) => {
-    const code = await quickRace(page);
+    const code = await hostPublicRoom(page);
     const b = await freshContext(browser);
     await landingListing(b.page, code);
     await expect(docket(b.page).getByRole("heading", { level: 2 })).toHaveText("OPEN ROOMS");
@@ -99,7 +104,7 @@ test.describe("open rooms docket (#807)", () => {
     browser,
   }) => {
     const a = await freshContext(browser);
-    const code = await quickRace(a.page);
+    const code = await hostPublicRoom(a.page);
     const b = await freshContext(browser);
     await landingListing(b.page, code);
     await expect(joinLink(b.page, code)).toBeVisible();
@@ -113,41 +118,43 @@ test.describe("open rooms docket (#807)", () => {
     await b.context.close();
   });
 
-  for (const scheme of ["light", "dark"] as const) {
-    test(`C6 ${scheme}: no axe violation with a populated docket, no horizontal scroll, 44px JOIN`, async ({
-      page,
-      browser,
-    }) => {
-      const code = await quickRace(page);
-      const b = await freshContext(browser);
-      await b.page.setViewportSize(page.viewportSize()!);
-      if (scheme === "dark") {
-        // the landing opens on paper whatever the OS (bible 3.2): Night shift is the saved choice
-        await b.page.emulateMedia({ colorScheme: "dark" });
-        await b.context.addCookies([
-          { name: "theme", value: "dark", url: test.info().project.use.baseURL! },
-        ]);
-      }
-      await landingListing(b.page, code);
-      if (scheme === "dark")
-        await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
-      const link = joinLink(b.page, code);
-      await link.scrollIntoViewIfNeeded();
-      await expect(link).toBeVisible();
-      await expectNoA11yViolations(b.page);
-      expect(await overflow(b.page)).toBeLessThanOrEqual(0);
+  // The `matchmaking` project is desktop only: the visitor's viewport is each of the three here.
+  for (const scheme of ["light", "dark"] as const)
+    for (const [name, viewport] of Object.entries(VIEWPORTS)) {
+      test(`C6 ${scheme} ${name}: no axe violation with a populated docket, no horizontal scroll, 44px JOIN`, async ({
+        page,
+        browser,
+      }) => {
+        const code = await hostPublicRoom(page);
+        const b = await freshContext(browser);
+        await b.page.setViewportSize(viewport);
+        if (scheme === "dark") {
+          // the landing opens on paper whatever the OS (bible 3.2): Night shift is the saved choice
+          await b.page.emulateMedia({ colorScheme: "dark" });
+          await b.context.addCookies([
+            { name: "theme", value: "dark", url: test.info().project.use.baseURL! },
+          ]);
+        }
+        await landingListing(b.page, code);
+        if (scheme === "dark")
+          await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
+        const link = joinLink(b.page, code);
+        await link.scrollIntoViewIfNeeded();
+        await expect(link).toBeVisible();
+        await expectNoA11yViolations(b.page);
+        expect(await overflow(b.page)).toBeLessThanOrEqual(0);
 
-      const box = await link.boundingBox();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
-      if (page.viewportSize()!.width <= 375) {
-        // full width: the docket spans the hero's actions column
-        const [own, column] = await docket(b.page).evaluate((el) => [
-          el.getBoundingClientRect().width,
-          el.parentElement!.getBoundingClientRect().width,
-        ]);
-        expect(Math.abs(own! - column!)).toBeLessThanOrEqual(1);
-      }
-      await b.context.close();
-    });
-  }
+        const box = await link.boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+        if (viewport.width <= 375) {
+          // full width: the docket spans the hero's actions column
+          const [own, column] = await docket(b.page).evaluate((el) => [
+            el.getBoundingClientRect().width,
+            el.parentElement!.getBoundingClientRect().width,
+          ]);
+          expect(Math.abs(own! - column!)).toBeLessThanOrEqual(1);
+        }
+        await b.context.close();
+      });
+    }
 });

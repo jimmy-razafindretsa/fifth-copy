@@ -171,7 +171,9 @@ describe("PersonalCard errors by key and tip (#867 C3)", () => {
     expect(sentence.match(/[.!?]/g)).toHaveLength(1); // one sentence
     expect(tip).not.toContain("data-guide");
     // the keys come before the tip, both after the bonus rows
-    expect(html.indexOf('data-section="bonuses"')).toBeLessThan(html.indexOf('data-section="keys"'));
+    expect(html.indexOf('data-section="bonuses"')).toBeLessThan(
+      html.indexOf('data-section="keys"'),
+    );
     expect(html.indexOf('data-section="keys"')).toBeLessThan(html.indexOf('data-section="tip"'));
   });
 

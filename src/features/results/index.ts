@@ -29,11 +29,7 @@ export { ReportActions } from "./components/report-actions";
 export { PersonalCard, type PersonalCardProps } from "./components/personal-card";
 export type { BonusTally, PersonalStats } from "./view/personal";
 // The WPM graph (#865): the viewer's own series and received-bonus marks, and its card section.
-export {
-  getPersonalReplay,
-  getRaceSeries,
-  type PersonalReplay,
-} from "./queries/get-race-series";
+export { getPersonalReplay, getRaceSeries, type PersonalReplay } from "./queries/get-race-series";
 export { RaceGraph, type RaceGraphProps } from "./components/race-graph";
 export type { BonusMark, RaceSeries } from "./view/series";
 // Errors by key and the one tip (#867): the viewer's missed keys and the pure tip choice.

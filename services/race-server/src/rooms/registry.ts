@@ -69,6 +69,8 @@ export type RoomState = {
   raceId: string | null;
   /** Set only on a room voided by a restart (#204): `void`. */
   endReason: EndReason | null;
+  /** The pending automatic start of a public room (#814), server ms epoch; null when none. */
+  autoStartAt: number | null;
 };
 
 /** What `rehydrate` did, by lobby id (#204). */
@@ -194,6 +196,11 @@ export type RoomRegistry = {
   ): Promise<void>;
   /** Writes the phase in one MULTI with both TTLs; the caller checked the room under `withRoom`. */
   setPhase(lobbyId: string, phase: Phase): Promise<void>;
+  /**
+   * Writes (a ms epoch) or deletes (`null`) the room's pending automatic start (#814), in one MULTI
+   * with the room's TTLs. Not queued: the lifecycle calls it inside `withRoom`.
+   */
+  setAutoStart(lobbyId: string, at: number | null): Promise<void>;
   /**
    * Voids the room's race (#204, ADR 0008 "Restart behaviour"), not queued (call it inside
    * `withRoom`). A room whose hash exists turns `ended` with `endReason: void` and `endedAt`, loses
@@ -330,6 +337,7 @@ export function createRoomRegistry({
       desks: room.desks,
       raceId: room.raceId,
       endReason: room.endReason,
+      autoStartAt: room.autoStartAt,
     };
   }
 
@@ -654,6 +662,8 @@ export function createRoomRegistry({
         desks: room.desks === undefined ? null : raceDesksSchema.parse(JSON.parse(room.desks)),
         raceId: room.raceId ?? null,
         endReason: room.endReason === undefined ? null : endReasonSchema.parse(room.endReason),
+        autoStartAt:
+          room.autoStartAt === undefined ? null : msSchema.parse(Number(room.autoStartAt)),
       };
     },
 
@@ -680,7 +690,8 @@ export function createRoomRegistry({
         lobbyId,
         redis
           .multi()
-          .hdel(roomKey(lobbyId), "endReason", "endedAt")
+          // A start (the host's or the room's own, #814) ends any pending automatic start.
+          .hdel(roomKey(lobbyId), "endReason", "endedAt", "autoStartAt")
           .del(desksKey(lobbyId), ...traces)
           .hset(roomKey(lobbyId), {
             phase: "countdown",
@@ -698,6 +709,13 @@ export function createRoomRegistry({
       await withTtl(lobbyId, redis.multi().hset(roomKey(lobbyId), "phase", phase));
     },
 
+    setAutoStart: async (lobbyId, at) => {
+      const tx = redis.multi();
+      if (at === null) tx.hdel(roomKey(lobbyId), "autoStartAt");
+      else tx.hset(roomKey(lobbyId), "autoStartAt", String(at));
+      await withTtl(lobbyId, tx);
+    },
+
     voidRoom,
 
     async rehydrate() {
@@ -712,6 +730,9 @@ export function createRoomRegistry({
               return void done.gone.push(lobbyId);
             }
             if (RECOVERY[parsePhase(room.phase)] === "keep") {
+              // A timer never outlives its process (ADR 0008, #814): the stale automatic start
+              // goes; the room's next join arms it again (a room with no socket never starts).
+              if (room.autoStartAt !== undefined) await redis.hdel(roomKey(lobbyId), "autoStartAt");
               openRooms.add(lobbyId);
               return void done.kept.push(lobbyId);
             }

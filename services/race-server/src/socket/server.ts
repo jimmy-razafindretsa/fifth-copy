@@ -160,6 +160,8 @@ export function attachSocketServer(
           bonus: race.bonusOf(lobby, joined.desk),
           resumeKey,
           serverNow: deps.clock.now(),
+          // A reload or a reconnect during a public room's countdown sees it (#814).
+          autoStartAt: now?.autoStartAt ?? null,
         });
         // A room voided by a restart (#204): this socket hears the race is over, never a frozen race.
         if (now?.phase === "ended" && now.endReason === "void" && now.raceId !== null) {
@@ -172,6 +174,8 @@ export function attachSocketServer(
         }
         io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });
+        // Eligibility is the lifecycle's one decision (#814); the edge only asks for a review.
+        void lifecycle.reviewAutoStart(lobby);
       })
       .catch(() => {
         log("join failed", { lobby });
@@ -197,6 +201,7 @@ export function attachSocketServer(
           // A `bots` patch, or a language change with bots, re-seated the room (#156, #361).
           if (result.members) {
             io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: result.members });
+            void lifecycle.reviewAutoStart(lobby);
           }
           reply({ ok: true, settings: result.settings });
         },
@@ -277,6 +282,8 @@ export function attachSocketServer(
           const leave = async () => {
             const { members, closed: roomClosed } = await leaveRoom(leaveDeps, lobby, sub);
             log("left", { lobby, members: members.length, closed: roomClosed });
+            // A closed room's timers went with `onRoomClosed`; nothing is told to an empty room.
+            if (!roomClosed) void lifecycle.reviewAutoStart(lobby);
           };
           // The last human of a waiting room (#734): a reload must not close the room or its
           // lobby, so the leave waits out the grace and is dropped if a socket of the user is back.

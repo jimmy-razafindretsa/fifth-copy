@@ -35,6 +35,7 @@ function deps({
     desks,
     raceId: "r1",
     endReason: null,
+    autoStartAt: null,
   };
   const leave = vi.fn(async (_lobbyId: string, userId: string) => result(userId));
   const d = {

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   abandonSchema,
   bonusPlaySchema,
+  autoStartSchema,
   countdownSchema,
   endedSchema,
   eventSchema,
@@ -110,6 +111,8 @@ export const welcomeSchema = z.object({
   resumeKey: resumeKeySchema.nullable(),
   /** Server clock (ms epoch) when sent: the client's first clock offset. */
   serverNow: msSchema,
+  /** The room's pending automatic start (#814, server ms epoch), else `null`. */
+  autoStartAt: msSchema.nullable(),
 });
 export type Welcome = z.infer<typeof welcomeSchema>;
 
@@ -154,6 +157,7 @@ export const serverEvents = {
   roster: rosterSchema,
   settings: settingsSchema,
   countdown: countdownSchema,
+  "auto-start": autoStartSchema,
   snapshot: snapshotSchema,
   event: eventSchema,
   ended: endedSchema,

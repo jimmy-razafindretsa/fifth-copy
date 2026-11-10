@@ -18,10 +18,10 @@ import type { WebApi } from "../persist/web-api";
 import type { Durations } from "./durations";
 import { rankingFor, type RankedState } from "./ranking";
 import type { BotSeat } from "./bot-driver";
-import type { RaceDesk, RoomRegistry } from "./registry";
+import type { RaceDesk, RoomRegistry, RoomState } from "./registry";
 
 /** The room broadcasts the lifecycle sends; implemented by the socket edge with `io.to(room)`. */
-type RoomEvents = Pick<ServerToClientEvents, "countdown" | "ended">;
+type RoomEvents = Pick<ServerToClientEvents, "countdown" | "ended" | "auto-start">;
 export type Emit = <E extends keyof RoomEvents>(
   lobbyId: string,
   event: E,
@@ -45,6 +45,14 @@ export type Lifecycle = {
    * web start call or of Redis is `start-failed`, with nothing emitted and the phase unchanged.
    */
   start(lobbyId: string, by: { sub: string; role: RaceRole }): Promise<HostStartAck>;
+  /**
+   * The room's automatic start (#814), the one decision, in the room's queue: after every join,
+   * leave and re-seat. An eligible room (`autoStartEligible`) with no instant pending is armed
+   * (`autoStartAt = now + AUTO_START_MS` in the room hash, one timer, `auto-start` to the room); a
+   * room already armed is left alone (a later join never moves it); a room no longer eligible is
+   * dropped (instant deleted, timer cleared, `auto-start { null }`). Never rejects.
+   */
+  reviewAutoStart(lobbyId: string): Promise<void>;
   /**
    * The one exit of a race: timer (here), all-finished (#173), void (#204). Idempotent. A room whose
    * keys are gone while its race runs in this process is voided (`voidRoom`), never left frozen.
@@ -72,6 +80,20 @@ const TERMINAL: ReadonlySet<PlayerStatus> = new Set(["finished", "abandoned", "a
  * Race again (#128) reuses with `onRestart`.
  */
 export const canStart = (phase: Phase): boolean => phase === "waiting" || phase === "ended";
+
+/**
+ * Whether a room starts by itself (#814; spec 4.1 rule 2): a `waiting` public room with at least one
+ * human and at least two desks in all (bots count). Only the first race: an ended room waits for the
+ * host's START (owner decision 2026-11-04). The seam a later rule (late-join floor, per-room wait)
+ * changes.
+ */
+export function autoStartEligible(room: Pick<RoomState, "phase" | "settings" | "seated">): boolean {
+  if (room.phase !== "waiting" || room.settings.lobbyType !== "public") return false;
+  return room.seated.length >= 2 && room.seated.some(({ isBot }) => !isBot);
+}
+
+/** Who starts a race: the host's socket (`host:start`), or the room's own clock (#814). */
+type Starter = { sub: string; role: RaceRole } | "room";
 
 /** Bound on the web start call (card #166); the room's queue waits for it. */
 export const START_TIMEOUT_MS = 5_000;
@@ -137,10 +159,85 @@ export function createLifecycle({
   liveRace?: (lobbyId: string) => { raceId: string; t0: number; desks: number[] } | null;
 }): Lifecycle {
   const timers = new Map<string, TimerHandle[]>();
+  /** The pending automatic start of each armed room (#814), apart so a start clears it alone. */
+  const autoTimers = new Map<string, TimerHandle>();
+
+  function clearAuto(lobbyId: string) {
+    const handle = autoTimers.get(lobbyId);
+    if (handle) scheduler.clear(handle);
+    autoTimers.delete(lobbyId);
+  }
 
   function cancel(lobbyId: string) {
     for (const handle of timers.get(lobbyId) ?? []) scheduler.clear(handle);
     timers.delete(lobbyId);
+    clearAuto(lobbyId);
+  }
+
+  const autoLog = (lobbyId: string, outcome: string) =>
+    log("auto-start", { lobby: lobbyId, outcome });
+
+  /** One timer for the room's automatic start at `when` (server ms epoch). */
+  function armAuto(lobbyId: string, when: number) {
+    clearAuto(lobbyId);
+    autoTimers.set(
+      lobbyId,
+      scheduler.setTimeout(() => {
+        autoTimers.delete(lobbyId);
+        fireAuto(lobbyId).catch((err: unknown) =>
+          log("auto-start failed", { lobby: lobbyId, err: String(err) }),
+        );
+      }, when - clock.now()),
+    );
+  }
+
+  /** Inside the queue: the instant goes, the timer goes, the room hears `null`. */
+  async function dropAuto(lobbyId: string, outcome: string) {
+    clearAuto(lobbyId);
+    await registry.setAutoStart(lobbyId, null);
+    emit(lobbyId, "auto-start", { v: PROTOCOL_VERSION, startsAt: null });
+    autoLog(lobbyId, outcome);
+  }
+
+  /** The instant came (#814): the same `begin` as a host START, on the room's behalf. */
+  const fireAuto = (lobbyId: string) =>
+    registry.withRoom(lobbyId, async () => {
+      const room = await registry.room(lobbyId);
+      // Dropped or started meanwhile: nothing pending any more.
+      if (!room || room.autoStartAt === null) return;
+      let result;
+      try {
+        result = await begin(lobbyId, "room");
+      } catch (err) {
+        log("start", { lobby: lobbyId, outcome: "start-failed", cause: String(err) });
+        result = { ok: false, error: "start-failed" } as const;
+      }
+      if (result.ok) return autoLog(lobbyId, "ok");
+      // The room stays `waiting`; the host's START remains.
+      await dropAuto(lobbyId, result.error);
+    });
+
+  /** The one automatic-start decision (#814), inside the room's queue. */
+  async function review(lobbyId: string) {
+    const room = await registry.room(lobbyId);
+    if (!room) return clearAuto(lobbyId);
+    const eligible = autoStartEligible(room);
+    if (!eligible) {
+      if (room.autoStartAt !== null) await dropAuto(lobbyId, "dropped");
+      else clearAuto(lobbyId);
+      return;
+    }
+    if (room.autoStartAt !== null) {
+      // Armed already: never reset nor extended. A stored instant with no timer here (another
+      // process armed it before a drain, #704) gets its timer at that same instant.
+      if (!autoTimers.has(lobbyId)) armAuto(lobbyId, room.autoStartAt);
+      return;
+    }
+    const startsAt = clock.now() + durations.AUTO_START_MS;
+    await registry.setAutoStart(lobbyId, startsAt);
+    armAuto(lobbyId, startsAt);
+    emit(lobbyId, "auto-start", { v: PROTOCOL_VERSION, startsAt });
+    autoLog(lobbyId, "armed");
   }
 
   function at(lobbyId: string, when: number, fn: () => Promise<void>) {
@@ -219,10 +316,15 @@ export function createLifecycle({
       onGo(lobbyId, { race: room.race, settings: room.settings, desks, bots });
     });
 
-  async function begin(lobbyId: string, by: { sub: string; role: RaceRole }) {
+  /**
+   * The one start path: a host START (`by` the socket's claims, authorised here) or the room's
+   * automatic start (`"room"`, #814: authorised by the room's own clock, so it fires even after the
+   * host's socket left; `hostUserId` still names the host to the web).
+   */
+  async function begin(lobbyId: string, by: Starter) {
     const room = await registry.room(lobbyId);
     if (!room) return { ok: false, error: "not-waiting" } as const;
-    if (by.role !== "host" || by.sub !== room.hostUserId) {
+    if (by !== "room" && (by.role !== "host" || by.sub !== room.hostUserId)) {
       return { ok: false, error: "not-host" } as const;
     }
     // `not-waiting`: a race is on (countdown or running).
@@ -272,6 +374,8 @@ export function createLifecycle({
         log("onRestart failed", { lobby: lobbyId, err: String(err) });
       }
     }
+    // `startRace` deletes the stored instant; its timer goes here. `countdown` supersedes it.
+    clearAuto(lobbyId);
     await registry.startRace(lobbyId, { race, endAt, desks: room.seated });
     at(lobbyId, t0, () => goRunning(lobbyId, raceId));
     at(lobbyId, endAt, () => lifecycle.endRace(lobbyId, "timer"));
@@ -288,6 +392,11 @@ export function createLifecycle({
           log("start", { lobby: lobbyId, outcome: "start-failed", cause: String(err) });
           return { ok: false, error: "start-failed" } as const;
         }),
+
+    reviewAutoStart: (lobbyId) =>
+      registry
+        .withRoom(lobbyId, () => review(lobbyId))
+        .catch((err: unknown) => log("auto-start failed", { lobby: lobbyId, err: String(err) })),
 
     endRace: (lobbyId, reason) =>
       registry.withRoom(lobbyId, async () => {
@@ -360,7 +469,7 @@ export function createLifecycle({
     },
 
     close: () => {
-      for (const lobbyId of [...timers.keys()]) cancel(lobbyId);
+      for (const lobbyId of [...timers.keys(), ...autoTimers.keys()]) cancel(lobbyId);
     },
   };
   return lifecycle;

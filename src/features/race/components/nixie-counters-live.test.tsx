@@ -62,6 +62,7 @@ const welcome: Welcome = {
   bonus: null,
   resumeKey: null,
   serverNow: SERVER_NOW,
+  autoStartAt: null,
 };
 const RACE = {
   raceId: "3b241101-e2bb-4255-8caf-4136c566a962",

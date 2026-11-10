@@ -11,6 +11,34 @@ export const ROOM_SEATS = 30;
  */
 export type LobbyError = "not-found" | "closed" | "room-full" | "server-disconnect" | "generic";
 
+/**
+ * A public room's automatic start (#814), on the server clock. `at`: the pending instant
+ * (`welcome.autoStartAt`, `auto-start.startsAt`), `null` when none. `offset`: server time = device
+ * time + offset, from the last `welcome.serverNow` (the race store's recipe, #172). `notice`: the one
+ * polite announcement of the last change seen while the page is live (`armed` with the seconds left at
+ * arrival, frozen so the live region never ticks; `dropped`), `null` before any.
+ */
+export type AutoStartState = {
+  at: number | null;
+  offset: number;
+  notice: { kind: "armed"; seconds: number } | { kind: "dropped" } | null;
+};
+
+export const NO_AUTO_START: AutoStartState = { at: null, offset: 0, notice: null };
+
+/** Whole seconds until `at` at device time `now` on the offset clock; never below 0; null with none. */
+export function autoStartSecondsAt(auto: AutoStartState, now: number): number | null {
+  return auto.at === null ? null : Math.max(0, Math.ceil((auto.at - (now + auto.offset)) / 1_000));
+}
+
+/** The pending instant moves to `at` (seen at device time `receivedAt`, if known). */
+function autoStartTo(auto: AutoStartState, at: number | null, receivedAt?: number): AutoStartState {
+  if (at === auto.at) return auto;
+  if (at === null) return { ...auto, at, notice: { kind: "dropped" } };
+  const seconds = autoStartSecondsAt({ ...auto, at }, receivedAt ?? Date.now()) ?? 0;
+  return { ...auto, at, notice: auto.at === null ? { kind: "armed", seconds } : auto.notice };
+}
+
 export type LobbyState = {
   /**
    * `starting`: the host pressed START; the page moves to the seat view of `raceId` (#214).
@@ -30,6 +58,8 @@ export type LobbyState = {
    * broadcast (ADR 0006: the client's only source); `null` until the first welcome.
    */
   settings: RaceSettings | null;
+  /** The public room's automatic start (#814). */
+  autoStart: AutoStartState;
 };
 
 /**
@@ -37,7 +67,9 @@ export type LobbyState = {
  * one case in `reduceLobby`, one binding in `bindRoomSocket`.
  */
 export type LobbyEvent =
-  | { type: "welcome"; payload: RoomEvents["welcome"] }
+  /** `receivedAt`: the device clock when it arrived (the binder's), for the clock offset (#814). */
+  | { type: "welcome"; payload: RoomEvents["welcome"]; receivedAt?: number }
+  | { type: "auto-start"; payload: RoomEvents["auto-start"]; receivedAt?: number }
   | { type: "roster"; payload: RoomEvents["roster"] }
   | { type: "settings"; payload: RoomEvents["settings"] }
   | { type: "countdown"; payload: RoomEvents["countdown"] }
@@ -55,6 +87,7 @@ export const initialLobbyState: LobbyState = {
   members: [],
   raceId: null,
   settings: null,
+  autoStart: NO_AUTO_START,
 };
 
 const byDesk = (members: Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -98,6 +131,9 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
       const { room, race } = event.payload;
       const underway = room.phase === "countdown" || room.phase === "running";
       const started = underway && race !== null;
+      const { receivedAt } = event;
+      const offset =
+        receivedAt === undefined ? state.autoStart.offset : event.payload.serverNow - receivedAt;
       return {
         // A START racing the join can leave `race` out: a page already starting stays starting.
         phase: started || (underway && state.phase === "starting") ? "starting" : "live",
@@ -106,7 +142,16 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
         members: byDesk(event.payload.members),
         raceId: started ? race.raceId : state.raceId,
         settings: event.payload.settings,
+        autoStart: autoStartTo(
+          { ...state.autoStart, offset },
+          event.payload.autoStartAt,
+          receivedAt,
+        ),
       };
+    }
+    case "auto-start": {
+      const autoStart = autoStartTo(state.autoStart, event.payload.startsAt, event.receivedAt);
+      return autoStart === state.autoStart ? state : { ...state, autoStart };
     }
     case "roster":
       return { ...state, members: byDesk(event.payload.members) };
@@ -186,6 +231,8 @@ export type BindRoomSocketOptions = {
    */
   storeResumeKey?: (lobbyId: string, key: string) => void;
   versionReload?: VersionReload;
+  /** The device clock stamped on `welcome` and `auto-start` (#814); `Date.now` by default. */
+  now?: () => number;
 };
 
 /**
@@ -197,7 +244,12 @@ export type BindRoomSocketOptions = {
 export function bindRoomSocket(
   socket: RoomSocket,
   dispatch: (event: LobbyEvent) => void,
-  { lobbyId, storeResumeKey, versionReload = browserVersionReload() }: BindRoomSocketOptions = {},
+  {
+    lobbyId,
+    storeResumeKey,
+    versionReload = browserVersionReload(),
+    now = Date.now,
+  }: BindRoomSocketOptions = {},
 ): Off {
   let reloading = false;
   const offs: Off[] = [
@@ -208,11 +260,12 @@ export function bindRoomSocket(
         // Storage went away: nothing to clear.
       }
       if (lobbyId && payload.resumeKey) storeResumeKey?.(lobbyId, payload.resumeKey);
-      dispatch({ type: "welcome", payload });
+      dispatch({ type: "welcome", payload, receivedAt: now() });
     }),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onCountdown((payload) => dispatch({ type: "countdown", payload })),
+    socket.onAutoStart((payload) => dispatch({ type: "auto-start", payload, receivedAt: now() })),
     socket.onConnectError((reason) => {
       if (reloading) return;
       if (reason === "version" && tryVersionReload(versionReload)) {

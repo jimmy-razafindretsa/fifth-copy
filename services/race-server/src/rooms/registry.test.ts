@@ -421,10 +421,20 @@ describe("room registry: lifecycle fields (#166)", () => {
       desks: null,
       raceId: null,
       endReason: null,
+      autoStartAt: null,
     });
     expect(await registry.room(`lob_${randomUUID()}`)).toBeNull();
 
+    // #814: the pending automatic start, written under the room's TTL, deleted by a start.
+    await registry.setAutoStart(lobbyId, race.t0 + 45_000);
+    expect(await registry.room(lobbyId)).toMatchObject({ autoStartAt: race.t0 + 45_000 });
+    expect(await redis.ttl(roomKey(lobbyId))).toBeGreaterThan(0);
+    await registry.setAutoStart(lobbyId, null);
+    expect(await redis.hexists(roomKey(lobbyId), "autoStartAt")).toBe(0);
+    await registry.setAutoStart(lobbyId, race.t0 + 45_000);
+
     await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks: seated });
+    expect(await redis.hexists(roomKey(lobbyId), "autoStartAt")).toBe(0);
     expect(await registry.room(lobbyId)).toMatchObject({
       phase: "countdown",
       race,

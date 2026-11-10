@@ -33,6 +33,7 @@ const welcome = (): Welcome => ({
   bonus: null,
   resumeKey: null,
   serverNow: SERVER_NOW,
+  autoStartAt: null,
 });
 
 function setup({ offset = 250 }: { offset?: number } = {}) {

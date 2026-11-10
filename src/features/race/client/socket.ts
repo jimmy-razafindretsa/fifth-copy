@@ -56,6 +56,11 @@ export interface RoomSocket {
   sendHostSettings(patch: RaceSettingsPatch): Promise<HostSettingsResult>;
   /** The host pressed START: the race and its GO instant (`race.t0`, server clock). */
   onCountdown(cb: (payload: RoomEvents["countdown"]) => void): Off;
+  /**
+   * A public room's automatic start (#814): `startsAt` on the server clock, `null` when dropped. A
+   * `countdown` supersedes it.
+   */
+  onAutoStart(cb: (payload: RoomEvents["auto-start"]) => void): Off;
   /** Host only: asks the server to start the race (#214); never rejects. */
   sendHostStart(): Promise<HostStartResult>;
   /** Your keystrokes since the last batch (#559, <= 50 ms of them); an invalid batch is not sent. */
@@ -241,6 +246,7 @@ export function connectToRoom(
         HOST_SETTINGS_TIMEOUT_MS,
       ),
     onCountdown: (cb) => on("countdown", cb),
+    onAutoStart: (cb) => on("auto-start", cb),
     sendHostStart: () =>
       ask("host:start", { v: PROTOCOL_VERSION }, clientAcks["host:start"], HOST_START_TIMEOUT_MS),
     sendKeys: (batch) => {

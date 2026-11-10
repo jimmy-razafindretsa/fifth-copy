@@ -285,6 +285,16 @@ export const en = {
     },
     /** A non-host's 7.4 notice row at the top of the roll (#105). */
     waitingForHost: "WAITING FOR THE HOST",
+    /**
+     * A public room's automatic start (#814, bible 14.3): the room docket's `STATUS` value with the
+     * seconds left, a non-host's still notice row, and the two polite announcements.
+     */
+    autoStart: {
+      status: "STARTS IN {n} S",
+      notice: "AUTOMATIC START",
+      armed: "The race starts by itself in {n} seconds.",
+      dropped: "The race waits for the host.",
+    },
     /** A late joiner's 7.4 notice row while the race runs (#732): held, seated at `ended`. */
     raceInProgress: "RACE IN PROGRESS · YOU ARE SEATED WHEN IT ENDS",
     players: { one: "{n} player in the room", other: "{n} players in the room" },

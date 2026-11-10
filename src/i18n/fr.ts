@@ -285,6 +285,12 @@ export const fr = {
       bot: "B",
     },
     waitingForHost: "EN ATTENTE DE L'HÔTE",
+    autoStart: {
+      status: "DÉPART DANS {n} S",
+      notice: "DÉPART AUTOMATIQUE",
+      armed: "La course démarre toute seule dans {n} secondes.",
+      dropped: "La course attend l'hôte.",
+    },
     raceInProgress: "COURSE EN COURS · TU SERAS PLACÉ À LA FIN",
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",

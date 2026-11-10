@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BACKSPACE } from "@fifth-copy/engine";
 import {
+  autoStartSchema,
   countdownSchema,
   DEFAULT_RACE_SETTINGS,
   endedSchema,
   MAX_RACE_MS,
   PROTOCOL_VERSION,
   welcomeSchema,
+  type AutoStart,
   type Countdown,
   type Ended,
   type HostStartAck,
@@ -48,14 +50,21 @@ afterEach(async () => {
   t = undefined;
 });
 
-type Seen = ReturnType<typeof track> & { countdown: Countdown[]; ended: Ended[]; pong: Pong[] };
+type Seen = ReturnType<typeof track> & {
+  countdown: Countdown[];
+  ended: Ended[];
+  pong: Pong[];
+  autoStart: AutoStart[];
+};
 
 function watch(client: Client): Seen {
   const seen = Object.assign(track(client), {
     countdown: [] as Countdown[],
     ended: [] as Ended[],
     pong: [] as Pong[],
+    autoStart: [] as AutoStart[],
   });
+  client.on("auto-start", (a) => void seen.autoStart.push(a));
   client.on("countdown", (c) => void seen.countdown.push(c));
   client.on("ended", (e) => void seen.ended.push(e));
   client.on("pong", (p) => void seen.pong.push(p));
@@ -836,5 +845,245 @@ describe("lifecycle: room keys (C6)", () => {
     } finally {
       redis.disconnect();
     }
+  });
+});
+
+describe("lifecycle: public room auto start (#814)", () => {
+  const AUTO_START_MS = 45_000;
+  const PUBLIC: RaceSettings = { ...DEFAULT_RACE_SETTINGS, lobbyType: "public" };
+  const withBot: RaceSettings = { ...PUBLIC, bots: [{ level: "clerk" }] };
+  const settings = (s: Client, bots: RaceSettings["bots"]) =>
+    s.timeout(2_000).emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch: { bots } });
+  /** Every JSON log line `auto-start` written so far. */
+  function autoLogs(spy: { mock: { calls: unknown[][] } }) {
+    return spy.mock.calls
+      .map(([line]) => {
+        try {
+          return JSON.parse(String(line)) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      })
+      .filter((l): l is Record<string, unknown> => l?.msg === "auto-start");
+  }
+
+  it("C2: the host seated with a bot arms one timer at now + 45 s, stored and broadcast; a later join never moves it", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    const { booted, lobby, seenHost, connectAs } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "auto-start armed");
+    const { startsAt } = autoStartSchema.parse(seenHost.autoStart[0]);
+    expect(startsAt).not.toBeNull();
+    expect(startsAt! - booted.clock.now()).toBeGreaterThan(AUTO_START_MS - 1_000);
+    expect(startsAt! - booted.clock.now()).toBeLessThanOrEqual(AUTO_START_MS);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect((await hash(lobby)).ttl).toBeGreaterThan(0);
+    expect(booted.scheduler.armed()).toBe(1);
+
+    booted.clock.advance(10_000);
+    const late = watch(await connectAs("usr_late", "Late"));
+    await until(() => !!late.welcome, WAIT_MS, "late welcome");
+    expect(late.welcome!.autoStartAt).toBe(startsAt);
+    await until(() => seenHost.roster?.length === 3, WAIT_MS, "late seated");
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+    expect(late.autoStart).toHaveLength(0);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(booted.scheduler.armed()).toBe(1);
+    const armed = autoLogs(logSpy).filter((l) => l.outcome === "armed");
+    expect(armed).toEqual([{ level: "info", msg: "auto-start", lobby, outcome: "armed" }]);
+  });
+
+  it("C2: a private room, a public room with one desk and a room of bots only never arm", async () => {
+    const priv = await room({
+      players: 0,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }] },
+    });
+    await settle();
+    expect(priv.seenHost.autoStart).toHaveLength(0);
+    expect(priv.seenHost.welcome!.autoStartAt).toBeNull();
+    expect((await hash(priv.lobby)).fields.autoStartAt).toBeUndefined();
+    expect(priv.booted.scheduler.armed()).toBe(0);
+    await t!.stop();
+
+    const alone = await room({ players: 0, settings: PUBLIC });
+    await settle();
+    expect(alone.seenHost.autoStart).toHaveLength(0);
+    expect(alone.booted.scheduler.armed()).toBe(0);
+    await t!.stop();
+
+    // Bots only: the room opened with bots and no human ever reviewed by a join.
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom("KGB-4821", {
+      ...PUBLIC,
+      bots: [{ level: "clerk" }, { level: "clerk" }],
+    });
+    await t.server.lifecycle.reviewAutoStart(lobby);
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(t.scheduler.armed()).toBe(0);
+  });
+
+  it("C3: removing the last bot drops it (null broadcast, instant deleted, timer cleared); adding one back arms afresh", async () => {
+    const { booted, lobby, host, seenHost } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const first = seenHost.autoStart[0]!.startsAt!;
+    expect(await settings(host, [])).toMatchObject({ ok: true });
+    await until(() => seenHost.autoStart.length === 2, WAIT_MS, "dropped");
+    expect(seenHost.autoStart[1]).toEqual({ v: PROTOCOL_VERSION, startsAt: null });
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+
+    booted.clock.advance(5_000);
+    expect(await settings(host, [{ level: "clerk" }])).toMatchObject({ ok: true });
+    await until(() => seenHost.autoStart.length === 3, WAIT_MS, "re-armed");
+    expect(seenHost.autoStart[2]!.startsAt).toBe(first + 5_000);
+    expect(booted.scheduler.armed()).toBe(1);
+  });
+
+  it("C3: the last human leaving closes the room and clears the timer; nothing is broadcast", async () => {
+    const { booted, lobby, host, seenHost } = await room({ players: 0, settings: withBot });
+    await until(() => booted.scheduler.armed() >= 1, WAIT_MS, "armed");
+    host.disconnect();
+    // The last leave waits out its grace (#734, 5 s) on the fake clock, well inside the 45 s.
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "last leave deferred");
+    booted.clock.advance(5_000);
+    await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
+    await until(() => booted.scheduler.armed() === 0, WAIT_MS, "no timer");
+    expect(seenHost.countdown).toHaveLength(0);
+  });
+
+  it("C3: a host START during the countdown starts at once: the instant and its timer go, no null is sent", async () => {
+    const { booted, lobby, host, seenHost } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    expect(await start(host)).toMatchObject({ ok: true });
+    // GO and the timer end; the automatic start is gone.
+    expect(booted.scheduler.armed()).toBe(2);
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+  });
+
+  it("C4: at the instant the room starts as a host start would: countdown to all, the host named in the web call, GO", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, seenHost, others } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    await until(() => seenHost.autoStart.length >= 1, WAIT_MS, "armed");
+    const { startsAt } = seenHost.autoStart[0]!;
+    booted.clock.advance(startsAt! - booted.clock.now() - 1);
+    await settle();
+    expect(seenHost.countdown).toHaveLength(0);
+    booted.clock.advance(1);
+    await until(
+      () => seenHost.countdown.length === 1 && others[0]!.seen.countdown.length === 1,
+      WAIT_MS,
+      "countdown to every member",
+    );
+    expect(seenHost.countdown[0]!.race.t0).toBe(startsAt! + 3_000);
+    expect(web.calls).toHaveLength(1);
+    expect(web.calls[0]).toMatchObject({ lobbyId: lobby, hostUserId: HOST_SUB });
+    expect((await hash(lobby)).fields).toMatchObject({ phase: "countdown" });
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(seenHost.autoStart.every((a) => a.startsAt !== null)).toBe(true);
+    booted.clock.advance(3_000);
+    await eventually(async () => (await phaseOf(lobby)) === "running", "running");
+    const fired = autoLogs(logSpy).filter((l) => l.outcome === "ok");
+    expect(fired).toEqual([{ level: "info", msg: "auto-start", lobby, outcome: "ok" }]);
+    expect(JSON.stringify(autoLogs(logSpy))).not.toMatch(/usr_|Ada|Clerk/);
+  });
+
+  it("C3: a leave that leaves one desk drops it", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, others } = await room({
+      players: 1,
+      settings: PUBLIC,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => guest.autoStart.length === 1, WAIT_MS, "armed");
+    host.disconnect();
+    await until(() => guest.roster?.length === 1, WAIT_MS, "host left");
+    // One human, one desk: the room no longer qualifies.
+    await until(() => guest.autoStart.length === 2, WAIT_MS, "dropped");
+    expect(guest.autoStart[1]!.startsAt).toBeNull();
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+  });
+
+  it("C4: a host whose socket left while a human and a bot stay: the room still starts, named after the host", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost, others } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    expect(guest.welcome!.autoStartAt).toBe(seenHost.autoStart[0]!.startsAt);
+    host.disconnect();
+    await until(() => guest.roster?.length === 2, WAIT_MS, "host left");
+    await settle();
+    expect(guest.autoStart).toEqual([]);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(seenHost.autoStart[0]!.startsAt));
+    booted.clock.advance(AUTO_START_MS);
+    await until(() => guest.countdown.length === 1, WAIT_MS, "countdown");
+    expect(web.calls[0]).toMatchObject({ hostUserId: HOST_SUB });
+  });
+
+  it("C4: a failing web start leaves the room waiting, drops the instant with a null broadcast; the host's START remains", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    let fail = true;
+    const web = fixtureWebApi({ now: () => 0 });
+    const api: WebApi = {
+      ...web.api,
+      startRace: async (req) => {
+        if (fail) throw new Error("web down");
+        return web.api.startRace(req);
+      },
+    };
+    const { booted, lobby, host, seenHost } = await room({
+      players: 0,
+      settings: withBot,
+      webApi: api,
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    booted.clock.advance(AUTO_START_MS);
+    await until(() => seenHost.autoStart.length === 2, WAIT_MS, "dropped after failure");
+    expect(seenHost.autoStart[1]).toEqual({ v: PROTOCOL_VERSION, startsAt: null });
+    expect(await phaseOf(lobby)).toBe("waiting");
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+    expect(autoLogs(logSpy).map((l) => l.outcome)).toEqual(["armed", "start-failed"]);
+    fail = false;
+    expect(await start(host)).toMatchObject({ ok: true });
+  });
+
+  it("C5: a reload during the countdown gets the stored instant in its welcome", async () => {
+    const { lobby, seenHost, connectAs } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const tab = watch(await connectAs(HOST_SUB, "Ada", "host"));
+    await until(() => !!tab.welcome, WAIT_MS, "tab welcome");
+    expect(welcomeSchema.parse(tab.welcome).autoStartAt).toBe(seenHost.autoStart[0]!.startsAt);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(seenHost.autoStart[0]!.startsAt));
+  });
+
+  it("only the first race auto-starts: an ended public room waits for the host", async () => {
+    const { booted, host, lobby, seenHost } = await room({
+      players: 0,
+      settings: { ...withBot, timerS: 60 },
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    booted.clock.advance(AUTO_START_MS);
+    await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
+    booted.clock.advance(63_000);
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
+    await booted.server.lifecycle.reviewAutoStart(lobby);
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+    expect(booted.scheduler.armed()).toBe(0);
+    expect(await start(host)).toMatchObject({ ok: true });
   });
 });

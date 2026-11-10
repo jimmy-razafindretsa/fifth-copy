@@ -340,6 +340,12 @@ export function createRaceServer({
         clock,
         nonces: createNonceStore({ redis }),
         draining: () => draining,
+        // The room's visibility changed (#815): the existing `settings` broadcast, then the one
+        // automatic-start decision (#814), queued behind the write.
+        onLobbyType: (lobbyId, settings) => {
+          to(audience(lobbyId))?.emit("settings", { v: PROTOCOL_VERSION, settings });
+          void lifecycle.reviewAutoStart(lobbyId);
+        },
       }),
     }),
   );

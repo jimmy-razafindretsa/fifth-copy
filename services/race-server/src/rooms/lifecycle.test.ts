@@ -24,6 +24,7 @@ import {
   boot,
   connectError,
   connectRedis,
+  postRoomType,
   FIXTURE_TEXT,
   ackClose,
   ackResults,
@@ -1085,5 +1086,63 @@ describe("lifecycle: public room auto start (#814)", () => {
     expect(seenHost.autoStart).toHaveLength(1);
     expect(booted.scheduler.armed()).toBe(0);
     expect(await start(host)).toMatchObject({ ok: true });
+  });
+});
+
+describe("lifecycle: the room's visibility reviews the automatic start (#815 C3)", () => {
+  const ok = { status: 200, body: { v: PROTOCOL_VERSION, result: "ok" } };
+  const withBot: RaceSettings = { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }] };
+
+  it("PRIVATE drops a pending start; PUBLIC arms it afresh", async () => {
+    const { booted, lobby, seenHost } = await room({
+      players: 0,
+      settings: { ...withBot, lobbyType: "public" },
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+
+    expect(await postRoomType(booted, lobby, "private")).toEqual(ok);
+    await until(() => seenHost.autoStart.length === 2, WAIT_MS, "dropped");
+    expect(seenHost.autoStart[1]).toEqual({ v: PROTOCOL_VERSION, startsAt: null });
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+
+    booted.clock.advance(5_000);
+    expect(await postRoomType(booted, lobby, "public")).toEqual(ok);
+    await until(() => seenHost.autoStart.length === 3, WAIT_MS, "re-armed");
+    const startsAt = seenHost.autoStart[2]!.startsAt!;
+    expect(startsAt).toBe(booted.clock.now() + 45_000);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(booted.scheduler.armed()).toBe(1);
+  });
+
+  it("a private room filed PUBLIC arms when eligible; one that is not eligible stays unarmed", async () => {
+    const { booted, lobby, seenHost } = await room({ players: 0, settings: withBot });
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(0);
+    expect(await postRoomType(booted, lobby, "public")).toEqual(ok);
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    expect(booted.scheduler.armed()).toBe(1);
+    await t!.stop();
+
+    const alone = await room({ players: 0 });
+    expect(await postRoomType(alone.booted, alone.lobby, "public")).toEqual(ok);
+    await settle();
+    expect(alone.seenHost.autoStart).toHaveLength(0);
+    expect(alone.booted.scheduler.armed()).toBe(0);
+  });
+
+  it("the value already stored answers ok and arms or drops nothing", async () => {
+    const { booted, lobby, seenHost } = await room({
+      players: 0,
+      settings: { ...withBot, lobbyType: "public" },
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt;
+    booted.clock.advance(1_000);
+    expect(await postRoomType(booted, lobby, "public")).toEqual(ok);
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(booted.scheduler.armed()).toBe(1);
   });
 });

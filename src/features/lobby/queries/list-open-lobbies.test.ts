@@ -34,6 +34,7 @@ function stubClient(
   return {
     calls,
     openRoom: vi.fn(),
+    setRoomType: vi.fn(),
     roomStatus: vi.fn(
       async (request: RoomStatusRequest): Promise<InternalCallResult<RoomStatusResponse>> => {
         calls.push(request);

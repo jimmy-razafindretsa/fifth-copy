@@ -335,10 +335,23 @@ describe("submitLobbyType with a fake action (#114 C3)", () => {
     ["not-found", "no-room"],
     ["invalid", "invalid"],
     ["rate-limited", "timeout"],
+    // #815 C6: the race server did not answer: the existing "did not answer, try again" line
+    ["unavailable", "timeout"],
   ] as const)("a %s answer is the form's %s line", async (answer, error) => {
     const h = harness({ ok: false, error: answer });
     await submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "public");
     expect(h.state()).toEqual({ status: "error", key: "lobbyType", error });
+  });
+
+  it("#815 C6: an ok answer leaves the row to the room's broadcast; a refusal keeps it on the stored value", async () => {
+    // The form never trusts its own value: on ok it goes idle and the LOBBY row reads the settings
+    // the room broadcast; on a refusal the inputs are put back on that same value.
+    const ok = harness({ ok: true });
+    await submitLobbyType({ ...ok, form: IDLE_FORM, current: "private" }, "public");
+    expect(ok.state()).toEqual(IDLE_FORM);
+    const refused = harness({ ok: false, error: "unavailable" });
+    await submitLobbyType({ ...refused, form: IDLE_FORM, current: "private" }, "public");
+    expect(refused.state()).toMatchObject({ status: "error", key: "lobbyType" });
   });
 
   it("not-host hides the form", async () => {

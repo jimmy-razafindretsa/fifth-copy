@@ -10,6 +10,7 @@ import {
   internalErrorSchema,
   openRoomResponseSchema,
   roomStatusResponseSchema,
+  roomTypeResponseSchema,
 } from "@fifth-copy/protocol";
 import { createHmac, randomBytes } from "node:crypto";
 import { createRaceServer, type RaceServer } from "../app";
@@ -380,5 +381,132 @@ describe("POST /internal/rooms/status (#806 C2)", () => {
       await expectError(await postSigned(base, statusBody(lobbyIds), STATUS), 400, "bad-body");
     // GET is not routed.
     expect((await fetch(`${base}${STATUS}`)).status).toBe(404);
+  });
+});
+
+describe("POST /internal/rooms/type (#815 C2)", () => {
+  const TYPE = "/internal/rooms/type";
+  const run = randomBytes(4).toString("hex");
+  const ids = { waiting: `lob_t_${run}_w`, running: `lob_t_${run}_r`, gone: `lob_t_${run}_g` };
+  const typeBody = (lobbyId: string, lobbyType: string) =>
+    JSON.stringify({ v: PROTOCOL_VERSION, lobbyId, lobbyType });
+  const opened = { ...DEFAULT_RACE_SETTINGS, timerS: 120, bots: [{ level: "clerk" as const }] };
+
+  afterEach(async () => {
+    const redis = await connectRedis(process.env.REDIS_URL);
+    await redis.del(
+      ...Object.values(ids).flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]),
+    );
+    await redis.srem("rooms", ...Object.values(ids));
+    redis.disconnect();
+  });
+
+  async function seed() {
+    const registry = server!.registry;
+    for (const lobbyId of [ids.waiting, ids.running]) {
+      await registry.open({ lobbyId, code: "KGB-4821", hostUserId: "usr_host", settings: opened });
+      await registry.join(lobbyId, { userId: "usr_host", name: "Ada" });
+    }
+    await registry.withRoom(ids.running, () => registry.setPhase(ids.running, "running"));
+  }
+
+  async function answer(res: Response) {
+    expect(res.status).toBe(200);
+    return roomTypeResponseSchema.parse(await res.json()).result;
+  }
+
+  it("a waiting room takes the type and answers ok; every other setting and seat stays", async () => {
+    const base = await start();
+    await seed();
+    const seats = await server!.registry.members(ids.waiting);
+    const res = await postSigned(base, typeBody(ids.waiting, "public"), TYPE);
+    const raw = await res.clone().text();
+    expect(await answer(res)).toBe("ok");
+    expect(await server!.registry.settings(ids.waiting)).toEqual({
+      ...opened,
+      lobbyType: "public",
+    });
+    expect(await server!.registry.members(ids.waiting)).toEqual(seats);
+    // A result only: never a name, a user id or the settings.
+    expect(JSON.parse(raw)).toEqual({ v: PROTOCOL_VERSION, result: "ok" });
+    for (const leak of ["Ada", "usr_", "settings", "KGB-4821"]) expect(raw).not.toContain(leak);
+    // Filed back: ok again.
+    expect(await answer(await postSigned(base, typeBody(ids.waiting, "private"), TYPE))).toBe("ok");
+    expect(await server!.registry.settings(ids.waiting)).toEqual(opened);
+  });
+
+  it("a running room answers not-waiting, an unknown one no-room; neither changes anything", async () => {
+    const base = await start();
+    await seed();
+    expect(await answer(await postSigned(base, typeBody(ids.running, "public"), TYPE))).toBe(
+      "not-waiting",
+    );
+    expect(await server!.registry.settings(ids.running)).toEqual(opened);
+    expect(await answer(await postSigned(base, typeBody(ids.gone, "public"), TYPE))).toBe(
+      "no-room",
+    );
+    expect(await server!.registry.room(ids.gone)).toBeNull();
+  });
+
+  it("sits behind the same signature, nonce, timestamp and version checks", async () => {
+    const base = await start();
+    await seed();
+    const body = typeBody(ids.waiting, "public");
+    const nonce = freshNonce();
+    await expectError(
+      await post(base, { path: TYPE, body, nonce, signature: "0".repeat(64) }),
+      401,
+      "bad-signature",
+    );
+    await expectError(
+      await post(base, { path: TYPE, body, nonce: null, signature: sign(body, nonce) }),
+      401,
+      "bad-signature",
+    );
+    await expectError(
+      await post(base, {
+        path: TYPE,
+        body: typeBody(ids.waiting, "private"),
+        nonce,
+        signature: sign(body, nonce),
+      }),
+      401,
+      "bad-signature",
+    );
+    const old = String(Number(V.timestamp) - INTERNAL_MAX_SKEW_S - 1);
+    const n2 = freshNonce();
+    await expectError(
+      await post(base, {
+        path: TYPE,
+        body,
+        nonce: n2,
+        timestamp: old,
+        signature: sign(body, n2, old),
+      }),
+      401,
+      "stale-timestamp",
+    );
+    // Nothing above was filed.
+    expect((await server!.registry.settings(ids.waiting))?.lobbyType).toBe("private");
+    const n3 = freshNonce();
+    const signed = { path: TYPE, body, nonce: n3, signature: sign(body, n3) };
+    expect(await answer(await post(base, signed))).toBe("ok");
+    await expectError(await post(base, signed), 401, "replay");
+    await expectError(
+      await postSigned(
+        base,
+        JSON.stringify({ v: 1, lobbyId: ids.waiting, lobbyType: "public" }),
+        TYPE,
+      ),
+      426,
+      "version",
+    );
+    for (const bad of [
+      typeBody(ids.waiting, "secret"),
+      typeBody("", "public"),
+      JSON.stringify({ v: PROTOCOL_VERSION, lobbyId: ids.waiting }),
+    ])
+      await expectError(await postSigned(base, bad, TYPE), 400, "bad-body");
+    expect((await fetch(`${base}${TYPE}`)).status).toBe(404);
   });
 });

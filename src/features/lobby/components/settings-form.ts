@@ -262,6 +262,8 @@ function lobbyAck(result: SetLobbyTypeResult): FormAck {
     case "not-found":
       return { ok: false, error: "no-room" };
     case "rate-limited":
+    // the race server did not answer (#815): nothing was filed, the host retries
+    case "unavailable":
       return { ok: false, error: "timeout" };
     default:
       return { ok: false, error: "invalid" };

@@ -23,7 +23,13 @@ import {
   traceKey,
   VOID_TTL_S,
 } from "./keys";
-import { createRoomRegistry, ROOM_SEATS, type RaceDesk, type RoomRegistry } from "./registry";
+import {
+  createRoomRegistry,
+  promoteHost,
+  ROOM_SEATS,
+  type RaceDesk,
+  type RoomRegistry,
+} from "./registry";
 
 // Integration tests against a real Redis (ADR 0008, ARCHITECTURE 10). They fail, never skip, when
 // Redis is missing: a card worktree loads REDIS_URL from its .env, CI from the `check` job service.
@@ -1166,5 +1172,126 @@ describe("room registry: host removal and block list (#133 C2, C3)", () => {
     const ttl = await redis.ttl(blockedKey(lobbyId));
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(ENDED_GRACE_TTL_S);
+  });
+});
+
+describe("room registry: host promotion (#137 C1, C2)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("promoteHost: the earliest-joined human, ties by the lowest desk, never a bot, null with no human", () => {
+    const human = (desk: number, joinedAt?: number) => ({ desk, joinedAt });
+    const bot = (desk: number) => ({ desk, isBot: true, joinedAt: 0 });
+    expect(
+      promoteHost([
+        ["b", human(2, 300)],
+        ["a", human(5, 200)],
+        ["bot:3", bot(3)],
+      ]),
+    ).toEqual({ userId: "a", desk: 5 });
+    expect(
+      promoteHost([
+        ["c", human(7, 100)],
+        ["a", human(4, 100)],
+      ]),
+    ).toEqual({ userId: "a", desk: 4 });
+    // a record written before #137 has no join time: it joined before any that has one
+    expect(
+      promoteHost([
+        ["new", human(2, 100)],
+        ["old", human(6)],
+      ]),
+    ).toEqual({ userId: "old", desk: 6 });
+    expect(promoteHost([["bot:2", bot(2)]])).toBeNull();
+    expect(promoteHost([])).toBeNull();
+  });
+
+  it("seats record their join time; a second join of a member keeps it", async () => {
+    const { registry, clock } = setup();
+    const lobbyId = await openRoom(registry);
+    const t0 = clock.now();
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    clock.advance(1_000);
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    const seat = JSON.parse((await redis.hget(membersKey(lobbyId), "a"))!) as object;
+    expect(seat).toEqual({ desk: 1, name: "Ada", joinedAt: t0 });
+  });
+
+  /** host at desk 1, then B (desk 2) joins after A (desk 3 freed and retaken): A joined first. */
+  async function hosted() {
+    const { registry, clock } = setup();
+    const lobbyId = await openRoom(registry, lobby(), "host");
+    await registry.join(lobbyId, { userId: "host", name: "Hal" });
+    clock.advance(10);
+    await registry.join(lobbyId, { userId: "x", name: "Xan" });
+    clock.advance(10);
+    await registry.join(lobbyId, { userId: "a", name: "Ada" });
+    clock.advance(10);
+    await registry.leave(lobbyId, "x");
+    await registry.join(lobbyId, { userId: "b", name: "Bea" });
+    return { registry, clock, lobbyId };
+  }
+
+  it("the host's leave promotes the earliest-joined human in the leave's MULTI; the roster follows", async () => {
+    const { registry, lobbyId } = await hosted();
+    await registry.setBots(lobbyId, [{ level: "clerk" }]);
+    const groups = recordCommands();
+    const left = await registry.leave(lobbyId, "host");
+    expect(left.newHost).toEqual({ userId: "a", desk: 3 });
+    expect(left.closed).toBe(false);
+    expect(left.members.filter((x) => x.isHost).map((x) => x.name)).toEqual(["Ada"]);
+    expect(await redis.hget(roomKey(lobbyId), "hostUserId")).toBe("a");
+    const write = groups().find(({ commands }) => commands.some(([name]) => name === "hdel"))!;
+    expect(write.atomic).toBe(true);
+    expect(write.commands).toContainEqual(["hset", roomKey(lobbyId), "hostUserId", "a"]);
+    expect(write.commands).toContainEqual(["expire", roomKey(lobbyId), String(ROOM_TTL_S)]);
+    // the new host's patch is accepted, the old host's refused
+    expect(await registry.updateSettings(lobbyId, "a", { timerS: 60 })).toMatchObject({ ok: true });
+    expect(await registry.updateSettings(lobbyId, "host", { timerS: 90 })).toEqual({
+      ok: false,
+      reason: "not-host",
+    });
+  });
+
+  it("a guest's leave promotes nobody; the host leaving with only bots left closes the room", async () => {
+    const { registry, lobbyId } = await hosted();
+    expect((await registry.leave(lobbyId, "b")).newHost).toBeUndefined();
+    expect(await redis.hget(roomKey(lobbyId), "hostUserId")).toBe("host");
+
+    const solo = await openRoom(registry, lobby(), "h");
+    await registry.join(solo, { userId: "h", name: "Hal" });
+    await registry.setBots(solo, [{ level: "clerk" }]);
+    expect(await registry.leave(solo, "h")).toEqual({ members: [], closed: true, kept: false });
+  });
+
+  it("the host's leave of an ended room promotes too (releaseDropped, a removal)", async () => {
+    const { registry, lobbyId } = await hosted();
+    await registry.withRoom(lobbyId, () => registry.setPhase(lobbyId, "ended"));
+    expect((await registry.leave(lobbyId, "host")).newHost).toEqual({ userId: "a", desk: 3 });
+  });
+
+  it("handOverHost: the host's desk gone mid-race passes the role while its seat stays", async () => {
+    const { registry, lobbyId } = await hosted();
+    await registry.withRoom(lobbyId, () => registry.setPhase(lobbyId, "running"));
+    expect(await registry.handOverHost(lobbyId, "b")).toBeNull();
+    const handed = await registry.handOverHost(lobbyId, "host");
+    expect(handed?.newHost).toEqual({ userId: "a", desk: 3 });
+    expect(handed?.members.map((x) => [x.name, x.isHost])).toEqual([
+      ["Hal", false],
+      ["Bea", false],
+      ["Ada", true],
+    ]);
+    expect(await redis.hget(roomKey(lobbyId), "hostUserId")).toBe("a");
+    expect(await redis.ttl(roomKey(lobbyId))).toBeGreaterThan(0);
+    // already handed over: the old host no longer hosts, nothing more happens
+    expect(await registry.handOverHost(lobbyId, "host")).toBeNull();
+  });
+
+  it("handOverHost: a host alone with bots keeps the role", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry, lobby(), "h");
+    await registry.join(lobbyId, { userId: "h", name: "Hal" });
+    await registry.setBots(lobbyId, [{ level: "clerk" }]);
+    expect(await registry.handOverHost(lobbyId, "h")).toBeNull();
+    expect(await redis.hget(roomKey(lobbyId), "hostUserId")).toBe("h");
   });
 });

@@ -95,7 +95,19 @@ export type JoinResult =
  * `ENDED_GRACE_TTL_S` so a member can come back for "Race again". Either way nothing of the room
  * is left in this process's live race state.
  */
-export type LeaveResult = { members: Member[]; closed: boolean; kept: boolean };
+export type LeaveResult = {
+  members: Member[];
+  closed: boolean;
+  kept: boolean;
+  /**
+   * Set only when the leaving user was the room's host and a human remains (#137): the promoted
+   * user, already written as the hash's `hostUserId` in the leave's MULTI; `members` follows it.
+   */
+  newHost?: NewHost;
+};
+
+/** The user the host role passed to (#137), and its desk (`event new-host { desk }`). */
+export type NewHost = { userId: string; desk: number };
 
 /**
  * Desks in a room (spec 5.2, owner decision 2026-11-03: 30 desks, humans and bots together; one is
@@ -132,6 +144,26 @@ function botsOverflow(seats: Map<string, Seat>, bots: readonly unknown[]): boole
 export function mayRejoin(room: Pick<RoomState, "phase">, isMember: boolean): boolean {
   return room.phase === "waiting" || room.phase === "ended" || isMember;
 }
+/**
+ * Who hosts once the host's seat is gone for good (#137, spec 5.4, ARCHITECTURE 7.1): among `seats`
+ * (the host's own already left out by the caller), the human who joined earliest (`joinedAt`; a record
+ * written before #137 has none and counts as earliest), ties by the lowest desk; never a bot; `null`
+ * when no human remains. The one rule: every path that frees the host's seat calls it, and a later
+ * deliberate hand-over control would too.
+ */
+export function promoteHost(
+  seats: Iterable<readonly [string, { desk: number; isBot?: boolean; joinedAt?: number }]>,
+): NewHost | null {
+  let best: (NewHost & { joinedAt: number }) | null = null;
+  for (const [userId, { desk, isBot, joinedAt = 0 }] of seats) {
+    if (isBot) continue;
+    if (!best || joinedAt < best.joinedAt || (joinedAt === best.joinedAt && desk < best.desk)) {
+      best = { userId, desk, joinedAt };
+    }
+  }
+  return best && { userId: best.userId, desk: best.desk };
+}
+
 /** `members` is set when the patch carried `bots`: the room was re-seated (#156). */
 export type UpdateSettingsResult =
   | { ok: true; settings: RaceSettings; members?: Member[] }
@@ -192,6 +224,17 @@ export type RoomRegistry = {
    * Written with the room's TTLs; nothing for an unknown room.
    */
   block(lobbyId: string, userId: string): Promise<void>;
+  /**
+   * The host's desk is gone for good during a race (#137 C2 b: `expired` or `abandoned`) while its
+   * seat stays in the members hash: when `goneUserId` is the room's host, the host role passes to
+   * `promoteHost` of the other seats, written in one MULTI with the TTLs. Resolves the promotion and
+   * the members it produces; `null` when `goneUserId` does not host or no other human remains. Not
+   * queued: the caller runs it inside `withRoom`.
+   */
+  handOverHost(
+    lobbyId: string,
+    goneUserId: string,
+  ): Promise<{ newHost: NewHost; members: Member[] } | null>;
   /** Whether the room's block list holds `userId` (#133). Not queued: the handshake reads it. */
   isBlocked(lobbyId: string, userId: string): Promise<boolean>;
   members(lobbyId: string): Promise<Member[] | null>;
@@ -290,10 +333,14 @@ async function execAll(lobbyId: string, tx: ChainableCommander) {
 
 const raceDesksSchema = startRaceRequestSchema.shape.desks;
 
-/** A members-hash record: humans `{ desk, name }`, bots also `isBot: true` and their level (#156). */
+/**
+ * A members-hash record: humans `{ desk, name, joinedAt }` (`joinedAt`: server ms epoch of the seat,
+ * #137, additive: older records have none), bots also `isBot: true` and their level (#156).
+ */
 const seatSchema = z.object({
   desk: z.int().min(1),
   name: z.string().min(1),
+  joinedAt: z.number().int().nonnegative().optional(),
   isBot: z.literal(true).optional(),
   level: botLevelSchema.optional(),
 });
@@ -585,10 +632,12 @@ export function createRoomRegistry({
         const desk =
           seats.get(userId)?.desk ??
           (raced !== undefined && !taken.includes(raced) ? raced : nextDesk([...taken, ...held]));
-        seats.set(userId, { desk, name });
+        // A member (a second tab, a resume) keeps the join time of its seat (#137: host promotion).
+        const seat: Seat = { desk, name, joinedAt: seats.get(userId)?.joinedAt ?? clock.now() };
+        seats.set(userId, seat);
         await withTtl(
           lobbyId,
-          redis.multi().hset(membersKey(lobbyId), userId, JSON.stringify({ desk, name })),
+          redis.multi().hset(membersKey(lobbyId), userId, JSON.stringify(seat)),
         );
         return {
           ok: true,
@@ -602,10 +651,10 @@ export function createRoomRegistry({
       serial(lobbyId, async (): Promise<LeaveResult> => {
         const room = await readRoom(lobbyId);
         if (!room) return { members: [], closed: false, kept: false };
-        const removed = await redis.hdel(membersKey(lobbyId), userId);
         const seats = await readSeats(lobbyId);
+        const removed = seats.delete(userId);
         const humans = [...seats.values()].filter((s) => !s.isBot).length;
-        if (removed === 1 && humans === 0) {
+        if (removed && humans === 0) {
           // The trace lists (#592) of the last race's desks go with the room.
           const traces = traceKeysOf(lobbyId, room.desks);
           if (room.phase === "ended") {
@@ -615,6 +664,7 @@ export function createRoomRegistry({
               lobbyId,
               redis
                 .multi()
+                .hdel(membersKey(lobbyId), userId)
                 .del(desksKey(lobbyId), ...traces)
                 .expire(roomKey(lobbyId), ENDED_GRACE_TTL_S)
                 .expire(membersKey(lobbyId), ENDED_GRACE_TTL_S)
@@ -639,8 +689,13 @@ export function createRoomRegistry({
           openRooms.delete(lobbyId);
           return { members: [], closed: true, kept: false };
         }
-        await withTtl(lobbyId, redis.multi());
-        return { members: toMembers(seats, room.hostUserId), closed: false, kept: false };
+        // The host's seat is gone (#137 C2 a, c, d): the role passes in the leave's own MULTI.
+        const newHost = removed && userId === room.hostUserId ? promoteHost(seats) : null;
+        const tx = redis.multi().hdel(membersKey(lobbyId), userId);
+        if (newHost) tx.hset(roomKey(lobbyId), "hostUserId", newHost.userId);
+        await withTtl(lobbyId, tx);
+        const members = toMembers(seats, newHost?.userId ?? room.hostUserId);
+        return { members, closed: false, kept: false, ...(newHost ? { newHost } : {}) };
       }),
 
     setBots: (lobbyId, bots) =>
@@ -694,6 +749,16 @@ export function createRoomRegistry({
         if (!(await readRoom(lobbyId))) return;
         await withTtl(lobbyId, redis.multi().sadd(blockedKey(lobbyId), userId));
       }),
+
+    handOverHost: async (lobbyId, goneUserId) => {
+      const room = await readRoom(lobbyId);
+      if (!room || room.hostUserId !== goneUserId) return null;
+      const seats = await readSeats(lobbyId);
+      const newHost = promoteHost([...seats].filter(([id]) => id !== goneUserId));
+      if (!newHost) return null;
+      await withTtl(lobbyId, redis.multi().hset(roomKey(lobbyId), "hostUserId", newHost.userId));
+      return { newHost, members: toMembers(seats, newHost.userId) };
+    },
 
     isBlocked: async (lobbyId, userId) =>
       (await redis.sismember(blockedKey(lobbyId), userId)) === 1,

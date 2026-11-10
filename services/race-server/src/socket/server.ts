@@ -88,6 +88,8 @@ export function attachSocketServer(
     limiter: Limiter;
     /** Queues the web's lobby close when a leave closes the room (#734, `LeaveDeps.onLobbyClosed`). */
     onLobbyClosed: (lobbyId: string) => void;
+    /** A leave passed the host role on (#137, `LeaveDeps.onNewHost`): `new-host` and the web's record. */
+    onNewHost: LeaveDeps["onNewHost"];
     /** The grace before the last human's leave closes a waiting room (#734: a reload keeps it). */
     lastLeave: LastLeave;
   },
@@ -98,6 +100,7 @@ export function attachSocketServer(
     presence,
     onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
     onLobbyClosed: deps.onLobbyClosed,
+    onNewHost: deps.onNewHost,
     announce: (lobbyId, members) =>
       void io.to(audience(lobbyId)).emit("roster", { v: PROTOCOL_VERSION, members }),
   };

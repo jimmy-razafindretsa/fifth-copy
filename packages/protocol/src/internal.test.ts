@@ -448,7 +448,12 @@ describe("lobby host transfer (#137 C3, C6)", () => {
     ["request empty lobbyId", setLobbyHostRequestSchema, { ...host, lobbyId: "" }, false],
     ["request previous v", setLobbyHostRequestSchema, { ...host, v: v - 1 }, false],
     ["response changed", setLobbyHostResponseSchema, { v, lobbyId: "lob_1", changed: true }, true],
-    ["response same host", setLobbyHostResponseSchema, { v, lobbyId: "lob_1", changed: false }, true],
+    [
+      "response same host",
+      setLobbyHostResponseSchema,
+      { v, lobbyId: "lob_1", changed: false },
+      true,
+    ],
     ["response missing changed", setLobbyHostResponseSchema, { v, lobbyId: "lob_1" }, false],
   ] as const)("%s", (_, schema, payload, ok) => {
     expect(schema.safeParse(payload).success).toBe(ok);
@@ -457,9 +462,9 @@ describe("lobby host transfer (#137 C3, C6)", () => {
   it("a host request never parses as a close or a results request, nor they as it (the outbox tells them apart)", () => {
     expect(closeLobbyRequestSchema.safeParse(host).success).toBe(false);
     expect(resultsSchema.safeParse(host).success).toBe(false);
-    expect(
-      setLobbyHostRequestSchema.safeParse({ v, lobbyId: "lob_1", closedAt: 1 }).success,
-    ).toBe(false);
+    expect(setLobbyHostRequestSchema.safeParse({ v, lobbyId: "lob_1", closedAt: 1 }).success).toBe(
+      false,
+    );
   });
 });
 

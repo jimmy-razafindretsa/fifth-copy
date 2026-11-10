@@ -170,7 +170,8 @@ describe("registry: bots seated at open (C1)", () => {
     }
     expect(new Set(members.map((m) => m.name)).size).toBe(3);
     expect(await records(lobbyId)).toEqual({
-      host: { desk: 1, name: "Ada" },
+      // #137 C1: a human seat records its join time (the host-promotion order).
+      host: { desk: 1, name: "Ada", joinedAt: expect.any(Number) },
       "bot:2": { desk: 2, name: botName(2, "en"), isBot: true, level: "clerk" },
       "bot:3": { desk: 3, name: botName(3, "en"), isBot: true, level: "officer" },
     });

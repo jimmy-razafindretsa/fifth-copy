@@ -7,6 +7,7 @@ import {
   type CloseLobbyRequest,
   type RaceResultsRequest,
   type RankingEntry,
+  type SetLobbyHostRequest,
 } from "@fifth-copy/protocol";
 import { createFakeClock, createFakeScheduler } from "../clock";
 import { OUTBOX_TTL_S, OUTBOXES_KEY, outboxKey } from "../rooms/keys";
@@ -22,6 +23,7 @@ import {
 import { membersKey, roomKey } from "../rooms/keys";
 import { LAST_LEAVE_GRACE_MS } from "../players/last-leave";
 import { closeLobbyRequest, lobbyCloseOutboxId, sendOutboxEntry } from "./lobby-close";
+import { lobbyHostOutboxId, sendLobbyHost, setLobbyHostRequest } from "./lobby-host";
 import { createOutbox, retryDelayMs } from "./outbox";
 import { WebApiStatusError, type WebApi } from "./web-api";
 import { buildResults, sendResults } from "./results";
@@ -335,16 +337,26 @@ describe("lobby close through the outbox (#734 C2)", () => {
         calls.push(`close ${req.lobbyId}`);
         return { v: PROTOCOL_VERSION, lobbyId: req.lobbyId, changed: false };
       },
+      setLobbyHost: async (req) => {
+        calls.push(`host ${req.lobbyId} ${req.hostUserId}`);
+        return { v: PROTOCOL_VERSION, lobbyId: req.lobbyId, changed: true };
+      },
     });
     const [chunk] = results(1);
     expect(await send(closeLobbyRequest("lob_1", 5))).toBe(true);
     expect(await send(chunk)).toBe(true);
-    expect(calls).toEqual(["close lob_1", `results ${chunk!.raceId}`]);
+    // #137 C3: a host transfer entry goes to setLobbyHost
+    expect(await send(setLobbyHostRequest("lob_1", "usr_a"))).toBe(true);
+    expect(calls).toEqual(["close lob_1", `results ${chunk!.raceId}`, "host lob_1 usr_a"]);
   });
 
   it("sendOutboxEntry: a 404 (no such lobby) is acknowledged; a 500 or another lobby's answer is retried", async () => {
     const answer = (fn: WebApi["closeLobby"]) =>
-      sendOutboxEntry({ postResults: () => Promise.reject(new Error("unused")), closeLobby: fn });
+      sendOutboxEntry({
+        postResults: () => Promise.reject(new Error("unused")),
+        closeLobby: fn,
+        setLobbyHost: () => Promise.reject(new Error("unused")),
+      });
     const entry = closeLobbyRequest("lob_1", 5);
     expect(await answer(() => Promise.reject(new WebApiStatusError(404)))(entry)).toBe(true);
     await expect(answer(() => Promise.reject(new WebApiStatusError(500)))(entry)).rejects.toThrow();
@@ -428,5 +440,73 @@ describe("lobby close through the outbox (#734 C2)", () => {
     expect(web.closes.map((c) => c.lobbyId)).not.toContain(live);
     await settle();
     expect(await pendingIn(lobbyCloseOutboxId(gone))).toEqual({ length: 0, listed: false });
+  });
+});
+
+describe("lobby host transfer through the outbox (#137 C3)", () => {
+  let booted: Booted | undefined;
+  afterEach(async () => {
+    await booted?.stop();
+    booted = undefined;
+  });
+
+  it("sendLobbyHost: a 200 for the lobby and a 404 are acknowledged; a 500 or another lobby's answer is retried", async () => {
+    const answer = (fn: WebApi["setLobbyHost"]) => sendLobbyHost({ setLobbyHost: fn });
+    const entry = setLobbyHostRequest("lob_1", "usr_a");
+    expect(
+      await answer(async () => ({ v: PROTOCOL_VERSION, lobbyId: "lob_1", changed: false }))(entry),
+    ).toBe(true);
+    expect(await answer(() => Promise.reject(new WebApiStatusError(404)))(entry)).toBe(true);
+    await expect(answer(() => Promise.reject(new WebApiStatusError(500)))(entry)).rejects.toThrow();
+    expect(
+      await answer(async () => ({ v: PROTOCOL_VERSION, lobbyId: "lob_2", changed: true }))(entry),
+    ).toBe(false);
+  });
+
+  it("the host's leave queues the web's record of the promoted user; a web outage is retried and never blocks the promotion", async () => {
+    const clock = { now: () => booted!.clock.now() };
+    const web = fixtureWebApi(clock);
+    const hosts: SetLobbyHostRequest[] = [];
+    let failures = 1;
+    booted = await boot(url, {
+      redisPrefix: prefix,
+      webApi: {
+        ...web.api,
+        setLobbyHost: async (request) => {
+          hosts.push(request);
+          if (failures-- > 0) throw new Error("web down");
+          return { v: PROTOCOL_VERSION, lobbyId: request.lobbyId, changed: true };
+        },
+      },
+    });
+    const lobby = await booted.openRoom("HST-0137");
+    const join = async (sub: string, role: "host" | "player") => {
+      const client = booted!.connect({
+        v: PROTOCOL_VERSION,
+        token: await booted!.token({ lobby, sub, role }),
+      });
+      const seen = track(client);
+      await until(() => !!seen.welcome, 2_000, `welcome ${sub}`);
+      return { client, seen };
+    };
+    const host = await join("usr_host", "host");
+    const a = await join("usr_a", "player");
+    host.client.disconnect();
+    await until(() => hosts.length === 1, 2_000, "first host call");
+    expect(hosts[0]).toEqual({ v: PROTOCOL_VERSION, lobbyId: lobby, hostUserId: "usr_a" });
+    // The promotion stands in the room although the web is down.
+    expect(await redis.hget(roomKey(lobby), "hostUserId")).toBe("usr_a");
+    await until(() => a.seen.roster?.length === 1, 2_000, "roster after the leave");
+    expect(a.seen.roster?.[0]).toMatchObject({ isHost: true });
+    await settle();
+    const id = lobbyHostOutboxId(lobby);
+    expect(await pendingIn(id)).toEqual({ length: 1, listed: true });
+    expect(await redis.ttl(outboxKey(id))).toBeGreaterThan(0);
+
+    booted.clock.advance(1_000);
+    await until(() => hosts.length === 2, 2_000, "retried host call");
+    await settle();
+    expect(hosts[1]).toEqual(hosts[0]);
+    expect(await pendingIn(id)).toEqual({ length: 0, listed: false });
   });
 });

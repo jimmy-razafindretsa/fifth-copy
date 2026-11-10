@@ -86,11 +86,23 @@ export const ackClose: WebApi["closeLobby"] = async (request) => ({
   changed: true,
 });
 
+/** The web's answer to a host transfer record (#137): written now. */
+export const ackHost: WebApi["setLobbyHost"] = async (request) => ({
+  v: PROTOCOL_VERSION,
+  lobbyId: request.lobbyId,
+  changed: true,
+});
+
 export function fixtureWebApi(clock: { now(): number }) {
   const calls: Parameters<WebApi["startRace"]>[0][] = [];
   const results: Parameters<WebApi["postResults"]>[0][] = [];
   const closes: Parameters<WebApi["closeLobby"]>[0][] = [];
+  const hosts: Parameters<WebApi["setLobbyHost"]>[0][] = [];
   const api: WebApi = {
+    setLobbyHost: async (request) => {
+      hosts.push(request);
+      return ackHost(request);
+    },
     closeLobby: async (request) => {
       closes.push(request);
       return ackClose(request);
@@ -110,7 +122,7 @@ export function fixtureWebApi(clock: { now(): number }) {
       };
     },
   };
-  return { api, calls, results, closes };
+  return { api, calls, results, closes, hosts };
 }
 
 export type Booted = {
@@ -325,6 +337,7 @@ export function textWebApi(
   return {
     postResults,
     closeLobby: ackClose,
+    setLobbyHost: ackHost,
     startRace: async (request) => ({
       v: PROTOCOL_VERSION,
       raceId: request.raceId,

@@ -8,7 +8,7 @@ import {
   type RaceEvent,
 } from "@fifth-copy/protocol";
 import { BACKSPACE, type PlayerStatus } from "@fifth-copy/engine";
-import { resumeKey } from "../rooms/keys";
+import { resumeKey, roomKey } from "../rooms/keys";
 import {
   connectError,
   connectRedis,
@@ -397,5 +397,53 @@ describe("members who dropped during the race leave at its end (#658)", () => {
     // the release runs after the end: give it the same chance it had in C1
     await new Promise((r) => setTimeout(r, 100));
     expect((await b.server.registry.members(lobby))?.map((m) => m.desk)).toEqual([1, 2]);
+  });
+});
+
+describe("host hand-over mid-race (#137 C2)", () => {
+  it("the host's line-cut expiring passes the role to the earliest-joined human: new-host, roster, host commands", async () => {
+    const race = await startedRace(process.env.REDIS_URL, {
+      players: 3,
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 180 },
+    });
+    booted = race.booted;
+    const b = race.booted;
+    const { lobby } = race;
+    const [host, a, guest] = race.racers as [Racer, Racer, Racer];
+    host.client.disconnect();
+    await until(() => kinds(a.seen.events, "line-cut").length === 1, WAIT_MS, "line-cut");
+    // Inside the grace the host keeps the role (a reload resumes it).
+    await advance(b, GRACE_MS - 1_000, { who: a, lobby });
+    expect(kinds(a.seen.events, "new-host")).toHaveLength(0);
+
+    await advance(b, 1_000);
+    await until(() => kinds(guest.seen.events, "new-host").length === 1, WAIT_MS, "new-host");
+    expect(kinds(a.seen.events, "new-host")).toEqual([
+      { v: PROTOCOL_VERSION, kind: "new-host", desk: a.desk },
+    ]);
+    await until(
+      () => guest.seen.roster?.find((m) => m.desk === a.desk)?.isHost === true,
+      WAIT_MS,
+      "roster with the new host",
+    );
+    expect(guest.seen.roster?.filter((m) => m.isHost).map((m) => m.desk)).toEqual([a.desk]);
+    expect(await redis.hget(roomKey(lobby), "hostUserId")).toBe(a.sub);
+  });
+
+  it("the host abandoning (Reassigned) hands the role over at once; a guest abandoning does not", async () => {
+    const race = await startedRace(process.env.REDIS_URL, { players: 3 });
+    booted = race.booted;
+    const [host, a, guest] = race.racers as [Racer, Racer, Racer];
+    guest.client.emit("abandon", { v: PROTOCOL_VERSION });
+    await until(
+      () => race.booted.server.desks.states(race.lobby).get(guest.desk)?.status === "abandoned",
+      WAIT_MS,
+      "guest abandoned",
+    );
+    expect(kinds(a.seen.events, "new-host")).toHaveLength(0);
+
+    host.client.emit("abandon", { v: PROTOCOL_VERSION });
+    await until(() => kinds(a.seen.events, "new-host").length === 1, WAIT_MS, "new-host");
+    expect(kinds(a.seen.events, "new-host")[0]).toMatchObject({ desk: a.desk });
   });
 });

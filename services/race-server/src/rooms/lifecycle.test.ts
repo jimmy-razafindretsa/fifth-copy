@@ -27,6 +27,7 @@ import {
   postRoomType,
   FIXTURE_TEXT,
   ackClose,
+  ackHost,
   ackResults,
   fixtureWebApi,
   HOST_SUB,
@@ -381,6 +382,7 @@ describe("lifecycle: text from the web app over the signed internal API (#199 C5
       startRace: (req) => wired.api!.startRace(req),
       postResults: ackResults,
       closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { booted, lobby, host, seenHost, others, connectAs } = await room({ players: 2, webApi });
     wired.api = createWebApi({
@@ -471,6 +473,7 @@ describe("lifecycle: refusals (C2)", () => {
       startRace: (req) => (fail ? Promise.reject(new Error("500")) : web.api.startRace(req)),
       postResults: ackResults,
       closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { host, lobby, seenHost } = await room({ webApi });
     expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
@@ -491,6 +494,7 @@ describe("lifecycle: refusals (C2)", () => {
       },
       postResults: ackResults,
       closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { booted, host, lobby } = await room({ webApi });
     const ack = start(host);
@@ -509,6 +513,7 @@ describe("lifecycle: refusals (C2)", () => {
       }),
       postResults: ackResults,
       closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { host } = await room({ webApi });
     expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
@@ -745,6 +750,7 @@ describe("lifecycle: race again (#143)", () => {
       startRace: (req) => (fail ? Promise.reject(new Error("500")) : web.api.startRace(req)),
       postResults: ackResults,
       closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { host, lobby, seenHost, others } = await endedRoom({ webApi });
 
@@ -1014,7 +1020,7 @@ describe("lifecycle: public room auto start (#814)", () => {
     expect(booted.scheduler.armed()).toBe(0);
   });
 
-  it("C4: a host whose socket left while a human and a bot stay: the room still starts, named after the host", async () => {
+  it("C4: a host whose socket left while a human and a bot stay: the room still starts, under the promoted host (#137 C2)", async () => {
     const web = fixtureWebApi({ now: () => 0 });
     const { booted, lobby, host, seenHost, others } = await room({
       players: 1,
@@ -1031,7 +1037,9 @@ describe("lifecycle: public room auto start (#814)", () => {
     expect((await hash(lobby)).fields.autoStartAt).toBe(String(seenHost.autoStart[0]!.startsAt));
     booted.clock.advance(AUTO_START_MS);
     await until(() => guest.countdown.length === 1, WAIT_MS, "countdown");
-    expect(web.calls[0]).toMatchObject({ hostUserId: HOST_SUB });
+    // #137: the host's leave in waiting passed the role to the remaining human.
+    expect(web.calls[0]).toMatchObject({ hostUserId: "usr_p0" });
+    expect(web.hosts).toEqual([{ v: PROTOCOL_VERSION, lobbyId: lobby, hostUserId: "usr_p0" }]);
   });
 
   it("C4: a failing web start leaves the room waiting, drops the instant with a null broadcast; the host's START remains", async () => {

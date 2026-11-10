@@ -26,7 +26,8 @@ export type LimitAction =
   | "password-reset-redeem"
   | "password-reset-redeem-account"
   | "recovery-redeem"
-  | "recovery-redeem-account";
+  | "recovery-redeem-account"
+  | "guest-create";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -78,6 +79,10 @@ export const LIMITS = {
   // (`recovery:<usernameNormalized>`); a success clears the account budget.
   "recovery-redeem": { max: 30, windowMs: 60 * 60_000 },
   "recovery-redeem-account": { max: 5, windowMs: 60 * 60_000 },
+  // Guest creation by a settings save (#840): per client IP (`requestIpSubject()`, a fresh guest
+  // cookie must not reset it), spent only when the save would mint a guest; sized above a class of
+  // 100 behind one address, as `mint-race-token-new-guest`.
+  "guest-create": { max: 120, windowMs: 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */

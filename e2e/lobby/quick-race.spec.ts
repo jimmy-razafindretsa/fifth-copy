@@ -125,6 +125,6 @@ test.describe("#128 quick race matchmaking @matchmaking", () => {
     await expect(mine).toHaveCount(1, { timeout: scaled(15_000) });
     await expect(mine.locator('[data-col="place"]')).toHaveText(/^\d+$/);
     await expect(mine.locator('[data-col="wpm"]')).toHaveText(/^\d+$/);
-    await expect(mine.locator('[data-col="accuracy"]')).toHaveText(/^\d+(\.\d+)? %$/);
+    await expect(mine.locator('[data-col="accuracy"]')).toHaveText(/^\d+(\.\d+)?\s%$/);
   });
 });

@@ -94,7 +94,8 @@
 }
 
 /* NEW HOST (#137, bible 7.3, 14.3): the red stamp over the roll docket, centred under its header,
-   clipped by the docket so the slam never paints over the dockets beside it; never takes a click */
+   clipped sideways by the docket so the slam never paints over the dockets column beside it (a short
+   roll lets it hang below, over the empty page); never takes a click */
 .newHost {
   position: absolute;
   inset: 0;
@@ -103,7 +104,8 @@
   align-items: flex-start;
   justify-content: center;
   padding: 64px 12px 12px;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
   pointer-events: none;
 }
 

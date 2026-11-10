@@ -8,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   rejectReasonSchema,
   serverEvents,
+  type HostKickAck,
   type HostSettingsAck,
   type HostStartAck,
   type Keys,
@@ -40,6 +41,12 @@ export type HostStartResult = HostStartAck | { ok: false; error: "timeout" };
 /** How long `sendHostStart` waits for the server's acknowledgement. */
 export const HOST_START_TIMEOUT_MS = 5_000;
 
+/** The ack of `host:kick` (#133), or `timeout` when none (or an invalid one) arrived in time. */
+export type HostKickResult = HostKickAck | { ok: false; error: "timeout" };
+
+/** How long `sendHostKick` waits for the server's acknowledgement. */
+export const HOST_KICK_TIMEOUT_MS = 5_000;
+
 /** Removes the one listener an `on*` call registered; calling it again does nothing. */
 export type Off = () => void;
 
@@ -63,6 +70,11 @@ export interface RoomSocket {
   onAutoStart(cb: (payload: RoomEvents["auto-start"]) => void): Off;
   /** Host only: asks the server to start the race (#214); never rejects. */
   sendHostStart(): Promise<HostStartResult>;
+  /**
+   * Host only (#133): asks the server to remove the human at `desk` (`host:kick { v, desk }`); the
+   * room hears `event { kind: "kicked" }` and a new `roster`. Never rejects.
+   */
+  sendHostKick(desk: number): Promise<HostKickResult>;
   /** Your keystrokes since the last batch (#559, <= 50 ms of them); an invalid batch is not sent. */
   sendKeys(batch: Keys["batch"]): void;
   /** The 10 Hz full state of every desk while the race runs (#559). */
@@ -249,6 +261,13 @@ export function connectToRoom(
     onAutoStart: (cb) => on("auto-start", cb),
     sendHostStart: () =>
       ask("host:start", { v: PROTOCOL_VERSION }, clientAcks["host:start"], HOST_START_TIMEOUT_MS),
+    sendHostKick: (desk) =>
+      ask(
+        "host:kick",
+        { v: PROTOCOL_VERSION, desk },
+        clientAcks["host:kick"],
+        HOST_KICK_TIMEOUT_MS,
+      ),
     sendKeys: (batch) => {
       const keys = keysSchema.safeParse({ v: PROTOCOL_VERSION, batch });
       if (keys.success) socket.emit("keys", keys.data);

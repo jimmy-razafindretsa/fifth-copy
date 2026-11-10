@@ -34,7 +34,9 @@ describe("wpmSeries (#865 C1)", () => {
 
   it("an empty trace returns no point", () => {
     expect(wpmSeries({ keystrokes: [], text: "abc", settings: CONTINUE })).toEqual([]);
-    expect(wpmSeries({ keystrokes: [], text: "abc", settings: CONTINUE, endMs: 5_000 })).toEqual([]);
+    expect(wpmSeries({ keystrokes: [], text: "abc", settings: CONTINUE, endMs: 5_000 })).toEqual(
+      [],
+    );
   });
 
   it("never more than maxPoints, never a bucket under a second", () => {

@@ -111,6 +111,8 @@ describe("RaceGraph (#865 C3)", () => {
       html.indexOf('data-section="bonuses"'),
     );
     // the card's h2 tag, then the graph's h3: headings in order
-    expect(html).toMatch(/<h2[^>]*>FORM 5-R · YOUR COPY<\/h2>[\s\S]*<h3[^>]*>WPM THROUGH THE RACE<\/h3>/);
+    expect(html).toMatch(
+      /<h2[^>]*>FORM 5-R · YOUR COPY<\/h2>[\s\S]*<h3[^>]*>WPM THROUGH THE RACE<\/h3>/,
+    );
   });
 });

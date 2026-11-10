@@ -126,7 +126,9 @@ describe("getRaceSeries (#865 C2)", () => {
     const long = typed(normalizeTypeable(BASE), 5_000); // 150 s
     const { db } = fakeDb([
       race({
-        results: [{ desk: 3, userId: "u-me", durationMs: long.at(-1)!.t, overlay: null, bonusLog: [] }],
+        results: [
+          { desk: 3, userId: "u-me", durationMs: long.at(-1)!.t, overlay: null, bonusLog: [] },
+        ],
         keystrokes: [{ desk: 3, userId: "u-me", ...blob(long) }],
       }),
     ]);

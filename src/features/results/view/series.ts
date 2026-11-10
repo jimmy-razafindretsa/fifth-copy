@@ -29,7 +29,11 @@ export function receivedMarks(desk: number, log: readonly StoredBonusEntry[]): B
 }
 
 /** The figures the graph's accessible name states: peak and final WPM, bonuses received. */
-export function seriesSummary(series: RaceSeries): { peak: number; final: number; bonuses: number } {
+export function seriesSummary(series: RaceSeries): {
+  peak: number;
+  final: number;
+  bonuses: number;
+} {
   const wpms = series.points.map((p) => p.wpm);
   return {
     peak: wpms.length ? Math.max(...wpms) : 0,

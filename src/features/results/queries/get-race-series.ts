@@ -64,7 +64,10 @@ export async function getRaceSeries(
   const keystrokes = decodeKeystrokes(trace.data, trace.count);
   if (!settings.success || !overlay.success || !keystrokes) return null;
   const text = storedEffectiveText({ textContent: race.textContent, overlay: overlay.data });
-  const baseLength = baseLengthOf(normalizeTypeable(race.textContent), overlay.data ?? EMPTY_OVERLAY);
+  const baseLength = baseLengthOf(
+    normalizeTypeable(race.textContent),
+    overlay.data ?? EMPTY_OVERLAY,
+  );
   const points = wpmSeries({
     keystrokes,
     text,

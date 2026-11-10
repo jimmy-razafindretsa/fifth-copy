@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
+import type { RaceSeries } from "../view/series";
 import {
   filingLabels,
   personalLabels,
@@ -58,14 +59,17 @@ export function DawnReportLayout({
  * `/results/[raceId]` (#300 C2, ARCHITECTURE 8.1, 8.3): the site header (as the waiting room keeps it),
  * then the report: the filing notice (the one client leaf that polls) or the podium with the ranking
  * docket (#301) and, for a typist, their personal stats card (#864) in their slots, the action row under it (#143, #863: RACE AGAIN, the way home, and a
- * guest member's prompt to open a file; `viewerIsGuest` is the viewer's guest flag, ADR 0009).
+ * guest member's prompt to open a file; `viewerIsGuest` is the viewer's guest flag, ADR 0009). The
+ * card's WPM graph (#865) draws `series` (`getRaceSeries`: the viewer's own trace, `null` without one).
  */
 export async function DawnReportScreen({
   report,
   viewerIsGuest = false,
+  series = null,
 }: {
   report: DawnReport;
   viewerIsGuest?: boolean;
+  series?: RaceSeries | null;
 }) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
   const [{ LandingHeader }, t] = await Promise.all([import("@/features/landing"), getT()]);
@@ -87,7 +91,7 @@ export async function DawnReportScreen({
           }
           personal={
             report.kind === "report" && report.personal ? (
-              <PersonalCard stats={report.personal} labels={personalLabels(t)} />
+              <PersonalCard stats={report.personal} labels={personalLabels(t)} series={series} />
             ) : undefined
           }
           actions={

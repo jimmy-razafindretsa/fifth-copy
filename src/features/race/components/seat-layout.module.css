@@ -188,8 +188,10 @@
   background: var(--color-bg);
 }
 
-/* over the scene the sound toggle's unpressed segments take the paper ground, as Abandon does (#243) */
-.seat:has([data-scene]) .sound [aria-pressed="false"] {
+/* over the scene the sound toggle's row (its label, segments and pending word) takes a paper chip, as
+   the kicker does (#243, #693); its refusal line has its own surface ground */
+.seat:has([data-scene]) .sound [data-sound] {
+  padding-left: 8px;
   background: var(--color-bg);
 }
 

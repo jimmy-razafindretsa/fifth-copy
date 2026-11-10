@@ -48,3 +48,10 @@ export type RedeemInviteResult =
 /** peekInvite's answer (#808): the token is on file, or why not. */
 export type PeekInviteResult =
   { ok: true } | { ok: false; error: "invalid" | "not-found" | "rate-limited" | "unavailable" };
+
+/**
+ * What `/invite/[token]` shows (#809): the invitation (`invite`), the stamped refusal (`refused`: used,
+ * expired, never issued, or lost to another press), or the refusal screen with an inline error line
+ * in place of the stamp (`closed`, `rate-limited`, `unavailable`).
+ */
+export type InviteOutcome = "invite" | "refused" | "closed" | "rate-limited" | "unavailable";

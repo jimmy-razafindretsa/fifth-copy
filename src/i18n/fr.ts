@@ -245,6 +245,21 @@ export const fr = {
       stageHint: "LE MAJOR · IL SUIT TON CURSEUR",
     },
   },
+  invite: {
+    kicker: "MINISTÈRE DE LA DACTYLOGRAPHIE · INVITATION",
+    title: "ON T'ATTEND",
+    rows: [
+      ["FORMULAIRE", "INVITATION"],
+      ["PLACES", "UNE"],
+    ],
+    take: "PRENDS TA PLACE",
+    refused: {
+      stamp: "REFUSÉ",
+      stamp2: "LIEN UTILISÉ OU EXPIRÉ",
+      body: "Demande un nouveau lien à l'hôte, ou entre le code de la salle.",
+      home: "AU RAPPORT À TON BUREAU",
+    },
+  },
   lobby: {
     kicker: {
       private: "SALLE D'ATTENTE · COURSE PRIVÉE",
@@ -389,6 +404,17 @@ export const fr = {
       copied: "COPIÉ",
       copiedStatus: "Code de salle copié",
       selectedStatus: "Code de salle sélectionné : copie-le avec ton clavier",
+    },
+    links: {
+      label: "LIEN",
+      newLink: "NOUVEAU LIEN",
+      issuing: "ÉMISSION…",
+      urlName: "Lien d'invitation",
+      copy: "COPIER",
+      copied: "COPIÉ",
+      copiedStatus: "Lien d'invitation copié",
+      selectedStatus: "Lien d'invitation sélectionné : copie-le avec ton clavier",
+      notHost: "Seul l'hôte peut émettre un lien.",
     },
   },
   race: {

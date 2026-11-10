@@ -250,6 +250,45 @@
   outline-offset: 2px;
 }
 
+/* the host's link row (#809): NEW LINK, then the issued URL and its COPY on one line, then its error */
+.links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.links > * {
+  max-width: 100%;
+}
+
+/* pending NEW LINK (ISSUING…, aria-busy): full strength, no press (7.2 pending) */
+.links > .ink:disabled {
+  cursor: progress;
+}
+
+.linkLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* the URL: IBM Plex Mono, one line, ellipsis; the full value stays selectable (title = the URL) */
+.url {
+  flex: 1 1 auto;
+  min-width: 0;
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
+}
+
 /* not startable yet: the Button primitive's disabled recipe (half strength, no press); while the start
    is on its way (aria-busy) it keeps full strength, as the landing's pending stamp buttons do */
 .startButton:disabled:not([aria-busy="true"]) {

@@ -112,18 +112,10 @@
   box-sizing: border-box;
 }
 
-.top,
 .tick,
 .line {
   vector-effect: non-scaling-stroke;
   fill: none;
-}
-
-/* the scale's top: a hairline dashed as the docket separators */
-.top {
-  stroke: color-mix(in srgb, var(--color-fg) 30%, transparent);
-  stroke-width: 1px;
-  stroke-dasharray: 4 3;
 }
 
 .tick {

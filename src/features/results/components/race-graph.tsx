@@ -79,7 +79,6 @@ function Chart({ series, labels }: { series: RaceSeries; labels: PersonalLabels 
         preserveAspectRatio="none"
         focusable="false"
       >
-        <line className={styles.top} x1={0} y1={0} x2={PLOT_W} y2={0} />
         {marks.map((m) => (
           <line
             key={`${m.t}:${m.kind}:${m.lane}`}

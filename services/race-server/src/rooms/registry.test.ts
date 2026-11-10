@@ -11,6 +11,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { createFakeClock } from "../clock";
 import { createRedis } from "../redis/client";
 import {
+  blockedKey,
   desksKey,
   ENDED_GRACE_TTL_S,
   membersKey,
@@ -53,7 +54,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   const ids = opened.splice(0);
-  const keys = ids.flatMap((id) => [roomKey(id), membersKey(id)]);
+  const keys = ids.flatMap((id) => [roomKey(id), membersKey(id), blockedKey(id)]);
   if (keys.length) await redis.del(...keys);
   if (ids.length) await redis.srem(ROOMS_KEY, ...ids);
 });
@@ -1038,5 +1039,132 @@ describe("room registry: setLobbyType (#815 C2)", () => {
       timerS: 60,
       lobbyType: "public",
     });
+  });
+});
+
+// #133: the host removes a human; the registry authorises, then blocks the user id for the room's
+// life (the edge frees the seat through `leaveRoom`). The block list is the one `join` and the
+// handshake consult (`isBlocked`).
+describe("room registry: host removal and block list (#133 C2, C3)", () => {
+  async function seated(registry: RoomRegistry, bots: RaceSettings["bots"] = []) {
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    await registry.join(lobbyId, { userId: "b", name: "Bob" });
+    if (bots.length) await registry.setBots(lobbyId, bots);
+    return lobbyId;
+  }
+
+  it("the host removes a human desk: the user is blocked under the room's TTL, the seat is untouched", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry);
+    expect(await registry.isBlocked(lobbyId, "b")).toBe(false);
+    expect(await registry.kick(lobbyId, "host", 2)).toEqual({ ok: true, userId: "b" });
+    expect(await registry.isBlocked(lobbyId, "b")).toBe(true);
+    expect(await registry.isBlocked(lobbyId, "host")).toBe(false);
+    expect(await redis.smembers(blockedKey(lobbyId))).toEqual(["b"]);
+    const ttl = await redis.ttl(blockedKey(lobbyId));
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(ROOM_TTL_S);
+    // The edge frees the seat with `leaveRoom`; the registry's kick only authorises and blocks.
+    expect(await registry.hasMember(lobbyId, "b")).toBe(true);
+  });
+
+  it("refuses not-host, no-such-desk, is-bot, self and no-room; nothing is blocked", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry, [{ level: "clerk" }]);
+    const botDesk = (await registry.members(lobbyId))!.find((m) => m.isBot)!.desk;
+    expect(await registry.kick(lobbyId, "b", 1)).toEqual({ ok: false, reason: "not-host" });
+    expect(await registry.kick(lobbyId, "host", 9)).toEqual({ ok: false, reason: "no-such-desk" });
+    expect(await registry.kick(lobbyId, "host", botDesk)).toEqual({ ok: false, reason: "is-bot" });
+    expect(await registry.kick(lobbyId, "host", 1)).toEqual({ ok: false, reason: "self" });
+    expect(await registry.kick(lobby(), "host", 2)).toEqual({ ok: false, reason: "no-room" });
+    expect(await redis.exists(blockedKey(lobbyId))).toBe(0);
+  });
+
+  it("only while waiting or ended: countdown and running answer not-waiting", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry);
+    const desks: RaceDesk[] = [
+      { desk: 1, userId: "host", name: "Ada", isBot: false },
+      { desk: 2, userId: "b", name: "Bob", isBot: false },
+    ];
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks });
+    expect(await registry.kick(lobbyId, "host", 2)).toEqual({ ok: false, reason: "not-waiting" });
+    await registry.setPhase(lobbyId, "running");
+    expect(await registry.kick(lobbyId, "host", 2)).toEqual({ ok: false, reason: "not-waiting" });
+    await registry.setPhase(lobbyId, "ended");
+    expect(await registry.kick(lobbyId, "host", 2)).toEqual({ ok: true, userId: "b" });
+  });
+
+  it("join refuses a blocked user with removed, in waiting and ended; another lobby's block does not apply", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry);
+    const other = await seated(registry);
+    await registry.kick(lobbyId, "host", 2);
+    await registry.leave(lobbyId, "b");
+    expect(await registry.join(lobbyId, { userId: "b", name: "Bob" })).toEqual({
+      ok: false,
+      reason: "removed",
+    });
+    expect(await registry.hasMember(lobbyId, "b")).toBe(false);
+    // `other` never removed b: b keeps its seat there and joins again.
+    expect(await registry.isBlocked(other, "b")).toBe(false);
+    expect(await registry.join(other, { userId: "b", name: "Bob" })).toMatchObject({ ok: true });
+  });
+
+  it("block is the extension point: any entry refuses the join, whoever added it", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry);
+    await registry.block(lobbyId, "c");
+    expect(await registry.join(lobbyId, { userId: "c", name: "Cy" })).toEqual({
+      ok: false,
+      reason: "removed",
+    });
+  });
+
+  it("every room write refreshes the block list's TTL with the room's", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry);
+    await registry.kick(lobbyId, "host", 2);
+    await redis.expire(blockedKey(lobbyId), 30);
+    await registry.updateSettings(lobbyId, "host", { timerS: 60 });
+    expect(await redis.ttl(blockedKey(lobbyId))).toBeGreaterThan(30);
+  });
+
+  it("a closed room drops its block list with its other keys", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry);
+    await registry.kick(lobbyId, "host", 2);
+    await registry.leave(lobbyId, "b");
+    expect((await registry.leave(lobbyId, "host")).closed).toBe(true);
+    expect(await redis.exists(blockedKey(lobbyId))).toBe(0);
+  });
+
+  it("a voided room drops its block list, whether its hash survived or is gone", async () => {
+    const { registry } = setup();
+    for (const lost of [false, true]) {
+      const lobbyId = await seated(registry);
+      await registry.kick(lobbyId, "host", 2);
+      if (lost) await redis.del(roomKey(lobbyId));
+      expect(await registry.voidRoom(lobbyId)).toEqual({ lost });
+      expect(await redis.exists(blockedKey(lobbyId))).toBe(0);
+    }
+  });
+
+  it("an ended room kept for Race again keeps its block list under the same grace TTL", async () => {
+    const { registry } = setup();
+    const lobbyId = await seated(registry);
+    const desks: RaceDesk[] = [
+      { desk: 1, userId: "host", name: "Ada", isBot: false },
+      { desk: 2, userId: "b", name: "Bob", isBot: false },
+    ];
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks });
+    await registry.setPhase(lobbyId, "ended");
+    await registry.kick(lobbyId, "host", 2);
+    await registry.leave(lobbyId, "b");
+    expect((await registry.leave(lobbyId, "host")).kept).toBe(true);
+    const ttl = await redis.ttl(blockedKey(lobbyId));
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(ENDED_GRACE_TTL_S);
   });
 });

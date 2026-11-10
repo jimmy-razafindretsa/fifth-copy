@@ -57,6 +57,8 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
   version: "generic",
   // A spectator past the room's cap (#616): its own sentence (#678).
   "room-full": "roomFull",
+  // The host's removal (#133) happens only between races, never on the seat view: the generic line.
+  removed: "generic",
   generic: "generic",
   // The lost room shows its own notice row (#235 C4); this sentence is never read.
   "room-lost": "noRoom",

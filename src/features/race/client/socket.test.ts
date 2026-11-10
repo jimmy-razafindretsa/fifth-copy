@@ -10,7 +10,13 @@ import {
   type SettingsEvent,
   type Welcome,
 } from "@fifth-copy/protocol";
-import { connectToRoom, HOST_START_TIMEOUT_MS, type HandshakeAuth, type IoFactory } from "./socket";
+import {
+  connectToRoom,
+  HOST_KICK_TIMEOUT_MS,
+  HOST_START_TIMEOUT_MS,
+  type HandshakeAuth,
+  type IoFactory,
+} from "./socket";
 import { bindRaceSocket, createRaceStore, type RaceTimer } from "./store";
 import { createTyping } from "./typing";
 
@@ -396,6 +402,53 @@ describe("settings (#101 C4)", () => {
     await expect(pending).resolves.toEqual({ ok: false, error: "timeout" });
     expect(onProtocolError).toHaveBeenCalledTimes(1);
     expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "host:settings" });
+  });
+});
+
+// #133 C4: the host's removal. `sendHostKick(desk)` emits `host:kick { v, desk }` and resolves the
+// parsed ack, or `timeout` after 5 s (or on an invalid ack, a protocol error); it never rejects.
+describe("host kick (#133 C4)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const lastAck = (fake: ReturnType<typeof makeFakeSocket>) =>
+    fake.emit.mock.calls.at(-1)![2] as (a: unknown) => void;
+
+  it("emits host:kick with the version and the desk and resolves the ok ack", async () => {
+    const { fake, room } = setup();
+    const pending = room.sendHostKick(3);
+    expect(fake.emit).toHaveBeenCalledWith(
+      "host:kick",
+      { v: PROTOCOL_VERSION, desk: 3 },
+      expect.any(Function),
+    );
+    lastAck(fake)({ ok: true });
+    await expect(pending).resolves.toEqual({ ok: true });
+  });
+
+  it.each(["not-host", "not-waiting", "no-such-desk", "is-bot", "self"] as const)(
+    "passes the %s refusal through",
+    async (error) => {
+      const { fake, room } = setup();
+      const pending = room.sendHostKick(3);
+      lastAck(fake)({ ok: false, error });
+      await expect(pending).resolves.toEqual({ ok: false, error });
+    },
+  );
+
+  it("resolves timeout after 5 s without an ack; an invalid ack is a protocol error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.useFakeTimers();
+    const { fake, room } = setup();
+    expect(HOST_KICK_TIMEOUT_MS).toBe(5_000);
+    const silent = room.sendHostKick(3);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(silent).resolves.toEqual({ ok: false, error: "timeout" });
+    const onProtocolError = vi.fn();
+    room.onProtocolError(onProtocolError);
+    const invalid = room.sendHostKick(3);
+    lastAck(fake)({ ok: false, error: "teapot" });
+    await expect(invalid).resolves.toEqual({ ok: false, error: "timeout" });
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "host:kick" });
   });
 });
 

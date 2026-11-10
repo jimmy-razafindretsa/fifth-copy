@@ -344,3 +344,86 @@ describe("room visibility broadcast (#815 C3)", () => {
     for (const seen of [host, guest, watcher]) expect(seen.settings).toHaveLength(1);
   });
 });
+
+// #133: the host removes a guest. The edge authorises through the registry (room hash `hostUserId`,
+// never the token role), frees the seat through `leaveRoom`, tells the room `kicked`, disconnects
+// the removed user's sockets and the block refuses them from then on.
+describe("host:kick (#133 C2)", () => {
+  type EventSeen = { kind: string; desk?: number };
+  async function room() {
+    const booted = (t = await boot(process.env.REDIS_URL));
+    const lobby = await booted.openRoom();
+    const connect = async (sub: string, name: string, role: "host" | "player" = "player") => {
+      const token = await booted.token({ lobby, sub, name, role });
+      const client = booted.connect({ v: PROTOCOL_VERSION, token });
+      const seen = track(client);
+      const events: EventSeen[] = [];
+      let disconnected: string | null = null;
+      client.on("event", (e) => void events.push(e as EventSeen));
+      client.on("disconnect", (reason) => void (disconnected = reason));
+      await until(() => !!seen.welcome, WAIT_MS, `welcome ${name}`);
+      return { client, seen, events, token, disconnected: () => disconnected };
+    };
+    const host = await connect("usr_host", "Ada", "host");
+    const a = await connect("usr_a", "Bea");
+    const b = await connect("usr_b", "Cy");
+    await until(() => host.seen.roster?.length === 3, WAIT_MS, "roster 3");
+    const kick = (who: typeof host, payload: unknown) =>
+      new Promise<unknown>((resolve) => who.client.emit("host:kick", payload as never, resolve));
+    return { booted, lobby, host, a, b, kick };
+  }
+
+  it("the host removes B: ack ok, everyone hears kicked, B is disconnected, the roster drops B, B is refused removed", async () => {
+    const { booted, lobby, host, a, b, kick } = await room();
+    expect(await kick(host, { v: PROTOCOL_VERSION, desk: 3 })).toEqual({ ok: true });
+    await until(
+      () => [host, a].every((p) => p.seen.roster?.length === 2) && b.disconnected() !== null,
+      WAIT_MS,
+      "roster 2 and B gone",
+    );
+    for (const p of [host, a, b])
+      expect(p.events).toContainEqual({ v: PROTOCOL_VERSION, kind: "kicked", desk: 3 });
+    expect(b.disconnected()).toBe("io server disconnect");
+    expect(host.seen.roster?.map((m) => m.name)).toEqual(["Ada", "Bea"]);
+    expect(await booted.server.registry.hasMember(lobby, "usr_b")).toBe(false);
+    expect(await booted.server.registry.isBlocked(lobby, "usr_b")).toBe(true);
+    const again = booted.connect({ v: PROTOCOL_VERSION, token: b.token });
+    expect(await connectError(again)).toBe("removed");
+  });
+
+  it("refuses not-host, self, no-such-desk and is-bot through the ack; nobody leaves, nothing is broadcast", async () => {
+    const { booted, lobby, host, a, kick } = await room();
+    await booted.server.registry.setBots(lobby, [{ level: "clerk" }]);
+    const bot = (await booted.server.registry.members(lobby))!.find((m) => m.isBot)!.desk;
+    const v = PROTOCOL_VERSION;
+    expect(await kick(a, { v, desk: 3 })).toEqual({ ok: false, error: "not-host" });
+    expect(await kick(host, { v, desk: 1 })).toEqual({ ok: false, error: "self" });
+    expect(await kick(host, { v, desk: 29 })).toEqual({ ok: false, error: "no-such-desk" });
+    expect(await kick(host, { v, desk: bot })).toEqual({ ok: false, error: "is-bot" });
+    expect(await booted.server.registry.members(lobby)).toHaveLength(4);
+    expect([...host.events, ...a.events].filter((e) => e.kind === "kicked")).toEqual([]);
+  });
+
+  it("refuses not-waiting while a race runs", async () => {
+    const { booted, lobby, host, kick } = await room();
+    const { registry } = booted.server;
+    await registry.withRoom(lobby, () => registry.setPhase(lobby, "running"));
+    expect(await kick(host, { v: PROTOCOL_VERSION, desk: 3 })).toEqual({
+      ok: false,
+      error: "not-waiting",
+    });
+  });
+
+  it("a malformed payload gets no ack and removes nobody", async () => {
+    const { booted, lobby, host } = await room();
+    let acked = false;
+    host.client.emit(
+      "host:kick",
+      { v: PROTOCOL_VERSION, desk: "3" } as never,
+      () => (acked = true),
+    );
+    await new Promise((r) => setTimeout(r, 150));
+    expect(acked).toBe(false);
+    expect(await booted.server.registry.members(lobby)).toHaveLength(3);
+  });
+});

@@ -46,7 +46,9 @@ export type HandshakeAuth = z.infer<typeof handshakeAuthSchema>;
 /**
  * Sent as the Socket.IO `connect_error` message when the handshake is refused. `in-progress`: the
  * room is past `waiting` and the client has no resume key. `room-full`: a spectator handshake past the
- * room's spectator cap (#616); seated players are never refused with it.
+ * room's spectator cap (#616); seated players are never refused with it. `removed` (#133): the host
+ * removed this user from this room (`host:kick`); every later handshake of the user for the room,
+ * player or spectator, is refused with it while the room lives.
  */
 export const rejectReasonSchema = z.enum([
   "version",
@@ -55,6 +57,7 @@ export const rejectReasonSchema = z.enum([
   "closed",
   "in-progress",
   "room-full",
+  "removed",
 ]);
 export type RejectReason = z.infer<typeof rejectReasonSchema>;
 
@@ -151,6 +154,32 @@ export const hostSettingsAckSchema = z.discriminatedUnion("ok", [
 ]);
 export type HostSettingsAck = z.infer<typeof hostSettingsAckSchema>;
 
+/**
+ * Client -> server, host only, `waiting` or `ended` only (#133, ARCHITECTURE 7.1): remove the human
+ * at `desk` from the room. The removed user's sockets get `event { kind: "kicked", desk }` (as the
+ * whole room does) and are disconnected; the user is refused `removed` from then on. Strict: the
+ * payload names a desk, never a user.
+ */
+export const hostKickSchema = z.strictObject({
+  v: versionSchema,
+  desk: deskSchema,
+});
+export type HostKick = z.infer<typeof hostKickSchema>;
+
+/**
+ * Acknowledgement of `host:kick`. `not-host`: the sender is not the room's host. `not-waiting`: the
+ * room is in a race (countdown, running) or gone. `no-such-desk`: nobody sits at `desk`. `is-bot`:
+ * bots leave through the bots setting (#114). `self`: the host's own desk.
+ */
+export const hostKickAckSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true) }),
+  z.object({
+    ok: z.literal(false),
+    error: z.enum(["not-host", "not-waiting", "no-such-desk", "is-bot", "self"]),
+  }),
+]);
+export type HostKickAck = z.infer<typeof hostKickAckSchema>;
+
 /** Server -> client event map. A later event is one schema plus one key here. */
 export const serverEvents = {
   welcome: welcomeSchema,
@@ -169,6 +198,7 @@ export const serverEvents = {
 export const clientEvents = {
   "host:settings": hostSettingsSchema,
   "host:start": hostStartSchema,
+  "host:kick": hostKickSchema,
   keys: keysSchema,
   abandon: abandonSchema,
   "bonus:play": bonusPlaySchema,
@@ -179,6 +209,7 @@ export const clientEvents = {
 export const clientAcks = {
   "host:settings": hostSettingsAckSchema,
   "host:start": hostStartAckSchema,
+  "host:kick": hostKickAckSchema,
 } as const satisfies Partial<Record<keyof typeof clientEvents, z.ZodType>>;
 
 /** Typed Socket.IO generics: `Server<ClientToServerEvents, ServerToClientEvents>`. */

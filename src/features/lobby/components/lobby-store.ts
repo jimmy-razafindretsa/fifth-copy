@@ -44,8 +44,10 @@ export type LobbyState = {
    * `starting`: the host pressed START; the page moves to the seat view of `raceId` (#214).
    * `spectating`: a late joiner refused `in-progress` before it was ever seated, held until the race
    * ends (#732, `joinRoom`); extension point for the phone spectator screen (#292) and the projector.
+   * `removed`: the host removed this viewer (#133, `kicked` for its desk or a `connect_error removed`);
+   * terminal like `error`, the page shows the removed docket.
    */
-  phase: "loading" | "live" | "reconnecting" | "starting" | "spectating" | "error";
+  phase: "loading" | "live" | "reconnecting" | "starting" | "spectating" | "removed" | "error";
   error: LobbyError | null;
   /** The viewer's desk, from `welcome`. */
   you: number | null;
@@ -73,6 +75,8 @@ export type LobbyEvent =
   | { type: "roster"; payload: RoomEvents["roster"] }
   | { type: "settings"; payload: RoomEvents["settings"] }
   | { type: "countdown"; payload: RoomEvents["countdown"] }
+  /** A room event (`event`); the lobby reads only `kicked` (#133). */
+  | { type: "event"; payload: RoomEvents["event"] }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
@@ -106,6 +110,9 @@ function connectError(reason: ConnectErrorReason): LobbyError | null {
     // A viewer seated before (a member refused later): a late joiner holds instead (#732).
     case "in-progress":
       return "generic";
+    // Handled before: the terminal `removed` phase (#133).
+    case "removed":
+      return null;
     // Every desk taken (#732), its own sentence (#678); a spectator past its cap is the late-join
     // hold's, never the store's.
     case "room-full":
@@ -122,8 +129,9 @@ export function lobbyErrorCopy(error: LobbyError | null): EntryError {
 }
 
 export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
-  // An error is terminal: the room refused this viewer, nothing later revives the page.
-  if (state.phase === "error") return state;
+  // An error is terminal: the room refused this viewer, nothing later revives the page. So is a removal
+  // by the host (#133): no reconnect, no late-join hold.
+  if (state.phase === "error" || state.phase === "removed") return state;
   switch (event.type) {
     case "welcome": {
       // A welcome after START (a reload or a reconnect during the countdown, #659) carries the race:
@@ -159,8 +167,15 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
       return { ...state, settings: event.payload.settings };
     case "countdown":
       return { ...state, phase: "starting", raceId: event.payload.race.raceId };
+    case "event": {
+      const { payload } = event;
+      // Another desk's removal: the roster broadcast drops its row.
+      if (payload.kind !== "kicked" || payload.desk !== state.you) return state;
+      return { ...state, phase: "removed", error: null };
+    }
     case "connect-error": {
       const { reason } = event;
+      if (reason === "removed") return { ...state, phase: "removed", error: null };
       // A late joiner (#732): refused before its first seat, it holds until the race ends; transport
       // errors keep the notice, a full room ends it. A viewer seated before keeps today's path.
       const neverSeated = state.you === null && state.phase !== "starting";
@@ -265,6 +280,9 @@ export function bindRoomSocket(
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onCountdown((payload) => dispatch({ type: "countdown", payload })),
+    socket.onEvent((payload) => {
+      if (payload.kind === "kicked") dispatch({ type: "event", payload });
+    }),
     socket.onAutoStart((payload) => dispatch({ type: "auto-start", payload, receivedAt: now() })),
     socket.onConnectError((reason) => {
       if (reloading) return;

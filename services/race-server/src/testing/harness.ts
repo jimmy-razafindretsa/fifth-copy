@@ -25,7 +25,15 @@ import { createFakeClock, createFakeScheduler, type FakeClock, type FakeSchedule
 import type { WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
-import { desksKey, membersKey, resumeIndexKey, resumeKey, roomKey, ROOMS_KEY } from "../rooms/keys";
+import {
+  blockedKey,
+  desksKey,
+  membersKey,
+  resumeIndexKey,
+  resumeKey,
+  roomKey,
+  ROOMS_KEY,
+} from "../rooms/keys";
 
 // Test-only harness for the race server's integration tests (real Redis, ARCHITECTURE testing table).
 // Fails, never skips, without Redis. Deletes only the keys of lobbies it created (shared db index).
@@ -220,6 +228,7 @@ export async function boot(
         membersKey(id),
         desksKey(id),
         resumeIndexKey(id),
+        blockedKey(id),
       ]);
       for (const id of lobbies) {
         // KEYS takes and returns full names: ioredis does not prefix a pattern.

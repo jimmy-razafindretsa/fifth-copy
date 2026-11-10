@@ -77,6 +77,7 @@ function fakeSocket() {
     onCountdown: bind("countdown"),
     onAutoStart: bind("autoStart"),
     sendHostStart: vi.fn(),
+    sendHostKick: vi.fn(),
     // #559: the seat view's typing (the lobby binds none of them)
     sendKeys: vi.fn(),
     onSnapshot: bind("snapshot"),
@@ -197,6 +198,7 @@ describe("bindRoomSocket", () => {
         "autoStart",
         "connectError",
         "countdown",
+        "event",
         "reconnected",
         "reconnecting",
         "roster",
@@ -458,6 +460,7 @@ describe("countdown and the resume key (#214 C2)", () => {
         "autoStart",
         "connectError",
         "countdown",
+        "event",
         "reconnected",
         "reconnecting",
         "roster",
@@ -1083,5 +1086,94 @@ describe("public room auto start (#814 C6)", () => {
       payload: at(SERVER_NOW),
       receivedAt: 42,
     });
+  });
+});
+
+// #133 C5: the host removed this viewer. `kicked` for its own desk, or a `connect_error removed` (a
+// reload, a second tab), puts the store in the terminal `removed` state: no reconnect, no late-join
+// hold; nothing after it revives the page.
+describe("removed (#133 C5)", () => {
+  const kicked = (desk: number): LobbyEvent => ({
+    type: "event",
+    payload: { v: PROTOCOL_VERSION, kind: "kicked", desk },
+  });
+
+  it("kicked for the viewer's desk: phase removed, error null", () => {
+    const state = run({ type: "welcome", payload: welcome(2, [ada, bob]) }, kicked(2));
+    expect(state.phase).toBe("removed");
+    expect(state.error).toBeNull();
+  });
+
+  it("kicked for another desk changes nothing (the roster drops the row)", () => {
+    const before = run({ type: "welcome", payload: welcome(1, [ada, bob]) });
+    expect(reduceLobby(before, kicked(2))).toBe(before);
+  });
+
+  it("another event kind changes nothing", () => {
+    const before = run({ type: "welcome", payload: welcome(2, [ada, bob]) });
+    const other: LobbyEvent = {
+      type: "event",
+      payload: { v: PROTOCOL_VERSION, kind: "new-host", desk: 2 },
+    };
+    expect(reduceLobby(before, other)).toBe(before);
+  });
+
+  it.each([
+    ["loading", initialLobbyState],
+    ["live", run({ type: "welcome", payload: welcome(2, [ada, bob]) })],
+    [
+      "reconnecting",
+      run({ type: "welcome", payload: welcome(2, [ada, bob]) }, { type: "reconnecting" }),
+    ],
+    ["spectating", run({ type: "connect-error", reason: "in-progress" })],
+  ] as const)("connect_error removed while %s: removed", (_, from) => {
+    expect(reduceLobby(from, { type: "connect-error", reason: "removed" }).phase).toBe("removed");
+  });
+
+  it("terminal: the server's close, a reconnect, a welcome or a roster never revive it", () => {
+    const removed = run({ type: "welcome", payload: welcome(2, [ada, bob]) }, kicked(2));
+    for (const event of [
+      { type: "server-disconnect" },
+      { type: "reconnecting" },
+      { type: "reconnected" },
+      { type: "connect-error", reason: "transport" },
+      { type: "welcome", payload: welcome(2, [ada, bob]) },
+      { type: "roster", payload: { v: PROTOCOL_VERSION, members: [ada] } },
+    ] as LobbyEvent[]) {
+      expect(reduceLobby(removed, event)).toBe(removed);
+    }
+  });
+
+  it("bindRoomSocket turns the socket's events into lobby events", () => {
+    const { socket, fire } = fakeSocket();
+    const dispatch = vi.fn();
+    bindRoomSocket(socket, dispatch, { versionReload: { reload: vi.fn(), storage: null } });
+    const payload = { v: PROTOCOL_VERSION, kind: "kicked", desk: 2 };
+    fire("event", payload);
+    expect(dispatch).toHaveBeenCalledWith({ type: "event", payload });
+  });
+
+  it("the late-join hold does not hold a removed viewer: no spectator mint, no retry", async () => {
+    const { socket, fire } = fakeSocket();
+    const mint = vi.fn(async () => ({ ok: true as const, url: "ws://race", token: "t" }));
+    const setTimer = vi.fn();
+    const events: LobbyEvent[] = [];
+    joinRoom({
+      mint,
+      connect: async () => socket,
+      attach: (s) =>
+        bindRoomSocket(s, (e) => events.push(e), {
+          versionReload: { reload: vi.fn(), storage: null },
+        }),
+      dispatch: (e) => events.push(e),
+      setTimer,
+    });
+    await vi.waitFor(() => expect(mint).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    fire("connectError", "removed");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(events.reduce(reduceLobby, initialLobbyState).phase).toBe("removed");
+    expect(mint).toHaveBeenCalledTimes(1);
+    expect(setTimer).not.toHaveBeenCalled();
   });
 });

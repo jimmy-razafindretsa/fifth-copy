@@ -14,11 +14,12 @@ const HOLD_FACTOR = 3;
 /**
  * How long COPIED holds, in ms, from the computed `--motion-duration-slow` token: 600ms x 3. Under
  * reduced motion the token is `0ms`, so the hold is 0 and COPIED stays until the button blurs (a
- * confirmation, not motion: it must stay readable).
+ * confirmation, not motion: it must stay readable). `factor`: another hold of the same recipe (the
+ * host's CONFIRM holds five, #133).
  */
-export function copiedHoldMs(token: string): number {
+export function copiedHoldMs(token: string, factor = HOLD_FACTOR): number {
   const match = /^(\d*\.?\d+)(ms|s)$/.exec(token.trim());
-  return match ? Number(match[1]) * (match[2] === "s" ? 1000 : 1) * HOLD_FACTOR : 0;
+  return match ? Number(match[1]) * (match[2] === "s" ? 1000 : 1) * factor : 0;
 }
 
 export type CopyDeps = {

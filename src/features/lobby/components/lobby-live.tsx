@@ -29,6 +29,14 @@ import {
   type LobbyState,
 } from "./lobby-store";
 import { PlayerList, PlayerListSkeleton } from "./player-list";
+import {
+  canRemove,
+  confirmHoldMs,
+  IDLE_REMOVE,
+  RemoveButton,
+  type RemoveState,
+} from "./remove-control";
+import { RemovedDocket } from "./removed-docket";
 import { SeatRing } from "./seat-ring";
 import { InviteDocket } from "./invite-docket";
 import { InviteLinkRow } from "./invite-link-row";
@@ -114,6 +122,10 @@ type ViewProps = {
    * is read once from the device clock. Ignored while no instant is pending.
    */
   autoStartS?: number | null;
+  /** The host's removal of a typist (#133): which REMOVE reads CONFIRM, the pending one, the refusal. */
+  remove?: RemoveState;
+  onRemove?: (desk: number) => void;
+  onRemoveBlur?: (desk: number) => void;
 };
 
 /** The viewer's own row says whether they host (`Member.isHost`, protocol v4). */
@@ -138,7 +150,12 @@ export function LobbyLiveView({
   onSetting,
   reset = null,
   autoStartS,
+  remove = IDLE_REMOVE,
+  onRemove,
+  onRemoveBlur,
 }: ViewProps) {
+  // removed by the host (#133): the docket replaces the room, nothing of it stays on the page
+  if (room.phase === "removed") return <RemovedDocket labels={labels.remove.docket} />;
   const state: LobbyState =
     room.settings && lobbyType ? { ...room, settings: { ...room.settings, lobbyType } } : room;
   const known =
@@ -172,6 +189,18 @@ export function LobbyLiveView({
           onChange: onSetting,
         })
       : null;
+  // the host removes typists while the room is live (waiting, or ended before the next START)
+  const removable = state.phase === "live" && isHost(state);
+  const removeTag = (member: LobbyState["members"][number]) =>
+    canRemove(member, state.you, true) ? (
+      <RemoveButton
+        member={member}
+        state={remove}
+        labels={labels.remove}
+        onPress={onRemove}
+        onBlur={onRemoveBlur}
+      />
+    ) : null;
   return (
     <div className={styles.room}>
       <div className={styles.dockets}>
@@ -244,7 +273,20 @@ export function LobbyLiveView({
           {state.phase === "loading" || state.phase === "spectating" ? (
             <PlayerListSkeleton labels={labels} />
           ) : null}
-          {known ? <PlayerList members={state.members} you={state.you} labels={labels} /> : null}
+          {known ? (
+            <PlayerList
+              members={state.members}
+              you={state.you}
+              labels={labels}
+              tags={removable ? removeTag : undefined}
+            />
+          ) : null}
+          {/* a refused removal (#133): the roll's 7.4 inline error line */}
+          {state.phase === "live" && remove.error ? (
+            <div className={styles.error}>
+              <InlineError prefix={errors.prefix}>{labels.remove.errors[remove.error]}</InlineError>
+            </div>
+          ) : null}
           {state.phase === "error" ? (
             <div className={styles.error}>
               <InlineError prefix={errors.prefix}>
@@ -301,6 +343,9 @@ export function LobbyLive({
   const [start, setStart] = useState<StartState>(IDLE_START);
   const [form, setForm] = useState<FormState>(IDLE_FORM);
   const [revision, setRevision] = useState(0);
+  const [remove, setRemove] = useState<RemoveState>(IDLE_REMOVE);
+  // CONFIRM's hold (#133): cleared by the second press, a blur or the unmount
+  const removeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // the form's state without waiting for a render: a blur and a click in one tick send one patch
   const formRef = useRef<FormState>(IDLE_FORM);
   const socketRef = useRef<RoomSocket | null>(null);
@@ -369,6 +414,50 @@ export function LobbyLive({
     );
   }
 
+  useEffect(
+    () => () => {
+      if (removeTimer.current) clearTimeout(removeTimer.current);
+    },
+    [],
+  );
+
+  function clearRemoveTimer() {
+    if (removeTimer.current) clearTimeout(removeTimer.current);
+    removeTimer.current = null;
+  }
+
+  // The first press turns REMOVE into CONFIRM for slow x 5 (until blur under reduced motion), the second
+  // sends `host:kick`; on success the roster and the `kicked` event drop the row.
+  async function onRemove(desk: number) {
+    const socket = socketRef.current;
+    if (!socket || remove.pending !== null) return;
+    if (remove.confirm !== desk) {
+      clearRemoveTimer();
+      setRemove({ confirm: desk, pending: null, error: null });
+      // the tokens live on :root, which also carries `data-motion="reduce"` (tokens.css)
+      const hold = confirmHoldMs(
+        getComputedStyle(document.documentElement).getPropertyValue("--motion-duration-slow"),
+      );
+      if (hold > 0) {
+        removeTimer.current = setTimeout(() => {
+          removeTimer.current = null;
+          setRemove((r) => (r.confirm === desk && r.pending === null ? IDLE_REMOVE : r));
+        }, hold);
+      }
+      return;
+    }
+    clearRemoveTimer();
+    setRemove({ confirm: desk, pending: desk, error: null });
+    const ack = await socket.sendHostKick(desk);
+    setRemove(ack.ok ? IDLE_REMOVE : { confirm: null, pending: null, error: ack.error });
+  }
+
+  // under reduced motion CONFIRM has no timer: it goes when focus leaves the button
+  function onRemoveBlur(desk: number) {
+    if (removeTimer.current) return;
+    setRemove((r) => (r.confirm === desk && r.pending === null ? { ...r, confirm: null } : r));
+  }
+
   function dispatchForm(event: FormEvent) {
     const next = reduceForm(formRef.current, event);
     formRef.current = next;
@@ -419,6 +508,9 @@ export function LobbyLive({
       onSetting={onSetting}
       reset={reset}
       autoStartS={autoStartS}
+      remove={remove}
+      onRemove={onRemove}
+      onRemoveBlur={onRemoveBlur}
     />
   );
 }

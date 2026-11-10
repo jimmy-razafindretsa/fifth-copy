@@ -299,6 +299,30 @@ export const en = {
     raceInProgress: "RACE IN PROGRESS · YOU ARE SEATED WHEN IT ENDS",
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
+    /**
+     * The host removes a typist (#133, bible 14.3): the row's 7.1 secondary REMOVE, its in-place CONFIRM,
+     * the roll's 7.4 error line on a refusal, and the removed viewer's docket.
+     */
+    remove: {
+      button: "REMOVE",
+      confirm: "CONFIRM",
+      /** Accessible names: idle, then while CONFIRM holds. */
+      name: "REMOVE {name}",
+      confirmName: "CONFIRM · REMOVE {name}",
+      errors: {
+        "not-host": "Only the host can remove a typist.",
+        "not-waiting": "Typists can only be removed between races.",
+        "no-such-desk": "This typist has already left the room.",
+        "is-bot": "A bot leaves through the race settings.",
+        self: "The host cannot remove themselves.",
+        timeout: "The room did not answer. Try again.",
+      },
+      docket: {
+        stamp: "REMOVED",
+        sentence: "The host removed you from this room's roll. Your file is intact.",
+        back: "BACK TO THE FRONT DESK →",
+      },
+    },
     /** The host's START (#214, bible 7.1 primary; its layout moves with #498) and its 7.4 lines. */
     start: {
       button: "START",

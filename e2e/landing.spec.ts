@@ -80,6 +80,11 @@ const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']"
  */
 async function ready(page: Page) {
   await page.goto("/");
+  await hydrated(page);
+}
+
+/** Waits until the loaded landing has hydrated (`ready` without the navigation, e.g. after a reload). */
+async function hydrated(page: Page) {
   await expect(feedVideo(page)).toHaveAttribute("data-feed", /^(armed|near)$/, {
     timeout: HYDRATION_WAIT,
   });
@@ -203,12 +208,13 @@ test.describe("landing page (#497)", () => {
     expect(night).toBe(await role(page, "--color-bg"));
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.getByRole("button", { name: "NIGHT SHIFT" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await page.getByRole("button", { name: "NIGHT SHIFT" }).click();
+    // #855: the toggle's action is a client function, so a click before hydration is lost (mobile under
+    // load): gate the second click on hydration and on the toggle's restored pressed state
+    await hydrated(page);
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await toggle.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light", AFTER_ACTION);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
   });
 
   test("C5 the typing strip stamps ACCEPTED with WPM, RETURNED with errors, and resets", async ({

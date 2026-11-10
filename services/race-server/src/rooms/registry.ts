@@ -137,6 +137,10 @@ export type UpdateSettingsResult =
   | { ok: false; reason: "no-room" | "not-host" | "not-waiting" | "invalid" };
 export type SetBotsResult =
   { ok: true; members: Member[] } | { ok: false; reason: "no-room" | "not-waiting" | "invalid" };
+/** `changed` is false when the room already held that type (#815): nothing written. */
+export type SetLobbyTypeResult =
+  | { ok: true; settings: RaceSettings; changed: boolean }
+  | { ok: false; reason: "no-room" | "not-waiting" };
 
 export type RoomRegistry = {
   /** Idempotent: a room keeps the fields (settings included) of its first open. */
@@ -158,6 +162,12 @@ export type RoomRegistry = {
    * phase is `waiting`. `open` and a `bots` patch of `updateSettings` seat through the same rule.
    */
   setBots(lobbyId: string, bots: { level: BotLevel }[]): Promise<SetBotsResult>;
+  /**
+   * The room's visibility (#815, ADR 0008): the web filed `Lobby.type` and tells the room. Only while
+   * the phase is `waiting`: `settings.lobbyType` is rewritten in one MULTI with the TTLs, every other
+   * setting and every seat untouched. Not the host's socket patch: `updateSettings` never carries it.
+   */
+  setLobbyType(lobbyId: string, lobbyType: RaceSettings["lobbyType"]): Promise<SetLobbyTypeResult>;
   members(lobbyId: string): Promise<Member[] | null>;
   /** The room's settings; null for an unknown room; rejects when the stored field is missing or corrupt. */
   settings(lobbyId: string): Promise<RaceSettings | null>;
@@ -600,6 +610,21 @@ export function createRoomRegistry({
         const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(settings));
         await withTtl(lobbyId, seatBots(tx, lobbyId, seats, parsed.data, settings.language));
         return { ok: true, members: toMembers(seats, room.hostUserId) };
+      }),
+
+    setLobbyType: (lobbyId, lobbyType) =>
+      serial(lobbyId, async (): Promise<SetLobbyTypeResult> => {
+        const room = await readRoom(lobbyId);
+        if (!room) return { ok: false, reason: "no-room" };
+        if (parsePhase(room.phase) !== "waiting") return { ok: false, reason: "not-waiting" };
+        const current = parseSettings(lobbyId, room.settings);
+        if (current.lobbyType === lobbyType) return { ok: true, settings: current, changed: false };
+        const settings = raceSettingsSchema.parse({ ...current, lobbyType });
+        await withTtl(
+          lobbyId,
+          redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(settings)),
+        );
+        return { ok: true, settings, changed: true };
       }),
 
     members: async (lobbyId) => {

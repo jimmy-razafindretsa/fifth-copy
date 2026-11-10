@@ -20,6 +20,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { createRaceServer, type RaceServer } from "../app";
+import { internalHeaders } from "../http/sign";
 import { createFakeClock, createFakeScheduler, type FakeClock, type FakeScheduler } from "../clock";
 import type { WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
@@ -269,6 +270,27 @@ export function connectError(client: Client): Promise<string> {
  * that a hang still fails, and short waits expired on a busy machine (several suites at once).
  */
 export const WAIT_MS = 10_000;
+
+/**
+ * Files a room's visibility over the signed `POST /internal/rooms/type` (#815), as the web's
+ * `setLobbyType` does; resolves with the parsed JSON answer.
+ */
+export async function postRoomType(
+  booted: Pick<Booted, "url" | "clock">,
+  lobbyId: string,
+  lobbyType: RaceSettings["lobbyType"],
+): Promise<{ status: number; body: unknown }> {
+  const rawBody = JSON.stringify({ v: PROTOCOL_VERSION, lobbyId, lobbyType });
+  const res = await fetch(`${booted.url}/internal/rooms/type`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...internalHeaders({ rawBody, secret: SECRET, nowMs: booted.clock.now() }),
+    },
+    body: rawBody,
+  });
+  return { status: res.status, body: await res.json() };
+}
 
 /** Polls `check` every 20 ms until it is true or `ms` elapses. */
 export async function until(

@@ -948,3 +948,95 @@ describe("room registry: race again (#143)", () => {
     for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(ENDED_GRACE_TTL_S);
   });
 });
+
+describe("room registry: setLobbyType (#815 C2)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function seededRoom(registry: RoomRegistry) {
+    const lobbyId = lobby();
+    await registry.open({ lobbyId, code: "ABCD", hostUserId: "host", settings: custom });
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    await registry.join(lobbyId, { userId: "b", name: "Bob" });
+    return lobbyId;
+  }
+
+  it("rewrites only settings.lobbyType of a waiting room, in one MULTI with the room's TTLs", async () => {
+    const { registry } = setup();
+    const lobbyId = await seededRoom(registry);
+    const seatsBefore = await redis.hgetall(membersKey(lobbyId));
+    const groups = recordCommands();
+    expect(await registry.setLobbyType(lobbyId, "public")).toEqual({
+      ok: true,
+      changed: true,
+      settings: { ...custom, lobbyType: "public" },
+    });
+    expect(await registry.settings(lobbyId)).toEqual({ ...custom, lobbyType: "public" });
+    // Every seat untouched, bots included.
+    expect(await redis.hgetall(membersKey(lobbyId))).toEqual(seatsBefore);
+    const writing = groups().filter(({ commands }) =>
+      commands.some(([name]) => name === "hset" || name === "hdel"),
+    );
+    expect(writing).toHaveLength(1);
+    expect(writing[0]!.atomic).toBe(true);
+    expect(writing[0]!.commands).toContainEqual([
+      "hset",
+      roomKey(lobbyId),
+      "settings",
+      JSON.stringify({ ...custom, lobbyType: "public" }),
+    ]);
+    for (const key of [roomKey(lobbyId), membersKey(lobbyId)])
+      expect(writing[0]!.commands).toContainEqual(["expire", key, String(ROOM_TTL_S)]);
+    for (const ttl of await ttls(lobbyId)) expect(ttl).toBeGreaterThan(0);
+  });
+
+  it("the value already stored answers ok, changed: false, and writes nothing", async () => {
+    const { registry } = setup();
+    const lobbyId = await seededRoom(registry);
+    const groups = recordCommands();
+    expect(await registry.setLobbyType(lobbyId, "private")).toEqual({
+      ok: true,
+      changed: false,
+      settings: custom,
+    });
+    expect(groups().some(({ commands }) => commands.some(([name]) => name === "hset"))).toBe(false);
+  });
+
+  it.each(["countdown", "running", "ended"] as const)(
+    "a room in %s answers not-waiting and changes nothing",
+    async (phase) => {
+      const { registry } = setup();
+      const lobbyId = await seededRoom(registry);
+      await registry.withRoom(lobbyId, () => registry.setPhase(lobbyId, phase));
+      expect(await registry.setLobbyType(lobbyId, "public")).toEqual({
+        ok: false,
+        reason: "not-waiting",
+      });
+      expect(await registry.settings(lobbyId)).toEqual(custom);
+    },
+  );
+
+  it("an unknown room answers no-room and opens nothing", async () => {
+    const { registry } = setup();
+    const lobbyId = lobby();
+    expect(await registry.setLobbyType(lobbyId, "public")).toEqual({
+      ok: false,
+      reason: "no-room",
+    });
+    expect(await redis.exists(roomKey(lobbyId), membersKey(lobbyId))).toBe(0);
+  });
+
+  it("runs in the room's queue: after a pending settings patch, never over it", async () => {
+    const { registry } = setup();
+    const lobbyId = await seededRoom(registry);
+    const [, typed] = await Promise.all([
+      registry.updateSettings(lobbyId, "host", { timerS: 60 }),
+      registry.setLobbyType(lobbyId, "public"),
+    ]);
+    expect(typed).toMatchObject({ ok: true, settings: { timerS: 60, lobbyType: "public" } });
+    expect(await registry.settings(lobbyId)).toEqual({
+      ...custom,
+      timerS: 60,
+      lobbyType: "public",
+    });
+  });
+});

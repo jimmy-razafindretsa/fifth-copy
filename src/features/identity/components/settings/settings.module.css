@@ -369,3 +369,17 @@
     grid-template-columns: 96px 1fr;
   }
 }
+
+/* the machine specimen (#638, bible 7.7a): an object on the paper backdrop, the same in both themes */
+.machinePlate {
+  border: 2px solid var(--color-fg);
+  background: var(--color-band-fg);
+  padding: 16px;
+  min-width: 0;
+}
+
+.machinePlate > div {
+  width: 100%;
+  max-width: 620px;
+  margin-inline: auto;
+}

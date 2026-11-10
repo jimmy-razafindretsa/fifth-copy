@@ -6,7 +6,7 @@ import { firstLoadFiles } from "../../../scripts/bundle-budget";
 // Contracts of #561 C7 and C9 (ADR 0013): three.js lives only in src/features/race-3d, loaded lazily by
 // the race route after the HUD; the HUD route itself never ships it. Two checks:
 // - sources: the race feature and the race route import neither `three` nor race-3d statically, and the
-//   route composes only the race and lobby features, through their index (dependency-cruiser enforces
+//   route composes only the race, lobby and identity features, through their index (dependency-cruiser enforces
 //   index-only; this pins which features);
 // - build: after `npm run build`, no first-load chunk of `/race/[raceId]` carries three.js (its
 //   `THREE.`-prefixed messages survive minification). Without a build this half is skipped; the C7
@@ -65,7 +65,7 @@ describe("the race route ships no three.js (#561 C7, C9)", () => {
     });
   }
 
-  it("src/app/race composes only @/features/race and @/features/lobby (and race-3d lazily, #563), through their index", () => {
+  it("src/app/race composes only @/features/race, @/features/lobby and @/features/identity (the viewer's preferences, #638; race-3d lazily, #563), through their index", () => {
     const features = ROUTE_FILES.flatMap((f) =>
       specifiers(readFileSync(f, "utf8")).filter((s) => s.spec.startsWith("@/features/")),
     );
@@ -73,7 +73,7 @@ describe("the race route ships no three.js (#561 C7, C9)", () => {
     for (const { spec, dynamic } of features) {
       if (spec === "@/features/race-3d")
         expect(dynamic, "race-3d only through import()").toBe(true);
-      else expect(["@/features/race", "@/features/lobby"]).toContain(spec);
+      else expect(["@/features/race", "@/features/lobby", "@/features/identity"]).toContain(spec);
     }
   });
 

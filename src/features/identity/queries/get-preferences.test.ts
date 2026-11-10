@@ -44,6 +44,7 @@ describe("getPreferences defaults (#66 C2)", () => {
       theme: "SYSTEM",
       locale: "fr",
       sound: true,
+      machineSkin: "teleprinter",
     });
   });
 
@@ -55,6 +56,7 @@ describe("getPreferences defaults (#66 C2)", () => {
       theme: "SYSTEM",
       locale: "en",
       sound: true,
+      machineSkin: "teleprinter",
     });
   });
 
@@ -100,6 +102,7 @@ describe.skipIf(!testDatabaseUrl)(
         theme: "DARK",
         locale: "fr",
         sound: false,
+        machineSkin: "teleprinter",
       });
       await db.preference.update({ where: { userId: viewer.id }, data: { locale: "EN" } });
       expect((await getPreferences(viewer)).locale).toBe("en");

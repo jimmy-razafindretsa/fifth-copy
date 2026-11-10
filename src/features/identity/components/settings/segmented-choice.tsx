@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import type { UpdatePreferences } from "../../actions/update-preferences";
 import type { PreferencesPatch } from "../../schema";
 import { SaveError, SaveState, type StatusLabels } from "./status-line";
@@ -11,7 +11,7 @@ export type ChoiceOption<T extends string> = { value: T; label: string; lang?: s
 
 export type SegmentedSectionProps<T extends string> = {
   /** The preference key this section files. */
-  name: "theme" | "locale" | "sound";
+  name: "theme" | "locale" | "sound" | "machineSkin";
   title: string;
   hint?: string;
   options: readonly ChoiceOption<T>[];
@@ -22,6 +22,8 @@ export type SegmentedSectionProps<T extends string> = {
   status: StatusLabels;
   /** `/design` specimens start in a given save state (#66 C7). */
   initialStatus?: SaveStatus;
+  /** A decorative picture of the shown value under the control (the machine specimen, #638). */
+  specimen?: (value: T) => ReactNode;
 };
 
 /**
@@ -79,6 +81,7 @@ export function SegmentedSection<T extends string>(props: SegmentedSectionProps<
         ))}
       </div>
       {status === "error" && <SaveError id={errorId} labels={labels} />}
+      {props.specimen?.(value)}
     </section>
   );
 }

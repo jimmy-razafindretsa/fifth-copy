@@ -290,6 +290,17 @@ export const PREFERENCE_THEMES = ["LIGHT", "DARK", "SYSTEM"] as const;
 export type PreferenceTheme = (typeof PREFERENCE_THEMES)[number];
 
 /**
+ * The seat-view machine skins a viewer may pick (#638, bible 7.7a): identity's own list, kept equal to the
+ * race feature's `machineSkinIds` by `preferences.test.ts` (a new skin is registered there, then here).
+ * `teleprinter` is the default and the column's default.
+ */
+export const PREFERENCE_MACHINE_SKINS = ["teleprinter"] as const;
+export type PreferenceMachineSkin = (typeof PREFERENCE_MACHINE_SKINS)[number];
+export const DEFAULT_MACHINE_SKIN: PreferenceMachineSkin = "teleprinter";
+/** A stored or sent skin id; anything else is refused (the patch) or reads the default (the row). */
+export const machineSkinSchema = z.enum(PREFERENCE_MACHINE_SKINS);
+
+/**
  * `updatePreferences` input (#66 C1): the single list of preference keys. Every key is optional, a
  * `null` layout clears the choice, and unknown keys are refused (`strict`): the target is always the
  * viewer, never an id from the input. Adding a preference is one line here plus its column.
@@ -300,6 +311,7 @@ export const preferencesPatch = z
     theme: z.enum(PREFERENCE_THEMES).optional(),
     locale: z.enum(LOCALES).optional(),
     sound: z.boolean().optional(),
+    machineSkin: machineSkinSchema.optional(),
   })
   .strict();
 export type PreferencesPatch = z.infer<typeof preferencesPatch>;
@@ -310,4 +322,5 @@ export type Preferences = {
   theme: PreferenceTheme;
   locale: Locale;
   sound: boolean;
+  machineSkin: PreferenceMachineSkin;
 };

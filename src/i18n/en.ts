@@ -621,6 +621,12 @@ export const en = {
     theme: { LIGHT: "LIGHT", DARK: "DARK", SYSTEM: "SYSTEM" },
     language: { en: "ENGLISH", fr: "FRANÇAIS" },
     sound: { on: "ON", off: "OFF", hint: "Key clacks and the carriage bell during a race." },
+    /** The seat-view machine (#638, bible 7.7a): one name per registered skin of `machineSkinIds`. */
+    machine: {
+      title: "MACHINE",
+      hint: "The machine on your desk during a race.",
+      skin: { teleprinter: "TELEPRINTER" },
+    },
     status: {
       pending: "FILING…",
       saved: "FILED",

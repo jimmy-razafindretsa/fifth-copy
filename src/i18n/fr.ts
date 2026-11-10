@@ -602,6 +602,11 @@ export const fr = {
       off: "NON",
       hint: "Le cliquetis des touches et la cloche du chariot pendant une course.",
     },
+    machine: {
+      title: "MACHINE",
+      hint: "La machine sur ton bureau pendant une course.",
+      skin: { teleprinter: "TÉLÉSCRIPTEUR" },
+    },
     status: {
       pending: "CLASSEMENT…",
       saved: "CLASSÉ",

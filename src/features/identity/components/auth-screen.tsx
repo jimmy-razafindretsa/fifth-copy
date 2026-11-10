@@ -12,13 +12,15 @@ import { ProviderButtons } from "./provider-buttons";
 
 export type AuthMode = "sign-in" | "sign-up";
 
-/** The routes of the two screens and the privacy page (ARCHITECTURE 8.1; `/privacy` is post-v1). */
-export const AUTH_LINKS = {
+/**
+ * The routes of the form screens (ARCHITECTURE 8.1). The privacy page is post-v1 (#76): a link appears
+ * when its route ships (bible 14.3, #875), so `privacy` comes back here once its `page.tsx` exists.
+ */
+export const AUTH_LINKS: { signIn: string; signUp: string; recover: string; privacy?: string } = {
   signIn: "/sign-in",
   signUp: "/sign-up",
   recover: "/recover",
-  privacy: "/privacy",
-} as const;
+};
 
 type Messages = Awaited<ReturnType<typeof getT>>;
 
@@ -64,8 +66,8 @@ export function authFormLabels(t: Messages, mode: AuthMode): AuthFormLabels {
  * `/sign-in` and `/sign-up` (#36 C8, bible 14.3 extension "Sign-in and sign-up"): the red kicker and the
  * Stardos H1, one sentence, then one paper docket (header row `FORM 1-A` + ink tag; the OAuth callback
  * error banner when the provider sent the visitor back; the username form; OR; GitHub, Discord and Google
- * with the age line; the link to the other screen), the guest docket and the privacy link. No email field,
- * no forgot-password path (R152, R153).
+ * with the age line; the link to the other screen), the guest docket and, once its page ships, the privacy
+ * link (#875). No email field, no forgot-password path (R152, R153).
  */
 export async function AuthScreen({
   mode,
@@ -131,9 +133,11 @@ export async function AuthScreen({
           </p>
         </div>
         <GuestCta labels={t.auth.guest} />
-        <a href={AUTH_LINKS.privacy} className={styles.privacy}>
-          {t.auth.privacy}
-        </a>
+        {AUTH_LINKS.privacy ? (
+          <a href={AUTH_LINKS.privacy} className={styles.privacy}>
+            {t.auth.privacy}
+          </a>
+        ) : null}
       </div>
     </section>
   );

@@ -1,7 +1,15 @@
 import Image from "next/image";
 import { getT } from "@/i18n";
-import { LINKS, SOCIAL_LINKS } from "../links";
+import { LINKS, SOCIAL_LINKS, type SocialLink } from "../links";
 import styles from "./footer.module.css";
+
+type Messages = Awaited<ReturnType<typeof getT>>;
+type Props = {
+  brand: Messages["brand"];
+  labels: Messages["landing"]["footer"];
+  links?: typeof LINKS;
+  social?: readonly SocialLink[];
+};
 
 /**
  * Footer (bible 14.1 item 10): brand column, PLAY / LEARN / AEGIS CORP. columns, social buttons, the gold
@@ -9,35 +17,48 @@ import styles from "./footer.module.css";
  */
 export async function LandingFooter() {
   const t = await getT();
-  const f = t.landing.footer;
+  return <FooterView brand={t.brand} labels={t.landing.footer} />;
+}
+
+/**
+ * The footer from its labels. A link appears when its route ships (#875): an entry whose href is not in
+ * `links` is left out, a column left with no entry is not rendered (heading included), and the social row
+ * is not rendered while `social` is empty.
+ */
+export function FooterView({ brand, labels: f, links = LINKS, social = SOCIAL_LINKS }: Props) {
   const columns = [
     {
       title: f.play,
       links: [
-        [f.links.quickRace, LINKS.play],
-        [f.links.createPrivateRace, LINKS.play],
-        [f.links.joinWithCode, LINKS.play],
-        [f.links.locker, LINKS.locker],
+        [f.links.quickRace, links.play],
+        [f.links.createPrivateRace, links.play],
+        [f.links.joinWithCode, links.play],
+        [f.links.locker, links.locker],
       ],
     },
     {
       title: f.learn,
       links: [
-        [f.links.guide, LINKS.guide],
-        [f.links.teachers, LINKS.teachers],
-        [f.links.profile, LINKS.profile],
+        [f.links.guide, links.guide],
+        [f.links.teachers, links.teachers],
+        [f.links.profile, links.profile],
       ],
     },
     {
       title: f.aegis,
       links: [
-        [f.links.about, LINKS.about],
-        [f.links.privacy, LINKS.privacy],
-        [f.links.terms, LINKS.terms],
-        [f.links.contact, LINKS.contact],
+        [f.links.about, links.about],
+        [f.links.privacy, links.privacy],
+        [f.links.terms, links.terms],
+        [f.links.contact, links.contact],
       ],
     },
-  ] as const;
+  ]
+    .map((column) => ({
+      title: column.title,
+      links: column.links.filter((entry): entry is [string, string] => entry[1] !== undefined),
+    }))
+    .filter((column) => column.links.length > 0);
 
   return (
     <footer className={styles.footer}>
@@ -49,10 +70,10 @@ export async function LandingFooter() {
               src="/brand/wordmark-red-on-ink.svg"
               width={217}
               height={87}
-              alt={t.brand.wordmarkAlt}
+              alt={brand.wordmarkAlt}
             />
           </div>
-          <div className={styles.tagline}>{t.brand.tagline}</div>
+          <div className={styles.tagline}>{brand.tagline}</div>
           <p className={styles.about}>{f.about}</p>
         </div>
         {columns.map((column) => (
@@ -67,23 +88,25 @@ export async function LandingFooter() {
         ))}
       </div>
       <div className={styles.row}>
-        <ul className={styles.social}>
-          {SOCIAL_LINKS.map((social) => (
-            <li key={social.key}>
-              <a
-                href={social.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.socialLink}
-              >
-                <span className={styles.socialTag} aria-hidden="true">
-                  {social.tag}
-                </span>
-                {f.social[social.key]}
-              </a>
-            </li>
-          ))}
-        </ul>
+        {social.length > 0 ? (
+          <ul className={styles.social}>
+            {social.map((entry) => (
+              <li key={entry.key}>
+                <a
+                  href={entry.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.socialLink}
+                >
+                  <span className={styles.socialTag} aria-hidden="true">
+                    {entry.tag}
+                  </span>
+                  {f.social[entry.key]}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <div className={styles.aegis}>
           {f.builtBy}
           <br />

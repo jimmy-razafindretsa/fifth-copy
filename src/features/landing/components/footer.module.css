@@ -150,6 +150,11 @@
   text-align: center;
 }
 
+/* no social row while SOCIAL_LINKS is empty (#875): the stamp keeps the reference's right-hand place */
+.aegis:only-child {
+  margin-left: auto;
+}
+
 .bar {
   display: flex;
   flex-wrap: wrap;

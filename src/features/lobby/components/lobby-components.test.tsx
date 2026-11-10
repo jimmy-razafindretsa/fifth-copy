@@ -636,7 +636,12 @@ describe("public room auto start (#814 C7)", () => {
   it("armed: one polite announcement with the seconds at arrival; none without an instant", () => {
     expect(polite(render(armed(2), 40))).toContain("The race starts by itself in 45 seconds.");
     expect(polite(render(armed(2, 41), 40))).toContain("The race starts by itself in 41 seconds.");
-    expect(polite(view(live([host, guest], 2)))).toEqual(["2 players in the room", ""]);
+    expect(polite(view(live([host, guest], 2)))).toEqual(["2 players in the room"]);
+    // a public room keeps its (empty) second region mounted, so the arming is announced
+    expect(polite(render({ ...armed(2), autoStart: NO_AUTO_START }))).toEqual([
+      "2 players in the room",
+      "",
+    ]);
     expect(status(view(live([host, guest], 2)))).toBe(labels.waiting);
   });
 

@@ -255,10 +255,13 @@ export function LobbyLiveView({
           <p aria-live="polite" className={styles.srOnly}>
             {known ? playersLabel(labels, state.members.length) : ""}
           </p>
-          {/* the automatic start's arrival and drop, once each (#814); the ticking figure is never live */}
-          <p aria-live="polite" className={styles.srOnly}>
-            {announcement}
-          </p>
+          {/* a public room's automatic start, its arrival and drop once each (#814); the ticking figure
+              is never live, and a private room has no second region */}
+          {state.settings?.lobbyType === "public" ? (
+            <p aria-live="polite" className={styles.srOnly}>
+              {announcement}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

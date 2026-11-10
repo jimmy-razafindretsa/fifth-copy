@@ -459,6 +459,14 @@ export const en = {
       back: "BACK TO THE WAITING ROOM →",
     },
     abandon: { abandon: "ABANDON", confirm: "CONFIRM · REASSIGN ME" },
+    sound: {
+      label: "SOUND",
+      off: "OFF",
+      on: "ON",
+      pending: "FILING…",
+      errorPrefix: "RETURNED ·",
+      error: "That change was not filed. Try again.",
+    },
     /** The exit dockets (#233, bible 7.3, 7.4): Reassigned after ABANDON, Asleep at desk after the idle kick. */
     exit: {
       stamp: { abandoned: "REASSIGNED", asleep: "ASLEEP AT DESK" },

@@ -33,7 +33,8 @@ export async function updatePreferences(patch: unknown): Promise<UpdatePreferenc
   };
   await db.preference.upsert({
     where: { userId: viewer.id },
-    create: { userId: viewer.id, ...data },
+    // a first row starts muted (#243) whatever the column's default: sound is opt-in for classrooms
+    create: { userId: viewer.id, sound: false, ...data },
     update: data,
   });
   await writePreferenceCookies({ theme: parsed.data.theme, locale });

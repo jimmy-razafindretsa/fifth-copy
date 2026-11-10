@@ -34,6 +34,8 @@ test.describe("#66 settings visual baselines", () => {
       await stabilize(page);
       await openSettings(page);
       await choose(page, "KEYBOARD LAYOUT", "AZERTY");
+      // #243 made sound opt-in (OFF by default): the baseline keeps its ON segment
+      await choose(page, "SOUND", "ON");
       // the save writes the stored theme as the cookie: put the shot's scheme back
       await choose(page, "THEME", scheme === "dark" ? "DARK" : "LIGHT");
       await page.reload();

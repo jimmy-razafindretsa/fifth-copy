@@ -109,7 +109,9 @@ function sounds(): Record<"clack" | "jam" | "stamp", Float32Array> {
 /** 16-bit mono PCM WAV. */
 function wav(samples: Float32Array): Buffer {
   const data = Buffer.alloc(samples.length * 2);
-  samples.forEach((s, i) => data.writeInt16LE(Math.round(Math.max(-1, Math.min(1, s)) * 32767), i * 2));
+  samples.forEach((s, i) =>
+    data.writeInt16LE(Math.round(Math.max(-1, Math.min(1, s)) * 32767), i * 2),
+  );
   const head = Buffer.alloc(44);
   head.write("RIFF", 0);
   head.writeUInt32LE(36 + data.length, 4);
@@ -134,8 +136,22 @@ function main() {
     const src = path.join(tmp, `${name}.wav`);
     fs.writeFileSync(src, wav(samples));
     const ff = ["-hide_banner", "-loglevel", "error", "-y", "-i", src, "-map_metadata", "-1"];
-    execFileSync("ffmpeg", [...ff, "-c:a", "libvorbis", "-q:a", "3", path.join(out, `${name}.ogg`)]);
-    execFileSync("ffmpeg", [...ff, "-c:a", "libmp3lame", "-b:a", "64k", path.join(out, `${name}.mp3`)]);
+    execFileSync("ffmpeg", [
+      ...ff,
+      "-c:a",
+      "libvorbis",
+      "-q:a",
+      "3",
+      path.join(out, `${name}.ogg`),
+    ]);
+    execFileSync("ffmpeg", [
+      ...ff,
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "64k",
+      path.join(out, `${name}.mp3`),
+    ]);
     console.log(`sounds: ${name} ${(samples.length / RATE).toFixed(2)} s`);
   }
   fs.rmSync(tmp, { recursive: true, force: true });

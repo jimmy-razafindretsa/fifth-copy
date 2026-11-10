@@ -1,0 +1,85 @@
+/*
+ * Sound toggle (#243, design bible 7.1 segmented toggle, 7.2 pending, 7.4 inline error line): the row
+ * label (Oswald 600 11px .16em, the TIMER unit recipe) then the segmented `OFF | ON` (2px ink rule,
+ * Oswald 600 12px .14em, pressed = ink ground + paper text: the recipe of
+ * preferences/components/toggles.module.css; CSS modules do not cross features). Every segment is 44px
+ * tall on the seat view (tablet+, bible 14.3: every touch control on the seat view is 44px square).
+ */
+
+@reference "../../../app/globals.css";
+
+.sound {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.label,
+.pending,
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.label {
+  color: var(--color-fg);
+}
+
+.pending {
+  color: var(--color-fg-muted);
+}
+
+.segmented {
+  display: flex;
+  border: 2px solid var(--color-fg);
+}
+
+.segment {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 5px 12px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-fg);
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.segment[aria-disabled="true"] {
+  cursor: progress;
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.error {
+  margin: 0;
+  max-width: 100%;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+  text-wrap: pretty;
+}

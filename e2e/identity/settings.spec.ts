@@ -53,7 +53,8 @@ test.describe("#66 preferences end to end", () => {
     ).toHaveCount(0);
     await expect(group(defaults, "THEME").getByRole("radio", { name: "SYSTEM" })).toBeChecked();
     await expect(group(defaults, "LANGUAGE").getByRole("radio", { name: "ENGLISH" })).toBeChecked();
-    await expect(group(defaults, "SOUND").getByRole("radio", { name: "ON" })).toBeChecked();
+    // #243: muted by default, for classrooms
+    await expect(group(defaults, "SOUND").getByRole("radio", { name: "OFF" })).toBeChecked();
     await other.close();
     await deleteUsers(name);
   });
@@ -97,7 +98,7 @@ test.describe("#66 preferences end to end", () => {
     await openSettings(page);
     await choose(page, "KEYBOARD LAYOUT", "CANADIAN FRENCH (CSA)");
     await choose(page, "THEME", "DARK");
-    await choose(page, "SOUND", "OFF");
+    await choose(page, "SOUND", "ON");
 
     const second = await browser.newContext({ baseURL: info.project.use.baseURL });
     const other = await second.newPage();
@@ -108,7 +109,7 @@ test.describe("#66 preferences end to end", () => {
       group(docket, "KEYBOARD LAYOUT").getByRole("radio", { name: "CANADIAN FRENCH (CSA)" }),
     ).toBeChecked({ timeout: HYDRATION_WAIT });
     await expect(group(docket, "THEME").getByRole("radio", { name: "DARK" })).toBeChecked();
-    await expect(group(docket, "SOUND").getByRole("radio", { name: "OFF" })).toBeChecked();
+    await expect(group(docket, "SOUND").getByRole("radio", { name: "ON" })).toBeChecked();
     // the sign-in refreshed this browser's theme cookie from the account (database wins)
     await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
     await second.close();

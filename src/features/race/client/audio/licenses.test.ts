@@ -21,7 +21,13 @@ function rows(): Row[] {
         .split("|")
         .slice(1, -1)
         .map((c) => c.trim());
-      return { file: file!, source: source!, author: author!, licence: licence!, attribution: attribution! };
+      return {
+        file: file!,
+        source: source!,
+        author: author!,
+        licence: licence!,
+        attribution: attribution!,
+      };
     });
 }
 

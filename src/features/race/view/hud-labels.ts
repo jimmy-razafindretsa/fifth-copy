@@ -62,6 +62,16 @@ export type SabotageTrayLabels = {
   immune: string;
 };
 
+/** The sound toggle (#243, bible 7.1, 7.2, 7.4): `SOUND` + `OFF | ON`, its pending word and refusal line. */
+export type SoundLabels = {
+  label: string;
+  off: string;
+  on: string;
+  pending: string;
+  errorPrefix: string;
+  error: string;
+};
+
 export type AbandonLabels = {
   /** The secondary button (bible 7.1). */
   abandon: string;

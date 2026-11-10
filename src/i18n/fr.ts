@@ -444,6 +444,14 @@ export const fr = {
       back: "RETOUR À LA SALLE D'ATTENTE →",
     },
     abandon: { abandon: "ABANDONNER", confirm: "CONFIRMER · ME RÉAFFECTER" },
+    sound: {
+      label: "SON",
+      off: "NON",
+      on: "OUI",
+      pending: "CLASSEMENT…",
+      errorPrefix: "RETOURNÉ ·",
+      error: "Ce changement n'a pas été classé. Réessaie.",
+    },
     exit: {
       stamp: { abandoned: "RÉAFFECTÉ", asleep: "ENDORMI AU BUREAU" },
       wpm: "MPM",

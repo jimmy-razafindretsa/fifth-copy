@@ -109,11 +109,12 @@ describe.skipIf(!testDatabaseUrl)(
     it("C1 upserts the viewer's row, patch by patch", async () => {
       state.viewer = await account();
       const first = await updatePreferences({ layout: "AZERTY" });
-      expect(first).toMatchObject({ ok: true, preferences: { layout: "AZERTY", sound: true } });
-      await updatePreferences({ sound: false });
+      // #243: a first row starts muted, whatever setting created it
+      expect(first).toMatchObject({ ok: true, preferences: { layout: "AZERTY", sound: false } });
+      await updatePreferences({ sound: true });
       await updatePreferences({ layout: null });
       const row = await db.preference.findUnique({ where: { userId: state.viewer.id } });
-      expect(row).toMatchObject({ layout: null, sound: false, theme: "SYSTEM" });
+      expect(row).toMatchObject({ layout: null, sound: true, theme: "SYSTEM" });
     });
 
     it("C1 a visitor with no viewer gets a guest first, and the row is theirs", async () => {

@@ -43,6 +43,14 @@ export const ENDED_GRACE_TTL_S = 600;
 export const membersKey = (lobbyId: string) => `room:${lobbyId}:members`;
 
 /**
+ * Set: the user ids the room refuses (#133, ADR 0008, 0009): a user the host removed (`host:kick`).
+ * The handshake and `join` consult it; a later moderation flow adds entries, not code paths. TTL
+ * `ROOM_TTL_S`, refreshed with every room write; follows an ended room's grace TTL; deleted with the
+ * room (close) and by a void. Never durable: Postgres holds no block.
+ */
+export const blockedKey = (lobbyId: string) => `room:${lobbyId}:blocked`;
+
+/**
  * Hash: desk number -> JSON `DeskState` without `trace` and `typed` (#173, #592): the live mirror of
  * each desk's engine counters, status and anomaly counts, written once per tick for the desks changed
  * since the previous one (`typed` replays from the trace). A mirror, never a recovery source (a

@@ -5,12 +5,14 @@ import type { Limiter } from "@fifth-copy/limiter";
 import {
   abandonSchema,
   bonusPlaySchema,
+  hostKickSchema,
   hostSettingsSchema,
   hostStartSchema,
   keysSchema,
   pingSchema,
   PROTOCOL_VERSION,
   type ClientToServerEvents,
+  type HostKickAck,
   type HostSettingsAck,
   type HostStartAck,
   type RaceTokenClaims,
@@ -35,7 +37,13 @@ import { attachSpectator } from "./spectator";
  * set by the handshake middleware from the verified race token, `desk` once the registry seated the
  * socket's user.
  */
-export type SocketData = { claims: RaceTokenClaims; resume?: boolean; desk?: number };
+export type SocketData = {
+  claims: RaceTokenClaims;
+  resume?: boolean;
+  desk?: number;
+  /** The host removed this socket's user (#133): its seat is already freed, its leave is skipped. */
+  removed?: boolean;
+};
 
 /**
  * The live race behind the `keys`, `abandon` and `bonus:play` edges: `rooms/ingest.ts` over the
@@ -221,6 +229,41 @@ export function attachSocketServer(
       void lifecycle.start(lobby, { sub, role }).then(reply);
     });
 
+    // Host removal (#133, ARCHITECTURE 7.1, 7.2): the registry authorises (`sub` against the room's
+    // `hostUserId`, ADR 0009; `waiting`/`ended` only; never a bot or the host's desk) and blocks the
+    // user under the room's queue; the seat is freed through `leaveRoom` (roster to the room), then
+    // the room hears `kicked` (the removed sockets included) and the user's sockets are closed
+    // after it (no close of the transport: the event is flushed first). Malformed: no ack.
+    socket.on("host:kick", (raw: unknown, ack: unknown) => {
+      const reply = typeof ack === "function" ? (ack as (a: HostKickAck) => void) : () => {};
+      const parsed = hostKickSchema.safeParse(raw);
+      if (!parsed.success) return log("kick", { lobby, outcome: "invalid" });
+      const { desk } = parsed.data;
+      registry
+        .kick(lobby, sub, desk)
+        .then(async (result) => {
+          log("kick", { lobby, desk, outcome: result.ok ? "ok" : result.reason });
+          if (!result.ok) {
+            return reply({
+              ok: false,
+              // A room gone meanwhile is no waiting room: nothing to remove.
+              error: result.reason === "no-room" ? "not-waiting" : result.reason,
+            });
+          }
+          const removed = (await io.in(room).fetchSockets()).filter(
+            (s) => s.data.claims.sub === result.userId,
+          );
+          for (const s of removed) s.data.removed = true;
+          await leaveRoom(leaveDeps, lobby, result.userId);
+          io.to(everyone).emit("event", { v: PROTOCOL_VERSION, kind: "kicked", desk });
+          for (const s of removed) s.disconnect();
+          reply({ ok: true });
+          void lifecycle.reviewAutoStart(lobby);
+        })
+        // No wire code for a Redis failure: no ack; the client times out.
+        .catch(() => log("kick failed", { lobby, desk }));
+    });
+
     // Keystrokes (#173, ADR 0006 point 3): parsed here, applied by the runtime only. A malformed
     // batch or a socket not yet seated is dropped silently (spectators are refused by their own
     // edge, #187); a refusal by phase is `rejected` to the sender. Rate limited per identity (#207).
@@ -277,8 +320,10 @@ export function attachSocketServer(
       presence
         .socketClosed(lobby, sub)
         .then(async (closed) => {
-          // A new socket of the user queued its join meanwhile: it keeps the desk.
+          // A new socket of the user queued its join meanwhile: it keeps the desk. A removed
+          // user's seat was freed by the kick (#133): no second leave, no second roster.
           if (closed !== "leave" || presence.sockets(lobby, sub) > 0) return;
+          if (socket.data.removed) return;
           const leave = async () => {
             const { members, closed: roomClosed } = await leaveRoom(leaveDeps, lobby, sub);
             log("left", { lobby, members: members.length, closed: roomClosed });

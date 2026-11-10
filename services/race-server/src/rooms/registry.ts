@@ -25,6 +25,7 @@ import type { Clock } from "../clock";
 import { botName, botUserId, isBotUserId, planBotSeats } from "./bots";
 import { nextDesk } from "./desks";
 import {
+  blockedKey,
   desksKey,
   ENDED_GRACE_TTL_S,
   membersKey,
@@ -86,7 +87,7 @@ export type Voided = { lobbyId: string; raceId: string };
  */
 export type JoinResult =
   | { ok: true; desk: number; members: Member[]; room: Room }
-  | { ok: false; reason: "no-room" | "in-progress" | "bot-id" | "room-full" };
+  | { ok: false; reason: "no-room" | "in-progress" | "bot-id" | "room-full" | "removed" };
 /**
  * `closed` is true only when this call removed the last human member and deleted the room's keys
  * (bots seated with no human left go with the room, ARCHITECTURE 7.1 "last human leaves").
@@ -137,6 +138,16 @@ export type UpdateSettingsResult =
   | { ok: false; reason: "no-room" | "not-host" | "not-waiting" | "invalid" };
 export type SetBotsResult =
   { ok: true; members: Member[] } | { ok: false; reason: "no-room" | "not-waiting" | "invalid" };
+/**
+ * The host's removal of a human (#133): `userId` is the user behind `desk`, now blocked. The seat is
+ * freed by the caller (`leaveRoom`), so the leave's roster and close rules stay in one place.
+ */
+export type KickResult =
+  | { ok: true; userId: string }
+  | {
+      ok: false;
+      reason: "no-room" | "not-host" | "not-waiting" | "no-such-desk" | "is-bot" | "self";
+    };
 /** `changed` is false when the room already held that type (#815): nothing written. */
 export type SetLobbyTypeResult =
   | { ok: true; settings: RaceSettings; changed: boolean }
@@ -168,6 +179,21 @@ export type RoomRegistry = {
    * setting and every seat untouched. Not the host's socket patch: `updateSettings` never carries it.
    */
   setLobbyType(lobbyId: string, lobbyType: RaceSettings["lobbyType"]): Promise<SetLobbyTypeResult>;
+  /**
+   * The host removes the human at `desk` (#133, ARCHITECTURE 7.1 `host:kick`): only the room's host
+   * (`byUserId` equals the hash's `hostUserId`, as `updateSettings`), only while the phase is
+   * `waiting` or `ended`, never a bot desk nor the host's own. On success the user is blocked (as
+   * `block`) in the same queued step; the seat itself is left to the caller's `leaveRoom`.
+   */
+  kick(lobbyId: string, byUserId: string, desk: number): Promise<KickResult>;
+  /**
+   * Adds `userId` to the room's block list (#133): from then on `join` refuses it `removed` and the
+   * handshake refuses it. The one list; a later report or moderation flow adds entries through it.
+   * Written with the room's TTLs; nothing for an unknown room.
+   */
+  block(lobbyId: string, userId: string): Promise<void>;
+  /** Whether the room's block list holds `userId` (#133). Not queued: the handshake reads it. */
+  isBlocked(lobbyId: string, userId: string): Promise<boolean>;
   members(lobbyId: string): Promise<Member[] | null>;
   /** The room's settings; null for an unknown room; rejects when the stored field is missing or corrupt. */
   settings(lobbyId: string): Promise<RaceSettings | null>;
@@ -325,6 +351,8 @@ export function createRoomRegistry({
         .expire(roomKey(lobbyId), ROOM_TTL_S)
         .expire(membersKey(lobbyId), ROOM_TTL_S)
         .expire(desksKey(lobbyId), ROOM_TTL_S)
+        // The block list (#133) lives as long as its room; EXPIRE on no list is a no-op.
+        .expire(blockedKey(lobbyId), ROOM_TTL_S)
         // The index outlives each room it lists (#204).
         .expire(ROOMS_KEY, ROOM_TTL_S),
     );
@@ -440,7 +468,14 @@ export function createRoomRegistry({
       : [];
     const traces = [...new Set([...stored, ...extraDesks])].map((desk) => traceKey(lobbyId, desk));
     const resume = Object.values(await redis.hgetall(resumeIndexKey(lobbyId))).map(resumeKey);
-    const leftovers = [desksKey(lobbyId), resumeIndexKey(lobbyId), ...traces, ...resume];
+    // The block list (#133) goes with a void as with a close: a voided room is never raced again.
+    const leftovers = [
+      desksKey(lobbyId),
+      resumeIndexKey(lobbyId),
+      blockedKey(lobbyId),
+      ...traces,
+      ...resume,
+    ];
     if (!room.openedAt) {
       await execAll(
         lobbyId,
@@ -521,6 +556,10 @@ export function createRoomRegistry({
         if (isBotUserId(userId)) return { ok: false, reason: "bot-id" };
         const room = await readRoom(lobbyId);
         if (!room) return { ok: false, reason: "no-room" };
+        // Behind the handshake (#133): a removed user is never seated again in this room.
+        if ((await redis.sismember(blockedKey(lobbyId), userId)) === 1) {
+          return { ok: false, reason: "removed" };
+        }
         const settings = parseSettings(lobbyId, room.settings);
         const phase = parsePhase(room.phase);
         const seats = await readSeats(lobbyId);
@@ -579,6 +618,7 @@ export function createRoomRegistry({
                 .del(desksKey(lobbyId), ...traces)
                 .expire(roomKey(lobbyId), ENDED_GRACE_TTL_S)
                 .expire(membersKey(lobbyId), ENDED_GRACE_TTL_S)
+                .expire(blockedKey(lobbyId), ENDED_GRACE_TTL_S)
                 .expire(ROOMS_KEY, ROOM_TTL_S),
             );
             return { members: toMembers(seats, room.hostUserId), closed: false, kept: true };
@@ -587,7 +627,13 @@ export function createRoomRegistry({
             lobbyId,
             redis
               .multi()
-              .del(roomKey(lobbyId), membersKey(lobbyId), desksKey(lobbyId), ...traces)
+              .del(
+                roomKey(lobbyId),
+                membersKey(lobbyId),
+                desksKey(lobbyId),
+                blockedKey(lobbyId),
+                ...traces,
+              )
               .srem(ROOMS_KEY, lobbyId),
           );
           openRooms.delete(lobbyId);
@@ -626,6 +672,31 @@ export function createRoomRegistry({
         );
         return { ok: true, settings, changed: true };
       }),
+
+    kick: (lobbyId, byUserId, desk) =>
+      serial(lobbyId, async (): Promise<KickResult> => {
+        const room = await readRoom(lobbyId);
+        if (!room) return { ok: false, reason: "no-room" };
+        if (byUserId !== room.hostUserId) return { ok: false, reason: "not-host" };
+        const phase = parsePhase(room.phase);
+        if (phase !== "waiting" && phase !== "ended") return { ok: false, reason: "not-waiting" };
+        const seat = [...(await readSeats(lobbyId)).entries()].find(([, s]) => s.desk === desk);
+        if (!seat) return { ok: false, reason: "no-such-desk" };
+        const [userId, { isBot }] = seat;
+        if (isBot) return { ok: false, reason: "is-bot" };
+        if (userId === room.hostUserId) return { ok: false, reason: "self" };
+        await withTtl(lobbyId, redis.multi().sadd(blockedKey(lobbyId), userId));
+        return { ok: true, userId };
+      }),
+
+    block: (lobbyId, userId) =>
+      serial(lobbyId, async () => {
+        if (!(await readRoom(lobbyId))) return;
+        await withTtl(lobbyId, redis.multi().sadd(blockedKey(lobbyId), userId));
+      }),
+
+    isBlocked: async (lobbyId, userId) =>
+      (await redis.sismember(blockedKey(lobbyId), userId)) === 1,
 
     members: async (lobbyId) => {
       const room = await readRoom(lobbyId);

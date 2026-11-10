@@ -2,6 +2,7 @@
 import "./merge-step";
 export { createLobby } from "./actions/create-lobby";
 export { createPracticeLobby } from "./actions/create-practice-lobby";
+export { quickRace } from "./actions/quick-race";
 export { createInvite } from "./actions/create-invite";
 export { joinByCode } from "./actions/join-by-code";
 export { peekInvite, redeemInvite } from "./actions/redeem-invite";
@@ -18,6 +19,7 @@ export type {
   ListOpenLobbiesResult,
   OpenLobby,
   PeekInviteResult,
+  QuickRaceResult,
   RaceTokenResult,
   RedeemInviteResult,
 } from "./types";

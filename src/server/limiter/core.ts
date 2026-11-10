@@ -21,6 +21,7 @@ export type LimitAction =
   | "invite-redeem"
   | "clerk-outfit"
   | "set-lobby-type"
+  | "quick-race"
   | "password-reset-issue"
   | "password-reset-redeem"
   | "password-reset-redeem-account"
@@ -67,6 +68,9 @@ export const LIMITS = {
   "invite-redeem": { max: 20, windowMs: 60_000 },
   "clerk-outfit": { max: 30, windowMs: 60_000 },
   "set-lobby-type": { max: 30, windowMs: 60_000 },
+  // QUICK RACE (#128) counts one client's presses (`requestSubject()`: the guest, else the IP), before
+  // any lookup or write: each can open a room on the race server.
+  "quick-race": { max: 20, windowMs: 60_000 },
   "password-reset-issue": { max: 5, windowMs: 60 * 60_000 },
   "password-reset-redeem": { max: 30, windowMs: 60 * 60_000 },
   "password-reset-redeem-account": { max: 5, windowMs: 60 * 60_000 },

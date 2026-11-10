@@ -44,6 +44,10 @@ import {
   type DawnReportFixture,
   filingLabels,
   FilingNoticeView,
+  PersonalCard,
+  type PersonalFixture,
+  personalFixtures,
+  personalLabels,
   Podium,
   podiumLabels,
   RankingTable,
@@ -315,6 +319,30 @@ function HudSpecimen({
     </figure>
   );
 }
+
+/** The personal stats card's states (#864 C4, bible 14.4): one specimen each, at the slot's width. */
+const PERSONAL_STATES: { id: PersonalFixture; title: string; caption: string }[] = [
+  {
+    id: "populated",
+    title: "Personal card",
+    caption: "Your copy: third, 48 WPM; two cards sent, one received.",
+  },
+  {
+    id: "no-bonuses",
+    title: "Personal card, no bonuses",
+    caption: "Nothing sent, nothing received.",
+  },
+  {
+    id: "unfinished",
+    title: "Personal card, timed out",
+    caption: "The status in words when not filed.",
+  },
+  {
+    id: "under-review",
+    title: "Personal card, under review",
+    caption: "A suspicious result keeps its figures under the review row.",
+  },
+];
 
 const NIXIE_STATES = [
   { id: "nixie-before-start", title: "Before the start", wpm: 0, place: null, caption: "00 / 30" },
@@ -1135,6 +1163,20 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
               labels={rankingLabels(t.results)}
             />
           </HudSpecimen>
+        </div>
+        <div id="results-personal" className="grid gap-6 md:grid-cols-2">
+          {PERSONAL_STATES.map((state) => (
+            <HudSpecimen
+              key={state.id}
+              id={`personal-${state.id}`}
+              title={state.title}
+              caption={state.caption}
+            >
+              <div className="w-full max-w-[400px]">
+                <PersonalCard stats={personalFixtures[state.id]} labels={personalLabels(t)} />
+              </div>
+            </HudSpecimen>
+          ))}
         </div>
         <HudSpecimen
           id="report-actions"

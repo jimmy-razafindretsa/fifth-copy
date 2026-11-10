@@ -5,6 +5,7 @@
  */
 import { OUTFIT_CATALOGUE, outfitForDesk, type Outfit } from "@/features/identity";
 import type { DawnReport, ReportEntry, ReportRace } from "./dawn-report";
+import type { PersonalStats } from "./personal";
 
 /** A saved outfit (the viewer's desk 12 in the six-desk race): ids from bible 10.1's catalogue. */
 export const SAVED_OUTFIT: Outfit = {
@@ -70,12 +71,66 @@ const report = (
   id: string,
   entries: ReportEntry[],
   viewerDesk: number | null = null,
+  personal: PersonalStats | null = null,
 ): Extract<DawnReport, { kind: "report" }> => ({
   kind: "report",
   race: race(id),
   entries,
   viewerDesk,
+  personal,
 });
+
+/**
+ * `/design#results-personal` and the tests (#864 C4): the personal card's states, each the row of one
+ * desk of `SIX`: desk 12 populated (bonuses both ways) and with no bonuses, desk 9 timed out, desk 2
+ * under review.
+ */
+export const personalFixtures = {
+  populated: {
+    desk: 12,
+    place: 3,
+    wpm: 47.8,
+    accuracy: 0.92,
+    status: "FINISHED",
+    suspicious: false,
+    bonuses: {
+      sent: [
+        { kind: "extra-paperwork", count: 2 },
+        { kind: "smoke-break", count: 1 },
+      ],
+      received: [{ kind: "extra-paperwork", count: 1 }],
+    },
+  },
+  "no-bonuses": {
+    desk: 12,
+    place: 3,
+    wpm: 47.8,
+    accuracy: 0.92,
+    status: "FINISHED",
+    suspicious: false,
+    bonuses: { sent: [], received: [] },
+  },
+  unfinished: {
+    desk: 9,
+    place: 5,
+    wpm: 31,
+    accuracy: 0.97,
+    status: "TIMED_OUT",
+    suspicious: false,
+    bonuses: { sent: [{ kind: "exemption", count: 1 }], received: [] },
+  },
+  "under-review": {
+    desk: 2,
+    place: 6,
+    wpm: 29.5,
+    accuracy: 0.97,
+    status: "FINISHED",
+    suspicious: true,
+    bonuses: { sent: [], received: [{ kind: "smoke-break", count: 2 }] },
+  },
+} satisfies Record<string, PersonalStats>;
+
+export type PersonalFixture = keyof typeof personalFixtures;
 
 /** `/design#results` and the tests: one fixture per podium state (C6). */
 export const dawnReportFixtures = {
@@ -94,7 +149,7 @@ export const dawnReportFixtures = {
     entry({ desk: 3, name: "Typist Bot 2", isBot: true, place: 2, wpm: 54.2, accuracy: 0.95 }),
     entry({ desk: 12, name: "Heron-302", place: 3, wpm: 47.8, accuracy: 0.92 }),
   ]),
-  viewer: report("0b1e8a52-77a4-4f0e-9d3b-2c8f5e6a1d44", SIX, 12),
+  viewer: report("0b1e8a52-77a4-4f0e-9d3b-2c8f5e6a1d44", SIX, 12, personalFixtures.populated),
   /** `/design#results-ranking` (#301 C5): six rows, one per status, a bot, a suspicious row, the viewer 3rd. */
   ranking: report(
     "5d0c7a9e-2f41-4b8a-9e63-1c7d2b4f8a10",

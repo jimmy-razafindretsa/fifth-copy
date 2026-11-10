@@ -56,8 +56,9 @@
   gap: 24px;
 }
 
+/* the second track only when the personal card is there: a spectator's ranking takes the full width */
 @media (min-width: 1024px) {
-  .slots {
+  .slots:has(> [data-slot="personal"]) {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
     align-items: start;
   }

@@ -91,6 +91,8 @@ export type Desk = {
   userId?: string | null;
   status?: InternalRaceResult["status"];
   suspicious?: boolean;
+  /** #864: the desk's stored bonus log (the counters follow it as the engine's ledger counts them). */
+  bonusLog?: InternalRaceResult["bonusLog"];
 };
 
 const EMPTY_TRACE = {
@@ -120,9 +122,9 @@ function result(d: Desk): InternalRaceResult {
     total: 104,
     durationMs: 50_000,
     finishedAtMs: finished ? 40_000 + d.place * 1_000 : null,
-    bonusesSent: 0,
-    bonusesReceived: 0,
-    bonusLog: [],
+    bonusesSent: new Set((d.bonusLog ?? []).filter((e) => e.from === d.desk).map((e) => e.t)).size,
+    bonusesReceived: (d.bonusLog ?? []).filter((e) => e.to === d.desk && e.from !== d.desk).length,
+    bonusLog: d.bonusLog ?? [],
     overlay: null,
     flags: d.suspicious ? [{ code: "e2e-review" }] : [],
     engineVersion: ENGINE_VERSION,

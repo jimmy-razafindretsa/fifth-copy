@@ -1,5 +1,6 @@
 import type { Messages } from "@/i18n/en";
-import type { DawnReport, PodiumLabels } from "./dawn-report";
+import type { DawnReport, PodiumLabels, ReportStatus } from "./dawn-report";
+import type { BonusKind } from "./personal";
 import type { RankingLabels } from "./ranking";
 
 /** The filing notice's copy (#300 C2). */
@@ -28,6 +29,44 @@ export function rankingLabels(results: Messages["results"]): RankingLabels {
     you,
     underReview,
     status: results.status,
+  };
+}
+
+/** The personal stats card's copy (#864, bible 14.4 "Personal stats card"). */
+export type PersonalLabels = {
+  /** The header's ink tag and the card's accessible name: `FORM 5-R · YOUR COPY`. */
+  tag: string;
+  /** `№ {n}` (the plinth tag, language-neutral). */
+  place: string;
+  wpm: string;
+  accuracy: string;
+  underReview: string;
+  sent: string;
+  received: string;
+  none: string;
+  /** `× {n}` */
+  count: string;
+  status: Record<ReportStatus, string>;
+  /** The Sabotage tray's card names (bible 7.4). */
+  bonus: Record<BonusKind, string>;
+};
+
+/** The catalog's strings as the personal card's labels: its own, the podium's figures, the tray's names. */
+export function personalLabels(t: Pick<Messages, "results" | "race">): PersonalLabels {
+  const { place, wpm, accuracy, underReview } = t.results.podium;
+  const { cards } = t.race.sabotageTray;
+  return {
+    ...t.results.personal,
+    place,
+    wpm,
+    accuracy,
+    underReview,
+    status: t.results.status,
+    bonus: {
+      "extra-paperwork": cards["extra-paperwork"].name,
+      exemption: cards.exemption.name,
+      "smoke-break": cards["smoke-break"].name,
+    },
   };
 }
 

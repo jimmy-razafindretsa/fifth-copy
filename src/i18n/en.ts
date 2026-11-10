@@ -297,6 +297,14 @@ export const en = {
     },
     /** A late joiner's 7.4 notice row while the race runs (#732): held, seated at `ended`. */
     raceInProgress: "RACE IN PROGRESS · YOU ARE SEATED WHEN IT ENDS",
+    /**
+     * The host left for good (#137, bible 14.3): the red 7.3 stamp over the roll with the new host's
+     * name (upper case), and its one polite announcement.
+     */
+    newHost: {
+      stamp: "NEW HOST: {name}",
+      announce: "{name} is the new host.",
+    },
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
     /**

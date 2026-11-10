@@ -9,7 +9,16 @@ import {
   warmRace,
 } from "../race/helpers";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
-import { postResults, seedLobby, six, startRace, withoutWebGL, type Desk } from "./helpers";
+import { normalizeTypeable, type Keystroke } from "@fifth-copy/engine";
+import {
+  postResults,
+  raceTextOf,
+  seedLobby,
+  six,
+  startRace,
+  withoutWebGL,
+  type Desk,
+} from "./helpers";
 
 // Contract of #864 C3: the personal stats card in the Dawn report's `personal` slot (bible 14.4), from
 // races seeded through the signed internal routes (helpers.ts) on the page's own lobby (its host is the
@@ -197,5 +206,79 @@ test.describe("Dawn report personal card, WPM graph (#865)", () => {
     await report(page, request, withBonuses);
     await expect(graph(page)).toContainText("NO TRACE ON FILE");
     await expect(graph(page).getByRole("img")).toHaveCount(0);
+  });
+});
+
+// Contract of #867 C4: a typist who misses the same key three times in a race sees that key first in the
+// list and the `key` tip naming it. The race is seeded through the signed internal routes with a trace
+// for the viewer's desk: the stored text typed in full (Continue mode, the default), with a wrong key
+// pressed on the first three times its most frequent letter is asked for.
+const keysSection = (page: Page) => card(page).locator('[data-section="keys"]');
+const tipSection = (page: Page) => card(page).locator('[data-section="tip"]');
+
+/** The most frequent plain lowercase letter of `text` (at least three of it). */
+function frequentLetter(text: string): string {
+  const counts = new Map<string, number>();
+  for (const c of text) if (/[a-z]/.test(c)) counts.set(c, (counts.get(c) ?? 0) + 1);
+  const [letter, n] = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]!;
+  expect(n).toBeGreaterThanOrEqual(3);
+  return letter;
+}
+
+/** `text` typed at 120 ms a key, `letter` mistyped (as a digit) its first three times. */
+function missingThrice(text: string, letter: string): Keystroke[] {
+  let left = 3;
+  return [...text].map((key, i) => {
+    const miss = key === letter && left > 0;
+    if (miss) left -= 1;
+    return { t: (i + 1) * 120, key: miss ? "7" : key };
+  });
+}
+
+test.describe("Dawn report personal card, errors by key and tip (#867)", () => {
+  test.setTimeout(scaled(90_000));
+
+  test("C4 a key missed three times is first in the list and named by the key tip", async ({
+    page,
+    request,
+  }) => {
+    await withoutWebGL(page);
+    const lobby = await seedLobby(page);
+    const desks = six(lobby.hostUserId);
+    const raceId = await startRace(request, lobby, desks);
+    const text = normalizeTypeable(await raceTextOf(raceId));
+    const letter = frequentLetter(text);
+    const trace = missingThrice(text, letter);
+    await postResults(
+      request,
+      raceId,
+      desks.map((d) => (d.desk === 7 ? { ...d, trace } : d)),
+    );
+    await page.goto(`/results/${raceId}`);
+    await expect(ranking(page)).toBeVisible({ timeout: HYDRATION_WAIT });
+
+    await expect(keysSection(page).getByRole("heading", { name: "ERRORS BY KEY" })).toBeVisible();
+    const first = keysSection(page).locator("li").first();
+    await expect(first.locator('[data-field="key"]')).toHaveText(letter);
+    await expect(first.locator('[data-field="count"]')).toHaveText("× 3");
+    await expect(tipSection(page)).toHaveAttribute("data-tip", "key");
+    await expect(tipSection(page).getByRole("heading", { name: "ORDER OF THE DAY" })).toBeVisible();
+    await expect(tipSection(page).locator('[data-field="tip"]')).toHaveText(
+      `The ${letter} key slipped 3 times: slow down on it next race and the rest will follow.`,
+    );
+    const [scrollWidth, clientWidth] = await page.evaluate(() => [
+      document.documentElement.scrollWidth,
+      document.documentElement.clientWidth,
+    ]);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+
+  test("C3 a seeded race with no trace on file: NO TRACE ON FILE, the tip from the accuracy", async ({
+    page,
+    request,
+  }) => {
+    await report(page, request, withBonuses); // the viewer's accuracy is 91 %: steady
+    await expect(keysSection(page)).toContainText("NO TRACE ON FILE");
+    await expect(tipSection(page)).toHaveAttribute("data-tip", "steady");
   });
 });

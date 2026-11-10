@@ -2,6 +2,7 @@ import type { Messages } from "@/i18n/en";
 import type { DawnReport, PodiumLabels, ReportStatus } from "./dawn-report";
 import type { BonusKind } from "./personal";
 import type { RankingLabels } from "./ranking";
+import type { TipId } from "./tip";
 
 /** The filing notice's copy (#300 C2). */
 export type FilingLabels = {
@@ -55,14 +56,22 @@ export type PersonalLabels = {
     summary: { zero: string; one: string; other: string };
     noTrace: string;
   };
+  /** Errors by key (#867): its row label, `NONE`, the space's name; `noTrace` is the graph's. */
+  keys: { title: string; none: string; space: string };
+  /**
+   * The tip (#867): its ink tag, one sentence per tip id (`{key}`, `{n}` in `special` and `key`), and
+   * the guide link of the `special` tip (the site header's `HOW TO TYPE É Ç « »`).
+   */
+  tip: { tag: string; guide: string } & Record<TipId, string>;
 };
 
 /** The catalog's strings as the personal card's labels: its own, the podium's figures, the tray's names. */
-export function personalLabels(t: Pick<Messages, "results" | "race">): PersonalLabels {
+export function personalLabels(t: Pick<Messages, "results" | "race" | "header">): PersonalLabels {
   const { place, wpm, accuracy, underReview } = t.results.podium;
   const { cards } = t.race.sabotageTray;
   return {
     ...t.results.personal,
+    tip: { ...t.results.personal.tip, guide: t.header.guide },
     place,
     wpm,
     accuracy,

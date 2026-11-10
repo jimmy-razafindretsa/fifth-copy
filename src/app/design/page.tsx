@@ -40,6 +40,8 @@ import {
   type TypingMachineProps,
 } from "@/features/race";
 import {
+  type CoachingFixture,
+  coachingFixtures,
   dawnReportFixtures,
   type DawnReportFixture,
   filingLabels,
@@ -370,6 +372,31 @@ const GRAPH_STATES: {
     card: "unfinished",
     title: "WPM graph, no trace on file",
     caption: "The keystrokes are purged after 30 days, or were never filed.",
+  },
+];
+
+/** The personal card's errors by key and tip (#867 C5, bible 14.4): each of the five tips. */
+const COACHING_STATES: { id: CoachingFixture; title: string; caption: string }[] = [
+  {
+    id: "key",
+    title: "Errors by key",
+    caption: "Five keys, most missed first, a space named; the tip names the key missed four times.",
+  },
+  {
+    id: "special",
+    title: "Errors by key, a special key",
+    caption: "An accented letter missed three times: the tip sends the typist to the guide.",
+  },
+  { id: "clean", title: "Errors by key, none", caption: "Not one error: NONE, and the clean tip." },
+  {
+    id: "steady",
+    title: "Errors by key, a few misses",
+    caption: "No key missed three times, accuracy at 90 % or more: the steady tip.",
+  },
+  {
+    id: "no-trace",
+    title: "Errors by key, no trace on file",
+    caption: "No keystrokes on file: the tip comes from the accuracy alone (86 %).",
   },
 ];
 
@@ -1220,6 +1247,24 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
                   stats={personalFixtures[state.card]}
                   labels={personalLabels(t)}
                   series={raceSeriesFixtures[state.id]}
+                />
+              </div>
+            </HudSpecimen>
+          ))}
+        </div>
+        <div id="results-personal-keys" className="grid gap-6 md:grid-cols-2">
+          {COACHING_STATES.map((state) => (
+            <HudSpecimen
+              key={state.id}
+              id={`personal-keys-${state.id}`}
+              title={state.title}
+              caption={state.caption}
+            >
+              <div className="w-full max-w-[400px]">
+                <PersonalCard
+                  stats={coachingFixtures[state.id].stats}
+                  labels={personalLabels(t)}
+                  coaching={coachingFixtures[state.id].coaching}
                 />
               </div>
             </HudSpecimen>

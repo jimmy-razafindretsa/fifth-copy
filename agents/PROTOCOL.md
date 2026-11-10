@@ -122,7 +122,7 @@ Then drop candidates that violate a lock (section 7). With `BOARD_FOCUS_LABEL` s
 
 ## 7. Locks, WIP and isolation
 - WIP limit: `BOARD_WIP_LIMIT` (default 1; `scripts/loop.sh --parallel N` sets N) cards in In Progress/In Review/QA combined. Cards parked on `needs-human` do not count against WIP but keep their locks.
-- Hotspot locks: at most one in-flight card per `touches:*` label. Analyst sets them; Explorer adds any it finds; Builder adds one before committing to an unlabeled hotspot. `board.ts locks <n>` checks; the loop waits before Builder starts.
+- Hotspot locks: at most one in-flight card per `touches:*` label, except `touches:i18n`: two (#869; `LOCK_LIMITS` in `scripts/lib/kit.ts`; each PR merges main before it lands). Analyst sets them; Explorer adds any it finds; Builder adds one before committing to an unlabeled hotspot. `board.ts locks <n>` checks; the loop waits before Builder starts.
 | Label | Paths |
 |---|---|
 | `touches:prisma` | `prisma/schema/**`, `prisma/migrations/**` |

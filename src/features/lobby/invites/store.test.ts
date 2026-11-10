@@ -3,12 +3,7 @@ import { randomBytes } from "node:crypto";
 import { createServer, type Server, type Socket } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createRedisClient } from "@/server/redis";
-import {
-  createInviteStore,
-  INVITE_TIMEOUT_MS,
-  INVITE_TTL_S,
-  inviteKey,
-} from "./store";
+import { createInviteStore, INVITE_TIMEOUT_MS, INVITE_TTL_S, inviteKey } from "./store";
 
 // #808 C1, C3, C4, C6: the invite store over real Redis (the worktree's REDIS_URL): one
 // `SET NX EX`, one `EXISTS`, one `GETDEL`, keys `web:invite:<token>` (ADR 0008), fail closed.

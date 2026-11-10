@@ -171,6 +171,7 @@ describe("createWebLimit (C3, real Redis)", () => {
       "avatar-upload",
       "clerk-outfit",
       "invite",
+      "invite-redeem",
       "join-by-code",
       "lobby-codes",
       "mint-race-token",
@@ -192,6 +193,8 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(LIMITS["lobby-codes"]).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS["clerk-outfit"]).toEqual({ max: 30, windowMs: 60_000 });
     expect(LIMITS["set-lobby-type"]).toEqual({ max: 30, windowMs: 60_000 });
+    expect(LIMITS.invite).toEqual({ max: 20, windowMs: 60_000 });
+    expect(LIMITS["invite-redeem"]).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS["password-reset-issue"]).toEqual({ max: 5, windowMs: 3_600_000 });
     expect(LIMITS["password-reset-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
     expect(LIMITS["password-reset-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });

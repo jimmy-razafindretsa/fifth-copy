@@ -18,6 +18,7 @@ export type LimitAction =
   | "avatar-upload"
   | "recovery"
   | "invite"
+  | "invite-redeem"
   | "clerk-outfit"
   | "set-lobby-type"
   | "password-reset-issue"
@@ -34,8 +35,8 @@ export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
  * actions (#699, ADR 0020 amendment) let a class behind one address share one code:
  * `join-by-code` and `mint-race-token-new-guest` (a mint without a guest cookie) count per
  * (subject, code), sized above a class of 100; `lobby-codes` counts the distinct codes a subject
- * tries, so guessing stays slow; `mint-race-token` counts per guest. `recovery` and `invite` are
- * defined for #120 and #121, which wire them; the sign-in, sign-up and avatar rows are #87's. `clerk-outfit` (#687) counts the
+ * tries, so guessing stays slow; `mint-race-token` counts per guest. `recovery` is defined for #120,
+ * which wires it; `invite` and `invite-redeem` are #808's; the sign-in, sign-up and avatar rows are #87's. `clerk-outfit` (#687) counts the
  * clerk outfit saves of one viewer (`user:<id>`): one per REISSUE UNIFORM, 30 a minute is a click
  * every two seconds for a whole minute, well above a person trying uniforms on. `set-lobby-type`
  * (#114) counts one host's PUBLIC / PRIVATE changes (`user:<id>`), on the same 30 a minute.
@@ -61,6 +62,9 @@ export const LIMITS = {
   "avatar-upload": { max: 5, windowMs: 60_000 },
   recovery: { max: 5, windowMs: 60 * 60_000 },
   invite: { max: 20, windowMs: 60_000 },
+  // Invite links (#808, ADR 0008): `invite` counts the links one host issues (`user:<id>`);
+  // `invite-redeem` counts the redeems and peeks of one client (`requestSubject()`).
+  "invite-redeem": { max: 20, windowMs: 60_000 },
   "clerk-outfit": { max: 30, windowMs: 60_000 },
   "set-lobby-type": { max: 30, windowMs: 60_000 },
   "password-reset-issue": { max: 5, windowMs: 60 * 60_000 },

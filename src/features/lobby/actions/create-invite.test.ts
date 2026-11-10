@@ -69,7 +69,12 @@ describe("createInvite (C1)", () => {
     state.puts = new Map();
     state.putResult = [];
     fake.seedLobby({ id: "lob_open", code: "KGB-4821", status: "WAITING", hostUserId: "usr_host" });
-    fake.seedLobby({ id: "lob_closed", code: "ZRT-1093", status: "CLOSED", hostUserId: "usr_host" });
+    fake.seedLobby({
+      id: "lob_closed",
+      code: "ZRT-1093",
+      status: "CLOSED",
+      hostUserId: "usr_host",
+    });
   });
 
   it("the host of a waiting lobby gets a single-use link to /invite/<token>", async () => {

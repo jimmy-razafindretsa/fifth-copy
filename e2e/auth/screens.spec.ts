@@ -81,9 +81,12 @@ test.describe("auth screens (#36)", () => {
           "href",
           other,
         );
-        await expect(main.getByRole("link", { name: c.privacy })).toHaveAttribute(
-          "href",
-          "/privacy",
+        // #875 C3: the privacy page is post-v1, so no privacy link; the guest docket closes the column
+        await expect(main.getByRole("link", { name: c.privacy })).toHaveCount(0);
+        await expect(page.locator('a[href="/privacy"]')).toHaveCount(0);
+        const guestDocket = main.locator('section[aria-labelledby="guest-cta-title"]');
+        expect(await guestDocket.evaluate((el) => el.parentElement!.lastElementChild === el)).toBe(
+          true,
         );
         // no email field (R152); the only lost-password path is the recovery code link (#46)
         await expect(page.locator('input[type="email"], input[name*="mail" i]')).toHaveCount(0);

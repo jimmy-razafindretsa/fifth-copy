@@ -328,10 +328,8 @@ test.describe("landing page (#497)", () => {
     expect(values.every((v) => v.length > 1 && v !== "…")).toBe(true);
     await expect(page.getByText("UNASSIGNED", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "REISSUE UNIFORM" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveAttribute(
-      "href",
-      "/locker",
-    );
+    // #875: the locker is post-v1, so the personnel file offers no OPEN THE LOCKER button
+    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveCount(0);
     await expect(page.locator("[aria-labelledby='clerk-title'] ol li")).toHaveText([
       "RECRUIT",
       "CLERK",
@@ -377,16 +375,13 @@ test.describe("landing page (#497)", () => {
     await expect(page.getByRole("button", { name: QUICK })).toHaveCount(2);
 
     const footer = page.locator("footer");
-    for (const name of ["PLAY", "LEARN", "AEGIS CORP."]) {
+    // #875: a link appears when its route ships; AEGIS CORP. has none yet, nor do the social profiles
+    for (const name of ["PLAY", "LEARN"]) {
       await expect(footer.getByRole("navigation", { name })).toBeVisible();
     }
-    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(11);
-    const social = footer.getByRole("list").getByRole("link");
-    await expect(social).toHaveCount(4);
-    for (const link of await social.all()) {
-      await expect(link).toHaveAttribute("target", "_blank");
-      await expect(link).toHaveAttribute("rel", /noopener/);
-    }
+    await expect(footer.getByRole("navigation", { name: "AEGIS CORP." })).toHaveCount(0);
+    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(4);
+    await expect(footer.getByRole("list")).toHaveCount(0);
     await expect(footer.getByText("BUILT BYAEGIS CORP.")).toBeVisible();
     await expect(
       footer.getByText("© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec"),

@@ -37,7 +37,8 @@ type Props = {
   labels: ClerkLabels;
   /** The viewer's typist name with its honorific, or null before a guest exists. */
   name: string | null;
-  lockerHref: string;
+  /** The locker's route, or null while it has not shipped (#875): no `OPEN THE LOCKER →` button then. */
+  lockerHref: string | null;
   /** The viewer's saved outfit (identity `getClerkOutfit`), or null: the embed then issues a random one. */
   savedOutfit: Outfit | null;
   /** identity's `saveClerkOutfit`, passed by the server page; null for a visitor without identity. */
@@ -135,9 +136,11 @@ export function ClerkSection({ labels, name, lockerHref, savedOutfit, save }: Pr
             >
               {labels.reissue}
             </button>
-            <a href={lockerHref} className={shared.secondary}>
-              {labels.locker}
-            </a>
+            {lockerHref ? (
+              <a href={lockerHref} className={shared.secondary}>
+                {labels.locker}
+              </a>
+            ) : null}
           </div>
         </div>
         <div className={styles.ladder}>

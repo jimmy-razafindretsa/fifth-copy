@@ -43,7 +43,7 @@ export async function LandingPage({ primary, entries, rooms, finalAction }: Prop
         <ClerkSection
           labels={t.landing.clerk}
           name={name}
-          lockerHref={LINKS.locker}
+          lockerHref={LINKS.locker ?? null}
           savedOutfit={savedOutfit}
           save={viewer ? saveClerkOutfit : null}
         />

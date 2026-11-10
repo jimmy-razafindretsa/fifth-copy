@@ -14,7 +14,15 @@ export { getDawnReport } from "./queries/get-dawn-report";
 // The races stats and results count (#613): never a voided or open one.
 export { COUNTED_RACE } from "./queries/counted-races";
 export { DawnReportLayout, DawnReportScreen } from "./components/dawn-report-screen";
-export { filingLabels, podiumLabels, rankingLabels } from "./view/report-labels";
+export {
+  filingLabels,
+  podiumLabels,
+  rankingLabels,
+  type ReportAction,
+  reportActions,
+} from "./view/report-labels";
+// The action row (#143, #863): RACE AGAIN, the way home, a guest member's prompt to open a file.
+export { ReportActions } from "./components/report-actions";
 export { FilingNoticeView } from "./components/filing-notice-view";
 export { Podium, type PodiumProps } from "./components/podium";
 // The ranking docket (#301): every desk in place order, under the podium.

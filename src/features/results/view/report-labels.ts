@@ -39,17 +39,38 @@ export function filingLabels(results: Messages["results"], lobbyCode: string | n
 }
 
 /**
- * The Dawn report's one action (#143, bible 14.4 action row): `again`, the way back to the waiting
- * room for another race, only for a member of the race while its lobby is open; else `home`.
+ * The Dawn report's action row (#143, #863, bible 14.4 action row), as an ordered list. `again` (the way
+ * back to the waiting room for another race) only for a member of the race (the viewer has a desk) while
+ * its lobby is open, then `home` (the front desk) for everyone; a guest member also gets `signup`, the
+ * prompt to open a file (`/sign-up`) so the results stay theirs (ADR 0009: the merge carries them). One
+ * entry per link, so a later `PERSONNEL FILE` is one more entry here.
  */
-export type ReportAction = { kind: "again" | "home"; label: string; href: string };
+export type ReportAction =
+  | { kind: "again" | "home"; label: string; href: string }
+  | { kind: "signup"; label: string; href: string; prompt: string };
 
-export function reportAction(
+export type ReportActionKind = ReportAction["kind"];
+
+export function reportActions(
   results: Messages["results"],
-  { race, viewerDesk }: Pick<Extract<DawnReport, { kind: "report" }>, "race" | "viewerDesk">,
-): ReportAction {
-  if (race.lobbyOpen && race.lobbyCode && viewerDesk !== null) {
-    return { kind: "again", label: results.actions.again, href: `/lobby/${race.lobbyCode}` };
+  {
+    race,
+    viewerDesk,
+    viewerIsGuest,
+  }: Pick<Extract<DawnReport, { kind: "report" }>, "race" | "viewerDesk"> & {
+    /** The viewer is a guest (ADR 0009); `false` for an account and for no identity at all. */
+    viewerIsGuest: boolean;
+  },
+): ReportAction[] {
+  const member = viewerDesk !== null;
+  const actions: ReportAction[] = [];
+  if (member && race.lobbyOpen && race.lobbyCode) {
+    actions.push({ kind: "again", label: results.actions.again, href: `/lobby/${race.lobbyCode}` });
   }
-  return { kind: "home", label: results.filing.home, href: "/" };
+  actions.push({ kind: "home", label: results.filing.home, href: "/" });
+  if (member && viewerIsGuest) {
+    const { signup, prompt } = results.actions;
+    actions.push({ kind: "signup", label: signup, href: "/sign-up", prompt });
+  }
+  return actions;
 }

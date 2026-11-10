@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
-import { filingLabels, podiumLabels, rankingLabels, reportAction } from "../view/report-labels";
+import { filingLabels, podiumLabels, rankingLabels, reportActions } from "../view/report-labels";
 import styles from "./dawn-report.module.css";
 import { FilingNotice } from "./filing-notice";
 import { Podium } from "./podium";
@@ -50,9 +50,16 @@ export function DawnReportLayout({
 /**
  * `/results/[raceId]` (#300 C2, ARCHITECTURE 8.1, 8.3): the site header (as the waiting room keeps it),
  * then the report: the filing notice (the one client leaf that polls) or the podium with the ranking
- * docket (#301) in its slot and the action row under it (#143: RACE AGAIN or the way home).
+ * docket (#301) in its slot and the action row under it (#143, #863: RACE AGAIN, the way home, and a
+ * guest member's prompt to open a file; `viewerIsGuest` is the viewer's guest flag, ADR 0009).
  */
-export async function DawnReportScreen({ report }: { report: DawnReport }) {
+export async function DawnReportScreen({
+  report,
+  viewerIsGuest = false,
+}: {
+  report: DawnReport;
+  viewerIsGuest?: boolean;
+}) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
   const [{ LandingHeader }, t] = await Promise.all([import("@/features/landing"), getT()]);
   const r = t.results;
@@ -73,7 +80,7 @@ export async function DawnReportScreen({ report }: { report: DawnReport }) {
           }
           actions={
             report.kind === "report" ? (
-              <ReportActions action={reportAction(r, report)} />
+              <ReportActions actions={reportActions(r, { ...report, viewerIsGuest })} />
             ) : undefined
           }
         >

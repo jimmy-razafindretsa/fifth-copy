@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { envelopeSchema, PROTOCOL_VERSION } from "./index";
 
 describe("version", () => {
-  it("is 15 (#133: `host:kick`, reject reason `removed`)", () => {
-    expect(PROTOCOL_VERSION).toBe(15);
+  it("is 16 (#137: `POST /api/internal/lobbies/:id/host`)", () => {
+    expect(PROTOCOL_VERSION).toBe(16);
   });
 
   it.each([

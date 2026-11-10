@@ -2,9 +2,16 @@ import type { ReactNode } from "react";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
-import { filingLabels, podiumLabels, rankingLabels, reportActions } from "../view/report-labels";
+import {
+  filingLabels,
+  personalLabels,
+  podiumLabels,
+  rankingLabels,
+  reportActions,
+} from "../view/report-labels";
 import styles from "./dawn-report.module.css";
 import { FilingNotice } from "./filing-notice";
+import { PersonalCard } from "./personal-card";
 import { Podium } from "./podium";
 import { RankingTable } from "./ranking-table";
 import { ReportActions } from "./report-actions";
@@ -50,7 +57,7 @@ export function DawnReportLayout({
 /**
  * `/results/[raceId]` (#300 C2, ARCHITECTURE 8.1, 8.3): the site header (as the waiting room keeps it),
  * then the report: the filing notice (the one client leaf that polls) or the podium with the ranking
- * docket (#301) in its slot and the action row under it (#143, #863: RACE AGAIN, the way home, and a
+ * docket (#301) and, for a typist, their personal stats card (#864) in their slots, the action row under it (#143, #863: RACE AGAIN, the way home, and a
  * guest member's prompt to open a file; `viewerIsGuest` is the viewer's guest flag, ADR 0009).
  */
 export async function DawnReportScreen({
@@ -76,6 +83,11 @@ export async function DawnReportScreen({
                 rows={rankingRowsFrom(report.entries, report.viewerDesk)}
                 labels={rankingLabels(r)}
               />
+            ) : undefined
+          }
+          personal={
+            report.kind === "report" && report.personal ? (
+              <PersonalCard stats={report.personal} labels={personalLabels(t)} />
             ) : undefined
           }
           actions={

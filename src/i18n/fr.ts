@@ -576,6 +576,13 @@ export const fr = {
       prompt: "Ouvre un dossier et ces résultats restent à ton nom.",
       signup: "OUVRIR UN DOSSIER →",
     },
+    personal: {
+      tag: "FORMULAIRE 5-R · TA COPIE",
+      sent: "ENVOYÉS",
+      received: "REÇUS",
+      none: "AUCUN",
+      count: "× {n}",
+    },
     podium: {
       title: "Podium",
       place: "№ {n}",

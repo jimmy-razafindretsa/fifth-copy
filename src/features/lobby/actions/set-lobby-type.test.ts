@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import { fakeLobbyDb } from "../testing/fake-db";
 
 // Contract of #114 C3, C4: `setLobbyType` is the one writer of `Lobby.type` (ADR 0008): zod first, the
@@ -10,6 +11,9 @@ const state = vi.hoisted(() => ({
   limited: false,
   limitCalls: [] as [string, string][],
   revalidated: [] as string[],
+  /** The race server's answer to `setRoomType` (#815): a stub client, never a socket. */
+  room: { ok: true, data: { v: 14, result: "ok" } } as unknown,
+  roomCalls: [] as unknown[],
 }));
 
 vi.mock("next/headers", () => ({
@@ -26,7 +30,22 @@ vi.mock("next/headers", () => ({
 vi.mock("next/cache", () => ({
   revalidatePath: (path: string) => void state.revalidated.push(path),
 }));
-vi.mock("@/env", () => ({ env: { NODE_ENV: "test", AUTH_SECRET: "a".repeat(32) } }));
+vi.mock("@/env", () => ({
+  env: {
+    NODE_ENV: "test",
+    AUTH_SECRET: "a".repeat(32),
+    RACE_SERVER_INTERNAL_URL: "http://race.test",
+    RACE_TOKEN_SECRET: "r".repeat(32),
+  },
+}));
+vi.mock("@/server/internal-api/client", () => ({
+  createInternalApiClient: () => ({
+    setRoomType: async (request: unknown) => {
+      state.roomCalls.push(request);
+      return state.room;
+    },
+  }),
+}));
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));
@@ -52,6 +71,8 @@ describe("setLobbyType (unit, fake DB)", () => {
     state.limited = false;
     state.limitCalls = [];
     state.revalidated = [];
+    state.room = { ok: true, data: { v: PROTOCOL_VERSION, result: "ok" } };
+    state.roomCalls = [];
     hostId = (await ensureGuest()).id;
     hostJar = state.jar;
     fake.seedLobby({ id: "lob_open", code: "KGB-4821", status: "WAITING", hostUserId: hostId });
@@ -65,6 +86,9 @@ describe("setLobbyType (unit, fake DB)", () => {
     expect(row("lob_open").type).toBe("PUBLIC");
     expect(state.revalidated).toEqual(["/lobby/KGB-4821"]);
     expect(state.limitCalls).toEqual([["set-lobby-type", `user:${hostId}`]]);
+    expect(state.roomCalls).toEqual([
+      { v: PROTOCOL_VERSION, lobbyId: "lob_open", lobbyType: "public" },
+    ]);
     expect(await setLobbyType({ code: "KGB-4821", type: "private" })).toEqual({ ok: true });
     expect(row("lob_open").type).toBe("PRIVATE");
   });
@@ -138,5 +162,54 @@ describe("setLobbyType (unit, fake DB)", () => {
     });
     expect(row("lob_open").type).toBe("PRIVATE");
     expect(fake.db.lobby.update).not.toHaveBeenCalled();
+    expect(state.roomCalls).toEqual([]);
+  });
+
+  describe("the room answers first (#815 C5)", () => {
+    const refusals = [
+      ["not-waiting", { ok: true, data: { v: PROTOCOL_VERSION, result: "not-waiting" } }, "closed"],
+      ["no-room", { ok: true, data: { v: PROTOCOL_VERSION, result: "no-room" } }, "closed"],
+      [
+        "a timeout, a 5xx or an unparsable body",
+        { ok: false, error: "race-server-unavailable" },
+        "unavailable",
+      ],
+    ] as const;
+
+    it.each(refusals)("%s: %s, Lobby.type unchanged, no revalidation", async (_, answer, error) => {
+      state.room = answer;
+      const users = fake.users.length;
+      expect(await setLobbyType({ code: "KGB-4821", type: "public" })).toEqual({
+        ok: false,
+        error,
+      });
+      expect(state.roomCalls).toHaveLength(1);
+      expect(row("lob_open").type).toBe("PRIVATE");
+      expect(fake.db.lobby.update).not.toHaveBeenCalled();
+      expect(state.revalidated).toEqual([]);
+      expect(fake.users).toHaveLength(users);
+    });
+
+    it("a client that throws is unavailable too, and writes nothing", async () => {
+      state.room = Promise.reject(new Error("boom"));
+      (state.room as Promise<unknown>).catch(() => undefined);
+      expect(await setLobbyType({ code: "KGB-4821", type: "public" })).toEqual({
+        ok: false,
+        error: "unavailable",
+      });
+      expect(fake.db.lobby.update).not.toHaveBeenCalled();
+    });
+
+    it("the room is asked only after the input, host, WAITING and limit checks pass", async () => {
+      await setLobbyType({ code: "KGB-4821", type: "nope" } as never);
+      await setLobbyType({ code: "AAA-0000", type: "public" });
+      await setLobbyType({ code: "ZRT-1093", type: "public" });
+      state.limited = true;
+      await setLobbyType({ code: "KGB-4821", type: "public" });
+      state.limited = false;
+      state.jar = new Map();
+      await setLobbyType({ code: "KGB-4821", type: "public" });
+      expect(state.roomCalls).toEqual([]);
+    });
   });
 });

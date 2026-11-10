@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { parseRoomCode } from "@fifth-copy/protocol";
+import { parseRoomCode, PROTOCOL_VERSION } from "@fifth-copy/protocol";
+import { env } from "@/env";
 import { getViewer } from "@/server/auth";
 import { db } from "@/server/db";
+import { createInternalApiClient } from "@/server/internal-api/client";
 import { limit } from "@/server/limiter";
 import { findLobbyByCode } from "../queries/get-lobby-by-code";
 import { setLobbyTypeInputSchema } from "../schema";
@@ -15,8 +17,11 @@ import type { SetLobbyTypeResult } from "../types";
  * (#127) and matchmaking (#128). The input is parsed first; the host is the row's `hostUserId` compared
  * with the viewer, never an id from the input, and no guest is created for it. The lobby must still be
  * WAITING. Changes count against the host's `set-lobby-type` limit (ADR 0020); a refused call writes
- * nothing. On success `/lobby/[code]` is revalidated, so the host's page shows the new type at once;
- * the others read it on their next load (no broadcast, #114 C4).
+ * nothing. Then the room is told first (#815, `POST /internal/rooms/type`): the row is written only on
+ * its `ok`, so Postgres and the room never disagree; a room past `waiting` or gone is `closed`, no answer
+ * (timeout, 5xx, unparsable body) is `unavailable`. The room broadcasts its new settings and reviews
+ * its automatic start (#814). On success `/lobby/[code]` is revalidated, so the host's page shows the
+ * new type at once; the others' LOBBY rows read it on their next load (#114 C4).
  */
 export async function setLobbyType(input: {
   code: string;
@@ -33,6 +38,14 @@ export async function setLobbyType(input: {
   if (!(await limit("set-lobby-type", `user:${viewer.id}`)).ok) {
     return { ok: false, error: "rate-limited" };
   }
+  const room = await createInternalApiClient({
+    baseUrl: env.RACE_SERVER_INTERNAL_URL,
+    secret: env.RACE_TOKEN_SECRET,
+  })
+    .setRoomType({ v: PROTOCOL_VERSION, lobbyId: lobby.id, lobbyType: parsed.data.type })
+    .catch(() => ({ ok: false as const }));
+  if (!room.ok) return { ok: false, error: "unavailable" };
+  if (room.data.result !== "ok") return { ok: false, error: "closed" };
   await db.lobby.update({
     where: { id: lobby.id },
     data: { type: parsed.data.type === "public" ? "PUBLIC" : "PRIVATE" },

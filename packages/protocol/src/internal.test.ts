@@ -21,6 +21,8 @@ import {
   MAX_ROOM_STATUS_IDS,
   roomStatusRequestSchema,
   roomStatusResponseSchema,
+  roomTypeRequestSchema,
+  roomTypeResponseSchema,
   closeLobbyRequestSchema,
   closeLobbyResponseSchema,
   raceResultsRequestSchema as resultsSchema,
@@ -425,5 +427,36 @@ describe("lobby close (#734 C6)", () => {
 
   it("a close request never parses as a results request (the race server's outbox tells them apart)", () => {
     expect(resultsSchema.safeParse(close).success).toBe(false);
+  });
+});
+
+describe("room type (#815 C1)", () => {
+  const typed = { v, lobbyId: "lob_1", lobbyType: "public" };
+
+  it.each([
+    ["request public", roomTypeRequestSchema, typed, true],
+    ["request private", roomTypeRequestSchema, { ...typed, lobbyType: "private" }, true],
+    ["request unknown type", roomTypeRequestSchema, { ...typed, lobbyType: "secret" }, false],
+    ["request missing type", roomTypeRequestSchema, { v, lobbyId: "lob_1" }, false],
+    ["request empty lobbyId", roomTypeRequestSchema, { ...typed, lobbyId: "" }, false],
+    [
+      "request oversize lobbyId",
+      roomTypeRequestSchema,
+      { ...typed, lobbyId: "l".repeat(129) },
+      false,
+    ],
+    ["request previous v", roomTypeRequestSchema, { ...typed, v: v - 1 }, false],
+    ["response ok", roomTypeResponseSchema, { v, result: "ok" }, true],
+    ["response no-room", roomTypeResponseSchema, { v, result: "no-room" }, true],
+    ["response not-waiting", roomTypeResponseSchema, { v, result: "not-waiting" }, true],
+    ["response unknown result", roomTypeResponseSchema, { v, result: "not-host" }, false],
+    ["response missing result", roomTypeResponseSchema, { v }, false],
+    ["response previous v", roomTypeResponseSchema, { v: v - 1, result: "ok" }, false],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("takes its type from the race settings' own enum", () => {
+    expect(roomTypeRequestSchema.shape.lobbyType.options).toEqual(["public", "private"]);
   });
 });

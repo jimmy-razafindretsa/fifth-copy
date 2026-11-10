@@ -9,6 +9,7 @@ import {
 import {
   boot,
   connectError,
+  postRoomType,
   SECRET,
   startedRace,
   track,
@@ -308,4 +309,38 @@ describe("public room auto start at the edge (#814 C5)", () => {
     expect(host.autoStart[1]).toBeNull();
     expect(watcher.autoStart).toEqual([null]);
   }, 20_000);
+});
+
+describe("room visibility broadcast (#815 C3)", () => {
+  it("an ok toggle sends `settings` with the new lobbyType to players and spectators; the stored value sends nothing", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const opened: RaceSettings = { ...DEFAULT_RACE_SETTINGS, timerS: 120 };
+    const lobby = await t.openRoom("KGB-4821", opened);
+    const connect = async (claims: Parameters<Booted["token"]>[0]) => {
+      const seen = track(t!.connect({ v: PROTOCOL_VERSION, token: await t!.token(claims) }));
+      await until(() => !!seen.welcome, WAIT_MS, `welcome ${claims.sub}`);
+      return seen;
+    };
+    const host = await connect({ lobby, sub: "usr_host", name: "Ada", role: "host" });
+    const guest = await connect({ lobby, sub: "usr_guest", name: "Bob" });
+    const watcher = await connect({ lobby, sub: "usr_watch", name: "Eve", role: "spectator" });
+
+    const res = await postRoomType(t, lobby, "public");
+    expect(res).toEqual({ status: 200, body: { v: PROTOCOL_VERSION, result: "ok" } });
+    const expected = { ...opened, lobbyType: "public" };
+    await until(
+      () => [host, guest, watcher].every((s) => s.settings.length === 1),
+      WAIT_MS,
+      "settings broadcast",
+    );
+    for (const seen of [host, guest, watcher]) expect(seen.settings).toEqual([expected]);
+
+    // Already PUBLIC: ok, and no second broadcast.
+    expect((await postRoomType(t, lobby, "public")).body).toEqual({
+      v: PROTOCOL_VERSION,
+      result: "ok",
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    for (const seen of [host, guest, watcher]) expect(seen.settings).toHaveLength(1);
+  });
 });

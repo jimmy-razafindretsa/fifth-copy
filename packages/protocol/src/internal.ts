@@ -113,6 +113,25 @@ export const roomStatusResponseSchema = z.object({
 export type RoomStatusResponse = z.infer<typeof roomStatusResponseSchema>;
 
 /**
+ * `POST /internal/rooms/type` (web -> race server, #815): the host filed PUBLIC or PRIVATE. Postgres
+ * owns `Lobby.type` (ADR 0008); the web asks the room first and writes the row only on `ok`, and the
+ * room's `settings.lobbyType` follows. Extension point: one Postgres-owned setting per request.
+ */
+export const roomTypeRequestSchema = z.object({
+  v: versionSchema,
+  lobbyId: idSchema,
+  lobbyType: raceSettingsSchema.shape.lobbyType,
+});
+export type RoomTypeRequest = z.infer<typeof roomTypeRequestSchema>;
+
+/** `ok` (filed, or already the stored value); `not-waiting` (the race left `waiting`); `no-room`. */
+export const roomTypeResponseSchema = z.object({
+  v: versionSchema,
+  result: z.enum(["ok", "no-room", "not-waiting"]),
+});
+export type RoomTypeResponse = z.infer<typeof roomTypeResponseSchema>;
+
+/**
  * `POST /api/internal/races` (race server -> web, on `host:start`): create the Race row and pick the
  * text. Idempotent on `raceId`. The web stamps its own `ENGINE_VERSION` (same deploy, ADR 0012).
  */
@@ -272,11 +291,11 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   timestamp: "1767225600",
   nonce: "5f2b9c0e8a4d4e1b9f3a7c6d2e1b0a98",
   body:
-    '{"v":13,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":14,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "3f4a3d03de1731ea5bef0e5cb93228f733e175621446e15acefaac3fd3fd7f1f",
+  signature: "8866d3ad5ed383ebfd0d456cdcd42791bfebab944899e8541d30606d49ab279e",
 } as const;

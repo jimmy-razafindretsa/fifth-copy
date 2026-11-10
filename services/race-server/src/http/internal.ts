@@ -4,10 +4,13 @@ import {
   PROTOCOL_VERSION,
   openRoomRequestSchema,
   roomStatusRequestSchema,
+  roomTypeRequestSchema,
   type InternalError,
   type OpenRoomResponse,
   type RoomStatus,
   type RoomStatusResponse,
+  type RoomTypeResponse,
+  type RaceSettings,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import { ROOM_SEATS, type RoomRegistry } from "../rooms/registry";
@@ -36,6 +39,11 @@ type Deps = {
   nonces: NonceStore;
   /** SIGTERM drain (#704): new rooms are refused with a retryable 503. */
   draining?: () => boolean;
+  /**
+   * A room's visibility changed (#815): the composition root broadcasts the new settings and asks
+   * the lifecycle to review the automatic start. Not called when the type was already stored.
+   */
+  onLobbyType?: (lobbyId: string, settings: RaceSettings) => void;
 };
 
 /** `Retry-After` of a room refused while draining (#704): the next deployment is already up. */
@@ -48,12 +56,13 @@ const error = (status: number, code: InternalError["error"]) => ({
 
 /**
  * Web -> race server routes (ADR 0006 point 6). One entry per path: `POST /internal/rooms` (open),
- * `POST /internal/rooms/status` (#806); `PATCH /internal/rooms/:id/settings` and `/close` land here later. Each handler parses its body with a protocol schema.
+ * `POST /internal/rooms/status` (#806), `POST /internal/rooms/type` (#815); `PATCH /internal/rooms/:id/settings` and `/close` land here later. Each handler parses its body with a protocol schema.
  */
 export function internalRoutes({
   registry,
   draining = () => false,
-}: Pick<Deps, "registry" | "draining">): InternalRoute[] {
+  onLobbyType = () => {},
+}: Pick<Deps, "registry" | "draining" | "onLobbyType">): InternalRoute[] {
   return [
     {
       method: "POST",
@@ -112,6 +121,24 @@ export function internalRoutes({
         const res: RoomStatusResponse = {
           v: PROTOCOL_VERSION,
           rooms: found.filter((room) => room !== null),
+        };
+        return { status: 200, body: res };
+      },
+    },
+    {
+      // The host filed PUBLIC or PRIVATE (#815, ADR 0008): the web writes `Lobby.type` only on `ok`.
+      // Not refused while draining: it writes a live room, it opens none. The body is a result only.
+      method: "POST",
+      path: "/internal/rooms/type",
+      async handle(body) {
+        const parsed = roomTypeRequestSchema.safeParse(body);
+        if (!parsed.success) return error(400, "bad-body");
+        const { lobbyId, lobbyType } = parsed.data;
+        const typed = await registry.setLobbyType(lobbyId, lobbyType);
+        if (typed.ok && typed.changed) onLobbyType(lobbyId, typed.settings);
+        const res: RoomTypeResponse = {
+          v: PROTOCOL_VERSION,
+          result: typed.ok ? "ok" : typed.reason,
         };
         return { status: 200, body: res };
       },

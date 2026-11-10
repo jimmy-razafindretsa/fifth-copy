@@ -23,6 +23,11 @@ export async function throttleSignUp(): Promise<LimitVerdict> {
   return limit("sign-up", await requestIpSubject());
 }
 
+/** One guest creation of this client (`guest-create`, 120 per minute, #840). */
+export async function throttleGuestCreate(): Promise<LimitVerdict> {
+  return limit("guest-create", await requestIpSubject());
+}
+
 /** One avatar upload of this viewer (`avatar-upload`, 5 per minute). */
 export function throttleAvatarUpload(viewerId: string): Promise<LimitVerdict> {
   return limit("avatar-upload", `user:${viewerId}`);

@@ -14,6 +14,9 @@ const state = vi.hoisted(() => ({
   db: null as unknown,
   viewer: null as Viewer | null,
   revalidated: [] as string[],
+  limits: [] as string[],
+  limited: false,
+  locale: "en" as "en" | "fr",
 }));
 
 vi.mock("next/headers", () => ({
@@ -39,6 +42,25 @@ vi.mock("@/server/auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/auth")>()),
   getViewer: async () => state.viewer,
 }));
+
+// #840: the shared limiter (ADR 0020) recorded, refusing while `state.limited`.
+vi.mock("@/server/limiter", () => ({
+  requestIpSubject: async () => "ip:203.0.113.7",
+  limit: async (action: string, subject: string) => {
+    state.limits.push(`${action}:${subject}`);
+    return state.limited ? { ok: false, retryAfterMs: 90_000 } : { ok: true };
+  },
+}));
+vi.mock("@/i18n", async () => {
+  const { en } = await import("@/i18n/en");
+  const { fr } = await import("@/i18n/fr");
+  const { fill } = await import("@/i18n/format");
+  return {
+    fill,
+    getT: async () => (state.locale === "fr" ? fr : en),
+    getLocale: async () => state.locale,
+  };
+});
 
 const { updatePreferences } = await import("../index");
 const { refreshPreferenceCookies } = await import("../server");
@@ -76,6 +98,61 @@ describe("updatePreferences validation (#66 C1)", () => {
   });
 });
 
+describe("updatePreferences guest creation throttle (#840 C1)", () => {
+  const noDb = new Proxy(
+    {},
+    {
+      get: () => {
+        throw new Error("no db call expected for a throttled save");
+      },
+    },
+  );
+  beforeEach(() => {
+    state.jar.clear();
+    state.viewer = null;
+    state.limits = [];
+    state.limited = true;
+    state.locale = "en";
+    state.db = noDb;
+  });
+
+  it.each([
+    ["en", "Too many tries. Try again in 2 min."],
+    ["fr", "Trop d'essais. Réessaie dans 2 min."],
+  ] as const)(
+    "a visitor over the per-IP guest-create budget gets the generic %s throttle line, no guest",
+    async (locale, message) => {
+      state.locale = locale;
+      await expect(updatePreferences({ layout: "CSA" })).resolves.toEqual({
+        ok: false,
+        reason: "rate-limited",
+        message,
+      });
+      expect(state.limits).toEqual(["guest-create:ip:203.0.113.7"]);
+      expect(state.jar.has(GUEST_COOKIE)).toBe(false);
+    },
+  );
+
+  it("a viewer who already has an identity spends no guest-create budget", async () => {
+    state.viewer = { id: "u1", name: "Ada", isGuest: true, hasAvatar: false };
+    const calls: string[] = [];
+    state.db = {
+      preference: {
+        upsert: async () => void calls.push("upsert"),
+        findUnique: async () => null,
+      },
+    };
+    await expect(updatePreferences({ layout: "CSA" })).resolves.toMatchObject({ ok: true });
+    expect(state.limits).toEqual([]);
+    expect(calls).toEqual(["upsert"]);
+  });
+
+  it("an invalid patch spends no budget", async () => {
+    await updatePreferences({ layout: "DVORAK" });
+    expect(state.limits).toEqual([]);
+  });
+});
+
 describe.skipIf(!testDatabaseUrl)(
   "updatePreferences and refreshPreferenceCookies (integration, needs TEST_DATABASE_URL)",
   { timeout: 15_000 },
@@ -99,6 +176,8 @@ describe.skipIf(!testDatabaseUrl)(
       state.jar.clear();
       state.viewer = null;
       state.revalidated = [];
+      state.limits = [];
+      state.limited = false;
       state.db = db;
     });
     afterAll(async () => {
@@ -120,6 +199,8 @@ describe.skipIf(!testDatabaseUrl)(
     it("C1 a visitor with no viewer gets a guest first, and the row is theirs", async () => {
       const result = await updatePreferences({ layout: "CSA" });
       expect(result.ok).toBe(true);
+      // #840: the admitted guest creation spent the per-IP budget once
+      expect(state.limits).toEqual(["guest-create:ip:203.0.113.7"]);
       const cookie = state.jar.get(GUEST_COOKIE)?.value;
       expect(cookie).toBeDefined();
       const guestId = cookie!.slice(0, cookie!.lastIndexOf("."));

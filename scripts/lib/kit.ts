@@ -205,7 +205,7 @@ export function lockViolation(
     const limit = LOCK_LIMITS[flag] ?? 1;
     if (holders.length >= limit)
       return limit === 1
-        ? `another ${flag} card is in flight (${holders[0].id})`
+        ? `another ${flag} card is in flight (${holders[0]?.id})`
         : `${limit} ${flag} cards are in flight (${holders.map((c) => c.id).join(", ")})`;
   }
   const areas = card.labels.filter((l) => l.startsWith("area:"));

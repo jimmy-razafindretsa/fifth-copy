@@ -23,3 +23,20 @@ export type OpenLobby = { code: string; typists: number; bots: number; seats: nu
 /** listOpenLobbies' answer (#806); the landing's open-rooms docket renders it (#807). */
 export type ListOpenLobbiesResult =
   { ok: true; lobbies: OpenLobby[] } | { ok: false; error: "race-server-unavailable" };
+
+/** createInvite's answer (#808): the single-use link `${NEXT_PUBLIC_APP_URL}/invite/<token>`, or why not. */
+export type CreateInviteResult =
+  | { ok: true; url: string }
+  | {
+      ok: false;
+      error: "invalid" | "not-found" | "not-host" | "closed" | "rate-limited" | "unavailable";
+    };
+
+/** redeemInvite's answer (#808): the lobby's code, once per token. `not-found`: never issued, used or expired. */
+export type RedeemInviteResult =
+  | { ok: true; code: RoomCode }
+  | { ok: false; error: "invalid" | "not-found" | "closed" | "rate-limited" | "unavailable" };
+
+/** peekInvite's answer (#808): the token is on file, or why not. */
+export type PeekInviteResult =
+  { ok: true } | { ok: false; error: "invalid" | "not-found" | "rate-limited" | "unavailable" };

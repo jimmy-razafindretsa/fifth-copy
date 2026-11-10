@@ -244,6 +244,22 @@ export const en = {
       stageHint: "THE MAJOR · HE'S WATCHING YOUR CURSOR",
     },
   },
+  /** `/invite/[token]` (#809, bible 14.3): the invitation screen and the refusal screen. */
+  invite: {
+    kicker: "MINISTRY OF TYPING · INVITATION",
+    title: "YOU ARE EXPECTED",
+    rows: [
+      ["FORM", "INVITE"],
+      ["SEATS", "ONE"],
+    ],
+    take: "TAKE YOUR DESK",
+    refused: {
+      stamp: "REFUSED",
+      stamp2: "LINK USED OR EXPIRED",
+      body: "Ask the host for a new link, or join with the room code.",
+      home: "REPORT TO YOUR DESK",
+    },
+  },
   lobby: {
     /** The kicker names the lobby's type (`Lobby.type`, #105). */
     kicker: { private: "WAITING ROOM · PRIVATE RACE", public: "WAITING ROOM · PUBLIC RACE" },
@@ -402,6 +418,20 @@ export const en = {
       copiedStatus: "Room code copied",
       /** Read out when the clipboard is unavailable and the code is selected instead. */
       selectedStatus: "Room code selected: copy it with your keyboard",
+    },
+    /** The host's single-use link row (#809, bible 14.3), right after INVITE in the room docket. */
+    links: {
+      label: "LINK",
+      newLink: "NEW LINK",
+      issuing: "ISSUING…",
+      /** The shown link's accessible name (the URL itself is the visible value). */
+      urlName: "Invite link",
+      copy: "COPY",
+      copied: "COPIED",
+      copiedStatus: "Invite link copied",
+      selectedStatus: "Invite link selected: copy it with your keyboard",
+      /** createInvite answered `not-host` (the row only shows to the host; the action decides). */
+      notHost: "Only the host can issue a link.",
     },
   },
   race: {

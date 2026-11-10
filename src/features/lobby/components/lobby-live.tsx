@@ -21,6 +21,7 @@ import {
 import { PlayerList, PlayerListSkeleton } from "./player-list";
 import { SeatRing } from "./seat-ring";
 import { InviteDocket } from "./invite-docket";
+import { InviteLinkRow } from "./invite-link-row";
 import { ROOM_CODE_ID, RoomCodeDocket } from "./room-code-docket";
 import { hostForm } from "./settings-controls";
 import { SettingsDocket } from "./settings-docket";
@@ -117,7 +118,18 @@ export function LobbyLiveView({
           seats={ROOM_SEATS}
           labels={labels}
         >
-          <InviteDocket code={code} codeId={ROOM_CODE_ID} labels={labels.invite} />
+          <InviteDocket
+            code={code}
+            codeId={ROOM_CODE_ID}
+            labels={labels.invite}
+            // the host's single-use link row (#809): only for the viewer whose own row hosts;
+            // createInvite refuses everyone else anyway
+            links={
+              isHost(state) ? (
+                <InviteLinkRow code={code} labels={labels.links} errors={errors} />
+              ) : undefined
+            }
+          />
         </RoomCodeDocket>
         {state.phase === "error" ? null : (
           <SettingsDocket settings={state.settings} labels={labels.settings} {...edits} />

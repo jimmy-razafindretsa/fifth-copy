@@ -25,3 +25,4 @@ export type {
 } from "./types";
 export type { CreateLobbyOptions } from "./actions/create-lobby";
 export { LobbyScreen } from "./components/lobby-screen";
+export { InvitePage } from "./components/invite-page";

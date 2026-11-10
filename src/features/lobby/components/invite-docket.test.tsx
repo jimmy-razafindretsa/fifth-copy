@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../actions/create-invite", () => ({ createInvite: vi.fn() }));
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { copiedHoldMs, copyRoomCode, InviteDocket, InviteRow } from "./invite-docket";
+import { IDLE_LINK, InviteLinkRowView, linkErrorCopy, type LinkRowState } from "./invite-link-row";
 import { RoomCodeDocket } from "./room-code-docket";
 
 // Contract of #498 C4: the room docket's invite row, a 7.1 ink button COPY that writes the code to the
@@ -114,5 +117,76 @@ describe("RoomCodeDocket keeps its rows and takes the invite rows after them", (
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain(`id="lobby-room-code"`);
     expect(html.match(new RegExp(CODE, "g"))).toHaveLength(1);
+  });
+});
+
+// #809 C4: the host's link row: LINK | NEW LINK (ISSUING… pending), the issued URL (mono, one line,
+// ellipsis, title) with its own COPY, the polite status, and a refusal as the 7.4 inline error line.
+describe("InviteLinkRowView (#809 C4)", () => {
+  const URL = "http://localhost:3000/invite/" + "A".repeat(43);
+  const linkRow = (state: LinkRowState, catalog = en) =>
+    renderToStaticMarkup(
+      <dl>
+        <InviteLinkRowView
+          state={state}
+          labels={catalog.lobby.links}
+          errors={catalog.landing.errors}
+          urlId="u"
+          errorId="e"
+        />
+      </dl>,
+    );
+
+  it("idle: LINK | the ink NEW LINK button, no URL", () => {
+    const html = linkRow(IDLE_LINK);
+    expect(html).toContain(">LINK</dt>");
+    expect(html).toMatch(/<button type="button" class="[^"]*ink[^"]*"[^>]*>NEW LINK<\/button>/);
+    expect(html).not.toContain("/invite/");
+    expect(html).toMatch(/class="[^"]*invite[^"]*"/);
+  });
+
+  it("pending: ISSUING…, disabled and aria-busy", () => {
+    const html = linkRow({ ...IDLE_LINK, pending: true });
+    expect(html).toMatch(/disabled="" aria-busy="true"[^>]*>ISSUING…</);
+  });
+
+  it("shown: the URL with its title, then its own COPY", () => {
+    const html = linkRow({ ...IDLE_LINK, url: URL });
+    expect(html).toContain(`title="${URL}"`);
+    expect(html).toContain(`>${URL}</span>`);
+    expect(html.indexOf(URL)).toBeLessThan(html.lastIndexOf(">COPY</button>"));
+    expect(html).toContain(">NEW LINK</button>");
+  });
+
+  it("copied: COPIED and the polite status; selected: the selection status", () => {
+    const copied = linkRow({ ...IDLE_LINK, url: URL, copy: "copied" });
+    expect(copied).toContain(">COPIED</button>");
+    expect(copied).toContain(">Invite link copied</span>");
+    const selected = linkRow({ ...IDLE_LINK, url: URL, copy: "selected" });
+    expect(selected).toContain(en.lobby.links.selectedStatus);
+  });
+
+  it("error: the 7.4 inline error line, the button described by it", () => {
+    const html = linkRow({ ...IDLE_LINK, error: "not-host" });
+    expect(html).toContain('role="alert"');
+    expect(html).toContain(en.lobby.links.notHost);
+    expect(html).toContain('aria-describedby="e"');
+  });
+
+  it("every refusal maps to a sentence", () => {
+    const l = en.lobby.links;
+    const e = en.landing.errors;
+    expect(linkErrorCopy(l, e, "closed")).toBe(e.closed);
+    expect(linkErrorCopy(l, e, "unavailable")).toBe(e.unavailable);
+    expect(linkErrorCopy(l, e, "rate-limited")).toBe(e.generic);
+    expect(linkErrorCopy(l, e, "invalid")).toBe(e.generic);
+  });
+
+  it("French", () => {
+    const html = linkRow({ ...IDLE_LINK, url: URL, copy: "copied" }, fr);
+    expect(html).toContain(">LIEN</dt>");
+    expect(html).toContain(">NOUVEAU LIEN</button>");
+    expect(html).toContain(">COPIÉ</button>");
+    expect(html).toContain("Lien d&#x27;invitation copié");
   });
 });

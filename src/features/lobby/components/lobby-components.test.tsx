@@ -15,6 +15,7 @@ import { IDLE_FORM, type FormState } from "./settings-form";
 // Contract of card 107, C6: every state renders, every string from the catalog (C6 greps `src`).
 vi.mock("../actions/mint-race-token", () => ({ mintRaceToken: vi.fn() }));
 vi.mock("../actions/set-lobby-type", () => ({ setLobbyType: vi.fn() }));
+vi.mock("../actions/create-invite", () => ({ createInvite: vi.fn() }));
 
 const labels = en.lobby;
 const errors = en.landing.errors;
@@ -394,6 +395,18 @@ describe("lobby layout (#498)", () => {
     expect(html).toContain(labels.settings.tag);
     expect(html).toContain(`>${labels.invite.copy}<`);
     expect(html).not.toContain(`>${labels.start.button}<`);
+  });
+
+  it("#809 C4 the host's link row follows INVITE; a guest has none", () => {
+    const hostHtml = view(live([host, guest], 1));
+    expect(at(hostHtml, `>${labels.invite.copy}<`)).toBeLessThan(
+      at(hostHtml, `>${labels.links.label}</dt>`),
+    );
+    expect(hostHtml).toContain(`>${labels.links.newLink}</button>`);
+    const guestHtml = view(live([host, guest], 2));
+    expect(guestHtml).not.toContain(`>${labels.links.label}</dt>`);
+    expect(guestHtml).not.toContain(labels.links.newLink);
+    expect(view(initialLobbyState)).not.toContain(labels.links.newLink);
   });
 
   it("loading: the settings docket's skeleton rows; an error shows no settings docket", () => {

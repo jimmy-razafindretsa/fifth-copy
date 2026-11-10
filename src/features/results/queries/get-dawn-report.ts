@@ -3,6 +3,7 @@ import { z } from "zod";
 import { outfitForDesk, parseOutfit } from "@/features/identity";
 import type { db as appDb } from "@/server/db";
 import type { DawnReport, ReportEntry } from "../view/dawn-report";
+import { personalFrom } from "../view/personal";
 
 /** Who is looking: only the id matters (ADR 0009: the viewer's desk is the row whose `userId` is theirs). */
 type ReportViewer = { id: string } | null;
@@ -19,6 +20,8 @@ const raceIdSchema = z.uuid();
  * flagged: the podium shows them under review (ARCHITECTURE 7.7). Each entry's clerk outfit (#688) comes
  * from the same query (the result's `user.outfit`): the saved outfit when the catalogue accepts it, else
  * the desk's fixed one (bots, guests with nothing saved, a stored value the catalogue now rejects).
+ * `personal` (#864) is the viewer's own row as the personal stats card reads it: their bonus log is
+ * tallied by kind here, and every other desk's log stays inside this function.
  */
 export async function getDawnReport(
   raceId: string,
@@ -50,6 +53,8 @@ export async function getDawnReport(
           progress: true,
           finishedAtMs: true,
           suspicious: true,
+          // #864: read for the viewer's own row only; no other desk's log leaves this function
+          bonusLog: true,
           user: { select: { outfit: true } },
         },
       },
@@ -87,5 +92,7 @@ export async function getDawnReport(
     },
     entries,
     viewerDesk: mine?.desk ?? null,
+    // #864 C1: the viewer's own figures and bonuses; null for a spectator and a visitor
+    personal: mine ? personalFrom(mine) : null,
   };
 }

@@ -8,7 +8,7 @@ import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { deskLabel, fill, playersLabel } from "./lobby-labels";
 import { LobbyLiveView, type StartState } from "./lobby-live";
-import { initialLobbyState, type LobbyState } from "./lobby-store";
+import { initialLobbyState, NO_AUTO_START, type LobbyState } from "./lobby-store";
 import { PlayerList } from "./player-list";
 import { IDLE_FORM, type FormState } from "./settings-form";
 
@@ -35,6 +35,7 @@ const live = (members: Member[], you = 1): LobbyState => ({
   members,
   raceId: null,
   settings: DEFAULT_RACE_SETTINGS,
+  autoStart: NO_AUTO_START,
 });
 const view = (state: LobbyState) =>
   renderToStaticMarkup(<LobbyLiveView code={CODE} state={state} labels={labels} errors={errors} />);
@@ -551,5 +552,128 @@ describe("lobby client code keeps @/features/race out of the first load", () => 
   it("lobby-live loads the race module lazily", () => {
     const text = readFileSync(path.join(dir, "lobby-live.tsx"), "utf8");
     expect(text).toMatch(/import\(\s*["']@\/features\/race["']\s*\)/);
+  });
+});
+
+// Contract of #814 C7: a public room's automatic start in the waiting room (bible 7.4, 14.3, 8).
+describe("public room auto start (#814 C7)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const NOW = 1767225600000;
+  const armed = (you: number, seconds = 45): LobbyState => ({
+    ...live([host, guest], you),
+    settings: { ...DEFAULT_RACE_SETTINGS, lobbyType: "public" },
+    autoStart: { at: NOW + 45_000, offset: 0, notice: { kind: "armed", seconds } },
+  });
+  const render = (state: LobbyState, autoStartS?: number | null, l = labels) =>
+    renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={state}
+        labels={l}
+        errors={errors}
+        autoStartS={autoStartS}
+      />,
+    );
+  /** The STATUS row's value, tags stripped. */
+  const status = (html: string, l = labels) =>
+    new RegExp(`<dt[^>]*>${l.status}</dt><dd[^>]*>(.*?)</dd>`)
+      .exec(html)![1]!
+      .replace(/<[^>]+>/g, "");
+  const statuses = (html: string) =>
+    [...html.matchAll(/<p role="status" class="([^"]*)"[^>]*>([^<]*)</g)].map((m) => ({
+      cls: m[1]!,
+      text: m[2]!,
+    }));
+  const polite = (html: string) =>
+    [...html.matchAll(/<p aria-live="polite"[^>]*>([^<]*)</g)].map((m) => m[1]);
+
+  it("pending: STATUS reads STARTS IN n S with only the figure pulsing, outside any live region", () => {
+    const html = render(armed(1), 45);
+    expect(status(html)).toBe("STARTS IN 45 S");
+    expect(html).toMatch(/<dd[^>]*>STARTS IN <span class="[^"]*_pulse_[^"]*">45<\/span> S<\/dd>/);
+    expect(status(render(armed(1), 12))).toBe("STARTS IN 12 S");
+    // the figure is never inside a live region
+    for (const region of html.match(/<p aria-live="polite"[^>]*>[^<]*<\/p>/g) ?? [])
+      expect(region).not.toContain("STARTS IN");
+  });
+
+  it("the host keeps START, enabled, and sees no notice row", () => {
+    const html = render(armed(1), 45);
+    expect(html).toMatch(new RegExp(`<button[^>]*>${labels.start.button}<`));
+    expect(html).not.toMatch(new RegExp(`<button[^>]*disabled[^>]*>${labels.start.button}<`));
+    expect(statuses(html).map((s) => s.text)).not.toContain(labels.autoStart.notice);
+    expect(html).not.toContain(labels.waitingForHost);
+  });
+
+  it("a guest: the still AUTOMATIC START row in the place of WAITING FOR THE HOST, no START", () => {
+    const html = render(armed(2), 30);
+    expect(status(html)).toBe("STARTS IN 30 S");
+    const rows = statuses(html);
+    expect(rows.map((r) => r.text)).toEqual([labels.autoStart.notice]);
+    expect(rows[0]!.cls).toMatch(/_notice_/);
+    expect(rows[0]!.cls).not.toMatch(/_pulse_/);
+    expect(html).not.toContain(labels.waitingForHost);
+    expect(html).not.toContain(`>${labels.start.button}<`);
+  });
+
+  it("zero: STARTING… until the countdown moves the page", () => {
+    expect(status(render(armed(2), 0))).toBe(labels.start.pending);
+    expect(status(render(armed(2), 0))).toBe("STARTING…");
+  });
+
+  it("dropped: WAITING and WAITING FOR THE HOST again, one polite announcement", () => {
+    const dropped: LobbyState = {
+      ...armed(2),
+      autoStart: { at: null, offset: 0, notice: { kind: "dropped" } },
+    };
+    const html = render(dropped, null);
+    expect(status(html)).toBe(labels.waiting);
+    expect(statuses(html).map((r) => r.text)).toEqual([labels.waitingForHost]);
+    expect(polite(html)).toContain("The race waits for the host.");
+  });
+
+  it("armed: one polite announcement with the seconds at arrival; none without an instant", () => {
+    expect(polite(render(armed(2), 40))).toContain("The race starts by itself in 45 seconds.");
+    expect(polite(render(armed(2, 41), 40))).toContain("The race starts by itself in 41 seconds.");
+    expect(polite(view(live([host, guest], 2)))).toEqual(["2 players in the room"]);
+    // a public room keeps its (empty) second region mounted, so the arming is announced
+    expect(polite(render({ ...armed(2), autoStart: NO_AUTO_START }))).toEqual([
+      "2 players in the room",
+      "",
+    ]);
+    expect(status(view(live([host, guest], 2)))).toBe(labels.waiting);
+  });
+
+  it("reconnecting keeps the last figure under the pulsing CONNECTION LOST row", () => {
+    const html = render({ ...armed(2), phase: "reconnecting" }, 20);
+    expect(status(html)).toBe("STARTS IN 20 S");
+    expect(statuses(html).map((r) => r.text)).toEqual([
+      labels.reconnecting,
+      labels.autoStart.notice,
+    ]);
+  });
+
+  it("reduced motion: the figure's pulse is the lobby's .pulse, which stops under both switches", () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), "lobby.module.css"),
+      "utf8",
+    );
+    expect(css).toMatch(
+      /prefers-reduced-motion: reduce\)\s*\{[^}]*\.pulse\s*\{\s*animation: none;/,
+    );
+    expect(css).toMatch(/:root\[data-motion="reduce"\] \.pulse\s*\{\s*animation: none;/);
+    // the count still steps: the figure is rendered text, not an animation
+    expect(status(render(armed(2), 9))).toBe("STARTS IN 9 S");
+  });
+
+  it("French: DÉPART DANS n S, DÉPART AUTOMATIQUE, DÉMARRAGE… at zero", () => {
+    const l = fr.lobby;
+    expect(status(render(armed(2), 45, l), l)).toBe("DÉPART DANS 45 S");
+    expect(render(armed(2), 45, l)).toContain("DÉPART AUTOMATIQUE");
+    expect(status(render(armed(2), 0, l), l)).toBe("DÉMARRAGE…");
+    expect(polite(render(armed(2), 45, l))).toContain(
+      "La course démarre toute seule dans 45 secondes.",
+    );
   });
 });

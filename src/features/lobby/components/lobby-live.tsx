@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import type { RoomSocket } from "@/features/race";
@@ -9,13 +17,15 @@ import { setLobbyType } from "../actions/set-lobby-type";
 import { errorMessage, type EntryErrors } from "./entry-errors";
 import { InlineError } from "./inline-error";
 import { joinRoom } from "./late-join";
-import { playersLabel, type LobbyLabels } from "./lobby-labels";
+import { fill, playersLabel, type LobbyLabels } from "./lobby-labels";
 import {
+  autoStartSecondsAt,
   bindRoomSocket,
   initialLobbyState,
   lobbyErrorCopy,
   reduceLobby,
   ROOM_SEATS,
+  type AutoStartState,
   type LobbyState,
 } from "./lobby-store";
 import { PlayerList, PlayerListSkeleton } from "./player-list";
@@ -44,6 +54,40 @@ export type StartState = { pending: boolean; error: StartError | null; hidden: b
 
 const IDLE_START: StartState = { pending: false, error: null, hidden: false };
 
+/**
+ * The automatic start's seconds step once a second (#814), the Sabotage tray's recipe
+ * (`COOLDOWN_SAMPLE_MS`, #236): a 1 Hz sampler of the offset clock while an instant is pending.
+ */
+export const AUTO_START_SAMPLE_MS = 1_000;
+
+/** Whole seconds left of the room's automatic start, sampled at 1 Hz; null with none pending. */
+export function useAutoStartSeconds(auto: AutoStartState): number | null {
+  const pending = auto.at !== null;
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (!pending) return () => {};
+      const id = setInterval(onChange, AUTO_START_SAMPLE_MS);
+      return () => clearInterval(id);
+    },
+    [pending],
+  );
+  const read = useCallback(() => autoStartSecondsAt(auto, Date.now()), [auto]);
+  return useSyncExternalStore(subscribe, read, () => null);
+}
+
+/** `STARTS IN 45 S` with only the figure pulsing (bible 7.4 cooldown recipe, 8 `lkPulse`). */
+function AutoStartStatus({ seconds, labels }: { seconds: number; labels: LobbyLabels }) {
+  if (seconds <= 0) return <>{labels.start.pending}</>;
+  const [before = "", after = ""] = labels.autoStart.status.split("{n}");
+  return (
+    <>
+      {before}
+      <span className={styles.pulse}>{seconds}</span>
+      {after}
+    </>
+  );
+}
+
 type ViewProps = {
   code: string;
   state: LobbyState;
@@ -65,6 +109,11 @@ type ViewProps = {
    * only (never hidden here): placed under the settings docket, above START.
    */
   reset?: ReactNode;
+  /**
+   * Whole seconds left of the public room's automatic start (#814, `useAutoStartSeconds`); absent, it
+   * is read once from the device clock. Ignored while no instant is pending.
+   */
+  autoStartS?: number | null;
 };
 
 /** The viewer's own row says whether they host (`Member.isHost`, protocol v4). */
@@ -88,6 +137,7 @@ export function LobbyLiveView({
   revision = 0,
   onSetting,
   reset = null,
+  autoStartS,
 }: ViewProps) {
   const state: LobbyState =
     room.settings && lobbyType ? { ...room, settings: { ...room.settings, lobbyType } } : room;
@@ -96,6 +146,19 @@ export function LobbyLiveView({
   const canStart = (state.phase === "live" || state.phase === "starting") && isHost(state);
   // a non-host waits for the host's START: a statement row, so it does not pulse (bible 7.4, #105)
   const waitsForHost = known && state.phase !== "starting" && !isHost(state);
+  // a public room's automatic start (#814): the STATUS row counts down, a guest reads AUTOMATIC START
+  const { notice: autoNotice } = state.autoStart;
+  // without a ticking figure (a static render), the seconds the server announced stand in
+  const seconds =
+    !known || state.autoStart.at === null
+      ? null
+      : (autoStartS ?? (autoNotice?.kind === "armed" ? autoNotice.seconds : null));
+  const announcement =
+    !known || autoNotice === null
+      ? ""
+      : autoNotice.kind === "armed"
+        ? fill(labels.autoStart.armed, { n: autoNotice.seconds })
+        : labels.autoStart.dropped;
   // the host edits while the room is live and waiting; `not-host` (form hidden) falls back to the rows
   const edits =
     state.phase === "live" && state.settings && isHost(state) && form.status !== "hidden"
@@ -117,6 +180,9 @@ export function LobbyLiveView({
           count={known ? state.members.length : null}
           seats={ROOM_SEATS}
           labels={labels}
+          status={
+            seconds === null ? undefined : <AutoStartStatus seconds={seconds} labels={labels} />
+          }
         >
           <InviteDocket
             code={code}
@@ -166,7 +232,7 @@ export function LobbyLiveView({
           ) : null}
           {waitsForHost ? (
             <p role="status" className={styles.notice}>
-              {labels.waitingForHost}
+              {seconds === null ? labels.waitingForHost : labels.autoStart.notice}
             </p>
           ) : null}
           {/* a late joiner (#732): a statement row, so it does not pulse (bible 7.4, 14.3) */}
@@ -189,6 +255,13 @@ export function LobbyLiveView({
           <p aria-live="polite" className={styles.srOnly}>
             {known ? playersLabel(labels, state.members.length) : ""}
           </p>
+          {/* a public room's automatic start, its arrival and drop once each (#814); the ticking figure
+              is never live, and a private room has no second region */}
+          {state.settings?.lobbyType === "public" ? (
+            <p aria-live="polite" className={styles.srOnly}>
+              {announcement}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>
@@ -224,6 +297,7 @@ export function LobbyLive({
 }) {
   const router = useRouter();
   const [state, dispatch] = useReducer(reduceLobby, initialLobbyState);
+  const autoStartS = useAutoStartSeconds(state.autoStart);
   const [start, setStart] = useState<StartState>(IDLE_START);
   const [form, setForm] = useState<FormState>(IDLE_FORM);
   const [revision, setRevision] = useState(0);
@@ -344,6 +418,7 @@ export function LobbyLive({
       revision={revision}
       onSetting={onSetting}
       reset={reset}
+      autoStartS={autoStartS}
     />
   );
 }

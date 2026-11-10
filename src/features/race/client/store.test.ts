@@ -74,6 +74,7 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   bonus: null,
   resumeKey: KEY,
   serverNow: 1_767_225_600_000,
+  autoStartAt: null,
   ...over,
 });
 
@@ -1852,6 +1853,7 @@ describe("#236 bonus state", () => {
           state: { ...initialState(), typed: [] },
           bonus,
           serverNow: SERVER_NOW,
+          autoStartAt: null,
         }),
         receivedAt: RECEIVED_AT,
       });
@@ -1879,6 +1881,7 @@ describe("#236 bonus state", () => {
           state: { ...initialState(), typed: [] },
           bonus: { card: "smoke-break", cooldownUntil: null, blurUntil: null },
           serverNow: SERVER_NOW,
+          autoStartAt: null,
         }),
         receivedAt: RECEIVED_AT,
       });

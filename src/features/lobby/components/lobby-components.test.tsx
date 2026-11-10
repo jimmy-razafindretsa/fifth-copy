@@ -641,12 +641,10 @@ describe("public room auto start (#814 C7)", () => {
   it("armed: one polite announcement with the seconds at arrival; none without an instant", () => {
     expect(polite(render(armed(2), 40))).toContain("The race starts by itself in 45 seconds.");
     expect(polite(render(armed(2, 41), 40))).toContain("The race starts by itself in 41 seconds.");
-    // #137: the second region is the new-host one, empty until a host leaves for good
-    expect(polite(view(live([host, guest], 2)))).toEqual(["2 players in the room", ""]);
-    // a public room keeps its (empty) auto-start region mounted too, so the arming is announced
+    expect(polite(view(live([host, guest], 2)))).toEqual(["2 players in the room"]);
+    // a public room keeps its (empty) second region mounted, so the arming is announced
     expect(polite(render({ ...armed(2), autoStart: NO_AUTO_START }))).toEqual([
       "2 players in the room",
-      "",
       "",
     ]);
     expect(status(view(live([host, guest], 2)))).toBe(labels.waiting);
@@ -811,10 +809,11 @@ describe("new host (#137 C4)", () => {
     }
   });
 
-  it("the roll's polite region says it once in sentence case; nothing without a stamp", () => {
+  it("the roll's one polite region adds the sentence while the stamp shows; nothing without a stamp", () => {
     const html = view(stamped(3));
+    expect(html.match(/aria-live="polite"/g)).toHaveLength(1);
     expect(html).toContain(
-      `<p aria-live="polite" class="${styles.srOnly}">${fill(labels.newHost.announce, { name: "Clerk-2" })}</p>`,
+      `<p aria-live="polite" class="${styles.srOnly}">2 players in the room ${fill(labels.newHost.announce, { name: "Clerk-2" })}</p>`,
     );
     expect(view(live(promoted, 3))).not.toContain("data-new-host");
     expect(view(live(promoted, 3))).not.toContain(

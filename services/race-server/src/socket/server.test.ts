@@ -21,6 +21,7 @@ import {
   type Racer,
 } from "../testing/harness";
 import { internalHeaders } from "../http/sign";
+import { LAST_LEAVE_GRACE_MS } from "../players/last-leave";
 
 let t: Booted | undefined;
 afterEach(async () => {
@@ -500,6 +501,31 @@ describe("host transfer when the host leaves (#137 C2, C3)", () => {
     await until(() => host.seen.roster?.length === 2, WAIT_MS, "B left");
     expect([...host.events, ...a.events].filter((e) => e.kind === "new-host")).toEqual([]);
     expect(host.seen.roster?.[0]).toMatchObject({ name: "Ada", isHost: true });
+  });
+
+  it("the host of an ended room (the Dawn report) keeps the role if back within the grace; promoted only after it", async () => {
+    const { booted, lobby, host, a, b, connect } = await room();
+    const { registry } = booted.server;
+    await registry.withRoom(lobby, () => registry.setPhase(lobby, "ended"));
+    const newHosts = () => [...a.events, ...b.events].filter((e) => e.kind === "new-host");
+    host.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1_000);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(newHosts()).toEqual([]);
+    // Race again: back on the lobby page within the grace
+    const back = await connect("usr_host", "Ada", "host");
+    booted.clock.advance(2_000);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(newHosts()).toEqual([]);
+    expect(back.seen.welcome?.members.find((m) => m.name === "Ada")?.isHost).toBe(true);
+
+    // gone for good: promoted once the grace is over
+    back.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await until(() => newHosts().length === 2, WAIT_MS, "new-host after the grace");
+    expect(a.events.at(-1)).toEqual({ v: PROTOCOL_VERSION, kind: "new-host", desk: 2 });
   });
 
   it("an asleep host is not replaced: it is still connected", async () => {

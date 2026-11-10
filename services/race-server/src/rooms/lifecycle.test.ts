@@ -692,6 +692,8 @@ describe("lifecycle: room close", () => {
     booted.clock.advance(63_000);
     await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
     others[0]!.client.disconnect();
+    // The guest's leave lands first: the host is then the last human, never deferred (#137).
+    await until(() => seenHost.roster?.length === 1, WAIT_MS, "guest gone");
     host.disconnect();
     await eventually(async () => {
       const { fields, ttl } = await hash(lobby);
@@ -811,8 +813,10 @@ describe("lifecycle: race again (#143)", () => {
   });
 
   it("members who left after the end come back at their desks and race again (C3)", async () => {
-    const { host, lobby, others, connectAs, raceId1 } = await endedRoom();
+    const { host, lobby, others, connectAs, raceId1, seenHost } = await endedRoom();
     others[0]!.client.disconnect();
+    // The guest's leave lands first: the host is then the last human, never deferred (#137).
+    await until(() => seenHost.roster?.length === 1, WAIT_MS, "guest gone");
     host.disconnect();
     await eventually(async () => (await hash(lobby)).ttl <= ENDED_GRACE_TTL_S, "room kept");
 

@@ -299,13 +299,12 @@ export function LobbyLiveView({
               </InlineError>
             </div>
           ) : null}
+          {/* the roll's one polite region; while the NEW HOST stamp shows (#137, aria-hidden) it also
+              names the new host */}
           <p aria-live="polite" className={styles.srOnly}>
             {known ? playersLabel(labels, state.members.length) : ""}
-          </p>
-          {/* the new host, said once per event (#137); the stamp itself is aria-hidden */}
-          <p aria-live="polite" className={styles.srOnly}>
-            {state.newHost && known
-              ? newHostAnnouncement(state.newHost, state.members, labels)
+            {known && state.newHost
+              ? ` ${newHostAnnouncement(state.newHost, state.members, labels)}`
               : ""}
           </p>
           {/* a public room's automatic start, its arrival and drop once each (#814); the ticking figure

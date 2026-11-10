@@ -1,6 +1,6 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
-import { scaled } from "../timeouts";
+import { HYDRATION_WAIT, scaled } from "../timeouts";
 import { createLobby, joinAsGuest, lobbyIdOf } from "./helpers";
 
 // Contract of #214: the host's START (C8), the lobby -> seat view move with no line cut and the phase
@@ -175,6 +175,30 @@ async function warm(page: Page, lobbyId: string) {
 }
 
 /**
+ * The seat view is ready in `context` before START (#854): under load the move to `/race/<raceId>` could
+ * finish loading the seat view only after GO, so the countdown it must show was already gone. A second
+ * page of the same context opens the room's seat view at phone width, where it never takes a desk
+ * (#561: no mint, no socket, so no member joins or is line-cut), and waits for its client leaf's own
+ * ready marker (the telex strip's `data-telex-ready`, set in a layout effect: hydrated); the route's
+ * code is then compiled and loaded before the click.
+ */
+async function seatViewReady(context: BrowserContext, lobbyId: string) {
+  const seat = await context.newPage();
+  const sockets: string[] = [];
+  seat.on("websocket", (ws) => sockets.push(ws.url()));
+  await seat.setViewportSize({ width: 375, height: 812 });
+  await seat.goto(`/race/${lobbyId}`);
+  await expect(seat.locator('[data-telex-ready="true"]')).toHaveCount(1, {
+    timeout: HYDRATION_WAIT,
+  });
+  expect(
+    sockets.filter((u) => u.includes("/socket.io/")),
+    "warm-up seat view socket",
+  ).toEqual([]);
+  await seat.close();
+}
+
+/**
  * When the page began showing a step (#818): the start of the long task that committed it, else its
  * commit time. The store's GO timer fires on time and dispatches GO; the seat view then renders the
  * running race in that same task, which on a loaded machine running `next dev` takes up to ~250 ms, so
@@ -269,6 +293,11 @@ test.describe("#214 countdown and GO stamp", () => {
     opened.push(guest.context);
     await expect(start(page)).toBeEnabled();
     await warm(page, lobbyId);
+    for (const p of [page, guest.page]) await seatViewReady(p.context(), lobbyId);
+    // both lobbies still hold their desks after the warm-up
+    for (const p of [page, guest.page]) {
+      await expect(roll(p).getByRole("listitem")).toHaveCount(2);
+    }
 
     const clickedAt = Date.now();
     await start(page).click();
@@ -277,7 +306,8 @@ test.describe("#214 countdown and GO stamp", () => {
     const raceId = raceIdIn(hostFrames)!;
     expect(raceId).toMatch(UUID);
     expect(raceId).not.toBe(lobbyId);
-    expect(raceIdIn(guestFrames)).toBe(raceId);
+    // the guest's countdown frame lands on its own socket, a moment after the host's
+    await expect.poll(() => raceIdIn(guestFrames)).toBe(raceId);
 
     for (const p of [page, guest.page]) {
       await expect(p).toHaveURL(new RegExp(`/race/${raceId}$`));

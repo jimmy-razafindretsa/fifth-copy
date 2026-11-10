@@ -1,8 +1,11 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AUTH_LINKS } from "@/features/identity";
 import { LINKS, SOCIAL_LINKS } from "./links";
+
+// The identity index reaches src/env.ts through its server modules; the route table needs no secrets.
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
 
 // #875 C1: a link appears only when its route ships (bible 14.1, 14.3). Every internal path the public
 // screens offer must be served by a src/app page; a social entry must name a profile, not a site's home.

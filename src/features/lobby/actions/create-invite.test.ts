@@ -114,7 +114,7 @@ describe("createInvite (C1)", () => {
     expect(await createInvite({ code: "KGB-4821" })).toEqual({ ok: false, error: "not-host" });
     state.viewer = null;
     expect(await createInvite({ code: "KGB-4821" })).toEqual({ ok: false, error: "not-host" });
-    expect(state.calls.filter((c) => c !== "getViewer")).toEqual([]);
+    expect(state.calls).not.toContain("put");
     expect(ensureGuest).not.toHaveBeenCalled();
   });
 
@@ -127,6 +127,22 @@ describe("createInvite (C1)", () => {
   it("a lobby that is not WAITING is closed; nothing is written", async () => {
     expect(await createInvite({ code: "ZRT-1093" })).toEqual({ ok: false, error: "closed" });
     expect(state.calls).not.toContain("put");
+  });
+
+  it("every answer costs budget: the rule is spent before the lookup, so a non-host cannot probe codes freely", async () => {
+    state.viewer = { id: "usr_other" };
+    await createInvite({ code: "QQQ-0000" });
+    await createInvite({ code: "KGB-4821" });
+    expect(state.calls).toEqual([
+      "getViewer",
+      "limit:invite:user:usr_other",
+      "getViewer",
+      "limit:invite:user:usr_other",
+    ]);
+    state.limited = true;
+    expect(await createInvite({ code: "QQQ-0000" })).toEqual({ ok: false, error: "rate-limited" });
+    expect(await createInvite({ code: "KGB-4821" })).toEqual({ ok: false, error: "rate-limited" });
+    expect(fake.db.lobby.findUnique).toHaveBeenCalledTimes(2);
   });
 
   it("the invite rule is checked before any write: refused means rate-limited and nothing stored", async () => {

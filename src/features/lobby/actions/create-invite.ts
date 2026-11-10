@@ -13,22 +13,24 @@ import type { CreateInviteResult } from "../types";
 /**
  * Issues a single-use invite link to a waiting lobby (#808, ADR 0008). The input is parsed first;
  * the host is the row's `hostUserId` compared with the viewer, never an id from the input, and no
- * guest is created. The host's `invite` budget (`user:<id>`, ADR 0020) is spent before the one
- * write: `SET web:invite:<token> <lobbyId> NX EX 86400`. Redis down or slow: `unavailable`.
+ * guest is created. The viewer's `invite` budget (`user:<id>`, ADR 0020) is spent before the lobby
+ * lookup, so no answer comes for free, and so before the one write: `SET web:invite:<token> <lobbyId> NX EX 86400`. Redis down or slow: `unavailable`.
  */
 export async function createInvite(input: { code: string }): Promise<CreateInviteResult> {
   const parsed = codeInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
   try {
-    const code = parseRoomCode(parsed.data.code);
-    const lobby = code ? await findLobbyByCode(code) : null;
-    if (!lobby) return { ok: false, error: "not-found" };
     const viewer = await getViewer();
-    if (!viewer || viewer.id !== lobby.hostUserId) return { ok: false, error: "not-host" };
-    if (lobby.status !== "WAITING") return { ok: false, error: "closed" };
+    if (!viewer) return { ok: false, error: "not-host" };
+    // Spent before the lookup, so every answer (not-found, not-host, ...) costs the caller budget.
     if (!(await limit("invite", `user:${viewer.id}`)).ok) {
       return { ok: false, error: "rate-limited" };
     }
+    const code = parseRoomCode(parsed.data.code);
+    const lobby = code ? await findLobbyByCode(code) : null;
+    if (!lobby) return { ok: false, error: "not-found" };
+    if (viewer.id !== lobby.hostUserId) return { ok: false, error: "not-host" };
+    if (lobby.status !== "WAITING") return { ok: false, error: "closed" };
     // A collision of 256-bit tokens does not happen; NX makes one harmless, and one redraw ends it.
     for (let attempt = 0; attempt < 2; attempt++) {
       const token = newInviteToken();

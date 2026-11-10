@@ -1121,7 +1121,10 @@ describe("removed (#133 C5)", () => {
   it.each([
     ["loading", initialLobbyState],
     ["live", run({ type: "welcome", payload: welcome(2, [ada, bob]) })],
-    ["reconnecting", run({ type: "welcome", payload: welcome(2, [ada, bob]) }, { type: "reconnecting" })],
+    [
+      "reconnecting",
+      run({ type: "welcome", payload: welcome(2, [ada, bob]) }, { type: "reconnecting" }),
+    ],
     ["spectating", run({ type: "connect-error", reason: "in-progress" })],
   ] as const)("connect_error removed while %s: removed", (_, from) => {
     expect(reduceLobby(from, { type: "connect-error", reason: "removed" }).phase).toBe("removed");
@@ -1159,7 +1162,9 @@ describe("removed (#133 C5)", () => {
       mint,
       connect: async () => socket,
       attach: (s) =>
-        bindRoomSocket(s, (e) => events.push(e), { versionReload: { reload: vi.fn(), storage: null } }),
+        bindRoomSocket(s, (e) => events.push(e), {
+          versionReload: { reload: vi.fn(), storage: null },
+        }),
       dispatch: (e) => events.push(e),
       setTimer,
     });

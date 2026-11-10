@@ -294,6 +294,25 @@ export const fr = {
     raceInProgress: "COURSE EN COURS · TU SERAS PLACÉ À LA FIN",
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",
+    remove: {
+      button: "RETIRER",
+      confirm: "CONFIRMER",
+      name: "RETIRER {name}",
+      confirmName: "CONFIRMER · RETIRER {name}",
+      errors: {
+        "not-host": "Seul l'hôte peut retirer un dactylo.",
+        "not-waiting": "On ne retire un dactylo qu'entre deux courses.",
+        "no-such-desk": "Ce dactylo a déjà quitté la salle.",
+        "is-bot": "Un bot se retire dans les réglages de la course.",
+        self: "L'hôte ne peut pas se retirer lui-même.",
+        timeout: "La salle n'a pas répondu. Réessaie.",
+      },
+      docket: {
+        stamp: "RETIRÉ",
+        sentence: "L'hôte t'a retiré de la liste de cette salle. Ton dossier est intact.",
+        back: "RETOUR À L'ACCUEIL →",
+      },
+    },
     start: {
       button: "DÉMARRER",
       pending: "DÉMARRAGE…",

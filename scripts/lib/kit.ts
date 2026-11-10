@@ -187,6 +187,12 @@ export function orderCandidates(cands: Candidate[], ctx: PickContext): Candidate
  * Cards parked on `needs-human` do not count against the WIP limit but keep their locks.
  * Every `touches:*` label is a hotspot lock (at most one in-flight card per label).
  */
+/**
+ * In-flight cards allowed per hotspot lock; any other `touches:*` label allows one. `touches:i18n` allows two
+ * (owner decision on #869): catalog additions merge cleanly, each PR merges main before it lands.
+ */
+export const LOCK_LIMITS: Readonly<Record<string, number>> = { "touches:i18n": 2 };
+
 export function lockViolation(
   card: { labels: string[] },
   inFlight: InFlight[],
@@ -195,8 +201,12 @@ export function lockViolation(
   const active = inFlight.filter((c) => !c.labels.includes("needs-human"));
   if (active.length >= wipLimit) return `WIP limit ${wipLimit} reached`;
   for (const flag of card.labels.filter((l) => l.startsWith("touches:"))) {
-    const holder = inFlight.find((c) => c.labels.includes(flag));
-    if (holder) return `another ${flag} card is in flight (${holder.id})`;
+    const holders = inFlight.filter((c) => c.labels.includes(flag));
+    const limit = LOCK_LIMITS[flag] ?? 1;
+    if (holders.length >= limit)
+      return limit === 1
+        ? `another ${flag} card is in flight (${holders[0].id})`
+        : `${limit} ${flag} cards are in flight (${holders.map((c) => c.id).join(", ")})`;
   }
   const areas = card.labels.filter((l) => l.startsWith("area:"));
   for (const c of inFlight) {

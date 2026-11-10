@@ -582,6 +582,15 @@ export const fr = {
       received: "REÇUS",
       none: "AUCUN",
       count: "× {n}",
+      graph: {
+        title: "MPM AU FIL DE LA COURSE",
+        summary: {
+          zero: "Pointe à {peak} MPM, arrivée à {final} MPM, 0 bonus reçu.",
+          one: "Pointe à {peak} MPM, arrivée à {final} MPM, {n} bonus reçu.",
+          other: "Pointe à {peak} MPM, arrivée à {final} MPM, {n} bonus reçus.",
+        },
+        noTrace: "AUCUNE TRACE AU DOSSIER",
+      },
     },
     podium: {
       title: "Podium",

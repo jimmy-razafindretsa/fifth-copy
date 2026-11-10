@@ -37,3 +37,42 @@ export function seriesSummary(series: RaceSeries): { peak: number; final: number
     bonuses: series.marks.length,
   };
 }
+
+/** The graph's drawing box (SVG user units; the plot stretches it to the card's width). */
+export const PLOT_W = 1000;
+export const PLOT_H = 100;
+/** A mark on the plot: `x` 0..1 along the race; its name prints on lane `lane` (one per mark). */
+export type GraphMark = BonusMark & { x: number; lane: number };
+
+export type GraphGeometry = {
+  /** The WPM scale's top: the peak rounded up to a ten (at least 10). */
+  yMax: number;
+  /** The SVG `points` of the ink polyline, from GO at 0 WPM through every point. */
+  line: string;
+  marks: GraphMark[];
+};
+
+const round = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Where everything sits (#865): x is time over `endMs`, y the WPM over the scale's top (0 at the
+ * bottom). The line starts at GO with 0 WPM. Each bonus name has its own lane above the plot, in time
+ * order, so two close hits never print over each other (a long French name spans half a phone card).
+ */
+export function graphGeometry(series: RaceSeries): GraphGeometry {
+  const { peak } = seriesSummary(series);
+  const yMax = Math.max(10, Math.ceil(peak / 10) * 10);
+  const end = series.endMs > 0 ? series.endMs : (series.points.at(-1)?.t ?? 1);
+  const xOf = (t: number) => Math.min(1, Math.max(0, t / end));
+  const line = [{ t: 0, wpm: 0 }, ...series.points]
+    .map((p) => `${round(xOf(p.t) * PLOT_W)},${round(PLOT_H - (p.wpm / yMax) * PLOT_H)}`)
+    .join(" ");
+  const marks = series.marks.map((m, lane) => ({ ...m, x: xOf(m.t), lane }));
+  return { yMax, line, marks };
+}
+
+/** A race time as `m:ss` (the graph's time axis). */
+export function formatRaceTime(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}

@@ -1,0 +1,147 @@
+/*
+ * The personal card's WPM graph (#865, bible 14.4 "Personal stats card", 3, 7.4, 8): a card section
+ * under the bonus rows (dashed separator over it). The row label is the roll-row label (Oswald 600 11px
+ * .2em, muted). The chart is a grid: the WPM scale (Plex Mono 11px muted, top and 0) left of the plot,
+ * the bonus names over it, the race time under it. The plot is a paper cell in the newsprint docket
+ * (7.4 multi-cell: 1px ink rule), the line an ink 2px polyline; a received bonus is a 2px dashed tick in
+ * the red text role (`link`: agit-red on paper, night-ink on Night shift, bible 3.3; dashed so it never
+ * reads as the line), its tray name (Oswald 600 10px .16em) in the same role above it. Strokes keep
+ * their width however the plot stretches. No gold, no motion.
+ */
+
+@reference "../../../app/globals.css";
+
+.graph {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.title {
+  margin: 0;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.none {
+  margin: 0;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.chart {
+  --lane-h: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 120px auto;
+  column-gap: 6px;
+  row-gap: 2px;
+}
+
+.scale {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.scale,
+.time {
+  @apply type-typing;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the names strip: one lane per hit, each a zero-width anchor at its tick with a dashed stub down */
+.names {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  height: calc(var(--lanes) * var(--lane-h));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.name {
+  position: absolute;
+  top: calc(var(--lane) * var(--lane-h));
+  bottom: -2px;
+  left: calc(var(--x) * 100%);
+  width: 0;
+  border-left: 2px dashed var(--color-link);
+  margin-left: -1px;
+}
+
+.nameText {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(calc(var(--x) * -100%));
+  padding: 0 4px;
+  background: var(--color-surface);
+  @apply type-label;
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.16em;
+  color: var(--color-link);
+  white-space: nowrap;
+}
+
+.plot {
+  grid-column: 2;
+  grid-row: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  background: var(--color-bg);
+  border: 1px solid var(--color-fg);
+  box-sizing: border-box;
+}
+
+.top,
+.tick,
+.line {
+  vector-effect: non-scaling-stroke;
+  fill: none;
+}
+
+/* the scale's top: a hairline dashed as the docket separators */
+.top {
+  stroke: color-mix(in srgb, var(--color-fg) 30%, transparent);
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+}
+
+.tick {
+  stroke: var(--color-link);
+  stroke-width: 2px;
+  stroke-dasharray: 4 3;
+}
+
+.line {
+  stroke: var(--color-fg);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.time {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+  justify-content: space-between;
+}

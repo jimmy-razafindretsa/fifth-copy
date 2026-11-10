@@ -616,6 +616,15 @@ export const en = {
       received: "RECEIVED",
       none: "NONE",
       count: "× {n}",
+      graph: {
+        title: "WPM THROUGH THE RACE",
+        summary: {
+          zero: "Peak {peak} WPM, final {final} WPM, 0 bonuses received.",
+          one: "Peak {peak} WPM, final {final} WPM, {n} bonus received.",
+          other: "Peak {peak} WPM, final {final} WPM, {n} bonuses received.",
+        },
+        noTrace: "NO TRACE ON FILE",
+      },
     },
     podium: {
       title: "Podium",

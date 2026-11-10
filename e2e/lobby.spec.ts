@@ -834,7 +834,8 @@ test.describe("bot rows and lobby type (#114)", () => {
     await b.context.close();
   });
 
-  test("C3 C4 the host files PUBLIC: the kicker follows; the guest reads PUBLIC after a reload", async ({
+  // a PUBLIC room is joinable by any QUICK RACE (#128): `matchmaking` project
+  test("C3 C4 the host files PUBLIC: the kicker follows; the guest reads PUBLIC after a reload @matchmaking", async ({
     page,
     browser,
   }) => {

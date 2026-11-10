@@ -6,6 +6,13 @@ import { ACTION_WAIT, scaled } from "../timeouts";
 // Contract of #807: the landing's open-rooms docket (bible 14.1 "Open rooms docket", 7.4). Parallel
 // workers open public rooms too, so every assertion targets this test's own room code.
 
+/** The viewport projects' sizes (playwright.config.ts `VIEWPORTS`), for C6's visitor. */
+const VIEWPORTS = {
+  mobile: { width: 375, height: 812 },
+  tablet: { width: 768, height: 1024 },
+  desktop: { width: 1280, height: 800 },
+} as const;
+
 const docket = (page: Page) => page.locator("section[data-open-rooms]");
 const joinLink = (page: Page, code: string) =>
   docket(page).getByRole("link", { name: `Join room ${code}`, exact: true });
@@ -56,7 +63,8 @@ async function freshContext(browser: Browser): Promise<{ context: BrowserContext
   return { context, page: await context.newPage() };
 }
 
-test.describe("open rooms docket (#807)", () => {
+// Public rooms are joinable by any QUICK RACE (#128): this file runs in the `matchmaking` project.
+test.describe("open rooms docket (#807) @matchmaking", () => {
   test.beforeEach(() => test.slow());
 
   test("C1 a visitor sees a public room, follows JOIN → and both rolls show two typists", async ({
@@ -110,41 +118,43 @@ test.describe("open rooms docket (#807)", () => {
     await b.context.close();
   });
 
-  for (const scheme of ["light", "dark"] as const) {
-    test(`C6 ${scheme}: no axe violation with a populated docket, no horizontal scroll, 44px JOIN`, async ({
-      page,
-      browser,
-    }) => {
-      const code = await hostPublicRoom(page);
-      const b = await freshContext(browser);
-      await b.page.setViewportSize(page.viewportSize()!);
-      if (scheme === "dark") {
-        // the landing opens on paper whatever the OS (bible 3.2): Night shift is the saved choice
-        await b.page.emulateMedia({ colorScheme: "dark" });
-        await b.context.addCookies([
-          { name: "theme", value: "dark", url: test.info().project.use.baseURL! },
-        ]);
-      }
-      await landingListing(b.page, code);
-      if (scheme === "dark")
-        await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
-      const link = joinLink(b.page, code);
-      await link.scrollIntoViewIfNeeded();
-      await expect(link).toBeVisible();
-      await expectNoA11yViolations(b.page);
-      expect(await overflow(b.page)).toBeLessThanOrEqual(0);
+  // The `matchmaking` project is desktop only: the visitor's viewport is each of the three here.
+  for (const scheme of ["light", "dark"] as const)
+    for (const [name, viewport] of Object.entries(VIEWPORTS)) {
+      test(`C6 ${scheme} ${name}: no axe violation with a populated docket, no horizontal scroll, 44px JOIN`, async ({
+        page,
+        browser,
+      }) => {
+        const code = await hostPublicRoom(page);
+        const b = await freshContext(browser);
+        await b.page.setViewportSize(viewport);
+        if (scheme === "dark") {
+          // the landing opens on paper whatever the OS (bible 3.2): Night shift is the saved choice
+          await b.page.emulateMedia({ colorScheme: "dark" });
+          await b.context.addCookies([
+            { name: "theme", value: "dark", url: test.info().project.use.baseURL! },
+          ]);
+        }
+        await landingListing(b.page, code);
+        if (scheme === "dark")
+          await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
+        const link = joinLink(b.page, code);
+        await link.scrollIntoViewIfNeeded();
+        await expect(link).toBeVisible();
+        await expectNoA11yViolations(b.page);
+        expect(await overflow(b.page)).toBeLessThanOrEqual(0);
 
-      const box = await link.boundingBox();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
-      if (page.viewportSize()!.width <= 375) {
-        // full width: the docket spans the hero's actions column
-        const [own, column] = await docket(b.page).evaluate((el) => [
-          el.getBoundingClientRect().width,
-          el.parentElement!.getBoundingClientRect().width,
-        ]);
-        expect(Math.abs(own! - column!)).toBeLessThanOrEqual(1);
-      }
-      await b.context.close();
-    });
-  }
+        const box = await link.boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+        if (viewport.width <= 375) {
+          // full width: the docket spans the hero's actions column
+          const [own, column] = await docket(b.page).evaluate((el) => [
+            el.getBoundingClientRect().width,
+            el.parentElement!.getBoundingClientRect().width,
+          ]);
+          expect(Math.abs(own! - column!)).toBeLessThanOrEqual(1);
+        }
+        await b.context.close();
+      });
+    }
 });

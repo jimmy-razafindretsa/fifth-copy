@@ -8,3 +8,6 @@ export type { ListOpenLobbiesResult, OpenLobby } from "./queries/list-open-lobbi
 // The race server's close call (#734): the one route that writes a lobby CLOSED.
 export { closeLobby } from "./queries/close-lobby";
 export type { CloseLobbyResult } from "./queries/close-lobby";
+// The race server's host transfer (#137): the durable copy of the promoted host.
+export { setLobbyHost } from "./queries/set-lobby-host";
+export type { SetLobbyHostResult } from "./queries/set-lobby-host";

@@ -87,6 +87,20 @@ export function fakeLobbyDb() {
         return Object.assign(row, data);
       },
     ),
+    // The subset setLobbyHost uses (#137): one id, and a host other than the new one.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string; hostUserId: { not: string } };
+        data: { hostUserId: string };
+      }) => {
+        const row = lobbies.find((l) => l.id === where.id && l.hostUserId !== where.hostUserId.not);
+        if (row) Object.assign(row, data);
+        return { count: row ? 1 : 0 };
+      },
+    ),
     delete: vi.fn(async ({ where }: { where: { id: string } }) => {
       const index = lobbies.findIndex((l) => l.id === where.id);
       if (index < 0) throw new Error("Record to delete does not exist");

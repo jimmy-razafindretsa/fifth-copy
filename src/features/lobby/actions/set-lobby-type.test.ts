@@ -57,6 +57,7 @@ vi.mock("@/server/limiter", () => ({
 }));
 
 const { setLobbyType } = await import("./set-lobby-type");
+const { setLobbyHost } = await import("../queries/set-lobby-host");
 const { ensureGuest } = await import("@/features/identity");
 
 describe("setLobbyType (unit, fake DB)", () => {
@@ -103,6 +104,26 @@ describe("setLobbyType (unit, fake DB)", () => {
     expect(row("lob_open").type).toBe("PRIVATE");
     expect(fake.db.lobby.update).not.toHaveBeenCalled();
     expect(state.revalidated).toEqual([]);
+  });
+
+  it("#137 C3: after the race server's host transfer, the new host files PUBLIC and the old host gets not-host", async () => {
+    state.jar = new Map();
+    const promoted = (await ensureGuest()).id;
+    const promotedJar = state.jar;
+    expect(await setLobbyHost("lob_open", promoted)).toEqual({ ok: true, changed: true });
+    expect(await setLobbyHost("lob_open", promoted)).toEqual({ ok: true, changed: false });
+    expect(row("lob_open").hostUserId).toBe(promoted);
+
+    state.jar = hostJar;
+    expect(await setLobbyType({ code: "KGB-4821", type: "public" })).toEqual({
+      ok: false,
+      error: "not-host",
+    });
+    expect(row("lob_open").type).toBe("PRIVATE");
+    state.jar = promotedJar;
+    expect(await setLobbyType({ code: "KGB-4821", type: "public" })).toEqual({ ok: true });
+    expect(row("lob_open").type).toBe("PUBLIC");
+    expect(state.limitCalls.at(-1)).toEqual(["set-lobby-type", `user:${promoted}`]);
   });
 
   it("C4: no viewer at all gets not-host and creates no guest", async () => {

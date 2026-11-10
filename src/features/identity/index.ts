@@ -85,9 +85,10 @@ export {
   type UpdatePreferences,
   type UpdatePreferencesResult,
 } from "./actions/update-preferences";
-export type { Preferences, PreferenceTheme } from "./schema";
+export type { PreferenceMachineSkin, Preferences, PreferenceTheme } from "./schema";
 export { SettingsScreen } from "./components/settings/settings-screen";
 export { SettingsStates } from "./components/settings/settings-states";
+export type { MachineSpecimens } from "./components/settings/machine-picker";
 // The first-race keyboard prompt (#70): the lobby mounts it; `/design?dialog=layout` shows it open.
 export { FirstRaceLayoutPrompt } from "./components/first-race-layout-prompt";
 export { LayoutPrompt, LAYOUT_PROMPT_KEY } from "./components/layout-prompt";

@@ -7,6 +7,12 @@ export async function fileSpecimenPreference(patch: unknown): Promise<UpdatePref
   void patch;
   return {
     ok: true,
-    preferences: { layout: null, theme: "SYSTEM", locale: "en", sound: true },
+    preferences: {
+      layout: null,
+      theme: "SYSTEM",
+      locale: "en",
+      sound: true,
+      machineSkin: "teleprinter",
+    },
   };
 }

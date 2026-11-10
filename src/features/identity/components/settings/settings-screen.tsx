@@ -5,12 +5,13 @@ import type { Preferences } from "../../schema";
 import { AccountSection, type AccountAvatar } from "./account-section";
 import { LanguagePicker } from "./language-picker";
 import { LayoutPicker } from "./layout-picker";
+import { MachinePicker, type MachineSpecimens } from "./machine-picker";
 import { SoundToggle } from "./sound-toggle";
 import { ThemePicker } from "./theme-picker";
 import type { SaveStatus } from "./use-preference-save";
 import styles from "./settings.module.css";
 
-type SectionKey = "layout" | "theme" | "language" | "sound";
+type SectionKey = "layout" | "theme" | "language" | "sound" | "machine";
 
 /**
  * The settings docket (#66): header `FORM 1-F` + ink tag, then the sections split by the dashed docket
@@ -24,6 +25,7 @@ export async function SettingsDocket({
   initialStatus = {},
   idPrefix = "settings",
   avatar,
+  machineSpecimens,
 }: {
   viewer: Viewer | null;
   preferences: Preferences;
@@ -33,6 +35,8 @@ export async function SettingsDocket({
   idPrefix?: string;
   /** The picture dialog's data (#60); absent on `/design` specimens. */
   avatar?: AccountAvatar;
+  /** The machine section's specimens, one per skin (#638), drawn by the route; absent on `/design`. */
+  machineSpecimens?: MachineSpecimens;
 }) {
   const t = await getT();
   const s = t.settings;
@@ -76,6 +80,16 @@ export async function SettingsDocket({
         action={action}
         initialStatus={initialStatus.sound}
       />
+      <MachinePicker
+        value={preferences.machineSkin}
+        title={s.machine.title}
+        hint={s.machine.hint}
+        names={s.machine.skin}
+        status={s.status}
+        action={action}
+        initialStatus={initialStatus.machine}
+        specimens={machineSpecimens}
+      />
       <AccountSection viewer={viewer} t={t} idPrefix={idPrefix} avatar={avatar} />
     </div>
   );
@@ -90,11 +104,13 @@ export async function SettingsScreen({
   preferences,
   action,
   avatar,
+  machineSpecimens,
 }: {
   viewer: Viewer | null;
   preferences: Preferences;
   action: UpdatePreferences;
   avatar?: AccountAvatar;
+  machineSpecimens?: MachineSpecimens;
 }) {
   const t = await getT();
   return (
@@ -105,7 +121,13 @@ export async function SettingsScreen({
           {t.settings.title}
         </h1>
         <p className={styles.lede}>{t.settings.lede}</p>
-        <SettingsDocket viewer={viewer} preferences={preferences} action={action} avatar={avatar} />
+        <SettingsDocket
+          viewer={viewer}
+          preferences={preferences}
+          action={action}
+          avatar={avatar}
+          machineSpecimens={machineSpecimens}
+        />
       </div>
     </section>
   );

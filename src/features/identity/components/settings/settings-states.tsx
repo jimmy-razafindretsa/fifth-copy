@@ -11,8 +11,20 @@ const ACCOUNT: Viewer = {
   isGuest: false,
   hasAvatar: false,
 };
-const DEFAULTS: Preferences = { layout: null, theme: "SYSTEM", locale: "en", sound: true };
-const CHOSEN: Preferences = { layout: "CSA", theme: "LIGHT", locale: "en", sound: false };
+const DEFAULTS: Preferences = {
+  layout: null,
+  theme: "SYSTEM",
+  locale: "en",
+  sound: true,
+  machineSkin: "teleprinter",
+};
+const CHOSEN: Preferences = {
+  layout: "CSA",
+  theme: "LIGHT",
+  locale: "en",
+  sound: false,
+  machineSkin: "teleprinter",
+};
 
 /**
  * The `/design` settings states (#66 C7): the guest docket, the account docket, and the controls

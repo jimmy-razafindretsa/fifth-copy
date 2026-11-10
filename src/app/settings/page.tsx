@@ -3,17 +3,29 @@ import {
   getAvatarUser,
   getPreferences,
   getViewer,
+  layouts,
+  type MachineSpecimens,
   SettingsScreen,
   updatePreferences,
   uploadAvatar,
 } from "@/features/identity";
 import { LandingHeader } from "@/features/landing";
+import { machineSkinIds, TypingMachine } from "@/features/race";
+
+/** The MACHINE section's specimens (#638): every registered skin, static, on the US QWERTY letter rows. */
+const machineSpecimens: MachineSpecimens = Object.fromEntries(
+  machineSkinIds.map((skin) => [
+    skin,
+    <TypingMachine key={skin} rows={layouts.US_QWERTY} skin={skin} />,
+  ]),
+);
 
 /**
  * `/settings` (#66, ADR 0009): the site header and the settings screen for the current viewer. proxy.ts
  * lets a session or a guest through; a visitor whose guest cookie no longer resolves reads the defaults
  * and gets a new guest on the first save (`updatePreferences`). A viewer on file gets the picture
- * dialog (#60); `?dialog=avatar` opens it on arrival outside production (eyes, #60 C9).
+ * dialog (#60); `?dialog=avatar` opens it on arrival outside production (eyes, #60 C9). The race feature
+ * draws the MACHINE section's specimens (#638), so identity never imports its components.
  */
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const [viewer, query] = await Promise.all([getViewer(), searchParams]);
@@ -31,6 +43,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           preferences={preferences}
           action={updatePreferences}
           avatar={avatarUser ? { user: avatarUser, action: uploadAvatar, open } : undefined}
+          machineSpecimens={machineSpecimens}
         />
       </main>
     </>

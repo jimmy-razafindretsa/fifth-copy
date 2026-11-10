@@ -61,7 +61,10 @@ describe("keyErrors (#867 C1)", () => {
   it("charges each press to the character expected under the cursor (Continue)", () => {
     // text "aba": typed "xbx" -> a missed twice, b once right
     const tallies = keyErrors({ keystrokes: keys("xbx"), text: "aba", settings: CONTINUE });
-    expect(byChar(tallies)).toEqual({ a: { attempts: 2, errors: 2 }, b: { attempts: 1, errors: 0 } });
+    expect(byChar(tallies)).toEqual({
+      a: { attempts: 2, errors: 2 },
+      b: { attempts: 1, errors: 0 },
+    });
     expect(tallies.map((t) => t.char)).toEqual(["a", "b"]); // first asked for first
   });
 
@@ -78,7 +81,10 @@ describe("keyErrors (#867 C1)", () => {
   it("a backspace in Continue mode takes the undone error back from its character", () => {
     const trace = keys("x⌫ab");
     const tallies = keyErrors({ keystrokes: trace, text: "ab", settings: CONTINUE });
-    expect(byChar(tallies)).toEqual({ a: { attempts: 2, errors: 0 }, b: { attempts: 1, errors: 0 } });
+    expect(byChar(tallies)).toEqual({
+      a: { attempts: 2, errors: 0 },
+      b: { attempts: 1, errors: 0 },
+    });
     // backspace off: the press is only counted, the x stays and the a lands on the b
     const kept = keyErrors({
       keystrokes: trace,

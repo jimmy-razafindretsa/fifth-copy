@@ -16,8 +16,7 @@ export const KEY_TIP_MIN_MISSES = 3;
 export const ACCURACY_TIP_BELOW = 0.9;
 
 export type Tip =
-  | { id: "clean" | "accuracy" | "steady" }
-  | { id: "special" | "key"; char: string; count: number };
+  { id: "clean" | "accuracy" | "steady" } | { id: "special" | "key"; char: string; count: number };
 
 export type TipInput = {
   /** The stored accuracy, 0..1 (`RaceResult.accuracy`). */

@@ -380,7 +380,8 @@ const COACHING_STATES: { id: CoachingFixture; title: string; caption: string }[]
   {
     id: "key",
     title: "Errors by key",
-    caption: "Five keys, most missed first, a space named; the tip names the key missed four times.",
+    caption:
+      "Five keys, most missed first, a space named; the tip names the key missed four times.",
   },
   {
     id: "special",

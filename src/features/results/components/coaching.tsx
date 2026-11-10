@@ -13,7 +13,9 @@ export function keyName(char: string, labels: PersonalLabels): string {
 /** The tip's one sentence, its key named as the list names it. */
 export function tipSentence(tip: Tip, labels: PersonalLabels): string {
   const template = labels.tip[tip.id];
-  return "char" in tip ? fill(template, { key: keyName(tip.char, labels), n: tip.count }) : template;
+  return "char" in tip
+    ? fill(template, { key: keyName(tip.char, labels), n: tip.count })
+    : template;
 }
 
 /**

@@ -84,7 +84,8 @@ describe("missedKeys and the special keys (#867 C2, C3)", () => {
   });
 
   it("special keys: everything outside printable ASCII", () => {
-    for (const c of ["é", "É", "ç", "æ", "Œ", "ÿ", "«", "»", "€"]) expect(isSpecialKey(c)).toBe(true);
+    for (const c of ["é", "É", "ç", "æ", "Œ", "ÿ", "«", "»", "€"])
+      expect(isSpecialKey(c)).toBe(true);
     for (const c of ["a", "Z", " ", "!", "~", "'", '"']) expect(isSpecialKey(c)).toBe(false);
   });
 

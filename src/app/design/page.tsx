@@ -49,6 +49,8 @@ import {
   personalFixtures,
   personalLabels,
   Podium,
+  type RaceSeriesFixture,
+  raceSeriesFixtures,
   podiumLabels,
   RankingTable,
   rankingLabels,
@@ -341,6 +343,33 @@ const PERSONAL_STATES: { id: PersonalFixture; title: string; caption: string }[]
     id: "under-review",
     title: "Personal card, under review",
     caption: "A suspicious result keeps its figures under the review row.",
+  },
+];
+
+/** The personal card's WPM graph (#865 C5, bible 14.4): with marks, without, and no trace on file. */
+const GRAPH_STATES: {
+  id: RaceSeriesFixture;
+  card: PersonalFixture;
+  title: string;
+  caption: string;
+}[] = [
+  {
+    id: "marks",
+    card: "populated",
+    title: "Personal card, WPM graph",
+    caption: "The clean WPM through the race; a red tick where an extra paperwork hit at 0:30.",
+  },
+  {
+    id: "no-marks",
+    card: "no-bonuses",
+    title: "WPM graph, no bonus received",
+    caption: "The line alone: nothing hit this desk.",
+  },
+  {
+    id: "no-trace",
+    card: "unfinished",
+    title: "WPM graph, no trace on file",
+    caption: "The keystrokes are purged after 30 days, or were never filed.",
   },
 ];
 
@@ -1174,6 +1203,24 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
             >
               <div className="w-full max-w-[400px]">
                 <PersonalCard stats={personalFixtures[state.id]} labels={personalLabels(t)} />
+              </div>
+            </HudSpecimen>
+          ))}
+        </div>
+        <div id="results-personal-graph" className="grid gap-6 md:grid-cols-2">
+          {GRAPH_STATES.map((state) => (
+            <HudSpecimen
+              key={state.id}
+              id={`personal-graph-${state.id}`}
+              title={state.title}
+              caption={state.caption}
+            >
+              <div className="w-full max-w-[400px]">
+                <PersonalCard
+                  stats={personalFixtures[state.card]}
+                  labels={personalLabels(t)}
+                  series={raceSeriesFixtures[state.id]}
+                />
               </div>
             </HudSpecimen>
           ))}

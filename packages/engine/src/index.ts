@@ -35,6 +35,8 @@ export {
   rawWpm,
   wpm,
 } from "./scoring/scoring";
+// series (#865): the clean WPM through a race (the personal card's graph; the Personnel file, #311)
+export { MAX_SERIES_POINTS, wpmSeries, type WpmPoint, type WpmSeriesInput } from "./scoring/series";
 
 // trace: the bound on one desk's stored keystrokes (race server ingest, web persistence)
 export { TRACE_ALLOWANCE, TRACE_KEYS_PER_CHAR, traceCapOf } from "./trace/cap";

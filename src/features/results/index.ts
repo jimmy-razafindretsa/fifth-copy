@@ -28,6 +28,10 @@ export { ReportActions } from "./components/report-actions";
 // The personal stats card (#864, #302): the viewer's own figures and bonuses, beside the ranking.
 export { PersonalCard, type PersonalCardProps } from "./components/personal-card";
 export type { BonusTally, PersonalStats } from "./view/personal";
+// The WPM graph (#865): the viewer's own series and received-bonus marks, and its card section.
+export { getRaceSeries } from "./queries/get-race-series";
+export { RaceGraph, type RaceGraphProps } from "./components/race-graph";
+export type { BonusMark, RaceSeries } from "./view/series";
 export { FilingNoticeView } from "./components/filing-notice-view";
 export { Podium, type PodiumProps } from "./components/podium";
 // The ranking docket (#301): every desk in place order, under the podium.
@@ -38,6 +42,8 @@ export {
   type DawnReportFixture,
   personalFixtures,
   type PersonalFixture,
+  raceSeriesFixtures,
+  type RaceSeriesFixture,
 } from "./view/dawn-report-fixtures";
 export {
   type DawnReport,

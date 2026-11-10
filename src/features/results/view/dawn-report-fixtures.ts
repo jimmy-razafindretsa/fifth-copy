@@ -6,6 +6,7 @@
 import { OUTFIT_CATALOGUE, outfitForDesk, type Outfit } from "@/features/identity";
 import type { DawnReport, ReportEntry, ReportRace } from "./dawn-report";
 import type { PersonalStats } from "./personal";
+import type { RaceSeries } from "./series";
 
 /** A saved outfit (the viewer's desk 12 in the six-desk race): ids from bible 10.1's catalogue. */
 export const SAVED_OUTFIT: Outfit = {
@@ -131,6 +132,27 @@ export const personalFixtures = {
 } satisfies Record<string, PersonalStats>;
 
 export type PersonalFixture = keyof typeof personalFixtures;
+
+/** Clean WPM every 4 s of a 48 s race (desk 12 of `SIX`): a quick start, a dip after the hit at 30 s. */
+const DESK_12_WPM = [31.5, 42.8, 47.2, 50.1, 51.4, 52.6, 52.2, 47.9, 45.6, 46.4, 47.1, 47.8];
+const desk12Points = DESK_12_WPM.map((wpm, i) => ({ t: (i + 1) * 4_000, wpm }));
+
+/**
+ * `/design#results-personal` (#865 C5): the WPM graph's states on the populated card (desk 12, hit once
+ * by an extra paperwork at 30 s, as its `RECEIVED` row says), with no mark (the no-bonuses card), and no
+ * trace on file (the timed-out card: a purged trace).
+ */
+export const raceSeriesFixtures = {
+  marks: {
+    points: desk12Points,
+    marks: [{ t: 30_000, kind: "extra-paperwork" }],
+    endMs: 48_000,
+  },
+  "no-marks": { points: desk12Points, marks: [], endMs: 48_000 },
+  "no-trace": null,
+} satisfies Record<string, RaceSeries | null>;
+
+export type RaceSeriesFixture = keyof typeof raceSeriesFixtures;
 
 /** `/design#results` and the tests: one fixture per podium state (C6). */
 export const dawnReportFixtures = {

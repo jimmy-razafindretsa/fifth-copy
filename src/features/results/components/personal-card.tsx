@@ -3,19 +3,29 @@ import { fill } from "@/i18n/format";
 import { formatAccuracy, formatWpm } from "../view/dawn-report";
 import type { BonusTally, PersonalStats } from "../view/personal";
 import type { PersonalLabels } from "../view/report-labels";
+import type { RaceSeries } from "../view/series";
 import styles from "./personal-card.module.css";
+import { RaceGraph } from "./race-graph";
 
-export type PersonalCardProps = { stats: PersonalStats; labels: PersonalLabels };
+export type PersonalCardProps = {
+  stats: PersonalStats;
+  labels: PersonalLabels;
+  /**
+   * The WPM graph's data (#865, `getRaceSeries`): `null` reads `NO TRACE ON FILE`; left out, the card
+   * has no graph section (a specimen of the other sections).
+   */
+  series?: RaceSeries | null;
+};
 
 /**
  * The personal stats card (#864, #302, bible 14.4 "Personal stats card", 7.4): the viewer's own copy of
  * the race, presentational (stats and labels only). One 7.4 docket of sections: the header (the ink tag
  * that names it, the place `№ n`), the `UNDER REVIEW` row of a suspicious result, the figures (clean WPM,
  * ADR 0016; accuracy; the status when not filed), then the bonuses as `SENT` / `RECEIVED` rows.
- * Extension point: the WPM graph, the keys and the tip (sibling cards) and the personal-best flag (#321)
- * are further sections after these, on the same `PersonalStats`. No gold (bible 3), no motion.
+ * Then the WPM graph (#865, `RaceGraph`) from `series`. Extension point: the keys and the tip (sibling
+ * cards) and the personal-best flag (#321) are further sections after these. No gold (bible 3), no motion.
  */
-export function PersonalCard({ stats, labels }: PersonalCardProps) {
+export function PersonalCard({ stats, labels, series }: PersonalCardProps) {
   const tagId = useId();
   return (
     <section
@@ -40,6 +50,7 @@ export function PersonalCard({ stats, labels }: PersonalCardProps) {
       )}
       <Figures stats={stats} labels={labels} />
       <Bonuses stats={stats} labels={labels} />
+      {series !== undefined && <RaceGraph series={series} labels={labels} />}
     </section>
   );
 }

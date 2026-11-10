@@ -49,6 +49,12 @@ export type PersonalLabels = {
   status: Record<ReportStatus, string>;
   /** The Sabotage tray's card names (bible 7.4). */
   bonus: Record<BonusKind, string>;
+  /** The WPM graph (#865): its row label, its accessible sentence (`{peak}`, `{final}`, `{n}`), no trace. */
+  graph: {
+    title: string;
+    summary: { zero: string; one: string; other: string };
+    noTrace: string;
+  };
 };
 
 /** The catalog's strings as the personal card's labels: its own, the podium's figures, the tray's names. */

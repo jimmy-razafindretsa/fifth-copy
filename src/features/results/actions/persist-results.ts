@@ -1,8 +1,6 @@
 // Called only by the HMAC-verified route `POST /api/internal/races/:id/results`. `server-only`, and
 // never a `"use server"` module: a server action would be callable from any browser without the HMAC.
 import "server-only";
-import { gunzipSync } from "node:zlib";
-import { z } from "zod";
 import {
   charsOf,
   MAX_EXTRA_WORD_LENGTH,
@@ -13,7 +11,6 @@ import {
   type PlayerStatus,
 } from "@fifth-copy/engine";
 import {
-  keystrokeSchema,
   MAX_OVERLAY_WORDS,
   MAX_RESULTS_PER_REQUEST,
   MAX_TRACE_BASE64_LENGTH,
@@ -24,6 +21,7 @@ import {
 } from "@fifth-copy/protocol";
 import { Prisma, type RaceEndReason, type ResultStatus } from "@/generated/prisma/client";
 import { db as appDb } from "@/server/db";
+import { decodeKeystrokes, MAX_KEYSTROKE_JSON_BYTES } from "../trace-codec";
 
 /**
  * Body cap of `POST /api/internal/races/:id/results`, from the protocol's own bounds:
@@ -53,12 +51,8 @@ const REASON_TO_DB: Record<RaceResultsRequest["reason"], RaceEndReason> = {
   timer: "TIMER",
 };
 
-/**
- * The largest JSON of one keystroke plus its separator, in bytes: `{"t":3600000,"key":"Backspace"},`
- * (`t` <= MAX_RACE_MS; any other key is one character, at most 6 bytes once quoted or escaped).
- * Bounds the inflated size of a trace of `count` keystrokes.
- */
-export const MAX_KEYSTROKE_JSON_BYTES = 32;
+// The stored blob's codec (#865 moved it to a pure module the WPM series reads too).
+export { MAX_KEYSTROKE_JSON_BYTES };
 
 /**
  * The most keystrokes a stored trace may hold for a race whose base text has `baseLength`
@@ -88,22 +82,8 @@ export function decodeTrace(
 ): DecodedTrace | null {
   if (trace.count > maxKeys) return null;
   const data = Buffer.from(trace.data, "base64");
-  let json: string;
-  try {
-    json = gunzipSync(data, {
-      maxOutputLength: trace.count * MAX_KEYSTROKE_JSON_BYTES + 2,
-    }).toString("utf8");
-  } catch {
-    return null;
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(json);
-  } catch {
-    return null;
-  }
-  const parsed = z.array(keystrokeSchema).length(trace.count).safeParse(value);
-  return parsed.success ? { data, keystrokes: parsed.data } : null;
+  const keystrokes = decodeKeystrokes(data, trace.count);
+  return keystrokes ? { data, keystrokes } : null;
 }
 
 /** Same printable rule as the protocol's names and keys (#557): ids reach Postgres as text. */

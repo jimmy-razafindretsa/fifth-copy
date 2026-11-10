@@ -9,8 +9,10 @@ import {
 import type { ConnectErrorReason, RoomEvents, RoomSocket } from "@/features/race";
 import {
   bindRoomSocket,
+  autoStartSecondsAt,
   initialLobbyState,
   lobbyErrorCopy,
+  NO_AUTO_START,
   reduceLobby,
   VERSION_RELOAD_KEY,
   type LobbyEvent,
@@ -44,6 +46,7 @@ const welcome = (you: number, members: Member[]): RoomEvents["welcome"] => ({
   bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
+  autoStartAt: null,
 });
 
 function run(...events: LobbyEvent[]) {
@@ -72,6 +75,7 @@ function fakeSocket() {
     onSettings: bind("settings"),
     sendHostSettings: vi.fn(),
     onCountdown: bind("countdown"),
+    onAutoStart: bind("autoStart"),
     sendHostStart: vi.fn(),
     // #559: the seat view's typing (the lobby binds none of them)
     sendKeys: vi.fn(),
@@ -108,6 +112,7 @@ describe("reduceLobby", () => {
       members: [],
       raceId: null,
       settings: null,
+      autoStart: NO_AUTO_START,
     });
   });
 
@@ -120,6 +125,7 @@ describe("reduceLobby", () => {
       members: [ada, bob, cyd],
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
+      autoStart: NO_AUTO_START,
     });
   });
 
@@ -185,9 +191,10 @@ describe("bindRoomSocket", () => {
   it("subscribes the socket's events and dispatches them as lobby events", () => {
     const { socket, cbs, fire } = fakeSocket();
     const dispatch = vi.fn();
-    bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps });
+    bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps, now: () => 7 });
     expect(Object.keys(cbs).sort()).toEqual(
       [
+        "autoStart",
         "connectError",
         "countdown",
         "reconnected",
@@ -208,7 +215,7 @@ describe("bindRoomSocket", () => {
     const changed = { v: PROTOCOL_VERSION, settings: { ...DEFAULT_RACE_SETTINGS, bonuses: false } };
     fire("settings", changed);
     expect(dispatch.mock.calls.map(([e]) => e)).toEqual([
-      { type: "welcome", payload: w },
+      { type: "welcome", payload: w, receivedAt: 7 },
       { type: "roster", payload: { v: PROTOCOL_VERSION, members: [ada, bob] } },
       { type: "connect-error", reason: "transport" },
       { type: "reconnecting" },
@@ -232,6 +239,7 @@ describe("bindRoomSocket", () => {
       members: [ada, bob],
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
+      autoStart: { ...NO_AUTO_START, offset: expect.any(Number) },
     });
   });
 });
@@ -390,6 +398,7 @@ describe("countdown and the resume key (#214 C2)", () => {
       members: [ada, bob],
       raceId: RACE_ID,
       settings: DEFAULT_RACE_SETTINGS,
+      autoStart: NO_AUTO_START,
     });
     // a roster while the page moves keeps it starting
     const later = reduceLobby(state, {
@@ -446,6 +455,7 @@ describe("countdown and the resume key (#214 C2)", () => {
     unbind();
     expect(Object.keys(offs).sort()).toEqual(
       [
+        "autoStart",
         "connectError",
         "countdown",
         "reconnected",
@@ -488,6 +498,7 @@ describe("welcome during the countdown (#659)", () => {
         members: [ada, bob],
         raceId: RACE_ID,
         settings: DEFAULT_RACE_SETTINGS,
+        autoStart: NO_AUTO_START,
       });
     },
   );
@@ -510,6 +521,7 @@ describe("welcome during the countdown (#659)", () => {
       members: [ada, bob],
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
+      autoStart: NO_AUTO_START,
     });
   });
 
@@ -967,5 +979,109 @@ describe("joinRoom: the late joiner's hold (#732 C2)", () => {
     });
     await h.flush();
     expect(h.sockets).toHaveLength(2);
+  });
+});
+
+describe("public room auto start (#814 C6)", () => {
+  const SERVER_NOW = 1767225600000;
+  const at = (startsAt: number | null) => ({ v: PROTOCOL_VERSION, startsAt }) as const;
+  // the device runs 2 s behind the server: server time = device time + 2 000
+  const DEVICE = SERVER_NOW - 2_000;
+  const live = (autoStartAt: number | null = null) =>
+    run({
+      type: "welcome",
+      payload: { ...welcome(2, [ada, bob]), autoStartAt },
+      receivedAt: DEVICE,
+    });
+
+  it("welcome.autoStartAt sets the instant and the clock offset from serverNow", () => {
+    const state = live(SERVER_NOW + 45_000);
+    expect(state.autoStart).toEqual({
+      at: SERVER_NOW + 45_000,
+      offset: 2_000,
+      notice: { kind: "armed", seconds: 45 },
+    });
+    expect(autoStartSecondsAt(state.autoStart, DEVICE)).toBe(45);
+    expect(autoStartSecondsAt(state.autoStart, DEVICE + 1)).toBe(45);
+    expect(autoStartSecondsAt(state.autoStart, DEVICE + 1_000)).toBe(44);
+    expect(autoStartSecondsAt(state.autoStart, DEVICE + 44_001)).toBe(1);
+    expect(autoStartSecondsAt(state.autoStart, DEVICE + 45_000)).toBe(0);
+    // never below 0
+    expect(autoStartSecondsAt(state.autoStart, DEVICE + 90_000)).toBe(0);
+  });
+
+  it("no instant: null seconds, no notice", () => {
+    const state = live();
+    expect(state.autoStart).toEqual({ at: null, offset: 2_000, notice: null });
+    expect(autoStartSecondsAt(state.autoStart, DEVICE)).toBeNull();
+  });
+
+  it("auto-start arms (notice frozen at its arrival), a repeat changes nothing, null drops it", () => {
+    const armed = reduceLobby(live(), {
+      type: "auto-start",
+      payload: at(SERVER_NOW + 45_000),
+      receivedAt: DEVICE + 3_000,
+    });
+    expect(armed.autoStart).toEqual({
+      at: SERVER_NOW + 45_000,
+      offset: 2_000,
+      notice: { kind: "armed", seconds: 42 },
+    });
+    expect(reduceLobby(armed, { type: "auto-start", payload: at(SERVER_NOW + 45_000) })).toBe(
+      armed,
+    );
+    const dropped = reduceLobby(armed, { type: "auto-start", payload: at(null) });
+    expect(dropped.autoStart).toEqual({ at: null, offset: 2_000, notice: { kind: "dropped" } });
+    expect(dropped.phase).toBe("live");
+  });
+
+  it("a reconnect's welcome keeps the instant (no second announcement) or reads its drop", () => {
+    const armed = live(SERVER_NOW + 45_000);
+    const again = reduceLobby(armed, {
+      type: "welcome",
+      payload: {
+        ...welcome(2, [ada, bob]),
+        autoStartAt: SERVER_NOW + 45_000,
+        serverNow: SERVER_NOW + 5_000,
+      },
+      receivedAt: DEVICE + 5_000,
+    });
+    expect(again.autoStart).toEqual(armed.autoStart);
+    const gone = reduceLobby(armed, { type: "welcome", payload: welcome(2, [ada, bob]) });
+    expect(gone.autoStart.at).toBeNull();
+    expect(gone.autoStart.notice).toEqual({ kind: "dropped" });
+  });
+
+  it("countdown still moves the page to the race (#214)", () => {
+    const state = reduceLobby(live(SERVER_NOW + 45_000), {
+      type: "countdown",
+      payload: {
+        v: PROTOCOL_VERSION,
+        race: {
+          raceId: "3f0c8a52-6a3e-4c1b-9d7e-2b5f1e8a4c90",
+          text: "Le reçu",
+          language: "fr",
+          wordCount: 2,
+          t0: SERVER_NOW + 48_000,
+          timerS: null,
+        },
+      },
+    });
+    expect(state).toMatchObject({
+      phase: "starting",
+      raceId: "3f0c8a52-6a3e-4c1b-9d7e-2b5f1e8a4c90",
+    });
+  });
+
+  it("bindRoomSocket stamps auto-start with the device clock", () => {
+    const { socket, fire } = fakeSocket();
+    const dispatch = vi.fn();
+    bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps, now: () => 42 });
+    fire("autoStart", at(SERVER_NOW));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "auto-start",
+      payload: at(SERVER_NOW),
+      receivedAt: 42,
+    });
   });
 });

@@ -49,6 +49,7 @@ describe("waiting room over Socket.IO (C1)", () => {
       // #178: every welcome carries the user's resume key (32 random bytes hex).
       resumeKey: expect.stringMatching(/^[0-9a-f]{64}$/),
       serverNow: t.clock.now(),
+      autoStartAt: null,
     });
 
     const b = t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby, name: "Bob" }) });
@@ -266,4 +267,45 @@ describe("a room whose racer dropped for good still closes (#658 C2)", () => {
     expect(await t.server.registry.room(lobby)).toMatchObject({ phase: "ended", seated: [] });
     expect(t.server.presence.sockets(lobby, host.sub)).toBe(0);
   });
+});
+
+describe("public room auto start at the edge (#814 C5)", () => {
+  it("every welcome carries the stored instant; auto-start reaches players and spectators", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom("KGB-4821", {
+      ...DEFAULT_RACE_SETTINGS,
+      lobbyType: "public",
+      bots: [{ level: "clerk" }],
+    });
+    const join = async (claims: Parameters<Booted["token"]>[0]) => {
+      const client = t!.connect({ v: PROTOCOL_VERSION, token: await t!.token(claims) });
+      const seen = Object.assign(track(client), { autoStart: [] as (number | null)[] });
+      client.on("auto-start", (a) => void seen.autoStart.push(a.startsAt));
+      await until(() => !!seen.welcome, WAIT_MS, `welcome ${claims.sub}`);
+      return seen;
+    };
+    // The host's welcome precedes the review its join triggers.
+    const host = await join({ lobby, sub: "usr_host", name: "Ada", role: "host" });
+    expect(host.welcome!.autoStartAt).toBeNull();
+    await until(() => host.autoStart.length === 1, WAIT_MS, "auto-start");
+    const startsAt = host.autoStart[0]!;
+    expect(startsAt).toBe(t.clock.now() + 45_000);
+
+    const guest = await join({ lobby, sub: "usr_guest", name: "Bob" });
+    expect(guest.welcome!.autoStartAt).toBe(startsAt);
+    const watcher = await join({ lobby, sub: "usr_watch", name: "Eve", role: "spectator" });
+    expect(watcher.welcome!.autoStartAt).toBe(startsAt);
+
+    // A drop goes to the whole audience, spectators included.
+    await t.server.registry.setBots(lobby, []);
+    await t.server.registry.leave(lobby, "usr_guest");
+    await t.server.lifecycle.reviewAutoStart(lobby);
+    await until(
+      () => host.autoStart.length === 2 && watcher.autoStart.length === 1,
+      WAIT_MS,
+      "dropped",
+    );
+    expect(host.autoStart[1]).toBeNull();
+    expect(watcher.autoStart).toEqual([null]);
+  }, 20_000);
 });

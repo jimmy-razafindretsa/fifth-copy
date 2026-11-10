@@ -52,6 +52,7 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   bonus: null,
   resumeKey: null,
   serverNow: SERVER_NOW,
+  autoStartAt: null,
   ...over,
 });
 

@@ -28,6 +28,15 @@ export const countdownSchema = z.object({ v: versionSchema, race: raceInfoSchema
 export type Countdown = z.infer<typeof countdownSchema>;
 
 /**
+ * A public room's automatic start (#814, ARCHITECTURE 7.1): `startsAt` is the server ms epoch at
+ * which the race server starts the race by itself, as a host's START would; `null` when no
+ * automatic start is pending any more (dropped). Broadcast to the room's audience; a `countdown`
+ * supersedes it (no `null` follows a start).
+ */
+export const autoStartSchema = z.object({ v: versionSchema, startsAt: msSchema.nullable() });
+export type AutoStart = z.infer<typeof autoStartSchema>;
+
+/**
  * One desk in a snapshot: `[desk, cursor, correct, errors, statusCode, total]` (`PLAYER_STATUSES[code]`;
  * `total` = the engine's accepted presses, Backspace included, never decreasing: the exact ack of the
  * keys the server applied, #645).

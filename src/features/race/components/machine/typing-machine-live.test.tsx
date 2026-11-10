@@ -47,6 +47,7 @@ function storeIn(errorMode: "continue" | "block", keys: string[] = []): RaceStor
       bonus: null,
       resumeKey: null,
       serverNow: 1_767_225_600_000,
+      autoStartAt: null,
     },
   });
   store.dispatch({

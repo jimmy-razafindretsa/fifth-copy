@@ -60,6 +60,7 @@ export function attachSpectator(
         bonus: null,
         resumeKey: null,
         serverNow: clock.now(),
+        autoStartAt: room.autoStartAt,
       });
       // A room voided by a restart (#204): the spectator hears the race is over, like a player.
       if (room.phase === "ended" && room.endReason === "void" && room.raceId !== null) {

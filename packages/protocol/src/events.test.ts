@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   abandonSchema,
+  autoStartSchema,
   bonusPlaySchema,
   countdownSchema,
   endedSchema,
@@ -194,5 +195,18 @@ describe("race events", () => {
 
   it("caps a key batch at 64", () => {
     expect(MAX_KEYS_PER_BATCH).toBe(64);
+  });
+});
+
+describe("auto-start (#814)", () => {
+  it.each([
+    ["pending", { v, startsAt: 1767225645000 }, true],
+    ["dropped", { v, startsAt: null }, true],
+    ["missing startsAt", { v }, false],
+    ["negative instant", { v, startsAt: -1 }, false],
+    ["fractional instant", { v, startsAt: 1.5 }, false],
+    ["previous v", { v: v - 1, startsAt: null }, false],
+  ] as const)("%s", (_, payload, ok) => {
+    expect(autoStartSchema.safeParse(payload).success).toBe(ok);
   });
 });

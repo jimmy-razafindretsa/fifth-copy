@@ -53,6 +53,7 @@ export function fakeRoomSocket() {
       error: "timeout",
     })),
     onCountdown: on("onCountdown"),
+    onAutoStart: on("onAutoStart"),
     sendHostStart: vi.fn(async (): Promise<HostStartResult> => ({ ok: false, error: "timeout" })),
     sendKeys: vi.fn<RoomSocket["sendKeys"]>(),
     onSnapshot: on("onSnapshot"),

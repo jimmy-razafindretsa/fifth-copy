@@ -22,6 +22,7 @@ function setup(phase: RoomState["phase"], seated: RaceDesk[]) {
     desks: null,
     raceId: null,
     endReason: null,
+    autoStartAt: null,
   };
   const lastLeave = createLastLeave({
     registry: {

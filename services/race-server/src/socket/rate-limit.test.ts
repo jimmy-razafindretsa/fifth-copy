@@ -445,6 +445,8 @@ describe("host:settings budget sized for the host settings form (#750)", () => {
       keys: { max: 25, windowMs: 1_000 },
       ping: { max: 2, windowMs: 1_000 },
       "host:start": { max: 5, windowMs: 10_000 },
+      // #133: a host removal, like the other host and race actions.
+      "host:kick": { max: 5, windowMs: 10_000 },
       abandon: { max: 5, windowMs: 10_000 },
       "bonus:play": { max: 5, windowMs: 10_000 },
     });

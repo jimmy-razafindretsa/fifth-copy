@@ -10,7 +10,9 @@ import { deskLabel, fill, playersLabel } from "./lobby-labels";
 import { LobbyLiveView, type StartState } from "./lobby-live";
 import { initialLobbyState, NO_AUTO_START, type LobbyState } from "./lobby-store";
 import { PlayerList } from "./player-list";
+import { CONFIRM_HOLD_FACTOR, confirmHoldMs, type RemoveState } from "./remove-control";
 import { IDLE_FORM, type FormState } from "./settings-form";
+import styles from "./lobby.module.css";
 
 // Contract of card 107, C6: every state renders, every string from the catalog (C6 greps `src`).
 vi.mock("../actions/mint-race-token", () => ({ mintRaceToken: vi.fn() }));
@@ -675,5 +677,98 @@ describe("public room auto start (#814 C7)", () => {
     expect(polite(render(armed(2), 45, l))).toContain(
       "La course démarre toute seule dans 45 secondes.",
     );
+  });
+});
+
+// Contract of #133 C4, C5, C7: the host's REMOVE on typists' rows, its CONFIRM, the refusal line, and the
+// removed viewer's docket (bible 14.3).
+describe("remove a typist (#133 C4 C5)", () => {
+  const bot: Member = { ...member(3), name: "Agent 3", isBot: true };
+  const roll = [member(1, true), member(2), bot, member(4)];
+  const removeView = (state: LobbyState, remove?: RemoveState) =>
+    renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={state}
+        labels={labels}
+        errors={errors}
+        remove={remove}
+        onRemove={() => {}}
+      />,
+    );
+  const removeButtons = (html: string) =>
+    [...html.matchAll(/<button[^>]*aria-label="([^"]*)"[^>]*>([^<]*)<\/button>/g)]
+      .filter((m) => m[2] === labels.remove.button || m[2] === labels.remove.confirm)
+      .map((m) => [m[1], m[2]]);
+
+  it("the host sees REMOVE on every human non-host row, named REMOVE <name>", () => {
+    expect(removeButtons(removeView(live(roll, 1)))).toEqual([
+      [fill(labels.remove.name, { name: "Clerk-2" }), "REMOVE"],
+      [fill(labels.remove.name, { name: "Clerk-4" }), "REMOVE"],
+    ]);
+  });
+
+  it("the row-sized 7.1 secondary (the bot row's recipe), never on the host's row or a bot's", () => {
+    const html = removeView(live(roll, 1));
+    expect(html).toContain(`class="${styles.secondary} ${styles.remove}"`);
+    expect(html).not.toContain(fill(labels.remove.name, { name: "Clerk-1" }));
+    expect(html).not.toContain(fill(labels.remove.name, { name: "Agent 3" }));
+  });
+
+  it("a non-host sees no REMOVE, nor the host in another phase", () => {
+    expect(removeButtons(removeView(live(roll, 2)))).toEqual([]);
+    expect(removeButtons(removeView({ ...live(roll, 1), phase: "reconnecting" }))).toEqual([]);
+    expect(removeButtons(removeView({ ...live(roll, 1), phase: "starting" }))).toEqual([]);
+  });
+
+  it("the first press reads CONFIRM in place, named CONFIRM · REMOVE <name>; pending is aria-disabled", () => {
+    const confirm = removeView(live(roll, 1), { confirm: 4, pending: null, error: null });
+    expect(removeButtons(confirm)).toEqual([
+      [fill(labels.remove.name, { name: "Clerk-2" }), "REMOVE"],
+      [fill(labels.remove.confirmName, { name: "Clerk-4" }), "CONFIRM"],
+    ]);
+    expect(confirm).toContain("data-confirm");
+    expect(confirm).not.toContain('aria-disabled="true"');
+    const pending = removeView(live(roll, 1), { confirm: 4, pending: 4, error: null });
+    expect(pending).toMatch(/aria-disabled="true"[^>]*>CONFIRM</);
+  });
+
+  it.each(["not-host", "not-waiting", "no-such-desk", "is-bot", "self", "timeout"] as const)(
+    "a refused removal (%s) shows the roll's 7.4 inline error line",
+    (error) => {
+      const html = removeView(live(roll, 1), { confirm: null, pending: null, error });
+      expect(html).toContain('role="alert"');
+      expect(html).toContain(labels.remove.errors[error]);
+      expect(html).toContain(errors.prefix);
+    },
+  );
+
+  it("CONFIRM holds slow x 5, and until blur under reduced motion", () => {
+    expect(CONFIRM_HOLD_FACTOR).toBe(5);
+    expect(confirmHoldMs("600ms")).toBe(3000);
+    expect(confirmHoldMs("0ms")).toBe(0);
+  });
+
+  it("removed: the docket named by the ink REMOVED stamp, one sentence, the ink link to /", () => {
+    const html = view({ ...live(roll, 2), phase: "removed" });
+    expect(html).toContain(`aria-label="${labels.remove.docket.stamp}"`);
+    expect(html).toContain(labels.remove.docket.sentence.replace(/'/g, "&#x27;"));
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/"[^>]*>${labels.remove.docket.back}</a>`));
+    // the room is gone: no roll, no room docket, no reconnecting row
+    expect(rows(html)).toBe(0);
+    expect(html).not.toContain(CODE);
+  });
+
+  it("the strings exist in both catalogs with identical keys", () => {
+    const keys = (o: object): string[] =>
+      Object.entries(o).flatMap(([k, v]) =>
+        typeof v === "object" ? keys(v).map((s) => `${k}.${s}`) : [k],
+      );
+    expect(keys(fr.lobby.remove)).toEqual(keys(en.lobby.remove));
+    expect(fr.lobby.remove.button).toBe("RETIRER");
+    expect(fr.lobby.remove.confirm).toBe("CONFIRMER");
+    expect(fr.lobby.remove.docket.stamp).toBe("RETIRÉ");
+    expect(fr.lobby.remove.docket.back).toBe("RETOUR À L'ACCUEIL →");
+    expect(en.lobby.remove.docket.back).toBe("BACK TO THE FRONT DESK →");
   });
 });

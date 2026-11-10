@@ -1,6 +1,7 @@
 export { connectToRoom } from "./client/socket";
 export type {
   ConnectErrorReason,
+  HostKickResult,
   HostSettingsResult,
   HostStartResult,
   Off,

@@ -1,5 +1,11 @@
 import { vi, type Mock } from "vitest";
-import type { HostSettingsResult, HostStartResult, Off, RoomSocket } from "../socket";
+import type {
+  HostKickResult,
+  HostSettingsResult,
+  HostStartResult,
+  Off,
+  RoomSocket,
+} from "../socket";
 
 // Test support only (#682): imported by `*.test.ts` files, never by app code (depcruise
 // `feature-testing-only-from-tests`). The one typed `RoomSocket` fake of the race client: the object
@@ -55,6 +61,7 @@ export function fakeRoomSocket() {
     onCountdown: on("onCountdown"),
     onAutoStart: on("onAutoStart"),
     sendHostStart: vi.fn(async (): Promise<HostStartResult> => ({ ok: false, error: "timeout" })),
+    sendHostKick: vi.fn(async (): Promise<HostKickResult> => ({ ok: false, error: "timeout" })),
     sendKeys: vi.fn<RoomSocket["sendKeys"]>(),
     onSnapshot: on("onSnapshot"),
     onEvent: on("onEvent"),

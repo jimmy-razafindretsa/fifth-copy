@@ -8,6 +8,8 @@ import {
   handshakeAuthSchema,
   hostSettingsAckSchema,
   hostSettingsSchema,
+  hostKickAckSchema,
+  hostKickSchema,
   MAX_RACE_MS,
   memberSchema,
   rejectReasonSchema,
@@ -31,6 +33,7 @@ import {
   type ClientToServerEvents,
   type HostStartAck,
   type HostSettingsAck,
+  type HostKickAck,
   type Keys,
 } from "./index";
 
@@ -93,6 +96,7 @@ describe("socket schemas", () => {
     ["reject example", rejectReasonSchema, "bad-token", true],
     ["reject in-progress", rejectReasonSchema, "in-progress", true],
     ["reject room-full", rejectReasonSchema, "room-full", true],
+    ["reject removed (#133)", rejectReasonSchema, "removed", true],
     ["reject wrong enum", rejectReasonSchema, "banned", false],
     ["member example", memberSchema, member, true],
     ["member desk 0", memberSchema, { ...member, desk: 0 }, false],
@@ -193,6 +197,18 @@ describe("socket schemas", () => {
     ["ack invalid", hostSettingsAckSchema, { ok: false, error: "invalid" }, true],
     ["ack no-room", hostSettingsAckSchema, { ok: false, error: "no-room" }, true],
     ["ack unknown error", hostSettingsAckSchema, { ok: false, error: "teapot" }, false],
+    ["host:kick example (#133)", hostKickSchema, { v, desk: 3 }, true],
+    ["host:kick previous v", hostKickSchema, { v: v - 1, desk: 3 }, false],
+    ["host:kick desk 0", hostKickSchema, { v, desk: 0 }, false],
+    ["host:kick missing desk", hostKickSchema, { v }, false],
+    ["host:kick extra userId", hostKickSchema, { v, desk: 3, userId: "usr_x" }, false],
+    ["kick ack ok", hostKickAckSchema, { ok: true }, true],
+    ...(["not-host", "not-waiting", "no-such-desk", "is-bot", "self"] as const).map(
+      (error) => [`kick ack ${error}`, hostKickAckSchema, { ok: false, error }, true] as const,
+    ),
+    ["kick ack rate-limited", hostKickAckSchema, { ok: false, error: "rate-limited" }, false],
+    ["kick ack unknown error", hostKickAckSchema, { ok: false, error: "teapot" }, false],
+    ["kicked event (#133)", eventSchema, { v, kind: "kicked", desk: 3 }, true],
   ] as const)("%s", (_, schema, payload, ok) => {
     expect(schema.safeParse(payload).success).toBe(ok);
   });
@@ -212,10 +228,11 @@ describe("socket schemas", () => {
     });
   });
 
-  it("maps every client event to its schema, and the two acked ones to their ack", () => {
+  it("maps every client event to its schema, and the three acked ones to their ack", () => {
     expect(clientEvents).toEqual({
       "host:settings": hostSettingsSchema,
       "host:start": hostStartSchema,
+      "host:kick": hostKickSchema,
       keys: keysSchema,
       abandon: abandonSchema,
       "bonus:play": bonusPlaySchema,
@@ -224,6 +241,7 @@ describe("socket schemas", () => {
     expect(clientAcks).toEqual({
       "host:settings": hostSettingsAckSchema,
       "host:start": hostStartAckSchema,
+      "host:kick": hostKickAckSchema,
     });
   });
 
@@ -233,6 +251,9 @@ describe("socket schemas", () => {
     >();
     expectTypeOf<Parameters<ClientToServerEvents["host:settings"]>[1]>().toEqualTypeOf<
       (a: HostSettingsAck) => void
+    >();
+    expectTypeOf<Parameters<ClientToServerEvents["host:kick"]>[1]>().toEqualTypeOf<
+      (a: HostKickAck) => void
     >();
     expectTypeOf<Parameters<ClientToServerEvents["keys"]>>().toEqualTypeOf<[payload: Keys]>();
   });

@@ -31,6 +31,7 @@ export const SOCKET_LIMITS = {
   ping: { max: 2, windowMs: 1_000 },
   "host:start": { max: 5, windowMs: 10_000 },
   "host:settings": { max: 30, windowMs: 10_000 },
+  "host:kick": { max: 5, windowMs: 10_000 },
   abandon: { max: 5, windowMs: 10_000 },
   "bonus:play": { max: 5, windowMs: 10_000 },
 } as const satisfies Record<keyof ClientToServerEvents, LimitRule>;

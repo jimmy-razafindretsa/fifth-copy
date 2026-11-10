@@ -148,6 +148,43 @@ describe("authenticateHandshake (C2)", () => {
   });
 });
 
+describe("removed users (#133 C3)", () => {
+  it("refuses a removed user removed, as player, host-role or spectator token; others and other lobbies pass", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const other = await t.openRoom();
+    const { registry } = t.server;
+    await registry.join(lobby, { userId: "usr_host", name: "Ada" });
+    await registry.join(lobby, { userId: "usr_b", name: "Bob" });
+    expect(await registry.kick(lobby, "usr_host", 2)).toEqual({ ok: true, userId: "usr_b" });
+    const deps = { secret: SECRET, registry, clock: t.clock };
+    const as = async (claims: { lobby: string; sub: string; role?: "player" | "spectator" }) =>
+      authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token(claims) }, deps);
+    // Still seated until the edge's leaveRoom: the block alone refuses (never seated, no slot).
+    expect(await as({ lobby, sub: "usr_b" })).toEqual({ ok: false, reason: "removed" });
+    expect(await as({ lobby, sub: "usr_b", role: "spectator" })).toEqual({
+      ok: false,
+      reason: "removed",
+    });
+    expect(await as({ lobby, sub: "usr_c" })).toMatchObject({ ok: true });
+    expect(await as({ lobby: other, sub: "usr_b" })).toMatchObject({ ok: true });
+  });
+
+  it("over the wire: connect_error removed, the roster unchanged", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const { registry } = t.server;
+    await registry.join(lobby, { userId: "usr_host", name: "Ada" });
+    await registry.block(lobby, "usr_b");
+    const client = t.connect({
+      v: PROTOCOL_VERSION,
+      token: await t.token({ lobby, sub: "usr_b" }),
+    });
+    expect(await connectError(client)).toBe("removed");
+    expect((await registry.members(lobby))?.map((m) => m.name)).toEqual(["Ada"]);
+  });
+});
+
 describe("spectator tokens (#187)", () => {
   it("accepts a spectator token for a waiting room, without membership and without joining", async () => {
     t = await boot(process.env.REDIS_URL);

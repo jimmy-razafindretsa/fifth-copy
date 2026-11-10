@@ -437,6 +437,67 @@
   cursor: progress;
 }
 
+/* the host's REMOVE on a typist's roll row (#133, bible 14.3): the bot row's row-sized 7.1 secondary,
+   pushed to the row's end; the roll is paper, so it hovers to the newsprint ground. CONFIRM (the first
+   press) takes the 7.1 ink fill in place (Abandon's confirm), paper text */
+.remove {
+  margin-left: auto;
+}
+
+.remove:hover:not([aria-disabled="true"]) {
+  background: var(--color-surface);
+}
+
+.remove[data-confirm],
+.remove[data-confirm]:hover:not([aria-disabled="true"]) {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the removed viewer's docket (#133, bible 14.3): the 7.4 exit docket recipe (#233), paper, 2px ink
+   rule, min(480px, 100%) and centred; the ink stamp in its own clipped band, one Courier Prime sentence,
+   the ink link closing it under a 2px ink rule */
+.removed {
+  width: min(480px, 100%);
+  margin-inline: auto;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+}
+
+.removedStamp {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 20px 12px;
+}
+
+.removedText {
+  margin: 0;
+  padding: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  @apply type-body;
+  font-size: 17px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.removedActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 2px solid var(--color-fg);
+}
+
+/* the ink button as a link: centred in its 44px, no underline */
+.removedLink {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: normal;
+  text-decoration: none;
+}
+
 /* bible 18: hit targets >= 44px on touch widths */
 @media (max-width: 768px) {
   .segment,

@@ -30,7 +30,8 @@ export type HandshakeResult =
 /**
  * Decides whether a Socket.IO handshake may proceed (ADR 0006, 0009). Order: protocol version, then
  * the auth shape and race token (any failure is `bad-token`), then the room of the token's `lobby`
- * claim, the only source of the room: a client never names one; then `in-progress` for a new user of
+ * claim, the only source of the room: a client never names one; then `removed` for a user on the
+ * room's block list (#133, any role); then `in-progress` for a new user of
  * a room whose race is on (`countdown`, `running`); `waiting` and `ended` admit anyone (#143, #732)
  * while a desk is free, else `room-full`.
  * Reads only; joining happens on connect.
@@ -54,6 +55,11 @@ export async function authenticateHandshake(
   if (!verified.ok) return { ok: false, reason: "bad-token" };
   const room = await registry.room(verified.claims.lobby);
   if (room === null) return { ok: false, reason: "no-room" };
+  // A user the host removed (#133, ADR 0009: the token's `sub`, never the socket) is refused in
+  // every role: never seated, never a spectator slot.
+  if (await registry.isBlocked(verified.claims.lobby, verified.claims.sub)) {
+    return { ok: false, reason: "removed" };
+  }
   if (verified.claims.role === "spectator")
     return { ok: true, claims: verified.claims, resume: false };
   // During a race only an existing member (a second tab, same `sub`) is let in (#166); `ended`

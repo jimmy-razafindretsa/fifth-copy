@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { initialState } from "@fifth-copy/engine";
 import {
+  autoStartSchema,
   clientAcks,
   clientEvents,
   DEFAULT_RACE_SETTINGS,
@@ -50,6 +51,7 @@ const welcome = {
   bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
+  autoStartAt: null,
 };
 const running = {
   ...welcome,
@@ -137,6 +139,9 @@ describe("socket schemas", () => {
     ["welcome spectator", welcomeSchema, { ...welcome, role: "spectator", you: null }, true],
     ["welcome wrong role", welcomeSchema, { ...welcome, role: "admin" }, false],
     ["welcome missing serverNow", welcomeSchema, { ...welcome, serverNow: undefined }, false],
+    ["#814 welcome auto start pending", welcomeSchema, { ...welcome, autoStartAt: 1767225645000 }, true],
+    ["#814 welcome missing autoStartAt", welcomeSchema, { ...welcome, autoStartAt: undefined }, false],
+    ["#814 welcome negative autoStartAt", welcomeSchema, { ...welcome, autoStartAt: -5 }, false],
     ["welcome missing race", welcomeSchema, { ...welcome, race: undefined }, false],
     ["welcome bad resume key", welcomeSchema, { ...welcome, resumeKey: "short" }, false],
     ["welcome v: 1", welcomeSchema, { ...welcome, v: 1 }, false],
@@ -188,6 +193,7 @@ describe("socket schemas", () => {
       roster: rosterSchema,
       settings: settingsSchema,
       countdown: countdownSchema,
+      "auto-start": autoStartSchema,
       snapshot: snapshotSchema,
       event: eventSchema,
       ended: endedSchema,

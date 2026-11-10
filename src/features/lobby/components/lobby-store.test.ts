@@ -44,6 +44,7 @@ const welcome = (you: number, members: Member[]): RoomEvents["welcome"] => ({
   bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
+  autoStartAt: null,
 });
 
 function run(...events: LobbyEvent[]) {

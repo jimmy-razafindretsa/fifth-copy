@@ -1,0 +1,210 @@
+/*
+ * The personal stats card (#864, #302, bible 14.4 "Personal stats card"): one 7.4 docket on newsprint
+ * beside the ranking docket on paper (the lobby's roll | room docket pair, 7.4 roll rows), 2px ink rule,
+ * no radius. Header row: the ink tag left, the mono place right (the HUD docket header, 7.4). A
+ * suspicious result's one-row `UNDER REVIEW` label (the plinth's, 14.4) under it. The figures are the
+ * plinth stat cell's (big clean WPM in Plex Mono 500, Oswald 11px muted units, accuracy 14px muted, the
+ * 7.4a hairline status label). The bonuses are 7.4 rows `120px | 1fr` with dashed separators. Colours
+ * are roles (no reward role: no gold, bible 3), faces the type roles (#531); no motion.
+ */
+
+@reference "../../../app/globals.css";
+
+.docket {
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-fg);
+}
+
+/* header row: the ink tag, the place on the right */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+/* the ink tag (bible 7.4 roll rows: Oswald 600 10px .16em, ink ground, paper text) */
+.tag {
+  display: inline-block;
+  margin: 0;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* the HUD docket header's mono value (IBM Plex Mono 500 14px .08em) */
+.place {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* the plinth's UNDER REVIEW label as a docket row (Oswald 11px .16em), dashed separator under it */
+.review {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+/* the plinth stat cell's figures: the big WPM then its unit, the accuracy then its unit */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.figure {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* the value reads first, the unit after it (dt stays first in the markup) */
+.figure > dd {
+  order: -1;
+  margin: 0;
+}
+
+.unit {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+/* the clean WPM, the card's big figure (IBM Plex Mono 500, the plinth's) */
+.wpm {
+  @apply type-typing;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.accuracy {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.statusLine {
+  margin: 0;
+}
+
+/* a status other than filed: the 7.4a status label (Oswald 10px .16em in a 1px muted hairline) */
+.status {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+  border: 1px solid var(--color-fg-muted);
+  padding: 0 5px;
+}
+
+/* the bonus rows: 7.4 rows 120px | 1fr, dashed separators */
+.rows {
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+/* the row label (bible 7.4 roll-row label: Oswald 600 11px .2em, muted) */
+.label {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.value {
+  margin: 0;
+  min-width: 0;
+}
+
+.bonuses {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* a card name (the tray's caps label, Oswald 600 12px .16em) and its count (Plex Mono 500 14px) */
+.bonus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.bonusName {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.none {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}

@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 // one and the bot (desk 3) wears its desk's fixed outfit, as `getDawnReport` would resolve them.
 vi.mock("@/env", () => ({ env: {} }));
 const { outfitForDesk, parseOutfit } = await import("@/features/identity");
-const { dawnReportFixtures, SAVED_OUTFIT } = await import("./dawn-report-fixtures");
+const { dawnReportFixtures, personalFixtures, SAVED_OUTFIT } =
+  await import("./dawn-report-fixtures");
 
 describe("dawnReportFixtures outfits (#688 C1)", () => {
   it("every entry of every fixture wears an outfit the catalogue accepts", () => {
@@ -28,5 +29,28 @@ describe("dawnReportFixtures outfits (#688 C1)", () => {
     for (const e of dawnReportFixtures.full.entries.filter((x) => x.desk !== 12)) {
       expect(e.outfit, `desk ${e.desk}`).toEqual(outfitForDesk(e.desk));
     }
+  });
+});
+
+describe("personalFixtures (#864 C4)", () => {
+  it("each state is the figures of its desk's row in the six-desk race", () => {
+    for (const [name, p] of Object.entries(personalFixtures)) {
+      const e = dawnReportFixtures.full.entries.find((x) => x.desk === p.desk)!;
+      expect(
+        { place: p.place, wpm: p.wpm, accuracy: p.accuracy, status: p.status, sus: p.suspicious },
+        name,
+      ).toEqual({
+        place: e.place,
+        wpm: e.wpm,
+        accuracy: e.accuracy,
+        status: e.status,
+        sus: e.suspicious,
+      });
+    }
+  });
+
+  it("the viewer fixture carries desk 12's populated card; the others none", () => {
+    expect(dawnReportFixtures.viewer.personal).toEqual(personalFixtures.populated);
+    expect(dawnReportFixtures.full.personal).toBeNull();
   });
 });

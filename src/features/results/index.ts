@@ -16,6 +16,8 @@ export { COUNTED_RACE } from "./queries/counted-races";
 export { DawnReportLayout, DawnReportScreen } from "./components/dawn-report-screen";
 export {
   filingLabels,
+  type PersonalLabels,
+  personalLabels,
   podiumLabels,
   rankingLabels,
   type ReportAction,
@@ -23,12 +25,20 @@ export {
 } from "./view/report-labels";
 // The action row (#143, #863): RACE AGAIN, the way home, a guest member's prompt to open a file.
 export { ReportActions } from "./components/report-actions";
+// The personal stats card (#864, #302): the viewer's own figures and bonuses, beside the ranking.
+export { PersonalCard, type PersonalCardProps } from "./components/personal-card";
+export type { BonusTally, PersonalStats } from "./view/personal";
 export { FilingNoticeView } from "./components/filing-notice-view";
 export { Podium, type PodiumProps } from "./components/podium";
 // The ranking docket (#301): every desk in place order, under the podium.
 export { RankingTable, type RankingTableProps } from "./components/ranking-table";
 export { initialsOf, type RankingLabels, type RankingRow, rankingRowsFrom } from "./view/ranking";
-export { dawnReportFixtures, type DawnReportFixture } from "./view/dawn-report-fixtures";
+export {
+  dawnReportFixtures,
+  type DawnReportFixture,
+  personalFixtures,
+  type PersonalFixture,
+} from "./view/dawn-report-fixtures";
 export {
   type DawnReport,
   MEDAL_VARIANTS,

@@ -24,6 +24,7 @@ type Row = {
   progress: number;
   finishedAtMs: number | null;
   suspicious: boolean;
+  bonusLog: unknown;
   /** The `user` relation as the nested select returns it: null for a bot. */
   user: { outfit: unknown } | null;
 };
@@ -57,6 +58,7 @@ const row = (over: Partial<Row>): Row => ({
   progress: 1,
   finishedAtMs: 40_000,
   suspicious: false,
+  bonusLog: [],
   user: null,
   ...over,
 });
@@ -81,8 +83,37 @@ const RACES: RaceRow[] = [
     lobby: { code: "KGB-4821", status: "WAITING" },
     // stored out of order: the query orders by place, then desk
     results: [
-      row({ desk: 5, place: 3, name: "Otter-417", isBot: false, userId: "u-otter", cleanWpm: 31 }),
-      row({ desk: 2, place: 1, name: "Lynx-785", isBot: false, userId: "u-lynx", cleanWpm: 61 }),
+      row({
+        desk: 5,
+        place: 3,
+        name: "Otter-417",
+        isBot: false,
+        userId: "u-otter",
+        cleanWpm: 31,
+        status: "LINE_CUT",
+        suspicious: true,
+        // #864: desk 5 sent two extra paperworks and a smoke break (two desks), and was hit once
+        bonusLog: [
+          { t: 4_000, kind: "extra-paperwork", from: 5, to: 2 },
+          { t: 20_000, kind: "smoke-break", from: 5, to: 2 },
+          { t: 20_000, kind: "smoke-break", from: 5, to: 9 },
+          { t: 30_000, kind: "extra-paperwork", from: 5, to: 2 },
+          { t: 9_000, kind: "smoke-break", from: 9, to: 5 },
+        ],
+      }),
+      row({
+        desk: 2,
+        place: 1,
+        name: "Lynx-785",
+        isBot: false,
+        userId: "u-lynx",
+        cleanWpm: 61,
+        bonusLog: [
+          { t: 4_000, kind: "extra-paperwork", from: 5, to: 2 },
+          { t: 20_000, kind: "smoke-break", from: 5, to: 2 },
+          { t: 30_000, kind: "extra-paperwork", from: 5, to: 2 },
+        ],
+      }),
       row({ desk: 9, place: 2, name: "Typist Bot 2", cleanWpm: 44, suspicious: true }),
       row({ desk: 4, place: 4, status: "LINE_CUT", finishedAtMs: null, progress: 0.4 }),
     ],
@@ -225,6 +256,9 @@ describe("getDawnReport (#300 C1)", () => {
     expect(select).toHaveProperty("cleanWpm", true);
     expect(select).not.toHaveProperty("adjustedWpm");
     expect(select).not.toHaveProperty("wpm");
+    // #864 C1: a visitor has no personal card, and no bonus log leaves the query
+    expect(report.personal).toBeNull();
+    expect(JSON.stringify(report)).not.toContain("bonusLog");
   });
 
   it.each([
@@ -267,5 +301,64 @@ describe("getDawnReport outfits (#688 C1)", () => {
     const report = await getDawnReport(OUTFITS_ID, null, { db });
     if (report?.kind !== "report") throw new Error("report expected");
     for (const e of report.entries) expect(Object.keys(e.outfit).sort()).toHaveLength(6);
+  });
+});
+
+describe("getDawnReport personal (#864 C1)", () => {
+  it("the viewer's own row: place, clean WPM, accuracy, status, flag, bonuses by kind", async () => {
+    const report = await getDawnReport(RACE_ID, { id: "u-otter" }, { db: fakeDb().db });
+    if (report?.kind !== "report") throw new Error("report expected");
+    expect(report.personal).toEqual({
+      desk: 5,
+      place: 3,
+      wpm: 31,
+      accuracy: 0.95,
+      status: "LINE_CUT",
+      suspicious: true,
+      bonuses: {
+        sent: [
+          { kind: "extra-paperwork", count: 2 },
+          { kind: "smoke-break", count: 1 },
+        ],
+        received: [{ kind: "smoke-break", count: 1 }],
+      },
+    });
+  });
+
+  it("another viewer gets only their own tallies", async () => {
+    const report = await getDawnReport(RACE_ID, { id: "u-lynx" }, { db: fakeDb().db });
+    if (report?.kind !== "report") throw new Error("report expected");
+    expect(report.personal?.desk).toBe(2);
+    expect(report.personal?.bonuses).toEqual({
+      sent: [],
+      received: [
+        { kind: "extra-paperwork", count: 2 },
+        { kind: "smoke-break", count: 1 },
+      ],
+    });
+  });
+
+  it.each([
+    ["a spectator (a viewer with no desk)", { id: "u-nobody" }],
+    ["a visitor", null],
+  ])("null for %s", async (_, viewer) => {
+    const report = await getDawnReport(RACE_ID, viewer, { db: fakeDb().db });
+    expect(report?.kind === "report" && report.personal).toBeNull();
+  });
+
+  it("no personal on a filing or voided race", async () => {
+    const filing = await getDawnReport(FILING_ID, { id: "u-lynx" }, { db: fakeDb().db });
+    expect(filing).not.toHaveProperty("personal");
+    await expect(getDawnReport(VOID_ID, { id: "u-lynx" }, { db: fakeDb().db })).resolves.toBeNull();
+  });
+
+  it("no entry carries a bonus log or a user id", async () => {
+    const report = await getDawnReport(RACE_ID, { id: "u-otter" }, { db: fakeDb().db });
+    if (report?.kind !== "report") throw new Error("report expected");
+    for (const e of report.entries) {
+      expect(e).not.toHaveProperty("bonusLog");
+      expect(e).not.toHaveProperty("userId");
+    }
+    expect(JSON.stringify(report)).not.toMatch(/"t":|"from":|bonusLog/);
   });
 });

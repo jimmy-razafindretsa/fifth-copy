@@ -630,6 +630,17 @@ export const en = {
       prompt: "Open a file and these results stay in your name.",
       signup: "OPEN A FILE →",
     },
+    /**
+     * The personal stats card (#864, bible 14.4): the viewer's own copy. Place, figures, the review row
+     * and the status read the podium's strings; bonus names are `race.sabotageTray.cards`.
+     */
+    personal: {
+      tag: "FORM 5-R · YOUR COPY",
+      sent: "SENT",
+      received: "RECEIVED",
+      none: "NONE",
+      count: "× {n}",
+    },
     podium: {
       title: "Podium",
       place: "№ {n}",

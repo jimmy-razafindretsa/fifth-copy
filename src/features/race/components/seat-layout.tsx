@@ -25,6 +25,8 @@ export type SeatLayoutProps = {
   tray: ReactNode;
   /** ...and Abandon under it, always visible (bible 7.1). */
   abandon: ReactNode;
+  /** ...and the sound toggle under Abandon (#243, bible 7.1). */
+  sound?: ReactNode;
   /** The only thing phones see (<= 480 px). */
   phones: string;
   /**
@@ -83,6 +85,7 @@ export function SeatLayout(props: SeatLayoutProps) {
         <div className={styles.right}>
           {props.tray}
           <div className={styles.abandon}>{props.abandon}</div>
+          {props.sound ? <div className={styles.sound}>{props.sound}</div> : null}
         </div>
       </div>
       <p data-phones className={styles.phones}>

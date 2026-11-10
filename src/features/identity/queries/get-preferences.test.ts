@@ -37,13 +37,13 @@ describe("getPreferences defaults (#66 C2)", () => {
     state.db = { preference: { findUnique: async () => null } };
   });
 
-  it("no viewer: layout null, theme SYSTEM, sound on, locale from the cookie", async () => {
+  it("no viewer: layout null, theme SYSTEM, sound off (#243), locale from the cookie", async () => {
     state.jar.set("locale", "fr");
     await expect(getPreferences(null)).resolves.toEqual({
       layout: null,
       theme: "SYSTEM",
       locale: "fr",
-      sound: true,
+      sound: false,
       machineSkin: "teleprinter",
     });
   });
@@ -55,7 +55,7 @@ describe("getPreferences defaults (#66 C2)", () => {
       layout: null,
       theme: "SYSTEM",
       locale: "en",
-      sound: true,
+      sound: false,
       machineSkin: "teleprinter",
     });
   });

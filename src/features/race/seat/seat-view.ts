@@ -9,6 +9,7 @@ import type {
   RaceCardLabels,
   RaceNoticeLabels,
   SabotageTrayLabels,
+  SoundLabels,
 } from "../view/hud-labels";
 
 /**
@@ -34,6 +35,8 @@ export type RaceSeatLabels = {
   /** The room-lost notice (#235 C4): its statement and the link back to the lobby. */
   presence: SeatPresenceLabels;
   abandon: AbandonLabels;
+  /** The sound toggle (#243): muted by default, filed per viewer. */
+  sound: SoundLabels;
   /** The exit dockets (#233): Reassigned after ABANDON, Asleep at desk after the idle kick. */
   exit: ExitLabels;
   /** The nixie counters (#225): the tube tags and the words their `aria-label` reads. */

@@ -92,6 +92,12 @@
   justify-content: flex-end;
 }
 
+/* the sound toggle (#243) under Abandon, right-aligned like it */
+.sound {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .center {
   grid-area: center;
   align-self: stretch;
@@ -179,6 +185,13 @@
 }
 
 .seat:has([data-scene]) .abandon [aria-expanded]:not(:enabled:hover) {
+  background: var(--color-bg);
+}
+
+/* over the scene the sound toggle's row (its label, segments and pending word) takes a paper chip, as
+   the kicker does (#243, #693); its refusal line has its own surface ground */
+.seat:has([data-scene]) .sound [data-sound] {
+  padding-left: 8px;
   background: var(--color-bg);
 }
 

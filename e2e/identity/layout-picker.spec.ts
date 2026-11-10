@@ -54,7 +54,7 @@ test.describe("#66 layout picker and live controls", () => {
 
     await choose(page, "THEME", "DARK");
     await expect(html).toHaveAttribute("data-theme", "dark");
-    await choose(page, "SOUND", "OFF");
+    await choose(page, "SOUND", "ON"); // #243: sound starts OFF
     await choose(page, "LANGUAGE", "FRANÇAIS");
     await expect(html).toHaveAttribute("lang", "fr");
     await expect(page.getByRole("heading", { level: 1, name: "RÉGLAGES" })).toBeVisible();
@@ -70,7 +70,7 @@ test.describe("#66 layout picker and live controls", () => {
     await page.reload();
     await expect(html).toHaveAttribute("lang", "fr");
     const docket = settingsDocket(page);
-    await expect(group(docket, "SON").getByRole("radio", { name: "NON" })).toBeChecked();
+    await expect(group(docket, "SON").getByRole("radio", { name: "OUI" })).toBeChecked();
     await expect(group(docket, "THÈME").getByRole("radio", { name: "SYSTÈME" })).toBeChecked();
   });
 });

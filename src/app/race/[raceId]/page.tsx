@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getPreferences, getViewer } from "@/features/identity";
+import { getPreferences, getViewer, updatePreferences } from "@/features/identity";
 import { mintRaceToken } from "@/features/lobby";
 import { getRaceSeat, machineRows, RaceSeat } from "@/features/race";
 import { getLocale, getT } from "@/i18n";
@@ -12,13 +12,14 @@ import { SeatScene } from "./seat-scene";
  * (bible 14.3 seat view). The keys follow the viewer's keyboard layout (#224, R179): none is saved yet, so
  * the UI language picks it; the settings screen (#66) passes the saved layout in place of `null`. The
  * machine's skin is the viewer's filed one (#638; `teleprinter` without a preference or a viewer).
- * The 3D seat scene (#563) is `SeatScene`, a client leaf that loads race-3d after the HUD mounted.
+ * The sound toggle (#243) starts from the viewer's filed `sound` (muted by default) and files through
+ * `updatePreferences`. The 3D seat scene (#563) is `SeatScene`, a client leaf that loads race-3d after the HUD mounted.
  */
 export default async function RacePage({ params }: PageProps<"/race/[raceId]">) {
   const { raceId } = await params;
   const seat = await getRaceSeat(raceId);
   if (!seat) notFound();
-  const [t, { machineSkin }] = await Promise.all([getT(), getViewer().then(getPreferences)]);
+  const [t, { machineSkin, sound }] = await Promise.all([getT(), getViewer().then(getPreferences)]);
   const rows = await machineRows({ layout: null, locale: await getLocale() });
   return (
     <main className="flex flex-1 flex-col">
@@ -28,6 +29,8 @@ export default async function RacePage({ params }: PageProps<"/race/[raceId]">) 
         mint={mintRaceToken}
         rows={rows}
         skin={machineSkin}
+        sound={sound}
+        saveSound={updatePreferences}
         scene={<SeatScene labels={t.race.scene} notice={t.race.notice} tips={t.race.didYouKnow} />}
       />
     </main>

@@ -573,6 +573,8 @@ export const fr = {
     },
     actions: {
       again: "ENCORE UNE FOIS",
+      prompt: "Ouvre un dossier et ces résultats restent à ton nom.",
+      signup: "OUVRIR UN DOSSIER →",
     },
     podium: {
       title: "Podium",

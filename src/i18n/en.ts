@@ -597,9 +597,14 @@ export const en = {
       lobby: "BACK TO THE WAITING ROOM →",
       home: "BACK TO THE FRONT DESK →",
     },
-    /** The action row under the ranking (#143, bible 14.4): the same lobby races again. */
+    /**
+     * The action row under the ranking (#143, bible 14.4): the same lobby races again; the way home is
+     * `filing.home`. A guest who raced also gets the prompt to open a file (#863), its link to /sign-up.
+     */
     actions: {
       again: "RACE AGAIN",
+      prompt: "Open a file and these results stay in your name.",
+      signup: "OPEN A FILE →",
     },
     podium: {
       title: "Podium",

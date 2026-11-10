@@ -49,6 +49,8 @@ import {
   RankingTable,
   rankingLabels,
   rankingRowsFrom,
+  ReportActions,
+  reportActions,
 } from "@/features/results";
 import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
@@ -1134,6 +1136,20 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
             />
           </HudSpecimen>
         </div>
+        <HudSpecimen
+          id="report-actions"
+          title="Action row, guest member"
+          caption="A guest who raced, lobby open: RACE AGAIN, the way home, then the prompt to open a file."
+        >
+          <ReportActions
+            actions={reportActions(t.results, {
+              ...dawnReportFixtures.full,
+              race: { ...dawnReportFixtures.full.race, lobbyOpen: true, lobbyCode: "KGB-4821" },
+              viewerDesk: 7,
+              viewerIsGuest: true,
+            })}
+          />
+        </HudSpecimen>
         <div className="grid gap-6 md:grid-cols-2">
           <HudSpecimen
             id="filing"

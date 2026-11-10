@@ -46,7 +46,11 @@ describe("quick race action (#128 C4)", () => {
 
   it("a press after an error runs again (retry)", async () => {
     vi.mocked(quickRace).mockResolvedValueOnce({ ok: false, error: "race-server-unavailable" });
-    vi.mocked(quickRace).mockResolvedValueOnce({ ok: true, code: "KGB-4821" as never, joined: false });
+    vi.mocked(quickRace).mockResolvedValueOnce({
+      ok: true,
+      code: "KGB-4821" as never,
+      joined: false,
+    });
     const navigate = vi.fn();
     const action = makeQuickRaceAction(navigate);
     expect(await action()).toEqual({ error: "race-server-unavailable" });

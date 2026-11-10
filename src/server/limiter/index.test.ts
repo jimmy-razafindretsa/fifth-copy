@@ -166,7 +166,7 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset rules (#788, #789), the recovery redeem rules (#46) and the rules #90, #120 and #121 will wire", () => {
+  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset rules (#788, #789), the recovery redeem rules (#46), the quick race rule (#128) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
       "avatar-upload",
       "clerk-outfit",
@@ -179,6 +179,7 @@ describe("createWebLimit (C3, real Redis)", () => {
       "password-reset-issue",
       "password-reset-redeem",
       "password-reset-redeem-account",
+      "quick-race",
       "recovery",
       "recovery-redeem",
       "recovery-redeem-account",
@@ -193,6 +194,7 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(LIMITS["lobby-codes"]).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS["clerk-outfit"]).toEqual({ max: 30, windowMs: 60_000 });
     expect(LIMITS["set-lobby-type"]).toEqual({ max: 30, windowMs: 60_000 });
+    expect(LIMITS["quick-race"]).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS.invite).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS["invite-redeem"]).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS["password-reset-issue"]).toEqual({ max: 5, windowMs: 3_600_000 });

@@ -397,7 +397,9 @@ test.describe("landing page (#497)", () => {
     expect(await footer.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("14px");
   });
 
-  test("C10 QUICK RACE opens a room and the header then files the guest", async ({ page }) => {
+  test("C10 QUICK RACE opens a room and the header then files the guest @matchmaking", async ({
+    page,
+  }) => {
     await ready(page);
     await hero(page).getByRole("button", { name: QUICK }).click();
     await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
@@ -1080,7 +1082,8 @@ test.describe("site header at phone width (#696)", () => {
 
   test("C1 C2 landing with a guest docket", async ({ page }) => {
     await ready(page);
-    await hero(page).getByRole("button", { name: QUICK }).click();
+    // any entry files the guest; QUICK RACE would seat it in another test's open room (#128)
+    await hero(page).getByRole("button", { name: CREATE, exact: true }).click();
     await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
     await ready(page);
     await expectTwoRowHeader(page, { docket: true });

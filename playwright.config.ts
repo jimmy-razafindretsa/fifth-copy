@@ -18,6 +18,18 @@ const WORKERS = /^[1-9]\d*$/.test(process.env.PW_WORKERS ?? "")
   ? Number(process.env.PW_WORKERS)
   : undefined;
 
+/** Tests that press QUICK RACE (#128): they run in the `matchmaking` project only. */
+const MATCHMAKING = /@matchmaking/;
+const PARALLEL_GREP_INVERT = process.env.PW_VISUAL ? MATCHMAKING : /@visual|@matchmaking/;
+/**
+ * A run filtered to spec paths (`npx playwright test e2e/lobby/quick-race.spec.ts`): Playwright runs a
+ * project's dependencies unfiltered, so the `matchmaking` project waits for the viewport projects only
+ * in a whole-suite run (CI shards included), where they are what could leave a public room open.
+ */
+const PATH_FILTERED = process.argv
+  .slice(2)
+  .some((arg) => !arg.startsWith("-") && /\.ts$|\/|^e2e/.test(arg) && !/^\d+\/\d+$/.test(arg));
+
 export const VIEWPORTS = {
   mobile: { width: 375, height: 812 },
   tablet: { width: 768, height: 1024 },
@@ -45,10 +57,23 @@ export default defineConfig({
     timezoneId: "UTC",
     locale: "en-US",
   },
-  projects: Object.entries(VIEWPORTS).map(([name, viewport]) => ({
-    name,
-    use: { ...devices["Desktop Chrome"], viewport },
-  })),
+  projects: [
+    ...Object.entries(VIEWPORTS).map(([name, viewport]) => ({
+      name,
+      use: { ...devices["Desktop Chrome"], viewport },
+      grepInvert: PARALLEL_GREP_INVERT,
+    })),
+    // QUICK RACE seats a visitor in any open public room (#128), so its tests (tag @matchmaking) run
+    // alone, one at a time, once the viewport projects are done: no other test's room is joinable.
+    {
+      name: "matchmaking",
+      grep: MATCHMAKING,
+      dependencies: PATH_FILTERED ? [] : Object.keys(VIEWPORTS),
+      workers: 1,
+      fullyParallel: false,
+      use: { ...devices["Desktop Chrome"], viewport: VIEWPORTS.desktop },
+    },
+  ],
   webServer: process.env.PW_BASE_URL
     ? undefined
     : [

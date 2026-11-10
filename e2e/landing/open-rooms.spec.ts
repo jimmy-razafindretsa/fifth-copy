@@ -1,7 +1,7 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
-import { createLobby } from "../race/helpers";
-import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "../timeouts";
+import { createLobby, makePublic } from "../race/helpers";
+import { ACTION_WAIT, scaled } from "../timeouts";
 
 // Contract of #807: the landing's open-rooms docket (bible 14.1 "Open rooms docket", 7.4). Parallel
 // workers open public rooms too, so every assertion targets this test's own room code.
@@ -39,19 +39,16 @@ async function landingListing(page: Page, code: string) {
   }).toPass({ timeout: ACTION_WAIT });
 }
 
-/** Opens a public room with QUICK RACE once the landing is hydrated (landing.spec.ts `ready`). */
-async function quickRace(page: Page): Promise<string> {
-  await page.goto("/");
-  await expect(page.locator("section#play video[aria-hidden='true']")).toHaveAttribute(
-    "data-feed",
-    /^(armed|near)$/,
-    { timeout: HYDRATION_WAIT },
-  );
-  await page.locator("section#play").getByRole("button", { name: "QUICK RACE" }).click();
-  await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/, { timeout: ACTION_WAIT });
+/**
+ * Hosts a fresh public room: a private race filed PUBLIC (#114's toggle, written to the row). Not
+ * QUICK RACE, which seats a visitor in any open public room (#128), another worker's included.
+ */
+async function hostPublicRoom(page: Page): Promise<string> {
+  const code = await createLobby(page);
   // seated: the roll shows the host, so the race server has the room
   await expect(typistRows(page)).toHaveCount(1, { timeout: ACTION_WAIT });
-  return /\/lobby\/([A-Z]{3}-\d{4})$/.exec(new URL(page.url()).pathname)![1]!;
+  await makePublic(code);
+  return code;
 }
 
 async function freshContext(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
@@ -66,7 +63,7 @@ test.describe("open rooms docket (#807)", () => {
     page,
     browser,
   }) => {
-    const code = await quickRace(page);
+    const code = await hostPublicRoom(page);
     const b = await freshContext(browser);
     await landingListing(b.page, code);
     await expect(docket(b.page).getByRole("heading", { level: 2 })).toHaveText("OPEN ROOMS");
@@ -99,7 +96,7 @@ test.describe("open rooms docket (#807)", () => {
     browser,
   }) => {
     const a = await freshContext(browser);
-    const code = await quickRace(a.page);
+    const code = await hostPublicRoom(a.page);
     const b = await freshContext(browser);
     await landingListing(b.page, code);
     await expect(joinLink(b.page, code)).toBeVisible();
@@ -118,7 +115,7 @@ test.describe("open rooms docket (#807)", () => {
       page,
       browser,
     }) => {
-      const code = await quickRace(page);
+      const code = await hostPublicRoom(page);
       const b = await freshContext(browser);
       await b.page.setViewportSize(page.viewportSize()!);
       if (scheme === "dark") {

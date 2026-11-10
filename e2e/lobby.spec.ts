@@ -393,7 +393,7 @@ test.describe("lobby roll: BOT tag, non-host notice, kicker (#105)", () => {
     await b.context.close();
   });
 
-  test("C3 the kicker names the room: private from CREATE PRIVATE RACE, public from QUICK RACE", async ({
+  test("C3 the kicker names the room: private from CREATE PRIVATE RACE, public from QUICK RACE @matchmaking", async ({
     page,
   }) => {
     await createLobby(page);

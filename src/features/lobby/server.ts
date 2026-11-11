@@ -11,3 +11,6 @@ export type { CloseLobbyResult } from "./queries/close-lobby";
 // The race server's host transfer (#137): the durable copy of the promoted host.
 export { setLobbyHost } from "./queries/set-lobby-host";
 export type { SetLobbyHostResult } from "./queries/set-lobby-host";
+// The lobby-scoped access rule (#880, ADR 0022): live room mates (asked of the race server) or race
+// mates of the last 24 h. The avatar route passes it to `readAvatarFile`.
+export { shareLobby } from "./queries/share-lobby";

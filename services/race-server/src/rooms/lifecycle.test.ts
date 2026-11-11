@@ -19,6 +19,7 @@ import {
   startRaceRequestSchema,
 } from "@fifth-copy/protocol";
 import { verifyInternalRequest } from "../http/hmac";
+import { LAST_LEAVE_GRACE_MS } from "../players/last-leave";
 import { createWebApi, type WebApi } from "../persist/web-api";
 import {
   boot,
@@ -1016,6 +1017,9 @@ describe("lifecycle: public room auto start (#814)", () => {
     const guest = others[0]!.seen;
     await until(() => guest.autoStart.length === 1, WAIT_MS, "armed");
     host.disconnect();
+    // #884: the host's disconnect waits out the leave grace
+    await settle();
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
     await until(() => guest.roster?.length === 1, WAIT_MS, "host left");
     // One human, one desk: the room no longer qualifies.
     await until(() => guest.autoStart.length === 2, WAIT_MS, "dropped");
@@ -1035,11 +1039,14 @@ describe("lifecycle: public room auto start (#814)", () => {
     await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
     expect(guest.welcome!.autoStartAt).toBe(seenHost.autoStart[0]!.startsAt);
     host.disconnect();
+    // #884: the host's disconnect waits out the leave grace (inside the auto-start delay)
+    await settle();
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
     await until(() => guest.roster?.length === 2, WAIT_MS, "host left");
     await settle();
     expect(guest.autoStart).toEqual([]);
     expect((await hash(lobby)).fields.autoStartAt).toBe(String(seenHost.autoStart[0]!.startsAt));
-    booted.clock.advance(AUTO_START_MS);
+    booted.clock.advance(AUTO_START_MS - LAST_LEAVE_GRACE_MS);
     await until(() => guest.countdown.length === 1, WAIT_MS, "countdown");
     // #137: the host's leave in waiting passed the role to the remaining human.
     expect(web.calls[0]).toMatchObject({ hostUserId: "usr_p0" });

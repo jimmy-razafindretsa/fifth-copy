@@ -492,6 +492,9 @@ describe("lobby host transfer through the outbox (#137 C3)", () => {
     const host = await join("usr_host", "host");
     const a = await join("usr_a", "player");
     host.client.disconnect();
+    // #884: the host's disconnect waits out the leave grace before the role passes on
+    await settle(100);
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
     await until(() => hosts.length === 1, 2_000, "first host call");
     expect(hosts[0]).toEqual({ v: PROTOCOL_VERSION, lobbyId: lobby, hostUserId: "usr_a" });
     // The promotion stands in the room although the web is down.

@@ -460,9 +460,14 @@ describe("host transfer when the host leaves (#137 C2, C3)", () => {
   const start = (who: { client: Client }) =>
     who.client.timeout(2_000).emitWithAck("host:start", { v: PROTOCOL_VERSION });
 
-  it("the host closes its page in waiting: new-host to A and B, the roster follows, the web records A", async () => {
-    const { lobby, web, host, a, b } = await room();
+  it("the host closes its page in waiting: after the grace (#884), new-host to A and B, the roster follows, the web records A", async () => {
+    const { booted, lobby, web, host, a, b } = await room();
     host.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect([...a.events, ...b.events].filter((e) => e.kind === "new-host")).toEqual([]);
+    booted.clock.advance(1);
     await until(
       () => [a, b].every((p) => p.events.some((e) => e.kind === "new-host")),
       WAIT_MS,
@@ -480,8 +485,10 @@ describe("host transfer when the host leaves (#137 C2, C3)", () => {
   });
 
   it("the new host's host:settings and host:start (player token) are accepted; B's and the returning old host's refused not-host", async () => {
-    const { host, a, b, connect } = await room();
+    const { booted, host, a, b, connect } = await room();
     host.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
     await until(() => a.seen.roster?.[0]?.isHost === true, WAIT_MS, "A promoted");
     expect(await settings(b, 60)).toMatchObject({ ok: false, error: "not-host" });
     // The old host comes back with its host-role token: it rejoins as a guest.
@@ -493,6 +500,25 @@ describe("host transfer when the host leaves (#137 C2, C3)", () => {
     expect(await settings(a, 60)).toMatchObject({ ok: true });
     await until(() => b.seen.settings.at(-1)?.timerS === 60, WAIT_MS, "settings reach B");
     expect(await start(a)).toMatchObject({ ok: true });
+  });
+
+  it("#884 C1 the host reloads the waiting room with guests present: no new-host, roster and host unchanged", async () => {
+    const { booted, lobby, web, host, a, b, connect } = await room();
+    const newHosts = () => [...a.events, ...b.events].filter((e) => e.kind === "new-host");
+    const rosterBefore = a.seen.roster?.map((m) => [m.name, m.isHost]);
+    host.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(1_500);
+    // the reloaded page's socket joins again within the grace
+    const back = await connect("usr_host", "Ada", "host");
+    booted.clock.advance(LAST_LEAVE_GRACE_MS * 2);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(newHosts()).toEqual([]);
+    expect(web.hosts).toEqual([]);
+    expect((await booted.server.registry.room(lobby))?.hostUserId).toBe("usr_host");
+    expect(back.seen.welcome?.members.find((m) => m.name === "Ada")?.isHost).toBe(true);
+    expect(a.seen.roster?.map((m) => [m.name, m.isHost])).toEqual(rosterBefore);
+    expect(await settings(back, 60)).toMatchObject({ ok: true });
   });
 
   it("a guest leaving passes nothing on; the last human leaving closes the room as today", async () => {

@@ -1090,6 +1090,107 @@ describe("lifecycle: public room auto start (#814)", () => {
     expect((await hash(lobby)).fields.autoStartAt).toBe(String(seenHost.autoStart[0]!.startsAt));
   });
 
+  // #890: the instant falls inside a pending leave grace (host with others #884, last human #734).
+  /** Advances the fake clock by 0 until `ok` holds: a re-armed past instant fires on an advance. */
+  const pump = (booted: Booted, ok: () => boolean, what: string) =>
+    until(
+      () => {
+        booted.clock.advance(0);
+        return ok();
+      },
+      WAIT_MS,
+      what,
+    );
+
+  it("#890 C1: the host's grace pending at the instant holds the start; it fires under the promoted host once the grace runs out", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost, others } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt!;
+    booted.clock.advance(startsAt - booted.clock.now() - 2_000);
+    host.disconnect();
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "host leave deferred");
+    booted.clock.advance(2_000);
+    await settle();
+    expect(guest.countdown).toHaveLength(0);
+    expect(web.calls).toHaveLength(0);
+    expect(await phaseOf(lobby)).toBe("waiting");
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(guest.autoStart).toEqual([]);
+    expect(autoLogs(logSpy).map((l) => l.outcome)).toEqual(["armed", "held"]);
+
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 2_000);
+    await until(() => guest.roster?.length === 2, WAIT_MS, "host left");
+    await pump(booted, () => guest.countdown.length === 1, "countdown after the grace");
+    expect(web.calls).toHaveLength(1);
+    expect(web.calls[0]).toMatchObject({ hostUserId: "usr_p0" });
+    expect(autoLogs(logSpy).map((l) => l.outcome)).toEqual(["armed", "held", "ok"]);
+  });
+
+  it("#890 C1: the last human's grace pending at the instant holds the start; the grace closes the room, no race", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost } = await room({
+      players: 0,
+      settings: withBot,
+      webApi: web.api,
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt!;
+    booted.clock.advance(startsAt - booted.clock.now() - 1_000);
+    host.disconnect();
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "last leave deferred");
+    booted.clock.advance(1_000);
+    await settle();
+    expect(web.calls).toHaveLength(0);
+    expect(await phaseOf(lobby)).toBe("waiting");
+
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1_000);
+    await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
+    await pump(booted, () => booted.scheduler.armed() === 0, "no timer");
+    await settle();
+    expect(web.calls).toHaveLength(0);
+    expect(seenHost.countdown).toHaveLength(0);
+  });
+
+  it("#890 C2: a host back within the grace finds the room waiting; the start then proceeds under that host", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost, others, connectAs } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt!;
+    booted.clock.advance(startsAt - booted.clock.now() - 1_000);
+    host.disconnect();
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "host leave deferred");
+    booted.clock.advance(2_000);
+    await settle();
+    expect(guest.countdown).toHaveLength(0);
+
+    // The reload lands within the grace: same room, still waiting, the instant still announced.
+    const back = watch(await connectAs(HOST_SUB, "Ada", "host"));
+    await until(() => !!back.welcome, WAIT_MS, "host welcome again");
+    expect(back.welcome!.room.phase).toBe("waiting");
+    expect(back.welcome!.autoStartAt).toBe(startsAt);
+    await pump(booted, () => back.countdown.length === 1, "countdown once the host is back");
+    expect(guest.countdown).toHaveLength(1);
+    expect(web.calls).toHaveLength(1);
+    expect(web.calls[0]).toMatchObject({ lobbyId: lobby, hostUserId: HOST_SUB });
+    // The grace runs out with the host seated: no leave, no new host.
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await settle();
+    expect(web.hosts).toEqual([]);
+    expect((await hash(lobby)).fields.hostUserId).toBe(HOST_SUB);
+  });
+
   it("only the first race auto-starts: an ended public room waits for the host", async () => {
     const { booted, host, lobby, seenHost } = await room({
       players: 0,

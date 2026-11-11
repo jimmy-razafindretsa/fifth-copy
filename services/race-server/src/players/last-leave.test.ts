@@ -7,7 +7,11 @@ import { createLastLeave, LAST_LEAVE_GRACE_MS } from "./last-leave";
 // #734: the last human of a waiting room leaves only after a grace, so a host reloading the lobby
 // page never closes the room or its `Lobby` row (the close call goes out only on a real leave).
 
-function setup(phase: RoomState["phase"], seated: RaceDesk[]) {
+function setup(
+  phase: RoomState["phase"],
+  seated: RaceDesk[],
+  onSettled?: (lobbyId: string) => void,
+) {
   const clock = createFakeClock(1_000_000);
   const scheduler = createFakeScheduler(clock);
   const open = new Map<string, number>();
@@ -31,6 +35,7 @@ function setup(phase: RoomState["phase"], seated: RaceDesk[]) {
     },
     scheduler,
     sockets: (lobbyId, userId) => open.get(`${lobbyId}/${userId}`) ?? 0,
+    onSettled,
   });
   const leave = vi.fn(async () => {});
   return { clock, scheduler, open, lastLeave, leave };
@@ -128,5 +133,41 @@ describe("a host with others in the room waits out the grace (#137, #884)", () =
     expect(leave).not.toHaveBeenCalled();
     clock.advance(1);
     expect(leave).toHaveBeenCalledOnce();
+  });
+});
+
+describe("a pending grace holds the room's auto-start (#890)", () => {
+  it("pending while the user is away, per room; not once back or after the grace", () => {
+    const { clock, open, lastLeave, leave } = setup("waiting", [host, guest]);
+    expect(lastLeave.pending("lob")).toBe(false);
+    lastLeave.defer("lob", "host", leave);
+    expect(lastLeave.pending("lob")).toBe(true);
+    expect(lastLeave.pending("other")).toBe(false);
+    open.set("lob/host", 1);
+    expect(lastLeave.pending("lob")).toBe(false);
+    open.delete("lob/host");
+    clock.advance(LAST_LEAVE_GRACE_MS);
+    expect(lastLeave.pending("lob")).toBe(false);
+  });
+
+  it("the grace's end settles the room once, back or gone (after the leave); never after close", async () => {
+    const settled = vi.fn();
+    const { clock, open, lastLeave, leave } = setup("waiting", [host, guest], settled);
+    lastLeave.defer("lob", "host", leave);
+    open.set("lob/host", 1);
+    clock.advance(LAST_LEAVE_GRACE_MS);
+    expect(settled).toHaveBeenCalledExactlyOnceWith("lob");
+
+    open.delete("lob/host");
+    lastLeave.defer("lob", "host", leave);
+    clock.advance(LAST_LEAVE_GRACE_MS);
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledTimes(2));
+    expect(leave.mock.invocationCallOrder[0]!).toBeLessThan(settled.mock.invocationCallOrder[1]!);
+
+    lastLeave.defer("lob", "host", leave);
+    lastLeave.close();
+    clock.advance(LAST_LEAVE_GRACE_MS);
+    await Promise.resolve();
+    expect(settled).toHaveBeenCalledTimes(2);
   });
 });

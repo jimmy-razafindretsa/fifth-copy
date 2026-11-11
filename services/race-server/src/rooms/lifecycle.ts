@@ -122,6 +122,7 @@ export function createLifecycle({
   onClosed = () => {},
   onRestart = () => {},
   liveRace = () => null,
+  leavePending = () => false,
 }: {
   registry: RoomRegistry;
   clock: Clock;
@@ -157,6 +158,12 @@ export function createLifecycle({
   onRestart?: (lobbyId: string) => void;
   /** The race running in this process for the room (#204: the desks' runtime), else null. */
   liveRace?: (lobbyId: string) => { raceId: string; t0: number; desks: number[] } | null;
+  /**
+   * A leave of the room is waiting out its grace (#890: the host with others #884, or the last
+   * human #734; `lastLeave.pending`). The automatic start holds while it does; the grace's end
+   * reviews the room again (`reviewAutoStart`), which fires the kept instant or drops it.
+   */
+  leavePending?: (lobbyId: string) => boolean;
 }): Lifecycle {
   const timers = new Map<string, TimerHandle[]>();
   /** The pending automatic start of each armed room (#814), apart so a start clears it alone. */
@@ -205,6 +212,9 @@ export function createLifecycle({
       const room = await registry.room(lobbyId);
       // Dropped or started meanwhile: nothing pending any more.
       if (!room || room.autoStartAt === null) return;
+      // A leave grace is pending (#890): the instant stays stored, with no timer, until the grace
+      // resolves and its review re-arms it (at once, the instant being past) or drops it.
+      if (leavePending(lobbyId)) return autoLog(lobbyId, "held");
       let result;
       try {
         result = await begin(lobbyId, "room");

@@ -150,8 +150,22 @@ export type HandshakeAuth = (cb: (payload: HandshakeAuthPayload) => void) => voi
 
 export type IoFactory = (
   url: string,
-  opts: { auth: HandshakeAuth; transports: string[]; autoConnect: boolean },
+  opts: {
+    auth: HandshakeAuth;
+    transports: string[];
+    tryAllTransports: boolean;
+    autoConnect: boolean;
+  },
 ) => RawSocket;
+
+/**
+ * The room socket's transports, in order (ADR 0006: WebSocket first, polling fallback; #442). With
+ * `tryAllTransports` a connect attempt whose WebSocket is refused (a school proxy that blocks the
+ * upgrade) goes on with long-polling in the same attempt, without any user action; once on polling the
+ * client still probes an upgrade, so an open network ends on WebSocket. One constant: the lobby
+ * (`late-join.ts`) and the seat share it through `connectToRoom`.
+ */
+export const ROOM_TRANSPORTS: readonly string[] = ["websocket", "polling"];
 
 /**
  * `resumeKey`: the desk's key from an earlier `welcome` (ARCHITECTURE 7.4); during a race only a
@@ -183,7 +197,12 @@ export function connectToRoom(
     const current = typeof token === "function" ? token() : token;
     cb(key ? { v, token: current, resumeKey: key } : { v, token: current });
   };
-  const socket = io(url, { auth, transports: ["websocket", "polling"], autoConnect: true });
+  const socket = io(url, {
+    auth,
+    transports: [...ROOM_TRANSPORTS],
+    tryAllTransports: true,
+    autoConnect: true,
+  });
 
   const registered: [Emitter, string, Listener][] = [];
   const protocolErrorListeners = new Set<(error: ProtocolError) => void>();

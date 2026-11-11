@@ -11,6 +11,7 @@ import { LobbyLiveView, type StartState } from "./lobby-live";
 import { initialLobbyState, NO_AUTO_START, type LobbyState } from "./lobby-store";
 import { NEW_HOST_HOLD_FACTOR, NEW_HOST_REDUCED_HOLD_MS, newHostHoldMs } from "./new-host-stamp";
 import { PlayerList } from "./player-list";
+import { PortraitCellView, portraitSlot, portraitSrc } from "./portrait-cell";
 import { CONFIRM_HOLD_FACTOR, confirmHoldMs, type RemoveState } from "./remove-control";
 import { IDLE_FORM, type FormState } from "./settings-form";
 import styles from "./lobby.module.css";
@@ -30,6 +31,7 @@ const member = (desk: number, isHost = false): Member => ({
   isHost,
   isBot: false,
   ...deskIdentity(desk),
+  avatar: null,
 });
 const live = (members: Member[], you = 1): LobbyState => ({
   phase: "live",
@@ -861,5 +863,95 @@ describe("new host (#137 C4)", () => {
     expect(newHostHoldMs("600ms")).toBe(3000);
     expect(newHostHoldMs("0ms")).toBe(NEW_HOST_REDUCED_HOLD_MS);
     expect(NEW_HOST_REDUCED_HOLD_MS).toBe(3000);
+  });
+});
+
+// Contract of #730 C2: human rows lead with the portrait cell (bible 14.4): the avatar `<img>` from the
+// lobby-scoped route when `avatar` is set, the initials otherwise; a failed load falls back to the
+// initials in the same square; bot rows have none.
+describe("portrait cell (#730 C2)", () => {
+  const pictured = (desk: number): Member => ({
+    ...member(desk),
+    name: "Clerk Novak",
+    avatar: { userId: "usr_novak", v: 7 },
+  });
+  const bot = (desk: number): Member => ({ ...member(desk), name: "Agent 3", isBot: true });
+  // `<li ` only: React adds a `<link rel="preload">` for each img to the static markup
+  const rows = (html: string) => html.split(/<li[ >]/).slice(1);
+  const roll = (members: Member[]) =>
+    renderToStaticMarkup(
+      <PlayerList members={members} you={1} labels={labels} leading={portraitSlot} />,
+    );
+
+  it("addresses the picture through the avatar route: 64 px file, the wire version", () => {
+    expect(portraitSrc({ userId: "usr_novak", v: 7 })).toBe("/api/avatars/usr_novak?size=64&v=7");
+    expect(portraitSrc({ userId: "a/b", v: 1 })).toBe("/api/avatars/a%2Fb?size=64&v=1");
+  });
+
+  it("a member with an avatar: the img (32px box, alt empty) over its initials, before the name", () => {
+    const [row] = rows(roll([pictured(1)]));
+    expect(row).toMatch(
+      /<span class="_portrait_[^"]*" data-portrait="loading" aria-hidden="true"><span class="_initials_[^"]*">CN<\/span><img src="\/api\/avatars\/usr_novak\?size=64&amp;v=7" alt="" width="32" height="32" class="_avatar_[^"]*"\/><\/span>/,
+    );
+    expect(row!.indexOf("data-portrait")).toBeLessThan(row!.indexOf(">Clerk Novak<"));
+  });
+
+  it("a member without one: the initials only, no img", () => {
+    const [row] = rows(roll([member(1, true)]));
+    expect(row).toMatch(
+      /data-portrait="initials"[^>]*><span class="_initials_[^"]*">C<\/span><\/span>/,
+    );
+    expect(row).not.toContain("<img");
+  });
+
+  it("a failed picture falls back to the initials in the same square", () => {
+    const cell = (state: "loading" | "failed") =>
+      renderToStaticMarkup(
+        <PortraitCellView
+          name="Clerk Novak"
+          src={portraitSrc({ userId: "u", v: 1 })}
+          state={state}
+        />,
+      ).replace(/<link[^>]*\/>/, "");
+    const failed = cell("failed");
+    expect(failed).not.toContain("<img");
+    expect(failed).toContain(">CN</span>");
+    // the same box, so nothing moves: only the img leaves
+    expect(failed.replace(/data-portrait="[a-z]+"/, "")).toBe(
+      cell("loading")
+        .replace(/<img[^>]*\/>/, "")
+        .replace(/data-portrait="[a-z]+"/, ""),
+    );
+  });
+
+  it("the cell is a fixed 32px square in a 2px ink rule; the loaded picture hides the initials", () => {
+    const css = readFileSync(
+      path.join(process.cwd(), "src/features/lobby/components/lobby.module.css"),
+      "utf8",
+    );
+    const rule = css.match(/\n\.portrait \{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toMatch(/width: 32px;/);
+    expect(rule).toMatch(/height: 32px;/);
+    expect(rule).toMatch(/border: 2px solid var\(--color-fg\);/);
+    expect(rule).toMatch(/background: var\(--color-bg\);/);
+    expect(css).toMatch(/\.portrait\[data-portrait="loaded"\] \.initials \{\s*visibility: hidden;/);
+    expect(css).toMatch(/\n\.avatar \{[^}]*position: absolute;[^}]*inset: 0;/);
+  });
+
+  it("bot rows have no cell, even with an avatar on the wire", () => {
+    const html = roll([member(1, true), bot(2), { ...bot(3), avatar: { userId: "x", v: 1 } }]);
+    const [human, b2, b3] = rows(html);
+    expect(human).toContain("data-portrait");
+    expect(b2).not.toContain("data-portrait");
+    expect(b3).not.toContain("data-portrait");
+  });
+
+  it("the live roll uses it: a mix of avatar and initials rows", () => {
+    const html = view(live([member(1, true), pictured(2), bot(3)]));
+    const [first, second, third] = rows(html);
+    expect(first).toContain('data-portrait="initials"');
+    expect(second).toContain('data-portrait="loading"');
+    expect(second).toContain('src="/api/avatars/usr_novak?size=64&amp;v=7"');
+    expect(third).not.toContain("data-portrait");
   });
 });

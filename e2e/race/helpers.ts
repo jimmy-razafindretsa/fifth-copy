@@ -196,6 +196,17 @@ export async function recordRaceTokens(page: Page) {
       if (String(payload).startsWith('42["welcome"')) record.seated = true;
     }),
   );
+  // A room socket on long-polling (#442: WebSocket blocked) gets its welcome in a polling response.
+  page.on("response", (response) => {
+    if (!/\/socket\.io\/\?.*transport=polling/.test(response.url())) return;
+    if (response.request().method() !== "GET") return;
+    response.text().then(
+      (body) => {
+        if (body.includes('42["welcome"')) record.seated = true;
+      },
+      () => undefined,
+    );
+  });
   await page.route("**/lobby/**", async (route) => {
     const r = route.request();
     if (r.method() !== "POST" || !r.headers()["next-action"]) return route.continue();
@@ -409,5 +420,62 @@ export async function withoutWebGL(page: Page): Promise<void> {
       if (id === "webgl2" || id === "webgl") return null;
       return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
     } as typeof original;
+  });
+}
+
+/**
+ * Blocks the page's Socket.IO WebSockets (#442) the way a school proxy that refuses the upgrade does:
+ * before any page script runs, `WebSocket` is replaced for `/socket.io/` URLs by one that never
+ * connects and fails the way a browser reports a refused upgrade (`error`, then `close` 1006, not
+ * clean), so nothing reaches the race server and Socket.IO must go on with long-polling. Neither
+ * `page.routeWebSocket` (its mock opens, then closes: a dropped line, not a refused upgrade) nor
+ * DevTools request blocking (Chromium lets WebSockets through it) reproduces that refusal. `next dev`'s
+ * hot-reload socket is not a Socket.IO one and stays up (blocking it reloads the page in a loop).
+ * Call it before the page loads anything.
+ */
+export async function blockWebSockets(page: Page) {
+  await page.addInitScript(() => {
+    const Native = window.WebSocket;
+    const blocked = (url: string | URL) => String(url).includes("/socket.io/");
+    class Refused extends EventTarget {
+      static readonly CONNECTING = 0;
+      static readonly OPEN = 1;
+      static readonly CLOSING = 2;
+      static readonly CLOSED = 3;
+      readyState = 0;
+      binaryType: BinaryType = "blob";
+      bufferedAmount = 0;
+      extensions = "";
+      protocol = "";
+      onopen: ((e: Event) => void) | null = null;
+      onerror: ((e: Event) => void) | null = null;
+      onclose: ((e: CloseEvent) => void) | null = null;
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      constructor(readonly url: string) {
+        super();
+        setTimeout(() => {
+          this.readyState = 3;
+          const error = new Event("error");
+          this.onerror?.(error);
+          this.dispatchEvent(error);
+          const close = new CloseEvent("close", { code: 1006, wasClean: false });
+          this.onclose?.(close);
+          this.dispatchEvent(close);
+        }, 0);
+      }
+      send() {
+        throw new DOMException("WebSocket is not open", "InvalidStateError");
+      }
+      close() {
+        this.readyState = 3;
+      }
+    }
+    window.WebSocket = new Proxy(Native, {
+      construct(target, args: [string | URL, (string | string[])?]) {
+        return blocked(args[0])
+          ? (new Refused(String(args[0])) as unknown as WebSocket)
+          : new target(...args);
+      },
+    });
   });
 }

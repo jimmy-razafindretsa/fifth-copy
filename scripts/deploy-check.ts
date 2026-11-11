@@ -172,7 +172,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error("usage: npx tsx scripts/deploy-check.ts --web <url> --race <url>");
     process.exit(2);
   }
-  const v = await run({ web, race });
-  for (const line of v.lines) console.log(line);
-  process.exit(v.ok ? 0 : 1);
+  void run({ web, race }).then(
+    (v) => {
+      for (const line of v.lines) console.log(line);
+      process.exit(v.ok ? 0 : 1);
+    },
+    (error: Error) => {
+      console.error(error.message);
+      process.exit(2);
+    },
+  );
 }

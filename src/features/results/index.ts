@@ -13,6 +13,8 @@ export { storedEffectiveText, type StoredReplayText } from "./replay-text";
 export { getDawnReport } from "./queries/get-dawn-report";
 // The races stats and results count (#613): never a voided or open one.
 export { COUNTED_RACE } from "./queries/counted-races";
+// Lobby mates of the last 24 h (#880, ADR 0022): path (b) of `shareLobby` in features/lobby.
+export { racedTogether, RACED_TOGETHER_WINDOW_MS } from "./queries/raced-together";
 export { DawnReportLayout, DawnReportScreen } from "./components/dawn-report-screen";
 export {
   filingLabels,

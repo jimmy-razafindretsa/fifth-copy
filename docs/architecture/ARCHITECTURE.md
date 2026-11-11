@@ -393,6 +393,7 @@ Environments: local (`npm run dev`, `npm run dev:race`, `npm run dev:worker`, co
 | `RACE_SERVER_PORT` | race-server | listen port |
 | `RACE_DRAIN_CAP_S` | race-server | longest drain after SIGTERM, default 900 (#704, ADR 0019) |
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS`, `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` | race-server (Railway) | Railway's SIGTERM-to-SIGKILL time (930) and overlap (0); the race server warns at boot when the draining time is below its cap (#704) |
+| `RAILWAY_GIT_COMMIT_SHA` | web, race-server (Railway) | Railway's provided deployed commit, reported as `commit` by `/api/health` and `/health` for the `deploy-check` workflow (#718, ADR 0019); unset locally and in CI |
 | `NEXT_PUBLIC_RACE_SERVER_URL` | browser | socket origin (the race-server's own Railway domain in production, ADR 0019) |
 | `RACE_SERVER_INTERNAL_URL` | web | internal API base |
 | `RACE_TOKEN_SECRET` | web, race-server, worker (validated by `src/env.ts`, unused) | race tokens and internal HMAC |

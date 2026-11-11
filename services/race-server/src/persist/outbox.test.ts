@@ -212,6 +212,31 @@ describe("outbox (C2)", () => {
     await redis.srem(OUTBOXES_KEY, entry!.raceId);
   });
 
+  it("flush (#897): skips the backoff and resolves true once sent; false on a failure, the retry kept", async () => {
+    const { clock, scheduler, sent, outbox } = setup([false, false, true]);
+    const [entry] = results(1);
+    const id = entry!.raceId;
+    // Called with the write still in flight: it waits for it, then for the first send.
+    const enqueued = outbox.enqueue(id, [entry]);
+    expect(await outbox.flush(id)).toBe(false);
+    await enqueued;
+    expect(sent).toHaveLength(2);
+    expect(await pendingIn(id)).toEqual({ length: 1, listed: true });
+    expect(scheduler.armed()).toBe(1);
+    // No clock advance: the backoff is skipped.
+    expect(await outbox.flush(id)).toBe(true);
+    expect(sent.map((s) => s.at - sent[0]!.at)).toEqual([0, 0, 0]);
+    expect(await pendingIn(id)).toEqual({ length: 0, listed: false });
+    expect(scheduler.armed()).toBe(0);
+    // Nothing pending: true, nothing sent.
+    expect(await outbox.flush(id)).toBe(true);
+    expect(sent).toHaveLength(3);
+    clock.advance(OUTBOX_TTL_S * 1000);
+    await settle();
+    expect(sent).toHaveLength(3);
+    outbox.close();
+  });
+
   it("sendResults wiring: a partial acknowledgement keeps the entry", async () => {
     const clock = createFakeClock(0);
     const scheduler = createFakeScheduler(clock);

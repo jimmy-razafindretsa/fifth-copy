@@ -6,6 +6,9 @@ import { filingLabels } from "../view/report-labels";
 import { FILING_MAX_MS, FILING_REFRESH_MS, startFilingPoll } from "./filing-notice";
 import { FilingNoticeView } from "./filing-notice-view";
 
+// The report links reach src/env.ts through the identity index (#899); these tests need no secrets.
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
+
 // Contract of #300 C2 (unit half; e2e/results/podium.spec.ts drives the page): refresh every 2 s for at
 // most 60 s, then the inline error line with the way back.
 afterEach(() => vi.useRealTimers());

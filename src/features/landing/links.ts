@@ -13,14 +13,16 @@ export type HeldBackLink =
   "locker" | "teachers" | "profile" | "about" | "privacy" | "terms" | "contact";
 
 /**
- * Where the landing's links go. The guide link anchors to "How a race runs" until the special-characters
- * guide (card 388) exists, as the reference does.
+ * Where the landing's links go. The guide link anchors to the landing's "How a race runs" until the
+ * special-characters guide (card 388) exists, as the reference does. It is the one guide href: the site
+ * header and the Dawn report's tip (`REPORT_LINKS` of the results feature, #899) both read it, from any
+ * page, so it names the landing (`/#how`); pointing the guide at its own route is this one line.
  */
 export const LINKS: ShippedLinks & Partial<Record<HeldBackLink, string>> = {
   home: "/",
   play: "#play",
   how: "#how",
-  guide: "#how",
+  guide: "/#how",
   signIn: "/sign-in",
 };
 

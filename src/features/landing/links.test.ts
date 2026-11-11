@@ -1,7 +1,8 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { AUTH_LINKS } from "@/features/identity";
+import { REPORT_LINKS } from "@/features/results";
 import { LINKS, SOCIAL_LINKS } from "./links";
 
 // The identity index reaches src/env.ts through its server modules; the route table needs no secrets.
@@ -82,6 +83,45 @@ describe("public links (#875 C1)", () => {
     expect(bareHome("https://github.com/aegis-corp")).toBe(false);
     for (const social of SOCIAL_LINKS) {
       expect(bareHome(social.href), social.href).toBe(false);
+    }
+  });
+});
+
+/** Every non-test source file of a feature. */
+function featureSources(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return featureSources(full);
+    return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [full] : [];
+  });
+}
+
+describe("Dawn report links (#899)", () => {
+  it("C1 the guide href has one definition: the report's tip reads the header's LINKS.guide", () => {
+    expect(REPORT_LINKS.guide).toBe(LINKS.guide);
+    const tip = readFileSync(path.resolve(__dirname, "../results/view/tip.ts"), "utf8");
+    expect(tip).toMatch(/export const GUIDE_HREF = REPORT_LINKS\.guide;/);
+  });
+
+  it("C2 every internal href the results feature offers is served by a src/app page", () => {
+    const hrefs = {
+      home: REPORT_LINKS.home,
+      guide: REPORT_LINKS.guide,
+      signUp: REPORT_LINKS.signUp,
+      lobby: REPORT_LINKS.lobby("KGB-4821"),
+    };
+    expect(Object.keys(hrefs).sort()).toEqual(Object.keys(REPORT_LINKS).sort());
+    for (const [key, href] of Object.entries(hrefs)) {
+      expect(served(href), `${key}: ${href}`).toBe(true);
+    }
+  });
+
+  it("C2 no results source writes an internal href outside REPORT_LINKS", () => {
+    const literal = /(?:href\s*[=:]\s*\{?|HREF\s*=\s*)["'`]\//;
+    const root = path.resolve(__dirname, "../results");
+    for (const file of featureSources(root)) {
+      if (file.endsWith(path.join("view", "links.ts"))) continue;
+      expect(readFileSync(file, "utf8"), path.relative(root, file)).not.toMatch(literal);
     }
   });
 });

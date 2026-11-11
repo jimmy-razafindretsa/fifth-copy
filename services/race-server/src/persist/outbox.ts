@@ -18,11 +18,25 @@ export type Outbox = {
   enqueue(id: string, entries: readonly unknown[]): Promise<void>;
   /** Re-sends every entry of every id listed in `outboxes` (boot, after a restart). */
   drain(): Promise<void>;
+  /**
+   * Sends the entries of `id` now (#897: a start delivers the room's host transfer first): waits for
+   * a write or send of `id` in flight, skips its backoff wait, then resolves `true` once nothing of
+   * `id` is left, `false` if a send failed (the id keeps its retries, as after any failure). Rejects
+   * only when Redis does.
+   */
+  flush(id: string): Promise<boolean>;
   /** Cancels every pending retry; an in-flight send finishes but schedules nothing. */
   close(): void;
 };
 
-type Pending = { attempt: number; since: number; running: boolean; timer?: TimerHandle };
+type Pending = {
+  attempt: number;
+  since: number;
+  running: boolean;
+  timer?: TimerHandle;
+  /** The run in flight while `running` (`flush` waits for it). */
+  job?: Promise<void>;
+};
 
 const log = (msg: string, fields: Record<string, unknown>) =>
   console.log(JSON.stringify({ level: "info", msg, ...fields }));
@@ -47,6 +61,8 @@ export function createOutbox({
   send: (entry: unknown) => Promise<boolean>;
 }): Outbox {
   const pending = new Map<string, Pending>();
+  /** Each id's last `enqueue` write, settled either way (`flush` waits for it). */
+  const writes = new Map<string, Promise<unknown>>();
   let closed = false;
 
   async function forget(id: string) {
@@ -107,28 +123,37 @@ export function createOutbox({
     // Already sending, or waiting for its backoff: that run owns the id.
     if (p.running || p.timer) return;
     p.running = true;
-    let done = false;
-    try {
-      done = await run(id, p);
-    } catch (err) {
-      if (!closed) log("outbox redis failed", { id, err: String(err) });
-    } finally {
-      p.running = false;
-    }
-    if (!done) retry(id, p);
+    p.job = (async () => {
+      let done = false;
+      try {
+        done = await run(id, p);
+      } catch (err) {
+        if (!closed) log("outbox redis failed", { id, err: String(err) });
+      } finally {
+        p.running = false;
+      }
+      if (!done) retry(id, p);
+    })();
+    await p.job;
   }
 
   return {
     async enqueue(id, entries) {
       if (entries.length === 0) return;
       const key = outboxKey(id);
-      const results = await redis
+      const write = redis
         .multi()
         .rpush(key, ...entries.map((e) => JSON.stringify(e)))
         .expire(key, OUTBOX_TTL_S)
         .sadd(OUTBOXES_KEY, id)
         .expire(OUTBOXES_KEY, OUTBOX_TTL_S)
         .exec();
+      const settled = write.catch(() => undefined);
+      writes.set(id, settled);
+      void settled.then(() => {
+        if (writes.get(id) === settled) writes.delete(id);
+      });
+      const results = await write;
       if (!results) throw new Error(`outbox ${id}: transaction aborted`);
       for (const [err] of results) if (err) throw err;
       void pump(id);
@@ -138,6 +163,19 @@ export function createOutbox({
       const ids = await redis.smembers(OUTBOXES_KEY);
       if (ids.length) log("outbox drain", { ids: ids.length });
       await Promise.all(ids.map((id) => pump(id)));
+    },
+
+    async flush(id) {
+      await writes.get(id);
+      for (let p = pending.get(id); p?.running; p = pending.get(id)) await p.job;
+      if (closed) return false;
+      const p = pending.get(id);
+      if (p?.timer) {
+        scheduler.clear(p.timer);
+        p.timer = undefined;
+      }
+      await pump(id);
+      return !closed && (await redis.exists(outboxKey(id))) === 0;
     },
 
     close() {

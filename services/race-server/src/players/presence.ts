@@ -97,7 +97,10 @@ export function createPresence({
   /** Per room: line-cut desks awaiting their user. */
   const cuts = new Map<string, Map<number, Cut>>();
   const v = PROTOCOL_VERSION;
-  /** Set by `close()`: the sockets closing at shutdown arm no grace timer. */
+  /**
+   * Set by `close()`: the sockets closing at shutdown arm no grace timer. Read again after every
+   * wait (#886): a disconnect queued before `close()` must not arm one once its reads come back.
+   */
   let shut = false;
 
   const userKey = (lobbyId: string, userId: string) => `${lobbyId}\u0000${userId}`;
@@ -180,6 +183,9 @@ export function createPresence({
       return registry.withRoom(lobbyId, async (): Promise<Closed> => {
         // A socket of the user reopened while this waited in the queue.
         if (sockets(lobbyId, userId) > 0) return "still-connected";
+        // `close()` ran while this waited in the queue (#886): a socket that dropped just before
+        // the shutdown arms no grace timer either.
+        if (shut) return "kept";
         const room = await registry.room(lobbyId);
         if (room?.phase !== "countdown" && room?.phase !== "running") return "leave";
         const desk = (room.desks ?? room.seated).find((d) => d.userId === userId)?.desk;
@@ -192,6 +198,8 @@ export function createPresence({
         const resumeKey =
           seats.get(lobbyId)?.get(userId)?.key ?? (await resumeKeys.issue(lobbyId, userId, desk));
         await resumeKeys.grace(resumeKey, durations.GRACE_MS);
+        // ... or during the Redis reads above (#886): `close()` already cleared the cuts.
+        if (shut) return "kept";
         const cut: Cut = {
           userId,
           key: resumeKey,

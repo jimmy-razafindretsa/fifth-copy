@@ -400,6 +400,34 @@ describe("members who dropped during the race leave at its end (#658)", () => {
   });
 });
 
+describe("close() while a disconnect is still reading Redis (#886)", () => {
+  it("the queued disconnect arms no grace timer and cuts no line once close() ran", async () => {
+    const race = await startedRace(process.env.REDIS_URL, { players: 2 });
+    booted = race.booted;
+    const [host, player] = race.racers as [Racer, Racer];
+    const { registry, presence } = race.booted.server;
+    const armed = race.booted.scheduler.armed();
+    // The disconnect's room read is held until after close(): the order a shutdown can meet
+    // when a socket drops just before it (the flaky "close() leaves no timer armed").
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const read = registry.room.bind(registry);
+    const room = vi.spyOn(registry, "room").mockImplementation(async (id) => {
+      await held;
+      return read(id);
+    });
+    player.client.disconnect();
+    await until(() => room.mock.calls.length > 0, WAIT_MS, "disconnect reading the room");
+    presence.close();
+    release();
+    // The room's queue is FIFO: once this runs, the queued disconnect has finished.
+    await registry.withRoom(race.lobby, async () => {});
+    expect(race.booted.scheduler.armed()).toBe(armed);
+    expect(kinds(host.seen.events, "line-cut")).toEqual([]);
+    expect(statusOf(race.booted, race.lobby, player.desk)).toBe("typing");
+  });
+});
+
 describe("host hand-over mid-race (#137 C2)", () => {
   it("the host's line-cut expiring passes the role to the earliest-joined human: new-host, roster, host commands", async () => {
     const race = await startedRace(process.env.REDIS_URL, {

@@ -84,6 +84,15 @@ describe("last leave grace (#734)", () => {
     expect(leave).not.toHaveBeenCalled();
     expect(scheduler.armed()).toBe(0);
   });
+
+  it("a defer after close arms nothing (#886: the disconnect's checks read Redis across the shutdown)", () => {
+    const { clock, scheduler, lastLeave, leave } = setup("waiting", [host]);
+    lastLeave.close();
+    lastLeave.defer("lob", "host", leave);
+    expect(scheduler.armed()).toBe(0);
+    clock.advance(LAST_LEAVE_GRACE_MS);
+    expect(leave).not.toHaveBeenCalled();
+  });
 });
 
 describe("a host with others in the room waits out the grace (#137, #884)", () => {

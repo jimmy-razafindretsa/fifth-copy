@@ -28,7 +28,10 @@ export type LastLeave = {
    * (a reload or a reconnect keeps the room and its lobby). A second defer of the same user restarts it.
    */
   defer(lobbyId: string, userId: string, leave: () => Promise<void>): void;
-  /** Cancels every pending leave (shutdown: Redis keeps the room for the next process). */
+  /**
+   * Cancels every pending leave (shutdown: Redis keeps the room for the next process); a `defer`
+   * after it arms nothing (#886: a disconnect whose checks were still reading Redis at shutdown).
+   */
   close(): void;
 };
 
@@ -49,6 +52,7 @@ export function createLastLeave({
 }): LastLeave {
   const timers = new Map<string, TimerHandle>();
   const keyOf = (lobbyId: string, userId: string) => `${lobbyId}\n${userId}`;
+  let shut = false;
 
   return {
     closes: (lobbyId, userId) =>
@@ -69,6 +73,7 @@ export function createLastLeave({
       }),
 
     defer(lobbyId, userId, leave) {
+      if (shut) return;
       const key = keyOf(lobbyId, userId);
       const previous = timers.get(key);
       if (previous) scheduler.clear(previous);
@@ -86,6 +91,7 @@ export function createLastLeave({
     },
 
     close() {
+      shut = true;
       for (const timer of timers.values()) scheduler.clear(timer);
       timers.clear();
     },

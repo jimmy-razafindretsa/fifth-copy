@@ -62,26 +62,29 @@ made after the chosen backup (up to 24 hours), so pick the newest backup taken b
 
 ## 3. Restore drill (C4 of #705; then once a term)
 
-Railway cannot restore a volume backup into another service, so a separate scratch Postgres cannot receive a
-production backup. The drill therefore restores production onto itself from a backup taken a minute earlier, in a
-window with no users, so no write is lost; the untouched old volume stays as the instant rollback.
+Railway restores a volume backup only onto its own service, so a drill with the Railway backup would restart
+production. Owner decision (2026-11-11): the drill proves the database can be rebuilt elsewhere instead, with a
+`pg_dump` piped inside Railway into a throwaway Postgres. Production is never restored, stopped or written. The
+daily Railway backups (section 1) stay the real safety net. The `avatars` volume is not drilled: its restore is the
+in-place path of section 2.
 
-1. Pick a time outside class hours. Check that no race runs (race-server `/health`) and nobody is signed in that
-   you know of. Scale the worker to 0 replicas.
-2. `Postgres` > **Backups** > create a manual backup (name it `drill-<YYYY-MM-DD>`). Do the same on the web
-   service for `avatars`. Wait until both are listed as complete.
-3. Note one count to compare later, without copying data: in `railway ssh --service web`, run
-   `npx prisma migrate status` (expected: up to date) and note the number of migrations it reports.
-4. Restore `Postgres` from `drill-<YYYY-MM-DD>` as in section 2, step 2 (check **Details**, then **Deploy**).
-5. Restore `avatars` from its `drill-<YYYY-MM-DD>` as in section 2, step 3.
-6. Run section 2, steps 4 to 6. Pass when: `npx prisma migrate status` against the restored database says
-   `Database schema is up to date!` with the same number of migrations as step 3, `/api/health` answers 200, a
-   teacher signs in and sees their classes, and an avatar loads.
-7. Fail (any check above): mount the old unmounted volume(s) back in place of the restored ones, deploy, and
-   check again; record the failure.
-8. Clean up the same day: delete the two old unmounted volumes, delete both `drill-<YYYY-MM-DD>` manual backups
-   (their expiry is not documented, so they must not linger), scale the worker back to 1 replica.
-9. Record in `work/log/705.md` (first drill) or the drill's card log: date, duration, pass or fail, and anything
+1. In the production project, add a new **Postgres** service named `drill-<YYYY-MM-DD>` (same environment, so it
+   reaches `Postgres` over the private network). On it, add the variable `SOURCE_URL` = `${{Postgres.DATABASE_URL}}`
+   (a reference: never paste or print the value).
+2. `railway ssh --service drill-<YYYY-MM-DD>`, then run
+   `pg_dump --no-owner --no-acl "$SOURCE_URL" | psql -q "$DATABASE_URL"`.
+   The dump streams between the two services. Never write it to a file or copy it off Railway.
+3. In the same shell, compare without printing any data:
+   - `psql "$DATABASE_URL" -tAc "select count(*) from _prisma_migrations where finished_at is not null and rolled_back_at is null"`
+     must equal the number of folders in `prisma/migrations/` on `main`, and
+     `psql "$DATABASE_URL" -tAc "select count(*) from _prisma_migrations where rolled_back_at is null and finished_at is null"` must be `0`
+     (what `npx prisma migrate status` checks).
+   - `select count(*)` on `"User"`, `"Lobby"` and `"Race"` must match the same queries run against `"$SOURCE_URL"`
+     (rows added during the dump may make production one or two higher; anything else fails).
+4. Pass: every check in step 3 holds. Fail: note which check differed.
+5. Clean up the same day: delete the `drill-<YYYY-MM-DD>` service *and its volume* (it holds a full copy of
+   production data). Check in the project canvas that nothing named `drill-` remains.
+6. Record in `work/log/705.md` (first drill) or the drill's card log: date, duration, pass or fail, and anything
    that differed from these steps. No values, ids or data. Fix this runbook in the same PR if a step was wrong.
 
 ## Never

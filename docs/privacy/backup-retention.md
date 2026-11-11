@@ -7,7 +7,8 @@ deletion is confirmed purged, restore drill cadence once agreed).
   Redis holds no durable data and is not backed up (ADR 0008).
 - **Mechanism:** Railway volume backups, one **Daily** schedule per volume. Railway keeps each daily backup 6 days,
   then deletes it. Weekly and monthly schedules, point-in-time recovery and backup locks stay off: each would keep
-  copies past the window below. A manual backup (for example a restore drill) is deleted the same day.
+  copies past the window below. A manual backup is deleted the same day, and so is the restore drill's temporary Postgres service with its volume
+  (a full copy that never leaves Railway).
 - **Where:** inside Railway, attached to each volume, in the same project, environment (`production`) and region
   (`sfo`, US West) as the live data, not in a separate bucket or provider. Railway encrypts them at rest (AES-256,
   Railway-held keys). Hosting outside Québec is assessed by the PIA card, not here.

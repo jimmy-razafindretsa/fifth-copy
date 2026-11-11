@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
+import { createServer, type Server as HttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
+import { Server as SocketServer } from "socket.io";
+import { io as realIo } from "socket.io-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
@@ -108,6 +112,7 @@ describe("connectToRoom (C1)", () => {
     expect(io).toHaveBeenCalledWith("http://localhost:7495", {
       auth: expect.any(Function),
       transports: ["websocket", "polling"],
+      tryAllTransports: true,
       autoConnect: true,
     });
     expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "secret-token" });
@@ -135,6 +140,7 @@ describe("resume key in the handshake (#561 C11)", () => {
     expect(opts).toEqual({
       auth: expect.any(Function),
       transports: ["websocket", "polling"],
+      tryAllTransports: true,
       autoConnect: true,
     });
     expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "tok", resumeKey: KEY });
@@ -756,5 +762,62 @@ describe("#661 server-side disconnect and the cut line", () => {
     typing.press(" ");
     flush();
     expect(keysSent()).toHaveLength(3);
+  });
+});
+
+/**
+ * #442 C1 over real Socket.IO (no fake): a local server that serves `transports` only and answers
+ * every connection with a `welcome`. A server without `websocket` refuses the upgrade request (HTTP
+ * 400), as a school proxy that blocks WebSocket does: the client must still reach `welcome`, on
+ * polling. With WebSocket available the connection ends on `websocket`.
+ */
+describe("transport fallback over a real Socket.IO server (#442 C1)", () => {
+  const servers: { http: HttpServer; io: SocketServer }[] = [];
+  const rooms: { close(): void }[] = [];
+  afterEach(async () => {
+    for (const room of rooms.splice(0)) room.close();
+    for (const { io } of servers.splice(0))
+      await new Promise<void>((done) => void io.close(() => done()));
+  });
+
+  async function serve(transports: ("websocket" | "polling")[]): Promise<string> {
+    const http = createServer();
+    const io = new SocketServer(http, { transports });
+    io.on("connection", (socket) => void socket.emit("welcome", welcome));
+    servers.push({ http, io });
+    await new Promise<void>((done) => http.listen(0, "127.0.0.1", done));
+    return `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
+  }
+
+  /** `connectToRoom` over the real client; resolves the transport its engine is on once welcomed. */
+  async function welcomedOver(url: string, settle: (name: string) => boolean) {
+    type Engine = { transport: { name: string } };
+    let raw: { io: { engine?: Engine } } | undefined;
+    const io: IoFactory = (u, opts) => {
+      const socket = (realIo as unknown as IoFactory)(u, { ...opts, reconnection: false } as never);
+      raw = socket as unknown as typeof raw;
+      return socket;
+    };
+    const room = connectToRoom(url, "tok", { io });
+    rooms.push(room);
+    const got = await new Promise<Welcome>((resolve, reject) => {
+      room.onWelcome(resolve);
+      room.onConnectError((reason) => reject(new Error(`connect_error: ${reason}`)));
+    });
+    expect(got.you).toBe(1);
+    const engine = () => raw!.io.engine!.transport.name;
+    // the upgrade to websocket (when offered) completes a little after the handshake
+    await vi.waitFor(() => expect(settle(engine())).toBe(true), { timeout: 5_000, interval: 20 });
+    return engine();
+  }
+
+  it("reaches welcome over polling when the server refuses WebSocket", async () => {
+    const url = await serve(["polling"]);
+    expect(await welcomedOver(url, (name) => name === "polling")).toBe("polling");
+  });
+
+  it("still ends on websocket when WebSocket is available", async () => {
+    const url = await serve(["websocket", "polling"]);
+    expect(await welcomedOver(url, (name) => name === "websocket")).toBe("websocket");
   });
 });

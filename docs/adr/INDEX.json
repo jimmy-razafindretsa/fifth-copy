@@ -315,6 +315,7 @@
         "src/worker/main.ts",
         ".github/workflows/**",
         "scripts/deploy-smoke.sh",
+        "scripts/deploy-check.ts",
         "src/env.ts",
         "services/race-server/src/env.ts"
       ],

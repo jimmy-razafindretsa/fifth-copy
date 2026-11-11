@@ -93,7 +93,10 @@ export function createRaceServer({
   rng = Math.random,
   maxSpectatorsPerRoom = MAX_SPECTATORS_PER_ROOM,
 }: {
-  env: Pick<RaceServerEnv, "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK">;
+  env: Pick<
+    RaceServerEnv,
+    "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK" | "RAILWAY_GIT_COMMIT_SHA"
+  >;
   redis: Redis;
   clock: Clock;
   scheduler: Scheduler;
@@ -381,7 +384,11 @@ export function createRaceServer({
 
   const httpServer = createServer(
     createHttpHandler({
-      health: { rooms: () => registry.count(), draining: () => draining },
+      health: {
+        rooms: () => registry.count(),
+        draining: () => draining,
+        commit: env.RAILWAY_GIT_COMMIT_SHA ?? null,
+      },
       internal: createInternalHandler({
         registry,
         secret,

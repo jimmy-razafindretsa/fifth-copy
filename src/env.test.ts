@@ -51,6 +51,15 @@ describe("env", () => {
     expect(String(error)).not.toMatch(/short-secret-value/);
   });
 
+  it("RAILWAY_GIT_COMMIT_SHA is optional (#718): Railway's commit when set, undefined when absent or empty", async () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    expect((await loadEnv({ RAILWAY_GIT_COMMIT_SHA: sha })).RAILWAY_GIT_COMMIT_SHA).toBe(sha);
+    expect(
+      (await loadEnv({ RAILWAY_GIT_COMMIT_SHA: undefined })).RAILWAY_GIT_COMMIT_SHA,
+    ).toBeUndefined();
+    expect((await loadEnv({ RAILWAY_GIT_COMMIT_SHA: "" })).RAILWAY_GIT_COMMIT_SHA).toBeUndefined();
+  });
+
   it("REDIS_URL is an optional redis url outside production (#207): absent or empty disables the limiter", async () => {
     expect((await loadEnv({ REDIS_URL: "redis://localhost:6379/3" })).REDIS_URL).toBe(
       "redis://localhost:6379/3",

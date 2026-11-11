@@ -47,6 +47,14 @@ const server = z.object({
   AUTH_DISCORD_SECRET: optionalSecret,
   AUTH_GOOGLE_ID: optionalSecret,
   AUTH_GOOGLE_SECRET: optionalSecret,
+  /**
+   * Railway's provided commit of the running deployment (ADR 0019, #718), shown by /api/health for the
+   * deploy-check workflow; unset locally and in CI (health then reports `commit: null`).
+   */
+  RAILWAY_GIT_COMMIT_SHA: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().max(64).optional(),
+  ),
   /** Set to `1` by playwright.config.ts only: the one run where a production build may take `WEB_RATE_LIMIT=off`. */
   PLAYWRIGHT_E2E: z.literal("1").optional(),
 });
@@ -96,6 +104,7 @@ function parse() {
     REDIS_URL: process.env.REDIS_URL,
     WEB_RATE_LIMIT: process.env.WEB_RATE_LIMIT,
     PLAYWRIGHT_E2E: process.env.PLAYWRIGHT_E2E,
+    RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA,
     AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
     AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
     AUTH_DISCORD_ID: process.env.AUTH_DISCORD_ID,

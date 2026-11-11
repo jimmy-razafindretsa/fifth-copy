@@ -3,7 +3,7 @@ id: "0019"
 title: Production runs on Railway (web, race-server, Postgres, Redis as Railway services), replacing the single VPS
 status: accepted
 category: tooling
-scope: ["railway.json", "railway.toml", "services/race-server/railway.json", "src/worker/railway.json", "src/worker/main.ts", ".github/workflows/**", "scripts/deploy-smoke.sh", "src/env.ts", "services/race-server/src/env.ts"]
+scope: ["railway.json", "railway.toml", "services/race-server/railway.json", "src/worker/railway.json", "src/worker/main.ts", ".github/workflows/**", "scripts/deploy-smoke.sh", "scripts/deploy-check.ts", "src/env.ts", "services/race-server/src/env.ts"]
 supersedes: ["0012"]
 rule: Production is the Railway project with five services (web = Next.js from the repo root, race-server = the services/race-server workspace, worker = src/worker from the repo root with no domain (ADR 0011, #733), Railway Postgres, Railway Redis); Railway builds from main on push, web runs prisma migrate deploy as its pre-deploy command, secrets live only in Railway variables (generated, never printed or committed), and every new env var is added to the matching Railway service in the same PR.
 ---
@@ -25,6 +25,7 @@ ADR 0012 chose one VPS with Docker Compose and Caddy, and left the provider open
 - **Variables (names only):**
   - web: `DATABASE_URL` (reference to Postgres), `AUTH_SECRET`, `RACE_TOKEN_SECRET`, `RACE_SERVER_INTERNAL_URL` (`http://race-server.railway.internal:4000`), `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_RACE_SERVER_URL`, `AVATAR_DIR`, `REDIS_URL` (reference to Redis, with `?family=0`; required in production since #716: rate limiter and internal nonce store, ADR 0020), `NODE_ENV`, `PORT`.
   - race-server: `REDIS_URL` (reference to Redis, with `?family=0` so ioredis resolves Railway's private DNS over IPv4 or IPv6), `RACE_TOKEN_SECRET` (same value as web), `WEB_ORIGIN`, `RACE_SERVER_PORT`, `RACE_FAST_CLOCK=0`, `NODE_ENV`, `RACE_DRAIN_CAP_S` (optional, default 900, #704), and Railway's own `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` / `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` (#704).
+  - web and race-server also read Railway's provided `RAILWAY_GIT_COMMIT_SHA` (#718, not set by hand): `/api/health` and `/health` report it as `commit` for the `deploy-check` workflow (`.github/workflows/deploy-check.yml`, `scripts/deploy-check.ts`), which compares it and `protocol` with `main` after every push, holds no Railway token and never redeploys (runbook "Stale deploy").
   - worker (#733): the web's `src/env.ts` validates at boot, so it takes the same names as references to the web's values: `DATABASE_URL` (reference to Postgres), `AUTH_SECRET`, `RACE_TOKEN_SECRET`, `REDIS_URL` (required in production by `src/env.ts`), `NODE_ENV=production`. No new variable name.
   - Secrets are generated with `openssl rand -hex 32` and piped into the Railway CLI (`railway variable set --stdin`); they are never printed, committed or pasted into issues. Rotation is a human task.
 - **Deploys:** Railway builds and deploys each service on push to `main` when its watch paths change. `NEXT_PUBLIC_*` values are build-time, so changing them needs a web rebuild.

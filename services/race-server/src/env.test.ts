@@ -47,6 +47,15 @@ describe("race-server env", () => {
     );
   });
 
+  it("RAILWAY_GIT_COMMIT_SHA is optional (#718 C2): Railway's commit when set, undefined otherwise", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    expect(parseEnv(valid).RAILWAY_GIT_COMMIT_SHA).toBeUndefined();
+    expect(
+      parseEnv({ ...valid, RAILWAY_GIT_COMMIT_SHA: "" }).RAILWAY_GIT_COMMIT_SHA,
+    ).toBeUndefined();
+    expect(parseEnv({ ...valid, RAILWAY_GIT_COMMIT_SHA: sha }).RAILWAY_GIT_COMMIT_SHA).toBe(sha);
+  });
+
   it("reads RACE_FAST_CLOCK", () => {
     expect(parseEnv({ ...valid, RACE_FAST_CLOCK: "1" }).RACE_FAST_CLOCK).toBe("1");
   });

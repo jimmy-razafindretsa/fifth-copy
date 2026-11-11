@@ -114,12 +114,13 @@ describe("CI unit step runs the DB-backed suites (card #501)", () => {
 // while `e2e` stays ONE required check (.github/branch-protection.json, scripts/merge.sh): an
 // aggregating job that needs every shard and passes only when all of them succeeded.
 describe("CI e2e is sharded behind one required check (card #532)", () => {
+  type Combo = { suite: string; filter: string; shard: number; shardTotal: number };
   type MatrixJob = Job & {
     name?: string;
     needs?: string | string[];
     if?: string;
     "timeout-minutes"?: number;
-    strategy?: { "fail-fast"?: boolean; matrix?: { shard?: number[]; shardTotal?: number[] } };
+    strategy?: { "fail-fast"?: boolean; matrix?: { include?: Combo[] } };
   };
   const all = workflow.jobs as Record<string, MatrixJob>;
   const required = (
@@ -127,7 +128,7 @@ describe("CI e2e is sharded behind one required check (card #532)", () => {
       required_status_checks: { contexts: string[] };
     }
   ).required_status_checks.contexts;
-  const shardIds = Object.keys(all).filter((id) => all[id]?.strategy?.matrix?.shard);
+  const shardIds = Object.keys(all).filter((id) => all[id]?.strategy?.matrix);
   const shardId = shardIds[0] ?? "";
   const shard = all[shardId];
   const gate = all.e2e;
@@ -151,18 +152,68 @@ describe("CI e2e is sharded behind one required check (card #532)", () => {
     expect(JSON.stringify(gate?.steps)).toContain(`needs.${shardId}.result`);
   });
 
-  it("C1 the shard matrix covers 1..N exactly and each shard runs its slice of the full suite", () => {
-    const total = shard?.strategy?.matrix?.shardTotal ?? [];
-    expect(total).toHaveLength(1);
-    const n = total[0] ?? 0;
-    expect(n).toBeGreaterThan(1);
-    expect(shard?.strategy?.matrix?.shard).toEqual(Array.from({ length: n }, (_, i) => i + 1));
+  // Card #891: the matrix lists suites explicitly (include entries), each sharded 1..N on its own, so
+  // no shard collects a slow tail (the serial matchmaking project, or the desktop race specs that the
+  // skipped mobile/tablet race tests pushed into the last shard). The suites' filters must partition
+  // the suite: every test of `playwright test --list` runs in exactly one suite.
+  const combos = shard?.strategy?.matrix?.include ?? [];
+  const suites = [...new Set(combos.map((c) => c.suite))];
+  const filterOf = (suite: string) => combos.find((c) => c.suite === suite)?.filter ?? "";
+  // splits a filter like the runner's bash does for the shapes used: words and "double-quoted" words
+  const argv = (filter: string) =>
+    [...filter.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? "");
+  const list = (args: string[]) => {
+    const out = spawnSync("npx", ["playwright", "test", "--list", ...args], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, PW_VISUAL: "" },
+    });
+    expect(out.status, out.stderr).toBe(0);
+    return out.stdout.split("\n").filter((l) => /^\s+\[[a-z]+\] › /.test(l));
+  };
+
+  it("C1 the matrix is the only shape: include entries, fail-fast off, one run line, suite in the name", () => {
+    expect(Object.keys(shard?.strategy?.matrix ?? {})).toEqual(["include"]);
     expect(shard?.strategy?.["fail-fast"]).toBe(false);
     const pw = runs(shard ?? { steps: [] }).filter((r) => r.includes("playwright test"));
     expect(pw).toEqual([
-      "npx playwright test --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}",
+      "npx playwright test ${{ matrix.filter }} --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}",
     ]);
+    expect(shard?.name).toContain("${{ matrix.suite }}");
     expect(shard?.["timeout-minutes"]).toBeLessThanOrEqual(15);
+  });
+
+  it("C1 each suite has one filter and its shards cover 1..N exactly", () => {
+    expect(suites.length).toBeGreaterThan(1);
+    for (const suite of suites) {
+      const own = combos.filter((c) => c.suite === suite);
+      const totals = [...new Set(own.map((c) => c.shardTotal))];
+      expect(totals, suite).toHaveLength(1);
+      expect(
+        own.map((c) => c.shard).sort((x, y) => x - y),
+        suite,
+      ).toEqual(Array.from({ length: totals[0] ?? 0 }, (_, i) => i + 1));
+      expect(new Set(own.map((c) => c.filter)).size, suite).toBe(1);
+    }
+    expect(suites).toContain("matchmaking");
+    expect(filterOf("matchmaking")).toBe("--project=matchmaking");
+  });
+
+  it("C2 the suites partition the e2e suite: every listed test runs in exactly one suite", () => {
+    const all = list([]);
+    expect(all.length).toBeGreaterThan(0);
+    const seen = new Map<string, string>();
+    for (const suite of suites) {
+      for (const test of list(argv(filterOf(suite)))) {
+        expect(seen.get(test), `${test} in ${suite} and ${seen.get(test)}`).toBeUndefined();
+        seen.set(test, suite);
+      }
+    }
+    expect([...seen.keys()].sort()).toEqual([...all].sort());
+  }, 60_000);
+
+  it("C3 the e2e check gates on the matrix job, so every suite (matchmaking included) gates it", () => {
+    expect(gate?.needs).toContain(shardId);
   });
 });
 
@@ -236,10 +287,8 @@ describe("CI concurrency never cancels a main run (card #543)", () => {
 // skips the browser and only installs the OS packages. The contract's other arm (the pinned container
 // image of `visual`) was not chosen: it moves a bigger pull into the same job (#602 BRIEF).
 describe("CI e2e shards install Chromium from a cache (card #602)", () => {
-  type ShardJob = Job & { strategy?: { matrix?: { shard?: unknown } } };
-  const shard = Object.values(workflow.jobs).find(
-    (job) => (job as ShardJob).strategy?.matrix?.shard,
-  );
+  type ShardJob = Job & { strategy?: { matrix?: unknown } };
+  const shard = Object.values(workflow.jobs).find((job) => (job as ShardJob).strategy?.matrix);
   const steps = shard?.steps ?? [];
   const at = (s: Step | undefined) => (s ? steps.indexOf(s) : -1);
   const version = steps.find((s) => s.run?.includes("@playwright/test/package.json"));
@@ -279,10 +328,8 @@ describe("CI e2e shards install Chromium from a cache (card #602)", () => {
 // seen on PRs #810-#817) runs under scripts/retry.sh: each attempt has its own timeout and a stalled
 // attempt is killed and retried inside the shard instead of eating the step timeout once.
 describe("CI e2e shards retry a stalled Playwright dependency install (card #819)", () => {
-  type ShardJob = Job & { strategy?: { matrix?: { shard?: unknown } } };
-  const shard = Object.values(workflow.jobs).find(
-    (job) => (job as ShardJob).strategy?.matrix?.shard,
-  );
+  type ShardJob = Job & { strategy?: { matrix?: unknown } };
+  const shard = Object.values(workflow.jobs).find((job) => (job as ShardJob).strategy?.matrix);
   const steps = shard?.steps ?? [];
   const cache = steps.find((s) => s.uses?.startsWith("actions/cache@"));
   const pwSteps = steps.filter((s) => /playwright install/.test(s.run ?? ""));

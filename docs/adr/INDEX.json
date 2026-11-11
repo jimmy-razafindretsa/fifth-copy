@@ -356,6 +356,24 @@
       "supersededBy": [],
       "rule": "Cross-feature imports go through the other feature's index.ts (client-safe, no server-only, no Prisma) or its server.ts (starts with import \"server-only\"; only server code imports it, never a component).",
       "file": "docs/adr/0021-feature-server-entry.md"
+    },
+    {
+      "id": "0022",
+      "title": "The web app asks the race server whether two users share a live room; lobby-scoped access never reads Redis room keys",
+      "status": "proposed",
+      "category": "architecture",
+      "scope": [
+        "src/app/api/avatars/**",
+        "src/features/lobby/queries/share-lobby.ts",
+        "src/features/identity/queries/avatar-file.ts",
+        "src/server/internal-api/client.ts",
+        "services/race-server/src/http/internal.ts",
+        "packages/protocol/src/internal.ts"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "A web-side rule that depends on who is in a live room asks the race server through the signed POST /internal/rooms/shared (two user ids in, one boolean out) and treats no answer as \"not shared\"; the web app never reads room:* keys and keeps no copy of live membership; a refusal looks the same whether or not the lobby, the user or the resource exists.",
+      "file": "docs/adr/0022-shared-room-lookup.md"
     }
   ]
 }

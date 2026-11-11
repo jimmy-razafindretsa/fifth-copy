@@ -248,7 +248,7 @@ Player states inside `running`: `typing -> finished`, `typing -> abandoned` (but
 ### 7.2 Protocol (`@fifth-copy/protocol`)
 Client -> server: `join {token}`, `keys {batch: Keystroke[]}` (<= 50 ms of keys, `t` relative to GO), `abandon`, `host:start`, `host:kick {desk}`, `host:settings {patch}` (also persisted by web), `ping {sent}`.
 Server -> client: `welcome {room, you: desk, text, overlay, settings, t0, serverNow}`, `snapshot {t, desks: [desk, cursor, correct, errors, status, total][], ranks}` at 10 Hz (`total`: the engine's accepted presses, the client's exact ack of its sent keys, #645), `event {kind: overtake|passed|new-host|line-cut|resumed|asleep|bonus-sent|bonus-hit|kicked, ...}`, `countdown {goAt}`, `ended {raceId, ranking}`, `rejected {reason}`.
-Internal HTTP (HMAC): see ADR 0006 point 6. All payloads carry `v: PROTOCOL_VERSION`.
+Internal HTTP (HMAC): see ADR 0006 point 6. All payloads carry `v: PROTOCOL_VERSION`. Web -> race server routes: `POST /internal/rooms` (open), `/internal/rooms/status` (#806), `/internal/rooms/type` (#815) and `/internal/rooms/shared` (#65, ADR 0022: whether two users share a live room, `{ shared }` alone; the web never reads `room:*` keys and counts no answer as not shared).
 
 ### 7.3 One keystroke, end to end
 ```mermaid

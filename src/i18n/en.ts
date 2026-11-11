@@ -1,4 +1,14 @@
 /**
+ * The host left for good (#137, bible 14.3): the stamp with the new host's name (upper case) and its one
+ * polite announcement. One source for the lobby (`lobby.newHost`) and the seat view (`race.stamps.newHost`,
+ * #868).
+ */
+const NEW_HOST = {
+  stamp: "NEW HOST: {name}",
+  announce: "{name} is the new host.",
+};
+
+/**
  * English catalog (ADR 0010). Its shape is the `Messages` type every catalog follows; `fr.ts` must
  * satisfy it, so a missing key fails type-check. Strings are the bible's canonical copy (section 2) and the
  * reference `Fifth Copy Landing.dc.html`; `{name}` placeholders are filled with `fill()`.
@@ -301,10 +311,7 @@ export const en = {
      * The host left for good (#137, bible 14.3): the red 7.3 stamp over the roll with the new host's
      * name (upper case), and its one polite announcement.
      */
-    newHost: {
-      stamp: "NEW HOST: {name}",
-      announce: "{name} is the new host.",
-    },
+    newHost: NEW_HOST,
     players: { one: "{n} player in the room", other: "{n} players in the room" },
     reconnecting: "CONNECTION LOST, RETRYING",
     /**
@@ -489,6 +496,8 @@ export const en = {
       accepted: "ACCEPTED · {wpm} WPM",
       returned: "RETURNED · {n} ERRORS",
       returnedOne: "RETURNED · 1 ERROR",
+      /** The host left for good during a race (#868, bible 14.3): the lobby's strings, the ink stamp. */
+      newHost: NEW_HOST,
     },
     /** The race announcer (#232 C4, #242; bible 14.3): one polite status region, never the race text. */
     announce: {

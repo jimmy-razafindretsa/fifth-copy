@@ -288,3 +288,35 @@ describe("#242 the announcer's pace (bounded rate)", () => {
     queue.dispose();
   });
 });
+
+// #868 C2: the NEW HOST notice is said once, when it shows, in the lobby's sentence (#137).
+describe("#868 C2 the new host's sentence", () => {
+  const host = (id: number) => ({
+    id,
+    kind: "new-host" as const,
+    other: 3,
+    errors: 0,
+    name: "Bea",
+  });
+
+  it("a new NEW HOST stamp is said once, however many views it stays in", () => {
+    const said = run([
+      view({ at: T }),
+      view({ at: T + 100, stamp: host(4) }),
+      view({ at: T + 1_000, stamp: host(4) }),
+      view({ at: T + 2_900, stamp: host(4) }),
+      view({ at: T + 3_100 }),
+    ]);
+    expect(said.filter((a) => a.kind === "new-host")).toEqual([{ kind: "new-host", name: "Bea" }]);
+  });
+
+  it("is said in ended too, and in each language", () => {
+    const out = announcementsFor(
+      view({ phase: "ended", typing: false }),
+      view({ phase: "ended", typing: false, stamp: host(9) }),
+    );
+    expect(out.said).toEqual([{ kind: "new-host", name: "Bea" }]);
+    expect(announcementText(out.said[0]!, labels(en))).toBe("Bea is the new host.");
+    expect(announcementText(out.said[0]!, labels(fr))).toBe("Bea est le nouvel hôte.");
+  });
+});

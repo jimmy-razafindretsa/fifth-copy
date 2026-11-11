@@ -9,8 +9,9 @@ import { selectFinishWpm, selectPlace } from "./counters";
 /**
  * The race announcer's sentences (#242, ARCHITECTURE 10, WCAG 4.1.3): a pure function of two views of
  * the race store and the countdown step, no React, no timers. Announcements carry numbers and desk ids
- * only (no string of the race), so no character of the race text can reach the live region; their
- * words come from the catalogs (`announcementText`). The region paces them (`createAnnounceQueue`).
+ * only (no string of the race), so no character of the race text can reach the live region (the one
+ * name is the new host's, from the roster, #868); their words come from the catalogs
+ * (`announcementText`). The region paces them (`createAnnounceQueue`).
  */
 
 /** What the announcer reads of the seat: primitives and the visible stamp, one view per change. */
@@ -21,7 +22,7 @@ export type AnnounceView = {
   /** The countdown's step (#214): `3`, `2`, `1`, `go`, or `null` once the GO stamp left. */
   step: CountdownStep | null;
   /** The visible stamp (#232, #240), or `null`. */
-  stamp: Pick<RaceStamp, "id" | "kind" | "other" | "errors"> | null;
+  stamp: Pick<RaceStamp, "id" | "kind" | "other" | "errors" | "name"> | null;
   /** Your finish figure (`selectFinishWpm`): the finish stamp's line reads it. */
   wpm: number;
   /** Your live place and the desks in the race (`selectPlace`); `0` without a desk. */
@@ -41,7 +42,9 @@ export type Announcement =
   | { kind: "passed"; desk: number }
   | { kind: "finished"; place: number; total: number }
   | { kind: "filed"; stamp: "accepted" | "returned"; errors: number; wpm: number }
-  | { kind: "over"; place: number; total: number };
+  | { kind: "over"; place: number; total: number }
+  /** The host left for good (#868): the new host's name, from the roster. */
+  | { kind: "new-host"; name: string };
 
 /** The last place the region said, and when: a place line comes at most once per `PLACE_EVERY_MS`. */
 export type PlaceMemo = { place: number; at: number } | null;
@@ -51,8 +54,8 @@ export const PLACE_EVERY_MS = 5_000;
 /**
  * The sentences from `prev` to `next` (`prev` null: the first view) and the new place memo. In order:
  * the countdown step when it changes (`3`, `2`, `1`, `GO`); a new visible stamp: `overtake` / `passed`
- * (each one stands for the place change it made), or your finish with your place and then the finish
- * stamp's line; the race over once; else your place, once the GO stamp left, while you type, when it
+ * (each one stands for the place change it made), the new host's sentence (#868), or your finish
+ * with your place and then the finish stamp's line; the race over once; else your place, once the GO stamp left, while you type, when it
  * differs from the last place said and `PLACE_EVERY_MS` passed since (the first one at once). A new
  * countdown forgets the last race's place.
  */
@@ -71,6 +74,8 @@ export function announcementsFor(
     if (stamp.kind === "overtake" || stamp.kind === "passed") {
       said.push({ kind: stamp.kind, desk: stamp.other });
       if (next.place > 0) memo = { place: next.place, at: next.at };
+    } else if (stamp.kind === "new-host") {
+      said.push({ kind: "new-host", name: stamp.name ?? "" });
     } else {
       said.push({ kind: "finished", place: next.place, total: next.total });
       said.push({ kind: "filed", stamp: stamp.kind, errors: stamp.errors, wpm: next.wpm });
@@ -125,6 +130,8 @@ export function announcementText(a: Announcement, labels: AnnouncerLabels): stri
       return fill(announce.finished, { place: a.place, total: a.total });
     case "filed":
       return stampText({ kind: a.stamp, errors: a.errors }, a.wpm, labels.stamps);
+    case "new-host":
+      return fill(labels.stamps.newHost.announce, { name: a.name });
     case "over":
       return a.place > 0
         ? fill(announce.over, { place: a.place, total: a.total })

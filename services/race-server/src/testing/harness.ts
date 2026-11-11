@@ -22,7 +22,7 @@ import {
 import { createRaceServer, type RaceServer } from "../app";
 import { internalHeaders } from "../http/sign";
 import { createFakeClock, createFakeScheduler, type FakeClock, type FakeScheduler } from "../clock";
-import type { WebApi } from "../persist/web-api";
+import { WebApiStatusError, type WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
 import {
@@ -123,6 +123,38 @@ export function fixtureWebApi(clock: { now(): number }) {
     },
   };
   return { api, calls, results, closes, hosts };
+}
+
+/**
+ * A web fake with the web's host check (#897; `startRace` in src/features/results): a start whose
+ * `hostUserId` is not the lobby's recorded `Lobby.hostUserId` (`host`, the opener's, until a
+ * transfer) is refused 409; `setLobbyHost` records the new host once `beforeHost` resolves (a
+ * rejection is that call's failure, e.g. a `WebApiStatusError(503)`). `logOf(lobby)` lists the
+ * lobby's host records and start calls in order (the shared test db may drain other lobbies' calls).
+ */
+export function hostCheckingWebApi(clock: { now(): number }, host = HOST_SUB) {
+  const web = fixtureWebApi(clock);
+  const hosts = new Map<string, string>();
+  const log: { lobbyId: string; line: string }[] = [];
+  const state = { beforeHost: async (): Promise<void> => {} };
+  const api: WebApi = {
+    ...web.api,
+    setLobbyHost: async (request) => {
+      await state.beforeHost();
+      hosts.set(request.lobbyId, request.hostUserId);
+      log.push({ lobbyId: request.lobbyId, line: `host ${request.hostUserId}` });
+      return web.api.setLobbyHost(request);
+    },
+    startRace: async (request) => {
+      log.push({ lobbyId: request.lobbyId, line: `start ${request.hostUserId}` });
+      if (request.hostUserId !== (hosts.get(request.lobbyId) ?? host)) {
+        throw new WebApiStatusError(409);
+      }
+      return web.api.startRace(request);
+    },
+  };
+  const logOf = (lobbyId: string) => log.filter((l) => l.lobbyId === lobbyId).map((l) => l.line);
+  return { ...web, api, state, logOf };
 }
 
 export type Booted = {

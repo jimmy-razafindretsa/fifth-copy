@@ -123,6 +123,7 @@ export function createLifecycle({
   onRestart = () => {},
   liveRace = () => null,
   leavePending = () => false,
+  syncHost = async () => true,
 }: {
   registry: RoomRegistry;
   clock: Clock;
@@ -164,6 +165,12 @@ export function createLifecycle({
    * reviews the room again (`reviewAutoStart`), which fires the kept instant or drops it.
    */
   leavePending?: (lobbyId: string) => boolean;
+  /**
+   * Delivers the room's pending host transfer to the web before a start call (#897): the web refuses
+   * a start whose `hostUserId` is not its recorded `Lobby.hostUserId`, and the transfer (#137) rides
+   * the outbox. `false` or a rejection fails the start (`start-failed`); a later start tries again.
+   */
+  syncHost?: (lobbyId: string) => Promise<boolean>;
 }): Lifecycle {
   const timers = new Map<string, TimerHandle[]>();
   /** The pending automatic start of each armed room (#814), apart so a start clears it alone. */
@@ -346,6 +353,10 @@ export function createLifecycle({
     const raceId = randomUUID();
     let text;
     try {
+      // The web checks the host against its own record: the room's transfer lands there first.
+      if (!(await withTimeout(syncHost(lobbyId), START_TIMEOUT_MS))) {
+        throw new Error("host transfer undelivered");
+      }
       const response = startRaceResponseSchema.parse(
         await withTimeout(
           webApi.startRace({

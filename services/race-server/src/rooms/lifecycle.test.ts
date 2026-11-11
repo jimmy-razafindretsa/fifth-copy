@@ -20,7 +20,7 @@ import {
 } from "@fifth-copy/protocol";
 import { verifyInternalRequest } from "../http/hmac";
 import { LAST_LEAVE_GRACE_MS } from "../players/last-leave";
-import { createWebApi, type WebApi } from "../persist/web-api";
+import { createWebApi, WebApiStatusError, type WebApi } from "../persist/web-api";
 import {
   boot,
   connectError,
@@ -31,6 +31,7 @@ import {
   ackHost,
   ackResults,
   fixtureWebApi,
+  hostCheckingWebApi,
   HOST_SUB,
   track,
   typeKeys,
@@ -1264,5 +1265,97 @@ describe("lifecycle: the room's visibility reviews the automatic start (#815 C3)
     expect(seenHost.autoStart).toHaveLength(1);
     expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
     expect(booted.scheduler.armed()).toBe(1);
+  });
+});
+
+// #897: the web refuses a start whose host is not its recorded `Lobby.hostUserId`; a host transfer
+// reaches it through the outbox (#137). The start delivers the room's pending transfer first.
+describe("lifecycle: a start after a host transfer the web has not recorded yet (#897)", () => {
+  const PUBLIC_BOT: RaceSettings = {
+    ...DEFAULT_RACE_SETTINGS,
+    lobbyType: "public",
+    bots: [{ level: "clerk" }],
+  };
+  /** The host leaves for good with guests seated: after the grace (#884) usr_p0 is promoted. */
+  async function promoted(players: number, settings = DEFAULT_RACE_SETTINGS) {
+    const web = hostCheckingWebApi({ now: () => 0 });
+    const r = await room({ players, settings, webApi: web.api });
+    return { ...r, web };
+  }
+  async function hostLeaves(r: Awaited<ReturnType<typeof promoted>>) {
+    r.host.disconnect();
+    await until(() => r.booted.scheduler.armed() >= 1, WAIT_MS, "host leave deferred");
+    r.booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await until(
+      () => r.others[0]!.seen.roster?.find((m) => m.name === "Clerk 0")?.isHost === true,
+      WAIT_MS,
+      "usr_p0 promoted",
+    );
+  }
+
+  it("C1: the promoted host's START while the transfer is still in flight waits for it, then starts", async () => {
+    const r = await promoted(2);
+    let deliver = () => {};
+    const delivered = new Promise<void>((resolve) => (deliver = resolve));
+    r.web.state.beforeHost = () => delivered;
+    await hostLeaves(r);
+    const [p0, p1] = r.others as [(typeof r.others)[0], (typeof r.others)[0]];
+    const ack = start(p0.client);
+    await settle();
+    // The start call waits for the transfer: nothing reached the web, nothing was emitted.
+    expect(r.web.logOf(r.lobby)).toEqual([]);
+    expect(p1.seen.countdown).toHaveLength(0);
+    deliver();
+    expect(await ack).toMatchObject({ ok: true });
+    expect(r.web.logOf(r.lobby)).toEqual(["host usr_p0", "start usr_p0"]);
+    await until(() => p1.seen.countdown.length === 1, WAIT_MS, "countdown");
+    expect(r.web.calls[0]).toMatchObject({ lobbyId: r.lobby, hostUserId: "usr_p0" });
+  });
+
+  it("C1: the held automatic start fired by the promoting leave starts under the promoted host", async () => {
+    const r = await promoted(1, PUBLIC_BOT);
+    // The web is slower than the room: the transfer lands after the instant fires.
+    r.web.state.beforeHost = () => new Promise((resolve) => setTimeout(resolve, 300));
+    await until(() => r.seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = r.seenHost.autoStart[0]!.startsAt!;
+    r.booted.clock.advance(startsAt - r.booted.clock.now() - 1_000);
+    r.host.disconnect();
+    await until(() => r.booted.scheduler.armed() === 2, WAIT_MS, "host leave deferred");
+    r.booted.clock.advance(1_000);
+    await settle();
+    const guest = r.others[0]!.seen;
+    expect(guest.countdown).toHaveLength(0);
+    r.booted.clock.advance(LAST_LEAVE_GRACE_MS - 1_000);
+    await until(
+      () => {
+        r.booted.clock.advance(0);
+        return guest.countdown.length === 1;
+      },
+      WAIT_MS,
+      "countdown after the grace",
+    );
+    expect(r.web.logOf(r.lobby)).toEqual(["host usr_p0", "start usr_p0"]);
+    expect(guest.autoStart.map((a) => a.startsAt)).not.toContain(null);
+  });
+
+  it("C3: a web that cannot record the transfer (5xx) fails the START cleanly; a later START succeeds once it is delivered", async () => {
+    const r = await promoted(2);
+    let down = true;
+    r.web.state.beforeHost = async () => {
+      if (down) throw new WebApiStatusError(503);
+    };
+    await hostLeaves(r);
+    const [p0, p1] = r.others as [(typeof r.others)[0], (typeof r.others)[0]];
+    expect(await start(p0.client)).toEqual({ ok: false, error: "start-failed" });
+    await settle();
+    expect(r.web.logOf(r.lobby)).toEqual([]);
+    expect(p0.seen.countdown).toHaveLength(0);
+    expect(p1.seen.countdown).toHaveLength(0);
+    expect(await phaseOf(r.lobby)).toBe("waiting");
+
+    down = false;
+    expect(await start(p0.client)).toMatchObject({ ok: true });
+    expect(r.web.logOf(r.lobby)).toEqual(["host usr_p0", "start usr_p0"]);
+    await until(() => p1.seen.countdown.length === 1, WAIT_MS, "countdown");
   });
 });

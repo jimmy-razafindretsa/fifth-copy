@@ -1,7 +1,7 @@
 ---
 id: "0022"
 title: The web app asks the race server whether two users share a live room; lobby-scoped access never reads Redis room keys
-status: proposed
+status: accepted
 category: architecture
 scope: ["src/app/api/avatars/**", "src/features/lobby/queries/share-lobby.ts", "src/features/identity/queries/avatar-file.ts", "src/server/internal-api/client.ts", "services/race-server/src/http/internal.ts", "packages/protocol/src/internal.ts"]
 supersedes: []

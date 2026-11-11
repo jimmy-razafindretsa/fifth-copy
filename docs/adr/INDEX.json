@@ -360,7 +360,7 @@
     {
       "id": "0022",
       "title": "The web app asks the race server whether two users share a live room; lobby-scoped access never reads Redis room keys",
-      "status": "proposed",
+      "status": "accepted",
       "category": "architecture",
       "scope": [
         "src/app/api/avatars/**",

@@ -64,7 +64,8 @@ No account type collects an email address, a phone number, a birth date, a schoo
 
 Fifth Copy is also open outside class: a student can play a public Quick race at home. No school mandate covers that
 use, and the app collects no consent. The project accepts this risk because the app collects so little (guest by
-default, generated names, no contact details, avatars only in lobbies) and because inactive guests are deleted after
+default, generated names, no contact details, avatars seen only by their owner, live room mates and race mates for
+24 h after the race ends (ADR 0022), each viewer keeping its copy in its own browser cache (ADR 0014)) and because inactive guests are deleted after
 the period in [retention.md](retention.md). The [PIA](pia.md) records it as a residual risk. If a qualified review says
 this is not enough, the fix is a new card, not a change to this file alone.
 

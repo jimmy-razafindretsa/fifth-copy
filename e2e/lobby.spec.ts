@@ -12,8 +12,10 @@ import {
   startButton,
   warmRace,
 } from "./race/helpers";
+import { Client } from "pg";
 import { contrastRatio, type Rgb } from "../src/lib/color";
-import { HYDRATION_WAIT, scaled } from "./timeouts";
+import { becomeGuest, guestIdOf, SEEDED_VERSION, seedAvatar } from "./identity/avatar-helpers";
+import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "./timeouts";
 
 // Contract of #107: the waiting room /lobby/[code] (bible 4, 7.3, 7.4, 7.10, 8), live over the race
 // server started by playwright.config.ts. next/font and CSS modules rename families and keyframes,
@@ -1112,3 +1114,89 @@ test.describe("seat ring diagram (#731)", () => {
     });
   }
 });
+
+// Contract C3 of #730: roll portraits behind lobby membership. A guest with an approved avatar (seeded
+// as uploadAvatar leaves it, #64/#880 fixtures) and one without share a room: both rolls draw A's
+// picture (loaded, 200 from the lobby-scoped route) and B's initials; a guest of another room gets 404
+// for the same URL; a room mate who joins after A's picture is revoked sees the initials again.
+const portrait = (page: Page, userId: string) =>
+  roll(page).locator(`[data-portrait] img[src^="/api/avatars/${userId}?"]`);
+const portraitCells = (page: Page) => roll(page).locator("[data-portrait]");
+
+test.describe("lobby roll portraits (#730)", () => {
+  // The cell is fixed-size; one project runs the flow (see.ts covers 375/768/1280).
+  test.skip(({ viewport }) => viewport?.width !== 1280, "desktop project only");
+
+  const opened: BrowserContext[] = [];
+  const cleanups: (() => Promise<void>)[] = [];
+  test.afterEach(async () => {
+    for (const context of opened.splice(0)) await context.close();
+    for (const cleanup of cleanups.splice(0)) await cleanup();
+  });
+
+  test("C3 room mates see the portrait; another room's guest gets 404; a refused picture falls back to initials", async ({
+    page,
+    browser,
+  }) => {
+    const code = await createLobby(page);
+    const aId = await guestIdOf(page);
+    cleanups.push(await seedAvatar(aId));
+    // A's next race token carries the approved version: reload so A's seat takes it.
+    await page.reload();
+    await expect(portrait(page, aId)).toHaveCount(1, { timeout: ACTION_WAIT });
+
+    const b = await joinAsGuest(browser, code);
+    opened.push(b.context);
+    for (const p of [page, b.page]) {
+      await expect(rows(p)).toHaveCount(2, { timeout: ACTION_WAIT });
+      const img = portrait(p, aId);
+      await expect(img).toHaveAttribute("alt", "");
+      await expect(img).toHaveAttribute("src", `/api/avatars/${aId}?size=64&v=${SEEDED_VERSION}`);
+      await expect(roll(p).locator('[data-portrait="loaded"]')).toHaveCount(1, {
+        timeout: ACTION_WAIT,
+      });
+      expect(await img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(
+        true,
+      );
+      expect((await p.request.get((await img.getAttribute("src"))!)).status()).toBe(200);
+      // B has no picture: its row keeps the initials, no img
+      await expect(roll(p).locator('[data-portrait="initials"]')).toHaveCount(1);
+      await expect(roll(p).locator('[data-portrait="initials"] img')).toHaveCount(0);
+      const box = await roll(p).locator("[data-portrait]").first().boundingBox();
+      expect(box).toMatchObject({ width: 32, height: 32 });
+    }
+
+    // Another room's guest asks for the same URL: 404 (#880).
+    const outsider = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    opened.push(outsider);
+    const outsiderPage = await outsider.newPage();
+    await becomeGuest(outsiderPage);
+    const src = `/api/avatars/${aId}?size=64&v=${SEEDED_VERSION}`;
+    expect((await outsiderPage.request.get(src)).status()).toBe(404);
+
+    // A's picture is revoked: a mate seated now still gets A's address from the roster, the route
+    // refuses it, and the cell shows A's initials in the same square.
+    await setAvatarStatus(aId, "NONE");
+    const c = await joinAsGuest(browser, code);
+    opened.push(c.context);
+    await expect(rows(c.page)).toHaveCount(3, { timeout: ACTION_WAIT });
+    await expect(portraitCells(c.page)).toHaveCount(3);
+    await expect(roll(c.page).locator('[data-portrait="failed"]')).toHaveCount(1, {
+      timeout: ACTION_WAIT,
+    });
+    await expect(roll(c.page).locator('[data-portrait="failed"] img')).toHaveCount(0);
+    await expect(roll(c.page).locator('[data-portrait="failed"]')).toHaveText(/^\p{Lu}{1,2}$/u);
+    const failedBox = await roll(c.page).locator('[data-portrait="failed"]').boundingBox();
+    expect(failedBox).toMatchObject({ width: 32, height: 32 });
+  });
+});
+
+async function setAvatarStatus(userId: string, status: "NONE" | "APPROVED") {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query(`UPDATE "User" SET "avatarStatus" = $1 WHERE id = $2`, [status, userId]);
+  } finally {
+    await db.end();
+  }
+}

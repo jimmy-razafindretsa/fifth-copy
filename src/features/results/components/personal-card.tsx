@@ -4,6 +4,8 @@ import { formatAccuracy, formatWpm } from "../view/dawn-report";
 import type { BonusTally, PersonalStats } from "../view/personal";
 import type { PersonalLabels } from "../view/report-labels";
 import type { RaceSeries } from "../view/series";
+import type { Coaching } from "../view/tip";
+import { CoachingSections } from "./coaching";
 import styles from "./personal-card.module.css";
 import { RaceGraph } from "./race-graph";
 
@@ -15,6 +17,11 @@ export type PersonalCardProps = {
    * has no graph section (a specimen of the other sections).
    */
   series?: RaceSeries | null;
+  /**
+   * The errors by key and the tip (#867, `coachingFrom`): left out, the card has neither section (a
+   * specimen of the other sections).
+   */
+  coaching?: Coaching;
 };
 
 /**
@@ -22,10 +29,10 @@ export type PersonalCardProps = {
  * the race, presentational (stats and labels only). One 7.4 docket of sections: the header (the ink tag
  * that names it, the place `№ n`), the `UNDER REVIEW` row of a suspicious result, the figures (clean WPM,
  * ADR 0016; accuracy; the status when not filed), then the bonuses as `SENT` / `RECEIVED` rows.
- * Then the WPM graph (#865, `RaceGraph`) from `series`. Extension point: the keys and the tip (sibling
- * cards) and the personal-best flag (#321) are further sections after these. No gold (bible 3), no motion.
+ * Then the WPM graph (#865, `RaceGraph`) from `series`, then the errors by key and the tip (#867,
+ * `CoachingSections`) from `coaching`. Extension point: the personal-best flag (#321) is a further section. No gold (bible 3), no motion.
  */
-export function PersonalCard({ stats, labels, series }: PersonalCardProps) {
+export function PersonalCard({ stats, labels, series, coaching }: PersonalCardProps) {
   const tagId = useId();
   return (
     <section
@@ -51,6 +58,7 @@ export function PersonalCard({ stats, labels, series }: PersonalCardProps) {
       <Figures stats={stats} labels={labels} />
       <Bonuses stats={stats} labels={labels} />
       {series !== undefined && <RaceGraph series={series} labels={labels} />}
+      {coaching && <CoachingSections coaching={coaching} labels={labels} />}
     </section>
   );
 }

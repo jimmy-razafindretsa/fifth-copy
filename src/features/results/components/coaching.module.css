@@ -1,0 +1,138 @@
+/*
+ * The personal card's errors by key and tip (#867, bible 14.4 "Errors by key", 7.4, 2, 3): two card
+ * sections under the WPM graph, each with a dashed separator over it. Errors by key: the roll-row label
+ * (Oswald 600 11px .2em, muted) as its h3, then up to five keys in a wrapping row, each the ranking's
+ * portrait cell (a 32px paper square in a 2px ink rule; the character in Plex Mono 500 16px, a named key
+ * such as SPACE in Oswald 600 10px .16em, the square widening to fit) then its count (Plex Mono 500 14px,
+ * the bonus rows' count). The tip: the ink tag (Oswald 600 10px .16em, ink ground, paper text) as its
+ * h3, one Courier Prime 15px sentence, the special tip's 7.1 secondary link (44px) to the guide. Colours
+ * are roles (no gold, bible 3), faces the type roles (#531); no motion.
+ */
+
+@reference "../../../app/globals.css";
+
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.title {
+  margin: 0;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.none {
+  margin: 0;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* the ranking's portrait cell: a 32px paper square in a 2px ink rule */
+.square,
+.named {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 32px;
+  height: 32px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.square {
+  @apply type-typing;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.named {
+  padding: 0 6px;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.16em;
+}
+
+.count {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* the ink tag (bible 7.4 roll rows: Oswald 600 10px .16em, ink ground, paper text) */
+.tag {
+  display: inline-block;
+  margin: 0;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.sentence {
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* the 7.1 secondary link (the action row's), 44px */
+.guide {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 2px solid var(--color-fg);
+  color: var(--color-fg);
+  text-decoration: none;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.guide:hover {
+  background: var(--color-bg);
+}
+
+.guide:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}

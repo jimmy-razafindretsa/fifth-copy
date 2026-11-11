@@ -7,6 +7,8 @@ import { OUTFIT_CATALOGUE, outfitForDesk, type Outfit } from "@/features/identit
 import type { DawnReport, ReportEntry, ReportRace } from "./dawn-report";
 import type { PersonalStats } from "./personal";
 import type { RaceSeries } from "./series";
+import type { MissedKey } from "./keys";
+import { coachingFrom, type Coaching } from "./tip";
 
 /** A saved outfit (the viewer's desk 12 in the six-desk race): ids from bible 10.1's catalogue. */
 export const SAVED_OUTFIT: Outfit = {
@@ -153,6 +155,42 @@ export const raceSeriesFixtures = {
 } satisfies Record<string, RaceSeries | null>;
 
 export type RaceSeriesFixture = keyof typeof raceSeriesFixtures;
+
+/** One specimen of the errors by key and the tip (#867 C5): the card it sits on and its coaching. */
+export type CoachingFixtureData = { stats: PersonalStats; coaching: Coaching };
+
+const coached = (stats: PersonalStats, missed: MissedKey[] | null): CoachingFixtureData => ({
+  stats,
+  coaching: coachingFrom({ accuracy: stats.accuracy, missed }),
+});
+
+/**
+ * `/design#results-personal-keys` (#867 C5): the keys listed (with a space, the `key` tip), a special
+ * key (the `special` tip and its guide link), no error (`NONE`, the `clean` tip), a few misses (the
+ * `steady` tip), and no trace on file with a low accuracy (the `accuracy` tip from the accuracy alone).
+ */
+export const coachingFixtures = {
+  key: coached(personalFixtures.populated, [
+    { char: "t", count: 4 },
+    { char: " ", count: 3 },
+    { char: "é", count: 2 },
+    { char: "a", count: 1 },
+    { char: "r", count: 1 },
+  ]),
+  special: coached(personalFixtures["no-bonuses"], [
+    { char: "é", count: 3 },
+    { char: "«", count: 2 },
+    { char: "e", count: 1 },
+  ]),
+  clean: coached({ ...personalFixtures["no-bonuses"], accuracy: 1 }, []),
+  steady: coached(personalFixtures["no-bonuses"], [
+    { char: "s", count: 2 },
+    { char: "o", count: 1 },
+  ]),
+  "no-trace": coached({ ...personalFixtures.unfinished, accuracy: 0.86 }, null),
+} satisfies Record<string, CoachingFixtureData>;
+
+export type CoachingFixture = keyof typeof coachingFixtures;
 
 /** `/design#results` and the tests: one fixture per podium state (C6). */
 export const dawnReportFixtures = {

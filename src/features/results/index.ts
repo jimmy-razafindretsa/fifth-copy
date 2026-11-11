@@ -29,15 +29,20 @@ export { ReportActions } from "./components/report-actions";
 export { PersonalCard, type PersonalCardProps } from "./components/personal-card";
 export type { BonusTally, PersonalStats } from "./view/personal";
 // The WPM graph (#865): the viewer's own series and received-bonus marks, and its card section.
-export { getRaceSeries } from "./queries/get-race-series";
+export { getPersonalReplay, getRaceSeries, type PersonalReplay } from "./queries/get-race-series";
 export { RaceGraph, type RaceGraphProps } from "./components/race-graph";
 export type { BonusMark, RaceSeries } from "./view/series";
+// Errors by key and the one tip (#867): the viewer's missed keys and the pure tip choice.
+export { coachingFrom, type Coaching, pickTip, type Tip, TIP_IDS } from "./view/tip";
+export type { MissedKey } from "./view/keys";
 export { FilingNoticeView } from "./components/filing-notice-view";
 export { Podium, type PodiumProps } from "./components/podium";
 // The ranking docket (#301): every desk in place order, under the podium.
 export { RankingTable, type RankingTableProps } from "./components/ranking-table";
 export { initialsOf, type RankingLabels, type RankingRow, rankingRowsFrom } from "./view/ranking";
 export {
+  coachingFixtures,
+  type CoachingFixture,
   dawnReportFixtures,
   type DawnReportFixture,
   personalFixtures,

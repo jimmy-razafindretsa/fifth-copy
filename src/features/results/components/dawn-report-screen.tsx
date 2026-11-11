@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
-import type { RaceSeries } from "../view/series";
+import type { PersonalReplay } from "../queries/get-race-series";
+import { coachingFrom } from "../view/tip";
 import {
   filingLabels,
   personalLabels,
@@ -60,16 +61,18 @@ export function DawnReportLayout({
  * then the report: the filing notice (the one client leaf that polls) or the podium with the ranking
  * docket (#301) and, for a typist, their personal stats card (#864) in their slots, the action row under it (#143, #863: RACE AGAIN, the way home, and a
  * guest member's prompt to open a file; `viewerIsGuest` is the viewer's guest flag, ADR 0009). The
- * card's WPM graph (#865) draws `series` (`getRaceSeries`: the viewer's own trace, `null` without one).
+ * card's WPM graph (#865), errors by key and tip (#867) read `replay` (`getPersonalReplay`: the viewer's
+ * own trace, `null` without one: the graph and the keys read NO TRACE ON FILE, the tip comes from the
+ * accuracy alone).
  */
 export async function DawnReportScreen({
   report,
   viewerIsGuest = false,
-  series = null,
+  replay = null,
 }: {
   report: DawnReport;
   viewerIsGuest?: boolean;
-  series?: RaceSeries | null;
+  replay?: PersonalReplay | null;
 }) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
   const [{ LandingHeader }, t] = await Promise.all([import("@/features/landing"), getT()]);
@@ -91,7 +94,15 @@ export async function DawnReportScreen({
           }
           personal={
             report.kind === "report" && report.personal ? (
-              <PersonalCard stats={report.personal} labels={personalLabels(t)} series={series} />
+              <PersonalCard
+                stats={report.personal}
+                labels={personalLabels(t)}
+                series={replay?.series ?? null}
+                coaching={coachingFrom({
+                  accuracy: report.personal.accuracy,
+                  missed: replay?.missed ?? null,
+                })}
+              />
             ) : undefined
           }
           actions={

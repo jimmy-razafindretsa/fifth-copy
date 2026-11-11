@@ -7,6 +7,7 @@ import { fr } from "@/i18n/fr";
 import { REPORT_STATUSES } from "../view/dawn-report";
 import type { PersonalStats } from "../view/personal";
 import { personalLabels } from "../view/report-labels";
+import { coachingFrom, TIP_IDS, type TipInput } from "../view/tip";
 import { PersonalCard } from "./personal-card";
 
 // Contract of #864 C2: one 7.4 docket in the personal slot, the ink tag FORM 5-R · YOUR COPY, the place
@@ -116,5 +117,120 @@ describe("PersonalCard (#864 C2)", () => {
     );
     expect(css).not.toMatch(/reward|gold|medal/i);
     expect(render(stats({ suspicious: true }))).not.toMatch(/gold|reward|medal/i);
+  });
+});
+
+// Contract of #867 C3: ERRORS BY KEY with up to five keys, most missed first, each the character in the
+// 32px portrait-cell square with × n; a space named SPACE; NONE with no error; then the tip as one
+// sentence under the ink tag ORDER OF THE DAY; the special tip links to the guide; no trace: NO TRACE ON
+// FILE and the tip from the accuracy alone.
+const sectionOf = (html: string, name: string) => {
+  const m = html.match(new RegExp(`<div[^>]*data-section="${name}"[^>]*>(.*?)</div>`));
+  if (!m) throw new Error(`no ${name} section`);
+  return m[1]!;
+};
+const withCoaching = (input: TipInput, labels = EN, s = stats()) =>
+  renderToStaticMarkup(<PersonalCard stats={s} labels={labels} coaching={coachingFrom(input)} />);
+const MISSED = [
+  { char: "t", count: 4 },
+  { char: " ", count: 3 },
+  { char: "é", count: 3 },
+  { char: "a", count: 2 },
+  { char: "b", count: 1 },
+  { char: "c", count: 1 },
+];
+
+describe("PersonalCard errors by key and tip (#867 C3)", () => {
+  it("up to five keys, most missed first, each in its square with × n; a space is SPACE", () => {
+    const html = withCoaching({ accuracy: 0.9, missed: MISSED });
+    const keys = sectionOf(html, "keys");
+    expect(keys).toMatch(/<h3[^>]*>ERRORS BY KEY<\/h3>/);
+    expect(keys.match(/<li/g)).toHaveLength(5);
+    expect(text(keys)).toBe("ERRORS BY KEY t × 4 SPACE × 3 é × 3 a × 2 b × 1");
+    expect(keys).toMatch(/data-key="t"[^>]*><span class="[^"]*square[^"]*" data-field="key">t</);
+    expect(keys).toMatch(/data-key=" "[^>]*><span class="[^"]*named[^"]*" data-field="key">SPACE</);
+    // the square is the ranking's portrait cell: 32px, 2px ink rule
+    const css = readFileSync(join(__dirname, "coaching.module.css"), "utf8");
+    expect(css).toMatch(/min-width: 32px;\s*height: 32px;\s*border: 2px solid var\(--color-fg\)/);
+  });
+
+  it("NONE with no error, and the clean tip", () => {
+    const html = withCoaching({ accuracy: 0.97, missed: [] });
+    expect(text(sectionOf(html, "keys"))).toBe("ERRORS BY KEY NONE");
+    expect(html).toMatch(/data-section="tip" data-tip="clean"/);
+  });
+
+  it("the tip: one sentence under the ink tag ORDER OF THE DAY, naming the key", () => {
+    const html = withCoaching({ accuracy: 0.9, missed: MISSED });
+    const tip = html.slice(html.indexOf('data-section="tip"'));
+    expect(tip).toMatch(/<h3[^>]*>ORDER OF THE DAY<\/h3>/);
+    const sentence = tip.match(/data-field="tip"[^>]*>([^<]*)</)![1]!;
+    expect(sentence).toBe(
+      "The t key slipped 4 times: slow down on it next race and the rest will follow.",
+    );
+    expect(sentence.match(/[.!?]/g)).toHaveLength(1); // one sentence
+    expect(tip).not.toContain("data-guide");
+    // the keys come before the tip, both after the bonus rows
+    expect(html.indexOf('data-section="bonuses"')).toBeLessThan(
+      html.indexOf('data-section="keys"'),
+    );
+    expect(html.indexOf('data-section="keys"')).toBeLessThan(html.indexOf('data-section="tip"'));
+  });
+
+  it("a space names SPACE in the tip", () => {
+    const html = withCoaching({ accuracy: 0.9, missed: [{ char: " ", count: 3 }] });
+    expect(html).toContain("The SPACE key slipped 3 times");
+  });
+
+  it("the special tip links to the guide", () => {
+    const html = withCoaching({ accuracy: 0.9, missed: [{ char: "é", count: 5 }] });
+    expect(html).toMatch(/data-tip="special"/);
+    expect(html).toContain("The é key slipped 5 times: the guide shows how to type it.");
+    const link = html.match(/<a [^>]*data-guide[^>]*>([^<]*)<\/a>/)!;
+    expect(link[0]).toContain('href="/#how"');
+    expect(link[1]).toBe("HOW TO TYPE É Ç « »");
+  });
+
+  it("no trace on file: NO TRACE ON FILE, the tip from the accuracy alone", () => {
+    const low = withCoaching({ accuracy: 0.85, missed: null });
+    expect(text(sectionOf(low, "keys"))).toBe("ERRORS BY KEY NO TRACE ON FILE");
+    expect(low).toMatch(/data-tip="accuracy"/);
+    expect(withCoaching({ accuracy: 0.95, missed: null })).toMatch(/data-tip="steady"/);
+    expect(withCoaching({ accuracy: 1, missed: null })).toMatch(/data-tip="clean"/);
+  });
+
+  it("every tip has one sentence, in both languages", () => {
+    for (const labels of [EN, FR]) {
+      for (const id of TIP_IDS) {
+        const sentence = labels.tip[id];
+        expect(sentence.length).toBeGreaterThan(0);
+        expect(sentence.match(/[.!?]/g), `${id}: one sentence`).toHaveLength(1);
+      }
+    }
+  });
+
+  it("French", () => {
+    const html = withCoaching({ accuracy: 0.9, missed: [{ char: " ", count: 3 }] }, FR);
+    expect(text(sectionOf(html, "keys"))).toBe("ERREURS PAR TOUCHE ESPACE × 3");
+    expect(html).toContain(">ORDRE DU JOUR<");
+    expect(html).toContain("La touche ESPACE t&#x27;a échappé 3 fois");
+    expect(text(sectionOf(withCoaching({ accuracy: 1, missed: [] }, FR), "keys"))).toBe(
+      "ERREURS PAR TOUCHE AUCUNE",
+    );
+    expect(text(sectionOf(withCoaching({ accuracy: 1, missed: null }, FR), "keys"))).toBe(
+      "ERREURS PAR TOUCHE AUCUNE TRACE AU DOSSIER",
+    );
+    const special = withCoaching({ accuracy: 0.9, missed: [{ char: "«", count: 3 }] }, FR);
+    expect(special).toContain(">TAPER É Ç « »<");
+  });
+
+  it("left out, the card has neither section; no gold in them (bible 3)", () => {
+    expect(render(stats())).not.toContain('data-section="keys"');
+    expect(render(stats())).not.toContain('data-section="tip"');
+    const css = readFileSync(join(__dirname, "coaching.module.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).not.toMatch(/reward|gold|medal/i);
   });
 });

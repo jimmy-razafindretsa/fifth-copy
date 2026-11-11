@@ -618,6 +618,21 @@ export const fr = {
         },
         noTrace: "AUCUNE TRACE AU DOSSIER",
       },
+      keys: {
+        title: "ERREURS PAR TOUCHE",
+        none: "AUCUNE",
+        space: "ESPACE",
+      },
+      tip: {
+        tag: "ORDRE DU JOUR",
+        clean: "Aucune faute au dossier : garde ce rythme et la vitesse suivra.",
+        special: "La touche {key} t'a échappé {n} fois : le guide montre comment la taper.",
+        key: "La touche {key} t'a échappé {n} fois : ralentis dessus à la prochaine course, le reste suivra.",
+        accuracy:
+          "La vitesse, c'est bien, la précision, c'est mieux : ralentis un peu et fais compter chaque touche.",
+        steady:
+          "Une copie régulière : à la prochaine course, accélère un peu sur les mots que tu connais.",
+      },
     },
     podium: {
       title: "Podium",

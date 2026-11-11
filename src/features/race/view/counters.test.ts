@@ -37,6 +37,7 @@ const member = (desk: number, name: string): Member => ({
   isBot: false,
   color: desk - 1,
   marker: "circle",
+  avatar: null,
 });
 
 const welcome = (over: Partial<Welcome> = {}): Welcome => ({

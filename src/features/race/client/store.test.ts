@@ -58,6 +58,7 @@ const member = (desk: number, name: string, isHost = false): Member => ({
   isBot: false,
   color: (desk - 1) % 12,
   marker: (["circle", "square", "triangle", "diamond"] as const)[Math.floor((desk - 1) / 12) % 4]!,
+  avatar: null,
 });
 
 const KEY = "k".repeat(40);

@@ -2,7 +2,14 @@ import { vi } from "vitest";
 
 // Test-only in-memory User and Lobby tables with the real unique indexes (typistName, code).
 // Not imported by app code. Duplicates throw a plain Error: tests that need Prisma's P2002 inject it.
-type UserRow = { id: string; typistName: string; isGuest: boolean; avatarStatus: "NONE" };
+type UserRow = {
+  id: string;
+  typistName: string;
+  isGuest: boolean;
+  avatarStatus: "NONE" | "PENDING" | "APPROVED";
+  /** `<userId>/<version>` once a picture is stored (ADR 0014; #730 tests set it). */
+  avatarKey?: string | null;
+};
 type LobbyRow = {
   id: string;
   code: string;

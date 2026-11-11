@@ -30,6 +30,7 @@ const member = (desk: number, name: string, extra: Partial<Member> = {}): Member
   isHost: false,
   isBot: false,
   ...deskIdentity(desk),
+  avatar: null,
   ...extra,
 });
 

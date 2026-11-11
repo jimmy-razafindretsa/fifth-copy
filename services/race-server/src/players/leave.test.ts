@@ -6,7 +6,14 @@ import { leaveRoom, releaseDropped, type LeaveDeps } from "./leave";
 // #143 C3 (and #658): who leaves after a race, and what the process frees, with fakes for the
 // registry and presence (the Redis side is registry.test.ts, the wire side lifecycle.test.ts).
 
-const bot: Member = { desk: 3, name: "Bot", isHost: false, isBot: true, ...deskIdentity(3) };
+const bot: Member = {
+  desk: 3,
+  name: "Bot",
+  isHost: false,
+  isBot: true,
+  ...deskIdentity(3),
+  avatar: null,
+};
 const desks: RaceDesk[] = [
   { desk: 1, userId: "host", name: "Ada", isBot: false },
   { desk: 2, userId: "b", name: "Bob", isBot: false },

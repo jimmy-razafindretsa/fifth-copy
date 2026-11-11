@@ -17,8 +17,10 @@ import {
 import {
   DESK_COLORS,
   deskIdentity,
+  avatarVersionSchema,
   bonusKindSchema,
   deskSchema,
+  idSchema,
   markerSchema,
   MAX_DESKS,
   msSchema,
@@ -61,7 +63,18 @@ export const rejectReasonSchema = z.enum([
 ]);
 export type RejectReason = z.infer<typeof rejectReasonSchema>;
 
-/** A desk's occupant. `color`/`marker` always equal `deskIdentity(desk)`. */
+/**
+ * What the roll needs to draw a member's portrait (#730): the user and the version of its approved
+ * avatar, addressed as `/api/avatars/<userId>?size=64&v=<v>`. Only members with an approved avatar
+ * carry one, and the route still serves it only to lobby mates (ADR 0014, 0022).
+ */
+export const memberAvatarSchema = z.object({ userId: idSchema, v: avatarVersionSchema });
+export type MemberAvatar = z.infer<typeof memberAvatarSchema>;
+
+/**
+ * A desk's occupant. `color`/`marker` always equal `deskIdentity(desk)`. `avatar` is null for bots
+ * and for members without an approved avatar (#730).
+ */
 export const memberSchema = z
   .object({
     desk: deskSchema,
@@ -73,11 +86,13 @@ export const memberSchema = z
       .min(0)
       .max(DESK_COLORS - 1),
     marker: markerSchema,
+    avatar: memberAvatarSchema.nullable(),
   })
   .refine((m) => {
     const id = deskIdentity(m.desk);
     return id.color === m.color && id.marker === m.marker;
-  }, "color and marker are deskIdentity(desk)");
+  }, "color and marker are deskIdentity(desk)")
+  .refine((m) => !m.isBot || m.avatar === null, "bots have no avatar");
 export type Member = z.infer<typeof memberSchema>;
 
 const membersSchema = z.array(memberSchema).max(MAX_DESKS);

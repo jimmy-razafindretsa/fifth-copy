@@ -27,7 +27,14 @@ describe("authenticateHandshake (C2)", () => {
     const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
     expect(await authenticateHandshake({ v: PROTOCOL_VERSION, token }, deps)).toEqual({
       ok: true,
-      claims: { v: PROTOCOL_VERSION, sub: "usr_a", name: "Ada", lobby, role: "player" },
+      claims: {
+        v: PROTOCOL_VERSION,
+        sub: "usr_a",
+        name: "Ada",
+        lobby,
+        role: "player",
+        avatar: null,
+      },
       resume: false,
     });
     expect(await t.server.registry.members(lobby)).toEqual([]);
@@ -193,7 +200,14 @@ describe("spectator tokens (#187)", () => {
     const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
     expect(await authenticateHandshake({ v: PROTOCOL_VERSION, token }, deps)).toEqual({
       ok: true,
-      claims: { v: PROTOCOL_VERSION, sub: "usr_s", name: "Eve", lobby, role: "spectator" },
+      claims: {
+        v: PROTOCOL_VERSION,
+        sub: "usr_s",
+        name: "Eve",
+        lobby,
+        role: "spectator",
+        avatar: null,
+      },
       resume: false,
     });
     expect(await t.server.registry.members(lobby)).toEqual([]);

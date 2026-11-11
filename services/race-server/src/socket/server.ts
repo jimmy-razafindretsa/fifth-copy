@@ -112,7 +112,7 @@ export function attachSocketServer(
   const guard = createSocketGuard({ limiter: deps.limiter, clock: deps.clock, log });
 
   io.on("connection", (socket: RaceSocket) => {
-    const { lobby, sub, name, role } = socket.data.claims;
+    const { lobby, sub, name, role, avatar } = socket.data.claims;
     const room = lobbyRoom(lobby);
     const everyone = audience(lobby);
     // Rate limits, payload cap and socket cap (#207) run before every handler below, spectators
@@ -142,7 +142,7 @@ export function attachSocketServer(
     // join, presence and leave go through the registry's per-room queue, so a disconnect that races
     // the join still runs after it. The desk comes from membership, never from the resume key.
     registry
-      .join(lobby, { userId: sub, name })
+      .join(lobby, { userId: sub, name, avatar })
       .then(async (joined) => {
         if (!joined.ok) return void socket.disconnect(true);
         socket.data.desk = joined.desk;

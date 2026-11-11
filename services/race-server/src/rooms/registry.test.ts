@@ -44,6 +44,7 @@ const m = (desk: number, name: string, isHost: boolean): Member => ({
   isHost,
   isBot: false,
   ...deskIdentity(desk),
+  avatar: null,
 });
 
 beforeAll(async () => {
@@ -238,6 +239,44 @@ describe("room registry: join (C2, C3)", () => {
       m(3, "b", false),
       m(4, "c", false),
     ]);
+  });
+});
+
+describe("room registry: member avatars (#730 C1)", () => {
+  it("addresses a member's portrait with its user id and the token's avatar version", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "a", name: "Ada", avatar: 3 });
+    await registry.join(lobbyId, { userId: "b", name: "Bob", avatar: null });
+    await registry.join(lobbyId, { userId: "c", name: "Cy" });
+    const members = (await registry.members(lobbyId)) ?? [];
+    expect(members.map((x) => x.avatar)).toEqual([{ userId: "a", v: 3 }, null, null]);
+    for (const member of members) expect(memberSchema.safeParse(member).success).toBe(true);
+  });
+
+  it("a rejoin takes the avatar version of its new token (approved, replaced or revoked since)", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "a", name: "Ada", avatar: null });
+    const again = await registry.join(lobbyId, { userId: "a", name: "Ada", avatar: 4 });
+    expect(again.ok && again.members[0]?.avatar).toEqual({ userId: "a", v: 4 });
+    const revoked = await registry.join(lobbyId, { userId: "a", name: "Ada", avatar: null });
+    expect(revoked.ok && revoked.members[0]?.avatar).toBeNull();
+  });
+
+  it("bots have no avatar", async () => {
+    const { registry } = setup();
+    const lobbyId = lobby();
+    await registry.open({
+      lobbyId,
+      code: "ABCD",
+      hostUserId: "host",
+      settings: { ...settings, bots: [{ level: "major" }] },
+    });
+    await registry.join(lobbyId, { userId: "host", name: "Ada", avatar: 2 });
+    const members = (await registry.members(lobbyId)) ?? [];
+    expect(members.find((x) => x.isBot)?.avatar).toBeNull();
+    expect(members.find((x) => !x.isBot)?.avatar).toEqual({ userId: "host", v: 2 });
   });
 });
 

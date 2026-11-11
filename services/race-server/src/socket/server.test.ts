@@ -30,7 +30,15 @@ afterEach(async () => {
   t = undefined;
 });
 
-const ada = { desk: 1, name: "Ada", isHost: false, isBot: false, color: 0, marker: "circle" };
+const ada = {
+  desk: 1,
+  name: "Ada",
+  isHost: false,
+  isBot: false,
+  color: 0,
+  marker: "circle",
+  avatar: null,
+};
 
 describe("waiting room over Socket.IO (C1)", () => {
   it("welcomes a joiner with its desk, rosters both on join and the first on leave", async () => {
@@ -66,6 +74,24 @@ describe("waiting room over Socket.IO (C1)", () => {
     await until(() => seenA.roster?.length === 1, 2_000, "roster 1");
     expect(seenA.roster).toEqual([ada]);
     expect(await t.server.registry.members(lobby)).toHaveLength(1);
+  });
+
+  it("puts the token's avatar version on the member, addressed by its sub (#730 C1)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const a = t.connect({
+      v: PROTOCOL_VERSION,
+      token: await t.token({ lobby, sub: "usr_ada", name: "Ada", avatar: 5 }),
+    });
+    const seenA = track(a);
+    await until(() => !!seenA.welcome, 2_000, "welcome A");
+    const b = t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby, name: "Bob" }) });
+    const seenB = track(b);
+    await until(() => seenB.welcome?.members.length === 2, 2_000, "welcome B");
+    expect(seenB.welcome?.members.map((m) => m.avatar)).toEqual([
+      { userId: "usr_ada", v: 5 },
+      null,
+    ]);
   });
 
   it("welcomes a joiner with the settings the room was opened with over POST /internal/rooms (#568 C5)", async () => {

@@ -37,7 +37,15 @@ import {
   type Keys,
 } from "./index";
 
-const member = { desk: 1, name: "Ada", isHost: true, isBot: false, color: 0, marker: "circle" };
+const member = {
+  desk: 1,
+  name: "Ada",
+  isHost: true,
+  isBot: false,
+  color: 0,
+  marker: "circle",
+  avatar: null,
+};
 const member13 = { ...member, desk: 13, isHost: false, color: 0, marker: "square" };
 const v = PROTOCOL_VERSION;
 const settings = DEFAULT_RACE_SETTINGS;
@@ -107,6 +115,17 @@ describe("socket schemas", () => {
     ["member identity not of its desk", memberSchema, { ...member13, marker: "circle" }, false],
     ["member empty name", memberSchema, { ...member, name: "" }, false],
     ["member oversize name", memberSchema, { ...member, name: "a".repeat(65) }, false],
+    // #730: what the roll needs to address a portrait through the avatar route, or null.
+    ["member avatar", memberSchema, { ...member, avatar: { userId: "usr_1", v: 2 } }, true],
+    ["member missing avatar", memberSchema, { ...member, avatar: undefined }, false],
+    ["member avatar v 0", memberSchema, { ...member, avatar: { userId: "usr_1", v: 0 } }, false],
+    ["member avatar no userId", memberSchema, { ...member, avatar: { v: 2 } }, false],
+    [
+      "bot member with an avatar",
+      memberSchema,
+      { ...member, isHost: false, isBot: true, avatar: { userId: "usr_1", v: 2 } },
+      false,
+    ],
     ["welcome example", welcomeSchema, welcome, true],
     ["welcome running", welcomeSchema, running, true],
     [

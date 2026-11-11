@@ -15,6 +15,7 @@ const member = (desk: number): Member => ({
   isHost: desk === 1,
   isBot: false,
   ...deskIdentity(desk),
+  avatar: null,
 });
 const { typing, finished } = PLAYER_STATUS_CODES;
 type Desk = Snapshot["desks"][number];

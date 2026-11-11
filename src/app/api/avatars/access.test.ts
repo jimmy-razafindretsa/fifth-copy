@@ -11,7 +11,13 @@ import { GUEST_COOKIE, signGuestCookie } from "@/server/auth/guest-cookie";
 const SECRET = "v".repeat(32);
 const VERSION = 1_700_000_000_000;
 type Status = "NONE" | "PENDING" | "APPROVED" | "REJECTED";
-type Row = { id: string; avatarKey: string | null; avatarStatus: Status };
+type Row = {
+  id: string;
+  typistName: string;
+  isGuest: boolean;
+  avatarKey: string | null;
+  avatarStatus: Status;
+};
 
 const state = vi.hoisted(() => ({
   jar: new Map<string, string>(),
@@ -45,15 +51,17 @@ vi.mock("@/env", () => ({
 }));
 vi.mock("@/server/db", () => ({
   db: {
-    user: {
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
-        return state.rows.find((r) => r.id === where.id) ?? null;
-      }),
-    },
+    user: { findUnique: vi.fn() },
     raceResult: {
       findFirst: vi.fn(
-        async ({ where }: { where: { userId: string; race: { results: { some: { userId: string } } } } }) =>
-          state.recent.has(`${where.userId}|${where.race.results.some.userId}`) ? { id: "r" } : null,
+        async ({
+          where,
+        }: {
+          where: { userId: string; race: { results: { some: { userId: string } } } };
+        }) =>
+          state.recent.has(`${where.userId}|${where.race.results.some.userId}`)
+            ? { id: "r" }
+            : null,
       ),
     },
   },
@@ -75,6 +83,8 @@ const { db } = await import("@/server/db");
 
 const row = (id: string, extra: Partial<Row> = {}): Row => ({
   id,
+  typistName: `Heron-${id}`,
+  isGuest: true,
   avatarKey: `${id}/${VERSION}`,
   avatarStatus: "APPROVED",
   ...extra,
@@ -97,6 +107,12 @@ async function shape(res: Response) {
     body: Buffer.from(await res.arrayBuffer()).toString("hex"),
   };
 }
+
+/** The ids whose `User` row was read: the viewer's own (cookie resolution) and the owner's. */
+const userReads = () =>
+  vi
+    .mocked(db.user.findUnique)
+    .mock.calls.map(([args]) => (args as { where: { id: string } }).where.id);
 
 let storeGet: ReturnType<typeof vi.spyOn>;
 
@@ -133,7 +149,11 @@ describe("GET /api/avatars/[userId] for lobby mates (#880)", () => {
       state.budget.set(subject, left - 1);
       return { ok: left > 0, retryAfterMs: left > 0 ? 0 : 1_000 };
     });
-    vi.mocked(db.user.findUnique).mockClear();
+    vi.mocked(db.user.findUnique).mockReset();
+    vi.mocked(db.user.findUnique).mockImplementation(
+      (async ({ where }: { where: { id: string } }) =>
+        state.rows.find((r) => r.id === where.id) ?? null) as never,
+    );
     vi.mocked(db.raceResult.findFirst).mockClear();
     storeGet?.mockRestore();
     storeGet = vi.spyOn(avatarStore, "get");
@@ -221,7 +241,8 @@ describe("GET /api/avatars/[userId] for lobby mates (#880)", () => {
         as("bob");
         expect((await get(owner)).status).toBe(404);
         expect(sharedRoom).toHaveBeenCalledTimes(1);
-        expect(db.user.findUnique).not.toHaveBeenCalled();
+        // Only the viewer's own row (resolving the guest cookie); never the owner's.
+        expect(userReads()).toEqual(["bob"]);
         expect(storeGet).not.toHaveBeenCalled();
       },
     );
@@ -232,9 +253,13 @@ describe("GET /api/avatars/[userId] for lobby mates (#880)", () => {
         order.push("sharedRoom");
         return { ok: true, data: { v: 1, shared: true } };
       });
-      vi.mocked(db.user.findUnique).mockImplementationOnce((async () => {
-        order.push("user");
-        return row("alice");
+      vi.mocked(db.user.findUnique).mockImplementation((async ({
+        where,
+      }: {
+        where: { id: string };
+      }) => {
+        order.push(`user:${where.id}`);
+        return state.rows.find((r) => r.id === where.id) ?? null;
       }) as never);
       storeGet.mockImplementationOnce(async () => {
         order.push("store");
@@ -242,7 +267,8 @@ describe("GET /api/avatars/[userId] for lobby mates (#880)", () => {
       });
       as("bob");
       expect((await get("alice")).status).toBe(200);
-      expect(order).toEqual(["sharedRoom", "user", "store"]);
+      // The viewer's own row first (cookie resolution), the owner's only after the rule said yes.
+      expect(order).toEqual(["user:bob", "sharedRoom", "user:alice", "store"]);
     });
   });
 
@@ -263,6 +289,7 @@ describe("GET /api/avatars/[userId] for lobby mates (#880)", () => {
       expect((await get("alice")).status).toBe(404);
       expect(sharedRoom).not.toHaveBeenCalled();
       expect(db.user.findUnique).not.toHaveBeenCalled();
+      expect(db.raceResult.findFirst).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -272,14 +299,17 @@ describe("GET /api/avatars/[userId] for lobby mates (#880)", () => {
       ["400 anonymous", null, "alice", "size=64", 400],
       ["404 stranger", "carol", "alice", `size=64&v=${VERSION}`, 404],
       ["404 anonymous", null, "alice", `size=64&v=${VERSION}`, 404],
-    ] as const)("%s carries Vary: Cookie and a private Cache-Control", async (_l, viewer, owner, q, status) => {
-      pair(state.live, "bob", "alice");
-      as(viewer);
-      const res = await get(owner, q);
-      expect(res.status).toBe(status);
-      expect(res.headers.get("vary")).toBe("Cookie");
-      expect(res.headers.get("cache-control")).toMatch(/^private(,|$)/);
-    });
+    ] as const)(
+      "%s carries Vary: Cookie and a private Cache-Control",
+      async (_l, viewer, owner, q, status) => {
+        pair(state.live, "bob", "alice");
+        as(viewer);
+        const res = await get(owner, q);
+        expect(res.status).toBe(status);
+        expect(res.headers.get("vary")).toBe("Cookie");
+        expect(res.headers.get("cache-control")).toMatch(/^private(,|$)/);
+      },
+    );
   });
 
   describe("C6 per-viewer limit", () => {
@@ -312,7 +342,7 @@ describe("GET /api/avatars/[userId] for lobby mates (#880)", () => {
       expect(await shape(await get("alice"))).toEqual(reference);
       expect(sharedRoom).toHaveBeenCalledTimes(1); // the reference call only
       expect(db.raceResult.findFirst).toHaveBeenCalledTimes(1);
-      expect(db.user.findUnique).not.toHaveBeenCalled();
+      expect(userReads()).toEqual(["bob", "bob"]);
     });
 
     it("the owner's own requests are not counted, even over the limit", async () => {

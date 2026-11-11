@@ -1,50 +1,9 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import type { Page } from "@playwright/test";
-import { Client } from "pg";
 import sharp from "sharp";
 import { expect, test } from "../fixtures";
+import { becomeGuest, SEEDED_VERSION as VERSION, seedAvatar } from "./avatar-helpers";
 
-// Contract C8 of #62: GET /api/avatars/[userId] over the real dev server. There is no upload UI yet
-// (#60), so the owner's avatar is seeded the way uploadAvatar leaves it: two WebP files under
-// AVATAR_DIR (the server's default .data/avatars in this checkout) and the User row's key + status.
-const AVATAR_DIR = path.resolve(".data/avatars");
-const VERSION = 1_700_000_000_123;
-const LOBBY_PATH = /^\/lobby\/[A-HJ-NP-Z]{3}-[0-9]{4}$/;
-
-/** Becomes a guest by creating a private race from the landing; returns the guest's user id. */
-async function becomeGuest(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
-  await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
-  const cookie = (await page.context().cookies()).find((c) => c.name === "fc_guest");
-  expect(cookie, "fc_guest cookie").toBeDefined();
-  return cookie!.value.slice(0, cookie!.value.lastIndexOf("."));
-}
-
-async function seedAvatar(userId: string) {
-  const dir = path.join(AVATAR_DIR, userId);
-  await mkdir(dir, { recursive: true });
-  for (const size of [256, 64]) {
-    const webp = await sharp({
-      create: { width: size, height: size, channels: 3, background: "#b4442e" },
-    })
-      .webp()
-      .toBuffer();
-    await writeFile(path.join(dir, `${VERSION}-${size}.webp`), webp);
-  }
-  const db = new Client({ connectionString: process.env.DATABASE_URL });
-  await db.connect();
-  try {
-    await db.query(
-      `UPDATE "User" SET "avatarKey" = $1, "avatarStatus" = 'APPROVED' WHERE id = $2`,
-      [`${userId}/${VERSION}`, userId],
-    );
-  } finally {
-    await db.end();
-  }
-  return () => rm(dir, { recursive: true, force: true });
-}
+// Contract C8 of #62: GET /api/avatars/[userId] over the real dev server. The owner's avatar is
+// seeded the way uploadAvatar leaves it (`seedAvatar`, shared with #880's avatar-access spec).
 
 test.describe("avatar route (#62)", () => {
   // One project is enough: the route has no layout.

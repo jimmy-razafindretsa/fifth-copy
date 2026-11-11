@@ -1,7 +1,10 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
+import { Client } from "pg";
 import sharp from "sharp";
 import { expect, test } from "../fixtures";
+import { createLobby } from "../race/helpers";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
 
 // Shared steps of the #60 picture specs: generated fixtures (no binary files in the repo) and the
@@ -70,3 +73,46 @@ export const cropOf = async (page: Page) =>
     y: number;
     size: number;
   };
+
+// Route specs (#62, #880): an avatar seeded the way uploadAvatar leaves it, two WebP files under
+// AVATAR_DIR (the server's default .data/avatars in this checkout) and the User row's key + status.
+export const AVATAR_DIR = path.resolve(".data/avatars");
+export const SEEDED_VERSION = 1_700_000_000_123;
+
+/** The guest id behind the page's `fc_guest` cookie. */
+export async function guestIdOf(page: Page): Promise<string> {
+  const cookie = (await page.context().cookies()).find((c) => c.name === "fc_guest");
+  expect(cookie, "fc_guest cookie").toBeDefined();
+  return cookie!.value.slice(0, cookie!.value.lastIndexOf("."));
+}
+
+/** Becomes a guest by creating a private race from the landing; returns the guest's user id. */
+export async function becomeGuest(page: Page): Promise<string> {
+  await createLobby(page);
+  return guestIdOf(page);
+}
+
+/** Seeds an APPROVED avatar at SEEDED_VERSION for `userId`; returns its cleanup. */
+export async function seedAvatar(userId: string) {
+  const dir = path.join(AVATAR_DIR, userId);
+  await mkdir(dir, { recursive: true });
+  for (const size of [256, 64]) {
+    const webp = await sharp({
+      create: { width: size, height: size, channels: 3, background: "#b4442e" },
+    })
+      .webp()
+      .toBuffer();
+    await writeFile(path.join(dir, `${SEEDED_VERSION}-${size}.webp`), webp);
+  }
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query(
+      `UPDATE "User" SET "avatarKey" = $1, "avatarStatus" = 'APPROVED' WHERE id = $2`,
+      [`${userId}/${SEEDED_VERSION}`, userId],
+    );
+  } finally {
+    await db.end();
+  }
+  return () => rm(dir, { recursive: true, force: true });
+}

@@ -27,7 +27,8 @@ export type LimitAction =
   | "password-reset-redeem-account"
   | "recovery-redeem"
   | "recovery-redeem-account"
-  | "guest-create";
+  | "guest-create"
+  | "avatar-view";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -83,6 +84,10 @@ export const LIMITS = {
   // cookie must not reset it), spent only when the save would mint a guest; sized above a class of
   // 100 behind one address, as `mint-race-token-new-guest`.
   "guest-create": { max: 120, windowMs: 60_000 },
+  // Another typist's avatar (#880, ADR 0022): one viewer's lookups (`user:<id>`), spent before the
+  // race server is asked. A full 30-desk roll is 29 portraits per version and size, so 240 a minute
+  // is a few rolls a minute; the owner's own avatar is never counted.
+  "avatar-view": { max: 240, windowMs: 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */

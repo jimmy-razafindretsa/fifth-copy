@@ -43,6 +43,10 @@ vi.mock("@/server/db", () => ({
   },
 }));
 
+// Lobby mates are #880's (access.test.ts): here nobody shares a lobby with anybody.
+const shareLobby = vi.hoisted(() => vi.fn(async () => false));
+vi.mock("@/features/lobby/server", () => ({ shareLobby }));
+
 const { GET } = await import("./[userId]/route");
 const { avatarStore } = await import("@/features/identity");
 
@@ -65,6 +69,7 @@ function get(userId: string, query = `size=256&v=${VERSION}`) {
 
 describe("GET /api/avatars/[userId]", () => {
   beforeEach(async () => {
+    shareLobby.mockClear();
     state.jar.clear();
     state.rows = [row("alice"), row("bob"), row("pending", { avatarStatus: "PENDING" })];
     for (const id of ["alice", "bob", "pending"]) {
@@ -85,15 +90,19 @@ describe("GET /api/avatars/[userId]", () => {
       expect(res.headers.get("content-type")).toBe("image/webp");
       expect(res.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(res.headers.get("vary")).toBe("Cookie");
       expect(Buffer.from(await res.arrayBuffer()).toString()).toBe(`alice-${size}`);
+      expect(shareLobby).not.toHaveBeenCalled();
     },
   );
 
-  it("C8: another viewer gets 404 (no lobby access until #65)", async () => {
+  it("C8: another viewer who shares no lobby gets 404 (#880 C5: private, Vary: Cookie)", async () => {
     as("bob");
     const res = await get("alice");
     expect(res.status).toBe(404);
+    expect(shareLobby).toHaveBeenCalledWith("bob", "alice");
     expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(res.headers.get("vary")).toBe("Cookie");
     expect(await res.arrayBuffer()).toHaveProperty("byteLength", 0);
   });
 
@@ -118,6 +127,8 @@ describe("GET /api/avatars/[userId]", () => {
     as("alice");
     const res = await get("alice", query);
     expect(res.status).toBe(400);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(res.headers.get("vary")).toBe("Cookie");
   });
 
   it("C8: a bad size is 400 for anonymous requests too (no auth needed to reject it)", async () => {

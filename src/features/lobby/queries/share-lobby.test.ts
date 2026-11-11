@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PROTOCOL_VERSION, type SharedRoomRequest } from "@fifth-copy/protocol";
 import type { InternalApiClient } from "@/server/internal-api/client";
 
 // #880 C1, C2: `shareLobby(viewer, owner)` over a stub race server client and a fake db. The fake
@@ -54,10 +55,15 @@ const now = () => NOW;
 
 type SharedAnswer = Awaited<ReturnType<InternalApiClient["sharedRoom"]>>;
 function client(answer: SharedAnswer | (() => Promise<SharedAnswer>)) {
-  const sharedRoom = vi.fn(typeof answer === "function" ? answer : async () => answer);
+  const sharedRoom = vi.fn<(request: SharedRoomRequest) => Promise<SharedAnswer>>(
+    typeof answer === "function" ? answer : async () => answer,
+  );
   return { client: { sharedRoom } as unknown as InternalApiClient, sharedRoom };
 }
-const shared = (value: boolean): SharedAnswer => ({ ok: true, data: { v: 1, shared: value } });
+const shared = (value: boolean): SharedAnswer => ({
+  ok: true,
+  data: { v: PROTOCOL_VERSION, shared: value },
+});
 const DOWN: SharedAnswer = { ok: false, error: "race-server-unavailable" };
 
 /** A race that ended `hoursAgo` before NOW (null: never ended) with these user ids (null: a bot). */
@@ -81,7 +87,7 @@ describe("shareLobby (#880)", () => {
       expect(sharedRoom).toHaveBeenCalledTimes(1);
       const request = sharedRoom.mock.calls[0]![0];
       expect(request.userIds).toEqual(["bob", "alice"]);
-      expect(typeof request.v).toBe("number");
+      expect(request.v).toBe(PROTOCOL_VERSION);
     });
 
     it("is false when the race server answers shared: false and no race was shared", async () => {

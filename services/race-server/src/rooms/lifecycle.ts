@@ -324,7 +324,9 @@ export function createLifecycle({
   async function begin(lobbyId: string, by: Starter) {
     const room = await registry.room(lobbyId);
     if (!room) return { ok: false, error: "not-waiting" } as const;
-    if (by !== "room" && (by.role !== "host" || by.sub !== room.hostUserId)) {
+    // The host is the room hash's `hostUserId` (ADR 0009), whatever role its token was minted with: a
+    // host promoted after its token (#137) holds a `player` token. A spectator socket never hosts.
+    if (by !== "room" && (by.role === "spectator" || by.sub !== room.hostUserId)) {
       return { ok: false, error: "not-host" } as const;
     }
     // `not-waiting`: a race is on (countdown or running).

@@ -1,11 +1,14 @@
 import {
   closeLobbyResponseSchema,
   raceResultsResponseSchema,
+  setLobbyHostResponseSchema,
   type CloseLobbyRequest,
   type CloseLobbyResponse,
   startRaceResponseSchema,
   type RaceResultsRequest,
   type RaceResultsResponse,
+  type SetLobbyHostRequest,
+  type SetLobbyHostResponse,
   type StartRaceRequest,
   type StartRaceResponse,
 } from "@fifth-copy/protocol";
@@ -30,6 +33,12 @@ export type WebApi = {
    * becomes CLOSED. Idempotent; the outbox (`persist/lobby-close.ts`) is the retry.
    */
   closeLobby(request: CloseLobbyRequest): Promise<CloseLobbyResponse>;
+  /**
+   * `POST /api/internal/lobbies/:id/host` (#137): the room's host left for good and the race server
+   * promoted another human, so `Lobby.hostUserId` follows. Idempotent; the outbox
+   * (`persist/lobby-host.ts`) is the retry.
+   */
+  setLobbyHost(request: SetLobbyHostRequest): Promise<SetLobbyHostResponse>;
 };
 
 /** A non-200 answer from the web; `status` lets a sender tell a final 404 from a retryable failure. */
@@ -144,6 +153,10 @@ export function createWebApi({
     closeLobby: (request) =>
       post(`/api/internal/lobbies/${encodeURIComponent(request.lobbyId)}/close`, request, (json) =>
         closeLobbyResponseSchema.parse(json),
+      ),
+    setLobbyHost: (request) =>
+      post(`/api/internal/lobbies/${encodeURIComponent(request.lobbyId)}/host`, request, (json) =>
+        setLobbyHostResponseSchema.parse(json),
       ),
   };
 }

@@ -76,6 +76,7 @@ export function createPresence({
   scheduler,
   durations,
   emit,
+  onExpired,
 }: {
   registry: RoomRegistry;
   desksState: DesksState;
@@ -84,6 +85,11 @@ export function createPresence({
   durations: Pick<Durations, "GRACE_MS">;
   /** `event` to the room (`line-cut`, `resumed`). */
   emit: (lobbyId: string, event: RaceEvent) => void;
+  /**
+   * A line-cut desk turned `expired` (#137 C2 b: its user is gone for good, the host role may pass).
+   * Called inside the room's queue: it must not call the registry's queued methods.
+   */
+  onExpired?: (lobbyId: string, userId: string) => Promise<void>;
 }): Presence {
   const counts = new Map<string, number>();
   /** Per room: userId -> desk and resume key, from `seated`. */
@@ -123,6 +129,7 @@ export function createPresence({
     cuts.get(lobbyId)?.delete(desk);
     setStatus(lobbyId, desk, "line-cut", "expired");
     await resumeKeys.drop(lobbyId, cut.userId);
+    await onExpired?.(lobbyId, cut.userId);
   }
 
   /** The grace ran out: the next tick sees `expired` and asks the lifecycle (all terminal?). */

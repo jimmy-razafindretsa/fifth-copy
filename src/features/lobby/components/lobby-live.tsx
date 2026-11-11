@@ -37,6 +37,7 @@ import {
   type RemoveState,
 } from "./remove-control";
 import { RemovedDocket } from "./removed-docket";
+import { newHostAnnouncement, newHostHoldMs, NewHostStampOverlay } from "./new-host-stamp";
 import { SeatRing } from "./seat-ring";
 import { InviteDocket } from "./invite-docket";
 import { InviteLinkRow } from "./invite-link-row";
@@ -254,6 +255,10 @@ export function LobbyLiveView({
           ) : null}
         </div>
         <div className={styles.roll}>
+          {/* the host left for good (#137): the NEW HOST stamp over the roll, until its hold ends */}
+          {state.newHost && known ? (
+            <NewHostStampOverlay stamp={state.newHost} members={state.members} labels={labels} />
+          ) : null}
           {state.phase === "reconnecting" ? (
             <p role="status" className={cn(styles.notice, styles.pulse)}>
               {labels.reconnecting}
@@ -294,8 +299,13 @@ export function LobbyLiveView({
               </InlineError>
             </div>
           ) : null}
+          {/* the roll's one polite region; while the NEW HOST stamp shows (#137, aria-hidden) it also
+              names the new host */}
           <p aria-live="polite" className={styles.srOnly}>
             {known ? playersLabel(labels, state.members.length) : ""}
+            {known && state.newHost
+              ? ` ${newHostAnnouncement(state.newHost, state.members, labels)}`
+              : ""}
           </p>
           {/* a public room's automatic start, its arrival and drop once each (#814); the ticking figure
               is never live, and a private room has no second region */}
@@ -420,6 +430,19 @@ export function LobbyLive({
     },
     [],
   );
+
+  // The NEW HOST stamp (#137) goes after slow x 5 (3 s under reduced motion); a later `new-host`
+  // replaces it and restarts the hold.
+  const newHostSeq = state.newHost?.seq ?? null;
+  useEffect(() => {
+    if (newHostSeq === null) return;
+    // the tokens live on :root, which also carries `data-motion="reduce"` (tokens.css)
+    const hold = newHostHoldMs(
+      getComputedStyle(document.documentElement).getPropertyValue("--motion-duration-slow"),
+    );
+    const id = setTimeout(() => dispatch({ type: "new-host-done", seq: newHostSeq }), hold);
+    return () => clearTimeout(id);
+  }, [newHostSeq]);
 
   function clearRemoveTimer() {
     if (removeTimer.current) clearTimeout(removeTimer.current);

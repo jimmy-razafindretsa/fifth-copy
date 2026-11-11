@@ -1,5 +1,5 @@
 import type { Member } from "@fifth-copy/protocol";
-import type { RoomRegistry } from "../rooms/registry";
+import type { NewHost, RoomRegistry } from "../rooms/registry";
 import type { Presence } from "./presence";
 
 /** What a member's leave touches; the socket server and the end of a race share it (#658). */
@@ -15,10 +15,16 @@ export type LeaveDeps = {
   onLobbyClosed: (lobbyId: string) => void;
   /** Sends the room's new roster to its members and spectators. */
   announce: (lobbyId: string, members: Member[]) => void;
+  /**
+   * The leave passed the host role on (#137): `event new-host { desk }` to the room and the web's
+   * `Lobby.hostUserId` through the outbox. Called after the roster went out; never awaited.
+   */
+  onNewHost: (lobbyId: string, host: NewHost) => void;
 };
 
 /**
- * Removes a member: the last human closes the room, otherwise the room gets the new roster. The
+ * Removes a member: the last human closes the room, otherwise the room gets the new roster (and,
+ * when the host left, its new host, #137: the same path serves a leave, a removal and `releaseDropped`). The
  * last human leaving an ended room (`kept`, #143) leaves its keys for "Race again" but frees the
  * room in this process as a close does (#658: nothing of the race outlives its last human here).
  */
@@ -27,11 +33,12 @@ export async function leaveRoom(
   lobbyId: string,
   userId: string,
 ): Promise<{ members: Member[]; closed: boolean; kept: boolean }> {
-  const { members, closed, kept } = await deps.registry.leave(lobbyId, userId);
+  const { members, closed, kept, newHost } = await deps.registry.leave(lobbyId, userId);
   if (closed || kept) deps.onRoomClosed(lobbyId);
   if (closed) deps.onLobbyClosed(lobbyId);
   else await deps.presence.left(lobbyId, userId);
   if (!closed) deps.announce(lobbyId, members);
+  if (newHost) deps.onNewHost(lobbyId, newHost);
   return { members, closed, kept };
 }
 

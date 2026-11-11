@@ -25,6 +25,8 @@ import {
   roomTypeResponseSchema,
   closeLobbyRequestSchema,
   closeLobbyResponseSchema,
+  setLobbyHostRequestSchema,
+  setLobbyHostResponseSchema,
   raceResultsRequestSchema as resultsSchema,
 } from "./index";
 
@@ -427,6 +429,42 @@ describe("lobby close (#734 C6)", () => {
 
   it("a close request never parses as a results request (the race server's outbox tells them apart)", () => {
     expect(resultsSchema.safeParse(close).success).toBe(false);
+  });
+});
+
+describe("lobby host transfer (#137 C3, C6)", () => {
+  const host = { v, lobbyId: "lob_1", hostUserId: "usr_a" };
+
+  it.each([
+    ["request example", setLobbyHostRequestSchema, host, true],
+    ["request empty hostUserId", setLobbyHostRequestSchema, { ...host, hostUserId: "" }, false],
+    [
+      "request oversize hostUserId",
+      setLobbyHostRequestSchema,
+      { ...host, hostUserId: "u".repeat(129) },
+      false,
+    ],
+    ["request missing hostUserId", setLobbyHostRequestSchema, { v, lobbyId: "lob_1" }, false],
+    ["request empty lobbyId", setLobbyHostRequestSchema, { ...host, lobbyId: "" }, false],
+    ["request previous v", setLobbyHostRequestSchema, { ...host, v: v - 1 }, false],
+    ["response changed", setLobbyHostResponseSchema, { v, lobbyId: "lob_1", changed: true }, true],
+    [
+      "response same host",
+      setLobbyHostResponseSchema,
+      { v, lobbyId: "lob_1", changed: false },
+      true,
+    ],
+    ["response missing changed", setLobbyHostResponseSchema, { v, lobbyId: "lob_1" }, false],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("a host request never parses as a close or a results request, nor they as it (the outbox tells them apart)", () => {
+    expect(closeLobbyRequestSchema.safeParse(host).success).toBe(false);
+    expect(resultsSchema.safeParse(host).success).toBe(false);
+    expect(setLobbyHostRequestSchema.safeParse({ v, lobbyId: "lob_1", closedAt: 1 }).success).toBe(
+      false,
+    );
   });
 });
 

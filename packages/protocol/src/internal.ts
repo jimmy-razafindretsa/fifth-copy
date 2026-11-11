@@ -268,6 +268,28 @@ export const closeLobbyResponseSchema = z.object({
 });
 export type CloseLobbyResponse = z.infer<typeof closeLobbyResponseSchema>;
 
+/**
+ * `POST /api/internal/lobbies/:id/host` (race server -> web, #137, ADR 0006 point 6): the room's host
+ * left for good and the race server promoted `hostUserId` (the earliest-joined remaining human), so
+ * the `Lobby` row's durable copy follows (ADR 0008: the room hash is the live truth, the row is what
+ * the web's host-only actions read). Idempotent: the same host answers `changed: false`. Sent through
+ * the race server's outbox, retried like results.
+ */
+export const setLobbyHostRequestSchema = z.object({
+  v: versionSchema,
+  lobbyId: idSchema,
+  hostUserId: idSchema,
+});
+export type SetLobbyHostRequest = z.infer<typeof setLobbyHostRequestSchema>;
+
+export const setLobbyHostResponseSchema = z.object({
+  v: versionSchema,
+  lobbyId: idSchema,
+  /** True when this call wrote `hostUserId`; false when the row already named that host. */
+  changed: z.boolean(),
+});
+export type SetLobbyHostResponse = z.infer<typeof setLobbyHostResponseSchema>;
+
 export const internalErrorSchema = z.object({
   v: versionSchema,
   error: z.enum([
@@ -291,11 +313,11 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   timestamp: "1767225600",
   nonce: "5f2b9c0e8a4d4e1b9f3a7c6d2e1b0a98",
   body:
-    '{"v":15,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":16,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "3b4338b7e8b21467800eeea206fc0e7526df9551961bf688bd6f11c0324b9631",
+  signature: "d1351d176a6c56bb63174dc4dd20c29ed5d153360016611b80169329e5fa1226",
 } as const;

@@ -52,6 +52,7 @@ function deps({
     onRoomClosed: vi.fn(),
     onLobbyClosed: vi.fn(),
     announce: vi.fn(),
+    onNewHost: vi.fn(),
   } satisfies LeaveDeps;
   return d;
 }
@@ -79,6 +80,39 @@ describe("leaveRoom (#143)", () => {
     expect(plain.onRoomClosed).not.toHaveBeenCalled();
     expect(plain.presence.left).toHaveBeenCalledWith("lob", "b");
     expect(plain.announce).toHaveBeenCalledWith("lob", [bot]);
+  });
+});
+
+describe("leaveRoom hands the host role over (#137 C2, C3)", () => {
+  it("a leave that promotes a new host announces the roster first, then reports the new host once", async () => {
+    const promoted = { ...bot, userId: "a", isBot: false, isHost: true };
+    const d = deps({
+      phase: "waiting",
+      result: () => ({
+        members: [promoted],
+        closed: false,
+        kept: false,
+        newHost: { userId: "a", desk: 1 },
+      }),
+    });
+    const order: string[] = [];
+    d.announce.mockImplementation(() => void order.push("announce"));
+    d.onNewHost.mockImplementation(() => void order.push("new-host"));
+    await leaveRoom(d, "lob", "host");
+    expect(d.onNewHost).toHaveBeenCalledExactlyOnceWith("lob", { userId: "a", desk: 1 });
+    expect(order).toEqual(["announce", "new-host"]);
+  });
+
+  it("a leave without a promotion (a guest, a closing room) reports no new host", async () => {
+    const plain = deps({ result: () => ({ members: [bot], closed: false, kept: false }) });
+    await leaveRoom(plain, "lob", "b");
+    const closed = deps({
+      phase: "waiting",
+      result: () => ({ members: [], closed: true, kept: false }),
+    });
+    await leaveRoom(closed, "lob", "host");
+    expect(plain.onNewHost).not.toHaveBeenCalled();
+    expect(closed.onNewHost).not.toHaveBeenCalled();
   });
 });
 

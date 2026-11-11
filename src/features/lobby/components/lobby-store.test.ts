@@ -114,6 +114,8 @@ describe("reduceLobby", () => {
       raceId: null,
       settings: null,
       autoStart: NO_AUTO_START,
+      newHost: null,
+      newHosts: 0,
     });
   });
 
@@ -127,6 +129,8 @@ describe("reduceLobby", () => {
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
       autoStart: NO_AUTO_START,
+      newHost: null,
+      newHosts: 0,
     });
   });
 
@@ -242,6 +246,8 @@ describe("bindRoomSocket", () => {
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
       autoStart: { ...NO_AUTO_START, offset: expect.any(Number) },
+      newHost: null,
+      newHosts: 0,
     });
   });
 });
@@ -401,6 +407,8 @@ describe("countdown and the resume key (#214 C2)", () => {
       raceId: RACE_ID,
       settings: DEFAULT_RACE_SETTINGS,
       autoStart: NO_AUTO_START,
+      newHost: null,
+      newHosts: 0,
     });
     // a roster while the page moves keeps it starting
     const later = reduceLobby(state, {
@@ -502,6 +510,8 @@ describe("welcome during the countdown (#659)", () => {
         raceId: RACE_ID,
         settings: DEFAULT_RACE_SETTINGS,
         autoStart: NO_AUTO_START,
+        newHost: null,
+        newHosts: 0,
       });
     },
   );
@@ -525,6 +535,8 @@ describe("welcome during the countdown (#659)", () => {
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
       autoStart: NO_AUTO_START,
+      newHost: null,
+      newHosts: 0,
     });
   });
 
@@ -1113,7 +1125,7 @@ describe("removed (#133 C5)", () => {
     const before = run({ type: "welcome", payload: welcome(2, [ada, bob]) });
     const other: LobbyEvent = {
       type: "event",
-      payload: { v: PROTOCOL_VERSION, kind: "new-host", desk: 2 },
+      payload: { v: PROTOCOL_VERSION, kind: "new-leader", desk: 2 },
     };
     expect(reduceLobby(before, other)).toBe(before);
   });
@@ -1175,5 +1187,58 @@ describe("removed (#133 C5)", () => {
     expect(events.reduce(reduceLobby, initialLobbyState).phase).toBe("removed");
     expect(mint).toHaveBeenCalledTimes(1);
     expect(setTimer).not.toHaveBeenCalled();
+  });
+});
+
+// #137 C4: the host left for good. The roster (sent first) moves the HOST tag and the controls; the
+// `new-host` event puts the NEW HOST stamp over the roll until its hold ends or the next one replaces it.
+describe("new host (#137 C4)", () => {
+  const newHost = (desk: number): LobbyEvent => ({
+    type: "event",
+    payload: { v: PROTOCOL_VERSION, kind: "new-host", desk },
+  });
+  const promoted: RoomEvents["roster"] = {
+    v: PROTOCOL_VERSION,
+    members: [{ ...bob, isHost: true }, cyd],
+  };
+
+  it("new-host stamps the promoted desk with seq 1; the roster makes the viewer host", () => {
+    const state = run(
+      { type: "welcome", payload: welcome(2, [ada, bob, cyd]) },
+      { type: "roster", payload: promoted },
+      newHost(2),
+    );
+    expect(state.newHost).toEqual({ desk: 2, seq: 1 });
+    expect(state.members.find((m) => m.desk === 2)?.isHost).toBe(true);
+    expect(state.members.some((m) => m.name === "Ada")).toBe(false);
+    expect(state.phase).toBe("live");
+  });
+
+  it("the hold's end clears its own stamp only; a later new-host replaces it with the next seq", () => {
+    const first = run({ type: "welcome", payload: welcome(5, [ada, bob, cyd]) }, newHost(2));
+    const second = reduceLobby(first, newHost(5));
+    expect(second.newHost).toEqual({ desk: 5, seq: 2 });
+    // the first stamp's timer firing late leaves the second
+    expect(reduceLobby(second, { type: "new-host-done", seq: 1 })).toBe(second);
+    const gone = reduceLobby(second, { type: "new-host-done", seq: 2 });
+    expect(gone.newHost).toBeNull();
+    expect(reduceLobby(gone, newHost(2)).newHost).toEqual({ desk: 2, seq: 3 });
+  });
+
+  it("a reconnect's welcome keeps the stamp and its count", () => {
+    const stamped = run({ type: "welcome", payload: welcome(5, [ada, bob, cyd]) }, newHost(2));
+    const again = reduceLobby(stamped, { type: "welcome", payload: welcome(5, [bob, cyd]) });
+    expect(again.newHost).toEqual({ desk: 2, seq: 1 });
+    expect(again.newHosts).toBe(1);
+  });
+
+  it("bindRoomSocket forwards new-host", () => {
+    const { socket, fire } = fakeSocket();
+    const dispatch = vi.fn();
+    bindRoomSocket(socket, dispatch, { versionReload: { reload: vi.fn(), storage: null } });
+    const payload = { v: PROTOCOL_VERSION, kind: "new-host", desk: 2 };
+    fire("event", payload);
+    fire("event", { v: PROTOCOL_VERSION, kind: "new-leader", desk: 2 });
+    expect(dispatch.mock.calls).toEqual([[{ type: "event", payload }]]);
   });
 });

@@ -16,6 +16,13 @@ export type LastLeave = {
    */
   closes(lobbyId: string, userId: string): Promise<boolean>;
   /**
+   * Whether `userId` hosts an `ended` room (#137): opening the Dawn report closes every member's
+   * socket, so while another human is seated the host's leave waits out the same grace and promotes
+   * nobody if the host is back (Race again) or every member left with it (the room is then kept, #143).
+   * Read in the room's queue.
+   */
+  hostOfEnded(lobbyId: string, userId: string): Promise<boolean>;
+  /**
    * Runs `leave` after `LAST_LEAVE_GRACE_MS` unless the user has a socket on the room again by then
    * (a reload or a reconnect keeps the room and its lobby). A second defer of the same user restarts it.
    */
@@ -49,6 +56,14 @@ export function createLastLeave({
         if (room?.phase !== "waiting") return false;
         const humans = room.seated.filter((desk) => !desk.isBot);
         return humans.length === 1 && humans[0]!.userId === userId;
+      }),
+
+    hostOfEnded: (lobbyId, userId) =>
+      registry.withRoom(lobbyId, async () => {
+        const room = await registry.room(lobbyId);
+        if (room?.phase !== "ended" || room.hostUserId !== userId) return false;
+        // The last human's leave keeps the room (#143) and promotes nobody: no need to wait.
+        return room.seated.some((desk) => !desk.isBot && desk.userId !== userId);
       }),
 
     defer(lobbyId, userId, leave) {

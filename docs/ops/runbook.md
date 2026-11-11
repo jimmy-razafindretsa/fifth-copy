@@ -38,3 +38,32 @@ The import runs `scripts/db-guard.sh`, which refuses any host that is not local 
 variables. `railway run --service web <command>` from a local checkout works the same way when the variables it
 injects point at a host your machine can reach (the public proxy host instead of the private one). The container
 imports the files of the deployed commit: merge new content files first, then import.
+
+## Stale deploy
+
+The `deploy-check` workflow (`.github/workflows/deploy-check.yml`, #718) runs after every push to `main`. It reads the
+public web `/api/health` and race-server `/health` every 30 s for up to 20 min and compares each service's `commit`
+and `protocol` with `main` (`scripts/deploy-check.ts`). It needs the repository variables `WEB_PUBLIC_URL` and
+`RACE_SERVER_PUBLIC_URL` (public URLs, not secrets: `gh variable set WEB_PUBLIC_URL --body <web URL>`).
+
+**Read the red check.** Open the failed `deploy-check` run; the job summary lists one line per failing service:
+
+- `STALE <service> deployed=<sha> expected=<sha>`: the service still runs `deployed`, older than the newest `main`
+  commit that touches its watch paths (`expected`, ADR 0019). Usually a failed Railway build or a skipped deploy.
+  `deployed=null` means the health endpoint did not answer or Railway gave no commit.
+- `PROTOCOL <service> deployed=<n> main=<n>`: the service speaks another `PROTOCOL_VERSION` than `main`; web and
+  race-server then reject each other's handshake (ADR 0006).
+
+A service whose watch paths did not change keeps its older commit and stays green: Railway skipped it on purpose.
+A missing repository variable fails the run with a line naming it.
+
+**Redeploy by hand** (CI holds no Railway token and never redeploys):
+
+1. Railway dashboard: project, the named service (`web` or `race-server`), Deployments. If the latest deployment
+   failed, read its build log first and fix the cause on `main`.
+2. Redeploy the deployment built from the newest `main` commit (its menu, Redeploy), or from a shell already
+   logged in to Railway: `railway redeploy --service <web|race-server>`.
+3. Wait until Railway marks the deployment Active and its healthcheck passes.
+
+**Confirm.** Actions, `deploy-check`, Run workflow on `main` (`workflow_dispatch`, or
+`gh workflow run deploy-check.yml --ref main`). The run goes green with an `OK` line.

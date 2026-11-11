@@ -10,6 +10,7 @@ import {
   boot,
   connectError,
   fixtureWebApi,
+  hostCheckingWebApi,
   postRoomType,
   SECRET,
   startedRace,
@@ -567,4 +568,61 @@ describe("host transfer when the host leaves (#137 C2, C3)", () => {
     expect(a.seen.events.filter((e) => e.kind === "new-host")).toEqual([]);
     expect(a.seen.roster?.find((m) => m.desk === host.desk)?.isHost).toBe(true);
   });
+});
+
+describe("the held automatic start survives the host transfer it waited for (#897 C2)", () => {
+  it("public room, the host leaves for good inside the instant: at the grace's end the race starts with the promoted host against a web that checks the host", async () => {
+    const web = hostCheckingWebApi({ now: () => 0 });
+    // The web records the transfer later than the room fires its start.
+    web.state.beforeHost = () => new Promise((resolve) => setTimeout(resolve, 300));
+    t = await boot(process.env.REDIS_URL, { webApi: web.api });
+    const booted = t;
+    const lobby = await booted.openRoom("KGB-4821", {
+      ...DEFAULT_RACE_SETTINGS,
+      lobbyType: "public",
+      bots: [{ level: "clerk" }],
+    });
+    const join = async (sub: string, name: string, role: "host" | "player" = "player") => {
+      const client = booted.connect({
+        v: PROTOCOL_VERSION,
+        token: await booted.token({ lobby, sub, name, role }),
+      });
+      const seen = Object.assign(track(client), {
+        autoStart: [] as (number | null)[],
+        countdown: 0,
+      });
+      client.on("auto-start", (a) => void seen.autoStart.push(a.startsAt));
+      client.on("countdown", () => void (seen.countdown += 1));
+      await until(() => !!seen.welcome, WAIT_MS, `welcome ${name}`);
+      return { client, seen };
+    };
+    const host = await join("usr_host", "Ada", "host");
+    await until(() => host.seen.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = host.seen.autoStart[0]!;
+    const a = await join("usr_a", "Bea");
+    expect(a.seen.welcome!.autoStartAt).toBe(startsAt);
+
+    booted.clock.advance(startsAt - booted.clock.now() - 1_000);
+    host.client.disconnect();
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "host leave deferred");
+    booted.clock.advance(1_000);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(a.seen.countdown).toBe(0);
+    expect(web.logOf(lobby)).toEqual([]);
+
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1_000);
+    await until(
+      () => {
+        booted.clock.advance(0);
+        return a.seen.countdown === 1;
+      },
+      WAIT_MS,
+      "countdown under the promoted host",
+    );
+    expect(web.logOf(lobby)).toEqual(["host usr_a", "start usr_a"]);
+    expect(web.calls.find((c) => c.lobbyId === lobby)).toMatchObject({ hostUserId: "usr_a" });
+    // The automatic start was never dropped.
+    expect(a.seen.autoStart).toEqual([]);
+    expect(a.seen.roster?.find((m) => m.name === "Bea")?.isHost).toBe(true);
+  }, 20_000);
 });

@@ -224,7 +224,8 @@ export function createRaceServer({
   };
 
   // Host transfer (#137, spec 5.4): the room hears `event new-host { desk }` (after the roster that
-  // flags the new host); the web's `Lobby.hostUserId` follows through the outbox, never awaited.
+  // flags the new host); the web's `Lobby.hostUserId` follows through the outbox, never awaited by
+  // the leave; a start flushes it before its own call (#897, `syncHost`).
   const onNewHost = (lobbyId: string, host: NewHost) => {
     roomEvent(lobbyId, { v: PROTOCOL_VERSION, kind: "new-host", desk: host.desk });
     log("new host", { lobby: lobbyId, desk: host.desk });
@@ -334,6 +335,8 @@ export function createRaceServer({
     ...raceHooks,
     // An armed auto-start waits out a pending leave grace (#890); `lastLeave` is created below.
     leavePending: (lobbyId) => lastLeave.pending(lobbyId),
+    // A start delivers the room's host transfer first (#897): the web checks the host it recorded.
+    syncHost: (lobbyId) => outbox.flush(lobbyHostOutboxId(lobbyId)),
   });
   const secret = env.RACE_TOKEN_SECRET;
   let draining = false;

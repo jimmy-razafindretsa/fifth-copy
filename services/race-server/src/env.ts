@@ -28,6 +28,8 @@ const schema = z.object({
   RACE_DRAIN_CAP_S: z.coerce.number().int().min(1).max(3600).default(DEFAULT_DRAIN_CAP_S),
   /** Railway's SIGTERM-to-SIGKILL time when set as a service variable (ADR 0019); boot warns if short. */
   RAILWAY_DEPLOYMENT_DRAINING_SECONDS: z.coerce.number().int().min(0).optional(),
+  /** Railway's provided commit of the running deployment (#718): GET /health shows it, null when unset. */
+  RAILWAY_GIT_COMMIT_SHA: z.string().min(1).max(64).optional(),
 });
 
 export type RaceServerEnv = z.infer<typeof schema>;
@@ -43,6 +45,7 @@ export function parseEnv(source: Record<string, string | undefined> = process.en
     RACE_GRACE_MS: source.RACE_GRACE_MS || undefined,
     RACE_DRAIN_CAP_S: source.RACE_DRAIN_CAP_S,
     RAILWAY_DEPLOYMENT_DRAINING_SECONDS: source.RAILWAY_DEPLOYMENT_DRAINING_SECONDS,
+    RAILWAY_GIT_COMMIT_SHA: source.RAILWAY_GIT_COMMIT_SHA || undefined,
   });
   if (!result.success) {
     const names = result.error.issues.map((i) => i.path.join(".")).join(", ");

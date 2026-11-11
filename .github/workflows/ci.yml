@@ -148,10 +148,13 @@ jobs:
   e2e-shard:
     # Playwright, functional + a11y, split into shards (#532): one runner ran ~250 tests in ~17 min and
     # hit the 20-min timeout. Each shard has its own services and build; `e2e` below is the required check.
-    # Two suites (#891): `parallel` shards every test but the @matchmaking ones; `matchmaking` shards the
-    # serial matchmaking project (playwright.config.ts, workers 1). Sharded together, that project sorted
-    # last and all of it ran one test at a time in the last shard, which reached the 15-min timeout. Each
-    # job has its own servers, Redis and DB, so a matchmaking shard still sees no other test's public room.
+    # Suites (#891), each sharded on its own so no shard collects a slow tail: `parallel` = everything but
+    # e2e/race and @matchmaking; `race-desktop` = e2e/race on desktop, where most race specs run (they
+    # skip mobile/tablet at runtime, yet the skipped tests still count when Playwright splits shards by
+    # test count, so every real race run used to land in the last shard: 10.8 min); `race-small` = e2e/race
+    # on mobile and tablet; `matchmaking` = the serial project (playwright.config.ts, workers 1), which
+    # sorted last too. Each job has its own servers, Redis and DB, so matchmaking stays isolated.
+    # scripts/ci-workflow.test.ts checks that the suites' --list outputs partition the full suite.
     name: e2e (${{ matrix.suite }} ${{ matrix.shard }}/${{ matrix.shardTotal }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -160,13 +163,47 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [parallel]
-        filter: ["--grep-invert=@matchmaking"]
-        shard: [1, 2, 3, 4, 5, 6]
-        shardTotal: [6]
         include:
-          - { suite: matchmaking, filter: "--project=matchmaking", shard: 1, shardTotal: 2 }
-          - { suite: matchmaking, filter: "--project=matchmaking", shard: 2, shardTotal: 2 }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 1,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 2,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 3,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 4,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 5,
+              shardTotal: 5,
+            }
+          - { suite: race-desktop, filter: "--project=desktop e2e/race/", shard: 1, shardTotal: 3 }
+          - { suite: race-desktop, filter: "--project=desktop e2e/race/", shard: 2, shardTotal: 3 }
+          - { suite: race-desktop, filter: "--project=desktop e2e/race/", shard: 3, shardTotal: 3 }
+          - {
+              suite: race-small,
+              filter: "--project=mobile --project=tablet e2e/race/",
+              shard: 1,
+              shardTotal: 1,
+            }
+          - { suite: matchmaking, filter: "--project=matchmaking", shard: 1, shardTotal: 1 }
     services:
       postgres:
         image: postgres:17-alpine

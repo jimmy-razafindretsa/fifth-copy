@@ -5,8 +5,11 @@ and what removes it. Card #71 (epic #29). Requirements: R1, R152, R164. Index: [
 
 Users are students aged 12 to 17. Most of them play as guests: a random typist name and typing statistics tied to a
 cookie, nothing that names them. Fifth Copy never asks for an email address, a real name, a birth date or a school
-(ADR 0009). Avatars are seen only by the members of a lobby (ADR 0014), and by the operator when a picture is held
-for review or reported, only to check it against the rules ([moderation.md](moderation.md)).
+(ADR 0009). An approved avatar is seen by three audiences only (ADR 0022): its owner, the members of the same live
+room (the race server answers, `shareLobby`), and anyone who raced in the same race, for 24 h after that race ended.
+A viewer's browser keeps a picture it was served in its own private cache (ADR 0014 headers: `private`, one year), so
+that copy can outlive the viewer's access; Fifth Copy keeps no copy anywhere else. The operator also sees a picture
+when it is held for review or reported, only to check it against the rules ([moderation.md](moderation.md)).
 
 How to read this table:
 - **Necessity** answers Law 25 s. 5: collect only what the stated purpose needs. "Needed" means the feature cannot
@@ -31,7 +34,7 @@ How to read this table:
 | Teacher reset codes | Let a lobby host give a student who lost a password a single-use, 30-minute reset code (#788); each row is also the audit record: student, issuing host, room code, issue, expiry and use times. Only the Argon2id hash of the code is stored. Only accounts the owner flags as teachers (`User.isTeacher`, set by `scripts/grant-teacher.ts`) may issue one | Needed: no email exists to reset a password (ADR 0009); the audit lets a reset be traced to the adult who issued it | [Accounts](retention.md#periods) | `prisma/schema/identity.prisma` `PasswordReset`, `User.isTeacher` | #81 (cascade with the student; the issuer link is cleared), purge of old rows #86 | in schema |
 | OAuth provider id | Sign in with GitHub, Discord or Google: provider name and provider account id | Optional: only students who choose a provider | [Accounts](retention.md#periods) | `prisma/schema/identity.prisma` `OAuthAccount` | #81, #828 | in schema |
 | Session cookie and token version | Keep a signed-in student signed in; the version revokes old sessions | Needed for accounts | [Session cookie](retention.md#periods) | browser cookie (Auth.js JWT, #38), `prisma/schema/identity.prisma` `User.tokenVersion` | sign-out, expiry, #81 | planned #38 (cookie), in schema (version) |
-| Avatar file | Picture shown to lobby members; uploaded or imported from GitHub, Discord or Google | Optional | [Avatars](retention.md#periods) | `AVATAR_DIR` private volume (ADR 0014), `prisma/schema/identity.prisma` `User.avatarKey` | #64 (rejected pictures), #81 | in schema |
+| Avatar file | Picture shown to its owner, live room mates and race mates for 24 h after the race ends (ADR 0022; kept in the viewer's browser cache, ADR 0014); uploaded or imported from GitHub, Discord or Google | Optional | [Avatars](retention.md#periods) | `AVATAR_DIR` private volume (ADR 0014), `prisma/schema/identity.prisma` `User.avatarKey` | #64 (rejected pictures), #81 | in schema |
 | Avatar status | Hide a picture until it is approved (`PENDING`, `REJECTED`) | Needed while avatars exist | [Accounts](retention.md#periods) | `prisma/schema/identity.prisma` `User.avatarStatus` | #81 | in schema |
 | Clerk outfit | The look of the student's 3D clerk on the landing, the podium and later the locker (hair, glasses, hat, clothes, face, hair colour ids, #687) | Optional, cosmetic: a fixed per-desk outfit replaces it | [Accounts](retention.md#periods) | `prisma/schema/identity.prisma` `User.outfit` | #81, #86 | in schema |
 | Preferences | Language, theme, keyboard layout and other settings | Needed for the settings the student picks | [Accounts](retention.md#periods) | `prisma/schema/identity.prisma` `Preference`; browser cookies (`src/features/preferences/cookie.ts`) | #81 | in schema (table), in code (cookies) |

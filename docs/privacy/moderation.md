@@ -14,8 +14,10 @@ qualified person are listed in [Needs qualified review](#needs-qualified-review)
 
 - **Users are minors** (12 to 17, R1). Every step collects as little as possible and never asks a student for an
   email address or any new personal information (ADR 0009, `docs/privacy/responsible.md`).
-- **No chat** (R162). The only things another player can see are a username, an avatar (lobby members only) and
-  race behaviour. Moderation covers exactly those three.
+- **No chat** (R162). The only things another player can see are a username, an avatar and race behaviour. An
+  approved avatar is seen by its owner, live room mates and race mates for 24 h after the race ends (ADR 0022); a
+  viewer's browser keeps the picture it was served in its own cache (ADR 0014), so hiding it later does not reach
+  that copy. Moderation covers exactly those three.
 - **Fail safe.** When in doubt, hide first (default portrait, generated name, race excluded from stats), decide
   after. Hiding is reversible; a student's picture shown to a class is not.
 - **A flag is not proof.** Filters and anti-cheat checks produce false positives. A person decides any consequence
@@ -90,7 +92,7 @@ school ID). A photo of the student's own face is allowed but discouraged.
 
 **Pipeline** (cards #62 and #64, ADR 0015). Every uploaded picture, and every picture imported from GitHub or
 Discord, is re-encoded, then checked by a local heuristic. No picture leaves the server for checking.
-- `approve`: shown to lobby members.
+- `approve`: shown to its owner, live room mates and race mates for 24 h after the race ends (ADR 0022).
 - `flag`: status `PENDING`. Files are kept, and **everyone, including the owner, sees the default portrait**. The
   owner sees "your picture is being reviewed".
 - `reject`: files deleted, the previous approved picture stays, the owner sees the rejection message with the appeal

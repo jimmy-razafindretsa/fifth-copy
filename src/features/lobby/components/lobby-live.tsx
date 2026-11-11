@@ -29,6 +29,7 @@ import {
   type LobbyState,
 } from "./lobby-store";
 import { PlayerList, PlayerListSkeleton } from "./player-list";
+import { portraitSlot } from "./portrait-cell";
 import {
   canRemove,
   confirmHoldMs,
@@ -283,6 +284,7 @@ export function LobbyLiveView({
               members={state.members}
               you={state.you}
               labels={labels}
+              leading={portraitSlot}
               tags={removable ? removeTag : undefined}
             />
           ) : null}

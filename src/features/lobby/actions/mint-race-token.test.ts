@@ -69,6 +69,22 @@ describe("mintRaceToken (unit, fake DB)", () => {
     expect(fake.db.user.create).not.toHaveBeenCalled();
   });
 
+  it("#730: the token carries the version of the viewer's approved avatar, null otherwise", async () => {
+    const none = await mintRaceToken({ code: "KGB-4821" });
+    if (!none.ok) throw new Error(none.error);
+    expect((await verified(none.token)).claims.avatar).toBeNull();
+
+    Object.assign(fake.users[0]!, { avatarStatus: "PENDING", avatarKey: `${hostId}/3` });
+    const pending = await mintRaceToken({ code: "KGB-4821" });
+    if (!pending.ok) throw new Error(pending.error);
+    expect((await verified(pending.token)).claims.avatar).toBeNull();
+
+    Object.assign(fake.users[0]!, { avatarStatus: "APPROVED", avatarKey: `${hostId}/4` });
+    const approved = await mintRaceToken({ code: "KGB-4821" });
+    if (!approved.ok) throw new Error(approved.error);
+    expect((await verified(approved.token)).claims.avatar).toBe(4);
+  });
+
   it("C6: another browser becomes a guest player; its second call reuses the same sub", async () => {
     state.jar = new Map();
     const first = await mintRaceToken({ code: "KGB-4821" });

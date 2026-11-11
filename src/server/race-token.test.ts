@@ -16,6 +16,7 @@ const claims: RaceTokenClaims = {
   name: "Ada",
   lobby: "lob_1",
   role: "host",
+  avatar: null,
 };
 
 describe("signRaceToken", () => {

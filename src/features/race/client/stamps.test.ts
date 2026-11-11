@@ -24,6 +24,7 @@ const member = (desk: number, name: string, isHost = false): Member => ({
   isBot: false,
   color: (desk - 1) % 12,
   marker: (["circle", "square", "triangle", "diamond"] as const)[Math.floor((desk - 1) / 12) % 4]!,
+  avatar: null,
 });
 const ROSTER = [member(1, "Sparrow-137", true), member(3, "Heron-411"), member(5, "Lynx-785")];
 const newHost = (desk: number) => ({ v: PROTOCOL_VERSION, kind: "new-host", desk }) as const;

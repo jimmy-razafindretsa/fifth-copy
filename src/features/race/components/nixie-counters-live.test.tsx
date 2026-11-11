@@ -48,6 +48,7 @@ const member = (desk: number): Member => ({
   isBot: false,
   color: desk - 1,
   marker: "circle",
+  avatar: null,
 });
 const welcome: Welcome = {
   v: PROTOCOL_VERSION,

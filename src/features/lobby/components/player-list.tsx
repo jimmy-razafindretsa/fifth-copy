@@ -34,7 +34,9 @@ export function PlayerList({
           <span className={styles.label}>{deskLabel(labels, member.desk)}</span>
           <span className={styles.who}>
             {leading?.(member)}
-            <span className={styles.name}>{member.name}</span>
+            <span className={styles.name} data-name>
+              {member.name}
+            </span>
             {member.isHost && !member.isBot ? (
               <Stamp lines={[labels.host]} tone="red" size="sm" rotation={-6} role={null} />
             ) : null}

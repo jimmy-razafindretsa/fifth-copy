@@ -45,6 +45,11 @@ export const nameSchema = z
   .max(MAX_NAME_LENGTH)
   .refine((name) => !UNPRINTABLE_IN_NAME.test(name), "printable characters only");
 export const idSchema = z.string().min(1).max(MAX_ID_LENGTH);
+/**
+ * The version of a user's approved avatar (`User.avatarKey` = `<userId>/<version>`, ADR 0014): what
+ * `/api/avatars/<userId>?v=` asks for (#730). A positive safe integer.
+ */
+export const avatarVersionSchema = z.int().positive();
 /** Chosen by the race server (uuid v4) so `POST /api/internal/races` is idempotent. */
 export const raceIdSchema = z.uuidv4();
 /** Milliseconds of a server epoch (or a client clock). Never negative. */

@@ -17,7 +17,17 @@ describe("race token claims", () => {
     ["wrong role", { ...example, role: "admin" }, false],
     ["oversize name", { ...example, name: "a".repeat(65) }, false],
     ["oversize lobby", { ...example, lobby: "l".repeat(129) }, false],
+    // #730: the approved avatar's version, read by the web at mint; null or absent = none.
+    ["avatar version", { ...example, avatar: 3 }, true],
+    ["avatar null", { ...example, avatar: null }, true],
+    ["avatar 0", { ...example, avatar: 0 }, false],
+    ["avatar fractional", { ...example, avatar: 1.5 }, false],
+    ["avatar string", { ...example, avatar: "3" }, false],
   ])("raceTokenClaimsSchema: %s", (_, payload, ok) => {
     expect(raceTokenClaimsSchema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("reads an absent avatar claim as null (#730)", () => {
+    expect(raceTokenClaimsSchema.parse(example).avatar).toBeNull();
   });
 });

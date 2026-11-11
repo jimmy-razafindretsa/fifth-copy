@@ -186,6 +186,7 @@ const member = (n: number, name: string): Member => ({
   isBot: false,
   color: (n - 1) % 12,
   marker: (["circle", "square", "triangle", "diamond"] as const)[(n - 1) % 4]!,
+  avatar: null,
 });
 
 const TEXT = "Le reçu des formulaires";

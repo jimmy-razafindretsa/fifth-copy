@@ -38,7 +38,7 @@ const hostTag = (page: Page, name: string) =>
 /** The viewer's own name: the roll row that carries the YOU tag. */
 async function ownName(page: Page): Promise<string> {
   const row = roll(page).filter({ has: page.getByText("YOU", { exact: true }) });
-  return ((await row.locator("span").nth(2).textContent()) ?? "").trim();
+  return ((await row.locator("[data-name]").textContent()) ?? "").trim();
 }
 
 test.describe("host transfer (#137)", () => {

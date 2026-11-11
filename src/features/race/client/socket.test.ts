@@ -69,6 +69,7 @@ const member = {
   isBot: false,
   color: 0,
   marker: "circle",
+  avatar: null,
 } as const;
 const welcome: Welcome = {
   v: PROTOCOL_VERSION,

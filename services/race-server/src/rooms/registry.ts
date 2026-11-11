@@ -1,6 +1,7 @@
 import type { ChainableCommander, Redis } from "ioredis";
 import { z } from "zod";
 import {
+  avatarVersionSchema,
   botLevelSchema,
   deskIdentity,
   endReasonSchema,
@@ -196,7 +197,11 @@ export type RoomRegistry = {
     created: boolean;
     room: Room & { phase: "waiting" };
   }>;
-  join(lobbyId: string, member: { userId: string; name: string }): Promise<JoinResult>;
+  /** `avatar`: the version of the member's approved avatar from its race token (#730), or none. */
+  join(
+    lobbyId: string,
+    member: { userId: string; name: string; avatar?: number | null },
+  ): Promise<JoinResult>;
   leave(lobbyId: string, userId: string): Promise<LeaveResult>;
   /**
    * Seats one bot member per entry (#156): `settings.bots` and the bot records of the members hash
@@ -342,13 +347,15 @@ async function execAll(lobbyId: string, tx: ChainableCommander) {
 const raceDesksSchema = startRaceRequestSchema.shape.desks;
 
 /**
- * A members-hash record: humans `{ desk, name, joinedAt }` (`joinedAt`: server ms epoch of the seat,
- * #137, additive: older records have none), bots also `isBot: true` and their level (#156).
+ * A members-hash record: humans `{ desk, name, joinedAt, avatar }` (`joinedAt`: server ms epoch of
+ * the seat, #137; `avatar`: the version of the member's approved avatar from its race token, #730;
+ * both additive: older records have none), bots also `isBot: true` and their level (#156).
  */
 const seatSchema = z.object({
   desk: z.int().min(1),
   name: z.string().min(1),
   joinedAt: z.number().int().nonnegative().optional(),
+  avatar: avatarVersionSchema.optional(),
   isBot: z.literal(true).optional(),
   level: botLevelSchema.optional(),
 });
@@ -457,12 +464,14 @@ export function createRoomRegistry({
 
   function toMembers(seats: Map<string, Seat>, hostUserId: string): Member[] {
     return [...seats.entries()]
-      .map(([userId, { desk, name, isBot = false }]) => ({
+      .map(([userId, { desk, name, isBot = false, avatar }]) => ({
         desk,
         name,
         isHost: !isBot && userId === hostUserId,
         isBot,
         ...deskIdentity(desk),
+        // #730: the roll addresses the portrait as /api/avatars/<userId>?v=<avatar>; bots have none.
+        avatar: !isBot && avatar ? { userId, v: avatar } : null,
       }))
       .sort((a, b) => a.desk - b.desk);
   }
@@ -605,7 +614,7 @@ export function createRoomRegistry({
         };
       }),
 
-    join: (lobbyId, { userId, name }) =>
+    join: (lobbyId, { userId, name, avatar = null }) =>
       serial(lobbyId, async (): Promise<JoinResult> => {
         // Belt and braces: token subs are web-minted cuids, the `bot:` space is the bots'.
         if (isBotUserId(userId)) return { ok: false, reason: "bot-id" };
@@ -641,7 +650,13 @@ export function createRoomRegistry({
           seats.get(userId)?.desk ??
           (raced !== undefined && !taken.includes(raced) ? raced : nextDesk([...taken, ...held]));
         // A member (a second tab, a resume) keeps the join time of its seat (#137: host promotion).
-        const seat: Seat = { desk, name, joinedAt: seats.get(userId)?.joinedAt ?? clock.now() };
+        // A rejoin takes the avatar of its new token: approved, replaced or revoked since (#730).
+        const seat: Seat = {
+          desk,
+          name,
+          joinedAt: seats.get(userId)?.joinedAt ?? clock.now(),
+          ...(avatar === null ? {} : { avatar }),
+        };
         seats.set(userId, seat);
         await withTtl(
           lobbyId,

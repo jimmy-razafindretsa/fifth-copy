@@ -28,6 +28,7 @@ const member = (desk: number, name: string, isHost: boolean): Member => ({
   isHost,
   isBot: false,
   ...deskIdentity(desk),
+  avatar: null,
 });
 const ada = member(1, "Ada", true);
 const bob = member(2, "Bob", false);
@@ -141,6 +142,23 @@ describe("reduceLobby", () => {
     );
     expect(state.members).toEqual([ada, cyd]);
     expect(state.you).toBe(2);
+  });
+
+  it("keeps each member's avatar from welcome and roster (#730 C1)", () => {
+    const pictured = { ...bob, avatar: { userId: "usr_bob", v: 2 } };
+    const welcomed = run({ type: "welcome", payload: welcome(1, [pictured, ada]) });
+    expect(welcomed.members.map((m) => m.avatar)).toEqual([null, { userId: "usr_bob", v: 2 }]);
+    const rostered = run(
+      { type: "welcome", payload: welcome(1, [ada]) },
+      {
+        type: "roster",
+        payload: {
+          v: PROTOCOL_VERSION,
+          members: [ada, { ...pictured, avatar: { userId: "usr_bob", v: 3 } }],
+        },
+      },
+    );
+    expect(rostered.members[1]?.avatar).toEqual({ userId: "usr_bob", v: 3 });
   });
 
   it.each([

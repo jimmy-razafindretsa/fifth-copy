@@ -47,7 +47,7 @@ const inputFocused = (page: Page) => input(page).evaluate((el) => el === documen
 /** The viewer's own name in the waiting room: the roll row that carries the YOU tag. */
 async function ownName(page: Page): Promise<string> {
   const row = roll(page).filter({ has: page.getByText("YOU", { exact: true }) });
-  return ((await row.locator("span").nth(2).textContent()) ?? "").trim();
+  return ((await row.locator("[data-name]").textContent()) ?? "").trim();
 }
 
 /** Types the next `n` characters of the race text (Block mode: each one is right, so each counts). */

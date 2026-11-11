@@ -11,6 +11,7 @@ import {
   openRoomResponseSchema,
   roomStatusResponseSchema,
   roomTypeResponseSchema,
+  sharedRoomResponseSchema,
 } from "@fifth-copy/protocol";
 import { createHmac, randomBytes } from "node:crypto";
 import { createRaceServer, type RaceServer } from "../app";
@@ -18,7 +19,7 @@ import { createFakeClock, createFakeScheduler } from "../clock";
 import { desksKey, membersKey, nonceKey, roomKey } from "../rooms/keys";
 import { ROOM_SEATS } from "../rooms/registry";
 import { connectRedis, fixtureWebApi } from "../testing/harness";
-import { MAX_INTERNAL_BODY_BYTES } from "./internal";
+import { internalRoutes, MAX_INTERNAL_BODY_BYTES } from "./internal";
 
 // Over real HTTP and real Redis. The vector's lobby id (`lob_test`) and nonce are fixed, so their keys
 // are deleted before and after each test; its secret is the vector's, not the worktree's. Every other
@@ -508,5 +509,186 @@ describe("POST /internal/rooms/type (#815 C2)", () => {
     ])
       await expectError(await postSigned(base, bad, TYPE), 400, "bad-body");
     expect((await fetch(`${base}${TYPE}`)).status).toBe(404);
+  });
+});
+
+describe("POST /internal/rooms/shared (#65 C2, C4)", () => {
+  const SHARED = "/internal/rooms/shared";
+  const run = randomBytes(4).toString("hex");
+  const ids = { first: `lob_sh_${run}_1`, second: `lob_sh_${run}_2` };
+  // User ids unique per run: the shared test db holds other files' members.
+  const u = { a: `usr_sh_${run}_a`, b: `usr_sh_${run}_b`, c: `usr_sh_${run}_c` };
+  const sharedBody = (userIds: unknown) => JSON.stringify({ v: PROTOCOL_VERSION, userIds });
+
+  afterEach(async () => {
+    const redis = await connectRedis(process.env.REDIS_URL);
+    await redis.del(
+      ...Object.values(ids).flatMap((id) => [roomKey(id), membersKey(id), desksKey(id)]),
+    );
+    await redis.srem("rooms", ...Object.values(ids));
+    redis.disconnect();
+  });
+
+  /** `first` holds a and b (a host) with a bot, `second` holds c. */
+  async function seed() {
+    const registry = server!.registry;
+    await registry.open({
+      lobbyId: ids.first,
+      code: "KGB-4821",
+      hostUserId: u.a,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" as const }] },
+    });
+    await registry.join(ids.first, { userId: u.a, name: "Ada" });
+    await registry.join(ids.first, { userId: u.b, name: "Grace" });
+    await registry.open({
+      lobbyId: ids.second,
+      code: "KGB-4822",
+      hostUserId: u.c,
+      settings: DEFAULT_RACE_SETTINGS,
+    });
+    await registry.join(ids.second, { userId: u.c, name: "Linus" });
+  }
+
+  async function answer(res: Response) {
+    expect(res.status).toBe(200);
+    const raw = await res.text();
+    // The boolean alone: exactly `v` and `shared` on the wire.
+    expect(Object.keys(JSON.parse(raw)).sort()).toEqual(["shared", "v"]);
+    for (const leak of [...Object.values(ids), ...Object.values(u), "KGB-", "Ada", "Grace"])
+      expect(raw).not.toContain(leak);
+    return sharedRoomResponseSchema.parse(JSON.parse(raw)).shared;
+  }
+
+  it("answers shared: true for two members of one room, false otherwise; never a lobby id or a name", async () => {
+    const base = await start();
+    await seed();
+    expect(await answer(await postSigned(base, sharedBody([u.a, u.b]), SHARED))).toBe(true);
+    expect(await answer(await postSigned(base, sharedBody([u.b, u.a]), SHARED))).toBe(true);
+    // Two rooms, one each.
+    expect(await answer(await postSigned(base, sharedBody([u.a, u.c]), SHARED))).toBe(false);
+    // An unknown user, and two unknown users (no room at all).
+    const nobody = `usr_sh_${run}_x`;
+    expect(await answer(await postSigned(base, sharedBody([u.a, nobody]), SHARED))).toBe(false);
+    expect(await answer(await postSigned(base, sharedBody([nobody, `${nobody}y`]), SHARED))).toBe(
+      false,
+    );
+    // A seated bot is never a member.
+    expect(await answer(await postSigned(base, sharedBody(["bot:3", u.a]), SHARED))).toBe(false);
+    // A member who left no longer counts.
+    await server!.registry.leave(ids.first, u.b);
+    expect(await answer(await postSigned(base, sharedBody([u.a, u.b]), SHARED))).toBe(false);
+  });
+
+  it("is read only: past the nonce claim it sends only SMEMBERS and HEXISTS", async () => {
+    const sent: string[][] = [];
+    const base = await start(0, (redis) => {
+      const original = redis.sendCommand.bind(redis);
+      vi.spyOn(redis, "sendCommand").mockImplementation((command, ...rest) => {
+        sent.push([command.name.toLowerCase(), ...command.args.map(String)]);
+        return original(command, ...(rest as []));
+      });
+      return redis;
+    });
+    await seed();
+    sent.length = 0;
+    expect(await answer(await postSigned(base, sharedBody([u.a, u.b]), SHARED))).toBe(true);
+    const [claim, ...rest] = sent;
+    expect(claim?.[0]).toBe("set");
+    expect(claim?.[1]).toMatch(/^internal:nonce:[0-9a-f]{32}$/);
+    expect(rest.length).toBeGreaterThan(0);
+    for (const [name] of rest) expect(["smembers", "hexists"]).toContain(name);
+    expect(await server!.registry.members(ids.first)).toHaveLength(3);
+  });
+
+  it("answers while draining and broadcasts nothing", async () => {
+    await start();
+    await seed();
+    const onLobbyType = vi.fn();
+    const route = internalRoutes({
+      registry: server!.registry,
+      draining: () => true,
+      onLobbyType,
+    }).find((r) => r.path === SHARED);
+    expect(route?.method).toBe("POST");
+    expect(await route!.handle({ v: PROTOCOL_VERSION, userIds: [u.a, u.b] })).toEqual({
+      status: 200,
+      body: { v: PROTOCOL_VERSION, shared: true },
+    });
+    expect(onLobbyType).not.toHaveBeenCalled();
+  });
+
+  it("logs path, status and outcome only: no user id, lobby id or code", async () => {
+    const base = await start();
+    await seed();
+    const lines: string[] = [];
+    for (const level of ["log", "info", "warn", "error"] as const) {
+      vi.spyOn(console, level).mockImplementation(
+        (...args: unknown[]) => void lines.push(args.map(String).join(" ")),
+      );
+    }
+    await answer(await postSigned(base, sharedBody([u.a, u.b]), SHARED));
+    await postSigned(base, sharedBody([u.a, u.a]), SHARED);
+    expect(lines.map((line) => JSON.parse(line))).toEqual([
+      { level: "info", msg: "internal", path: SHARED, status: 200, outcome: "ok" },
+      { level: "info", msg: "internal", path: SHARED, status: 400, outcome: "bad-body" },
+    ]);
+  });
+
+  it("sits behind the same signature, nonce, timestamp and version checks", async () => {
+    const base = await start();
+    await seed();
+    const body = sharedBody([u.a, u.b]);
+    const nonce = freshNonce();
+    await expectError(
+      await post(base, { path: SHARED, body, nonce, signature: "0".repeat(64) }),
+      401,
+      "bad-signature",
+    );
+    await expectError(
+      await post(base, { path: SHARED, body, nonce: null, signature: sign(body, nonce) }),
+      401,
+      "bad-signature",
+    );
+    await expectError(
+      await post(base, {
+        path: SHARED,
+        body: sharedBody([u.a, u.c]),
+        nonce,
+        signature: sign(body, nonce),
+      }),
+      401,
+      "bad-signature",
+    );
+    const old = String(Number(V.timestamp) - INTERNAL_MAX_SKEW_S - 1);
+    const n2 = freshNonce();
+    await expectError(
+      await post(base, {
+        path: SHARED,
+        body,
+        nonce: n2,
+        timestamp: old,
+        signature: sign(body, n2, old),
+      }),
+      401,
+      "stale-timestamp",
+    );
+    const n3 = freshNonce();
+    const signed = { path: SHARED, body, nonce: n3, signature: sign(body, n3) };
+    expect(await answer(await post(base, signed))).toBe(true);
+    await expectError(await post(base, signed), 401, "replay");
+    await expectError(
+      await postSigned(base, JSON.stringify({ v: 1, userIds: [u.a, u.b] }), SHARED),
+      426,
+      "version",
+    );
+    for (const bad of [
+      sharedBody([u.a]),
+      sharedBody([u.a, u.b, u.c]),
+      sharedBody([u.a, u.a]),
+      sharedBody([u.a, ""]),
+      JSON.stringify({ v: PROTOCOL_VERSION }),
+    ])
+      await expectError(await postSigned(base, bad, SHARED), 400, "bad-body");
+    expect((await fetch(`${base}${SHARED}`)).status).toBe(404);
   });
 });

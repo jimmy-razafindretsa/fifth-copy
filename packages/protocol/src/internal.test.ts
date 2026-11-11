@@ -27,6 +27,8 @@ import {
   closeLobbyResponseSchema,
   setLobbyHostRequestSchema,
   setLobbyHostResponseSchema,
+  sharedRoomRequestSchema,
+  sharedRoomResponseSchema,
   raceResultsRequestSchema as resultsSchema,
 } from "./index";
 
@@ -496,5 +498,71 @@ describe("room type (#815 C1)", () => {
 
   it("takes its type from the race settings' own enum", () => {
     expect(roomTypeRequestSchema.shape.lobbyType.options).toEqual(["public", "private"]);
+  });
+});
+
+describe("shared room (#65 C1)", () => {
+  const pair = { v, userIds: ["usr_a", "usr_b"] };
+
+  it.each([
+    ["request two different ids", sharedRoomRequestSchema, pair, true],
+    ["request one id", sharedRoomRequestSchema, { v, userIds: ["usr_a"] }, false],
+    [
+      "request three ids",
+      sharedRoomRequestSchema,
+      { v, userIds: ["usr_a", "usr_b", "usr_c"] },
+      false,
+    ],
+    ["request no ids", sharedRoomRequestSchema, { v, userIds: [] }, false],
+    [
+      "request twice the same id",
+      sharedRoomRequestSchema,
+      { v, userIds: ["usr_a", "usr_a"] },
+      false,
+    ],
+    ["request empty id", sharedRoomRequestSchema, { v, userIds: ["usr_a", ""] }, false],
+    [
+      "request oversize id",
+      sharedRoomRequestSchema,
+      { v, userIds: ["usr_a", "u".repeat(129)] },
+      false,
+    ],
+    ["request ids not a list", sharedRoomRequestSchema, { v, userIds: "usr_a,usr_b" }, false],
+    ["request missing ids", sharedRoomRequestSchema, { v }, false],
+    ["request previous v", sharedRoomRequestSchema, { ...pair, v: v - 1 }, false],
+    ["response shared", sharedRoomResponseSchema, { v, shared: true }, true],
+    ["response not shared", sharedRoomResponseSchema, { v, shared: false }, true],
+    ["response missing shared", sharedRoomResponseSchema, { v }, false],
+    ["response shared not a boolean", sharedRoomResponseSchema, { v, shared: "true" }, false],
+    ["response previous v", sharedRoomResponseSchema, { v: v - 1, shared: true }, false],
+    [
+      "response with a lobby id",
+      sharedRoomResponseSchema,
+      { v, shared: true, lobbyId: "lob_1" },
+      false,
+    ],
+    [
+      "response with a room code",
+      sharedRoomResponseSchema,
+      { v, shared: true, code: "KGB-4821" },
+      false,
+    ],
+    ["response with a name", sharedRoomResponseSchema, { v, shared: true, name: "Ada" }, false],
+    [
+      "response with a phase",
+      sharedRoomResponseSchema,
+      { v, shared: true, phase: "waiting" },
+      false,
+    ],
+    ["response with a count", sharedRoomResponseSchema, { v, shared: true, count: 2 }, false],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("parses the pair as given, in order", () => {
+    expect(sharedRoomRequestSchema.parse({ v, userIds: ["usr_b", "usr_a"] }).userIds).toEqual([
+      "usr_b",
+      "usr_a",
+    ]);
   });
 });

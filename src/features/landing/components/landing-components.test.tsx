@@ -120,7 +120,7 @@ describe("FooterView (#875)", () => {
         f.learn,
       ]);
       expect(navs[0]![2]!.match(/<a /g)).toHaveLength(3);
-      expect(navs[1]![2]).toContain(`href="#how"`);
+      expect(navs[1]![2]).toContain(`href="/#how"`);
       expect(navs[1]![2]!.match(/<a /g)).toHaveLength(1);
       for (const held of [f.links.locker, f.links.teachers, f.links.profile, f.links.privacy]) {
         expect(html).not.toContain(`>${held}<`);

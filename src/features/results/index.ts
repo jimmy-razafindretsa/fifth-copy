@@ -38,6 +38,8 @@ export type { BonusMark, RaceSeries } from "./view/series";
 export { coachingFrom, type Coaching, pickTip, type Tip, TIP_IDS } from "./view/tip";
 export type { MissedKey } from "./view/keys";
 export { FilingNoticeView } from "./components/filing-notice-view";
+// Every internal link the report offers, from the guarded link tables (#899).
+export { REPORT_LINKS } from "./view/links";
 export { Podium, type PodiumProps } from "./components/podium";
 // The ranking docket (#301): every desk in place order, under the podium.
 export { RankingTable, type RankingTableProps } from "./components/ranking-table";

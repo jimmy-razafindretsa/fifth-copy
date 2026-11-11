@@ -424,7 +424,7 @@ Suggested order for Iteration 1 technical cards, by dependency:
 | Risk | Mitigation | Owner |
 |---|---|---|
 | Auth.js adapter assumes an `email` column | Verify in card #38; custom adapter wrapper if needed (ADR 0009 consequence) | builder of #38 |
-| School network blocks WebSocket | Socket.IO polling fallback on; card #443 verifies on a real school network | #442, #443 |
+| School network blocks WebSocket | Socket.IO polling fallback on: the room socket tries WebSocket first and falls back to long-polling in the same attempt (`tryAllTransports`, `src/features/race/client/socket.ts`). Checked by `e2e/race/polling.spec.ts` (WebSocket refused, full bot race to the Dawn report, 10 Hz latency budget asserted) and the server unit test (polling, upgrades, CORS). Residual: a proxy that holds the upgrade open without answering is not covered; the on-site test on the partner school's network is a line of the launch checklist (#438) | #442, #438 |
 | A deploy cuts a live race during a class | Railway redeploys race-server on every matching push (ADR 0019). The old deployment drains on SIGTERM (new rooms refused with 503, live races finish, exit at `rooms == 0` or `RACE_DRAIN_CAP_S`), an owner lease keeps the new boot from voiding them, Railway's draining time is above the cap (`services/race-server/railway.json`). Residual: a desk that reconnects during the drain cannot resume; untimed races beyond the cap; WebSocket survival unconfirmed until the owner's live test (#704 C4) | #704 |
 | Text-changing bonuses vs fairness | Overlay model and clean/adjusted WPM (ADR 0007); teacher confirms values (open question 14) | #198, #445 |
 | Chromebook 3D performance | Quality presets, LODs, HTML text, 2D fallback, CI fps gate (ADR 0013) | #273-#279 |

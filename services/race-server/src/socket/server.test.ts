@@ -1,3 +1,4 @@
+import { io as connectClient } from "socket.io-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
@@ -625,4 +626,68 @@ describe("the held automatic start survives the host transfer it waited for (#89
     expect(a.seen.autoStart).toEqual([]);
     expect(a.seen.roster?.find((m) => m.name === "Bea")?.isHost).toBe(true);
   }, 20_000);
+});
+
+/**
+ * #442 C4: school networks that block WebSocket fall back to long-polling (ADR 0006), so the server
+ * must keep serving it: `polling` in its transports, upgrades allowed, and the CORS answer for
+ * `WEB_ORIGIN` (the harness's `http://localhost:3000`) on a polling handshake, since the browser
+ * reaches the race server's own domain cross-origin (ADR 0019).
+ */
+describe("polling clients (#442 C4)", () => {
+  const WEB_ORIGIN = "http://localhost:3000";
+
+  it("serves websocket and polling, upgrades allowed", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const opts = t.server.io.engine.opts;
+    expect(opts.transports).toEqual(expect.arrayContaining(["polling", "websocket"]));
+    expect(opts.allowUpgrades).not.toBe(false);
+  });
+
+  it("answers a polling handshake with the CORS header for WEB_ORIGIN only, offering the upgrade", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const handshake = `${t.url}/socket.io/?EIO=4&transport=polling`;
+    const res = await fetch(handshake, { headers: { Origin: WEB_ORIGIN } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe(WEB_ORIGIN);
+    const open = JSON.parse((await res.text()).replace(/^0/, "")) as { upgrades: string[] };
+    expect(open.upgrades).toContain("websocket");
+
+    const preflight = await fetch(handshake, {
+      method: "OPTIONS",
+      headers: { Origin: WEB_ORIGIN, "Access-Control-Request-Method": "POST" },
+    });
+    expect(preflight.status).toBeLessThan(300);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe(WEB_ORIGIN);
+
+    const foreign = await fetch(handshake, { headers: { Origin: "https://evil.example" } });
+    expect(foreign.headers.get("access-control-allow-origin")).not.toBe("https://evil.example");
+  });
+
+  it("seats a polling-only client, and a client that starts on polling upgrades to websocket", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const polling = connectClient(t.url, {
+      auth: { v: PROTOCOL_VERSION, token: await t.token({ lobby, name: "Ada" }) },
+      transports: ["polling"],
+      reconnection: false,
+      forceNew: true,
+    });
+    const upgrading = connectClient(t.url, {
+      auth: { v: PROTOCOL_VERSION, token: await t.token({ lobby, name: "Bob" }) },
+      transports: ["polling", "websocket"],
+      reconnection: false,
+      forceNew: true,
+    });
+    try {
+      const seenPolling = track(polling);
+      const seenUpgrading = track(upgrading);
+      await until(() => !!seenPolling.welcome && !!seenUpgrading.welcome, WAIT_MS, "welcomes");
+      expect(polling.io.engine.transport.name).toBe("polling");
+      await until(() => upgrading.io.engine.transport.name === "websocket", WAIT_MS, "upgrade");
+    } finally {
+      polling.disconnect();
+      upgrading.disconnect();
+    }
+  });
 });

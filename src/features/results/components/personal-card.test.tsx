@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { REPORT_STATUSES } from "../view/dawn-report";
@@ -9,6 +9,9 @@ import type { PersonalStats } from "../view/personal";
 import { personalLabels } from "../view/report-labels";
 import { coachingFrom, TIP_IDS, type TipInput } from "../view/tip";
 import { PersonalCard } from "./personal-card";
+
+// The report links reach src/env.ts through the identity index (#899); these tests need no secrets.
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
 
 // Contract of #864 C2: one 7.4 docket in the personal slot, the ink tag FORM 5-R · YOUR COPY, the place
 // as № n, the clean WPM as the big figure, the accuracy, the status in words when not filed; the SENT and

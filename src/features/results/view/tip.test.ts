@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { isSpecialKey, MAX_LISTED_KEYS, missedKeys, type MissedKey } from "./keys";
 import { coachingFrom, pickTip, TIP_IDS, type TipInput } from "./tip";
+
+// The report links reach src/env.ts through the identity index (#899); these tests need no secrets.
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
 
 // Contract of #867 C2: `pickTip(input)` returns exactly one tip id from a closed list, in a fixed
 // priority: clean (no error), special (the most-missed key is an accented letter, a guillemet or a

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import type { PersonalStats } from "../view/personal";
@@ -9,6 +9,9 @@ import { personalLabels } from "../view/report-labels";
 import { formatRaceTime, graphGeometry, type RaceSeries } from "../view/series";
 import { PersonalCard } from "./personal-card";
 import { RaceGraph } from "./race-graph";
+
+// The report links reach src/env.ts through the identity index (#899); these tests need no secrets.
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
 
 // Contract of #865 C3: the series as inline SVG, an ink polyline on paper with the WPM scale and the
 // race time, a red tick with the bonus name at each mark; role="img" named by one sentence (peak WPM,

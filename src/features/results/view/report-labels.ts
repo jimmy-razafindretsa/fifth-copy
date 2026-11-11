@@ -1,5 +1,6 @@
 import type { Messages } from "@/i18n/en";
 import type { DawnReport, PodiumLabels, ReportStatus } from "./dawn-report";
+import { REPORT_LINKS } from "./links";
 import type { BonusKind } from "./personal";
 import type { RankingLabels } from "./ranking";
 import type { TipId } from "./tip";
@@ -89,7 +90,7 @@ export function personalLabels(t: Pick<Messages, "results" | "race" | "header">)
 export function filingLabels(results: Messages["results"], lobbyCode: string | null) {
   const { notice, prefix, late, lobby, home } = results.filing;
   const labels: FilingLabels = { notice, prefix, late, back: lobbyCode ? lobby : home };
-  return { labels, backHref: lobbyCode ? `/lobby/${lobbyCode}` : "/" };
+  return { labels, backHref: lobbyCode ? REPORT_LINKS.lobby(lobbyCode) : REPORT_LINKS.home };
 }
 
 /**
@@ -119,12 +120,16 @@ export function reportActions(
   const member = viewerDesk !== null;
   const actions: ReportAction[] = [];
   if (member && race.lobbyOpen && race.lobbyCode) {
-    actions.push({ kind: "again", label: results.actions.again, href: `/lobby/${race.lobbyCode}` });
+    actions.push({
+      kind: "again",
+      label: results.actions.again,
+      href: REPORT_LINKS.lobby(race.lobbyCode),
+    });
   }
-  actions.push({ kind: "home", label: results.filing.home, href: "/" });
+  actions.push({ kind: "home", label: results.filing.home, href: REPORT_LINKS.home });
   if (member && viewerIsGuest) {
     const { signup, prompt } = results.actions;
-    actions.push({ kind: "signup", label: signup, href: "/sign-up", prompt });
+    actions.push({ kind: "signup", label: signup, href: REPORT_LINKS.signUp, prompt });
   }
   return actions;
 }

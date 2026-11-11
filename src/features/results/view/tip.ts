@@ -5,6 +5,7 @@
  * not change.
  */
 import { isSpecialKey, MAX_LISTED_KEYS, type MissedKey } from "./keys";
+import { REPORT_LINKS } from "./links";
 
 /** The closed list, in priority order (the first that applies wins). */
 export const TIP_IDS = ["clean", "special", "key", "accuracy", "steady"] as const;
@@ -52,8 +53,8 @@ export function coachingFrom(input: TipInput): Coaching {
 }
 
 /**
- * Where the `special` tip sends the typist: the guide `HOW TO TYPE É Ç « »` (the site header's link,
- * `LINKS.guide` of the landing feature), which anchors to the landing's "How a race runs" until the
- * special-characters guide (#388) ships its route.
+ * Where the `special` tip sends the typist: the guide `HOW TO TYPE É Ç « »`, the site header's own link
+ * (`LINKS.guide` of the landing feature through `REPORT_LINKS`, #899), which anchors to the landing's
+ * "How a race runs" until the special-characters guide (#388) ships its route.
  */
-export const GUIDE_HREF = "/#how";
+export const GUIDE_HREF = REPORT_LINKS.guide;

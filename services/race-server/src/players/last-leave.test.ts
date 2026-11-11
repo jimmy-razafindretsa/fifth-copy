@@ -85,3 +85,14 @@ describe("last leave grace (#734)", () => {
     expect(scheduler.armed()).toBe(0);
   });
 });
+
+describe("the host of an ended room waits out the grace (#137)", () => {
+  it("only the host, only in ended: a waiting host's leave promotes at once (#137 C5), a guest never waits", async () => {
+    expect(await setup("ended", [host, guest]).lastLeave.hostOfEnded("lob", "host")).toBe(true);
+    expect(await setup("ended", [host, guest]).lastLeave.hostOfEnded("lob", "b")).toBe(false);
+    expect(await setup("waiting", [host, guest]).lastLeave.hostOfEnded("lob", "host")).toBe(false);
+    expect(await setup("running", [host, guest]).lastLeave.hostOfEnded("lob", "host")).toBe(false);
+    // the last human: its leave keeps the room (#143), nobody to promote
+    expect(await setup("ended", [host, bot]).lastLeave.hostOfEnded("lob", "host")).toBe(false);
+  });
+});

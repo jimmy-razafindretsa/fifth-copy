@@ -62,7 +62,16 @@ export type LobbyState = {
   settings: RaceSettings | null;
   /** The public room's automatic start (#814). */
   autoStart: AutoStartState;
+  /**
+   * The NEW HOST stamp over the roll (#137): the promoted desk, and `seq`, this page's count of
+   * `new-host` events (the stamp's angle seed, and the key its timer clears). `null` once it is gone.
+   */
+  newHost: NewHostStamp | null;
+  /** How many `new-host` events this page has seen; the next stamp's `seq`. */
+  newHosts: number;
 };
+
+export type NewHostStamp = { desk: number; seq: number };
 
 /**
  * Everything the waiting room reacts to. Extension point (card 108, card 169, race HUD): one event here,
@@ -75,8 +84,10 @@ export type LobbyEvent =
   | { type: "roster"; payload: RoomEvents["roster"] }
   | { type: "settings"; payload: RoomEvents["settings"] }
   | { type: "countdown"; payload: RoomEvents["countdown"] }
-  /** A room event (`event`); the lobby reads only `kicked` (#133). */
+  /** A room event (`event`); the lobby reads `kicked` (#133) and `new-host` (#137). */
   | { type: "event"; payload: RoomEvents["event"] }
+  /** The NEW HOST stamp's hold ended (#137): clears stamp `seq`, never a later one. */
+  | { type: "new-host-done"; seq: number }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
@@ -92,6 +103,8 @@ export const initialLobbyState: LobbyState = {
   raceId: null,
   settings: null,
   autoStart: NO_AUTO_START,
+  newHost: null,
+  newHosts: 0,
 };
 
 const byDesk = (members: Member[]) => [...members].sort((a, b) => a.desk - b.desk);
@@ -155,6 +168,8 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
           event.payload.autoStartAt,
           receivedAt,
         ),
+        newHost: state.newHost,
+        newHosts: state.newHosts,
       };
     }
     case "auto-start": {
@@ -169,10 +184,18 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
       return { ...state, phase: "starting", raceId: event.payload.race.raceId };
     case "event": {
       const { payload } = event;
+      // The host left for good (#137): the stamp over the roll; a later one replaces it. The roster sent
+      // just before already moved the HOST tag and this viewer's controls.
+      if (payload.kind === "new-host") {
+        const seq = state.newHosts + 1;
+        return { ...state, newHost: { desk: payload.desk, seq }, newHosts: seq };
+      }
       // Another desk's removal: the roster broadcast drops its row.
       if (payload.kind !== "kicked" || payload.desk !== state.you) return state;
       return { ...state, phase: "removed", error: null };
     }
+    case "new-host-done":
+      return state.newHost?.seq === event.seq ? { ...state, newHost: null } : state;
     case "connect-error": {
       const { reason } = event;
       if (reason === "removed") return { ...state, phase: "removed", error: null };
@@ -281,7 +304,8 @@ export function bindRoomSocket(
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onCountdown((payload) => dispatch({ type: "countdown", payload })),
     socket.onEvent((payload) => {
-      if (payload.kind === "kicked") dispatch({ type: "event", payload });
+      if (payload.kind === "kicked" || payload.kind === "new-host")
+        dispatch({ type: "event", payload });
     }),
     socket.onAutoStart((payload) => dispatch({ type: "auto-start", payload, receivedAt: now() })),
     socket.onConnectError((reason) => {

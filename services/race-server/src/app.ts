@@ -11,6 +11,7 @@ import { createNonceStore } from "./http/nonces";
 import { createHttpHandler } from "./http/router";
 import { createOutbox, type Outbox } from "./persist/outbox";
 import { closeLobbyRequest, lobbyCloseOutboxId, sendOutboxEntry } from "./persist/lobby-close";
+import { lobbyHostOutboxId, setLobbyHostRequest } from "./persist/lobby-host";
 import { buildResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
 import { createIdle } from "./players/idle";
@@ -25,7 +26,12 @@ import { durationsFor } from "./rooms/durations";
 import { ingest } from "./rooms/ingest";
 import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecycle";
 import { createOwnerLease } from "./rooms/owner";
-import { createRoomRegistry, RECONCILE_MS, type RoomRegistry } from "./rooms/registry";
+import {
+  createRoomRegistry,
+  RECONCILE_MS,
+  type NewHost,
+  type RoomRegistry,
+} from "./rooms/registry";
 import { createTicker } from "./rooms/tick";
 import { audience, deskRoom, lobbyRoom, spectatorRoom } from "./socket/rooms";
 import { RACE_LIMITER_PREFIX } from "./socket/rate-limit";
@@ -132,6 +138,8 @@ export function createRaceServer({
     scheduler,
     durations,
     emit: roomEvent,
+    // The host's desk expired (#137 C2 b): the role passes on; already inside the room's queue.
+    onExpired: (lobbyId, userId) => hostGone(lobbyId, userId),
   });
   // Idle and abandon (#183): a tick step over the connected typing desks, and the abandon edge.
   const idle = createIdle({ desksState, presence, durations, emit: roomEvent });
@@ -165,7 +173,21 @@ export function createRaceServer({
   });
   const race: RacePort = {
     ingest: (lobbyId, desk, batch) => ingest(desksState.get(lobbyId), desk, batch, clock.now()),
-    abandon: idle.abandon,
+    abandon: (lobbyId, desk) => {
+      const result = idle.abandon(lobbyId, desk);
+      // The host abandoned (#137 C2 b): it stays seated and connected, but no longer hosts.
+      const userId = result.terminal
+        ? desksState.get(lobbyId)?.desks.find((d) => d.desk === desk)?.userId
+        : null;
+      if (userId) {
+        registry
+          .withRoom(lobbyId, () => hostGone(lobbyId, userId))
+          .catch((err: unknown) =>
+            log("host transfer failed", { lobby: lobbyId, err: String(err) }),
+          );
+      }
+      return result;
+    },
     playBonus: (lobbyId, desk) => bonuses.play(lobbyId, desk, clock.now()),
     overlayOf: bonuses.overlayOf,
     bonusOf: (lobbyId, desk) => bonuses.bonusOf(lobbyId, desk, clock.now()),
@@ -201,11 +223,32 @@ export function createRaceServer({
       );
   };
 
+  // Host transfer (#137, spec 5.4): the room hears `event new-host { desk }` (after the roster that
+  // flags the new host); the web's `Lobby.hostUserId` follows through the outbox, never awaited.
+  const onNewHost = (lobbyId: string, host: NewHost) => {
+    roomEvent(lobbyId, { v: PROTOCOL_VERSION, kind: "new-host", desk: host.desk });
+    log("new host", { lobby: lobbyId, desk: host.desk });
+    outbox
+      .enqueue(lobbyHostOutboxId(lobbyId), [setLobbyHostRequest(lobbyId, host.userId)])
+      .catch((err: unknown) =>
+        log("lobby host enqueue failed", { lobby: lobbyId, err: String(err) }),
+      );
+  };
+  // The host's desk is gone for good mid-race (#137 C2 b: expired, abandoned; never asleep): its seat
+  // stays, the role passes. Runs inside the room's queue.
+  const hostGone = async (lobbyId: string, userId: string) => {
+    const handed = await registry.handOverHost(lobbyId, userId);
+    if (!handed) return;
+    to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members: handed.members });
+    onNewHost(lobbyId, handed.newHost);
+  };
+
   const leaveDeps: LeaveDeps = {
     registry,
     presence,
     onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
     onLobbyClosed: closeLobby,
+    onNewHost,
     announce: (lobbyId, members) =>
       void to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members }),
   };
@@ -364,6 +407,7 @@ export function createRaceServer({
     // Per-identity buckets (#207): fails closed, a message Redis cannot count is dropped.
     limiter: createLimiter(redis, { prefix: RACE_LIMITER_PREFIX }),
     onLobbyClosed: closeLobby,
+    onNewHost,
     lastLeave,
   });
   sockets.io = io;

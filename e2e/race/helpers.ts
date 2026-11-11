@@ -82,6 +82,21 @@ export function lobbyStatusOf(code: string): Promise<string | null> {
   });
 }
 
+/**
+ * `Lobby.hostUserId` behind a room code and that user's typist name (#137: the race server's host
+ * transfer call moves it to the promoted user).
+ */
+export function lobbyHostOf(code: string): Promise<{ id: string; name: string | null } | null> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ id: string; name: string | null }>(
+      `SELECT u.id, u."typistName" AS name FROM "Lobby" l JOIN "User" u ON u.id = l."hostUserId"
+       WHERE l.code = $1`,
+      [code],
+    );
+    return rows[0] ?? null;
+  });
+}
+
 /** Marks a lobby closed, as a race start or the retention sweep leaves it (its token mint answers `closed`). */
 export function closeLobby(code: string): Promise<void> {
   return withDb(async (db) => {

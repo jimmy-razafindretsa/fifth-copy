@@ -9,6 +9,7 @@ import {
 import {
   boot,
   connectError,
+  fixtureWebApi,
   postRoomType,
   SECRET,
   startedRace,
@@ -16,9 +17,11 @@ import {
   until,
   WAIT_MS,
   type Booted,
+  type Client,
   type Racer,
 } from "../testing/harness";
 import { internalHeaders } from "../http/sign";
+import { LAST_LEAVE_GRACE_MS } from "../players/last-leave";
 
 let t: Booted | undefined;
 afterEach(async () => {
@@ -425,5 +428,117 @@ describe("host:kick (#133 C2)", () => {
     await new Promise((r) => setTimeout(r, 150));
     expect(acked).toBe(false);
     expect(await booted.server.registry.members(lobby)).toHaveLength(3);
+  });
+});
+
+describe("host transfer when the host leaves (#137 C2, C3)", () => {
+  type EventSeen = { v: number; kind: string; desk?: number };
+  async function room() {
+    const web = fixtureWebApi({ now: () => 0 });
+    const booted = (t = await boot(process.env.REDIS_URL, { webApi: web.api }));
+    const lobby = await booted.openRoom();
+    const connect = async (sub: string, name: string, role: "host" | "player" = "player") => {
+      const token = await booted.token({ lobby, sub, name, role });
+      const client = booted.connect({ v: PROTOCOL_VERSION, token });
+      const seen = track(client);
+      const events: EventSeen[] = [];
+      client.on("event", (e) => void events.push(e as EventSeen));
+      await until(() => !!seen.welcome, WAIT_MS, `welcome ${name}`);
+      return { client, seen, events };
+    };
+    const host = await connect("usr_host", "Ada", "host");
+    // A joins before B: A is promoted.
+    const a = await connect("usr_a", "Bea");
+    const b = await connect("usr_b", "Cy");
+    await until(() => host.seen.roster?.length === 3, WAIT_MS, "roster 3");
+    return { booted, lobby, web, host, a, b, connect };
+  }
+  const settings = (who: { client: Client }, timerS: number) =>
+    who.client
+      .timeout(2_000)
+      .emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch: { timerS } });
+  const start = (who: { client: Client }) =>
+    who.client.timeout(2_000).emitWithAck("host:start", { v: PROTOCOL_VERSION });
+
+  it("the host closes its page in waiting: new-host to A and B, the roster follows, the web records A", async () => {
+    const { lobby, web, host, a, b } = await room();
+    host.client.disconnect();
+    await until(
+      () => [a, b].every((p) => p.events.some((e) => e.kind === "new-host")),
+      WAIT_MS,
+      "new-host",
+    );
+    for (const p of [a, b]) {
+      expect(p.events).toEqual([{ v: PROTOCOL_VERSION, kind: "new-host", desk: 2 }]);
+      expect(p.seen.roster?.map((m) => [m.name, m.isHost])).toEqual([
+        ["Bea", true],
+        ["Cy", false],
+      ]);
+    }
+    await until(() => web.hosts.length === 1, WAIT_MS, "web host call");
+    expect(web.hosts).toEqual([{ v: PROTOCOL_VERSION, lobbyId: lobby, hostUserId: "usr_a" }]);
+  });
+
+  it("the new host's host:settings and host:start (player token) are accepted; B's and the returning old host's refused not-host", async () => {
+    const { host, a, b, connect } = await room();
+    host.client.disconnect();
+    await until(() => a.seen.roster?.[0]?.isHost === true, WAIT_MS, "A promoted");
+    expect(await settings(b, 60)).toMatchObject({ ok: false, error: "not-host" });
+    // The old host comes back with its host-role token: it rejoins as a guest.
+    const back = await connect("usr_host", "Ada", "host");
+    await until(() => a.seen.roster?.length === 3, WAIT_MS, "old host back");
+    expect(back.seen.welcome?.members.find((m) => m.name === "Ada")?.isHost).toBe(false);
+    expect(await settings(back, 60)).toMatchObject({ ok: false, error: "not-host" });
+    expect(await start(back)).toMatchObject({ ok: false, error: "not-host" });
+    expect(await settings(a, 60)).toMatchObject({ ok: true });
+    await until(() => b.seen.settings.at(-1)?.timerS === 60, WAIT_MS, "settings reach B");
+    expect(await start(a)).toMatchObject({ ok: true });
+  });
+
+  it("a guest leaving passes nothing on; the last human leaving closes the room as today", async () => {
+    const { host, a, b } = await room();
+    b.client.disconnect();
+    await until(() => host.seen.roster?.length === 2, WAIT_MS, "B left");
+    expect([...host.events, ...a.events].filter((e) => e.kind === "new-host")).toEqual([]);
+    expect(host.seen.roster?.[0]).toMatchObject({ name: "Ada", isHost: true });
+  });
+
+  it("the host of an ended room (the Dawn report) keeps the role if back within the grace; promoted only after it", async () => {
+    const { booted, lobby, host, a, b, connect } = await room();
+    const { registry } = booted.server;
+    await registry.withRoom(lobby, () => registry.setPhase(lobby, "ended"));
+    const newHosts = () => [...a.events, ...b.events].filter((e) => e.kind === "new-host");
+    host.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1_000);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(newHosts()).toEqual([]);
+    // Race again: back on the lobby page within the grace
+    const back = await connect("usr_host", "Ada", "host");
+    booted.clock.advance(2_000);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(newHosts()).toEqual([]);
+    expect(back.seen.welcome?.members.find((m) => m.name === "Ada")?.isHost).toBe(true);
+
+    // gone for good: promoted once the grace is over
+    back.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await until(() => newHosts().length === 2, WAIT_MS, "new-host after the grace");
+    expect(a.events.at(-1)).toEqual({ v: PROTOCOL_VERSION, kind: "new-host", desk: 2 });
+  });
+
+  it("an asleep host is not replaced: it is still connected", async () => {
+    const race = await startedRace(process.env.REDIS_URL, { players: 2 });
+    t = race.booted;
+    const [host, a] = race.racers as [Racer, Racer];
+    const desks = race.booted.server.desks;
+    desks.set(race.lobby, host.desk, {
+      ...desks.states(race.lobby).get(host.desk)!,
+      status: "asleep",
+    });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(a.seen.events.filter((e) => e.kind === "new-host")).toEqual([]);
+    expect(a.seen.roster?.find((m) => m.desk === host.desk)?.isHost).toBe(true);
   });
 });

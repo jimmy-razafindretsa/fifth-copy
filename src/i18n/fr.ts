@@ -292,6 +292,14 @@ export const fr = {
       dropped: "La course attend l'hôte.",
     },
     raceInProgress: "COURSE EN COURS · TU SERAS PLACÉ À LA FIN",
+    /**
+     * The host left for good (#137, bible 14.3): the red 7.3 stamp over the roll with the new host's
+     * name (upper case), and its one polite announcement.
+     */
+    newHost: {
+      stamp: "NOUVEL HÔTE : {name}",
+      announce: "{name} est le nouvel hôte.",
+    },
     players: { one: "{n} joueur dans la salle", other: "{n} joueurs dans la salle" },
     reconnecting: "CONNEXION PERDUE, NOUVEL ESSAI",
     remove: {

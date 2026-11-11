@@ -9,6 +9,7 @@ import { fr } from "@/i18n/fr";
 import { deskLabel, fill, playersLabel } from "./lobby-labels";
 import { LobbyLiveView, type StartState } from "./lobby-live";
 import { initialLobbyState, NO_AUTO_START, type LobbyState } from "./lobby-store";
+import { NEW_HOST_HOLD_FACTOR, NEW_HOST_REDUCED_HOLD_MS, newHostHoldMs } from "./new-host-stamp";
 import { PlayerList } from "./player-list";
 import { CONFIRM_HOLD_FACTOR, confirmHoldMs, type RemoveState } from "./remove-control";
 import { IDLE_FORM, type FormState } from "./settings-form";
@@ -38,6 +39,8 @@ const live = (members: Member[], you = 1): LobbyState => ({
   raceId: null,
   settings: DEFAULT_RACE_SETTINGS,
   autoStart: NO_AUTO_START,
+  newHost: null,
+  newHosts: 0,
 });
 const view = (state: LobbyState) =>
   renderToStaticMarkup(<LobbyLiveView code={CODE} state={state} labels={labels} errors={errors} />);
@@ -770,5 +773,93 @@ describe("remove a typist (#133 C4 C5)", () => {
     expect(fr.lobby.remove.docket.stamp).toBe("RETIRÉ");
     expect(fr.lobby.remove.docket.back).toBe("RETOUR À L'ACCUEIL →");
     expect(en.lobby.remove.docket.back).toBe("BACK TO THE FRONT DESK →");
+  });
+});
+
+// #137 C4: the host left for good. The roster moved the HOST stamp and the controls; the `new-host`
+// event shows the red NEW HOST stamp over the roll, aria-hidden, said once by the roll's polite region.
+describe("new host (#137 C4)", () => {
+  // the old host (desk 1) has left; Clerk-2 is promoted, Clerk-3 stays a guest
+  const promoted = [member(2, true), member(3)];
+  const stamped = (you: number, seq = 1): LobbyState => ({
+    ...live(promoted, you),
+    newHost: { desk: 2, seq },
+    newHosts: seq,
+  });
+  const stampOf = (html: string) =>
+    /<div[^>]*data-new-host="2"[^>]*>(.*?)<\/div>/.exec(html)?.[0] ?? "";
+  const hostTags = (html: string) =>
+    [...html.matchAll(/data-stamp-size="sm"[^>]*>(?:<span[^>]*>)?([^<]*)</g)].map((m) => m[1]);
+
+  it("every participant sees the red md stamp NEW HOST: <NAME> over the roll, aria-hidden, at a seeded angle", () => {
+    for (const you of [2, 3]) {
+      const html = view(stamped(you));
+      const stamp = stampOf(html);
+      expect(stamp).toContain('aria-hidden="true"');
+      expect(stamp).toContain('data-stamp-tone="red"');
+      expect(stamp).toContain('data-stamp-size="md"');
+      expect(stamp).toContain(fill(labels.newHost.stamp, { name: "CLERK-2" }));
+      expect(stamp).not.toContain("role=");
+      const angle = Number(/data-stamp-angle="([^"]+)"/.exec(stamp)?.[1]);
+      expect(Math.abs(angle)).toBeGreaterThanOrEqual(2);
+      expect(Math.abs(angle)).toBeLessThanOrEqual(6);
+      // the same event, the same angle; the stamp sits inside the roll docket
+      expect(stampOf(view(stamped(you)))).toBe(stamp);
+      expect(html).toMatch(new RegExp(`class="${styles.roll}"><div class="${styles.newHost}"`));
+    }
+  });
+
+  it("the roll's one polite region adds the sentence while the stamp shows; nothing without a stamp", () => {
+    const html = view(stamped(3));
+    expect(html.match(/aria-live="polite"/g)).toHaveLength(1);
+    expect(html).toContain(
+      `<p aria-live="polite" class="${styles.srOnly}">2 players in the room ${fill(labels.newHost.announce, { name: "Clerk-2" })}</p>`,
+    );
+    expect(view(live(promoted, 3))).not.toContain("data-new-host");
+    expect(view(live(promoted, 3))).not.toContain(
+      fill(labels.newHost.announce, { name: "Clerk-2" }),
+    );
+  });
+
+  it("French: NOUVEL HÔTE : <NOM>", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView code={CODE} state={stamped(3)} labels={fr.lobby} errors={fr.landing.errors} />,
+    );
+    expect(html).toContain("NOUVEL HÔTE : CLERK-2");
+    expect(html).toContain("Clerk-2 est le nouvel hôte.");
+  });
+
+  it("the HOST stamp is on the new host's row; the promoted viewer gets START, the settings form, REMOVE and the link row", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={stamped(2)}
+        labels={labels}
+        errors={errors}
+        onStart={() => {}}
+        onSetting={() => {}}
+        onRemove={() => {}}
+      />,
+    );
+    expect(hostTags(html)).toEqual([labels.host]);
+    expect(html).toContain(`>${labels.start.button}<`);
+    expect(html).toContain(fill(labels.remove.name, { name: "Clerk-3" }));
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-lobbyType"/);
+    expect(html).toContain(">ADD A BOT</button>");
+  });
+
+  it("the other guest keeps no host controls", () => {
+    const html = view(stamped(3));
+    expect(html).not.toContain(`>${labels.start.button}<`);
+    expect(html).not.toContain(">ADD A BOT</button>");
+    expect(html).not.toMatch(/role="group" aria-labelledby="lobby-setting-/);
+    expect(html).toContain(labels.waitingForHost);
+  });
+
+  it("holds slow x 5, and the same 3 s under reduced motion", () => {
+    expect(NEW_HOST_HOLD_FACTOR).toBe(5);
+    expect(newHostHoldMs("600ms")).toBe(3000);
+    expect(newHostHoldMs("0ms")).toBe(NEW_HOST_REDUCED_HOLD_MS);
+    expect(NEW_HOST_REDUCED_HOLD_MS).toBe(3000);
   });
 });

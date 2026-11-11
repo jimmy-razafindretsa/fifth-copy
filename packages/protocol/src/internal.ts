@@ -132,6 +132,29 @@ export const roomTypeResponseSchema = z.object({
 export type RoomTypeResponse = z.infer<typeof roomTypeResponseSchema>;
 
 /**
+ * `POST /internal/rooms/shared` (web -> race server, #65, ADR 0022): are these two users members of
+ * the same live room? Two different user ids in, one boolean out. Read only. The race server owns
+ * live membership (ADR 0008); the web asks and never reads a room key.
+ */
+export const sharedRoomRequestSchema = z.object({
+  v: versionSchema,
+  userIds: z
+    .tuple([idSchema, idSchema])
+    .refine(([a, b]) => a !== b, { message: "two different user ids" }),
+});
+export type SharedRoomRequest = z.infer<typeof sharedRoomRequestSchema>;
+
+/**
+ * The boolean alone (ADR 0022 "Minimal disclosure"): strict, so a lobby id, a code, a name, a phase
+ * or a count never parses. Extension point: a later rule changes the race server, never this shape.
+ */
+export const sharedRoomResponseSchema = z.strictObject({
+  v: versionSchema,
+  shared: z.boolean(),
+});
+export type SharedRoomResponse = z.infer<typeof sharedRoomResponseSchema>;
+
+/**
  * `POST /api/internal/races` (race server -> web, on `host:start`): create the Race row and pick the
  * text. Idempotent on `raceId`. The web stamps its own `ENGINE_VERSION` (same deploy, ADR 0012).
  */
@@ -313,11 +336,11 @@ export const INTERNAL_HMAC_TEST_VECTOR = {
   timestamp: "1767225600",
   nonce: "5f2b9c0e8a4d4e1b9f3a7c6d2e1b0a98",
   body:
-    '{"v":16,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
+    '{"v":17,"lobbyId":"lob_test","code":"KGB-4821","hostUserId":"usr_test","settings":' +
     '{"language":"en","textType":"sentences","wordCount":50,"accentEveryWord":false,' +
     '"difficulty":{"level":"normal"},"practiceLetters":[],"includeNumbers":false,' +
     '"includeSymbols":false,"includePunctuation":true,"timerS":null,"errorMode":"continue",' +
     '"backspace":true,"bonuses":true,"bots":[],"lobbyType":"private"}}',
   /** HMAC-SHA256 hex over `${timestamp}.${nonce}.${body}`. */
-  signature: "d1351d176a6c56bb63174dc4dd20c29ed5d153360016611b80169329e5fa1226",
+  signature: "786192603d2d3e1ba30506b46a220a4cefd4b8841e86f86d8320a548754908d7",
 } as const;

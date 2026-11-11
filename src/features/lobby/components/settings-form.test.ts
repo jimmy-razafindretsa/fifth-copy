@@ -332,7 +332,6 @@ describe("submitLobbyType with a fake action (#114 C3)", () => {
 
   it.each([
     ["closed", "not-waiting"],
-    ["not-found", "no-room"],
     ["invalid", "invalid"],
     ["rate-limited", "timeout"],
     // #815 C6: the race server did not answer: the existing "did not answer, try again" line
@@ -341,6 +340,12 @@ describe("submitLobbyType with a fake action (#114 C3)", () => {
     const h = harness({ ok: false, error: answer });
     await submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "public");
     expect(h.state()).toEqual({ status: "error", key: "lobbyType", error });
+  });
+
+  it("#858: a not-host answer (an unknown code or someone else's lobby) hides the form", async () => {
+    const h = harness({ ok: false, error: "not-host" });
+    await submitLobbyType({ ...h, form: IDLE_FORM, current: "private" }, "public");
+    expect(h.state()).toEqual({ status: "hidden" });
   });
 
   it("#815 C6: an ok answer leaves the row to the room's broadcast; a refusal keeps it on the stored value", async () => {

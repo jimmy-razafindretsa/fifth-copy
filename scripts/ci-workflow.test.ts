@@ -151,18 +151,58 @@ describe("CI e2e is sharded behind one required check (card #532)", () => {
     expect(JSON.stringify(gate?.steps)).toContain(`needs.${shardId}.result`);
   });
 
-  it("C1 the shard matrix covers 1..N exactly and each shard runs its slice of the full suite", () => {
-    const total = shard?.strategy?.matrix?.shardTotal ?? [];
-    expect(total).toHaveLength(1);
-    const n = total[0] ?? 0;
-    expect(n).toBeGreaterThan(1);
-    expect(shard?.strategy?.matrix?.shard).toEqual(Array.from({ length: n }, (_, i) => i + 1));
+  // Card #891: two suites share the matrix. `parallel` = the base axes (suite, filter, shard 1..N);
+  // `matchmaking` = include entries (shard 1..M) for the serial project, which sorted last and ran
+  // one test at a time inside the last shard until it hit the timeout. Together they run every test
+  // once: the parallel filter drops exactly the tests the matchmaking project selects.
+  type Combo = { suite: string; filter: string; shard: number; shardTotal: number };
+  const matrix = (shard?.strategy?.matrix ?? {}) as Partial<Record<keyof Combo, unknown[]>> & {
+    include?: Combo[];
+  };
+  const base: Combo[] = ((matrix.shard ?? []) as number[]).map((n) => ({
+    suite: String((matrix.suite ?? [])[0]),
+    filter: String((matrix.filter ?? [])[0]),
+    shard: n,
+    shardTotal: Number((matrix.shardTotal ?? [])[0]),
+  }));
+  const combos = [...base, ...(matrix.include ?? [])];
+  const config = readFileSync(path.join(root, "playwright.config.ts"), "utf8");
+
+  it("C1 each suite's shards cover 1..N exactly, and each shard runs its slice of its suite", () => {
+    for (const axis of ["suite", "filter", "shardTotal"] as const)
+      expect(matrix[axis]).toHaveLength(1);
     expect(shard?.strategy?.["fail-fast"]).toBe(false);
+    const suites = [...new Set(combos.map((c) => c.suite))];
+    expect(suites.sort()).toEqual(["matchmaking", "parallel"]);
+    for (const suite of suites) {
+      const own = combos.filter((c) => c.suite === suite);
+      const totals = [...new Set(own.map((c) => c.shardTotal))];
+      expect(totals, suite).toHaveLength(1);
+      expect(totals[0], suite).toBeGreaterThan(1);
+      expect(own.map((c) => c.shard).sort(), suite).toEqual(
+        Array.from({ length: totals[0] ?? 0 }, (_, i) => i + 1),
+      );
+      expect(new Set(own.map((c) => c.filter)).size, suite).toBe(1);
+    }
+    // an include entry never merges into a base combination: its suite differs
+    for (const c of matrix.include ?? []) expect(c.suite).not.toBe(base[0]?.suite);
     const pw = runs(shard ?? { steps: [] }).filter((r) => r.includes("playwright test"));
     expect(pw).toEqual([
-      "npx playwright test --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}",
+      "npx playwright test ${{ matrix.filter }} --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}",
     ]);
+    expect(shard?.name).toContain("${{ matrix.suite }}");
     expect(shard?.["timeout-minutes"]).toBeLessThanOrEqual(15);
+  });
+
+  it("C2 the suites split the tests at the @matchmaking tag: every test runs once, matchmaking gated too", () => {
+    expect(config).toMatch(/const MATCHMAKING = \/@matchmaking\/;/);
+    expect(config).toMatch(/name: "matchmaking",\s*grep: MATCHMAKING,/);
+    const filters = Object.fromEntries(combos.map((c) => [c.suite, c.filter]));
+    expect(filters).toEqual({
+      parallel: "--grep-invert=@matchmaking",
+      matchmaking: "--project=matchmaking",
+    });
+    expect(gate?.needs).toContain(shardId);
   });
 });
 

@@ -420,7 +420,7 @@ test.describe("lobby roll: BOT tag, non-host notice, kicker (#105)", () => {
     await recordRaceTokens(page);
     const code = await createLobby(page);
     await expect(rows(page)).toHaveCount(1);
-    const hostName = await rows(page).first().locator("span").nth(2).textContent();
+    const hostName = await rows(page).first().locator("[data-name]").textContent();
 
     await setHostSettings(page, { bots: [{ level: "clerk" }] });
     await expect(rows(page)).toHaveCount(2, { timeout: scaled(2_000) });
@@ -429,7 +429,7 @@ test.describe("lobby roll: BOT tag, non-host notice, kicker (#105)", () => {
     await expect(bot).toHaveCount(1);
     await expect(bot).not.toContainText("YOU");
     await expect(bot.locator("[data-stamp-tone]")).toHaveCount(0);
-    const botName = (await bot.locator("span").nth(2).textContent())?.trim() ?? "";
+    const botName = (await bot.locator("[data-name]").textContent())?.trim() ?? "";
     expect(botName).not.toBe("");
     expect(botName).not.toBe(hostName?.trim());
     // the YOU tag's recipe: Oswald 600 10px .16em on ink, paper text

@@ -164,15 +164,49 @@ describe("setLobbyType (unit, fake DB)", () => {
     expect(row("lob_open").hostUserId).toBe(hostId);
   });
 
-  it("an unknown or malformed code is not-found", async () => {
-    expect(await setLobbyType({ code: "AAA-0000", type: "public" })).toEqual({
+  it("#858 C3: an unknown or malformed code gets the same answer as someone else's lobby", async () => {
+    const unknown = await setLobbyType({ code: "AAA-0000", type: "public" });
+    const malformed = await setLobbyType({ code: "nope", type: "public" });
+    state.jar = new Map();
+    await ensureGuest(); // another guest: a real lobby it does not host
+    const foreign = await setLobbyType({ code: "KGB-4821", type: "public" });
+    expect(foreign).toEqual({ ok: false, error: "not-host" });
+    expect(unknown).toEqual(foreign);
+    expect(malformed).toEqual(foreign);
+  });
+
+  it("#858 C1: no viewer gets not-host without a lobby lookup or a limit call", async () => {
+    state.jar = new Map();
+    fake.db.lobby.findUnique.mockClear();
+    expect(await setLobbyType({ code: "KGB-4821", type: "public" })).toEqual({
       ok: false,
-      error: "not-found",
+      error: "not-host",
     });
-    expect(await setLobbyType({ code: "nope", type: "public" })).toEqual({
-      ok: false,
-      error: "not-found",
-    });
+    expect(fake.db.lobby.findUnique).not.toHaveBeenCalled();
+    expect(state.limitCalls).toEqual([]);
+  });
+
+  it("#858 C2: the limit is spent before the lookup, so a refused call looks nothing up", async () => {
+    state.limited = true;
+    fake.db.lobby.findUnique.mockClear();
+    for (const code of ["KGB-4821", "AAA-0000"]) {
+      expect(await setLobbyType({ code, type: "public" })).toEqual({
+        ok: false,
+        error: "rate-limited",
+      });
+    }
+    expect(fake.db.lobby.findUnique).not.toHaveBeenCalled();
+    expect(state.limitCalls).toEqual([
+      ["set-lobby-type", `user:${hostId}`],
+      ["set-lobby-type", `user:${hostId}`],
+    ]);
+  });
+
+  it("#858 C2: a non-host's call is counted against the caller's own limit", async () => {
+    state.jar = new Map();
+    const other = (await ensureGuest()).id;
+    await setLobbyType({ code: "KGB-4821", type: "public" });
+    expect(state.limitCalls).toEqual([["set-lobby-type", `user:${other}`]]);
   });
 
   it("a throttled host writes nothing", async () => {

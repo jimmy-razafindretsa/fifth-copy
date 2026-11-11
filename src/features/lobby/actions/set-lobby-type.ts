@@ -14,10 +14,11 @@ import type { SetLobbyTypeResult } from "../types";
 /**
  * Files the lobby's visibility (#114, spec 8 "Lobby: public / private"): the one writer of `Lobby.type`
  * (ADR 0008: Postgres owns it, `host:settings` never carries it), read by the kicker (#105), the listing
- * (#127) and matchmaking (#128). The input is parsed first; the host is the row's `hostUserId` compared
- * with the viewer, never an id from the input, and no guest is created for it. The lobby must still be
- * WAITING. Changes count against the host's `set-lobby-type` limit (ADR 0020); a refused call writes
- * nothing. Then the room is told first (#815, `POST /internal/rooms/type`): the row is written only on
+ * (#127) and matchmaking (#128). The input is parsed first; then the viewer (no guest is created for it)
+ * and the viewer's `set-lobby-type` limit (ADR 0020), spent before the lobby lookup (#858, the #808
+ * order); the host is the row's `hostUserId` compared with the viewer, never an id from the input, and
+ * an unknown code gets the same `not-host` as someone else's lobby. The lobby must still be WAITING; a
+ * refused call writes nothing. Then the room is told first (#815, `POST /internal/rooms/type`): the row is written only on
  * its `ok`, so Postgres and the room never disagree; a room past `waiting` or gone is `closed`, no answer
  * (timeout, 5xx, unparsable body) is `unavailable`. The room broadcasts its new settings and reviews
  * its automatic start (#814). On success `/lobby/[code]` is revalidated, so the host's page shows the
@@ -29,15 +30,17 @@ export async function setLobbyType(input: {
 }): Promise<SetLobbyTypeResult> {
   const parsed = setLobbyTypeInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid" };
-  const code = parseRoomCode(parsed.data.code);
-  const lobby = code ? await findLobbyByCode(code) : null;
-  if (!lobby) return { ok: false, error: "not-found" };
   const viewer = await getViewer();
-  if (!viewer || viewer.id !== lobby.hostUserId) return { ok: false, error: "not-host" };
-  if (lobby.status !== "WAITING") return { ok: false, error: "closed" };
+  if (!viewer) return { ok: false, error: "not-host" };
+  // Spent before the lookup (#858, as #808): every answer costs the caller budget.
   if (!(await limit("set-lobby-type", `user:${viewer.id}`)).ok) {
     return { ok: false, error: "rate-limited" };
   }
+  const code = parseRoomCode(parsed.data.code);
+  const lobby = code ? await findLobbyByCode(code) : null;
+  // An unknown code and someone else's lobby get the same answer (#858 C3).
+  if (!lobby || viewer.id !== lobby.hostUserId) return { ok: false, error: "not-host" };
+  if (lobby.status !== "WAITING") return { ok: false, error: "closed" };
   const room = await createInternalApiClient({
     baseUrl: env.RACE_SERVER_INTERNAL_URL,
     secret: env.RACE_TOKEN_SECRET,

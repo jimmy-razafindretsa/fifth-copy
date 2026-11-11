@@ -26,7 +26,7 @@ export type SetLobbyTypeResult =
   | { ok: true }
   | {
       ok: false;
-      error: "invalid" | "not-found" | "not-host" | "closed" | "rate-limited" | "unavailable";
+      error: "invalid" | "not-host" | "closed" | "rate-limited" | "unavailable";
     };
 
 /** A public room a visitor can join right now (#806): counts only, never names or user ids. */

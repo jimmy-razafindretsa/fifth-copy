@@ -88,12 +88,16 @@ describe("last leave grace (#734)", () => {
 
 describe("a host with others in the room waits out the grace (#137, #884)", () => {
   it("only the host, only in waiting or ended, only with another human seated; a guest never waits", async () => {
-    expect(await setup("waiting", [host, guest]).lastLeave.hostWithOthers("lob", "host")).toBe(true);
+    expect(await setup("waiting", [host, guest]).lastLeave.hostWithOthers("lob", "host")).toBe(
+      true,
+    );
     expect(await setup("ended", [host, guest]).lastLeave.hostWithOthers("lob", "host")).toBe(true);
     expect(await setup("waiting", [host, guest]).lastLeave.hostWithOthers("lob", "b")).toBe(false);
     expect(await setup("ended", [host, guest]).lastLeave.hostWithOthers("lob", "b")).toBe(false);
     // countdown and running keep the desk through presence (#178): no leave to defer
-    expect(await setup("running", [host, guest]).lastLeave.hostWithOthers("lob", "host")).toBe(false);
+    expect(await setup("running", [host, guest]).lastLeave.hostWithOthers("lob", "host")).toBe(
+      false,
+    );
     // the last human: nobody to promote (waiting: `closes` defers it; ended: kept, #143)
     expect(await setup("waiting", [host, bot]).lastLeave.hostWithOthers("lob", "host")).toBe(false);
     expect(await setup("ended", [host, bot]).lastLeave.hostWithOthers("lob", "host")).toBe(false);

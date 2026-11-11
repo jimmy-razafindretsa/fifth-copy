@@ -666,6 +666,19 @@ export const en = {
         },
         noTrace: "NO TRACE ON FILE",
       },
+      keys: {
+        title: "ERRORS BY KEY",
+        none: "NONE",
+        space: "SPACE",
+      },
+      tip: {
+        tag: "ORDER OF THE DAY",
+        clean: "Not one error on file: keep this rhythm and the speed will follow.",
+        special: "The {key} key slipped {n} times: the guide shows how to type it.",
+        key: "The {key} key slipped {n} times: slow down on it next race and the rest will follow.",
+        accuracy: "Speed is good, accuracy is better: slow down a little and make every key count.",
+        steady: "A steady copy: next race, push the pace a little on the words you know.",
+      },
     },
     podium: {
       title: "Podium",

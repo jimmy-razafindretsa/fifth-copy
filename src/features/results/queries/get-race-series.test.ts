@@ -7,7 +7,7 @@ import {
   replayTrace,
   type Keystroke,
 } from "@fifth-copy/engine";
-import { getRaceSeries } from "./get-race-series";
+import { getPersonalReplay, getRaceSeries } from "./get-race-series";
 
 vi.mock("server-only", () => ({}));
 
@@ -163,5 +163,48 @@ describe("getRaceSeries (#865 C2)", () => {
       race({ keystrokes: [{ desk: 3, userId: "u-me", data: Buffer.from("nope"), count: 3 }] }),
     ]);
     expect(await getRaceSeries(RACE_ID, { id: "u-me" }, { db: corrupt.db })).toBeNull();
+  });
+});
+
+// Contract of #867 C3 (data side): the keys the viewer missed come from their own trace only, replayed
+// on their effective text; only the counts leave the query; null without a trace.
+describe("getPersonalReplay, missed keys (#867 C3)", () => {
+  /** The viewer's text typed with three wrong presses on its "f"s (Continue: the cursor moves on). */
+  const missing = (text: string, char: string, times: number): Keystroke[] => {
+    let left = times;
+    return Array.from(text, (key, i) => {
+      const miss = key === char && left > 0;
+      if (miss) left -= 1;
+      return { t: (i + 1) * 250, key: miss ? "x" : key };
+    });
+  };
+
+  it("the viewer's own missed keys, most missed first, never another user's", async () => {
+    const mine = missing(MINE_TEXT, "f", 3);
+    const theirs = missing(BASE, "t", 5);
+    const { db, read } = fakeDb([
+      race({
+        keystrokes: [
+          { desk: 3, userId: "u-me", ...blob(mine) },
+          { desk: 5, userId: "u-other", ...blob(theirs) },
+        ],
+      }),
+    ]);
+    const replay = await getPersonalReplay(RACE_ID, { id: "u-me" }, { db });
+    expect(replay!.missed).toEqual([{ char: "f", count: 3 }]);
+    expect(replay!.series).not.toBeNull();
+    expect(read.map((t) => t.userId)).toEqual(["u-me"]);
+  });
+
+  it("a clean trace misses nothing; no trace on file is null", async () => {
+    const clean = fakeDb([race()]);
+    expect((await getPersonalReplay(RACE_ID, { id: "u-me" }, { db: clean.db }))!.missed).toEqual(
+      [],
+    );
+    const purged = fakeDb([race({ keystrokes: [] })]);
+    expect(await getPersonalReplay(RACE_ID, { id: "u-me" }, { db: purged.db })).toBeNull();
+    const empty = fakeDb([race({ keystrokes: [{ desk: 3, userId: "u-me", ...blob([]) }] })]);
+    expect(await getPersonalReplay(RACE_ID, { id: "u-me" }, { db: empty.db })).toBeNull();
+    expect(await getPersonalReplay(RACE_ID, null, { db: clean.db })).toBeNull();
   });
 });

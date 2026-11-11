@@ -335,11 +335,12 @@ export function attachSocketServer(
           };
           // The last human of a waiting room (#734): a reload must not close the room or its
           // lobby, so the leave waits out the grace and is dropped if a socket of the user is back.
-          // The host of an ended room (#137): the Dawn report is the room's own page, so the role
-          // passes only if the host is still away after the same grace.
+          // The host with others in the room (#137, #884): a reload of the lobby page or the Dawn
+          // report must not pass the role on, so it passes only if the host is still away after
+          // the same grace.
           if (
             (await deps.lastLeave.closes(lobby, sub)) ||
-            (await deps.lastLeave.hostOfEnded(lobby, sub))
+            (await deps.lastLeave.hostWithOthers(lobby, sub))
           )
             return deps.lastLeave.defer(lobby, sub, leave);
           await leave();

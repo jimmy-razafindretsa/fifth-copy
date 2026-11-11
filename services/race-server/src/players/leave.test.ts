@@ -103,6 +103,22 @@ describe("leaveRoom hands the host role over (#137 C2, C3)", () => {
     expect(order).toEqual(["announce", "new-host"]);
   });
 
+  it("#884 C3 an explicit leave by the host in a waiting room promotes at once: no grace (only a disconnect waits one)", async () => {
+    const d = deps({
+      phase: "waiting",
+      result: () => ({
+        members: [{ ...bot, userId: "a", isBot: false, isHost: true }],
+        closed: false,
+        kept: false,
+        newHost: { userId: "a", desk: 1 },
+      }),
+    });
+    // the host has no socket left and no timer runs: the role passes inside the leave itself
+    await leaveRoom(d, "lob", "host");
+    expect(d.registry.leave).toHaveBeenCalledExactlyOnceWith("lob", "host");
+    expect(d.onNewHost).toHaveBeenCalledExactlyOnceWith("lob", { userId: "a", desk: 1 });
+  });
+
   it("a leave without a promotion (a guest, a closing room) reports no new host", async () => {
     const plain = deps({ result: () => ({ members: [bot], closed: false, kept: false }) });
     await leaveRoom(plain, "lob", "b");

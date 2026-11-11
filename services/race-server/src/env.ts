@@ -18,6 +18,12 @@ const schema = z.object({
   WEB_ORIGIN: z.url().default("http://localhost:3000"),
   /** e2e fast clock (ADR 0012): "1" divides every lifecycle duration by 10 (`rooms/durations.ts`). */
   RACE_FAST_CLOCK: z.enum(["0", "1"]).default("0"),
+  /**
+   * e2e only (#868): the reconnection grace of a line-cut desk in ms, in place of the table's (120 s, or
+   * 12 s fast). Unset in production. Lets a spec wait a host's grace without the fast clock's other
+   * durations (countdown, idle, auto start).
+   */
+  RACE_GRACE_MS: z.coerce.number().int().min(1_000).max(120_000).optional(),
   /** Drain cap after SIGTERM (#704): exit when no room is left or after this many seconds. */
   RACE_DRAIN_CAP_S: z.coerce.number().int().min(1).max(3600).default(DEFAULT_DRAIN_CAP_S),
   /** Railway's SIGTERM-to-SIGKILL time when set as a service variable (ADR 0019); boot warns if short. */
@@ -34,6 +40,7 @@ export function parseEnv(source: Record<string, string | undefined> = process.en
     RACE_TOKEN_SECRET: source.RACE_TOKEN_SECRET,
     WEB_ORIGIN: source.WEB_ORIGIN,
     RACE_FAST_CLOCK: source.RACE_FAST_CLOCK,
+    RACE_GRACE_MS: source.RACE_GRACE_MS || undefined,
     RACE_DRAIN_CAP_S: source.RACE_DRAIN_CAP_S,
     RAILWAY_DEPLOYMENT_DRAINING_SECONDS: source.RAILWAY_DEPLOYMENT_DRAINING_SECONDS,
   });

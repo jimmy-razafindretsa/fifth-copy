@@ -21,7 +21,14 @@ import {
 } from "./prediction";
 import { storeResumeKey } from "./resume-key";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "./socket";
-import { expireStamp, pushStamp, STAMP_SHOW_MS, stampFromEvent, type RaceStamp } from "./stamps";
+import {
+  expireStamp,
+  newHostStamp,
+  pushStamp,
+  stampFromEvent,
+  stampShowMs,
+  type RaceStamp,
+} from "./stamps";
 
 /**
  * The race store (#561, ADR 0013 "two features, one store"): everything the seat view knows about its
@@ -478,12 +485,9 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       if (bonus) return bonus;
       const exit = reduceExitEvent(state, event.payload);
       if (exit) return exit;
+      if (event.payload.kind === "new-host") return reduceNewHost(state, event.payload, event.at);
       const stamp = stampFromEvent(event.payload, state.you, state.prediction?.state.errors ?? 0);
-      if (!stamp) return state;
-      const id = state.stampSeq + 1;
-      const stamps = pushStamp(state.stamps, { id, ...stamp, at: event.at });
-      if (stamps === state.stamps) return state;
-      return { ...state, stamps, stampSeq: stamps.some((s) => s.id === id) ? id : state.stampSeq };
+      return stamp ? queueStamp(state, stamp, event.at) : state;
     }
     case "stamp-expired": {
       const stamps = expireStamp(state.stamps, event.id, event.at);
@@ -556,6 +560,47 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
     case "token-error":
       return lost(state, event.error);
   }
+}
+
+/** Queues one stamp (`pushStamp`) under the next id; the same state when the queue drops it. */
+function queueStamp(
+  state: RaceState,
+  stamp: Omit<RaceStamp, "id" | "at" | "shownAt">,
+  at: number,
+): RaceState {
+  const id = state.stampSeq + 1;
+  const stamps = pushStamp(state.stamps, { id, ...stamp, at });
+  if (stamps === state.stamps) return state;
+  return { ...state, stamps, stampSeq: stamps.some((s) => s.id === id) ? id : state.stampSeq };
+}
+
+/** The phases whose seat view shows the NEW HOST notice (#868 C1): the race, before and after GO. */
+const NOTICE_PHASES: ReadonlySet<string> = new Set(["countdown", "running", "ended"]);
+
+/**
+ * `event new-host { desk }` (#137 promotes, #868 shows it): the roster's host flag and your role follow
+ * the desk, and in a race's phases the seat view gets the NEW HOST notice with the desk's name from the
+ * roster. A desk the roster does not hold is ignored. The typing (prediction, last key) is untouched.
+ */
+function reduceNewHost(
+  state: RaceState,
+  payload: Extract<RoomEvents["event"], { kind: "new-host" }>,
+  at: number,
+): RaceState {
+  const notice = newHostStamp(payload, state.members);
+  if (!notice) return state;
+  const members = state.members.some((m) => m.isHost !== (m.desk === payload.desk))
+    ? state.members.map((m) => ({ ...m, isHost: m.desk === payload.desk }))
+    : state.members;
+  const role: RaceState["role"] =
+    state.role === "spectator" || state.role === null
+      ? state.role
+      : state.you === payload.desk
+        ? "host"
+        : "player";
+  const next =
+    members === state.members && role === state.role ? state : { ...state, members, role };
+  return state.room && NOTICE_PHASES.has(state.room.phase) ? queueStamp(next, notice, at) : next;
 }
 
 /**
@@ -897,7 +942,7 @@ export function bindRaceSocket(
 }
 
 /**
- * Expires the visible stamp `STAMP_SHOW_MS` after it shows (#232 C1): on each store change that brings
+ * Expires the visible stamp `stampShowMs` after it shows (#232 C1; 3 s for NEW HOST, #868): on each store change that brings
  * a new visible stamp, one timeout on the injected clock dispatches `stamp-expired`. Returns the stop,
  * which cancels a pending expiry.
  */
@@ -920,7 +965,7 @@ export function watchStampExpiry(store: RaceStore, timer: RaceTimer = deviceTime
         pending = null;
         store.dispatch({ type: "stamp-expired", id, at: timer.now() });
       },
-      Math.max(0, visible.shownAt + STAMP_SHOW_MS - timer.now()),
+      Math.max(0, visible.shownAt + stampShowMs(visible.kind) - timer.now()),
     );
   };
   const off = store.subscribe(check);

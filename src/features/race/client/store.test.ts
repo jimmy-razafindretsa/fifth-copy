@@ -2357,3 +2357,108 @@ describe("#235 line cut, reconnect and the lost room", () => {
     });
   });
 });
+
+// Contract of #868 C1: `event new-host { desk }` in `countdown`, `running` and `ended` records one NEW
+// HOST notice (the desk's name from the roster) in the stamp queue and moves the host flag; an unknown
+// desk is ignored; the typing state (cursor, errors, trace) is untouched.
+describe("#868 C1 new host", () => {
+  const T = 1_767_225_600_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "Le reçu du café est prêt.",
+    language: "fr" as const,
+    wordCount: 5,
+    t0: T + 3_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const newHost = (desk: number, at = T + 5_000): RaceEvent => ({
+    type: "event",
+    payload: { v: PROTOCOL_VERSION, kind: "new-host", desk },
+    at,
+  });
+  const key = (key: string, t: number): RaceEvent => ({ type: "key", keystroke: { t, key } });
+  const counting = () =>
+    run(
+      { type: "welcome", payload: welcome() },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+    );
+  /** Running, with three keys typed (two right, one wrong). */
+  function typing(): RaceState {
+    let s = reduceRace(counting(), { type: "go" });
+    for (const [i, k] of ["L", "e", "x"].entries()) s = reduceRace(s, key(k, 100 + i * 100));
+    return s;
+  }
+  const hostOf = (s: RaceState) => s.members.filter((m) => m.isHost).map((m) => m.desk);
+  const notices = (s: RaceState) =>
+    s.stamps.map(({ kind, other, name }) => ({ kind, other, name }));
+
+  it("running: one notice with the roster's name, the host flag moves, the typing is untouched", () => {
+    const before = typing();
+    expect(before.phase).toBe("running");
+    expect(before.prediction!.state.errors).toBe(1);
+    expect(hostOf(before)).toEqual([1]);
+    const after = reduceRace(freeze(before), newHost(3));
+    expect(notices(after)).toEqual([{ kind: "new-host", other: 3, name: "Heron-411" }]);
+    expect(after.stamps[0]!.shownAt).toBe(T + 5_000);
+    expect(hostOf(after)).toEqual([3]);
+    expect(after.role).toBe("player");
+    // the typing state is the same object: cursor, errors and trace unchanged
+    expect(after.prediction).toBe(before.prediction);
+    expect(after.lastKey).toBe(before.lastKey);
+    expect(after.exit).toBe(before.exit);
+    // and the next key still counts
+    const next = reduceRace(after, key("r", 400));
+    expect(next.prediction).not.toBe(after.prediction);
+    expect(next.prediction!.state.cursor).toBeGreaterThan(before.prediction!.state.cursor);
+  });
+
+  it("countdown and ended take it too; your own promotion makes you the host", () => {
+    const c = reduceRace(counting(), newHost(5));
+    expect(notices(c)).toEqual([{ kind: "new-host", other: 5, name: "Lynx-785" }]);
+    expect(c.role).toBe("host");
+    expect(hostOf(c)).toEqual([5]);
+    const ended = reduceRace(typing(), {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "all-finished", ranking: [] },
+      at: T + 9_000,
+    });
+    expect(ended.phase).toBe("ended");
+    const e = reduceRace(ended, newHost(3, T + 9_500));
+    expect(notices(e)).toEqual([{ kind: "new-host", other: 3, name: "Heron-411" }]);
+  });
+
+  it("records one notice per event (ids unique), and the next one replaces it", () => {
+    const s = reduceRace(reduceRace(typing(), newHost(3)), newHost(5, T + 6_000));
+    expect(notices(s)).toEqual([{ kind: "new-host", other: 5, name: "Lynx-785" }]);
+    expect(s.stamps[0]!.id).toBe(2);
+  });
+
+  it("an unknown desk is ignored: the same state", () => {
+    const s = typing();
+    expect(reduceRace(s, newHost(9))).toBe(s);
+  });
+
+  it("waiting moves the host flag without a notice (the lobby shows it, #137)", () => {
+    const s = reduceRace(run({ type: "welcome", payload: welcome() }), newHost(3));
+    expect(s.stamps).toEqual([]);
+    expect(hostOf(s)).toEqual([3]);
+  });
+
+  it("watchStampExpiry holds the notice 3 s (slow x 5), then it goes", () => {
+    let now = T + 5_000;
+    const due: { at: number; fn: () => void }[] = [];
+    const timer = {
+      now: () => now,
+      setTimeout: (fn: () => void, ms: number) => due.push({ at: now + ms, fn }),
+      clearTimeout: () => undefined,
+    };
+    const store = createRaceStore(typing());
+    const stop = watchStampExpiry(store, timer);
+    store.dispatch(newHost(3));
+    expect(due.map((d) => d.at)).toEqual([T + 8_000]);
+    now = T + 8_000;
+    due[0]!.fn();
+    expect(store.getState().stamps).toEqual([]);
+    stop();
+  });
+});

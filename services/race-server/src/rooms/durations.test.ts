@@ -25,4 +25,15 @@ describe("durations", () => {
       AUTO_START_MS: 4_500,
     });
   });
+
+  it("RACE_GRACE_MS (e2e only, #868) sets the grace alone, with or without the fast clock", () => {
+    expect(durationsFor({ RACE_FAST_CLOCK: "0", RACE_GRACE_MS: 20_000 })).toEqual({
+      ...durationsFor({ RACE_FAST_CLOCK: "0" }),
+      GRACE_MS: 20_000,
+    });
+    expect(durationsFor({ RACE_FAST_CLOCK: "1", RACE_GRACE_MS: 20_000 })).toEqual({
+      ...durationsFor({ RACE_FAST_CLOCK: "1" }),
+      GRACE_MS: 20_000,
+    });
+  });
 });

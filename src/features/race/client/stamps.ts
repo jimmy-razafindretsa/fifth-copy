@@ -1,3 +1,4 @@
+import type { Member } from "@fifth-copy/protocol";
 import type { RoomEvents } from "./socket";
 
 /**
@@ -9,9 +10,10 @@ import type { RoomEvents } from "./socket";
 
 /**
  * The stamps the seat view shows: you passed someone (red), someone passed you (ink); your finish
- * (#240, bible 7.7): `accepted` with zero errors (red, you), `returned` with errors (ink, paperwork).
+ * (#240, bible 7.7): `accepted` with zero errors (red, you), `returned` with errors (ink, paperwork);
+ * the host left for good and the room promoted a typist (#868, bible 14.3: ink, `NEW HOST: <NAME>`).
  */
-export type StampKind = "overtake" | "passed" | "accepted" | "returned";
+export type StampKind = "overtake" | "passed" | "accepted" | "returned" | "new-host";
 
 export type RaceStamp = {
   /** Unique within a page (a counter): the row's key and the stamp's angle seed. */
@@ -23,16 +25,42 @@ export type RaceStamp = {
   other: number;
   /** Your errors at the finish (`returned` reads them); 0 for every other kind. */
   errors: number;
+  /** The new host's name as the roster held it when the event came (`new-host` only). */
+  name?: string;
   /** When it shows (or showed): `at` alone, else the moment the stamp before it expires. */
   shownAt: number;
 };
 
 /** How long a stamp stays once it shows. */
 export const STAMP_SHOW_MS = 1_400;
+/**
+ * How long the NEW HOST notice stays (#868 C2): the UI's slow duration x 5 (`--motion-duration-slow`,
+ * 600 ms in tokens.css, so 3 s), as the lobby's stamp of #137; the same 3 s under reduced motion, since
+ * the notice is news, not motion (bible 14.3).
+ */
+export const NEW_HOST_SHOW_MS = 3_000;
 /** A second event of the same kind this soon after the newest queued one is dropped. */
 export const STAMP_COLLAPSE_MS = 300;
 
-type StampOf = { kind: StampKind; other: number; errors: number };
+/** How long a stamp of this kind stays once it shows. */
+export const stampShowMs = (kind: StampKind): number =>
+  kind === "new-host" ? NEW_HOST_SHOW_MS : STAMP_SHOW_MS;
+
+const expiresAt = (stamp: RaceStamp) => stamp.shownAt + stampShowMs(stamp.kind);
+
+type StampOf = { kind: StampKind; other: number; errors: number; name?: string };
+
+/**
+ * The NEW HOST notice for `event new-host { desk }` (#868 C1): the desk's name from the roster, or
+ * `null` for a desk the roster does not hold (the event is then ignored).
+ */
+export function newHostStamp(
+  payload: Extract<RoomEvents["event"], { kind: "new-host" }>,
+  members: readonly Member[],
+): StampOf | null {
+  const host = members.find((m) => m.desk === payload.desk);
+  return host ? { kind: "new-host", other: host.desk, errors: 0, name: host.name } : null;
+}
 
 /**
  * The queue's stamp for one server event about your desk, or `null` (another kind, another desk).
@@ -63,13 +91,14 @@ export function stampFromEvent(
 /** The queue without the stamps that expired by `now` (the visible one first; a pending one follows). */
 export function dropExpired(stamps: readonly RaceStamp[], now: number): readonly RaceStamp[] {
   let i = 0;
-  while (i < stamps.length && stamps[i]!.shownAt + STAMP_SHOW_MS <= now) i++;
+  while (i < stamps.length && expiresAt(stamps[i]!) <= now) i++;
   return i === 0 ? stamps : stamps.slice(i);
 }
 
 /**
  * Queues a stamp: at most one visible (`[0]`) plus one pending (`[1]`, the latest wins). A stamp of the
- * same kind as the newest queued one within `STAMP_COLLAPSE_MS` collapses into it. Returns the same
+ * same kind as the newest queued one within `STAMP_COLLAPSE_MS` collapses into it. A visible NEW HOST
+ * notice gives way at once: whatever arrives while it shows replaces it (#868 C2). Returns the same
  * array when nothing changes.
  */
 export function pushStamp(
@@ -80,8 +109,8 @@ export function pushStamp(
   const newest = live.at(-1);
   if (newest && newest.kind === stamp.kind && stamp.at - newest.at < STAMP_COLLAPSE_MS) return live;
   const visible = live[0];
-  if (!visible) return [{ ...stamp, shownAt: stamp.at }];
-  return [visible, { ...stamp, shownAt: visible.shownAt + STAMP_SHOW_MS }];
+  if (!visible || visible.kind === "new-host") return [{ ...stamp, shownAt: stamp.at }];
+  return [visible, { ...stamp, shownAt: expiresAt(visible) }];
 }
 
 /** The visible stamp `id` expired at `now`: the pending one (if any) shows from then. */

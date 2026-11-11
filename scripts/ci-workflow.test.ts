@@ -415,3 +415,72 @@ describe("CI e2e shards retry a stalled Playwright dependency install (card #819
     expect(run(["2"]).status).toBe(2);
   });
 });
+
+// Card #718 C4: after every push to main, deploy-check polls the public health endpoints until both
+// Railway services run what main expects (scripts/deploy-check.ts), or fails after 20 min. It reads
+// public URLs from repository variables; it holds no secret and never calls Railway.
+describe("deploy-check workflow detects a stale Railway deploy (card #718)", () => {
+  type DeployWorkflow = {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: Record<string, Job & { "timeout-minutes"?: number }>;
+  };
+  const file = path.join(root, ".github/workflows/deploy-check.yml");
+  const text = readFileSync(file, "utf8");
+  const wf = parseYaml(text) as DeployWorkflow;
+  const steps = Object.values(wf.jobs).flatMap((j) => j.steps);
+  const script = steps.map((s) => s.run ?? "").join("\n");
+  const env = Object.assign({}, ...Object.values(wf.jobs).map((j) => j.env ?? {})) as Record<
+    string,
+    string
+  >;
+
+  it("C4 runs on push to main and workflow_dispatch only, with contents: read", () => {
+    expect(Object.keys(wf.on).sort()).toEqual(["push", "workflow_dispatch"]);
+    expect(wf.on.push).toEqual({ branches: ["main"] });
+    expect(wf.permissions).toEqual({ contents: "read" });
+  });
+
+  it("C4 checks out the full history (ancestry needs every commit)", () => {
+    const checkout = steps.find((s) => s.uses?.startsWith("actions/checkout@"));
+    expect(checkout?.with?.["fetch-depth"]).toBe(0);
+  });
+
+  it("C4 polls every 30 s for at most 20 min, running scripts/deploy-check.ts after each poll", () => {
+    expect(Number(env.POLL_SECONDS)).toBe(30);
+    expect(Number(env.TIMEOUT_SECONDS)).toBe(1200);
+    expect(script).toMatch(
+      /scripts\/deploy-check\.ts --web "\$WEB_PUBLIC_URL" --race "\$RACE_SERVER_PUBLIC_URL"/,
+    );
+    expect(script).toContain('sleep "$POLL_SECONDS"');
+    for (const job of Object.values(wf.jobs))
+      expect(job["timeout-minutes"]).toBeLessThanOrEqual(25);
+  });
+
+  it("C4 ends green on the first OK and, after the timeout, fails with the last verdict in the job summary", () => {
+    expect(script).toMatch(/exit 0/);
+    expect(script).toContain("$GITHUB_STEP_SUMMARY");
+    expect(script).toMatch(/exit 1/);
+  });
+
+  it("C4 reads the public URLs from repository variables and names a missing one", () => {
+    expect(env.WEB_PUBLIC_URL).toBe("${{ vars.WEB_PUBLIC_URL }}");
+    expect(env.RACE_SERVER_PUBLIC_URL).toBe("${{ vars.RACE_SERVER_PUBLIC_URL }}");
+    for (const name of ["WEB_PUBLIC_URL", "RACE_SERVER_PUBLIC_URL"]) {
+      const empty = {
+        ...process.env,
+        WEB_PUBLIC_URL: "https://w",
+        RACE_SERVER_PUBLIC_URL: "https://r",
+        [name]: "",
+      };
+      const guard = steps.find((s) => s.id === "vars")!;
+      const r = spawnSync("bash", ["-c", guard.run!], { encoding: "utf8", env: empty });
+      expect(r.status).toBe(1);
+      expect(r.stdout + r.stderr).toContain(name);
+    }
+  });
+
+  it("C4 holds no secret, no Railway token and no Railway CLI", () => {
+    expect(text).not.toMatch(/secrets\.|RAILWAY_TOKEN|railway /);
+  });
+});

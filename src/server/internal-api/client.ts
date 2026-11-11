@@ -3,12 +3,15 @@ import {
   openRoomResponseSchema,
   roomStatusResponseSchema,
   roomTypeResponseSchema,
+  sharedRoomResponseSchema,
   type OpenRoomRequest,
   type OpenRoomResponse,
   type RoomStatusRequest,
   type RoomStatusResponse,
   type RoomTypeRequest,
   type RoomTypeResponse,
+  type SharedRoomRequest,
+  type SharedRoomResponse,
 } from "@fifth-copy/protocol";
 import { internalHeaders } from "./sign";
 
@@ -26,6 +29,11 @@ export type InternalApiClient = {
    * the web writes `Lobby.type`.
    */
   setRoomType(request: RoomTypeRequest): Promise<InternalCallResult<RoomTypeResponse>>;
+  /**
+   * Whether two users are members of the same live room (#65, ADR 0022). Read only. Fails closed:
+   * anything but a parsed 200 is `race-server-unavailable`, which callers treat as not shared.
+   */
+  sharedRoom(request: SharedRoomRequest): Promise<InternalCallResult<SharedRoomResponse>>;
 };
 
 type ClientOptions = {
@@ -78,5 +86,7 @@ export function createInternalApiClient({
       post("/internal/rooms/status", request, (json) => roomStatusResponseSchema.parse(json)),
     setRoomType: (request) =>
       post("/internal/rooms/type", request, (json) => roomTypeResponseSchema.parse(json)),
+    sharedRoom: (request) =>
+      post("/internal/rooms/shared", request, (json) => sharedRoomResponseSchema.parse(json)),
   };
 }

@@ -1295,3 +1295,110 @@ describe("room registry: host promotion (#137 C1, C2)", () => {
     expect(await redis.hget(roomKey(lobbyId), "hostUserId")).toBe("h");
   });
 });
+
+describe("room registry: sharedRoom (#65 C3)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  // User ids unique per test: the shared test db holds other files' rooms and members.
+  const users = () => {
+    const run = randomUUID();
+    return { a: `usr_${run}_a`, b: `usr_${run}_b`, c: `usr_${run}_c`, host: `usr_${run}_h` };
+  };
+
+  async function roomWith(registry: RoomRegistry, host: string, ...userIds: string[]) {
+    const lobbyId = await openRoom(registry, lobby(), host);
+    for (const userId of [host, ...userIds]) await registry.join(lobbyId, { userId, name: "Ada" });
+    return lobbyId;
+  }
+
+  it("is true when one room's members hash holds both ids, in either order", async () => {
+    const { registry } = setup();
+    const u = users();
+    await roomWith(registry, u.host, u.a, u.b);
+    expect(await registry.sharedRoom(u.a, u.b)).toBe(true);
+    expect(await registry.sharedRoom(u.b, u.a)).toBe(true);
+    expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
+  });
+
+  it("is false with no room, one of the two in a room, the two in different rooms, an unknown user", async () => {
+    const { registry } = setup();
+    const u = users();
+    expect(await registry.sharedRoom(u.a, u.b)).toBe(false);
+    await roomWith(registry, u.host, u.a);
+    expect(await registry.sharedRoom(u.a, u.b)).toBe(false);
+    await roomWith(registry, u.c, u.b);
+    expect(await registry.sharedRoom(u.a, u.b)).toBe(false);
+    expect(await registry.sharedRoom(u.a, `usr_${randomUUID()}`)).toBe(false);
+  });
+
+  it("refuses a bot key on either side without a lookup, even when the bot is seated", async () => {
+    const { registry } = setup();
+    const u = users();
+    const lobbyId = await roomWith(registry, u.host, u.a);
+    await registry.setBots(lobbyId, [{ level: "recruit" }]);
+    expect(await redis.hexists(membersKey(lobbyId), "bot:3")).toBe(1);
+    const groups = recordCommands();
+    expect(await registry.sharedRoom("bot:3", u.a)).toBe(false);
+    expect(await registry.sharedRoom(u.host, "bot:3")).toBe(false);
+    expect(groups()).toEqual([]);
+  });
+
+  it("counts a room in any phase: waiting, countdown, running, ended, voided", async () => {
+    const { registry } = setup();
+    const u = users();
+    const lobbyId = await roomWith(registry, u.host, u.a);
+    const desks: RaceDesk[] = [
+      { desk: 1, userId: u.host, name: "Ada", isBot: false },
+      { desk: 2, userId: u.a, name: "Ada", isBot: false },
+    ];
+    expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
+    await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks });
+    expect((await registry.room(lobbyId))?.phase).toBe("countdown");
+    expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
+    for (const phase of ["running", "ended"] as const) {
+      await registry.setPhase(lobbyId, phase);
+      expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
+    }
+    await registry.setPhase(lobbyId, "running");
+    expect(await registry.voidRoom(lobbyId)).toEqual({ lost: false });
+    expect((await registry.room(lobbyId))?.endReason).toBe("void");
+    expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
+  });
+
+  it("a member who left no longer counts", async () => {
+    const { registry } = setup();
+    const u = users();
+    const lobbyId = await roomWith(registry, u.host, u.a, u.b);
+    await registry.leave(lobbyId, u.b);
+    expect(await registry.sharedRoom(u.a, u.b)).toBe(false);
+    expect(await registry.sharedRoom(u.a, u.host)).toBe(true);
+  });
+
+  it("reads Redis, not this process's cache: a fresh registry with no open room answers the same", async () => {
+    const { registry } = setup();
+    const u = users();
+    await roomWith(registry, u.host, u.a);
+    const fresh = setup().registry;
+    expect(fresh.count()).toBe(0);
+    expect(await fresh.sharedRoom(u.host, u.a)).toBe(true);
+  });
+
+  it("is read only: the rooms set, then one pipeline of HEXISTS pairs; no write, no EXPIRE", async () => {
+    const { registry } = setup();
+    const u = users();
+    const first = await roomWith(registry, u.host, u.a);
+    const second = await roomWith(registry, u.c, u.b);
+    const pipelines = vi.spyOn(redis, "pipeline");
+    const groups = recordCommands();
+    expect(await registry.sharedRoom(u.a, u.b)).toBe(false);
+    const sent = groups().map(({ commands }) => commands[0]!);
+    expect(pipelines).toHaveBeenCalledTimes(1);
+    expect(sent[0]).toEqual(["smembers", ROOMS_KEY]);
+    const lookups = sent.slice(1);
+    expect(lookups.every(([name]) => name === "hexists")).toBe(true);
+    for (const lobbyId of [first, second])
+      for (const userId of [u.a, u.b])
+        expect(lookups).toContainEqual(["hexists", membersKey(lobbyId), userId]);
+    expect(lookups.length % 2).toBe(0);
+  });
+});

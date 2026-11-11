@@ -5,12 +5,14 @@ import {
   openRoomRequestSchema,
   roomStatusRequestSchema,
   roomTypeRequestSchema,
+  sharedRoomRequestSchema,
   type InternalError,
   type OpenRoomResponse,
   type RoomStatus,
   type RoomStatusResponse,
   type RoomTypeResponse,
   type RaceSettings,
+  type SharedRoomResponse,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import { ROOM_SEATS, type RoomRegistry } from "../rooms/registry";
@@ -56,7 +58,8 @@ const error = (status: number, code: InternalError["error"]) => ({
 
 /**
  * Web -> race server routes (ADR 0006 point 6). One entry per path: `POST /internal/rooms` (open),
- * `POST /internal/rooms/status` (#806), `POST /internal/rooms/type` (#815); `PATCH /internal/rooms/:id/settings` and `/close` land here later. Each handler parses its body with a protocol schema.
+ * `POST /internal/rooms/status` (#806), `POST /internal/rooms/type` (#815), `POST /internal/rooms/shared`
+ * (#65, ADR 0022); `PATCH /internal/rooms/:id/settings` and `/close` land here later. Each handler parses its body with a protocol schema.
  */
 export function internalRoutes({
   registry,
@@ -139,6 +142,22 @@ export function internalRoutes({
         const res: RoomTypeResponse = {
           v: PROTOCOL_VERSION,
           result: typed.ok ? "ok" : typed.reason,
+        };
+        return { status: 200, body: res };
+      },
+    },
+    {
+      // Do these two users share a live room (#65, ADR 0022)? Read only, so it answers while
+      // draining. The body is the boolean alone: never a lobby id, a code, a name or a count.
+      method: "POST",
+      path: "/internal/rooms/shared",
+      async handle(body) {
+        const parsed = sharedRoomRequestSchema.safeParse(body);
+        if (!parsed.success) return error(400, "bad-body");
+        const [userId, otherUserId] = parsed.data.userIds;
+        const res: SharedRoomResponse = {
+          v: PROTOCOL_VERSION,
+          shared: await registry.sharedRoom(userId, otherUserId),
         };
         return { status: 200, body: res };
       },

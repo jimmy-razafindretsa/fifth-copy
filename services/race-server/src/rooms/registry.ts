@@ -261,6 +261,14 @@ export type RoomRegistry = {
   room(lobbyId: string): Promise<RoomState | null>;
   hasMember(lobbyId: string, userId: string): Promise<boolean>;
   /**
+   * Whether one room's members hash holds both user ids (#65, ADR 0022), in any phase (a voided or
+   * ended room counts while its hash lives). Reads Redis, never this process's cache: the `rooms`
+   * set, then one pipeline of HEXISTS pairs. Read only: no write, no TTL refresh. A bot key
+   * (`bot:<desk>`) on either side, or the same id twice, is false without a lookup. Not queued.
+   * Rejects on a Redis error (the route answers 500; the web counts that as not shared).
+   */
+  sharedRoom(userId: string, otherUserId: string): Promise<boolean>;
+  /**
    * The level of each bot desk of the members hash (#366: the drivers at GO), by desk. One HGETALL,
    * not queued (the lifecycle reads it inside `withRoom`); empty for an unknown room.
    */
@@ -829,6 +837,22 @@ export function createRoomRegistry({
     },
 
     hasMember: async (lobbyId, userId) => (await redis.hexists(membersKey(lobbyId), userId)) === 1,
+
+    sharedRoom: async (a, b) => {
+      if (a === b || isBotUserId(a) || isBotUserId(b)) return false;
+      const lobbyIds = await redis.smembers(ROOMS_KEY);
+      if (lobbyIds.length === 0) return false;
+      const lookup = redis.pipeline();
+      for (const lobbyId of lobbyIds)
+        lookup.hexists(membersKey(lobbyId), a).hexists(membersKey(lobbyId), b);
+      const results = (await lookup.exec()) ?? [];
+      const found: number[] = [];
+      for (const [err, value] of results) {
+        if (err) throw err;
+        found.push(Number(value));
+      }
+      return lobbyIds.some((_, i) => found[2 * i] === 1 && found[2 * i + 1] === 1);
+    },
 
     botLevels: async (lobbyId) =>
       new Map(

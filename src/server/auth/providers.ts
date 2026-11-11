@@ -54,6 +54,8 @@ export function googleProfile(profile: GoogleProfile): OAuthUser {
 const GITHUB_USER = "https://api.github.com/user";
 /** Google's documented authorization endpoint, pinned so a sign-in press needs no discovery request. */
 const GOOGLE_AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth";
+/** Discord's `issuer` (https://discord.com/.well-known/openid-configuration), sent back as `iss`. */
+export const DISCORD_ISSUER = "https://discord.com";
 
 /**
  * GitHub, Discord (ADR 0009, #49) and Google (#828): `read:user` / `identify` / `openid profile` only, never linked by email, profile()
@@ -92,6 +94,10 @@ export function oauthProviders(env: OAuthEnv): Provider[] {
       Discord({
         clientId: env.AUTH_DISCORD_ID,
         clientSecret: env.AUTH_DISCORD_SECRET,
+        // Discord adds `iss=https://discord.com` to the callback (RFC 9207); without a matching issuer
+        // Auth.js compares it with its "https://authjs.dev" fallback and refuses the sign-in. Token and
+        // userinfo URLs stay the provider's, so this triggers no discovery request.
+        issuer: DISCORD_ISSUER,
         authorization: { params: { scope: "identify" } },
         checks: ["pkce", "state"],
         allowDangerousEmailAccountLinking: false,

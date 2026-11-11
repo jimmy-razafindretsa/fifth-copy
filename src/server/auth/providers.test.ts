@@ -82,6 +82,11 @@ describe("OAuth providers (#49 C1)", () => {
     expect(discord?.scope).toBe("identify");
   });
 
+  it("Discord's issuer matches the `iss` Discord sends on the callback, so the sign-in is not refused", () => {
+    const discord = oauthProviders(BOTH).map(resolved)[1];
+    expect(discord?.options).toMatchObject({ issuer: "https://discord.com" });
+  });
+
   it("never links accounts by email, and checks PKCE and state on the callback", () => {
     for (const provider of oauthProviders(ALL).map(resolved)) {
       expect(provider.options.allowDangerousEmailAccountLinking).toBe(false);

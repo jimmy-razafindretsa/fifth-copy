@@ -377,6 +377,26 @@ describe("CI e2e shards retry a stalled Playwright dependency install (card #819
     expect(steps.indexOf(lock!)).toBeLessThan(steps.indexOf(deps!));
   });
 
+  it("#910 C1 a failed OS deps install falls back to the Chromium launch probe", () => {
+    expect(deps?.run).toMatch(
+      /^scripts\/retry\.sh \d+ \d+ npx playwright install-deps chromium \|\| scripts\/chromium-probe\.sh$/,
+    );
+    const probe = readFileSync(path.join(root, "scripts/chromium-probe.sh"), "utf8");
+    expect(probe).toContain("::warning::");
+    expect(probe).toMatch(/chromium\.launch\(\)/);
+  });
+
+  it("#910 C2 the probe fails when Chromium cannot launch", () => {
+    const r = spawnSync("scripts/chromium-probe.sh", [], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 30_000,
+      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: path.join(tmpdir(), "no-browsers-910") },
+    });
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("::error::");
+  }, 30_000);
+
   it("C2 (lock) each OS deps attempt has time to wait out the lock", () => {
     const [attempts, seconds] = retry(deps);
     expect(attempts).toBeGreaterThanOrEqual(2);

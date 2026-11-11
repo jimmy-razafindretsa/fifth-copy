@@ -5,6 +5,7 @@ import {
   estimateOf,
   evaluateGate,
   latestPickup,
+  mainCiStatus,
   pickupComment,
   promotionBlockers,
   isTrusted,
@@ -443,5 +444,29 @@ describe("estimateOf / cardTier", () => {
     expect(cardTier(["type:feature"], 3)).toBe("full");
     expect(cardTier(["type:chore", "touches:prisma"], 1)).toBe("full");
     expect(cardTier(["pentest"], 1)).toBe("full");
+  });
+});
+
+describe("mainCiStatus: the Done gate's CI on the merge commit (#914 C3)", () => {
+  const run = (workflowName: string, conclusion: string | null, status = "completed") => ({
+    workflowName,
+    conclusion,
+    status,
+    event: "push",
+  });
+
+  it("a deploy-check run cancelled by a newer push is ignored", () => {
+    expect(mainCiStatus([run("CI", "success"), run("deploy-check", "cancelled")])).toBe("success");
+  });
+
+  it("a cancelled or failed run of any other workflow still fails", () => {
+    expect(mainCiStatus([run("CI", "cancelled"), run("deploy-check", "success")])).toBe("failure");
+    expect(mainCiStatus([run("CI", "success"), run("deploy-check", "failure")])).toBe("failure");
+  });
+
+  it("pending while a run is open; missing with no push run", () => {
+    expect(mainCiStatus([run("CI", null, "in_progress")])).toBe("pending");
+    expect(mainCiStatus([{ ...run("CI", "success"), event: "workflow_dispatch" }])).toBe("missing");
+    expect(mainCiStatus([run("deploy-check", "cancelled")])).toBe("missing");
   });
 });

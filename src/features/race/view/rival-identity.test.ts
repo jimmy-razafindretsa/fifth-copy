@@ -12,6 +12,7 @@ const member = (desk: number): Member =>
     isHost: false,
     isBot: false,
     ...deskIdentity(desk),
+    avatar: null,
   });
 
 describe("#565 C2 rivalIdentity", () => {

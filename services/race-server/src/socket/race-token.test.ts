@@ -70,7 +70,8 @@ describe("verifyRaceToken", () => {
   it("returns the avatar version claim, and null when the token carries none (#730)", async () => {
     const result = await verifyRaceToken(await sign({ ...claims, avatar: 7 }), secret, now + 10);
     expect(result).toEqual({ ok: true, claims: { ...claims, avatar: 7 } });
-    const { avatar: _, ...without } = claims;
+    const without: Record<string, unknown> = { ...claims };
+    delete without.avatar;
     expect(await verifyRaceToken(await sign(without), secret, now + 10)).toEqual({
       ok: true,
       claims,

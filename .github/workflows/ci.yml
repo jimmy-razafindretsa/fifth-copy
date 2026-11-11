@@ -259,8 +259,10 @@ jobs:
       # runner's boot-time apt jobs: apt waits for the lock instead of failing at once (exit 100).
       - name: apt waits for the dpkg lock
         run: echo 'DPkg::Lock::Timeout "120";' | sudo tee /etc/apt/apt.conf.d/90-lock-timeout
+      # An Ubuntu mirror outage (#910) fails apt on every attempt: fall back to a launch probe of the
+      # cached Chromium against the runner image's libraries; the step fails only if that launch fails.
       - name: Playwright OS deps
-        run: scripts/retry.sh 2 150 npx playwright install-deps chromium
+        run: scripts/retry.sh 2 150 npx playwright install-deps chromium || scripts/chromium-probe.sh
         timeout-minutes: 6
       - run: scripts/test-db.sh
       - run: npm run build

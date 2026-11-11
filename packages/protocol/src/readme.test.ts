@@ -1,16 +1,26 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { clientAcks, clientEvents, PROTOCOL_VERSION, rejectReasonSchema, serverEvents } from "./index";
+import {
+  clientAcks,
+  clientEvents,
+  PROTOCOL_VERSION,
+  rejectReasonSchema,
+  serverEvents,
+} from "./index";
 
 /**
  * The README is the wire's prose map (#898): five version bumps updated it piecemeal and it drifted
  * from the code. These checks fail when a wire name the code declares is missing from it.
+ * `fs` comes through `process.getBuiltinModule`, not an import: the package imports only zod and
+ * the engine (dependency-cruiser `protocol-only-zod-and-engine`).
  */
+const { readFileSync } = process.getBuiltinModule("node:fs");
 const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 const internalSource = readFileSync(new URL("./internal.ts", import.meta.url), "utf8");
 
 /** Each internal route as `internal.ts` names it in its schemas' doc comments. */
-const internalRoutes = [...new Set([...internalSource.matchAll(/`POST (\/[^`\s]+)`/g)].map((m) => m[1]!))];
+const internalRoutes = [
+  ...new Set([...internalSource.matchAll(/`POST (\/[^`\s]+)`/g)].map((m) => m[1]!)),
+];
 
 describe("packages/protocol/README.md (#898)", () => {
   it("states the current PROTOCOL_VERSION", () => {

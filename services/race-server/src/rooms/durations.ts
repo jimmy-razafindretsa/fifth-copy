@@ -5,7 +5,8 @@ import type { RaceServerEnv } from "../env";
  * table: `GRACE_MS` is the reconnection grace of a line-cut desk (#178); `IDLE_WARN_MS` and
  * `IDLE_KICK_MS` the silence before a connected typing desk is warned and put to sleep (#183, spec
  * 4.5); `AUTO_START_MS` the wait before a public room starts its first race by itself (#814).
- * `RACE_FAST_CLOCK=1` (e2e only, ADR 0012) divides each by 10.
+ * `RACE_FAST_CLOCK=1` (e2e only, ADR 0012) divides each by 10; `RACE_GRACE_MS` (e2e only, #868) sets
+ * `GRACE_MS` alone, after the fast clock.
  * Wire caps such as `MAX_RACE_MS` are not durations and are never scaled.
  */
 const BASE = {
@@ -18,9 +19,12 @@ const BASE = {
 
 export type Durations = { readonly [K in keyof typeof BASE]: number };
 
-export function durationsFor(env: Pick<RaceServerEnv, "RACE_FAST_CLOCK">): Durations {
+export function durationsFor(
+  env: Pick<RaceServerEnv, "RACE_FAST_CLOCK"> & Partial<Pick<RaceServerEnv, "RACE_GRACE_MS">>,
+): Durations {
   const scale = env.RACE_FAST_CLOCK === "1" ? 10 : 1;
-  return Object.fromEntries(
+  const scaled = Object.fromEntries(
     Object.entries(BASE).map(([name, ms]) => [name, ms / scale]),
   ) as Durations;
+  return env.RACE_GRACE_MS === undefined ? scaled : { ...scaled, GRACE_MS: env.RACE_GRACE_MS };
 }

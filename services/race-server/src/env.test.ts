@@ -18,6 +18,14 @@ describe("race-server env", () => {
     expect(env.RAILWAY_DEPLOYMENT_DRAINING_SECONDS).toBeUndefined();
   });
 
+  it("RACE_GRACE_MS (e2e only, #868): unset by default, an int in [1 s, 120 s] when set", () => {
+    expect(parseEnv(valid).RACE_GRACE_MS).toBeUndefined();
+    expect(parseEnv({ ...valid, RACE_GRACE_MS: "" }).RACE_GRACE_MS).toBeUndefined();
+    expect(parseEnv({ ...valid, RACE_GRACE_MS: "20000" }).RACE_GRACE_MS).toBe(20_000);
+    expect(() => parseEnv({ ...valid, RACE_GRACE_MS: "500" })).toThrow(/RACE_GRACE_MS/);
+    expect(() => parseEnv({ ...valid, RACE_GRACE_MS: "999999" })).toThrow(/RACE_GRACE_MS/);
+  });
+
   it("reads the drain cap and Railway's draining time (#704)", () => {
     const env = parseEnv({
       ...valid,

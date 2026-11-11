@@ -6,6 +6,14 @@ import { scaled } from "./e2e/timeouts";
 loadEnv({ path: [".env.local", ".env"], quiet: true });
 
 /**
+ * The race server's reconnection grace in this run (#868, `RACE_GRACE_MS`, e2e only): 20 s in place of
+ * the spec's 2 minutes, so a spec that waits a desk's expiry (e2e/race/host-transfer.spec.ts) fits a CI
+ * shard; every other lifecycle duration keeps its value. Set here so the race server and the specs read
+ * the same figure; a set variable wins. A reused local `npm run dev:race` keeps its own grace.
+ */
+process.env.RACE_GRACE_MS ||= "20000";
+
+/**
  * E2E + visual tests (docs/adr/0004). Viewports match the kit's UI contract: mobile, tablet, desktop.
  * Visual tests are tagged @visual and only run when PW_VISUAL=1 (CI runs them in the pinned
  * Playwright container so baselines are stable). Never update baselines to make a diff pass.

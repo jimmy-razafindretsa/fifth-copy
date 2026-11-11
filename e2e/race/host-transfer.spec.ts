@@ -14,7 +14,7 @@ import {
 
 // Contract of #868 C3 over the race server playwright.config.ts starts. The host and two guests, A
 // joined before B, race (Block mode, 30 words, untimed). The host closes its page mid-race: its desk is
-// line-cut, and once its grace runs out (ARCHITECTURE 7.4: 2 minutes, 12 s under `RACE_FAST_CLOCK=1`)
+// line-cut, and once its grace runs out (ARCHITECTURE 7.4: 2 minutes; 20 s in e2e, `RACE_GRACE_MS`)
 // the desk expires and the race server promotes A (#137). A and B then see the ink stamp
 // `NEW HOST: <A>` on the seat view within 3 s (B under reduced motion: no slam); A keeps the keyboard and
 // the keys A types while it shows all count. A and B keep typing a key now and then meanwhile, so the
@@ -22,8 +22,11 @@ import {
 // Dawn report and follow RACE AGAIN: A's waiting room has START enabled, B's has none.
 
 const FAST = process.env.RACE_FAST_CLOCK === "1";
-/** The race server's reconnection grace of a line-cut desk (`GRACE_MS`, durations.ts). */
-const GRACE_MS = FAST ? 12_000 : 120_000;
+/**
+ * The race server's reconnection grace of a line-cut desk: `RACE_GRACE_MS`, which playwright.config.ts
+ * sets for this run (20 s), else `GRACE_MS` of durations.ts (2 minutes, 12 s under the fast clock).
+ */
+const GRACE_MS = Number(process.env.RACE_GRACE_MS) || (FAST ? 12_000 : 120_000);
 /** A key from each guest this often keeps the idle warning (4.5 s / 45 s) away. */
 const KEEP_ALIVE_MS = FAST ? 1_500 : 10_000;
 
@@ -64,7 +67,7 @@ test.describe("#868 new host during a race", () => {
   test("C3 the host's desk expires: A and B see NEW HOST: <A>, A's keys count, A starts the next race", async ({
     browser,
   }) => {
-    test.setTimeout(scaled(GRACE_MS + 150_000));
+    test.setTimeout(scaled(GRACE_MS + 120_000));
     const { host, code, lobbyId, context } = await hostRoom(browser, opened, {
       before: recordRaceTokens,
     });

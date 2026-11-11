@@ -332,6 +332,8 @@ export function createRaceServer({
       void to(audience(lobbyId))?.emit(event, payload);
     },
     ...raceHooks,
+    // An armed auto-start waits out a pending leave grace (#890); `lastLeave` is created below.
+    leavePending: (lobbyId) => lastLeave.pending(lobbyId),
   });
   const secret = env.RACE_TOKEN_SECRET;
   let draining = false;
@@ -393,7 +395,13 @@ export function createRaceServer({
     }),
   );
   // A reload of the lobby page keeps the room and its lobby open (#734).
-  const lastLeave = createLastLeave({ registry, scheduler, sockets: presence.sockets });
+  const lastLeave = createLastLeave({
+    registry,
+    scheduler,
+    sockets: presence.sockets,
+    // The grace resolved: an auto-start it held fires or drops now (#890).
+    onSettled: (lobbyId) => void lifecycle.reviewAutoStart(lobbyId),
+  });
   const io = attachSocketServer(httpServer, {
     registry,
     lifecycle,

@@ -29,6 +29,12 @@ export type LastLeave = {
    */
   defer(lobbyId: string, userId: string, leave: () => Promise<void>): void;
   /**
+   * Whether a deferred leave of the room is still pending for a user with no socket on it (#890):
+   * an armed auto-start waits it out, so a host's reload never finds a race started without them.
+   * A user already back within the grace no longer holds the room.
+   */
+  pending(lobbyId: string): boolean;
+  /**
    * Cancels every pending leave (shutdown: Redis keeps the room for the next process); a `defer`
    * after it arms nothing (#886: a disconnect whose checks were still reading Redis at shutdown).
    */
@@ -43,14 +49,20 @@ export function createLastLeave({
   scheduler,
   sockets,
   graceMs = LAST_LEAVE_GRACE_MS,
+  onSettled = () => {},
 }: {
   registry: Pick<RoomRegistry, "room" | "withRoom">;
   scheduler: Scheduler;
   /** Open sockets of the user on the room in this process (`presence.sockets`). */
   sockets: (lobbyId: string, userId: string) => number;
   graceMs?: number;
+  /**
+   * A deferred leave resolved (the user came back, or the leave ran, failed included): the room's
+   * auto-start held by `pending` is reviewed again (#890). Never after `close()`.
+   */
+  onSettled?: (lobbyId: string) => void;
 }): LastLeave {
-  const timers = new Map<string, TimerHandle>();
+  const timers = new Map<string, { lobbyId: string; userId: string; handle: TimerHandle }>();
   const keyOf = (lobbyId: string, userId: string) => `${lobbyId}\n${userId}`;
   let shut = false;
 
@@ -76,23 +88,29 @@ export function createLastLeave({
       if (shut) return;
       const key = keyOf(lobbyId, userId);
       const previous = timers.get(key);
-      if (previous) scheduler.clear(previous);
-      timers.set(
-        key,
-        scheduler.setTimeout(() => {
-          timers.delete(key);
-          // Back within the grace (a reload): the room and its lobby stay open.
-          if (sockets(lobbyId, userId) > 0) return;
-          leave().catch((err: unknown) =>
-            log("last leave failed", { lobby: lobbyId, err: String(err) }),
-          );
-        }, graceMs),
-      );
+      if (previous) scheduler.clear(previous.handle);
+      const settled = () => {
+        if (!shut) onSettled(lobbyId);
+      };
+      const handle = scheduler.setTimeout(() => {
+        timers.delete(key);
+        // Back within the grace (a reload): the room and its lobby stay open.
+        if (sockets(lobbyId, userId) > 0) return settled();
+        leave()
+          .catch((err: unknown) => log("last leave failed", { lobby: lobbyId, err: String(err) }))
+          .finally(settled);
+      }, graceMs);
+      timers.set(key, { lobbyId, userId, handle });
     },
+
+    pending: (lobbyId) =>
+      [...timers.values()].some(
+        (timer) => timer.lobbyId === lobbyId && sockets(lobbyId, timer.userId) === 0,
+      ),
 
     close() {
       shut = true;
-      for (const timer of timers.values()) scheduler.clear(timer);
+      for (const { handle } of timers.values()) scheduler.clear(handle);
       timers.clear();
     },
   };

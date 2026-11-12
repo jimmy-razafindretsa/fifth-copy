@@ -278,6 +278,8 @@ test.describe("#214 countdown and GO stamp", () => {
     page,
     browser,
   }) => {
+    // #926: both seats load and report before the countdown, on top of two lobbies and two seat views
+    test.setTimeout(scaled(90_000));
     await page.setViewportSize({ width: 1280, height: 800 });
     const hostFrames: Frame[] = [];
     await prepare(page, hostFrames);

@@ -3,8 +3,10 @@ import type { PrivacySection } from "./types";
 /**
  * Privacy page, English (card #76). Second on `/privacy` after the French text (`privacy.fr.ts`), for players
  * aged 12 to 17: "you", short sentences. Same ids, paragraphs and list items as the French file
- * (`content.test.ts`). Every fact comes from `docs/privacy/*` and the ADRs (0009, 0014, 0019); what is not
- * delivered yet is written in the future tense ("soon"), never as a present fact (owner decision, 2026-11-02).
+ * (`content.test.ts`). Every fact comes from `docs/privacy/*` and the ADRs (0009, 0014, 0019, 0022); what is
+ * not delivered yet (#81 self-service deletion, #86 and #315 purges) is written in the future tense ("soon"),
+ * never as a present fact (owner decision, 2026-11-02). Accounts (#36), the session cookie (#38) and GitHub,
+ * Discord and Google sign-in (#49, #828) are delivered, so they read in the present tense.
  * Not reviewed by a lawyer (#438).
  */
 export const privacyEn: readonly PrivacySection[] = [
@@ -23,7 +25,9 @@ export const privacyEn: readonly PrivacySection[] = [
       "The look of your 3D clerk and your settings, like language and theme.",
       "Your device's address on the Internet (IP), when it talks to our servers.",
       "Your profile picture, only if you add one.",
-      "Soon, if you create an account: your username and a scrambled form of your password, never the password itself.",
+      "If you create an account: your username and a scrambled form of your password and recovery code. We never keep the password itself.",
+      "If you sign in with GitHub, Discord or Google: your account number with that service.",
+      "If a teacher gives you a code to reset your password: a scrambled form of the code, and which teacher gave it.",
     ],
   },
   {
@@ -36,6 +40,7 @@ export const privacyEn: readonly PrivacySection[] = [
     list: [
       "Your guest number links your results and settings to you, without a password.",
       "Your typist name helps players tell each other apart in a lobby.",
+      "Your account lets you sign in and find your results on any computer.",
       "Your results feed your history, your stats and the rankings.",
       "Your keys feed the per-key stats and help us spot cheating.",
       "Your IP address helps us find errors and abuse.",
@@ -51,7 +56,7 @@ export const privacyEn: readonly PrivacySection[] = [
     ],
     list: [
       "Inactive guest account: it will be deleted after 12 months with no race, sign-in or settings change.",
-      "Account with a username, soon: kept until you delete it, or your school asks us to.",
+      "Account (username, GitHub, Discord or Google): kept until you delete it, or your school asks us to.",
       "Keys typed during a race: they will be deleted 30 days after the race.",
       "Server logs and IP addresses: 30 days.",
       "Lobbies: 24 hours after they close.",
@@ -64,7 +69,8 @@ export const privacyEn: readonly PrivacySection[] = [
     id: "avatars",
     heading: "Who sees your picture",
     paragraphs: [
-      "A profile picture is optional. If you add one, only the players in your lobby see it.",
+      "A profile picture is optional. If you add one, only you and the players who share a lobby or a race with you see it. After a race, they can still see it for 24 hours.",
+      "Their browser may keep the copy it was shown, even after that.",
       "A filter checks every new picture on our server. Your picture is never sent anywhere else to be checked.",
       "The person in charge looks at your picture only if it is held for review or reported. They look to decide, and never copy it.",
       "A refused picture is deleted right away.",
@@ -100,7 +106,8 @@ export const privacyEn: readonly PrivacySection[] = [
       "fc_guest: your signed guest number, to recognise you without a password. It lasts 1 year at most.",
       "locale: the language you pick. It lasts 1 year.",
       "theme: the light theme or night shift. It lasts 1 year.",
-      "Session cookie: soon, it will keep you signed in to your account until you sign out.",
+      "Session cookie: it keeps you signed in to your account until you sign out, 30 days at most.",
+      "Sign-in cookies: a few short-lived cookies protect the sign-in itself. They last a few minutes, or until you close your browser.",
     ],
   },
   {
@@ -108,7 +115,8 @@ export const privacyEn: readonly PrivacySection[] = [
     heading: "Other services we use",
     paragraphs: [
       "Fifth Copy runs on the servers of Railway, a hosting company. Your data is kept in the United States, in the San Francisco region, so outside Québec.",
-      "Soon, you will be able to sign in with GitHub or Discord. They will only get what your own sign-in sends them. We will only read your account number, your name and your picture.",
+      "You can sign in with GitHub, Discord or Google. They only get what your own sign-in sends them. We only read your account number, your name and your picture, never your email.",
+      "These services are for people 13 or older. If you are younger, use a username or play as a guest.",
       "We share nothing with other companies for advertising.",
     ],
   },

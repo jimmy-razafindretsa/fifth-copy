@@ -15,4 +15,4 @@ export type PrivacySection = {
 export const TERMS_UPDATED = "2026-10-06";
 
 /** Date of the last change to the privacy page text (privacy.fr.ts / privacy.en.ts). Change it with the text. */
-export const PRIVACY_UPDATED = "2026-11-02";
+export const PRIVACY_UPDATED = "2026-11-12";

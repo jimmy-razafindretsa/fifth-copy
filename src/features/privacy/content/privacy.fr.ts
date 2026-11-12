@@ -4,9 +4,10 @@ import type { PrivacySection } from "./types";
  * Page de confidentialité, français (carte #76). French first on `/privacy` (Québec, Law 25), for players aged
  * 12 to 17: Québec French, "tu" form (bible 2), short sentences. Keep in step with `privacy.en.ts` (same ids,
  * same number of paragraphs and list items; `content.test.ts` checks parity, plain language and the facts).
- * Every fact comes from `docs/privacy/*` and the ADRs (0009, 0014, 0019). What is not delivered yet (#36
- * accounts, #38 session cookie, #49 GitHub and Discord, #81 self-service deletion, #86 and #315 purges) is
- * written in the future tense ("bientôt"), never as a present fact (owner decision, 2026-11-02).
+ * Every fact comes from `docs/privacy/*` and the ADRs (0009, 0014, 0019, 0022). What is not delivered yet
+ * (#81 self-service deletion, #86 and #315 purges) is written in the future tense ("bientôt"), never as a
+ * present fact (owner decision, 2026-11-02). Accounts (#36), the session cookie (#38) and GitHub, Discord
+ * and Google sign-in (#49, #828) are delivered, so they read in the present tense.
  * Not reviewed by a lawyer (#438).
  */
 export const privacyFr: readonly PrivacySection[] = [
@@ -25,7 +26,9 @@ export const privacyFr: readonly PrivacySection[] = [
       "L'allure de ton commis en 3D et tes réglages, comme la langue et le thème.",
       "L'adresse de ton appareil sur Internet (IP), quand il parle à nos serveurs.",
       "Ta photo de profil, seulement si tu en ajoutes une.",
-      "Bientôt, si tu crées un compte : ton nom d'utilisateur et ton mot de passe brouillé, jamais le mot de passe lui-même.",
+      "Si tu crées un compte : ton nom d'utilisateur, ton mot de passe brouillé et ton code de récupération brouillé. On ne garde jamais le mot de passe lui-même.",
+      "Si tu te connectes avec GitHub, Discord ou Google : ton numéro de compte chez ce service.",
+      "Si un enseignant te donne un code pour changer ton mot de passe : ce code brouillé, et quel enseignant l'a donné.",
     ],
   },
   {
@@ -38,6 +41,7 @@ export const privacyFr: readonly PrivacySection[] = [
     list: [
       "Ton numéro d'invité relie tes résultats et tes réglages à toi, sans mot de passe.",
       "Ton nom de dactylo aide les joueurs à se reconnaître dans un salon.",
+      "Ton compte te permet de te connecter et de retrouver tes résultats sur n'importe quel ordinateur.",
       "Tes résultats servent à ton historique, à tes statistiques et au classement.",
       "Tes touches servent aux statistiques par touche et à repérer la triche.",
       "Ton adresse IP sert à trouver les erreurs et les abus.",
@@ -53,7 +57,7 @@ export const privacyFr: readonly PrivacySection[] = [
     ],
     list: [
       "Compte d'invité inactif : il sera effacé après 12 mois sans course, connexion ni changement de réglage.",
-      "Compte avec nom d'utilisateur, bientôt : gardé jusqu'à ce que tu le supprimes, ou que ton école le demande.",
+      "Compte (nom d'utilisateur, GitHub, Discord ou Google) : gardé jusqu'à ce que tu le supprimes, ou que ton école le demande.",
       "Touches tapées pendant une course : elles seront effacées 30 jours après la course.",
       "Journaux des serveurs et adresses IP : 30 jours.",
       "Salons : 24 heures après leur fermeture.",
@@ -66,7 +70,8 @@ export const privacyFr: readonly PrivacySection[] = [
     id: "avatars",
     heading: "Qui voit ta photo",
     paragraphs: [
-      "La photo de profil est optionnelle. Si tu en ajoutes une, seuls les joueurs de ton salon la voient.",
+      "La photo de profil est optionnelle. Si tu en ajoutes une, seuls toi et les joueurs qui partagent un salon ou une course avec toi la voient. Après une course, ils peuvent encore la voir pendant 24 heures.",
+      "Leur navigateur peut garder la copie qu'il a reçue, même après.",
       "Un filtre vérifie chaque nouvelle photo sur notre serveur. Ta photo n'est jamais envoyée ailleurs pour être vérifiée.",
       "La personne responsable regarde ta photo seulement si elle est mise en attente ou signalée. Elle la regarde pour décider, sans la copier.",
       "Une photo refusée est effacée tout de suite.",
@@ -102,7 +107,8 @@ export const privacyFr: readonly PrivacySection[] = [
       "fc_guest : ton numéro d'invité signé, pour te reconnaître sans mot de passe. Il dure 1 an au plus.",
       "locale : la langue que tu choisis. Il dure 1 an.",
       "theme : le thème clair ou le quart de nuit. Il dure 1 an.",
-      "Témoin de session : bientôt, il te gardera connecté à ton compte jusqu'à ta déconnexion.",
+      "Témoin de session : il te garde connecté à ton compte jusqu'à ta déconnexion, 30 jours au plus.",
+      "Témoins de connexion : quelques témoins de courte durée protègent la connexion elle-même. Ils durent quelques minutes, ou jusqu'à la fermeture de ton navigateur.",
     ],
   },
   {
@@ -110,7 +116,8 @@ export const privacyFr: readonly PrivacySection[] = [
     heading: "Autres services utilisés",
     paragraphs: [
       "Fifth Copy fonctionne sur les serveurs de Railway, une entreprise d'hébergement. Tes données sont gardées aux États-Unis, dans la région de San Francisco, donc hors du Québec.",
-      "Bientôt, tu pourras te connecter avec GitHub ou Discord. Ils recevront seulement ce que ta connexion leur envoie. On lira seulement ton numéro de compte, ton nom et ta photo.",
+      "Tu peux te connecter avec GitHub, Discord ou Google. Ils reçoivent seulement ce que ta connexion leur envoie. On lit seulement ton numéro de compte, ton nom et ta photo, jamais ton courriel.",
+      "Ces services sont pour les personnes de 13 ans ou plus. Si tu es plus jeune, utilise un nom d'utilisateur ou joue comme invité.",
       "On ne partage rien avec d'autres entreprises pour de la publicité.",
     ],
   },

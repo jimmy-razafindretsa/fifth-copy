@@ -181,6 +181,38 @@ describe("privacy page: facts match docs/privacy (C3)", () => {
     expect(section(privacyEn, "third-parties")).toMatch(/Railway.*United States.*San Francisco/);
   });
 
+  it("names GitHub, Discord and Google, the sign-in services of consent.md, with their age rule", () => {
+    expect(doc("docs/privacy/consent.md")).toContain("GitHub, Discord or Google sign-in");
+    for (const [content, age] of [
+      [privacyFr, "13 ans"],
+      [privacyEn, "13 or older"],
+    ] as const) {
+      const text = section(content, "third-parties");
+      for (const name of ["GitHub", "Discord", "Google"]) expect(text, name).toContain(name);
+      expect(text).toContain(age);
+      // delivered (#49, #828): present tense, no "soon"
+      expect(text).not.toMatch(/bientôt|soon/i);
+    }
+  });
+
+  it("the picture audiences are those of ADR 0022 (owner, room and race mates for 24 h)", () => {
+    expect(doc("docs/privacy/inventory.md")).toContain("for 24 h after that race ended");
+    expect(section(privacyFr, "avatars")).toMatch(/salon ou une course.*24 heures/);
+    expect(section(privacyEn, "avatars")).toMatch(/lobby or a race.*24 hours/);
+  });
+
+  it("the session cookie is delivered (#38) and lasts SESSION_MAX_AGE", () => {
+    const seconds = /SESSION_MAX_AGE = ([\d_]+);/.exec(doc("src/server/auth/auth.ts"))?.[1];
+    expect(seconds).toBeTruthy();
+    const days = Number(seconds!.replaceAll("_", "")) / 86_400;
+    const item = (content: readonly PrivacySection[], label: RegExp) =>
+      content.find((s) => s.id === "cookies")!.list!.find((i) => label.test(i))!;
+    expect(item(privacyFr, /^Témoin de session/)).toContain(`${days} jours`);
+    expect(item(privacyEn, /^Session cookie/)).toContain(`${days} days`);
+    expect(item(privacyFr, /^Témoin de session/)).not.toMatch(/bientôt/);
+    expect(item(privacyEn, /^Session cookie/)).not.toMatch(/soon/i);
+  });
+
   it("names the four cookies", () => {
     for (const content of [privacyFr, privacyEn]) {
       const text = section(content, "cookies");

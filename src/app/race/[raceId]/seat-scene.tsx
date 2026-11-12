@@ -59,33 +59,31 @@ export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
   const decided = useRef(false);
 
   useEffect(() => {
-    if (decided.current) return;
+    if (decided.current || window.matchMedia(PHONE_QUERY).matches) return;
     decided.current = true;
-    if (window.matchMedia(PHONE_QUERY).matches) return void dispatch({ type: "scene-settled" });
     // the HUD-first gate: browser-only facts, read once after mount
     const search = new URLSearchParams(window.location.search);
     setPreset(search.get("preset"));
     setScene(search.get("scene"));
     setTip(tips.length ? tips[Math.floor(Math.random() * tips.length)]! : null);
     setMode(hasWebGL2() ? "loading" : "fallback");
-  }, [tips, dispatch]);
+  }, [tips]);
+
+  // #926 C4: a typist's scene still loading when its room counts down or runs drops to paper for
+  // that race (the frame unmounts; a later race may load it again)
+  const shown: Mode = mode === "loading" && gate === "paper" ? "fallback" : mode;
 
   // #926 C3: the scene is settled (its first frame, or paper): the seat may report ready
   useEffect(() => {
-    if (mode === "ready" || mode === "fallback") dispatch({ type: "scene-settled" });
-  }, [mode, dispatch]);
-
-  // #926 C4: a typist's scene still loading when its room counts down or runs drops to paper
-  useEffect(() => {
-    if (mode === "loading" && gate === "paper") setMode("fallback");
-  }, [mode, gate]);
+    if (shown === "ready" || shown === "fallback") dispatch({ type: "scene-settled" });
+  }, [shown, dispatch]);
 
   const card = <LoadingCard labels={labels} tip={tip} ready={ready} />;
   if (mode === "off") return null;
-  if (mode === "fallback") return ready ? card : <RaceNotice kind="no-scene" labels={notice} />;
+  if (shown === "fallback") return ready ? card : <RaceNotice kind="no-scene" labels={notice} />;
   return (
     <>
-      {mode === "loading" || ready ? card : null}
+      {shown === "loading" || ready ? card : null}
       {gate === "wait" ? null : (
         <RaceScene
           view={view}

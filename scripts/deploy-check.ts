@@ -4,8 +4,10 @@
  *
  * The one rule: Railway skips a service whose watch paths did not change, so its deployed commit may lag
  * main. A service is current when its deployed commit is an ancestor of (or equal to) HEAD and the newest
- * main commit touching its watch paths is an ancestor of (or equal to) the deployed commit. Every
- * service's `protocol` must equal PROTOCOL_VERSION at HEAD. Anything else, `commit: null` included, fails.
+ * main commit touching its watch paths is an ancestor of (or equal to) the deployed commit. A deployed
+ * commit newer than HEAD counts too when it is on main (#914): production already runs a later merge, so
+ * this run's commit is superseded, not stale. Every service's `protocol` must equal PROTOCOL_VERSION at
+ * HEAD, or at the deployed commit when that one is newer. Anything else, `commit: null` included, fails.
  *
  * Usage: npx tsx scripts/deploy-check.ts --web <url> --race <url>   (prints OK, or one line per failing
  * service; exit 1 on a failure). Run by `.github/workflows/deploy-check.yml`; redeploy steps:
@@ -22,6 +24,8 @@ export type ServiceRecord = {
   /** Newest main commit touching the service's watch paths. */
   expected: string;
   head: string;
+  /** Tip of main as fetched (origin/main); HEAD when unknown. A deployed commit past HEAD must be on it. */
+  main?: string;
   /** PROTOCOL_VERSION the service reports, null when absent or unreachable. */
   protocol: number | null;
 };
@@ -43,14 +47,21 @@ export function verdict(records: ServiceRecord[], git: Git): Verdict {
   const mainProtocol = new Map<string, number>();
   for (const r of records) {
     const deployed = r.deployed !== null && COMMIT.test(r.deployed) ? r.deployed : null;
-    const current =
-      deployed !== null && git.isAncestor(deployed, r.head) && git.isAncestor(r.expected, deployed);
+    const behind = deployed !== null && git.isAncestor(deployed, r.head);
+    // #914: a later main commit already deployed supersedes this run's HEAD.
+    const ahead =
+      deployed !== null &&
+      !behind &&
+      git.isAncestor(r.head, deployed) &&
+      git.isAncestor(deployed, r.main ?? r.head);
+    const current = (behind || ahead) && git.isAncestor(r.expected, deployed!);
     if (!current) {
       lines.push(`STALE ${r.service} deployed=${shown(r.deployed)} expected=${r.expected}`);
       continue;
     }
-    if (!mainProtocol.has(r.head)) mainProtocol.set(r.head, git.protocolAt(r.head));
-    const main = mainProtocol.get(r.head)!;
+    const at = ahead ? deployed! : r.head;
+    if (!mainProtocol.has(at)) mainProtocol.set(at, git.protocolAt(at));
+    const main = mainProtocol.get(at)!;
     if (r.protocol !== main) {
       lines.push(`PROTOCOL ${r.service} deployed=${r.protocol ?? "null"} main=${main}`);
     }
@@ -142,6 +153,8 @@ export async function run(
   const fetcher: Fetch =
     opts.fetch ?? ((url) => fetch(url, { signal: AbortSignal.timeout(15_000), cache: "no-store" }));
   const head = git(cwd, ["rev-parse", "HEAD"]).stdout.trim();
+  const tip = git(cwd, ["rev-parse", "--verify", "--quiet", "origin/main"]);
+  const main = tip.status === 0 && COMMIT.test(tip.stdout.trim()) ? tip.stdout.trim() : head;
   const base: Record<Service, string> = { web: urls.web, "race-server": urls.race };
   const records: ServiceRecord[] = [];
   for (const service of Object.keys(WATCH_PATHS) as Service[]) {
@@ -154,6 +167,7 @@ export async function run(
       deployed: health.commit,
       expected: expectedCommit(service, cwd),
       head,
+      main,
       protocol: health.protocol,
     });
   }

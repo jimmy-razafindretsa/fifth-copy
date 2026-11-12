@@ -87,6 +87,8 @@ import {
   type Comment,
   type GateFacts,
   type GateTarget,
+  mainCiStatus,
+  type MainRun,
 } from "./lib/flow";
 import {
   contractHash,
@@ -1152,13 +1154,10 @@ function mainCiFor(sha: string): "success" | "failure" | "pending" | "missing" {
       "--commit",
       sha,
       "--json",
-      "status,conclusion,event",
+      "status,conclusion,event,workflowName",
     ]),
-  ) as { status: string; conclusion: string | null; event: string }[];
-  const push = runs.filter((r) => r.event === "push");
-  if (!push.length) return "missing";
-  if (push.some((r) => r.status !== "completed")) return "pending";
-  return push.every((r) => r.conclusion === "success") ? "success" : "failure";
+  ) as MainRun[];
+  return mainCiStatus(runs);
 }
 
 async function opGate(n: number, requested: string) {

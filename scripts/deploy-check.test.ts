@@ -79,6 +79,46 @@ describe("verdict (#718 C3)", () => {
     ]);
   });
 
+  describe("#914 a newer main commit already deployed", () => {
+    // main moved on: a3 -> a4 (web, protocol 8) -> a5 (web); b4 is a branch commit off a3.
+    const [a4, a5, b4] = ["aaaaaa4", "aaaaaa5", "bbbbbb4"];
+    const later = fakeGit(
+      { ...history, [a4]: a3, [a5]: a4, [b4]: a3 },
+      { ...protocols, [a4]: 8, [a5]: 8, [b4]: 8 },
+    );
+
+    it("C1 a service running a later main commit is OK, its protocol read at that commit", () => {
+      const v = verdict(
+        [
+          rec({ service: "web", deployed: a5, main: a5, protocol: 8 }),
+          rec({ service: "race-server", main: a5 }),
+        ],
+        later,
+      );
+      expect(v).toEqual({ ok: true, lines: [`OK web=${a5} race-server=${a2}`] });
+    });
+
+    it("C1 the later commit's protocol must still match: a mismatch is PROTOCOL", () => {
+      const v = verdict([rec({ service: "web", deployed: a4, main: a5, protocol: 7 })], later);
+      expect(v.lines).toEqual(["PROTOCOL web deployed=7 main=8"]);
+    });
+
+    it("C2 a branch commit past HEAD (not on main) is STALE", () => {
+      const v = verdict([rec({ service: "web", deployed: b4, main: a5, protocol: 8 })], later);
+      expect(v.lines).toEqual([`STALE web deployed=${b4} expected=${a2}`]);
+    });
+
+    it("C2 with main unknown (no origin/main), nothing past HEAD counts", () => {
+      const v = verdict([rec({ service: "web", deployed: a4, protocol: 8 })], later);
+      expect(v.lines).toEqual([`STALE web deployed=${a4} expected=${a2}`]);
+    });
+
+    it("C2 commit: null is still STALE", () => {
+      const v = verdict([rec({ service: "web", deployed: null, main: a5, protocol: null })], later);
+      expect(v.lines).toEqual([`STALE web deployed=null expected=${a2}`]);
+    });
+  });
+
   it("one line per failing service, every failing service listed", () => {
     const v = verdict(
       [rec({ service: "web", deployed: a1 }), rec({ service: "race-server", protocol: 6 })],

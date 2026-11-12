@@ -221,3 +221,26 @@ export function cardTier(labels: string[], estimate: number | null): Tier {
   if (estimate === 1 || labels.includes("type:chore")) return "lite";
   return "standard";
 }
+
+/** One push run of the merge commit on main, as `gh run list --json status,conclusion,event,workflowName` gives it. */
+export type MainRun = {
+  status: string;
+  conclusion: string | null;
+  event: string;
+  workflowName?: string;
+};
+
+/**
+ * The Done gate's CI verdict for a merge commit: every push run must succeed. A `deploy-check` run that a
+ * newer push cancelled (its `cancel-in-progress` group) is ignored (#914): the newer run checks production.
+ * A cancelled run of any other workflow still fails.
+ */
+export function mainCiStatus(runs: MainRun[]): "success" | "failure" | "pending" | "missing" {
+  const push = runs.filter(
+    (r) =>
+      r.event === "push" && !(r.workflowName === "deploy-check" && r.conclusion === "cancelled"),
+  );
+  if (!push.length) return "missing";
+  if (push.some((r) => r.status !== "completed")) return "pending";
+  return push.every((r) => r.conclusion === "success") ? "success" : "failure";
+}

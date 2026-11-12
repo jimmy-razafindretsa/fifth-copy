@@ -1,4 +1,6 @@
 export {
+  ADMIT_ONCE_LUA,
+  CLEAR_LUA,
   createLimiter,
   SLIDING_WINDOW_LUA,
   WINDOW_COUNT_LUA,

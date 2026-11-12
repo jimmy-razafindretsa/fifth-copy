@@ -1,112 +1,204 @@
+import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { normalizeTypeable, wordCount, type Rng } from "@fifth-copy/engine";
-import { DEFAULT_RACE_SETTINGS, type RaceLanguage, type TextType } from "@fifth-copy/protocol";
+import { mulberry32, normalizeTypeable, wordCount } from "@fifth-copy/engine";
+import {
+  DEFAULT_RACE_SETTINGS,
+  type Difficulty,
+  type RaceLanguage,
+  type TextType,
+} from "@fifth-copy/protocol";
 import { generateRaceText } from "../index";
-import { seedProvider } from "./generate";
-import { SEED_EN } from "./seed-en";
-import { SEED_FR } from "./seed-fr";
+import { fileProvider } from "../corpus/files";
+import { drillStrategy } from "./drill";
+import { sentenceStrategy, STRATEGIES, wordStrategy } from "./strategies";
+import type { TextProvider } from "./types";
 
-// Seeded mulberry32 (copied from packages/engine/src/testing/rng.ts, which is internal).
-function mulberry32(seed: number): Rng {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// Contract of #351 C3, C4, C7 (and #199's exact count, carried over); #354 C6 at the end.
 
-const ACCENT = /[àâæçèéêëîïôùûüÿœÀÂÆÇÈÉÊËÎÏÔÙÛÜŸŒ]/;
-const settings = (language: RaceLanguage, count: number, textType: TextType = "sentences") => ({
-  ...DEFAULT_RACE_SETTINGS,
-  language,
-  wordCount: count,
-  textType,
-});
+const LANGUAGES: RaceLanguage[] = ["fr", "en"];
+const TEXT_TYPES: TextType[] = ["sentences", "words", "special-characters"];
+const DIFFICULTIES: Difficulty[] = [
+  { level: "easy" },
+  { level: "normal" },
+  { level: "hard" },
+  ...(["short", "medium", "long"] as const).flatMap((wordLength) =>
+    [true, false].flatMap((rareLetters) =>
+      (["none", "light", "heavy"] as const).map((punctuationDensity): Difficulty => ({
+        level: "custom",
+        wordLength,
+        rareLetters,
+        punctuationDensity,
+      })),
+    ),
+  ),
+];
+const COUNTS = [10, 11, 50, 499, 500];
+const SEEDS = Array.from({ length: 50 }, (_, i) => i + 1);
 
-describe("generateRaceText (C3)", () => {
-  const languages: RaceLanguage[] = ["fr", "en"];
-  const textTypes: TextType[] = ["sentences", "words", "special-characters"];
+const settings = (
+  language: RaceLanguage,
+  wordCount: number,
+  textType: TextType = "sentences",
+  difficulty: Difficulty = { level: "normal" },
+) => ({ ...DEFAULT_RACE_SETTINGS, language, wordCount, textType, difficulty });
 
-  for (const language of languages) {
-    for (const textType of textTypes) {
-      for (const count of [10, 50, 120, 500]) {
-        it(`${language} ${textType} ${count}: exact word count, typeable, deterministic`, () => {
-          for (const seed of [1, 2, 3, 42, 1234]) {
-            const text = generateRaceText(settings(language, count, textType), {
-              rng: mulberry32(seed),
-            });
-            expect(wordCount(text.content)).toBe(count);
-            expect(text.wordCount).toBe(count);
-            expect(text.content).toBe(normalizeTypeable(text.content));
-            expect(text.language).toBe(language);
-            expect(text.sourceRef).toBe(`seed:${language}:v1`);
-            // Sentence texts only: a `words` draw is random vocabulary (accents per word are #354).
-            if (language === "fr" && textType !== "words") expect(text.content).toMatch(ACCENT);
-            const again = generateRaceText(settings(language, count, textType), {
-              rng: mulberry32(seed),
-            });
-            expect(again).toEqual(text);
+const label = (d: Difficulty) =>
+  d.level === "custom"
+    ? `custom ${d.wordLength} ${d.rareLetters} ${d.punctuationDensity}`
+    : d.level;
+
+describe("exact count (C4)", () => {
+  for (const language of LANGUAGES) {
+    for (const textType of TEXT_TYPES) {
+      for (const difficulty of DIFFICULTIES) {
+        it(`${language} ${textType} ${label(difficulty)}: ${COUNTS.join(", ")} words over 50 rngs`, () => {
+          for (const count of COUNTS) {
+            for (const seed of SEEDS) {
+              const text = generateRaceText(settings(language, count, textType, difficulty), {
+                rng: mulberry32(seed),
+              });
+              if (
+                wordCount(text.content) !== count ||
+                normalizeTypeable(text.content) !== text.content
+              )
+                expect({ count, seed, content: text.content }).toBeNull();
+              expect(text.wordCount).toBe(count);
+              expect(text.language).toBe(language);
+            }
           }
-        });
+        }, 30_000);
       }
     }
+  }
+});
 
-    it(`${language}: two seeds give two different texts`, () => {
-      for (const textType of textTypes) {
+describe("strategy table and purity (C7)", () => {
+  it("dispatches each text type; special-characters runs the drill (#354)", () => {
+    expect(STRATEGIES.sentences).toBe(sentenceStrategy);
+    expect(STRATEGIES.words).toBe(wordStrategy);
+    expect(STRATEGIES["special-characters"]).toBe(drillStrategy);
+  });
+
+  for (const language of LANGUAGES) {
+    it(`${language}: a seeded rng gives the same text twice, two seeds two texts`, () => {
+      for (const textType of TEXT_TYPES) {
         const a = generateRaceText(settings(language, 50, textType), { rng: mulberry32(1) });
+        expect(generateRaceText(settings(language, 50, textType), { rng: mulberry32(1) })).toEqual(
+          a,
+        );
         const b = generateRaceText(settings(language, 50, textType), { rng: mulberry32(2) });
         expect(a.content).not.toBe(b.content);
+        expect(a.sourceRef).toBe(fileProvider.sourceRef(language));
+        expect(a.sourceRef).toMatch(new RegExp(`^files:${language}:[0-9a-f]{12}$`));
       }
     });
   }
 
-  it("defaults to Math.random and the seed provider", () => {
-    const text = generateRaceText(settings("en", 10));
+  it("defaults to Math.random and the file provider", () => {
+    const text = generateRaceText({
+      ...DEFAULT_RACE_SETTINGS,
+      language: "en",
+      textType: "words",
+      wordCount: 10,
+    });
     expect(wordCount(text.content)).toBe(10);
+    expect(text.sourceRef).toBe(fileProvider.sourceRef("en"));
   });
 
-  it("uses an injected provider (the #351/#354 seam)", () => {
-    const provider = {
+  it("uses an injected provider (the #346 seam)", () => {
+    const provider: TextProvider = {
       sourceRef: () => "corpus:test",
       sentences: () => [{ text: "un deux trois quatre cinq", source: "test" }],
+      words: () => ["mot"],
     };
-    const text = generateRaceText(settings("fr", 10), { rng: mulberry32(1), provider });
-    expect(text).toEqual({
+    expect(generateRaceText(settings("fr", 10), { rng: mulberry32(1), provider })).toEqual({
       content: "un deux trois quatre cinq un deux trois quatre cinq",
       language: "fr",
       wordCount: 10,
       sourceRef: "corpus:test",
     });
+    const words = generateRaceText(settings("fr", 10, "words", { level: "easy" }), {
+      rng: mulberry32(1),
+      provider,
+    });
+    expect(words.content).toBe(Array.from({ length: 10 }, () => "mot").join(" "));
   });
 });
 
-describe("seed files (C3)", () => {
-  for (const [language, seed] of [
-    ["fr", SEED_FR],
-    ["en", SEED_EN],
-  ] as const) {
-    it(`${language}: >= 30 attributed sentences, each typeable as written`, () => {
-      expect(seed.length).toBeGreaterThanOrEqual(30);
-      expect(seedProvider.sentences(language)).toBe(seed);
-      for (const { text, source } of seed) {
-        expect(text).toBe(normalizeTypeable(text));
-        expect(source.length).toBeGreaterThan(0);
+describe("words mode draws from the frequency lists (C3)", () => {
+  for (const language of LANGUAGES) {
+    it(`${language}: every word of a words text is in the list`, () => {
+      const list = new Set(fileProvider.words(language));
+      for (const seed of SEEDS.slice(0, 10)) {
+        const { content } = generateRaceText(
+          settings(language, 200, "words", {
+            level: "custom",
+            wordLength: "medium",
+            rareLetters: true,
+            punctuationDensity: "none",
+          }),
+          { rng: mulberry32(seed) },
+        );
+        for (const word of content.split(" ")) expect(list.has(word), word).toBe(true);
       }
-      expect(new Set(seed.map((s) => s.text)).size).toBe(seed.length);
     });
   }
 
-  it("fr: every sentence has at most 12 words and an accent within its first 10 words", () => {
-    for (const { text } of SEED_FR) {
-      expect(wordCount(text), text).toBeLessThanOrEqual(12);
-      const first10 = generateRaceText(settings("fr", 10), {
-        rng: () => 0,
-        provider: { sourceRef: () => "x", sentences: () => [{ text, source: "x" }] },
-      }).content;
-      expect(first10, text).toMatch(ACCENT);
+  it("the corpus-vocabulary fallback is deleted", () => {
+    const source = fs.readFileSync("src/features/texts/generate/generate.ts", "utf8");
+    expect(source).not.toMatch(/function vocabulary/);
+  });
+});
+
+describe("#354 C6: exact count and purity after every transform", () => {
+  const PRESETS: Difficulty[] = [
+    { level: "easy" },
+    { level: "normal" },
+    { level: "hard" },
+    { level: "custom", wordLength: "long", rareLetters: true, punctuationDensity: "heavy" },
+  ];
+  const TOGGLES = {
+    on: {
+      accentEveryWord: true,
+      practiceLetters: ["e", "r"],
+      includeNumbers: true,
+      includeSymbols: true,
+      includePunctuation: true,
+    },
+    off: {
+      accentEveryWord: false,
+      practiceLetters: [],
+      includeNumbers: false,
+      includeSymbols: false,
+      includePunctuation: false,
+    },
+  } as const;
+
+  for (const language of LANGUAGES) {
+    for (const textType of ["words", "special-characters", "sentences"] as const) {
+      for (const [toggles, values] of Object.entries(TOGGLES)) {
+        it(`${language} ${textType}, toggles ${toggles}: 4 presets, 10 and 500 words, 50 rngs`, () => {
+          for (const difficulty of PRESETS) {
+            for (const count of [10, 500]) {
+              for (const seed of SEEDS) {
+                const s = {
+                  ...settings(language, count, textType, difficulty),
+                  ...values,
+                  practiceLetters: [...values.practiceLetters],
+                };
+                const { content } = generateRaceText(s, { rng: mulberry32(seed) });
+                if (wordCount(content) !== count || normalizeTypeable(content) !== content)
+                  expect({ difficulty, count, seed, content }).toBeNull();
+              }
+            }
+          }
+        }, 60_000);
+      }
     }
+  }
+
+  it("generate.ts takes the full settings (no Pick)", () => {
+    const source = fs.readFileSync("src/features/texts/generate/generate.ts", "utf8");
+    expect(source).not.toMatch(/Pick<RaceSettings/);
   });
 });

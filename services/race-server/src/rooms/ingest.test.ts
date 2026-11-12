@@ -16,8 +16,16 @@ import {
   PROTOCOL_VERSION,
   snapshotSchema,
   type RaceInfo,
+  type RaceResultsRequest,
 } from "@fifth-copy/protocol";
-import { connectRedis, startedRace, typeKeys, until, type Booted } from "../testing/harness";
+import {
+  ackResults,
+  connectRedis,
+  startedRace,
+  typeKeys,
+  until,
+  type Booted,
+} from "../testing/harness";
 import { createDesksState, deskStateOf, type DeskState } from "./desks-state";
 import { traceCapOf } from "./desks-state";
 import { ingest, KEYS_BURST, KEYS_PER_SECOND, MAX_LAG_MS, MAX_LEAD_MS } from "./ingest";
@@ -58,6 +66,18 @@ describe("ingest: gates (C2)", () => {
       terminal: false,
     });
     expect(rt.states.get(1)?.cursor).toBe(0);
+  });
+
+  it("a runtime marked ending (#609: endRace started) is not-running and changes nothing", () => {
+    const { rt } = runtime();
+    rt.ending = true;
+    const before = rt.states.get(1);
+    expect(ingest(rt, 1, keys("b", 0), T0 + 100)).toEqual({
+      rejected: "not-running",
+      terminal: false,
+    });
+    expect(rt.states.get(1)).toBe(before);
+    expect(before).toMatchObject({ cursor: 0, lastKeyAt: T0, trace: [] });
   });
 
   it("drops silently a desk outside the race or not typing", () => {
@@ -320,6 +340,54 @@ describe("keys over the wire: authority (C2)", () => {
     const state = r.booted.server.desks.states(r.lobby).get(me!.desk)!;
     expect(state).toMatchObject({ cursor: 2, timingAnomalies: 1 });
     expect(state.trace.map((k) => k.t)).toEqual([MAX_LEAD_MS, MAX_LEAD_MS]);
+  });
+});
+
+describe("the end-of-race window (#609 C2)", () => {
+  it("a keys batch while endRace awaits the phase write is rejected not-running: state, ranking and result unchanged", async () => {
+    const posted: RaceResultsRequest[] = [];
+    const r = await startedRace(process.env.REDIS_URL, {
+      postResults: async (request) => {
+        posted.push(request);
+        return ackResults(request);
+      },
+    });
+    booted = r.booted;
+    const b = r.booted;
+    const [one, two] = r.racers;
+    typeKeys(one!.client, "b", 0);
+    typeKeys(two!.client, "b", 0);
+    await until(() => b.server.desks.states(r.lobby).get(two!.desk)?.cursor === 1, 2_000, "typed");
+    await ticks(b, 1);
+
+    // The ranking is computed; the race is not yet `ended` in Redis nor in the runtime. Meanwhile
+    // desk 2 sends the rest of the text, which would finish it.
+    const registry = b.server.registry;
+    const setPhase = registry.setPhase.bind(registry);
+    let state: DeskState | undefined;
+    registry.setPhase = async (id, phase) => {
+      if (id === r.lobby && phase === "ended") {
+        typeKeys(two!.client, "onjour", 500, 10);
+        await until(() => two!.seen.rejected.length > 0, 2_000, "keys answered");
+        state = b.server.desks.states(r.lobby).get(two!.desk);
+      }
+      return setPhase(id, phase);
+    };
+    await b.server.lifecycle.endRace(r.lobby, "timer");
+    await until(() => one!.seen.ended.length === 1, 2_000, "ended");
+
+    expect(two!.seen.rejected).toEqual([{ v: PROTOCOL_VERSION, reason: "not-running" }]);
+    expect(state).toMatchObject({ cursor: 1, status: "typing" });
+    expect(state?.trace).toHaveLength(1);
+    const ranking = one!.seen.ended[0]!.ranking;
+    expect(ranking.map((e) => [e.desk, e.status, e.finishedAt])).toEqual([
+      [1, "typing", null],
+      [2, "typing", null],
+    ]);
+    await until(() => posted.length === 1, 3_000, "results posted");
+    const result = posted[0]!.results.find((x) => x.desk === two!.desk)!;
+    expect(result).toMatchObject({ status: "typing", correct: 1, total: 1, finishedAtMs: null });
+    expect(result.progress).toBe(ranking.find((e) => e.desk === two!.desk)!.progress);
   });
 });
 

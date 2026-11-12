@@ -1,14 +1,14 @@
 import Image from "next/image";
-import { getViewer } from "@/features/identity";
+import { AccountControl, getAvatarUser, getViewer } from "@/features/identity";
 import { getTheme, LocaleToggle, ThemeToggle } from "@/features/preferences";
-import { fill, getLocale, getT } from "@/i18n";
+import { getLocale, getT } from "@/i18n";
 import { LINKS } from "../links";
 import styles from "./header.module.css";
 
 /**
  * Landing header (bible 14.1 item 1, reference `Fifth Copy Landing.dc.html`): FC icon + FIFTH COPY,
- * the guide link, EN/FR, NIGHT SHIFT, the guest docket and SIGN IN. The docket only shows a viewer
- * that exists: reads never create guests (ADR 0009), so a first visit has nothing to file yet.
+ * the guide link, EN/FR, NIGHT SHIFT, then the account control (#36): the viewer's docket and SIGN IN or
+ * SIGN OUT. The docket only shows a viewer that exists: reads never create guests (ADR 0009).
  */
 export async function LandingHeader() {
   const [t, locale, theme, viewer] = await Promise.all([
@@ -17,6 +17,7 @@ export async function LandingHeader() {
     getTheme(),
     getViewer(),
   ]);
+  const avatar = viewer ? await getAvatarUser(viewer) : null;
   return (
     <header className={styles.header}>
       <a href={LINKS.home} className={styles.brand}>
@@ -37,15 +38,18 @@ export async function LandingHeader() {
         <LocaleToggle locale={locale} label={t.header.languageLabel} />
         {/* no cookie = paper here, whatever the OS (bible 3.2, #651) */}
         <ThemeToggle theme={theme ?? "light"} label={t.header.nightShift} />
-        {viewer ? (
-          <div className={styles.docket}>
-            <span>{fill(t.header.honorific, { name: viewer.name })}</span>
-            {viewer.isGuest ? <span className={styles.tag}>{t.header.guestTag}</span> : null}
-          </div>
-        ) : null}
-        <a href={LINKS.signIn} className={styles.signIn}>
-          {t.header.signIn}
-        </a>
+        <AccountControl
+          viewer={viewer}
+          avatar={avatar}
+          labels={{ honorific: t.header.honorific, ...t.auth.account }}
+          classes={{
+            docket: styles.docket,
+            docketName: styles.docketName,
+            tag: styles.tag,
+            signIn: styles.signIn,
+            avatar: styles.avatar,
+          }}
+        />
       </nav>
     </header>
   );

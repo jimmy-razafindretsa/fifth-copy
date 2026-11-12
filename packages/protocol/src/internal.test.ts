@@ -16,7 +16,20 @@ import {
   startRaceRequestSchema,
   startRaceResponseSchema,
   internalRaceResultSchema,
+  MAX_OVERLAY_WORDS,
   MAX_RESULTS_PER_REQUEST,
+  MAX_ROOM_STATUS_IDS,
+  roomStatusRequestSchema,
+  roomStatusResponseSchema,
+  roomTypeRequestSchema,
+  roomTypeResponseSchema,
+  closeLobbyRequestSchema,
+  closeLobbyResponseSchema,
+  setLobbyHostRequestSchema,
+  setLobbyHostResponseSchema,
+  sharedRoomRequestSchema,
+  sharedRoomResponseSchema,
+  raceResultsRequestSchema as resultsSchema,
 } from "./index";
 
 const v = PROTOCOL_VERSION;
@@ -68,6 +81,7 @@ const result = {
   bonusesSent: 1,
   bonusesReceived: 0,
   bonusLog: [{ t: 12000, kind: "exemption", from: 1, to: 2 }],
+  overlay: null,
   flags: [{ code: "timing-anomaly", detail: "3 clamped" }, { code: "burst" }],
   engineVersion: "0.3.0",
   trace: { encoding: "gzip+base64", data: "H4sIAAAAAAAAA4uOBQApu0wNAgAAAA==", count: 2 },
@@ -91,10 +105,10 @@ describe("internal API", () => {
     expect(INTERNAL_MAX_SKEW_S).toBe(300);
   });
 
-  it("C1: protocol 7 signs `${timestamp}.${nonce}.${rawBody}`", () => {
-    expect(PROTOCOL_VERSION).toBe(7);
-    expect(internalSignedString({ timestamp: "1", nonce: "ab", rawBody: '{"v":7}' })).toBe(
-      '1.ab.{"v":7}',
+  it("C1: protocol 7+ signs `${timestamp}.${nonce}.${rawBody}`", () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(7);
+    expect(internalSignedString({ timestamp: "1", nonce: "ab", rawBody: '{"v":8}' })).toBe(
+      '1.ab.{"v":8}',
     );
   });
 
@@ -215,6 +229,44 @@ describe("internal API", () => {
       { ...result, userId: null, isBot: true, status: "typing", finishedAtMs: null },
       true,
     ],
+    // The desk's final text overlay (#623 C1): null when untouched, verbatim when overlaid.
+    [
+      "result overlay verbatim",
+      internalRaceResultSchema,
+      { ...result, overlay: { extra: ["quota", "ration"], removed: [0, 3] } },
+      true,
+    ],
+    [
+      "result overlay empty object",
+      internalRaceResultSchema,
+      { ...result, overlay: { extra: [], removed: [] } },
+      true,
+    ],
+    ["result overlay missing", internalRaceResultSchema, { ...result, overlay: undefined }, false],
+    [
+      "result overlay extra above MAX_OVERLAY_WORDS",
+      internalRaceResultSchema,
+      {
+        ...result,
+        overlay: { extra: Array.from({ length: MAX_OVERLAY_WORDS + 1 }, () => "w"), removed: [] },
+      },
+      false,
+    ],
+    [
+      "result overlay removed above MAX_OVERLAY_WORDS",
+      internalRaceResultSchema,
+      {
+        ...result,
+        overlay: { extra: [], removed: Array.from({ length: MAX_OVERLAY_WORDS + 1 }, (_, i) => i) },
+      },
+      false,
+    ],
+    [
+      "result overlay negative index",
+      internalRaceResultSchema,
+      { ...result, overlay: { extra: [], removed: [-1] } },
+      false,
+    ],
     ["result missing trace", internalRaceResultSchema, { ...result, trace: undefined }, false],
     ["result wrong status", internalRaceResultSchema, { ...result, status: "timed-out" }, false],
     [
@@ -261,5 +313,256 @@ describe("internal API", () => {
     ["persisted missing raceId", raceResultsResponseSchema, { v, persisted: [1] }, false],
   ] as const)("%s", (_, schema, payload, ok) => {
     expect(schema.safeParse(payload).success).toBe(ok);
+  });
+});
+
+describe("room status lookup (#806 C1)", () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `lob_${i}`);
+  const room = { lobbyId: "lob_1", phase: "waiting", typists: 2, bots: 1, seats: 30 };
+
+  it("caps a lookup at 50 lobby ids", () => {
+    expect(MAX_ROOM_STATUS_IDS).toBe(50);
+  });
+
+  it.each([
+    ["request example", roomStatusRequestSchema, { v, lobbyIds: ["lob_1"] }, true],
+    ["request 50 ids", roomStatusRequestSchema, { v, lobbyIds: ids(50) }, true],
+    ["request 51 ids", roomStatusRequestSchema, { v, lobbyIds: ids(51) }, false],
+    ["request no id", roomStatusRequestSchema, { v, lobbyIds: [] }, false],
+    ["request empty id", roomStatusRequestSchema, { v, lobbyIds: [""] }, false],
+    ["request oversize id", roomStatusRequestSchema, { v, lobbyIds: ["l".repeat(129)] }, false],
+    ["request missing ids", roomStatusRequestSchema, { v }, false],
+    ["request previous v", roomStatusRequestSchema, { v: v - 1, lobbyIds: ["lob_1"] }, false],
+    ["response example", roomStatusResponseSchema, { v, rooms: [room] }, true],
+    ["response no room found", roomStatusResponseSchema, { v, rooms: [] }, true],
+    ["response previous v", roomStatusResponseSchema, { v: v - 1, rooms: [room] }, false],
+    [
+      "response every phase",
+      roomStatusResponseSchema,
+      {
+        v,
+        rooms: (["waiting", "countdown", "running", "ended"] as const).map((phase) => ({
+          ...room,
+          phase,
+        })),
+      },
+      true,
+    ],
+    [
+      "response unknown phase",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, phase: "racing" }] },
+      false,
+    ],
+    [
+      "response negative typists",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, typists: -1 }] },
+      false,
+    ],
+    [
+      "response fractional bots",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, bots: 1.5 }] },
+      false,
+    ],
+    ["response no seats", roomStatusResponseSchema, { v, rooms: [{ ...room, seats: 0 }] }, false],
+    [
+      "response missing lobbyId",
+      roomStatusResponseSchema,
+      { v, rooms: [{ ...room, lobbyId: undefined }] },
+      false,
+    ],
+    [
+      "response 51 rooms",
+      roomStatusResponseSchema,
+      { v, rooms: ids(51).map((lobbyId) => ({ ...room, lobbyId })) },
+      false,
+    ],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("a room entry carries only lobbyId, phase and the desk counts (no names, users or settings)", () => {
+    const parsed = roomStatusResponseSchema.parse({
+      v,
+      rooms: [{ ...room, hostUserId: "usr_1", names: ["Ada"], settings: {} }],
+    });
+    expect(Object.keys(parsed.rooms[0]!).sort()).toEqual(
+      ["bots", "lobbyId", "phase", "seats", "typists"].sort(),
+    );
+  });
+});
+
+describe("lobby close (#734 C6)", () => {
+  const close = { v, lobbyId: "lob_1", closedAt: 1_767_225_600_000 };
+
+  it.each([
+    ["request example", closeLobbyRequestSchema, close, true],
+    ["request closedAt 0", closeLobbyRequestSchema, { ...close, closedAt: 0 }, true],
+    ["request negative closedAt", closeLobbyRequestSchema, { ...close, closedAt: -1 }, false],
+    ["request fractional closedAt", closeLobbyRequestSchema, { ...close, closedAt: 1.5 }, false],
+    ["request empty lobbyId", closeLobbyRequestSchema, { ...close, lobbyId: "" }, false],
+    [
+      "request oversize lobbyId",
+      closeLobbyRequestSchema,
+      { ...close, lobbyId: "l".repeat(129) },
+      false,
+    ],
+    ["request missing closedAt", closeLobbyRequestSchema, { v, lobbyId: "lob_1" }, false],
+    ["request previous v", closeLobbyRequestSchema, { ...close, v: v - 1 }, false],
+    ["response closed now", closeLobbyResponseSchema, { v, lobbyId: "lob_1", changed: true }, true],
+    [
+      "response already closed",
+      closeLobbyResponseSchema,
+      { v, lobbyId: "lob_1", changed: false },
+      true,
+    ],
+    ["response missing changed", closeLobbyResponseSchema, { v, lobbyId: "lob_1" }, false],
+    [
+      "response previous v",
+      closeLobbyResponseSchema,
+      { v: v - 1, lobbyId: "lob_1", changed: true },
+      false,
+    ],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("a close request never parses as a results request (the race server's outbox tells them apart)", () => {
+    expect(resultsSchema.safeParse(close).success).toBe(false);
+  });
+});
+
+describe("lobby host transfer (#137 C3, C6)", () => {
+  const host = { v, lobbyId: "lob_1", hostUserId: "usr_a" };
+
+  it.each([
+    ["request example", setLobbyHostRequestSchema, host, true],
+    ["request empty hostUserId", setLobbyHostRequestSchema, { ...host, hostUserId: "" }, false],
+    [
+      "request oversize hostUserId",
+      setLobbyHostRequestSchema,
+      { ...host, hostUserId: "u".repeat(129) },
+      false,
+    ],
+    ["request missing hostUserId", setLobbyHostRequestSchema, { v, lobbyId: "lob_1" }, false],
+    ["request empty lobbyId", setLobbyHostRequestSchema, { ...host, lobbyId: "" }, false],
+    ["request previous v", setLobbyHostRequestSchema, { ...host, v: v - 1 }, false],
+    ["response changed", setLobbyHostResponseSchema, { v, lobbyId: "lob_1", changed: true }, true],
+    [
+      "response same host",
+      setLobbyHostResponseSchema,
+      { v, lobbyId: "lob_1", changed: false },
+      true,
+    ],
+    ["response missing changed", setLobbyHostResponseSchema, { v, lobbyId: "lob_1" }, false],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("a host request never parses as a close or a results request, nor they as it (the outbox tells them apart)", () => {
+    expect(closeLobbyRequestSchema.safeParse(host).success).toBe(false);
+    expect(resultsSchema.safeParse(host).success).toBe(false);
+    expect(setLobbyHostRequestSchema.safeParse({ v, lobbyId: "lob_1", closedAt: 1 }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("room type (#815 C1)", () => {
+  const typed = { v, lobbyId: "lob_1", lobbyType: "public" };
+
+  it.each([
+    ["request public", roomTypeRequestSchema, typed, true],
+    ["request private", roomTypeRequestSchema, { ...typed, lobbyType: "private" }, true],
+    ["request unknown type", roomTypeRequestSchema, { ...typed, lobbyType: "secret" }, false],
+    ["request missing type", roomTypeRequestSchema, { v, lobbyId: "lob_1" }, false],
+    ["request empty lobbyId", roomTypeRequestSchema, { ...typed, lobbyId: "" }, false],
+    [
+      "request oversize lobbyId",
+      roomTypeRequestSchema,
+      { ...typed, lobbyId: "l".repeat(129) },
+      false,
+    ],
+    ["request previous v", roomTypeRequestSchema, { ...typed, v: v - 1 }, false],
+    ["response ok", roomTypeResponseSchema, { v, result: "ok" }, true],
+    ["response no-room", roomTypeResponseSchema, { v, result: "no-room" }, true],
+    ["response not-waiting", roomTypeResponseSchema, { v, result: "not-waiting" }, true],
+    ["response unknown result", roomTypeResponseSchema, { v, result: "not-host" }, false],
+    ["response missing result", roomTypeResponseSchema, { v }, false],
+    ["response previous v", roomTypeResponseSchema, { v: v - 1, result: "ok" }, false],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("takes its type from the race settings' own enum", () => {
+    expect(roomTypeRequestSchema.shape.lobbyType.options).toEqual(["public", "private"]);
+  });
+});
+
+describe("shared room (#65 C1)", () => {
+  const pair = { v, userIds: ["usr_a", "usr_b"] };
+
+  it.each([
+    ["request two different ids", sharedRoomRequestSchema, pair, true],
+    ["request one id", sharedRoomRequestSchema, { v, userIds: ["usr_a"] }, false],
+    [
+      "request three ids",
+      sharedRoomRequestSchema,
+      { v, userIds: ["usr_a", "usr_b", "usr_c"] },
+      false,
+    ],
+    ["request no ids", sharedRoomRequestSchema, { v, userIds: [] }, false],
+    [
+      "request twice the same id",
+      sharedRoomRequestSchema,
+      { v, userIds: ["usr_a", "usr_a"] },
+      false,
+    ],
+    ["request empty id", sharedRoomRequestSchema, { v, userIds: ["usr_a", ""] }, false],
+    [
+      "request oversize id",
+      sharedRoomRequestSchema,
+      { v, userIds: ["usr_a", "u".repeat(129)] },
+      false,
+    ],
+    ["request ids not a list", sharedRoomRequestSchema, { v, userIds: "usr_a,usr_b" }, false],
+    ["request missing ids", sharedRoomRequestSchema, { v }, false],
+    ["request previous v", sharedRoomRequestSchema, { ...pair, v: v - 1 }, false],
+    ["response shared", sharedRoomResponseSchema, { v, shared: true }, true],
+    ["response not shared", sharedRoomResponseSchema, { v, shared: false }, true],
+    ["response missing shared", sharedRoomResponseSchema, { v }, false],
+    ["response shared not a boolean", sharedRoomResponseSchema, { v, shared: "true" }, false],
+    ["response previous v", sharedRoomResponseSchema, { v: v - 1, shared: true }, false],
+    [
+      "response with a lobby id",
+      sharedRoomResponseSchema,
+      { v, shared: true, lobbyId: "lob_1" },
+      false,
+    ],
+    [
+      "response with a room code",
+      sharedRoomResponseSchema,
+      { v, shared: true, code: "KGB-4821" },
+      false,
+    ],
+    ["response with a name", sharedRoomResponseSchema, { v, shared: true, name: "Ada" }, false],
+    [
+      "response with a phase",
+      sharedRoomResponseSchema,
+      { v, shared: true, phase: "waiting" },
+      false,
+    ],
+    ["response with a count", sharedRoomResponseSchema, { v, shared: true, count: 2 }, false],
+  ] as const)("%s", (_, schema, payload, ok) => {
+    expect(schema.safeParse(payload).success).toBe(ok);
+  });
+
+  it("parses the pair as given, in order", () => {
+    expect(sharedRoomRequestSchema.parse({ v, userIds: ["usr_b", "usr_a"] }).userIds).toEqual([
+      "usr_b",
+      "usr_a",
+    ]);
   });
 });

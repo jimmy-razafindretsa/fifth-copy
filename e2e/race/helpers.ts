@@ -71,12 +71,57 @@ export function lobbyIdOf(code: string): Promise<string> {
   });
 }
 
+/** The `Lobby.status` behind a room code (#734: CLOSED once the race server's close call lands). */
+export function lobbyStatusOf(code: string): Promise<string | null> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ status: string }>(
+      `SELECT status FROM "Lobby" WHERE code = $1`,
+      [code],
+    );
+    return rows[0]?.status ?? null;
+  });
+}
+
+/**
+ * `Lobby.hostUserId` behind a room code and that user's typist name (#137: the race server's host
+ * transfer call moves it to the promoted user).
+ */
+export function lobbyHostOf(code: string): Promise<{ id: string; name: string | null } | null> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ id: string; name: string | null }>(
+      `SELECT u.id, u."typistName" AS name FROM "Lobby" l JOIN "User" u ON u.id = l."hostUserId"
+       WHERE l.code = $1`,
+      [code],
+    );
+    return rows[0] ?? null;
+  });
+}
+
 /** Marks a lobby closed, as a race start or the retention sweep leaves it (its token mint answers `closed`). */
 export function closeLobby(code: string): Promise<void> {
   return withDb(async (db) => {
     await db.query(`UPDATE "Lobby" SET status = 'CLOSED', "closedAt" = now() WHERE code = $1`, [
       code,
     ]);
+  });
+}
+
+/**
+ * Files a lobby PUBLIC, as the host's LOBBY toggle does (`setLobbyType`, #114; Postgres owns the type,
+ * ADR 0008), so a test hosts its own listed public room: QUICK RACE would seat it in any open one (#128).
+ */
+export function makePublic(code: string): Promise<void> {
+  return withDb(async (db) => {
+    await db.query(`UPDATE "Lobby" SET type = 'PUBLIC' WHERE code = $1`, [code]);
+  });
+}
+
+/** Closes every waiting public lobby, so the next QUICK RACE opens a room (`@matchmaking` tests only). */
+export function closeOpenPublicLobbies(): Promise<void> {
+  return withDb(async (db) => {
+    await db.query(
+      `UPDATE "Lobby" SET status = 'CLOSED', "closedAt" = now() WHERE type = 'PUBLIC' AND status = 'WAITING'`,
+    );
   });
 }
 
@@ -151,6 +196,17 @@ export async function recordRaceTokens(page: Page) {
       if (String(payload).startsWith('42["welcome"')) record.seated = true;
     }),
   );
+  // A room socket on long-polling (#442: WebSocket blocked) gets its welcome in a polling response.
+  page.on("response", (response) => {
+    if (!/\/socket\.io\/\?.*transport=polling/.test(response.url())) return;
+    if (response.request().method() !== "GET") return;
+    response.text().then(
+      (body) => {
+        if (body.includes('42["welcome"')) record.seated = true;
+      },
+      () => undefined,
+    );
+  });
   await page.route("**/lobby/**", async (route) => {
     const r = route.request();
     if (r.method() !== "POST" || !r.headers()["next-action"]) return route.continue();
@@ -194,7 +250,7 @@ export async function setHostSettings(host: Page, patch: RaceSettingsPatch): Pro
       socket.once("connect_error", reject);
     });
     const ack = (await socket
-      .timeout(5_000)
+      .timeout(scaled(5_000))
       .emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch })) as
       { ok: true; settings: RaceSettings } | { ok: false; error: string };
     expect(ack, "host:settings").toMatchObject({ ok: true });
@@ -364,5 +420,62 @@ export async function withoutWebGL(page: Page): Promise<void> {
       if (id === "webgl2" || id === "webgl") return null;
       return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
     } as typeof original;
+  });
+}
+
+/**
+ * Blocks the page's Socket.IO WebSockets (#442) the way a school proxy that refuses the upgrade does:
+ * before any page script runs, `WebSocket` is replaced for `/socket.io/` URLs by one that never
+ * connects and fails the way a browser reports a refused upgrade (`error`, then `close` 1006, not
+ * clean), so nothing reaches the race server and Socket.IO must go on with long-polling. Neither
+ * `page.routeWebSocket` (its mock opens, then closes: a dropped line, not a refused upgrade) nor
+ * DevTools request blocking (Chromium lets WebSockets through it) reproduces that refusal. `next dev`'s
+ * hot-reload socket is not a Socket.IO one and stays up (blocking it reloads the page in a loop).
+ * Call it before the page loads anything.
+ */
+export async function blockWebSockets(page: Page) {
+  await page.addInitScript(() => {
+    const Native = window.WebSocket;
+    const blocked = (url: string | URL) => String(url).includes("/socket.io/");
+    class Refused extends EventTarget {
+      static readonly CONNECTING = 0;
+      static readonly OPEN = 1;
+      static readonly CLOSING = 2;
+      static readonly CLOSED = 3;
+      readyState = 0;
+      binaryType: BinaryType = "blob";
+      bufferedAmount = 0;
+      extensions = "";
+      protocol = "";
+      onopen: ((e: Event) => void) | null = null;
+      onerror: ((e: Event) => void) | null = null;
+      onclose: ((e: CloseEvent) => void) | null = null;
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      constructor(readonly url: string) {
+        super();
+        setTimeout(() => {
+          this.readyState = 3;
+          const error = new Event("error");
+          this.onerror?.(error);
+          this.dispatchEvent(error);
+          const close = new CloseEvent("close", { code: 1006, wasClean: false });
+          this.onclose?.(close);
+          this.dispatchEvent(close);
+        }, 0);
+      }
+      send() {
+        throw new DOMException("WebSocket is not open", "InvalidStateError");
+      }
+      close() {
+        this.readyState = 3;
+      }
+    }
+    window.WebSocket = new Proxy(Native, {
+      construct(target, args: [string | URL, (string | string[])?]) {
+        return blocked(args[0])
+          ? (new Refused(String(args[0])) as unknown as WebSocket)
+          : new target(...args);
+      },
+    });
   });
 }

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
-import { Countdown, countdownStep, GO_STAMP_MS, nextStepIn } from "./countdown";
+import { atGo, Countdown, countdownStep, GO_STAMP_MS, nextStepIn } from "./countdown";
 
 // #214 C3 at unit level: the step the seat shows for the time left to GO (3, 2, 1, the GO stamp, then
 // nothing 1.2 s after GO), when it next changes, and the markup of each step. The live countdown on the
@@ -32,6 +32,19 @@ describe("countdownStep (#214 C3)", () => {
   });
 });
 
+describe("atGo (#723): the GO stamp lands with the store's GO", () => {
+  it("holds 1 until the phase runs, and shows GO as soon as it does", () => {
+    expect(atGo("go", "countdown")).toBe(1);
+    for (const digit of [3, 2, 1] as const) {
+      expect(atGo(digit, "countdown")).toBe(digit);
+      expect(atGo(digit, "running")).toBe("go");
+    }
+    expect(atGo("go", "running")).toBe("go");
+    expect(atGo(null, "running")).toBeNull();
+    expect(atGo(null, "countdown")).toBeNull();
+  });
+});
+
 describe("nextStepIn (#214 C3)", () => {
   it.each([
     [3_000, 1_000],
@@ -50,6 +63,35 @@ describe("nextStepIn (#214 C3)", () => {
       const next = nextStepIn(msToGo)!;
       expect(countdownStep(msToGo - next), String(msToGo)).not.toBe(countdownStep(msToGo));
       expect(countdownStep(msToGo - next + 1), String(msToGo)).toBe(countdownStep(msToGo));
+    }
+  });
+
+  // #643: a ping/pong clock offset can be fractional, so the time left to GO can be too
+  it.each([
+    [1_000.5, 0.5, 2],
+    [2_000.5, 0.5, 3],
+    [1_999.5, 999.5, 2],
+    [0.5, 0.5, 1],
+    [-0.5, GO_STAMP_MS - 0.5, "go"],
+  ] as const)("fractional %s ms to GO: the step changes in %s ms (now %s)", (msToGo, next, now) => {
+    expect(countdownStep(msToGo)).toBe(now);
+    expect(nextStepIn(msToGo)).toBeCloseTo(next, 9);
+  });
+
+  it("walks 3, 2, 1, GO on a fractional clock without skipping a step", () => {
+    for (const start of [3_000.5, 2_999.25, 3_000.75]) {
+      const seen: unknown[] = [];
+      let msToGo = start;
+      for (let i = 0; i < 10; i++) {
+        const step = countdownStep(msToGo);
+        if (seen.at(-1) !== step) seen.push(step);
+        const next = nextStepIn(msToGo);
+        if (next === null) break;
+        expect(next, String(msToGo)).toBeGreaterThan(0);
+        expect(next, String(msToGo)).toBeLessThanOrEqual(GO_STAMP_MS);
+        msToGo -= next;
+      }
+      expect(seen, String(start)).toEqual([3, 2, 1, "go", null]);
     }
   });
 });

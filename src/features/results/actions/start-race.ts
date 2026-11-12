@@ -10,13 +10,14 @@ import {
   type StartRaceResponse,
 } from "@fifth-copy/protocol";
 import { generateRaceText } from "@/features/texts";
+import { loadCorpusProvider } from "@/features/texts/server";
 import { Prisma, type RaceLanguage as DbRaceLanguage } from "@/generated/prisma/client";
 import { db as appDb } from "@/server/db";
 
 export type StartRaceResult =
   { ok: true; response: StartRaceResponse } | { ok: false; error: "not-found" | "conflict" };
 
-type Db = Pick<typeof appDb, "race" | "lobby">;
+type Db = Pick<typeof appDb, "race" | "lobby" | "text">;
 type StoredRace = Awaited<ReturnType<typeof appDb.race.findUnique>> & {};
 
 const TO_DB: Record<RaceLanguage, DbRaceLanguage> = { fr: "FR", en: "EN" };
@@ -47,8 +48,9 @@ function replay(race: StoredRace, lobbyId: string): StartRaceResult {
 /**
  * Starts a race durably (ADR 0006 point 6, ADR 0008): the only writer of `Race` at start. Checks the
  * lobby (missing or closed: `not-found`; another host: `conflict`), generates the text from the
- * validated settings and stores it with the settings, desk count and versions. Idempotent on
- * `raceId`: a repeated id answers the stored text unchanged, also under concurrent calls (P2002).
+ * validated settings through the corpus provider (#346: the `Text` rows, or the content files) and
+ * stores it with the settings, desk count and versions. Idempotent on `raceId`: a repeated id
+ * answers the stored text unchanged, also under concurrent calls (P2002).
  */
 export async function startRace(
   request: StartRaceRequest,
@@ -64,7 +66,8 @@ export async function startRace(
   if (!lobby || lobby.status === "CLOSED") return { ok: false, error: "not-found" };
   if (lobby.hostUserId !== request.hostUserId) return { ok: false, error: "conflict" };
 
-  const text = generateRaceText(request.settings);
+  const provider = await loadCorpusProvider(db, request.settings.language);
+  const text = generateRaceText(request.settings, { provider });
   try {
     const race = await db.race.create({
       data: {

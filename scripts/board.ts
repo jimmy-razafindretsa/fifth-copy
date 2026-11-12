@@ -28,8 +28,11 @@
  *   next                                       Picker ordering (PROTOCOL 6) + locks (7); last line `next: #n` or `STOP: <why>`
  *   pickup <n>                                 Ready -> In Progress after re-checking blockers and locks; posts PICKUP
  *                                              (contract hash, branch); prints `branch: <name>`
+ *   pickup <lead> --bundle <n,n,...>           bundle mode (PROTOCOL 15): 2-8 Ready sibling cards, no solo-only label;
+ *                                              one PICKUP on the lead, `BUNDLED-IN #lead` on the others, label bundle:<lead>
  *   gate <n> <In Review|QA|Done> [--check]     script-checkable PROTOCOL 5 preconditions; moves the card if they
- *                                              hold (--check: report only); exit 1 with the failures otherwise
+ *                                              hold (--check: report only); exit 1 with the failures otherwise;
+ *                                              on a bundle lead: checks every card, moves all or none
  *   promote [--epic n]                         Backlog -> Ready for every card in a plan-approved epic that passes
  *                                              the Backlog -> Ready preconditions; prints why the others stay
  *   locks <n>                                  exit 1 if a hotspot (touches:*) or area lock conflicts with another
@@ -82,7 +85,10 @@ import {
   promotionBlockers,
   trustedAuthors,
   type Comment,
+  type GateFacts,
   type GateTarget,
+  mainCiStatus,
+  type MainRun,
 } from "./lib/flow";
 import {
   contractHash,
@@ -92,6 +98,17 @@ import {
   unblocksCount,
   type CardNode,
 } from "./lib/kit";
+import {
+  bundleLabel,
+  bundleLocks,
+  bundlePickupComment,
+  bundleRefusals,
+  bundledInComment,
+  collapseBundles,
+  evaluateBundleGate,
+  parseBundleArg,
+  prCards,
+} from "./lib/bundle";
 
 loadEnv({ path: [".env.local", ".env"], quiet: true });
 
@@ -964,12 +981,94 @@ async function opNext() {
   process.exitCode = 3;
 }
 
+/** In-flight WIP slots: a bundle (cards sharing a bundle:<lead> label) is one slot (PROTOCOL 15). */
 const inFlightOf = (all: Item[]) =>
-  all
-    .filter((c) => c.status !== null && IN_FLIGHT_STATUSES.includes(c.status))
-    .map((c) => ({ id: cardId(c.number), labels: c.labels }));
+  collapseBundles(
+    all
+      .filter((c) => c.status !== null && IN_FLIGHT_STATUSES.includes(c.status))
+      .map((c) => ({ id: cardId(c.number), labels: c.labels })),
+  );
+
+const addComment = (i: FullIssue, body: string, what: string) =>
+  mutate(
+    `comment ${cardId(i.number)} ${what}`,
+    `mutation($input: AddCommentInput!) { addComment(input: $input) { commentEdge { node { id } } } }`,
+    { input: { subjectId: i.id, body } },
+  );
+
+/** pickup <lead> --bundle a,b: C1-C2 of #779, reusing the solo pickup checks per card. */
+async function opPickupBundle(lead: number) {
+  const index = await boardIndex();
+  let ns: number[];
+  try {
+    ns = parseBundleArg(lead, flag("bundle"));
+  } catch (e) {
+    throw new BoardError((e as Error).message);
+  }
+  const cards = ns.map((n) => {
+    const c = index.get(n);
+    if (!c) throw new BoardError(`${cardId(n)} is not on the board`);
+    return c;
+  });
+  const why = bundleRefusals(
+    cards.map((c) => ({ n: c.number, status: c.status, labels: c.labels })),
+  );
+  for (const c of cards) {
+    const epic = epicOf(c, index);
+    if (epic === null || !index.get(epic)?.labels.includes(PLAN_APPROVED))
+      why.push(`${cardId(c.number)}: epic not plan-approved`);
+    // A blocker inside the bundle is delivered by the same PR.
+    const open = c.blockedBy.filter((b) => !blockerDone(b, index) && !ns.includes(b.number));
+    if (open.length)
+      why.push(`${cardId(c.number)}: blocked by ${open.map((b) => cardId(b.number)).join(",")}`);
+  }
+  const lock = lockViolation(
+    { labels: bundleLocks(cards) },
+    inFlightOf([...index.values()]),
+    WIP_LIMIT,
+  );
+  if (lock) why.push(`bundle: ${lock}`);
+  const issues = await Promise.all(ns.map((n) => getIssue(n)));
+  const hashes = issues.map((i) => contractHash(i.body));
+  issues.forEach((i, k) => {
+    if (!hashes[k]) why.push(`${cardId(i.number)} has no ## Contract section`);
+  });
+  if (why.length) throw new BoardError(`bundle refused: ${why.join("; ")}`);
+
+  const branch = branchName(lead, issues[0]!.title);
+  const labelIds = await resolveLabelIds([bundleLabel(lead)], true);
+  for (const [k, i] of issues.entries()) {
+    const c = cards[k]!;
+    await setStatus(c.itemId, "In Progress", `move ${cardId(c.number)} Ready -> In Progress`);
+    await mutate(
+      `label ${cardId(c.number)} +${bundleLabel(lead)}`,
+      `mutation($input: AddLabelsToLabelableInput!) { addLabelsToLabelable(input: $input) { clientMutationId } }`,
+      { input: { labelableId: i.id, labelIds } },
+    );
+    await addComment(
+      i,
+      k === 0
+        ? bundlePickupComment(lead, hashes[0]!, branch, ns)
+        : bundledInComment(lead, i.number, hashes[k]!, branch),
+      k === 0 ? "PICKUP (bundle)" : `BUNDLED-IN ${cardId(lead)}`,
+    );
+  }
+  if (DRY) return;
+  for (const n of ns) {
+    const again = await getIssue(n, 5);
+    if ((await itemOf(again)).status !== "In Progress")
+      throw new BoardError(`verify failed: ${cardId(n)} status not updated`);
+    const p = latestPickup(n, commentsOf(again), TRUSTED);
+    if (!p || (n !== lead && p.lead !== lead))
+      throw new BoardError(`verify failed: ${cardId(n)} pickup record not found`);
+  }
+  console.log(bundlePickupComment(lead, hashes[0]!, branch, ns));
+  console.log(`bundle: ${ns.map(cardId).join(" ")} | tier: full`);
+  console.log(`branch: ${branch}`);
+}
 
 async function opPickup(n: number) {
+  if (argv.includes("--bundle")) return opPickupBundle(n);
   const index = await boardIndex();
   const c = index.get(n);
   if (!c) throw new BoardError(`${cardId(n)} is not on the board`);
@@ -989,11 +1088,7 @@ async function opPickup(n: number) {
   const branch = branchName(n, i.title);
   await setStatus(c.itemId, "In Progress", `move ${cardId(n)} Ready -> In Progress`);
   const body = pickupComment(n, hash, branch);
-  await mutate(
-    `comment ${cardId(n)} PICKUP`,
-    `mutation($input: AddCommentInput!) { addComment(input: $input) { commentEdge { node { id } } } }`,
-    { input: { subjectId: i.id, body } },
-  );
+  await addComment(i, body, "PICKUP");
   if (DRY) return;
   const again = await getIssue(n, 5);
   if ((await itemOf(again)).status !== "In Progress")
@@ -1017,7 +1112,7 @@ function prFor(branch: string): GateFactsPr {
     "--state",
     "all",
     "--json",
-    "number,state,mergeCommit,createdAt,isCrossRepository",
+    "number,state,mergeCommit,createdAt,isCrossRepository,body",
   ]);
   const prs = JSON.parse(out) as {
     number: number;
@@ -1025,6 +1120,7 @@ function prFor(branch: string): GateFactsPr {
     mergeCommit: { oid: string } | null;
     createdAt: string;
     isCrossRepository?: boolean;
+    body?: string;
   }[];
   // `--head` matches the branch NAME only: a fork can open a PR from a branch with the card's name.
   const pr = prs
@@ -1035,6 +1131,7 @@ function prFor(branch: string): GateFactsPr {
         number: pr.number,
         state: pr.state as "OPEN" | "MERGED" | "CLOSED",
         mergeCommit: pr.mergeCommit?.oid ?? null,
+        cards: prCards(pr.body ?? ""),
       }
     : null;
 }
@@ -1042,6 +1139,7 @@ type GateFactsPr = {
   number: number;
   state: "OPEN" | "MERGED" | "CLOSED";
   mergeCommit: string | null;
+  cards: number[];
 } | null;
 
 function mainCiFor(sha: string): "success" | "failure" | "pending" | "missing" {
@@ -1056,13 +1154,10 @@ function mainCiFor(sha: string): "success" | "failure" | "pending" | "missing" {
       "--commit",
       sha,
       "--json",
-      "status,conclusion,event",
+      "status,conclusion,event,workflowName",
     ]),
-  ) as { status: string; conclusion: string | null; event: string }[];
-  const push = runs.filter((r) => r.event === "push");
-  if (!push.length) return "missing";
-  if (push.some((r) => r.status !== "completed")) return "pending";
-  return push.every((r) => r.conclusion === "success") ? "success" : "failure";
+  ) as MainRun[];
+  return mainCiStatus(runs);
 }
 
 async function opGate(n: number, requested: string) {
@@ -1076,25 +1171,39 @@ async function opGate(n: number, requested: string) {
     target === "Done" && pr?.state === "MERGED" && pr.mergeCommit
       ? mainCiFor(pr.mergeCommit)
       : null;
-  const failures = evaluateGate({
-    n,
+  if (pickup?.lead != null)
+    throw new BoardError(`${cardId(n)} is bundled in ${cardId(pickup.lead)}: gate the lead`);
+  const facts = async (x: FullIssue, cs: Comment[]): Promise<GateFacts> => ({
+    n: x.number,
     target: target as GateTarget,
-    body: i.body,
-    labels: names(i.labels),
-    comments,
+    body: x.body,
+    labels: names(x.labels),
+    comments: cs,
     trusted: TRUSTED,
     pr,
     mainCi,
+    status: (await itemOf(x)).status,
   });
+  // Bundle (PROTOCOL 15): each member is checked on its own BUNDLED-IN record plus the lead's comments
+  // (one HANDOFF and one Deliver verdict cover the bundle); one failing card blocks every card.
+  const members = (pickup?.bundle ?? []).filter((m) => m !== n);
+  const all = [await facts(i, comments)];
+  for (const m of members) {
+    const mi = await getIssue(m, 100);
+    all.push(await facts(mi, [...commentsOf(mi), ...comments]));
+  }
+  const failures = members.length ? evaluateBundleGate(all) : evaluateGate(all[0]!);
   if (failures.length) {
     for (const f of failures) console.log(`FAIL ${cardId(n)} -> ${target}: ${f}`);
+    if (members.length) console.log(`bundle ${cardId(n)} blocked: no card moved`);
     process.exitCode = 1;
     return;
   }
-  console.log(
-    `PASS ${cardId(n)} -> ${target}${pr ? ` (PR #${pr.number} ${pr.state.toLowerCase()})` : ""}`,
-  );
-  if (!argv.includes("--check")) await opMove(n, target);
+  for (const f of all)
+    console.log(
+      `PASS ${cardId(f.n)} -> ${target}${pr ? ` (PR #${pr.number} ${pr.state.toLowerCase()})` : ""}`,
+    );
+  if (!argv.includes("--check")) for (const f of all) await opMove(f.n, target);
 }
 
 async function opPromote() {
@@ -1131,7 +1240,9 @@ async function opLocks(n: number) {
   const index = await boardIndex();
   const c = index.get(n);
   if (!c) throw new BoardError(`${cardId(n)} is not on the board`);
-  const others = inFlightOf([...index.values()]).filter((x) => x.id !== cardId(n));
+  const own = c.labels.find((l) => /^bundle:\d+$/.test(l));
+  const self = own ? `#${own.slice("bundle:".length)}` : cardId(n);
+  const others = inFlightOf([...index.values()]).filter((x) => x.id !== self);
   const lock = lockViolation(c, others, Number.MAX_SAFE_INTEGER);
   if (lock) {
     console.log(`LOCKED ${cardId(n)}: ${lock}`);

@@ -2,7 +2,7 @@ import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { Client } from "pg";
-import { ENGINE_VERSION } from "@fifth-copy/engine";
+import { ENGINE_VERSION, type Keystroke } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   INTERNAL_HEADERS,
@@ -91,6 +91,10 @@ export type Desk = {
   userId?: string | null;
   status?: InternalRaceResult["status"];
   suspicious?: boolean;
+  /** #864: the desk's stored bonus log (the counters follow it as the engine's ledger counts them). */
+  bonusLog?: InternalRaceResult["bonusLog"];
+  /** #867: the desk's keystroke trace (stored for a typist with a user); empty by default. */
+  trace?: Keystroke[];
 };
 
 const EMPTY_TRACE = {
@@ -120,13 +124,35 @@ function result(d: Desk): InternalRaceResult {
     total: 104,
     durationMs: 50_000,
     finishedAtMs: finished ? 40_000 + d.place * 1_000 : null,
-    bonusesSent: 0,
-    bonusesReceived: 0,
-    bonusLog: [],
+    bonusesSent: new Set((d.bonusLog ?? []).filter((e) => e.from === d.desk).map((e) => e.t)).size,
+    bonusesReceived: (d.bonusLog ?? []).filter((e) => e.to === d.desk && e.from !== d.desk).length,
+    bonusLog: d.bonusLog ?? [],
+    overlay: null,
     flags: d.suspicious ? [{ code: "e2e-review" }] : [],
     engineVersion: ENGINE_VERSION,
-    trace: EMPTY_TRACE,
+    trace: d.trace?.length
+      ? {
+          encoding: "gzip+base64",
+          data: gzipSync(JSON.stringify(d.trace)).toString("base64"),
+          count: d.trace.length,
+        }
+      : EMPTY_TRACE,
   };
+}
+
+/** #867: the stored base text of a seeded race (`Race.textContent`, raw: normalise it before typing). */
+export async function raceTextOf(raceId: string): Promise<string> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    const { rows } = await db.query<{ textContent: string }>(
+      `SELECT "textContent" FROM "Race" WHERE id = $1`,
+      [raceId],
+    );
+    return rows[0]!.textContent;
+  } finally {
+    await db.end();
+  }
 }
 
 /** A lobby hosted by the page's guest; returns what a race start needs. */

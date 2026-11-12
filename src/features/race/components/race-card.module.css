@@ -67,7 +67,8 @@
     0 0 / 6px 6px;
 }
 
-/* lanes: 7.4 rows, `120px | 1fr` with dashed separators */
+/* lanes: 7.4 rows, `80px | 1fr` with dashed separators (bible 7.4a, #758: the rank and `DESK 07` take
+   about 77px, so a 10-character name keeps its digits next to the longest label in the 320px card) */
 .lanes {
   list-style: none;
   margin: 0;
@@ -76,20 +77,14 @@
 
 .lane {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 80px minmax(0, 1fr);
   align-items: center;
-  gap: 0 12px;
-  padding: 6px 12px;
+  gap: 0 8px;
+  padding: 6px 10px;
 }
 
 .lane + .lane {
   border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
-}
-
-[data-compact="true"] .lane {
-  grid-template-columns: 84px minmax(0, 1fr);
-  gap: 0 8px;
-  padding: 6px 10px;
 }
 
 /* identity inks (#565, bible 3.1): rival inks appear only on race-card markers, placards and scarves */
@@ -164,12 +159,20 @@
   min-width: 0;
 }
 
+/* name, YOU tag and status label share one row (bible 7.4a, #697) while 10ch of name fits beside them;
+   past 10ch the name gives way with its ellipsis. Where the row cannot hold 10ch beside the tag and the
+   label (the seat-view gutters next to ASLEEP AT DESK, #792), the tag and then the label move to a second
+   line under the name, above the track: a 10-character name always shows in full */
 .line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 8px;
+  gap: 2px 6px;
   min-width: 0;
+}
+
+.line > * {
+  flex: none;
 }
 
 .line:empty {
@@ -183,6 +186,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1 0 min(10ch, 100%);
   min-width: 0;
 }
 
@@ -200,7 +204,17 @@
   padding: 0 5px;
   border: 1px solid var(--color-fg-muted);
   color: var(--color-fg-muted);
-  white-space: nowrap;
+  /* one line wherever it fits; wider than its whole line (ENDORMI AU BUREAU in the 1024 gutter, #792) it
+     breaks between its words, inside the lane */
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* a cut line and an expired one dim the marker (bible 7.4a, #235): the label says it in words, the shape and
+   its fg stroke stay above 3:1 at 0.6 */
+[data-status="line-cut"] .rider,
+[data-status="expired"] .rider {
+  opacity: 0.6;
 }
 
 /* the lane's track: a hairline the marker rides, to a 2px ink post at the finish */

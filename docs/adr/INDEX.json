@@ -152,7 +152,7 @@
       ],
       "supersedes": [],
       "supersededBy": [],
-      "rule": "Identity is resolved only by getViewer() in src/server/auth (session user or guest cookie); Auth.js uses the JWT session strategy with Credentials, GitHub and Discord providers; no email is ever stored; authorization happens inside server actions and route handlers, with proxy.ts doing optimistic redirects only; the race server trusts only race tokens minted by the web app.",
+      "rule": "Identity is resolved only by getViewer() in src/server/auth (session user or guest cookie); Auth.js uses the JWT session strategy with Credentials, GitHub, Discord and Google providers (minimal scopes, never linked by email); no email is ever stored; authorization happens inside server actions and route handlers, with proxy.ts doing optimistic redirects only; the race server trusts only race tokens minted by the web app.",
       "file": "docs/adr/0009-identity-and-sessions.md"
     },
     {
@@ -310,8 +310,12 @@
       "scope": [
         "railway.json",
         "railway.toml",
+        "services/race-server/railway.json",
+        "src/worker/railway.json",
+        "src/worker/main.ts",
         ".github/workflows/**",
         "scripts/deploy-smoke.sh",
+        "scripts/deploy-check.ts",
         "src/env.ts",
         "services/race-server/src/env.ts"
       ],
@@ -319,7 +323,7 @@
         "0012"
       ],
       "supersededBy": [],
-      "rule": "Production is the Railway project with four services (web = Next.js from the repo root, race-server = the services/race-server workspace, Railway Postgres, Railway Redis); Railway builds from main on push, web runs prisma migrate deploy as its pre-deploy command, secrets live only in Railway variables (generated, never printed or committed), and every new env var is added to the matching Railway service in the same PR.",
+      "rule": "Production is the Railway project with five services (web = Next.js from the repo root, race-server = the services/race-server workspace, worker = src/worker from the repo root with no domain (ADR 0011,",
       "file": "docs/adr/0019-railway-hosting.md"
     },
     {
@@ -330,12 +334,47 @@
       "scope": [
         "packages/limiter/**",
         "src/server/limiter/**",
+        "src/server/redis.ts",
+        "src/server/internal-api/nonces.ts",
         "services/race-server/src/socket/rate-limit.ts"
       ],
       "supersedes": [],
       "supersededBy": [],
       "rule": "Rate limits go through `@fifth-copy/limiter` (one Lua sliding window, keys `${prefix}:rl:${key}` with a TTL <= the window, prefixes `web` and `race`); the package imports nothing (the Redis client is injected); the web app reaches it only through `src/server/limiter` (`limit(action, subject)`, fails open) and the race server only through `socket/rate-limit.ts` (per-identity buckets before any handler, a socket cap per identity, fails closed); each process keeps its own `LIMITS` table.",
       "file": "docs/adr/0020-shared-rate-limiter.md"
+    },
+    {
+      "id": "0021",
+      "title": "A feature may expose a server-only public entry, server.ts, beside index.ts",
+      "status": "accepted",
+      "category": "architecture",
+      "scope": [
+        "src/features/*/index.ts",
+        "src/features/*/server.ts",
+        ".dependency-cruiser.cjs"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Cross-feature imports go through the other feature's index.ts (client-safe, no server-only, no Prisma) or its server.ts (starts with import \"server-only\"; only server code imports it, never a component).",
+      "file": "docs/adr/0021-feature-server-entry.md"
+    },
+    {
+      "id": "0022",
+      "title": "The web app asks the race server whether two users share a live room; lobby-scoped access never reads Redis room keys",
+      "status": "accepted",
+      "category": "architecture",
+      "scope": [
+        "src/app/api/avatars/**",
+        "src/features/lobby/queries/share-lobby.ts",
+        "src/features/identity/queries/avatar-file.ts",
+        "src/server/internal-api/client.ts",
+        "services/race-server/src/http/internal.ts",
+        "packages/protocol/src/internal.ts"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "A web-side rule that depends on who is in a live room asks the race server through the signed POST /internal/rooms/shared (two user ids in, one boolean out) and treats no answer as \"not shared\"; the web app never reads room:* keys and keeps no copy of live membership; a refusal looks the same whether or not the lobby, the user or the resource exists.",
+      "file": "docs/adr/0022-shared-room-lookup.md"
     }
   ]
 }

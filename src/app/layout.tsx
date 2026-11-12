@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MergeStamp } from "@/features/identity";
 import { getTheme } from "@/features/preferences";
 import { getLocale, getT } from "@/i18n";
 import { faceVariables, fontVariables } from "./fonts";
@@ -23,7 +24,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${fontVariables} h-full antialiased`}
       style={faceVariables}
     >
-      <body className="type-body flex min-h-full flex-col bg-bg text-fg">{children}</body>
+      <body className="type-body flex min-h-full flex-col bg-bg text-fg">
+        {children}
+        <MergeStamp />
+      </body>
     </html>
   );
 }

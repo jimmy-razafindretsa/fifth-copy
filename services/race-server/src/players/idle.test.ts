@@ -1,6 +1,7 @@
 import type { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
+  DEFAULT_RACE_SETTINGS,
   PLAYER_STATUS_CODES,
   PROTOCOL_VERSION,
   type RaceEvent,
@@ -121,6 +122,27 @@ describe("idle warning and kick (C1)", () => {
   });
 });
 
+describe("bots are never idle (#366 C5)", () => {
+  it("a typing bot desk next to a silent host: the host is warned and put asleep, the bot never", async () => {
+    // ~400 characters: a Recruit (20 WPM) is still typing at +70 s.
+    const text = Array.from({ length: 12 }, () => "le bureau ouvre ses dossiers").join(" ");
+    const race = await startedRace(process.env.REDIS_URL, {
+      players: 1,
+      text,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "recruit" }] },
+    });
+    booted = race.booted;
+    const { booted: b, lobby, t0 } = race;
+    const [host] = race.racers as [Racer];
+    await at(b, t0, 70_000, host);
+    expect(kinds(host, "asleep", host.desk)).toHaveLength(1);
+    expect(kinds(host, "idle-warning", 2)).toEqual([]);
+    expect(kinds(host, "asleep", 2)).toEqual([]);
+    expect(stateOf(b, lobby, 2)).toMatchObject({ status: "typing" });
+    expect(stateOf(b, lobby, 2)!.cursor).toBeGreaterThan(50);
+  });
+});
+
 describe("a keystroke clears the warning (C2)", () => {
   it("a key at +50 s after the warning: no asleep at +60 s, one warning per silence, the next at +95 s", async () => {
     const race = await startedRace(process.env.REDIS_URL, { players: 2 });
@@ -153,8 +175,9 @@ describe("a keystroke clears the warning (C2)", () => {
   });
 });
 
-describe("disconnection is not idle (C3)", () => {
-  it("line-cut from +10 s to +80 s: no warning, no asleep; resumed at +80 s, warned at +125 s", async () => {
+describe("disconnection is not idle (C3), and resume keeps the idle clock (#609 C1)", () => {
+  /** A 2-desk race where the player typed one key at GO, then cut at `cutAt` (ms since GO). */
+  async function cutRace(cutAt: number) {
     const race = await startedRace(process.env.REDIS_URL, { players: 2 });
     booted = race.booted;
     const { booted: b, lobby, t0 } = race;
@@ -162,31 +185,76 @@ describe("disconnection is not idle (C3)", () => {
     typeKeys(player.client, "b", 0);
     await cursorReached(b, lobby, player.desk, 1);
     const key = player.seen.welcome!.resumeKey!;
-
-    await at(b, t0, 10_000, host);
+    await at(b, t0, cutAt, host);
     player.client.disconnect();
     await until(() => kinds(host, "line-cut").length === 1, 2_000, "line-cut");
+    const resume = async () => {
+      const back = b.connect({ v, token: player.token, resumeKey: key });
+      const again: Racer = { ...player, client: back, seen: watchRace(back) };
+      await until(() => kinds(host, "resumed").length === 1, 2_000, "resumed");
+      return again;
+    };
+    return { b, lobby, t0, host, player, resume };
+  }
 
+  it("line-cut from +10 s to +50 s: no warning while cut; resumed, warned at once for kickAt +60 s, asleep at +60 s", async () => {
+    const { b, lobby, t0, host, player, resume } = await cutRace(10_000);
+    await at(b, t0, 50_000, host);
+    expect(stateOf(b, lobby, player.desk)?.status).toBe("line-cut");
+    expect(kinds(host, "idle-warning", player.desk)).toHaveLength(0);
+
+    await resume();
+    // The resume keeps the silence that started at the last accepted key (GO).
+    expect(stateOf(b, lobby, player.desk)).toMatchObject({ status: "typing", lastKeyAt: t0 });
+    await at(b, t0, 51_000, host);
+    const warning = { v, kind: "idle-warning", desk: player.desk, kickAt: 60_000 };
+    expect(kinds(host, "idle-warning", player.desk)).toEqual([warning]);
+    await at(b, t0, 59_900, host);
+    expect(kinds(host, "asleep", player.desk)).toHaveLength(0);
+    await at(b, t0, 60_000, host);
+    expect(kinds(host, "asleep", player.desk)).toEqual([{ v, kind: "asleep", desk: player.desk }]);
+    expect(kinds(host, "idle-warning", player.desk)).toEqual([warning]);
+  });
+
+  it("line-cut from +10 s to +80 s: no warning, no asleep while cut; resumed past the kick: warned then asleep at the next tick", async () => {
+    const { b, lobby, t0, host, player, resume } = await cutRace(10_000);
     await at(b, t0, 80_000, host);
     expect(stateOf(b, lobby, player.desk)?.status).toBe("line-cut");
     expect(kinds(host, "idle-warning", player.desk)).toHaveLength(0);
     expect(kinds(host, "asleep", player.desk)).toHaveLength(0);
 
-    const back = b.connect({ v, token: player.token, resumeKey: key });
-    const again: Racer = { ...player, client: back, seen: watchRace(back) };
-    await until(() => kinds(host, "resumed").length === 1, 2_000, "resumed");
-    expect(stateOf(b, lobby, player.desk)).toMatchObject({
-      status: "typing",
-      lastKeyAt: t0 + 80_000,
-    });
-
-    await at(b, t0, 124_900, host);
-    expect(kinds(host, "idle-warning", player.desk)).toHaveLength(0);
-    await at(b, t0, 125_000, host);
-    const warning = { v, kind: "idle-warning", desk: player.desk, kickAt: 140_000 };
+    const again = await resume();
+    await at(b, t0, 81_000, host);
+    expect(stateOf(b, lobby, player.desk)?.status).toBe("asleep");
+    const warning = { v, kind: "idle-warning", desk: player.desk, kickAt: 60_000 };
     expect(kinds(host, "idle-warning", player.desk)).toEqual([warning]);
-    await until(() => kinds(again, "idle-warning").length > 0, 2_000, "resumed tab warned");
-    expect(kinds(again, "idle-warning", player.desk)).toEqual([warning]);
+    expect(kinds(host, "asleep", player.desk)).toEqual([{ v, kind: "asleep", desk: player.desk }]);
+    const order = host.seen.events.filter((e) => "desk" in e && e.desk === player.desk);
+    expect(order.map((e) => e.kind).slice(-2)).toEqual(["idle-warning", "asleep"]);
+    await until(() => kinds(again, "asleep").length > 0, 2_000, "resumed tab put to sleep");
+  });
+
+  it("warned at +45 s, cut at +50 s, resumed at +55 s: no second warning, asleep at +60 s", async () => {
+    const race = await startedRace(process.env.REDIS_URL, { players: 2 });
+    booted = race.booted;
+    const { booted: b, lobby, t0 } = race;
+    const [host, player] = race.racers as [Racer, Racer];
+    typeKeys(player.client, "b", 0);
+    await cursorReached(b, lobby, player.desk, 1);
+    const key = player.seen.welcome!.resumeKey!;
+    await at(b, t0, 45_000, host);
+    expect(kinds(host, "idle-warning", player.desk)).toHaveLength(1);
+    await at(b, t0, 50_000, host);
+    player.client.disconnect();
+    await until(() => kinds(host, "line-cut").length === 1, 2_000, "line-cut");
+    await at(b, t0, 55_000, host);
+    b.connect({ v, token: player.token, resumeKey: key });
+    await until(() => kinds(host, "resumed").length === 1, 2_000, "resumed");
+    await at(b, t0, 59_900, host);
+    expect(kinds(host, "asleep", player.desk)).toHaveLength(0);
+    await at(b, t0, 60_000, host);
+    expect(kinds(host, "asleep", player.desk)).toHaveLength(1);
+    expect(kinds(host, "idle-warning", player.desk)).toHaveLength(1);
   });
 });
 

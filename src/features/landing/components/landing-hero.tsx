@@ -8,14 +8,17 @@ import { TypingStrip } from "./typing-strip";
 
 /**
  * Landing hero (bible 14.1 item 2, reference `Fifth Copy Landing.dc.html`). `primary` is the QUICK RACE
- * button, `entries` the private-race entries (card 99); both come from the lobby feature.
+ * button, `entries` the private-race entries (card 99); both come from the lobby feature. `rooms` is the
+ * open-rooms docket under the code join (#807).
  */
 export async function LandingHero({
   primary,
   entries,
+  rooms,
 }: {
   primary: React.ReactNode;
   entries: React.ReactNode;
+  rooms: React.ReactNode;
 }) {
   const t = await getT();
   const feed = drawFeedFacts();
@@ -56,6 +59,7 @@ export async function LandingHero({
               <p className={styles.note}>{t.landing.quick.note}</p>
             </div>
             <div className={styles.entries}>{entries}</div>
+            {rooms}
           </div>
         </div>
         <LiveFeed

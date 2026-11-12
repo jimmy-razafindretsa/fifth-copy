@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PROTOCOL_VERSION, RACE_TOKEN_TTL_S } from "@fifth-copy/protocol";
 import { boot, connectError, SECRET, type Booted } from "../testing/harness";
 import type { ResumeEntry } from "../players/resume-keys";
+import { ROOM_SEATS } from "../rooms/registry";
 import { authenticateHandshake } from "./handshake";
 
 let t: Booted | undefined;
@@ -26,7 +27,14 @@ describe("authenticateHandshake (C2)", () => {
     const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
     expect(await authenticateHandshake({ v: PROTOCOL_VERSION, token }, deps)).toEqual({
       ok: true,
-      claims: { v: PROTOCOL_VERSION, sub: "usr_a", name: "Ada", lobby, role: "player" },
+      claims: {
+        v: PROTOCOL_VERSION,
+        sub: "usr_a",
+        name: "Ada",
+        lobby,
+        role: "player",
+        avatar: null,
+      },
       resume: false,
     });
     expect(await t.server.registry.members(lobby)).toEqual([]);
@@ -55,6 +63,60 @@ describe("authenticateHandshake (C2)", () => {
       authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token({ lobby, sub }) }, deps);
     expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
     expect(await as("usr_a")).toMatchObject({ ok: true });
+  });
+
+  it("an ended room admits anyone, like waiting; countdown and running stay members only (#143, #732)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const { registry } = t.server;
+    const raced = [
+      { desk: 1, userId: "usr_host", name: "Ada", isBot: false },
+      { desk: 2, userId: "usr_b", name: "Bob", isBot: false },
+    ];
+    for (const { userId, name } of raced) await registry.join(lobby, { userId, name });
+    await registry.startRace(lobby, {
+      race: {
+        raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+        text: "Le dossier.",
+        language: "fr",
+        wordCount: 2,
+        t0: t.clock.now(),
+        timerS: null,
+      },
+      endAt: t.clock.now() + 60_000,
+      desks: raced,
+    });
+    await registry.setPhase(lobby, "ended");
+    await registry.leave(lobby, "usr_b");
+    const deps = { secret: SECRET, registry, clock: t.clock };
+    const as = async (sub: string) =>
+      authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token({ lobby, sub }) }, deps);
+    expect(await as("usr_b")).toMatchObject({ ok: true, resume: false });
+    expect(await as("usr_host")).toMatchObject({ ok: true });
+    // A late joiner is seated once the race is over (#732, spec 5.1).
+    expect(await as("usr_new")).toMatchObject({ ok: true, resume: false });
+    // Countdown and running stay members only.
+    await registry.setPhase(lobby, "running");
+    expect(await as("usr_b")).toEqual({ ok: false, reason: "in-progress" });
+    expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
+  });
+
+  it("refuses a stranger room-full once ROOM_SEATS typists are seated; a member still passes (#732)", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const { registry } = t.server;
+    for (let i = 1; i <= ROOM_SEATS; i++)
+      await registry.join(lobby, { userId: `usr_${i}`, name: "U" });
+    const deps = { secret: SECRET, registry, clock: t.clock };
+    const as = async (sub: string) =>
+      authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token({ lobby, sub }) }, deps);
+    expect(await as("usr_new")).toEqual({ ok: false, reason: "room-full" });
+    expect(await as("usr_2")).toMatchObject({ ok: true });
+    await registry.setPhase(lobby, "ended");
+    expect(await as("usr_new")).toEqual({ ok: false, reason: "room-full" });
+    expect(await as("usr_2")).toMatchObject({ ok: true });
+    await registry.leave(lobby, "usr_2");
+    expect(await as("usr_new")).toMatchObject({ ok: true });
   });
 
   it("accepts a well-formed resumeKey (restoring a desk is #178's)", async () => {
@@ -93,6 +155,43 @@ describe("authenticateHandshake (C2)", () => {
   });
 });
 
+describe("removed users (#133 C3)", () => {
+  it("refuses a removed user removed, as player, host-role or spectator token; others and other lobbies pass", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const other = await t.openRoom();
+    const { registry } = t.server;
+    await registry.join(lobby, { userId: "usr_host", name: "Ada" });
+    await registry.join(lobby, { userId: "usr_b", name: "Bob" });
+    expect(await registry.kick(lobby, "usr_host", 2)).toEqual({ ok: true, userId: "usr_b" });
+    const deps = { secret: SECRET, registry, clock: t.clock };
+    const as = async (claims: { lobby: string; sub: string; role?: "player" | "spectator" }) =>
+      authenticateHandshake({ v: PROTOCOL_VERSION, token: await t!.token(claims) }, deps);
+    // Still seated until the edge's leaveRoom: the block alone refuses (never seated, no slot).
+    expect(await as({ lobby, sub: "usr_b" })).toEqual({ ok: false, reason: "removed" });
+    expect(await as({ lobby, sub: "usr_b", role: "spectator" })).toEqual({
+      ok: false,
+      reason: "removed",
+    });
+    expect(await as({ lobby, sub: "usr_c" })).toMatchObject({ ok: true });
+    expect(await as({ lobby: other, sub: "usr_b" })).toMatchObject({ ok: true });
+  });
+
+  it("over the wire: connect_error removed, the roster unchanged", async () => {
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom();
+    const { registry } = t.server;
+    await registry.join(lobby, { userId: "usr_host", name: "Ada" });
+    await registry.block(lobby, "usr_b");
+    const client = t.connect({
+      v: PROTOCOL_VERSION,
+      token: await t.token({ lobby, sub: "usr_b" }),
+    });
+    expect(await connectError(client)).toBe("removed");
+    expect((await registry.members(lobby))?.map((m) => m.name)).toEqual(["Ada"]);
+  });
+});
+
 describe("spectator tokens (#187)", () => {
   it("accepts a spectator token for a waiting room, without membership and without joining", async () => {
     t = await boot(process.env.REDIS_URL);
@@ -101,7 +200,14 @@ describe("spectator tokens (#187)", () => {
     const deps = { secret: SECRET, registry: t.server.registry, clock: t.clock };
     expect(await authenticateHandshake({ v: PROTOCOL_VERSION, token }, deps)).toEqual({
       ok: true,
-      claims: { v: PROTOCOL_VERSION, sub: "usr_s", name: "Eve", lobby, role: "spectator" },
+      claims: {
+        v: PROTOCOL_VERSION,
+        sub: "usr_s",
+        name: "Eve",
+        lobby,
+        role: "spectator",
+        avatar: null,
+      },
       resume: false,
     });
     expect(await t.server.registry.members(lobby)).toEqual([]);

@@ -1,31 +1,40 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BACKSPACE } from "@fifth-copy/engine";
 import {
+  autoStartSchema,
   countdownSchema,
   DEFAULT_RACE_SETTINGS,
   endedSchema,
   MAX_RACE_MS,
   PROTOCOL_VERSION,
   welcomeSchema,
+  type AutoStart,
   type Countdown,
   type Ended,
   type HostStartAck,
   type Pong,
   type RaceSettings,
+  type Snapshot,
   INTERNAL_HEADERS,
   startRaceRequestSchema,
 } from "@fifth-copy/protocol";
 import { verifyInternalRequest } from "../http/hmac";
-import { createWebApi, type WebApi } from "../persist/web-api";
+import { LAST_LEAVE_GRACE_MS } from "../players/last-leave";
+import { createWebApi, WebApiStatusError, type WebApi } from "../persist/web-api";
 import {
   boot,
   connectError,
   connectRedis,
+  postRoomType,
   FIXTURE_TEXT,
+  ackClose,
+  ackHost,
   ackResults,
   fixtureWebApi,
+  hostCheckingWebApi,
   HOST_SUB,
   track,
+  typeKeys,
   until,
   WAIT_MS,
   type Booted,
@@ -33,7 +42,7 @@ import {
   type Client,
 } from "../testing/harness";
 import { startWebStub, STUB_TEXT, type WebStub } from "../testing/web-stub";
-import { membersKey, roomKey } from "./keys";
+import { desksKey, ENDED_GRACE_TTL_S, membersKey, roomKey, traceKey } from "./keys";
 import type { RaceEnded } from "./lifecycle";
 
 // #166: the room lifecycle over the wire, real Redis, fake clock and scheduler, fake WebApi
@@ -45,14 +54,21 @@ afterEach(async () => {
   t = undefined;
 });
 
-type Seen = ReturnType<typeof track> & { countdown: Countdown[]; ended: Ended[]; pong: Pong[] };
+type Seen = ReturnType<typeof track> & {
+  countdown: Countdown[];
+  ended: Ended[];
+  pong: Pong[];
+  autoStart: AutoStart[];
+};
 
 function watch(client: Client): Seen {
   const seen = Object.assign(track(client), {
     countdown: [] as Countdown[],
     ended: [] as Ended[],
     pong: [] as Pong[],
+    autoStart: [] as AutoStart[],
   });
+  client.on("auto-start", (a) => void seen.autoStart.push(a));
   client.on("countdown", (c) => void seen.countdown.push(c));
   client.on("ended", (e) => void seen.ended.push(e));
   client.on("pong", (p) => void seen.pong.push(p));
@@ -83,12 +99,18 @@ async function room({
       v: PROTOCOL_VERSION,
       token: await booted.token({ lobby, sub, name, role }),
     });
+  // Desks are seated in join-arrival order and `connect` resolves before the handshake lands, so
+  // each member waits for its own welcome before the next connects: host desk 1, then usr_p0 on
+  // desk 2, usr_p1 on desk 3... (#764: concurrent joins could swap the guests' desks).
   const host = await connectAs(HOST_SUB, "Ada", "host");
   const seenHost = watch(host);
+  await until(() => !!seenHost.welcome, WAIT_MS, "host welcome");
   const others: { client: Client; seen: Seen }[] = [];
   for (let i = 0; i < players; i++) {
     const client = await connectAs(`usr_p${i}`, `Clerk ${i}`);
-    others.push({ client, seen: watch(client) });
+    const seen = watch(client);
+    await until(() => !!seen.welcome, WAIT_MS, `usr_p${i} welcome`);
+    others.push({ client, seen });
   }
   await until(
     // The settings' bots are seated at open (#156) and count in the roster.
@@ -117,6 +139,16 @@ async function eventually(check: () => Promise<boolean>, what: string, ms = WAIT
   while (!(await check())) {
     if (Date.now() > deadline) throw new Error(`timed out after ${ms} ms waiting for ${what}`);
     await new Promise((r) => setTimeout(r, 20));
+  }
+}
+
+/** Runs `fn` with a short-lived Redis connection. */
+async function redis<T>(fn: (c: Awaited<ReturnType<typeof connectRedis>>) => Promise<T>) {
+  const c = await connectRedis(process.env.REDIS_URL);
+  try {
+    return await fn(c);
+  } finally {
+    c.disconnect();
   }
 }
 
@@ -205,6 +237,137 @@ describe("lifecycle: bots count as desks (#156 C3)", () => {
   });
 });
 
+describe("lifecycle: bots type from GO and stop with the race (#366 C3, C4)", () => {
+  /** Host (and `players` players) with `bots`, started and run to GO; the host's snapshots kept. */
+  async function botRace(bots: RaceSettings["bots"], players = 0) {
+    const r = await room({ players, settings: { ...DEFAULT_RACE_SETTINGS, bots } });
+    const snapshots: Snapshot[] = [];
+    r.host.on("snapshot", (snap) => void snapshots.push(snap));
+    const ack = await start(r.host);
+    expect(ack).toMatchObject({ ok: true });
+    r.booted.clock.advance(3_000);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO");
+    return { ...r, snapshots, raceId: (ack as { raceId: string }).raceId };
+  }
+  const traceOf = (b: Booted, lobby: string, desk: number) =>
+    b.server.desks.states(lobby).get(desk)?.trace.length ?? 0;
+  /** Advances the fake clock in 100 ms steps, yielding to the socket and Redis between them. */
+  async function stepFor(b: Booted, ms: number) {
+    for (let done = 0; done < ms; done += 100) {
+      b.clock.advance(100);
+      await new Promise((r) => setImmediate(r));
+    }
+  }
+
+  it("a bot removed by a settings change before START gets no driver; the other types, shows in snapshots and the rank", async () => {
+    const r = await room({
+      players: 0,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }, { level: "officer" }] },
+    });
+    // Bots leave highest desk first (#156): desk 3 goes, desk 2 stays.
+    expect(await r.booted.server.registry.setBots(r.lobby, [{ level: "clerk" }])).toMatchObject({
+      ok: true,
+    });
+    expect((await r.booted.server.registry.members(r.lobby))!.map((m) => m.desk)).toEqual([1, 2]);
+    const snapshots: Snapshot[] = [];
+    r.host.on("snapshot", (snap) => void snapshots.push(snap));
+    expect(await start(r.host)).toMatchObject({ ok: true });
+    r.booted.clock.advance(3_000);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO");
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([2]);
+    expect(r.booted.server.desks.get(r.lobby)!.desks.map((d) => d.desk)).toEqual([1, 2]);
+    await stepFor(r.booted, 2_000);
+    expect(traceOf(r.booted, r.lobby, 2)).toBeGreaterThan(0);
+    // The bot leads the silent host in the live rank and its cursor is in the snapshots.
+    await until(
+      () => (snapshots.at(-1)?.desks.find((d) => d[0] === 2)?.[1] ?? 0) > 0,
+      WAIT_MS,
+      "bot row",
+    );
+    expect(snapshots.at(-1)!.ranks[0]).toBe(2);
+  });
+
+  it("a host and a bot: the bot finishes first, the race ends all-finished once the host finishes too", async () => {
+    const { booted, lobby, host, seenHost } = await botRace([{ level: "major" }]);
+    const text = FIXTURE_TEXT.content;
+    for (
+      let i = 0;
+      i < 100 && booted.server.desks.states(lobby).get(2)?.status !== "finished";
+      i++
+    ) {
+      await stepFor(booted, 500);
+    }
+    expect(booted.server.desks.states(lobby).get(2)?.status).toBe("finished");
+    expect(booted.server.bots.active(lobby)).toEqual([]);
+    expect(seenHost.ended).toHaveLength(0);
+    const elapsed = booted.clock.now() - booted.server.desks.get(lobby)!.t0;
+    typeKeys(host, text, elapsed, 1);
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
+    expect(seenHost.ended[0]).toMatchObject({ reason: "all-finished" });
+    expect(seenHost.ended[0]!.ranking.map((e) => [e.desk, e.isBot, e.status])).toEqual([
+      [2, true, "finished"],
+      [1, false, "finished"],
+    ]);
+  });
+
+  it("an ending race (timer) stops every bot timer; no key lands afterwards", async () => {
+    const { booted, lobby, seenHost } = await botRace([{ level: "recruit" }, { level: "clerk" }]);
+    await stepFor(booted, 1_500);
+    expect(booted.server.bots.active(lobby)).toEqual([2, 3]);
+    await booted.server.lifecycle.endRace(lobby, "timer");
+    expect(booted.server.bots.active(lobby)).toEqual([]);
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
+    expect(seenHost.ended[0]!.ranking.filter((e) => e.isBot).map((e) => e.status)).toEqual([
+      "typing",
+      "typing",
+    ]);
+  });
+
+  it("voidRoom and a closed room stop the bots", async () => {
+    const a = await botRace([{ level: "clerk" }]);
+    await stepFor(a.booted, 1_000);
+    expect(a.booted.server.bots.active(a.lobby)).toEqual([2]);
+    await a.booted.server.lifecycle.voidRoom(a.lobby, a.raceId);
+    expect(a.booted.server.bots.active(a.lobby)).toEqual([]);
+    await t!.stop();
+    t = undefined;
+
+    const b = await botRace([{ level: "clerk" }]);
+    await stepFor(b.booted, 1_000);
+    const before = traceOf(b.booted, b.lobby, 2);
+    b.booted.server.lifecycle.onRoomClosed(b.lobby);
+    expect(b.booted.server.bots.active(b.lobby)).toEqual([]);
+    expect(b.booted.scheduler.armed()).toBe(0);
+    await stepFor(b.booted, 2_000);
+    expect(traceOf(b.booted, b.lobby, 2)).toBeLessThanOrEqual(before);
+  });
+
+  it("the race server's close() leaves no timer armed, bots included", async () => {
+    const r = await botRace([{ level: "clerk" }, { level: "major" }]);
+    await stepFor(r.booted, 1_000);
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([2, 3]);
+    // `restart` closes this server (keys kept) and boots another: the closed one holds nothing.
+    t = await r.booted.restart();
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([]);
+    expect(r.booted.scheduler.armed()).toBe(0);
+  });
+
+  it("Race again: the first race's bots stopped at its end, the second race's start at its GO", async () => {
+    const r = await botRace([{ level: "clerk" }]);
+    await stepFor(r.booted, 1_000);
+    await r.booted.server.lifecycle.endRace(r.lobby, "timer");
+    await until(() => r.seenHost.ended.length === 1, WAIT_MS, "ended 1");
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([]);
+    expect(await start(r.host)).toMatchObject({ ok: true });
+    r.booted.clock.advance(3_000);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO 2");
+    expect(r.booted.server.bots.active(r.lobby)).toEqual([2]);
+    expect(traceOf(r.booted, r.lobby, 2)).toBe(0);
+    await stepFor(r.booted, 1_500);
+    expect(traceOf(r.booted, r.lobby, 2)).toBeGreaterThan(0);
+  });
+});
+
 describe("lifecycle: text from the web app over the signed internal API (#199 C5)", () => {
   let stub: WebStub | undefined;
   afterEach(async () => {
@@ -220,6 +383,8 @@ describe("lifecycle: text from the web app over the signed internal API (#199 C5
     const webApi: WebApi = {
       startRace: (req) => wired.api!.startRace(req),
       postResults: ackResults,
+      closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { booted, lobby, host, seenHost, others, connectAs } = await room({ players: 2, webApi });
     wired.api = createWebApi({
@@ -309,6 +474,8 @@ describe("lifecycle: refusals (C2)", () => {
     const webApi: WebApi = {
       startRace: (req) => (fail ? Promise.reject(new Error("500")) : web.api.startRace(req)),
       postResults: ackResults,
+      closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { host, lobby, seenHost } = await room({ webApi });
     expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
@@ -328,6 +495,8 @@ describe("lifecycle: refusals (C2)", () => {
         return new Promise(() => {});
       },
       postResults: ackResults,
+      closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { booted, host, lobby } = await room({ webApi });
     const ack = start(host);
@@ -345,6 +514,8 @@ describe("lifecycle: refusals (C2)", () => {
         raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
       }),
       postResults: ackResults,
+      closeLobby: ackClose,
+      setLobbyHost: ackHost,
     };
     const { host } = await room({ webApi });
     expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
@@ -515,7 +686,7 @@ describe("lifecycle: room close", () => {
     expect(booted.scheduler.armed()).toBe(0);
   });
 
-  it("the last member leaving after the end closes the room with no timer left", async () => {
+  it("the last member leaving after the end keeps the room for Race again, with no timer left (#143)", async () => {
     const { booted, host, lobby, seenHost, others } = await room({
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
     });
@@ -523,9 +694,151 @@ describe("lifecycle: room close", () => {
     booted.clock.advance(63_000);
     await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
     others[0]!.client.disconnect();
+    // The guest's leave lands first: the host is then the last human, never deferred (#137).
+    await until(() => seenHost.roster?.length === 1, WAIT_MS, "guest gone");
     host.disconnect();
-    await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
+    await eventually(async () => {
+      const { fields, ttl } = await hash(lobby);
+      return fields.phase === "ended" && ttl > 0 && ttl <= ENDED_GRACE_TTL_S;
+    }, "room kept under the grace TTL");
+    // #658: the process holds nothing of the room any more.
     await until(() => booted.scheduler.armed() === 0, WAIT_MS, "no timer armed");
+    expect(booted.server.desks.get(lobby)).toBeUndefined();
+  });
+});
+
+describe("lifecycle: race again (#143)", () => {
+  /** A room of the host and one player whose first race ended on its 60 s timer. */
+  async function endedRoom(options: { webApi?: WebApi } = {}) {
+    const r = await room({ settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 }, ...options });
+    const first = await start(r.host);
+    expect(first).toMatchObject({ ok: true });
+    await until(() => r.seenHost.countdown.length === 1, WAIT_MS, "countdown 1");
+    r.booted.clock.advance(63_000);
+    await until(() => r.seenHost.ended.length === 1, WAIT_MS, "ended 1");
+    expect(await phaseOf(r.lobby)).toBe("ended");
+    return { ...r, raceId1: (first as { raceId: string }).raceId };
+  }
+
+  it("host:start on an ended room starts a new race: new raceId, countdown to all, GO at t0 (C1)", async () => {
+    const { booted, host, lobby, seenHost, others, raceId1 } = await endedRoom();
+    await redis(async (c) => c.hset(roomKey(lobby), { endReason: "void", endedAt: "1" }));
+
+    const ack = await start(host);
+    expect(ack).toEqual({ ok: true, raceId: expect.any(String) });
+    const raceId2 = (ack as { raceId: string }).raceId;
+    expect(raceId2).not.toBe(raceId1);
+    await until(
+      () => seenHost.countdown.length === 2 && others[0]!.seen.countdown.length === 2,
+      WAIT_MS,
+      "second countdown to every member",
+    );
+    const race = seenHost.countdown[1]!.race;
+    expect(race).toMatchObject({ raceId: raceId2, t0: booted.clock.now() + 3_000 });
+    const { fields } = await hash(lobby);
+    expect(fields).toMatchObject({ phase: "countdown", raceId: raceId2, t0: String(race.t0) });
+    expect(JSON.parse(fields.race!)).toEqual(race);
+    expect(JSON.parse(fields.desks!)).toHaveLength(2);
+    expect(fields.endReason).toBeUndefined();
+    expect(fields.endedAt).toBeUndefined();
+
+    booted.clock.advance(3_000);
+    await eventually(async () => (await phaseOf(lobby)) === "running", "phase running");
+    expect(booted.server.desks.get(lobby)?.raceId).toBe(raceId2);
+  });
+
+  it("refusals on an ended room keep it ended: not-host, too-few, start-failed (C1)", async () => {
+    let fail = false;
+    const web = fixtureWebApi({ now: () => 0 });
+    const webApi: WebApi = {
+      startRace: (req) => (fail ? Promise.reject(new Error("500")) : web.api.startRace(req)),
+      postResults: ackResults,
+      closeLobby: ackClose,
+      setLobbyHost: ackHost,
+    };
+    const { host, lobby, seenHost, others } = await endedRoom({ webApi });
+
+    expect(await start(others[0]!.client)).toEqual({ ok: false, error: "not-host" });
+    fail = true;
+    expect(await start(host)).toEqual({ ok: false, error: "start-failed" });
+    expect(await phaseOf(lobby)).toBe("ended");
+    fail = false;
+    others[0]!.client.disconnect();
+    await until(() => seenHost.roster?.length === 1, WAIT_MS, "player gone");
+    expect(await start(host)).toEqual({ ok: false, error: "too-few" });
+    await settle();
+    expect(seenHost.countdown).toHaveLength(1);
+    expect(await phaseOf(lobby)).toBe("ended");
+  });
+
+  it("two races in one room: fresh desks and traces, two results with distinct ids and their own keys (C2)", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, host, lobby, seenHost } = await room({
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60 },
+      webApi: web.api,
+    });
+    const race = async (n: number, chars: string) => {
+      const ack = await start(host);
+      expect(ack).toMatchObject({ ok: true });
+      await until(() => seenHost.countdown.length === n, WAIT_MS, `countdown ${n}`);
+      if (n === 2) {
+        // Nothing of race 1 is left before race 2's countdown: no runtime, no mirror, no trace.
+        expect(booted.server.desks.get(lobby)).toBeUndefined();
+        await redis(async (c) => {
+          expect(await c.exists(desksKey(lobby), traceKey(lobby, 1), traceKey(lobby, 2))).toBe(0);
+        });
+      }
+      booted.clock.advance(3_000);
+      await until(() => booted.server.desks.get(lobby)?.phase === "running", WAIT_MS, `GO ${n}`);
+      expect(booted.server.desks.states(lobby).get(1)?.trace).toEqual([]);
+      typeKeys(host, chars, 100, 50);
+      await until(
+        () => booted.server.desks.states(lobby).get(1)?.trace.length === chars.length,
+        WAIT_MS,
+        `keys of race ${n}`,
+      );
+      booted.clock.advance(60_000);
+      await until(() => web.results.length === n, WAIT_MS, `results of race ${n}`);
+      return (ack as { raceId: string }).raceId;
+    };
+
+    const raceId1 = await race(1, "Le for");
+    const first = structuredClone(web.results[0]!);
+    const raceId2 = await race(2, "Le");
+
+    expect(web.calls.map((c) => c.raceId)).toEqual([raceId1, raceId2]);
+    expect(web.results.map((r) => r.raceId)).toEqual([raceId1, raceId2]);
+    const desk1 = (n: number) => web.results[n]!.results.find((r) => r.desk === 1)!;
+    expect(desk1(0).trace.count).toBe(6);
+    expect(desk1(1).trace.count).toBe(2);
+    expect(web.results[0]).toEqual(first);
+  });
+
+  it("members who left after the end come back at their desks and race again (C3)", async () => {
+    const { host, lobby, others, connectAs, raceId1, seenHost } = await endedRoom();
+    others[0]!.client.disconnect();
+    // The guest's leave lands first: the host is then the last human, never deferred (#137).
+    await until(() => seenHost.roster?.length === 1, WAIT_MS, "guest gone");
+    host.disconnect();
+    await eventually(async () => (await hash(lobby)).ttl <= ENDED_GRACE_TTL_S, "room kept");
+
+    const host2 = await connectAs(HOST_SUB, "Ada", "host");
+    const seen2 = watch(host2);
+    const back = await connectAs("usr_p0", "Clerk 0");
+    const seenBack = watch(back);
+    await until(() => seen2.roster?.length === 2 && !!seenBack.welcome, WAIT_MS, "both back");
+    expect(seen2.welcome?.you).toBe(1);
+    expect(seenBack.welcome?.you).toBe(2);
+    expect((await hash(lobby)).ttl).toBeGreaterThan(ENDED_GRACE_TTL_S);
+
+    const ack = await start(host2);
+    expect(ack).toEqual({ ok: true, raceId: expect.any(String) });
+    expect((ack as { raceId: string }).raceId).not.toBe(raceId1);
+    await until(
+      () => seenBack.countdown.length === 1,
+      WAIT_MS,
+      "countdown to the returning member",
+    );
   });
 });
 
@@ -545,5 +858,504 @@ describe("lifecycle: room keys (C6)", () => {
     } finally {
       redis.disconnect();
     }
+  });
+});
+
+describe("lifecycle: public room auto start (#814)", () => {
+  const AUTO_START_MS = 45_000;
+  const PUBLIC: RaceSettings = { ...DEFAULT_RACE_SETTINGS, lobbyType: "public" };
+  const withBot: RaceSettings = { ...PUBLIC, bots: [{ level: "clerk" }] };
+  const settings = (s: Client, bots: RaceSettings["bots"]) =>
+    s.timeout(2_000).emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch: { bots } });
+  /** Every JSON log line `auto-start` written so far. */
+  function autoLogs(spy: { mock: { calls: unknown[][] } }) {
+    return spy.mock.calls
+      .map(([line]) => {
+        try {
+          return JSON.parse(String(line)) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      })
+      .filter((l): l is Record<string, unknown> => l?.msg === "auto-start");
+  }
+
+  it("C2: the host seated with a bot arms one timer at now + 45 s, stored and broadcast; a later join never moves it", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    const { booted, lobby, seenHost, connectAs } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "auto-start armed");
+    const { startsAt } = autoStartSchema.parse(seenHost.autoStart[0]);
+    expect(startsAt).not.toBeNull();
+    expect(startsAt! - booted.clock.now()).toBeGreaterThan(AUTO_START_MS - 1_000);
+    expect(startsAt! - booted.clock.now()).toBeLessThanOrEqual(AUTO_START_MS);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect((await hash(lobby)).ttl).toBeGreaterThan(0);
+    expect(booted.scheduler.armed()).toBe(1);
+
+    booted.clock.advance(10_000);
+    const late = watch(await connectAs("usr_late", "Late"));
+    await until(() => !!late.welcome, WAIT_MS, "late welcome");
+    expect(late.welcome!.autoStartAt).toBe(startsAt);
+    await until(() => seenHost.roster?.length === 3, WAIT_MS, "late seated");
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+    expect(late.autoStart).toHaveLength(0);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(booted.scheduler.armed()).toBe(1);
+    const armed = autoLogs(logSpy).filter((l) => l.outcome === "armed");
+    expect(armed).toEqual([{ level: "info", msg: "auto-start", lobby, outcome: "armed" }]);
+  });
+
+  it("C2: a private room, a public room with one desk and a room of bots only never arm", async () => {
+    const priv = await room({
+      players: 0,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }] },
+    });
+    await settle();
+    expect(priv.seenHost.autoStart).toHaveLength(0);
+    expect(priv.seenHost.welcome!.autoStartAt).toBeNull();
+    expect((await hash(priv.lobby)).fields.autoStartAt).toBeUndefined();
+    expect(priv.booted.scheduler.armed()).toBe(0);
+    await t!.stop();
+
+    const alone = await room({ players: 0, settings: PUBLIC });
+    await settle();
+    expect(alone.seenHost.autoStart).toHaveLength(0);
+    expect(alone.booted.scheduler.armed()).toBe(0);
+    await t!.stop();
+
+    // Bots only: the room opened with bots and no human ever reviewed by a join.
+    t = await boot(process.env.REDIS_URL);
+    const lobby = await t.openRoom("KGB-4821", {
+      ...PUBLIC,
+      bots: [{ level: "clerk" }, { level: "clerk" }],
+    });
+    await t.server.lifecycle.reviewAutoStart(lobby);
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(t.scheduler.armed()).toBe(0);
+  });
+
+  it("C3: removing the last bot drops it (null broadcast, instant deleted, timer cleared); adding one back arms afresh", async () => {
+    const { booted, lobby, host, seenHost } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const first = seenHost.autoStart[0]!.startsAt!;
+    expect(await settings(host, [])).toMatchObject({ ok: true });
+    await until(() => seenHost.autoStart.length === 2, WAIT_MS, "dropped");
+    expect(seenHost.autoStart[1]).toEqual({ v: PROTOCOL_VERSION, startsAt: null });
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+
+    booted.clock.advance(5_000);
+    expect(await settings(host, [{ level: "clerk" }])).toMatchObject({ ok: true });
+    await until(() => seenHost.autoStart.length === 3, WAIT_MS, "re-armed");
+    expect(seenHost.autoStart[2]!.startsAt).toBe(first + 5_000);
+    expect(booted.scheduler.armed()).toBe(1);
+  });
+
+  it("C3: the last human leaving closes the room and clears the timer; nothing is broadcast", async () => {
+    const { booted, lobby, host, seenHost } = await room({ players: 0, settings: withBot });
+    await until(() => booted.scheduler.armed() >= 1, WAIT_MS, "armed");
+    host.disconnect();
+    // The last leave waits out its grace (#734, 5 s) on the fake clock, well inside the 45 s.
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "last leave deferred");
+    booted.clock.advance(5_000);
+    await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
+    await until(() => booted.scheduler.armed() === 0, WAIT_MS, "no timer");
+    expect(seenHost.countdown).toHaveLength(0);
+  });
+
+  it("C3: a host START during the countdown starts at once: the instant and its timer go, no null is sent", async () => {
+    const { booted, lobby, host, seenHost } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    expect(await start(host)).toMatchObject({ ok: true });
+    // GO and the timer end; the automatic start is gone.
+    expect(booted.scheduler.armed()).toBe(2);
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+  });
+
+  it("C4: at the instant the room starts as a host start would: countdown to all, the host named in the web call, GO", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, seenHost, others } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    await until(() => seenHost.autoStart.length >= 1, WAIT_MS, "armed");
+    const { startsAt } = seenHost.autoStart[0]!;
+    booted.clock.advance(startsAt! - booted.clock.now() - 1);
+    await settle();
+    expect(seenHost.countdown).toHaveLength(0);
+    booted.clock.advance(1);
+    await until(
+      () => seenHost.countdown.length === 1 && others[0]!.seen.countdown.length === 1,
+      WAIT_MS,
+      "countdown to every member",
+    );
+    expect(seenHost.countdown[0]!.race.t0).toBe(startsAt! + 3_000);
+    expect(web.calls).toHaveLength(1);
+    expect(web.calls[0]).toMatchObject({ lobbyId: lobby, hostUserId: HOST_SUB });
+    expect((await hash(lobby)).fields).toMatchObject({ phase: "countdown" });
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(seenHost.autoStart.every((a) => a.startsAt !== null)).toBe(true);
+    booted.clock.advance(3_000);
+    await eventually(async () => (await phaseOf(lobby)) === "running", "running");
+    const fired = autoLogs(logSpy).filter((l) => l.outcome === "ok");
+    expect(fired).toEqual([{ level: "info", msg: "auto-start", lobby, outcome: "ok" }]);
+    expect(JSON.stringify(autoLogs(logSpy))).not.toMatch(/usr_|Ada|Clerk/);
+  });
+
+  it("C3: a leave that leaves one desk drops it", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, others } = await room({
+      players: 1,
+      settings: PUBLIC,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => guest.autoStart.length === 1, WAIT_MS, "armed");
+    host.disconnect();
+    // #884: the host's disconnect waits out the leave grace
+    await settle();
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await until(() => guest.roster?.length === 1, WAIT_MS, "host left");
+    // One human, one desk: the room no longer qualifies.
+    await until(() => guest.autoStart.length === 2, WAIT_MS, "dropped");
+    expect(guest.autoStart[1]!.startsAt).toBeNull();
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+  });
+
+  it("C4: a host whose socket left while a human and a bot stay: the room still starts, under the promoted host (#137 C2)", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost, others } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    expect(guest.welcome!.autoStartAt).toBe(seenHost.autoStart[0]!.startsAt);
+    host.disconnect();
+    // #884: the host's disconnect waits out the leave grace (inside the auto-start delay)
+    await settle();
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await until(() => guest.roster?.length === 2, WAIT_MS, "host left");
+    await settle();
+    expect(guest.autoStart).toEqual([]);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(seenHost.autoStart[0]!.startsAt));
+    booted.clock.advance(AUTO_START_MS - LAST_LEAVE_GRACE_MS);
+    await until(() => guest.countdown.length === 1, WAIT_MS, "countdown");
+    // #137: the host's leave in waiting passed the role to the remaining human.
+    expect(web.calls[0]).toMatchObject({ hostUserId: "usr_p0" });
+    expect(web.hosts).toEqual([{ v: PROTOCOL_VERSION, lobbyId: lobby, hostUserId: "usr_p0" }]);
+  });
+
+  it("C4: a failing web start leaves the room waiting, drops the instant with a null broadcast; the host's START remains", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    let fail = true;
+    const web = fixtureWebApi({ now: () => 0 });
+    const api: WebApi = {
+      ...web.api,
+      startRace: async (req) => {
+        if (fail) throw new Error("web down");
+        return web.api.startRace(req);
+      },
+    };
+    const { booted, lobby, host, seenHost } = await room({
+      players: 0,
+      settings: withBot,
+      webApi: api,
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    booted.clock.advance(AUTO_START_MS);
+    await until(() => seenHost.autoStart.length === 2, WAIT_MS, "dropped after failure");
+    expect(seenHost.autoStart[1]).toEqual({ v: PROTOCOL_VERSION, startsAt: null });
+    expect(await phaseOf(lobby)).toBe("waiting");
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+    expect(autoLogs(logSpy).map((l) => l.outcome)).toEqual(["armed", "start-failed"]);
+    fail = false;
+    expect(await start(host)).toMatchObject({ ok: true });
+  });
+
+  it("C5: a reload during the countdown gets the stored instant in its welcome", async () => {
+    const { lobby, seenHost, connectAs } = await room({ players: 0, settings: withBot });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const tab = watch(await connectAs(HOST_SUB, "Ada", "host"));
+    await until(() => !!tab.welcome, WAIT_MS, "tab welcome");
+    expect(welcomeSchema.parse(tab.welcome).autoStartAt).toBe(seenHost.autoStart[0]!.startsAt);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(seenHost.autoStart[0]!.startsAt));
+  });
+
+  // #890: the instant falls inside a pending leave grace (host with others #884, last human #734).
+  /** Advances the fake clock by 0 until `ok` holds: a re-armed past instant fires on an advance. */
+  const pump = (booted: Booted, ok: () => boolean, what: string) =>
+    until(
+      () => {
+        booted.clock.advance(0);
+        return ok();
+      },
+      WAIT_MS,
+      what,
+    );
+
+  it("#890 C1: the host's grace pending at the instant holds the start; it fires under the promoted host once the grace runs out", async () => {
+    const logSpy = vi.spyOn(console, "log");
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost, others } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt!;
+    booted.clock.advance(startsAt - booted.clock.now() - 2_000);
+    host.disconnect();
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "host leave deferred");
+    booted.clock.advance(2_000);
+    await settle();
+    expect(guest.countdown).toHaveLength(0);
+    expect(web.calls).toHaveLength(0);
+    expect(await phaseOf(lobby)).toBe("waiting");
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(guest.autoStart).toEqual([]);
+    expect(autoLogs(logSpy).map((l) => l.outcome)).toEqual(["armed", "held"]);
+
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 2_000);
+    await until(() => guest.roster?.length === 2, WAIT_MS, "host left");
+    await pump(booted, () => guest.countdown.length === 1, "countdown after the grace");
+    expect(web.calls).toHaveLength(1);
+    expect(web.calls[0]).toMatchObject({ hostUserId: "usr_p0" });
+    expect(autoLogs(logSpy).map((l) => l.outcome)).toEqual(["armed", "held", "ok"]);
+  });
+
+  it("#890 C1: the last human's grace pending at the instant holds the start; the grace closes the room, no race", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost } = await room({
+      players: 0,
+      settings: withBot,
+      webApi: web.api,
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt!;
+    booted.clock.advance(startsAt - booted.clock.now() - 1_000);
+    host.disconnect();
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "last leave deferred");
+    booted.clock.advance(1_000);
+    await settle();
+    expect(web.calls).toHaveLength(0);
+    expect(await phaseOf(lobby)).toBe("waiting");
+
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1_000);
+    await eventually(async () => (await hash(lobby)).fields.openedAt === undefined, "room closed");
+    await pump(booted, () => booted.scheduler.armed() === 0, "no timer");
+    await settle();
+    expect(web.calls).toHaveLength(0);
+    expect(seenHost.countdown).toHaveLength(0);
+  });
+
+  it("#890 C2: a host back within the grace finds the room waiting; the start then proceeds under that host", async () => {
+    const web = fixtureWebApi({ now: () => 0 });
+    const { booted, lobby, host, seenHost, others, connectAs } = await room({
+      players: 1,
+      settings: withBot,
+      webApi: web.api,
+    });
+    const guest = others[0]!.seen;
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt!;
+    booted.clock.advance(startsAt - booted.clock.now() - 1_000);
+    host.disconnect();
+    await until(() => booted.scheduler.armed() === 2, WAIT_MS, "host leave deferred");
+    booted.clock.advance(2_000);
+    await settle();
+    expect(guest.countdown).toHaveLength(0);
+
+    // The reload lands within the grace: same room, still waiting, the instant still announced.
+    const back = watch(await connectAs(HOST_SUB, "Ada", "host"));
+    await until(() => !!back.welcome, WAIT_MS, "host welcome again");
+    expect(back.welcome!.room.phase).toBe("waiting");
+    expect(back.welcome!.autoStartAt).toBe(startsAt);
+    await pump(booted, () => back.countdown.length === 1, "countdown once the host is back");
+    expect(guest.countdown).toHaveLength(1);
+    expect(web.calls).toHaveLength(1);
+    expect(web.calls[0]).toMatchObject({ lobbyId: lobby, hostUserId: HOST_SUB });
+    // The grace runs out with the host seated: no leave, no new host.
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await settle();
+    expect(web.hosts).toEqual([]);
+    expect((await hash(lobby)).fields.hostUserId).toBe(HOST_SUB);
+  });
+
+  it("only the first race auto-starts: an ended public room waits for the host", async () => {
+    const { booted, host, lobby, seenHost } = await room({
+      players: 0,
+      settings: { ...withBot, timerS: 60 },
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    booted.clock.advance(AUTO_START_MS);
+    await until(() => seenHost.countdown.length === 1, WAIT_MS, "countdown");
+    booted.clock.advance(63_000);
+    await until(() => seenHost.ended.length === 1, WAIT_MS, "ended");
+    await booted.server.lifecycle.reviewAutoStart(lobby);
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+    expect(booted.scheduler.armed()).toBe(0);
+    expect(await start(host)).toMatchObject({ ok: true });
+  });
+});
+
+describe("lifecycle: the room's visibility reviews the automatic start (#815 C3)", () => {
+  const ok = { status: 200, body: { v: PROTOCOL_VERSION, result: "ok" } };
+  const withBot: RaceSettings = { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }] };
+
+  it("PRIVATE drops a pending start; PUBLIC arms it afresh", async () => {
+    const { booted, lobby, seenHost } = await room({
+      players: 0,
+      settings: { ...withBot, lobbyType: "public" },
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+
+    expect(await postRoomType(booted, lobby, "private")).toEqual(ok);
+    await until(() => seenHost.autoStart.length === 2, WAIT_MS, "dropped");
+    expect(seenHost.autoStart[1]).toEqual({ v: PROTOCOL_VERSION, startsAt: null });
+    expect((await hash(lobby)).fields.autoStartAt).toBeUndefined();
+    expect(booted.scheduler.armed()).toBe(0);
+
+    booted.clock.advance(5_000);
+    expect(await postRoomType(booted, lobby, "public")).toEqual(ok);
+    await until(() => seenHost.autoStart.length === 3, WAIT_MS, "re-armed");
+    const startsAt = seenHost.autoStart[2]!.startsAt!;
+    expect(startsAt).toBe(booted.clock.now() + 45_000);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(booted.scheduler.armed()).toBe(1);
+  });
+
+  it("a private room filed PUBLIC arms when eligible; one that is not eligible stays unarmed", async () => {
+    const { booted, lobby, seenHost } = await room({ players: 0, settings: withBot });
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(0);
+    expect(await postRoomType(booted, lobby, "public")).toEqual(ok);
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    expect(booted.scheduler.armed()).toBe(1);
+    await t!.stop();
+
+    const alone = await room({ players: 0 });
+    expect(await postRoomType(alone.booted, alone.lobby, "public")).toEqual(ok);
+    await settle();
+    expect(alone.seenHost.autoStart).toHaveLength(0);
+    expect(alone.booted.scheduler.armed()).toBe(0);
+  });
+
+  it("the value already stored answers ok and arms or drops nothing", async () => {
+    const { booted, lobby, seenHost } = await room({
+      players: 0,
+      settings: { ...withBot, lobbyType: "public" },
+    });
+    await until(() => seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = seenHost.autoStart[0]!.startsAt;
+    booted.clock.advance(1_000);
+    expect(await postRoomType(booted, lobby, "public")).toEqual(ok);
+    await settle();
+    expect(seenHost.autoStart).toHaveLength(1);
+    expect((await hash(lobby)).fields.autoStartAt).toBe(String(startsAt));
+    expect(booted.scheduler.armed()).toBe(1);
+  });
+});
+
+// #897: the web refuses a start whose host is not its recorded `Lobby.hostUserId`; a host transfer
+// reaches it through the outbox (#137). The start delivers the room's pending transfer first.
+describe("lifecycle: a start after a host transfer the web has not recorded yet (#897)", () => {
+  const PUBLIC_BOT: RaceSettings = {
+    ...DEFAULT_RACE_SETTINGS,
+    lobbyType: "public",
+    bots: [{ level: "clerk" }],
+  };
+  /** The host leaves for good with guests seated: after the grace (#884) usr_p0 is promoted. */
+  async function promoted(players: number, settings = DEFAULT_RACE_SETTINGS) {
+    const web = hostCheckingWebApi({ now: () => 0 });
+    const r = await room({ players, settings, webApi: web.api });
+    return { ...r, web };
+  }
+  async function hostLeaves(r: Awaited<ReturnType<typeof promoted>>) {
+    r.host.disconnect();
+    await until(() => r.booted.scheduler.armed() >= 1, WAIT_MS, "host leave deferred");
+    r.booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    await until(
+      () => r.others[0]!.seen.roster?.find((m) => m.name === "Clerk 0")?.isHost === true,
+      WAIT_MS,
+      "usr_p0 promoted",
+    );
+  }
+
+  it("C1: the promoted host's START while the transfer is still in flight waits for it, then starts", async () => {
+    const r = await promoted(2);
+    let deliver = () => {};
+    const delivered = new Promise<void>((resolve) => (deliver = resolve));
+    r.web.state.beforeHost = () => delivered;
+    await hostLeaves(r);
+    const [p0, p1] = r.others as [(typeof r.others)[0], (typeof r.others)[0]];
+    const ack = start(p0.client);
+    await settle();
+    // The start call waits for the transfer: nothing reached the web, nothing was emitted.
+    expect(r.web.logOf(r.lobby)).toEqual([]);
+    expect(p1.seen.countdown).toHaveLength(0);
+    deliver();
+    expect(await ack).toMatchObject({ ok: true });
+    expect(r.web.logOf(r.lobby)).toEqual(["host usr_p0", "start usr_p0"]);
+    await until(() => p1.seen.countdown.length === 1, WAIT_MS, "countdown");
+    expect(r.web.calls[0]).toMatchObject({ lobbyId: r.lobby, hostUserId: "usr_p0" });
+  });
+
+  it("C1: the held automatic start fired by the promoting leave starts under the promoted host", async () => {
+    const r = await promoted(1, PUBLIC_BOT);
+    // The web is slower than the room: the transfer lands after the instant fires.
+    r.web.state.beforeHost = () => new Promise((resolve) => setTimeout(resolve, 300));
+    await until(() => r.seenHost.autoStart.length === 1, WAIT_MS, "armed");
+    const startsAt = r.seenHost.autoStart[0]!.startsAt!;
+    r.booted.clock.advance(startsAt - r.booted.clock.now() - 1_000);
+    r.host.disconnect();
+    await until(() => r.booted.scheduler.armed() === 2, WAIT_MS, "host leave deferred");
+    r.booted.clock.advance(1_000);
+    await settle();
+    const guest = r.others[0]!.seen;
+    expect(guest.countdown).toHaveLength(0);
+    r.booted.clock.advance(LAST_LEAVE_GRACE_MS - 1_000);
+    await until(
+      () => {
+        r.booted.clock.advance(0);
+        return guest.countdown.length === 1;
+      },
+      WAIT_MS,
+      "countdown after the grace",
+    );
+    expect(r.web.logOf(r.lobby)).toEqual(["host usr_p0", "start usr_p0"]);
+    expect(guest.autoStart.map((a) => a.startsAt)).not.toContain(null);
+  });
+
+  it("C3: a web that cannot record the transfer (5xx) fails the START cleanly; a later START succeeds once it is delivered", async () => {
+    const r = await promoted(2);
+    let down = true;
+    r.web.state.beforeHost = async () => {
+      if (down) throw new WebApiStatusError(503);
+    };
+    await hostLeaves(r);
+    const [p0, p1] = r.others as [(typeof r.others)[0], (typeof r.others)[0]];
+    expect(await start(p0.client)).toEqual({ ok: false, error: "start-failed" });
+    await settle();
+    expect(r.web.logOf(r.lobby)).toEqual([]);
+    expect(p0.seen.countdown).toHaveLength(0);
+    expect(p1.seen.countdown).toHaveLength(0);
+    expect(await phaseOf(r.lobby)).toBe("waiting");
+
+    down = false;
+    expect(await start(p0.client)).toMatchObject({ ok: true });
+    expect(r.web.logOf(r.lobby)).toEqual(["host usr_p0", "start usr_p0"]);
+    await until(() => p1.seen.countdown.length === 1, WAIT_MS, "countdown");
   });
 });

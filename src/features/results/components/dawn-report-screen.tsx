@@ -2,16 +2,26 @@ import type { ReactNode } from "react";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
-import { filingLabels, podiumLabels, rankingLabels } from "../view/report-labels";
+import type { PersonalReplay } from "../queries/get-race-series";
+import { coachingFrom } from "../view/tip";
+import {
+  filingLabels,
+  personalLabels,
+  podiumLabels,
+  rankingLabels,
+  reportActions,
+} from "../view/report-labels";
 import styles from "./dawn-report.module.css";
 import { FilingNotice } from "./filing-notice";
+import { PersonalCard } from "./personal-card";
 import { Podium } from "./podium";
 import { RankingTable } from "./ranking-table";
+import { ReportActions } from "./report-actions";
 
 /**
  * The Dawn report's layout (bible 14.4), presentational: kicker, `RACE OVER`, then the body (the
  * podium, or the filing notice), and under the podium the ranking docket (#301) beside the personal
- * stats card (#302) from 1024px. Empty slots render nothing.
+ * stats card (#302) from 1024px, then the action row (#143). Empty slots render nothing.
  */
 export function DawnReportLayout({
   kicker,
@@ -19,12 +29,14 @@ export function DawnReportLayout({
   children,
   ranking,
   personal,
+  actions,
 }: {
   kicker: string;
   heading: string;
   children: ReactNode;
   ranking?: ReactNode;
   personal?: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
     <div className={styles.screen} data-dawn-report>
@@ -38,6 +50,7 @@ export function DawnReportLayout({
             {personal && <div data-slot="personal">{personal}</div>}
           </div>
         )}
+        {actions && <div data-slot="actions">{actions}</div>}
       </div>
     </div>
   );
@@ -46,9 +59,21 @@ export function DawnReportLayout({
 /**
  * `/results/[raceId]` (#300 C2, ARCHITECTURE 8.1, 8.3): the site header (as the waiting room keeps it),
  * then the report: the filing notice (the one client leaf that polls) or the podium with the ranking
- * docket (#301) in its slot.
+ * docket (#301) and, for a typist, their personal stats card (#864) in their slots, the action row under it (#143, #863: RACE AGAIN, the way home, and a
+ * guest member's prompt to open a file; `viewerIsGuest` is the viewer's guest flag, ADR 0009). The
+ * card's WPM graph (#865), errors by key and tip (#867) read `replay` (`getPersonalReplay`: the viewer's
+ * own trace, `null` without one: the graph and the keys read NO TRACE ON FILE, the tip comes from the
+ * accuracy alone).
  */
-export async function DawnReportScreen({ report }: { report: DawnReport }) {
+export async function DawnReportScreen({
+  report,
+  viewerIsGuest = false,
+  replay = null,
+}: {
+  report: DawnReport;
+  viewerIsGuest?: boolean;
+  replay?: PersonalReplay | null;
+}) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
   const [{ LandingHeader }, t] = await Promise.all([import("@/features/landing"), getT()]);
   const r = t.results;
@@ -65,6 +90,24 @@ export async function DawnReportScreen({ report }: { report: DawnReport }) {
                 rows={rankingRowsFrom(report.entries, report.viewerDesk)}
                 labels={rankingLabels(r)}
               />
+            ) : undefined
+          }
+          personal={
+            report.kind === "report" && report.personal ? (
+              <PersonalCard
+                stats={report.personal}
+                labels={personalLabels(t)}
+                series={replay?.series ?? null}
+                coaching={coachingFrom({
+                  accuracy: report.personal.accuracy,
+                  missed: replay?.missed ?? null,
+                })}
+              />
+            ) : undefined
+          }
+          actions={
+            report.kind === "report" ? (
+              <ReportActions actions={reportActions(r, { ...report, viewerIsGuest })} />
             ) : undefined
           }
         >

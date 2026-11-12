@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
+import { createServer, type Server as HttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
+import { Server as SocketServer } from "socket.io";
+import { io as realIo } from "socket.io-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RACE_SETTINGS,
@@ -10,7 +14,15 @@ import {
   type SettingsEvent,
   type Welcome,
 } from "@fifth-copy/protocol";
-import { connectToRoom, HOST_START_TIMEOUT_MS, type HandshakeAuth, type IoFactory } from "./socket";
+import {
+  connectToRoom,
+  HOST_KICK_TIMEOUT_MS,
+  HOST_START_TIMEOUT_MS,
+  type HandshakeAuth,
+  type IoFactory,
+} from "./socket";
+import { bindRaceSocket, createRaceStore, type RaceTimer } from "./store";
+import { createTyping } from "./typing";
 
 type Listener = (...args: unknown[]) => void;
 
@@ -37,9 +49,10 @@ function makeFakeSocket() {
   const socket = makeEmitter();
   const manager = makeEmitter();
   const disconnect = vi.fn();
+  const connect = vi.fn();
   /** Outbound: what the client sends; distinct from the inbound `deliver`. */
   const emit = vi.fn();
-  return { ...socket, io: manager, disconnect, emit };
+  return { ...socket, io: manager, disconnect, connect, emit };
 }
 
 function setup(token = "tok.en.value") {
@@ -56,6 +69,7 @@ const member = {
   isBot: false,
   color: 0,
   marker: "circle",
+  avatar: null,
 } as const;
 const welcome: Welcome = {
   v: PROTOCOL_VERSION,
@@ -67,8 +81,10 @@ const welcome: Welcome = {
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
+  autoStartAt: null,
 };
 const roster: Roster = { v: PROTOCOL_VERSION, members: [member] };
 
@@ -96,6 +112,7 @@ describe("connectToRoom (C1)", () => {
     expect(io).toHaveBeenCalledWith("http://localhost:7495", {
       auth: expect.any(Function),
       transports: ["websocket", "polling"],
+      tryAllTransports: true,
       autoConnect: true,
     });
     expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "secret-token" });
@@ -123,6 +140,7 @@ describe("resume key in the handshake (#561 C11)", () => {
     expect(opts).toEqual({
       auth: expect.any(Function),
       transports: ["websocket", "polling"],
+      tryAllTransports: true,
       autoConnect: true,
     });
     expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "tok", resumeKey: KEY });
@@ -153,6 +171,20 @@ describe("resume key in the handshake (#561 C11)", () => {
     expect(handshake(io)).toEqual({ v: 7, token: "tok", resumeKey: KEY });
     stored = null;
     expect(handshake(io)).toEqual({ v: 7, token: "tok" });
+  });
+
+  it("#235 C6 reads a token given as a function before every handshake; reconnect() connects again", () => {
+    const fake = makeFakeSocket();
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    let token = "expired";
+    const room = connectToRoom("http://x", () => token, { io, resumeKey: KEY });
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "expired", resumeKey: KEY });
+    // a re-minted token reaches the next handshake of the same socket
+    token = "fresh";
+    room.reconnect();
+    expect(fake.connect).toHaveBeenCalledTimes(1);
+    expect(handshake(io)).toEqual({ v: PROTOCOL_VERSION, token: "fresh", resumeKey: KEY });
+    expect(io).toHaveBeenCalledTimes(1);
   });
 
   it.each([undefined, null, ""])("sends no resumeKey field when the key is %j", (resumeKey) => {
@@ -249,6 +281,20 @@ describe("connection lifecycle (C3)", () => {
     fake.deliver("connect_error", new Error("xhr poll error"));
     fake.deliver("connect_error", undefined);
     expect(cb.mock.calls).toEqual([["transport"], ["transport"]]);
+  });
+
+  it("onServerDisconnect fires only when the server closed the socket (#732)", () => {
+    const { fake, room } = setup();
+    const cb = vi.fn();
+    const off = room.onServerDisconnect(cb);
+    fake.deliver("disconnect", "transport close");
+    fake.deliver("disconnect", "io client disconnect");
+    expect(cb).not.toHaveBeenCalled();
+    fake.deliver("disconnect", "io server disconnect");
+    expect(cb).toHaveBeenCalledTimes(1);
+    off();
+    fake.deliver("disconnect", "io server disconnect");
+    expect(cb).toHaveBeenCalledTimes(1);
   });
 
   it("wraps the manager's reconnect_attempt and reconnect events", () => {
@@ -366,6 +412,53 @@ describe("settings (#101 C4)", () => {
   });
 });
 
+// #133 C4: the host's removal. `sendHostKick(desk)` emits `host:kick { v, desk }` and resolves the
+// parsed ack, or `timeout` after 5 s (or on an invalid ack, a protocol error); it never rejects.
+describe("host kick (#133 C4)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const lastAck = (fake: ReturnType<typeof makeFakeSocket>) =>
+    fake.emit.mock.calls.at(-1)![2] as (a: unknown) => void;
+
+  it("emits host:kick with the version and the desk and resolves the ok ack", async () => {
+    const { fake, room } = setup();
+    const pending = room.sendHostKick(3);
+    expect(fake.emit).toHaveBeenCalledWith(
+      "host:kick",
+      { v: PROTOCOL_VERSION, desk: 3 },
+      expect.any(Function),
+    );
+    lastAck(fake)({ ok: true });
+    await expect(pending).resolves.toEqual({ ok: true });
+  });
+
+  it.each(["not-host", "not-waiting", "no-such-desk", "is-bot", "self"] as const)(
+    "passes the %s refusal through",
+    async (error) => {
+      const { fake, room } = setup();
+      const pending = room.sendHostKick(3);
+      lastAck(fake)({ ok: false, error });
+      await expect(pending).resolves.toEqual({ ok: false, error });
+    },
+  );
+
+  it("resolves timeout after 5 s without an ack; an invalid ack is a protocol error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.useFakeTimers();
+    const { fake, room } = setup();
+    expect(HOST_KICK_TIMEOUT_MS).toBe(5_000);
+    const silent = room.sendHostKick(3);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(silent).resolves.toEqual({ ok: false, error: "timeout" });
+    const onProtocolError = vi.fn();
+    room.onProtocolError(onProtocolError);
+    const invalid = room.sendHostKick(3);
+    lastAck(fake)({ ok: false, error: "teapot" });
+    await expect(invalid).resolves.toEqual({ ok: false, error: "timeout" });
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "host:kick" });
+  });
+});
+
 // Contract of #214 C7: the host's START. `sendHostStart` emits `host:start { v }` and resolves the
 // parsed ack (`{ ok: true, raceId }` or a refusal), or `timeout` after 5 s; it never rejects, and an
 // invalid ack is a protocol error that resolves `timeout`. `onCountdown` delivers the parsed broadcast.
@@ -463,6 +556,71 @@ describe("host start (#214 C7)", () => {
   });
 });
 
+// Contract of #233 C1: the abandon intent is `abandon { v }`, no ack (the server answers the room with
+// `abandoned`, or you with `rejected { not-running }`).
+describe("sendAbandon (#233 C1)", () => {
+  it("emits abandon with the protocol version only", () => {
+    const { fake, room } = setup();
+    room.sendAbandon();
+    expect(fake.emit).toHaveBeenCalledTimes(1);
+    expect(fake.emit).toHaveBeenCalledWith("abandon", { v: PROTOCOL_VERSION });
+  });
+});
+
+// Contract of #643 C2: the clock sync pair (ARCHITECTURE 7.3). `sendPing` emits `ping { v, sent }`
+// with the device clock; `onPong` delivers a parsed `pong`, and an invalid one goes to onProtocolError.
+describe("ping and pong (#643 C2)", () => {
+  it("sendPing emits ping with the protocol version and Date.now()", () => {
+    const { fake, room } = setup();
+    vi.spyOn(Date, "now").mockReturnValue(1_767_225_600_123);
+    room.sendPing();
+    expect(fake.emit).toHaveBeenCalledTimes(1);
+    expect(fake.emit).toHaveBeenCalledWith("ping", {
+      v: PROTOCOL_VERSION,
+      sent: 1_767_225_600_123,
+    });
+  });
+
+  it("sendPing takes an explicit send time (the binder's injected clock)", () => {
+    const { fake, room } = setup();
+    room.sendPing(42);
+    expect(fake.emit).toHaveBeenCalledWith("ping", { v: PROTOCOL_VERSION, sent: 42 });
+  });
+
+  it("an invalid send time is not sent", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    room.sendPing(-1);
+    room.sendPing(Number.NaN);
+    expect(fake.emit).not.toHaveBeenCalled();
+  });
+
+  it("onPong delivers a parsed pong; an invalid one goes to onProtocolError", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fake, room } = setup();
+    const onPong = vi.fn();
+    const onProtocolError = vi.fn();
+    room.onPong(onPong);
+    room.onProtocolError(onProtocolError);
+    const pong = { v: PROTOCOL_VERSION, sent: 1_000, serverNow: 1_540 };
+    fake.deliver("pong", pong);
+    fake.deliver("pong", { v: PROTOCOL_VERSION, sent: 1_000 });
+    expect(onPong.mock.calls).toEqual([[pong]]);
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(onProtocolError.mock.calls[0]![0]).toMatchObject({ event: "pong" });
+  });
+
+  it("onPong returns its off", () => {
+    const { fake, room } = setup();
+    const onPong = vi.fn();
+    const off = room.onPong(onPong);
+    off();
+    fake.deliver("pong", { v: PROTOCOL_VERSION, sent: 1, serverNow: 2 });
+    expect(onPong).not.toHaveBeenCalled();
+    expect(fake.listeners.has("pong")).toBe(false);
+  });
+});
+
 describe("boundaries (C5)", () => {
   const source = readFileSync(path.join(__dirname, "socket.ts"), "utf8");
 
@@ -476,5 +634,190 @@ describe("boundaries (C5)", () => {
   it("has no use client directive and no window/document access", () => {
     expect(source).not.toMatch(/use client/);
     expect(source).not.toMatch(/\b(window|document)\b/);
+  });
+});
+
+// Contract of #661: the server closing the socket (`io server disconnect`, never reconnected by
+// socket.io) ends the race page on the lost line (C1); a transport drop marks it reconnecting at once
+// and no `keys` batch leaves until the reconnect's `welcome` (C2), so none reaches the server before
+// the new seat exists.
+describe("#661 server-side disconnect and the cut line", () => {
+  const T0 = 1_767_225_603_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "ab cd",
+    language: "en" as const,
+    wordCount: 2,
+    t0: T0,
+    timerS: 60,
+  };
+  const desk = (n: number) => ({
+    cursor: n,
+    correct: n,
+    errors: 0,
+    total: n,
+    typed: Array<null>(n).fill(null),
+    status: "typing" as const,
+    lastT: 100 * n,
+    finishedAt: null,
+  });
+  const runningWelcome = (typed = 0): Welcome => ({
+    ...welcome,
+    role: "player",
+    room: { ...welcome.room, phase: "running" },
+    race: RACE,
+    state: desk(typed),
+    serverNow: T0 + 1_000,
+    autoStartAt: null,
+  });
+
+  function bound() {
+    const { fake, room } = setup();
+    const store = createRaceStore();
+    let now = T0 + 1_000;
+    const due: (() => void)[] = [];
+    const timer: RaceTimer = {
+      now: () => now,
+      setTimeout: (fn) => due.push(fn),
+      clearTimeout: () => {},
+    };
+    bindRaceSocket(room, store.dispatch, { timer });
+    const typing = createTyping({ store, send: (batch) => room.sendKeys(batch), timer });
+    /** Runs the batcher's pending flushes (and the ping round's timers). */
+    const flush = () => {
+      now += 60;
+      for (const fn of due.splice(0)) fn();
+    };
+    const keysSent = () =>
+      fake.emit.mock.calls.filter(([event]) => event === "keys").map(([, p]) => p.batch);
+    return { fake, store, typing, flush, keysSent };
+  }
+
+  it("onTransportDisconnect fires on a dropped line, never on either side's own close", () => {
+    const { fake, room } = setup();
+    const cb = vi.fn();
+    const off = room.onTransportDisconnect(cb);
+    fake.deliver("disconnect", "io server disconnect");
+    fake.deliver("disconnect", "io client disconnect");
+    expect(cb).not.toHaveBeenCalled();
+    for (const reason of ["transport close", "transport error", "ping timeout", "parse error"])
+      fake.deliver("disconnect", reason);
+    expect(cb).toHaveBeenCalledTimes(4);
+    off();
+    fake.deliver("disconnect", "transport close");
+    expect(cb).toHaveBeenCalledTimes(4);
+  });
+
+  it("C1: a server disconnect is the terminal lost state with the server's reason", () => {
+    const { fake, store } = bound();
+    fake.deliver("welcome", runningWelcome());
+    fake.deliver("disconnect", "io server disconnect");
+    expect(store.getState()).toMatchObject({ phase: "lost", lost: "server-disconnect" });
+    // nothing later revives it: socket.io does not reconnect, and a stray event changes nothing
+    const lost = store.getState();
+    fake.io.deliver("reconnect", 1);
+    fake.deliver("welcome", runningWelcome());
+    expect(store.getState()).toBe(lost);
+  });
+
+  it("C1: a join refused after the handshake (no welcome yet) leaves the skeleton for the lost line", () => {
+    const { fake, store } = bound();
+    expect(store.getState().phase).toBe("connecting");
+    fake.deliver("disconnect", "io server disconnect");
+    expect(store.getState()).toMatchObject({ phase: "lost", lost: "server-disconnect" });
+  });
+
+  it("C2: a transport drop is reconnecting at once, before socket.io's first reconnect_attempt", () => {
+    const { fake, store } = bound();
+    fake.deliver("welcome", runningWelcome());
+    expect(store.getState()).toMatchObject({ phase: "running", keysHeld: false });
+    fake.deliver("disconnect", "transport close");
+    expect(store.getState()).toMatchObject({ phase: "reconnecting", keysHeld: true });
+  });
+
+  it("C2: no keys leave between the drop and the next welcome; the held ones leave after it", () => {
+    const { fake, store, typing, flush, keysSent } = bound();
+    fake.deliver("welcome", runningWelcome());
+    typing.press("a");
+    flush();
+    expect(keysSent()).toHaveLength(1);
+    // a key queued in the batch window when the line drops
+    typing.press("b");
+    fake.deliver("disconnect", "transport close");
+    flush();
+    expect(keysSent()).toHaveLength(1);
+    // the reconnect: socket.io is connected again, but the seat does not exist until the welcome
+    fake.io.deliver("reconnect", 1);
+    expect(store.getState().phase).toBe("running");
+    typing.press(" ");
+    flush();
+    expect(keysSent()).toHaveLength(1);
+    expect(store.getState().prediction!.state.cursor).toBe(2);
+    // the welcome: the server applied `a`; `b` was never sent, so it is typed again on top and leaves
+    fake.deliver("welcome", runningWelcome(1));
+    expect(store.getState().keysHeld).toBe(false);
+    expect(keysSent()).toEqual([[{ t: 1_000, key: "a" }], [{ t: 1_060, key: "b" }]]);
+    expect(store.getState().prediction!.state.cursor).toBe(2);
+    // and typing goes on
+    typing.press(" ");
+    flush();
+    expect(keysSent()).toHaveLength(3);
+  });
+});
+
+/**
+ * #442 C1 over real Socket.IO (no fake): a local server that serves `transports` only and answers
+ * every connection with a `welcome`. A server without `websocket` refuses the upgrade request (HTTP
+ * 400), as a school proxy that blocks WebSocket does: the client must still reach `welcome`, on
+ * polling. With WebSocket available the connection ends on `websocket`.
+ */
+describe("transport fallback over a real Socket.IO server (#442 C1)", () => {
+  const servers: { http: HttpServer; io: SocketServer }[] = [];
+  const rooms: { close(): void }[] = [];
+  afterEach(async () => {
+    for (const room of rooms.splice(0)) room.close();
+    for (const { io } of servers.splice(0))
+      await new Promise<void>((done) => void io.close(() => done()));
+  });
+
+  async function serve(transports: ("websocket" | "polling")[]): Promise<string> {
+    const http = createServer();
+    const io = new SocketServer(http, { transports });
+    io.on("connection", (socket) => void socket.emit("welcome", welcome));
+    servers.push({ http, io });
+    await new Promise<void>((done) => http.listen(0, "127.0.0.1", done));
+    return `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
+  }
+
+  /** `connectToRoom` over the real client; resolves the transport its engine is on once welcomed. */
+  async function welcomedOver(url: string, settle: (name: string) => boolean) {
+    type Engine = { transport: { name: string } };
+    let raw: { io: { engine?: Engine } } | undefined;
+    const io: IoFactory = (u, opts) => {
+      const socket = (realIo as unknown as IoFactory)(u, { ...opts, reconnection: false } as never);
+      raw = socket as unknown as typeof raw;
+      return socket;
+    };
+    const room = connectToRoom(url, "tok", { io });
+    rooms.push(room);
+    const got = await new Promise<Welcome>((resolve, reject) => {
+      room.onWelcome(resolve);
+      room.onConnectError((reason) => reject(new Error(`connect_error: ${reason}`)));
+    });
+    expect(got.you).toBe(1);
+    const engine = () => raw!.io.engine!.transport.name;
+    // the upgrade to websocket (when offered) completes a little after the handshake
+    await vi.waitFor(() => expect(settle(engine())).toBe(true), { timeout: 5_000, interval: 20 });
+    return engine();
+  }
+
+  it("reaches welcome over polling when the server refuses WebSocket", async () => {
+    const url = await serve(["polling"]);
+    expect(await welcomedOver(url, (name) => name === "polling")).toBe("polling");
+  });
+
+  it("still ends on websocket when WebSocket is available", async () => {
+    const url = await serve(["websocket", "polling"]);
+    expect(await welcomedOver(url, (name) => name === "websocket")).toBe("websocket");
   });
 });

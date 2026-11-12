@@ -26,7 +26,7 @@
 | Lower priority | Trophies / extra gamification |
 
 ### Success criteria
-1. A full class of **30+ students** can race together without lag on school laptops/Chromebooks.
+1. A full class of **up to 30 students** (one room of 30 desks, §5.2) can race together without lag on school laptops/Chromebooks.
 2. A race can be started in **under 60 seconds** from opening the site.
 3. Every student leaves a race knowing their **place, WPM, accuracy, and one thing to improve**.
 4. After 2 weeks of use, a student's profile clearly shows **progress over time**.
@@ -138,6 +138,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 - **No keystroke for 60 seconds** while connected → player is **kicked** from the race (marked "Asleep at desk").
 - Warning at 45 s (the Major's lamp turns to the player).
 - **Disconnection is not idle** (see §7.4).
+- **Reconnecting never resets the idle timer**: the 60 s count from the last accepted keystroke, not from the reconnection (owner decision 2026-11-04, #609). A player who comes back past 45 s or 60 s of silence is warned, or warned and kicked, at once.
 
 ---
 
@@ -151,7 +152,8 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 
 ### 5.2 Size
 - **Minimum 2 participants** to start (bots count toward the minimum).
-- **No maximum.** Must be tested and smooth with **30+ live players** (target: 60 tested, 100 supported).
+- **30 desks per room**, typists and bots together (owner decision 2026-11-03): a newcomer finds the room full once 30 desks are seated, and the host cannot add a bot past 30. Must be tested and smooth with **30 live players**.
+- **The host may watch instead of typing** (owner decision 2026-11-02, #876): a watching host holds no desk, so all 30 desks are for typists (a class of 30 plus the teacher) and the host does not count toward the minimum of 2.
 - **No offline mode**, except racing against **bots**.
 
 ### 5.3 Landing page matchmaking
@@ -161,6 +163,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 ### 5.4 Host powers
 - **Only the host can invite** others (generate code / single-use links).
 - Host configures the race (§8), starts it, and can remove players in the lobby.
+- **The host types by default, with an option to only watch** (owner decision 2026-11-02, #876): the settings row `HOST` is `TYPES` or `WATCHES`, changed in the waiting room only. A watching host keeps every power (settings, invites, START, removals) and follows the race on the seat view without a typing surface; switching back takes the lowest free desk, refused when all 30 are seated. If a watching host leaves, the transfer rule below applies and the new host types.
 - **Host transfer:** if the host leaves, host role passes automatically to the next player who joined earliest (human, never a bot). Everyone sees a "New host: X" stamp.
 
 ---
@@ -194,7 +197,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 
 ### 7.1 Layout
 - Round room: desks in a ring, all facing the centre; the Major on a turning platform in the middle.
-- 2–30 players: one ring. 31+: extra raised tiers behind (amphitheatre).
+- 2–30 players: one ring. ~~31+: extra raised tiers behind (amphitheatre).~~ Superseded 2026-11-03: a room has 30 desks (§5.2).
 - Small lobbies: the ring shrinks (desks pull in) so rivals stay close.
 
 ### 7.2 "Everyone sees everyone"
@@ -232,7 +235,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 | **Bots** | Number + difficulty per bot |
 | **Lobby** | Public · Private |
 
-\* **Copyright:** use **public-domain** literature (Project Gutenberg, BAnQ / Gallica for French) and **teacher-written texts**. Film quotes only if short and licensed. In-world, texts are "intercepted cables".
+\* **Copyright:** use **public-domain** literature (Project Gutenberg, BAnQ / Gallica for French) and **teacher-written texts**. Film quotes are out of v1 (no licensed source). Sources, licences and attribution: `docs/texts/sources.md`; teacher texts: `docs/texts/teacher-texts.md`. In-world, texts are "intercepted cables".
 
 ---
 
@@ -288,6 +291,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 | **Username + password** | Sign-up form | Yes |
 | **GitHub OAuth** | "Continue with GitHub" | Yes |
 | **Discord OAuth** | "Continue with Discord" | Yes |
+| **Google OAuth** | "Continue with Google" | Yes |
 
 - **No email** collected. **No "forgot password".**
 - **Guest → account upgrade:** when a guest creates an account, **all their guest stats and history are merged** into the new account.
@@ -487,7 +491,7 @@ Raw keystrokes are **rolled up** into daily per-character tables so stats stay f
 **Open questions for the teacher**
 1. Is a one-time recovery code acceptable, given "no forgot password"?
 2. Should the teacher get a class dashboard (all students' progress)?
-3. Are short film quotes required, or is public-domain literature enough?
+3. Are short film quotes required, or is public-domain literature enough? Settled (#342): public-domain literature and teacher texts only; no film quotes in v1.
 4. Which domain / server will host the site?
 
 ---

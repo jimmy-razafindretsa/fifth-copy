@@ -94,8 +94,8 @@ Script-checkable preconditions are enforced by `board.ts`: `promote` (Backlog ->
 | Ready -> In Progress | all blockers Done; WIP limit not exceeded; no lock conflict (section 7); contract hash recorded in a PICKUP comment |
 | In Progress -> In Review | `scripts/check.sh` green; branch pushed; PR open; HANDOFF posted; contract hash unchanged; PENTEST comment present if the card carries `pentest` |
 | In Review -> QA | reviewer verdict has zero blockers |
-| In Review -> QA (script) | Deliver HANDOFF `verdict: pass` (or `verdict: needs-human` after the human removed the label); every box ticked |
-| QA -> Done | every contract checkbox ticked by Deliver with evidence; PR merged through `scripts/merge.sh`; CI green on the merge commit on base; smoke passed (when a preview exists) |
+| In Review -> QA (script) | QA requires In Review (card Status is In Review; the QA gate refuses any other state, bundle cards each); Deliver HANDOFF `verdict: pass` (or `verdict: needs-human` after the human removed the label) after the newest PICKUP; every box ticked; PR open or already merged |
+| QA -> Done | card Status is QA (the Done gate refuses any other state); every contract checkbox ticked by Deliver with evidence; PR merged through `scripts/merge.sh`; CI green on the merge commit on base; smoke passed (when a preview exists) |
 | any -> Backlog + `needs-replan` | contract invalid, unverifiable, or dependency missing |
 | any -> `needs-human` (state unchanged) | `autonomy:hitl` reached, ADR conflict, fix budget exhausted |
 
@@ -122,7 +122,7 @@ Then drop candidates that violate a lock (section 7). With `BOARD_FOCUS_LABEL` s
 
 ## 7. Locks, WIP and isolation
 - WIP limit: `BOARD_WIP_LIMIT` (default 1; `scripts/loop.sh --parallel N` sets N) cards in In Progress/In Review/QA combined. Cards parked on `needs-human` do not count against WIP but keep their locks.
-- Hotspot locks: at most one in-flight card per `touches:*` label. Analyst sets them; Explorer adds any it finds; Builder adds one before committing to an unlabeled hotspot. `board.ts locks <n>` checks; the loop waits before Builder starts.
+- Hotspot locks: at most one in-flight card per `touches:*` label, except `touches:i18n`: two (#869; `LOCK_LIMITS` in `scripts/lib/kit.ts`; each PR merges main before it lands). Analyst sets them; Explorer adds any it finds; Builder adds one before committing to an unlabeled hotspot. `board.ts locks <n>` checks; the loop waits before Builder starts.
 | Label | Paths |
 |---|---|
 | `touches:prisma` | `prisma/schema/**`, `prisma/migrations/**` |
@@ -202,7 +202,7 @@ Log file `work/log/<n>.md` (<= ~200 words): date, one-line outcome, decisions, g
 - Never print or log secrets. Never place secrets in issues, comments, PRs, logs or `.eyes/`.
 
 ## 11. Board access layer (agent-agnostic)
-Use, in this order: (1) `npx tsx scripts/board.ts <op>`, a wrapper over GitHub's GraphQL API through `gh api graphql` (keeps tool schemas out of context; auth is the `gh` login); (2) raw `gh` / `gh api graphql` calls from `agents/BOARD.md`; (3) otherwise stop and report. Required operations (the names are this kit's, not GitHub's); `<n>` is the issue number, bare or quoted (`'#12'`):
+Use, in this order: (1) `npx tsx scripts/board.ts <op>`, a wrapper over GitHub's GraphQL API through `gh api graphql` (keeps tool schemas out of context; auth is the `gh` login); (2) raw `gh` / `gh api graphql` calls from `agents/BOARD.md`; (3) GraphQL blocked (cloud sessions): the Board workflow `.github/workflows/board.yml`, a `workflow_dispatch` on `main` that runs board.ts on a runner. Inputs: `op` (a board.ts op), `args` (JSON array of strings, e.g. `["12","--comments","5"]`), optional `body` (text written to a file; pass the argument `@BODY@` where board.ts wants a path, e.g. `["12","--body-file","@BODY@"]`), `request_id` (echoed in the run name `board <op> <request_id>`, so the caller finds its run). Result: the job summary, the log, and the artifact `board-<request_id>` (`output.txt`, `exit-code.txt`). Inputs and output are public: see `agents/BOARD.md` "Board from a cloud session"; (4) otherwise stop and report. Required operations (the names are this kit's, not GitHub's); `<n>` is the issue number, bare or quoted (`'#12'`):
 - `list_ready` -> Ready cards with blockers, epic, labels, estimate, priority
 - `get <n>` -> body, status, labels, relationships (blocked by, blocking), parent, sub-issues, comments, branch name
 - `create --parent <EPIC> --title ... --body-file ... --labels ... --estimate N --priority P` (reuses the same title under the same parent; never duplicate; lands in Backlog)
@@ -243,3 +243,22 @@ Pipeline tiers (`scripts/lib/flow.ts` `cardTier`), so ceremony scales with risk,
 | full | estimate 3, any `touches:*`, `pentest`, `type:adr`, `type:spike` | Explorer (Fable) -> Builder/UI -> check -> Pen tester (if `pentest`) -> Deliver |
 Deliver always runs in a fresh context; no tier skips review.
 In every mode the durable handoff is the board + repo, never the conversation.
+
+## 14. Velocity mode (owner decision 2026-11-02)
+The owner asked for more throughput with lighter pen test, QA and CI. Until revoked:
+- WIP 5 (owner decision 2026-11-09, v1 push; `BOARD_WIP_LIMIT` defaults to 5 in `board.yml`; locks of section 7 still apply).
+- Explorer: skipped for tier lite, estimate <= 1 and `discovered` bug cards; the Builder runs a short pass and posts the BRIEF itself.
+- Pen test: only when the card changes the security model (5a item 4: auth, sessions, tokens, HMAC, uploads, privacy flows). Time-boxed, targeted at the diff; everything else is `no pentest` in the BRIEF.
+- Builder: runs `scripts/check.sh` and the card's own new or changed e2e once; CI runs the rest. No repeated flake runs unless a spec is new and timing-sensitive (then 2).
+- Deliver: reviews the diff against the Contract and relies on green CI on the head plus the Builder's evidence; re-runs only the criteria it doubts or the card's new e2e, once. No full `check.sh` re-run when CI is green on the head. The card log rides the Builder's PR (Deliver adds to it only when it already pushes a fix).
+- Merge: a PR behind `main` merges without a refresh when GitHub reports it mergeable and the commits it lacks touch none of its files; CI on the merge commit is the guard (Done gate), and a red main is fixed forward first.
+- CI: PRs touching only Markdown or `work/` skip e2e and visual (`changes` job); e2e runs in 6 shards; `main` always runs everything.
+
+## 15. Bundle mode (owner decision 2026-11-03)
+One branch, one worktree and one PR deliver 2-8 small sibling cards, so pickup, worktree, CI, Deliver and the gates are paid once (10-day delivery push). Logic: `scripts/lib/bundle.ts`.
+- Eligible: at most 8 cards (lead included), all Ready, each passing the solo pickup checks (epic `plan-approved`, blockers Done or inside the bundle, a Contract). Prefer siblings of one epic with estimate <= 2 that touch nearby files.
+- Solo only (never bundled): `touches:prisma`, `area:auth`, `area:race-server`, `pentest`, `autonomy:hitl`. Big or risky cards stay solo.
+- Pickup: `board.ts pickup <lead> --bundle <n,n,...>` moves every card to In Progress, labels each `bundle:<lead>`, posts one PICKUP on the lead (`... bundle=#lead,#a,#b`) and `BUNDLED-IN #lead card=#a contract_hash=<a's hash> branch=<lead branch> worktree=.worktrees/<lead>` on each other card. Worktree and branch are the lead's.
+- Locks and WIP: the bundle locks the union of its cards' `area:*` and `touches:*` labels and takes one WIP slot.
+- Build: the Builder runs one session for the bundle, commits with each card's `[#n]`, and posts one HANDOFF on the lead (it covers every card). The PR body references every card: `Card: #lead #a #b` (or one `Refs #n` line per card), never `Closes`.
+- Gates: `board.ts gate <lead> <status>` checks every card on its own (its contract hash against its BUNDLED-IN record, the lead's HANDOFF and Deliver verdict, the PR referencing it, its own ticked boxes) and moves all of them, or none: one failing card blocks the bundle and is named. Gating a member directly is refused. Deliver ticks each card's boxes and posts one verdict on the lead. Merge with `scripts/merge.sh <lead>`.

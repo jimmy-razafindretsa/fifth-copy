@@ -60,6 +60,10 @@ const STORE_READERS: Record<string, string> = {
   [path.join(components, "machine/typing-machine-live.tsx")]: "../../client/use-race-store",
   // #225 C2: the nixie counters' live leaf, the same way (its WPM sampler takes the store's API)
   [path.join(components, "nixie-counters-live.tsx")]: "../client/use-race-store",
+  // #236 C3: the Sabotage tray's live leaf (its cooldown sampler is the nixie one)
+  [path.join(components, "sabotage-tray-live.tsx")]: "../client/use-race-store",
+  // #242 C2: the race announcer reads primitives of the store (its selectors live in view/announcements)
+  [path.join(components, "race-announcer.tsx")]: "../client/use-race-store",
 };
 
 /**
@@ -344,5 +348,53 @@ describe("no second comparison (#220 C7)", () => {
 
   it("the prediction is where the engine's numbers are read (the jam, the struck key, the pop stamp)", () => {
     expect(readFileSync(predictionFile, "utf8")).toMatch(COMPARISON);
+  });
+});
+
+// Contract of #236 C5: awarding, targets, cooldown and immunity are the engine's and the server's (#190,
+// ADR 0007, 0016). The race feature imports no bonus rule: from the engine only `effectiveText` and
+// `EMPTY_OVERLAY` (the overlay's text, through the prediction) and the `COOLDOWN_MS` constant.
+describe("no bonus rule in the race feature (#236 C5)", () => {
+  const feature = path.join(root, "src/features/race");
+  const modules = sources(feature).filter((f) => !isTest(f));
+  const RULES =
+    /\b(canPlay|canHit|applyBonus|eligibleBonus|BONUS_RULES|isHostile|rankPct|record|logOf|EXTRA_WORDS|EXEMPT_WORDS|BLUR_MS|MIN_BONUS_DESKS)\b/;
+  const engineClauses = (source: string) =>
+    [
+      ...source.matchAll(
+        /(?:import|export)\s+(?:type\s+)?([^"';]*?)\s*from\s*["'](@fifth-copy\/engine(?:\/[^"']*)?)["']/g,
+      ),
+    ].map((m) => ({ clause: m[1]!, from: m[2]! }));
+
+  it("no module imports an engine bonus rule or the engine's bonus module", () => {
+    const hits = modules.flatMap((f) =>
+      engineClauses(readFileSync(f, "utf8"))
+        .filter(({ clause, from }) => RULES.test(clause) || /bonus/.test(from) || /\*/.test(clause))
+        .map(({ clause }) => `${path.relative(root, f)}: ${clause}`),
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it("the client's engine door brings only effectiveText, EMPTY_OVERLAY and COOLDOWN_MS of the bonus", () => {
+    const source = readFileSync(path.join(feature, "client/prediction.ts"), "utf8");
+    const names = engineClauses(source)
+      .flatMap(({ clause }) => clause.replace(/[{}]/g, "").split(","))
+      .map((n) => n.trim().replace(/^type\s+/, ""))
+      .filter(Boolean);
+    expect(names).toEqual(
+      expect.arrayContaining(["effectiveText", "EMPTY_OVERLAY", "COOLDOWN_MS"]),
+    );
+    expect(names.filter((n) => RULES.test(n))).toEqual([]);
+  });
+
+  it("no module of the race feature names a bonus rule at all (no copy of one either)", () => {
+    const hits = modules
+      .filter((f) =>
+        /\b(canPlay|canHit|applyBonus|eligibleBonus|BONUS_RULES|isHostile)\b/.test(
+          readFileSync(f, "utf8"),
+        ),
+      )
+      .map((f) => path.relative(root, f));
+    expect(hits).toEqual([]);
   });
 });

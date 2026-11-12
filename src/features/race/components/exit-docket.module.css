@@ -1,0 +1,47 @@
+/*
+ * Exit dockets (#233, design bible 7.3, 7.4, 7.1, 14.3 extension): one HUD docket (hud-docket.module.css)
+ * at the top of the middle column, `min(480px, 100%)` wide and centred (the finished view's recipe). The
+ * ink stamp sits in its own band, the slam clipped by it (the scene loading card's recipe), so it never
+ * paints over the telex strip or the typed sheet; the partial stats are 7.4 rows `120px | 1fr` with dashed
+ * separators; the actions close the docket under a 2px ink rule. Both actions are at least 44px tall.
+ */
+
+@reference "../../../app/globals.css";
+
+.view {
+  width: min(480px, 100%);
+  margin-inline: auto;
+  flex: none;
+}
+
+.stamp {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 20px 12px;
+}
+
+.rows {
+  margin: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.rows dd {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 2px solid var(--color-fg);
+}
+
+/* the ink button as a link: centred in its 44px, no underline */
+.leave {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}

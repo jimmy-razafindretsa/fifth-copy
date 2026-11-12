@@ -1,31 +1,46 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { fill } from "@/i18n/format";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
 import {
   selectCanType,
+  selectExit,
   selectVisibleStamp,
+  sendAbandons,
+  sendBonusPlays,
+  watchBlurExpiry,
+  watchRefusalExpiry,
   watchStampExpiry,
   type RaceLostReason,
   type RacePhase,
 } from "../client/store";
 import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
-import { Countdown, countdownStep, nextStepIn, type CountdownStep } from "../components/countdown";
+import {
+  atGo,
+  Countdown,
+  countdownStep,
+  nextStepIn,
+  type CountdownStep,
+} from "../components/countdown";
 import docket from "../components/hud-docket.module.css";
+import notice from "../components/race-notice.module.css";
+import { AsleepAtDesk } from "../components/asleep-at-desk";
 import { RaceInput } from "../components/race-input";
+import { ReassignedNotice } from "../components/reassigned-notice";
 import { FinishedView } from "../components/finished-view";
 import { nixieNumber } from "../components/nixie-counters";
 import { RaceNotice } from "../components/race-notice";
-import { StampRow, stampText } from "../components/stamp-row";
-import { selectFinishWpm, selectPlace } from "../view/counters";
+import { RaceAnnouncer } from "../components/race-announcer";
+import { StampRow } from "../components/stamp-row";
+import { selectAccuracy, selectFinishWpm, selectPlace } from "../view/counters";
+import type { ExitLabels } from "../view/hud-labels";
 import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view/standings";
-import { paperwork, PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
+import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
-export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors">;
+export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors" | "presence">;
 
 /** The live leaf's copy: the status slot's, the countdown's (#214) and the typing input's name (#559). */
 export type SeatLiveLabels = SeatStatusLabels &
@@ -40,9 +55,15 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
   "not-found": "notFound",
   "bad-token": "generic",
   version: "generic",
-  // A spectator past the room's cap (#616): no dedicated copy yet.
-  "room-full": "generic",
+  // A spectator past the room's cap (#616): its own sentence (#678).
+  "room-full": "roomFull",
+  // The host's removal (#133) happens only between races, never on the seat view: the generic line.
+  removed: "generic",
   generic: "generic",
+  // The lost room shows its own notice row (#235 C4); this sentence is never read.
+  "room-lost": "noRoom",
+  // The server closed the socket (#661): something jammed (bible 14.2 lost line).
+  "server-disconnect": "generic",
 };
 
 type ViewProps = {
@@ -55,7 +76,8 @@ type ViewProps = {
 /**
  * The seat's live state for one phase (no hooks, so every phase renders in tests): skeleton rows while
  * connecting (bible 7.4), the waiting and line-cut notices (7.4 notice row), the lost line with the way
- * back to the waiting room (7.4 inline error line). Countdown and the GO stamp are `RaceSeatLive`'s
+ * back to the waiting room (7.4 inline error line); the lost room (#235 C4) as the still notice row
+ * `THE ROOM WAS LOST · BACK TO THE LOBBY`, its link to `/lobby/[code]`. Countdown and the GO stamp are `RaceSeatLive`'s
  * (#214, they follow the clock); after your finish and at RACE OVER the finished view is `SeatFinish`'s
  * (#240, it follows the snapshots): nothing here.
  */
@@ -80,6 +102,23 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
     case "reconnecting":
       return <RaceNotice kind="reconnecting" labels={labels.notice} />;
     case "lost":
+      if (lost === "room-lost") {
+        return (
+          <div data-lost="room-lost" className={styles.lost}>
+            {/* a statement, not a live state: the notice row without its pulse (bible 7.4) */}
+            <p
+              role="alert"
+              data-notice="room-lost"
+              className={cn(docket.notice, notice.notice, styles.roomLost)}
+            >
+              {labels.presence.roomLost} ·{" "}
+              <a href={`/lobby/${code}`} className={styles.roomLink}>
+                {labels.presence.backToLobby}
+              </a>
+            </p>
+          </div>
+        );
+      }
       return (
         <div data-lost={lost ?? "generic"} className={styles.lost}>
           <p role="alert" className={styles.errorLine}>
@@ -120,11 +159,49 @@ function useCountdownStep(): CountdownStep | null {
     handle = setTimeout(tick, 0);
     return () => clearTimeout(handle);
   }, [live, t0, offset]);
-  return live ? step : null;
+  return live ? atGo(step, phase) : null;
 }
 
-/** The overtake stamps' copy and the announcer's race lines (#232), the finished view's (#240). */
-export type SeatStampLabels = Pick<RaceSeatLabels, "stamps" | "announce" | "finish">;
+/**
+ * The overtake stamps' copy and the announcer's race lines (#232), the finished view's (#240), the exit
+ * dockets' (#233).
+ */
+export type SeatStampLabels = Pick<RaceSeatLabels, "stamps" | "announce" | "finish" | "exit">;
+
+/**
+ * The exit docket over the store (#233 C3, C4): after the server took your ABANDON, the Reassigned notice;
+ * after its idle kick, Asleep at desk; each with your partial stats frozen at your last key (the engine's
+ * WPM and accuracy over your predicted state, ADR 0007), until KEEP WATCHING closes it (the HUD stays live,
+ * without input) or RACE OVER yields to the finished view. A reload finds it again (`selectExit` reads the
+ * server's status too).
+ */
+export function SeatExit({ code, labels }: { code: string; labels: ExitLabels }) {
+  const store = useRaceStoreApi();
+  const exit = useRaceStore(selectExit);
+  const wpm = useRaceStore(selectFinishWpm);
+  const accuracy = useRaceStore((s) => selectAccuracy(s) ?? 100);
+  const keepWatching = useCallback(() => store.dispatch({ type: "exit-dismissed" }), [store]);
+  if (exit === null) return null;
+  const Docket = exit === "abandoned" ? ReassignedNotice : AsleepAtDesk;
+  return (
+    <Docket
+      wpm={wpm}
+      accuracy={accuracy}
+      leaveHref={`/lobby/${code}`}
+      onKeepWatching={keepWatching}
+      labels={labels}
+    />
+  );
+}
+
+/**
+ * The idle warning (#233 C4, bible 7.4 notice row): the urgent notice `THE MAJOR IS LOOKING AT YOU.
+ * TYPE.` while the race runs and the server warned your silent desk; your next key clears it.
+ */
+export function SeatIdleNotice({ labels }: { labels: SeatStatusLabels["notice"] }) {
+  const warned = useRaceStore((s) => s.phase === "running" && s.idleWarning);
+  return warned ? <RaceNotice kind="idle-warning" labels={labels} /> : null;
+}
 
 /**
  * The finished view over the store (#240 C2, C3): after your finish while the race runs, the `FILED`
@@ -174,9 +251,10 @@ export function SeatFinish({ labels }: { labels: FinishLabels }) {
  * the one race store every HUD leaf reads; it renders the live state. Phones only watch (the layout shows
  * them the notice; spectator mode is #292), so a phone-width page never takes a desk.
  * Its root carries the store's phase as `data-phase` (`countdown` until GO, `running` from GO: the gate
- * #559's input reads) and holds the countdown overlay and the polite announcer of 3, 2, 1, GO (#214;
- * the race announcer of #242 reuses it). It owns the typing path too (#559): the hidden `RaceInput`,
- * unlocked while you may type, feeds `createTyping` over the open socket.
+ * #559's input reads) and holds the countdown overlay and the race's one polite announcer (#242: 3, 2,
+ * 1, GO of #214, the overtake lines of #232, your place, your finish, the race over). It owns the typing path too (#559): the hidden `RaceInput`,
+ * unlocked while you may type, feeds `createTyping` over the open socket. A bare Enter there plays your
+ * Sabotage card (#236): the store takes the play when it may go out and `sendBonusPlays` emits it.
  */
 export function RaceSeatLive({
   code,
@@ -199,8 +277,12 @@ export function RaceSeatLive({
   const backspace = useRaceStore((s) => s.settings?.backspace);
   const errors = useRaceStore((s) => s.prediction?.state.errors);
   const finishWpm = useRaceStore(selectFinishWpm);
+  const { announce, countdown, stamps } = labels;
+  const announcer = useMemo(() => ({ announce, countdown, stamps }), [announce, countdown, stamps]);
   const typing = useRef<Typing | null>(null);
   const press = useCallback((key: string) => typing.current?.press(key), []);
+  // #236: Enter plays your card; the store gates it and `sendBonusPlays` sends it
+  const play = useCallback(() => store.dispatch({ type: "bonus-play", at: Date.now() }), [store]);
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
   // guest cookie, and a cookie set in an action re-renders the page): read the latest one, never reconnect
   // for it.
@@ -219,7 +301,12 @@ export function RaceSeatLive({
       onSocket: (socket) => {
         const own = createTyping({ store, send: (batch) => socket.sendKeys(batch) });
         typing.current = own;
+        const stopPlays = sendBonusPlays(store, socket);
+        // #233: one `abandon` per confirm the store took
+        const stopAbandons = sendAbandons(store, socket);
         return () => {
+          stopPlays();
+          stopAbandons();
           own.dispose();
           if (typing.current === own) typing.current = null;
         };
@@ -228,10 +315,15 @@ export function RaceSeatLive({
   }, [code, lobbyId, store]);
   // #232: the visible overtake stamp leaves 1.4 s after it shows
   useEffect(() => watchStampExpiry(store), [store]);
+  // #236: the IMMUNE row leaves 1.2 s after the refusal; a Smoke Break's blur lifts at its end
+  useEffect(() => watchRefusalExpiry(store), [store]);
+  useEffect(() => watchBlurExpiry(store), [store]);
 
   return (
     <div data-phase={phase} className={styles.live}>
       <RaceSeatLiveView phase={phase} lost={lost} code={code} labels={labels} />
+      <SeatIdleNotice labels={labels.notice} />
+      <SeatExit code={code} labels={labels.exit} />
       <SeatFinish labels={labels.finish} />
       {/* bible 8: one stamp at a time; the countdown and GO first, then the overtake stamps (#232) */}
       {step !== null ? (
@@ -242,25 +334,15 @@ export function RaceSeatLive({
       <RaceInput
         disabled={!canType}
         onKey={press}
+        onPlay={play}
         label={labels.input}
         mode={mode}
         backspace={backspace}
         errors={errors}
       />
-      {/* present before the countdown starts, so each change is announced; nothing to say once lost */}
-      {phase !== "lost" ? (
-        <p role="status" aria-atomic="true" data-announcer className={docket.srOnly}>
-          {step !== null
-            ? step === "go"
-              ? labels.countdown.go
-              : String(step)
-            : stamp
-              ? stamp.kind === "overtake" || stamp.kind === "passed"
-                ? fill(labels.announce[stamp.kind], { desk: paperwork(stamp.other) })
-                : stampText(stamp, finishWpm, labels.stamps)
-              : ""}
-        </p>
-      ) : null}
+      {/* #242: the one polite announcer, present before the countdown starts so each change is read;
+          nothing to say once lost (the lost line is its own alert) */}
+      {phase !== "lost" ? <RaceAnnouncer step={step} labels={announcer} /> : null}
     </div>
   );
 }

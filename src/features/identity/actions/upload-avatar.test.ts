@@ -66,6 +66,8 @@ const { revalidatePath } = await import("next/cache");
 const { db } = await import("@/server/db");
 const { UnauthenticatedError } = await import("@/server/auth");
 const { readAvatarFile } = await import("../queries/avatar-file");
+/** The owner reads their own avatar: no lobby rule is asked. */
+const noLobby = async () => false;
 const { avatarNotice } = await import("../avatars/moderation/notice");
 const { en } = await import("@/i18n/en");
 const { fr } = await import("@/i18n/fr");
@@ -216,7 +218,7 @@ describe("uploadAvatar (server action)", () => {
         avatarStatus: "APPROVED",
       });
       expect(await filesOf("alice")).toHaveLength(2);
-      expect(await readAvatarFile(owner, "alice", version, 256)).toBeInstanceOf(Buffer);
+      expect(await readAvatarFile(owner, "alice", version, 256, noLobby)).toBeInstanceOf(Buffer);
       expect(avatarNotice(result, en)).toEqual([]);
     });
 
@@ -230,8 +232,8 @@ describe("uploadAvatar (server action)", () => {
       });
       expect(await filesOf("alice")).toEqual([`${version}-256.webp`, `${version}-64.webp`]);
       // The reader serves APPROVED only: null means the default portrait, for the owner too.
-      expect(await readAvatarFile(owner, "alice", version, 256)).toBeNull();
-      expect(await readAvatarFile(owner, "alice", version, 64)).toBeNull();
+      expect(await readAvatarFile(owner, "alice", version, 256, noLobby)).toBeNull();
+      expect(await readAvatarFile(owner, "alice", version, 64, noLobby)).toBeNull();
       expect(avatarNotice(result, en)).toEqual([en.settings.avatar.moderation.pending]);
       expect(avatarNotice(result, fr)).toEqual([fr.settings.avatar.moderation.pending]);
       expect(en.settings.avatar.moderation.pending).toMatch(/being reviewed/i);
@@ -253,7 +255,9 @@ describe("uploadAvatar (server action)", () => {
         `${first.version}-256.webp`,
         `${first.version}-64.webp`,
       ]);
-      expect(await readAvatarFile(owner, "alice", first.version, 256)).toBeInstanceOf(Buffer);
+      expect(await readAvatarFile(owner, "alice", first.version, 256, noLobby)).toBeInstanceOf(
+        Buffer,
+      );
       expect(avatarNotice(result, en)).toEqual([
         en.settings.avatar.moderation.rejected,
         en.settings.avatar.moderation.appeal,
@@ -285,7 +289,7 @@ describe("uploadAvatar (server action)", () => {
         `${second.version}-256.webp`,
         `${second.version}-64.webp`,
       ]);
-      expect(await readAvatarFile(owner, "alice", first.version, 256)).toBeNull();
+      expect(await readAvatarFile(owner, "alice", first.version, 256, noLobby)).toBeNull();
     });
 
     it("the default (heuristic) moderator is used when AVATAR_MODERATOR is unset", async () => {

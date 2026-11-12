@@ -1,7 +1,7 @@
 import { MAX_AVATAR_BYTES } from "./store-avatar";
 
 // Server-side fetch of an OAuth provider's profile picture (#52). The URL comes from the provider's
-// profile, i.e. from the network, so it is an SSRF surface: only https, only the two provider CDNs
+// profile, i.e. from the network, so it is an SSRF surface: only https, only the provider CDNs
 // by exact host, default port, no userinfo, no redirects, one deadline for headers and body, and a
 // byte cap enforced on the stream (the Content-Length header is a hint, never trusted alone).
 
@@ -9,6 +9,8 @@ import { MAX_AVATAR_BYTES } from "./store-avatar";
 export const PROVIDER_IMAGE_HOSTS: readonly string[] = [
   "avatars.githubusercontent.com",
   "cdn.discordapp.com",
+  // Google's ID token `picture` claim (#828); exact host, no *.googleusercontent.com wildcard.
+  "lh3.googleusercontent.com",
 ];
 export const PROVIDER_IMAGE_TIMEOUT_MS = 5000;
 

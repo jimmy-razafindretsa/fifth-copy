@@ -8,7 +8,18 @@ import { NEEDS_LABELS } from "./board";
 import { trustedOnly, type Comment } from "./trust";
 
 export { isTrusted, trustedAuthors, trustedOnly, type Comment } from "./trust";
-export type Pickup = { hash: string; branch: string; worktree: string; at: string };
+/**
+ * `bundle`: the cards a lead's PICKUP lists (`bundle=#a,#b`, PROTOCOL 15), empty for a solo card.
+ * `lead`: set when the record is a `BUNDLED-IN #lead` on a bundle member (its hash, the lead's branch).
+ */
+export type Pickup = {
+  hash: string;
+  branch: string;
+  worktree: string;
+  at: string;
+  bundle: number[];
+  lead: number | null;
+};
 
 export const pickupComment = (n: number, hash: string, branch: string) =>
   `PICKUP #${n} contract_hash=${hash} branch=${branch} worktree=.worktrees/${n}`;
@@ -42,18 +53,30 @@ function fieldOf(body: string, name: string): string | null {
 /** A PENTEST blocks unless its header has `blockers: 0` (missing or unparsable blocks: fail closed). */
 const blocking = (body: string) => !/^0+$/.test(fieldOf(body, "blockers") ?? "");
 
-/** The newest PICKUP comment for card n written by a trusted author (trust.ts), or null. */
+/**
+ * The newest pickup record for card n written by a trusted author (trust.ts), or null: a `PICKUP #n` comment
+ * (optionally listing a bundle), or a `BUNDLED-IN #lead card=#n` comment when n is a bundle member.
+ */
 export function latestPickup(
   n: number,
   comments: readonly Comment[],
   trusted: ReadonlySet<string>,
 ): Pickup | null {
-  const re = new RegExp(`^PICKUP #${n} contract_hash=(\\w+) branch=(\\S+) worktree=(\\S+)`);
+  const re = new RegExp(
+    `^(?:PICKUP #${n}|BUNDLED-IN #(\\d+) card=#${n}) contract_hash=(\\w+) branch=(\\S+) worktree=(\\S+)(?: bundle=(\\S+))?`,
+  );
   let best: Pickup | null = null;
   for (const c of trustedOnly(comments, trusted)) {
     const m = re.exec(head(c.body));
     if (m && (!best || c.createdAt > best.at))
-      best = { hash: m[1]!, branch: m[2]!, worktree: m[3]!, at: c.createdAt };
+      best = {
+        hash: m[2]!,
+        branch: m[3]!,
+        worktree: m[4]!,
+        at: c.createdAt,
+        lead: m[1] ? Number(m[1]) : null,
+        bundle: !m[1] && m[5] ? [...m[5].matchAll(/#(\d+)/g)].map((x) => Number(x[1])) : [],
+      };
   }
   return best;
 }
@@ -77,7 +100,10 @@ export type GateFacts = {
   comments: Comment[];
   /** Logins whose comments count (trust.ts); every other comment is ignored by every gate. */
   trusted: ReadonlySet<string>;
-  pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED" } | null;
+  /** `cards`: the cards the PR body references (bundle.ts prCards); checked for bundle cards only. */
+  pr: { number: number; state: "OPEN" | "MERGED" | "CLOSED"; cards?: number[] } | null;
+  /** The card's current Project Status (null = unknown or not on the board). QA requires In Review, Done requires QA. */
+  status: string | null;
   /** Conclusion of the CI run on main for the PR's merge commit (Done gate only). */
   mainCi: "success" | "failure" | "pending" | "missing" | null;
 };
@@ -97,6 +123,10 @@ export function evaluateGate(facts: GateFacts): string[] {
     out.push(`contract hash ${hash ?? "none"} != PICKUP ${pickup.hash} (label needs-replan)`);
   const needs = f.labels.filter((l) => NEEDS_LABELS.includes(l));
   if (needs.length) out.push(`labeled ${needs.join(",")}`);
+  // A bundle shares one PR (found by the lead's branch): it must reference every card (PROTOCOL 15).
+  const bundled = pickup.lead !== null || pickup.bundle.length > 0;
+  if (bundled && f.pr?.cards && !f.pr.cards.includes(f.n))
+    out.push(`PR #${f.pr.number} body does not reference #${f.n} (Card: #a #b or Refs #n)`);
   const criteria = parseContract(f.body);
   const unticked = criteria.filter((c) => !c.checked).map((c) => c.id);
 
@@ -110,14 +140,29 @@ export function evaluateGate(facts: GateFacts): string[] {
       out.push("PENTEST reports blockers");
   }
   if (f.target === "QA") {
-    if (f.pr?.state !== "OPEN") out.push("PR is not open");
+    // PROTOCOL 5: only In Review -> QA; a card still In Progress must pass the In Review gate first (#801).
+    if (f.status !== "In Review")
+      out.push(
+        `card is in ${f.status ?? "an unknown status"}, not In Review (run gate "In Review" first)`,
+      );
+    // A merged PR still owes the QA gate (a re-picked card whose PR merged early, #651); a closed one does not pass.
+    if (f.pr?.state !== "OPEN" && f.pr?.state !== "MERGED")
+      out.push("PR is neither open nor merged");
     // A needs-human verdict counts once the human removed the needs-human label (checked above).
     const passed = (b: string) => ["pass", "needs-human"].includes(fieldOf(b, "verdict") ?? "");
-    if (!after(f.comments, pickup.at, /^HANDOFF deliver\b/, passed))
+    if (!after(f.comments, pickup.at, /^HANDOFF deliver\b/, passed)) {
       out.push("no Deliver HANDOFF with verdict: pass after PICKUP");
+      if (after(f.comments, pickup.at, /^HANDOFF deliver\b/, (b) => fieldOf(b, "verdict") === null))
+        out.push(
+          "a HANDOFF deliver after PICKUP has no verdict: in its header block (blank line or fence before it? PROTOCOL 9)",
+        );
+    }
     if (unticked.length) out.push(`contract not ticked by Deliver: ${unticked.join(",")}`);
   }
   if (f.target === "Done") {
+    // PROTOCOL 5: only QA -> Done; In Review (or anything else) must pass the QA gate first.
+    if (f.status !== "QA")
+      out.push(`card is in ${f.status ?? "an unknown status"}, not QA (run gate QA first)`);
     if (f.pr?.state !== "MERGED") out.push("PR not merged");
     if (unticked.length) out.push(`contract not ticked: ${unticked.join(",")}`);
     if (f.mainCi !== "success")
@@ -175,4 +220,27 @@ export function cardTier(labels: string[], estimate: number | null): Tier {
     return "full";
   if (estimate === 1 || labels.includes("type:chore")) return "lite";
   return "standard";
+}
+
+/** One push run of the merge commit on main, as `gh run list --json status,conclusion,event,workflowName` gives it. */
+export type MainRun = {
+  status: string;
+  conclusion: string | null;
+  event: string;
+  workflowName?: string;
+};
+
+/**
+ * The Done gate's CI verdict for a merge commit: every push run must succeed. A `deploy-check` run that a
+ * newer push cancelled (its `cancel-in-progress` group) is ignored (#914): the newer run checks production.
+ * A cancelled run of any other workflow still fails.
+ */
+export function mainCiStatus(runs: MainRun[]): "success" | "failure" | "pending" | "missing" {
+  const push = runs.filter(
+    (r) =>
+      r.event === "push" && !(r.workflowName === "deploy-check" && r.conclusion === "cancelled"),
+  );
+  if (!push.length) return "missing";
+  if (push.some((r) => r.status !== "completed")) return "pending";
+  return push.every((r) => r.conclusion === "success") ? "success" : "failure";
 }

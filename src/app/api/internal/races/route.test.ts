@@ -17,7 +17,19 @@ const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const SECRET = "internal-races-route-test-secret-0123456789";
 
 const state = vi.hoisted(() => ({ db: null as unknown }));
+const store = vi.hoisted(() => ({ seen: new Set<string>(), outage: false }));
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test", RACE_TOKEN_SECRET: SECRET } }));
+vi.mock("@/server/internal-api/nonces", () => ({
+  // #716: an in-memory replay store (the Redis one is src/server/internal-api/nonces.test.ts).
+  webNonceStore: () => ({
+    claim: async (nonce: string) => {
+      if (store.outage) return "unavailable";
+      if (store.seen.has(nonce)) return "replay";
+      store.seen.add(nonce);
+      return "claimed";
+    },
+  }),
+}));
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));
@@ -134,6 +146,29 @@ describe.skipIf(!testDatabaseUrl)(
       expect([a.status, b.status]).toEqual([200, 200]);
       expect(await a.json()).toEqual(await b.json());
       expect(await db.race.count({ where: { id: body.raceId } })).toBe(1);
+    });
+
+    it("#716 C1: the same signed request twice: the second is 401 replay and adds no row", async () => {
+      const body = request();
+      const rawBody = JSON.stringify(body);
+      const headers = internalHeaders({ rawBody, secret: SECRET, now: nowS() });
+      expect((await post(rawBody, headers)).status).toBe(200);
+      const again = await post(rawBody, headers);
+      expect(again.status).toBe(401);
+      expect(await again.json()).toEqual({ v: PROTOCOL_VERSION, error: "replay" });
+      expect(await rows()).toBe(1);
+    });
+
+    it("#716 C3: nonce store unavailable: a bare 503 and no row", async () => {
+      store.outage = true;
+      try {
+        const res = await signed(request());
+        expect(res.status).toBe(503);
+        expect(await res.text()).toBe("");
+        expect(await rows()).toBe(0);
+      } finally {
+        store.outage = false;
+      }
     });
 
     it("C2: refusals answer the protocol error and create no Race row", async () => {

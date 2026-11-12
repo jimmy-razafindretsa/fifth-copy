@@ -1,16 +1,20 @@
-import type { RaceLanguage } from "@fifth-copy/protocol";
+import type { Rng } from "@fifth-copy/engine";
+import type { RaceLanguage, RaceSettings } from "@fifth-copy/protocol";
 
-/** One attributed sentence of a text source. */
+/** One attributed passage of a text source (a content-file passage and its file's `source`). */
 export type SeedSentence = { readonly text: string; readonly source: string };
 
 /**
- * Where race text comes from: the extension seam of `generateRaceText`. The seed provider is the
- * only implementation until the corpus and frequency-list providers of #351 and the drill of #354.
+ * Where race text comes from: the extension seam of `generateRaceText`. `fileProvider` (#351, the
+ * committed content files and frequency lists) is the default; #346 plugs a database-backed one.
  */
 export type TextProvider = {
   /** Stable reference stored on the race (`Race.textSourceRef`), at most 256 characters. */
   sourceRef(language: RaceLanguage): string;
+  /** Passages for `sentences` mode: each 12 to 80 words, typeable as written. */
   sentences(language: RaceLanguage): readonly SeedSentence[];
+  /** Words for `words` mode, most frequent first: lower-case, typeable, clean. */
+  words(language: RaceLanguage): readonly string[];
 };
 
 export type GeneratedText = {
@@ -19,3 +23,13 @@ export type GeneratedText = {
   wordCount: number;
   sourceRef: string | null;
 };
+
+/** What a strategy gets: the host's settings, the injected rng and the text source. */
+export type StrategyInput = {
+  settings: RaceSettings;
+  rng: Rng;
+  provider: TextProvider;
+};
+
+/** Turns settings into the tokens of one text of exactly `settings.wordCount` engine words, typeable. */
+export type Strategy = (input: StrategyInput) => string[];

@@ -27,7 +27,8 @@ const frameStates = (page: Page) =>
   page.evaluate(() =>
     [...document.querySelectorAll<HTMLIFrameElement>("[data-plinth] iframe")].map((f) => ({
       mounted: f.dataset.embed === "mounted",
-      ready: f.contentDocument?.documentElement.dataset.ready === "1",
+      // a frame between documents has no documentElement yet
+      ready: f.contentDocument?.documentElement?.dataset.ready === "1",
     })),
   );
 
@@ -46,10 +47,8 @@ test.describe("Dawn report podium (#300)", () => {
     page,
     request,
   }, info) => {
-    // The timing under test is the data path (filing -> podium). Three medals booting software WebGL
-    // (headless CI, no GPU) block the page's thread for ~9 s right after the swap, so this test draws the
-    // medal slots as their stamp; the live medals are proven by the C4 tests below.
-    await withoutWebGL(page);
+    // WebGL on (#690 C2): the plinth clerks mount one at a time (#688 C4), so the filing -> podium swap
+    // is not frozen by three software-WebGL realms booting together.
     const lobby = await seedLobby(page);
     const desks = six(lobby.hostUserId);
     const raceId = await startRace(request, lobby, desks);
@@ -92,6 +91,10 @@ test.describe("Dawn report podium (#300)", () => {
       expect(one.height).toBeGreaterThan(two.height);
       expect(two.height).toBeGreaterThan(three.height);
     }
+
+    // the live path, not the stamp (#690 C2): WebGL2 is on and the first clerk boots after the podium
+    expect(await hasWebGL2(page), "WebGL2 on").toBe(true);
+    await expect(clerkDoc(page, 1)).toHaveAttribute("data-ready", "1", { timeout: scaled(30_000) });
   });
 
   test("C5 two finishers: the third plinth is UNFILLED", async ({ page, request }) => {
@@ -160,8 +163,16 @@ test.describe("Dawn report podium (#300)", () => {
     // desk 12 saved nothing: its desk's outfit, the bronze medal
     await expect(clerkDoc(page, 3)).toHaveAttribute("data-variant", "bronze");
     await expect(clerkDoc(page, 3)).toHaveAttribute("data-hat", outfitForDesk(12).hat);
-    // the frames keep the catalog titles (no new strings)
-    await expect(plinth(page, 1).locator("iframe")).toHaveAttribute("title", /gold medal/i);
+    // the frames carry the catalog titles: the clerk and the medal of the place, no drag (#714 C2)
+    for (const [n, medal] of [
+      [1, "gold"],
+      [2, "silver"],
+      [3, "bronze"],
+    ] as const) {
+      const title = plinth(page, n).locator("iframe");
+      await expect(title).toHaveAttribute("title", new RegExp(`clerk.*${medal} medal`, "i"));
+      await expect(title).not.toHaveAttribute("title", /drag|spin/i);
+    }
     await expect(clerkDoc(page, 1)).toHaveAttribute("data-motion", "full");
   });
 
@@ -178,9 +189,16 @@ test.describe("Dawn report podium (#300)", () => {
       !(await hasWebGL2(page)),
       "no WebGL2 in this browser (the no-WebGL path has its own test)",
     );
+    await expect(plinths(page)).toHaveCount(3, { timeout: HYDRATION_WAIT });
+    // the snapshots below compare the whole podium: let the mount queue (#688 C4) run dry first, every
+    // plinth frame mounted and drawn, or a later plinth's mount lands between them (#763)
+    await visitPlinths(page);
+    await expect
+      .poll(async () => JSON.stringify(await frameStates(page)), { timeout: scaled(30_000) })
+      .toBe(JSON.stringify([1, 2, 3].map(() => ({ mounted: true, ready: true }))));
     await plinth(page, 1).scrollIntoViewIfNeeded();
     const doc = clerkDoc(page, 1);
-    await expect(doc).toHaveAttribute("data-ready", "1", { timeout: scaled(30_000) });
+    await expect(doc).toHaveAttribute("data-ready", "1");
     await expect(doc).toHaveAttribute("data-motion", "full");
     const layout = () =>
       page.evaluate(() =>

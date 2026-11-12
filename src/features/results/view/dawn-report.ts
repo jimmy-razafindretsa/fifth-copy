@@ -8,17 +8,11 @@
  */
 
 import type { Outfit } from "@/features/identity";
+import type { PersonalStats } from "./personal";
 
-/** `RaceResult.status` (prisma/schema/race.prisma), as stored. */
-export const REPORT_STATUSES = [
-  "FINISHED",
-  "TIMED_OUT",
-  "REASSIGNED",
-  "ASLEEP",
-  "LINE_CUT",
-  "EXPIRED",
-] as const;
-export type ReportStatus = (typeof REPORT_STATUSES)[number];
+// `RaceResult.status` as stored: its own module, shared with the personal card's model (no import cycle).
+export { REPORT_STATUSES, type ReportStatus } from "./report-status";
+import type { ReportStatus } from "./report-status";
 
 export type ReportEndReason = "ALL_FINISHED" | "TIMER" | "VOID";
 
@@ -50,6 +44,8 @@ export type ReportRace = {
   endedAt: Date | null;
   endReason: ReportEndReason | null;
   lobbyCode: string | null;
+  /** The race's lobby is still `WAITING` (open, #143): the report offers `RACE AGAIN` to its members. */
+  lobbyOpen: boolean;
 };
 
 /**
@@ -58,7 +54,16 @@ export type ReportRace = {
  */
 export type DawnReport =
   | { kind: "filing"; raceId: string; lobbyCode: string | null }
-  | { kind: "report"; race: ReportRace; entries: ReportEntry[]; viewerDesk: number | null };
+  | {
+      kind: "report";
+      race: ReportRace;
+      entries: ReportEntry[];
+      viewerDesk: number | null;
+      /** The viewer hosts the race's lobby (#876): a watching host has no desk yet races again. */
+      viewerHosts?: boolean;
+      /** The viewer's own figures (#864): `null` for a spectator and a visitor. */
+      personal: PersonalStats | null;
+    };
 
 export const MEDAL_VARIANTS = ["gold", "silver", "bronze"] as const;
 export type MedalVariant = (typeof MEDAL_VARIANTS)[number];

@@ -1,5 +1,7 @@
-import type { Locator, Page } from "@playwright/test";
+import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { scaled } from "../timeouts";
+import { hostRoom, phaseOf, SEAT_HUD, simulatedPlayers, startButton, warmRace } from "./helpers";
 
 /**
  * #560 seat view HUD dockets on /design#race-hud: nixie counters, race card, Sabotage tray, Abandon
@@ -115,7 +117,7 @@ test.describe("#560 race HUD on /design", () => {
     expect(line.find((t) => t.desk === 9)!.x).toBeCloseTo(1, 1);
     expect(line.find((t) => t.desk === 17)!.x).toBeCloseTo(0.61, 1);
     const statuses = state(page, "card-six-statuses");
-    for (const label of ["FILED", "LINE CUT", "ASLEEP AT DESK", "REASSIGNED"]) {
+    for (const label of ["FILED", "LINE CUT", "EXPIRED", "ASLEEP AT DESK", "REASSIGNED"]) {
       await expect(statuses.getByText(label, { exact: true })).toBeVisible();
     }
     // the allocator gives desks 1-12 circles, 13-24 squares, 25-30 triangles (#156)
@@ -124,13 +126,13 @@ test.describe("#560 race HUD on /design", () => {
     }
   });
 
-  test("C3 compact race card: names hidden, markers, desks and the field line kept", async ({
+  test("C3 compact race card: names (kept since #792), markers, desks and the field line", async ({
     page,
   }) => {
     await open(page);
     const compact = state(page, "card-thirty-compact").locator("[data-race-card]");
     await expect(compact).toHaveAttribute("data-compact", "true");
-    await expect(compact.locator("[data-name]")).toHaveCount(0);
+    await expect(compact.locator("[data-name]")).toHaveCount(8);
     await expect(compact.locator("[data-tick]")).toHaveCount(30);
     await expect(compact.locator("svg[data-marker]")).toHaveCount(8);
     await expect(compact.getByText("DESK 17", { exact: true })).toBeVisible();
@@ -151,6 +153,7 @@ test.describe("#560 race HUD on /design", () => {
       "tray-exemption",
       "tray-smoke-break",
       "tray-cooling",
+      "tray-refused",
       "tray-held-cooling",
     ]) {
       const tray = state(page, id).getByRole("region", { name: "SABOTAGE TRAY" });
@@ -200,6 +203,32 @@ test.describe("#560 race HUD on /design", () => {
     await expect(state(page, "abandon-confirm").getByRole("button")).toHaveCount(2);
   });
 
+  // #236 C3: the refused play's IMMUNE row, in a polite status region, shaking once on the urgent ground
+  test("#236 tray refused: IMMUNE in a status region, lkShake 0.4s on danger-surface, still under reduced motion", async ({
+    page,
+  }) => {
+    await open(page);
+    const refused = state(page, "tray-refused");
+    const tray = refused.getByRole("region", { name: "SABOTAGE TRAY" });
+    expect((await styleOf(tray)).border).toBe("2px solid");
+    await expect(tray.getByRole("status")).toHaveText("IMMUNE");
+    const row = tray.locator("[data-row=refused]");
+    const s = await styleOf(row);
+    expect(s.animation).toContain("lkShake");
+    expect(s.duration).toBe("0.4s");
+    expect(s.bg).toBe(await roleColour(page, "danger-surface"));
+    expect(s.color).toBe(await roleColour(page, "fg"));
+    // the card is kept and still ready
+    await expect(tray.locator("[data-slot]")).toContainText("EXTRA PAPERWORK");
+    await expect(tray.locator("[data-row=play] dd")).toHaveText("ENTER TO PLAY");
+    // every other tray has an empty status region
+    for (const id of ["tray-empty", "tray-smoke-break", "tray-cooling", "tray-held-cooling"]) {
+      await expect(state(page, id).locator("[data-refusal]"), id).toBeEmpty();
+    }
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect((await styleOf(row)).animation).toBe("none");
+  });
+
   test("C6 notices: status rows pulsing with lkPulse, still under reduced motion", async ({
     page,
   }) => {
@@ -234,7 +263,8 @@ test.describe("#560 race HUD on /design", () => {
         await expect(stamps.getByText(text)).toBeVisible();
       }
       await expect(stamps.locator('[data-stamp-tone="ink"]')).toContainText("PASSED −1");
-      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(27);
+      // 28 states of #560 and later cards, plus the two exit dockets of #777
+      await expect(page.locator("#race-hud [data-hud-state]")).toHaveCount(30);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
       );
@@ -242,6 +272,198 @@ test.describe("#560 race HUD on /design", () => {
       await expectNoA11yViolations(page);
     });
   }
+});
+
+test.describe("#697 race card lanes: name, YOU tag and status share one row", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C2 a 24-character FILED lane and a short LINE CUT lane keep the chip on the name row (${scheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await open(page);
+      for (const width of [1280, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        const card = state(page, "card-six-statuses");
+        const box = async (lane: Locator) =>
+          lane.evaluate((el) => {
+            const r = (n: Element | null) => {
+              const b = n!.getBoundingClientRect();
+              return { top: b.top, left: b.left, right: b.right, height: b.height };
+            };
+            // the lane's box without its dashed separator (`.lane + .lane` border-top, the first lane has none)
+            const lane = r(el);
+            lane.height -= parseFloat(getComputedStyle(el).borderTopWidth);
+            return {
+              lane,
+              name: r(el.querySelector("[data-name]")),
+              chip: r(el.querySelector("[data-status-label]")),
+              name24: el.querySelector("[data-name]")!.textContent!.length,
+            };
+          });
+        const filed = await box(card.locator('[data-lane][data-status="finished"]'));
+        const cut = await box(card.locator('[data-lane][data-status="line-cut"]'));
+        expect(filed.name24, `${width}`).toBe(24);
+        for (const lane of [filed, cut]) {
+          expect(
+            Math.abs(lane.chip.top - lane.name.top),
+            `${width} chip on the name row`,
+          ).toBeLessThanOrEqual(2);
+          expect(lane.name.left).toBeGreaterThanOrEqual(lane.lane.left);
+          expect(lane.name.right, `${width} name inside the lane`).toBeLessThanOrEqual(
+            lane.chip.left,
+          );
+          expect(lane.chip.right).toBeLessThanOrEqual(lane.lane.right);
+        }
+        expect(
+          Math.abs(filed.lane.height - cut.lane.height),
+          `${width} equal lane heights`,
+        ).toBeLessThanOrEqual(0.5);
+        // your lane: the YOU tag sits on the name row too
+        const you = card.locator('[data-lane][data-you="true"]');
+        const [nameTop, tagTop] = await Promise.all([
+          you.locator("[data-name]").evaluate((el) => el.getBoundingClientRect().top),
+          you.getByText("YOU", { exact: true }).evaluate((el) => el.getBoundingClientRect().top),
+        ]);
+        expect(Math.abs(tagTop - nameTop), `${width} YOU on the name row`).toBeLessThanOrEqual(2);
+      }
+    });
+  }
+});
+
+test.describe("#758 race card lanes: a 10-character name stays readable next to a long label", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`C1 Marmot-648 next to ASLEEP AT DESK shows in full, on the name row (${scheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await open(page);
+      for (const width of [1280, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        const lane = state(page, "card-six-statuses").locator('[data-lane][data-status="asleep"]');
+        await expect(lane.locator("[data-status-label]")).toHaveText("ASLEEP AT DESK");
+        const m = await lane.evaluate((el) => {
+          const name = el.querySelector<HTMLElement>("[data-name]")!;
+          const chip = el.querySelector("[data-status-label]")!.getBoundingClientRect();
+          const n = name.getBoundingClientRect();
+          return {
+            text: name.textContent,
+            clipped: name.scrollWidth - name.clientWidth,
+            sameRow: Math.abs(chip.top - n.top),
+            gap: chip.left - n.right,
+          };
+        });
+        expect(m.text, `${width}`).toBe("Marmot-648");
+        expect(m.clipped, `${width} name shown in full`).toBeLessThanOrEqual(0);
+        // the #697 one-row rule still holds: the chip on the name row, after the name
+        expect(m.sameRow, `${width} chip on the name row`).toBeLessThanOrEqual(2);
+        expect(m.gap, `${width} chip after the name`).toBeGreaterThanOrEqual(0);
+      }
+    });
+  }
+});
+
+test.describe("#792 seat view lane: a 10-character name stays readable next to ASLEEP AT DESK", () => {
+  test.skip(
+    ({ viewport }) => viewport?.width !== 1280,
+    "desktop project; the test sets its viewports",
+  );
+
+  // The race server warns a silent desk at 45 s and puts it to sleep at 60 s (spec 4.5);
+  // `RACE_FAST_CLOCK=1` divides both by 10 (see e2e/race/idle.spec.ts).
+  const KICK_MS = process.env.RACE_FAST_CLOCK === "1" ? 6_000 : 60_000;
+  const opened: BrowserContext[] = [];
+  test.afterEach(async () => {
+    for (const context of opened.splice(0)) await context.close();
+  });
+
+  /** One correct key every 3 s, so the server never puts this desk to sleep; `stop()` ends it. */
+  function keepAwake(p: Page) {
+    let awake = true;
+    const run = (async () => {
+      const text = Array.from(
+        (await p.locator("[data-telex] [data-state]").allTextContents()).join(""),
+      );
+      for (let i = 0; awake && i < text.length - 1; i++) {
+        await p.keyboard.type(text[i]!);
+        for (let w = 0; awake && w < 30; w++) await p.waitForTimeout(100);
+      }
+    })().catch(() => {});
+    return async () => {
+      awake = false;
+      await run;
+    };
+  }
+
+  /** The lane of `desk` at 1280x800 and 1024x768: its name in full, name and label inside the lane. */
+  async function expectNameInFull(p: Page, desk: number, asleep: string) {
+    const lane = SEAT_HUD.raceCard(p).locator(`[data-lane][data-desk="${desk}"]`);
+    await expect(lane.locator('[data-status-label="asleep"]')).toHaveText(asleep, {
+      timeout: scaled(KICK_MS + 10_000),
+    });
+    for (const [width, height] of [
+      [1280, 800],
+      [1024, 768],
+    ] as const) {
+      await p.setViewportSize({ width, height });
+      const m = await lane.evaluate((el) => {
+        const name = el.querySelector<HTMLElement>("[data-name]");
+        const chip = el.querySelector("[data-status-label]")!.getBoundingClientRect();
+        const box = el.getBoundingClientRect();
+        return name
+          ? {
+              text: name.textContent,
+              clipped: name.scrollWidth - name.clientWidth,
+              inside: name.getBoundingClientRect().right <= box.right && chip.right <= box.right,
+            }
+          : null;
+      });
+      const at = `${width} ${asleep}`;
+      expect(m, `${at}: the lane shows a name`).not.toBeNull();
+      expect(m!.text, at).toBe("Marmot-648");
+      expect(m!.clipped, `${at}: name shown in full`).toBeLessThanOrEqual(0);
+      expect(m!.inside, `${at}: name and label inside the lane`).toBe(true);
+    }
+  }
+
+  test("C1 seat view lane: Marmot-648 ASLEEP AT DESK shows its name in full at 1280 and 1024, in English and French", async ({
+    page,
+  }) => {
+    test.slow();
+    test.setTimeout(scaled(90_000 + KICK_MS * 2));
+    const room = await hostRoom(page.context().browser()!, opened);
+    // `next dev` compiles the seat view on its first request (this file's other tests only open /design)
+    await warmRace(page, room.lobbyId);
+    await page.goto(`/race/${room.lobbyId}`);
+    await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/, { timeout: scaled(10_000) });
+    // a third typist named Marmot-648 who never types: the server puts it to sleep
+    const [marmot] = await simulatedPlayers(1, room.lobbyId, { names: ["Marmot-648"] });
+    try {
+      await expect(startButton(room.host)).toBeEnabled();
+      await startButton(room.host).click();
+      for (const p of [page, room.host]) {
+        await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", {
+          timeout: scaled(10_000),
+        });
+      }
+      const stops = [keepAwake(room.host), keepAwake(page)];
+      try {
+        await expectNameInFull(page, marmot!.desk, "ASLEEP AT DESK");
+        // French: the same seat view after a reload with the locale cookie (the desk resumes, #235)
+        await page
+          .context()
+          .addCookies([{ name: "locale", value: "fr", url: test.info().project.use.baseURL! }]);
+        await page.reload();
+        await expect(SEAT_HUD.kicker(page)).toHaveText(/^VUE DE TA PLACE · BUREAU \d{2}$/, {
+          timeout: scaled(10_000),
+        });
+        await expectNameInFull(page, marmot!.desk, "ENDORMI AU BUREAU");
+      } finally {
+        await Promise.all(stops.map((stop) => stop()));
+      }
+    } finally {
+      marmot?.close();
+    }
+  });
 });
 
 test.describe("#565 rival inks on /design#race-hud", () => {

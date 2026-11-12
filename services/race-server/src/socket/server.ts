@@ -5,20 +5,25 @@ import type { Limiter } from "@fifth-copy/limiter";
 import {
   abandonSchema,
   bonusPlaySchema,
+  hostKickSchema,
   hostSettingsSchema,
   hostStartSchema,
   keysSchema,
   pingSchema,
   PROTOCOL_VERSION,
   type ClientToServerEvents,
+  type HostKickAck,
   type HostSettingsAck,
   type HostStartAck,
+  type Phase,
+  type RaceSettings,
   type RaceTokenClaims,
   type RoomCode,
   type ServerToClientEvents,
   type Welcome,
 } from "@fifth-copy/protocol";
 import type { AbandonResult } from "../players/idle";
+import type { LastLeave } from "../players/last-leave";
 import { leaveRoom, type LeaveDeps } from "../players/leave";
 import type { BonusPlayResult } from "../rooms/bonus-step";
 import type { Presence } from "../players/presence";
@@ -34,7 +39,13 @@ import { attachSpectator } from "./spectator";
  * set by the handshake middleware from the verified race token, `desk` once the registry seated the
  * socket's user.
  */
-export type SocketData = { claims: RaceTokenClaims; resume?: boolean; desk?: number };
+export type SocketData = {
+  claims: RaceTokenClaims;
+  resume?: boolean;
+  desk?: number;
+  /** The host removed this socket's user (#133): its seat is already freed, its leave is skipped. */
+  removed?: boolean;
+};
 
 /**
  * The live race behind the `keys`, `abandon` and `bonus:play` edges: `rooms/ingest.ts` over the
@@ -46,6 +57,8 @@ export type RacePort = {
   playBonus(lobbyId: string, desk: number): BonusPlayResult;
   /** The desk's text overlay while a race runs (`welcome.overlay`), else null. */
   overlayOf(lobbyId: string, desk: number): Welcome["overlay"];
+  /** The desk's card, cooldown end and blur end while a race runs (`welcome.bonus`, #768), else null. */
+  bonusOf(lobbyId: string, desk: number): Welcome["bonus"];
   /** The desk's engine state while a race runs (`welcome.state`), else null. */
   stateOf(lobbyId: string, desk: number): Welcome["state"];
 };
@@ -75,6 +88,12 @@ export function attachSocketServer(
     presence: Presence;
     /** The shared Redis limiter behind the per-identity buckets (#207, `rate-limit.ts`). */
     limiter: Limiter;
+    /** Queues the web's lobby close when a leave closes the room (#734, `LeaveDeps.onLobbyClosed`). */
+    onLobbyClosed: (lobbyId: string) => void;
+    /** A leave passed the host role on (#137, `LeaveDeps.onNewHost`): `new-host` and the web's record. */
+    onNewHost: LeaveDeps["onNewHost"];
+    /** The grace before the last human's leave closes a waiting room (#734: a reload keeps it). */
+    lastLeave: LastLeave;
   },
 ): RaceIo {
   const { registry, lifecycle, race, presence } = deps;
@@ -82,18 +101,62 @@ export function attachSocketServer(
     registry,
     presence,
     onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
+    onLobbyClosed: deps.onLobbyClosed,
+    onNewHost: deps.onNewHost,
     announce: (lobbyId, members) =>
       void io.to(audience(lobbyId)).emit("roster", { v: PROTOCOL_VERSION, members }),
+    announceSettings: (lobbyId, settings) =>
+      void io.to(audience(lobbyId)).emit("settings", { v: PROTOCOL_VERSION, settings }),
   };
   const io: RaceIo = new Server(httpServer, {
     cors: { origin: deps.origin, credentials: false },
     transports: ["websocket", "polling"],
   });
   io.use(createHandshakeMiddleware(deps));
+
+  /**
+   * Sends `welcome` to a seat socket at `desk` (`null`: the watching host, #876: no desk, no resume
+   * key, no race state): joins its desk's room, has presence issue the desk's resume key (or resume
+   * it), then reads the phase again, which may have moved on while presence waited in the queue.
+   */
+  async function sendWelcome(
+    target: Pick<RaceSocket, "data" | "emit" | "join">,
+    desk: number | null,
+    members: Welcome["members"],
+    joined: { code: string; phase: Phase; settings: RaceSettings; race: Welcome["race"] },
+  ) {
+    const { lobby, sub, role } = target.data.claims;
+    target.data.desk = desk ?? undefined;
+    if (desk !== null) void target.join(deskRoom(lobby, desk));
+    const resumeKey =
+      desk === null
+        ? null
+        : (await presence.seated(lobby, sub, desk, target.data.resume === true)).resumeKey;
+    const now = await registry.room(lobby);
+    target.emit("welcome", {
+      v: PROTOCOL_VERSION,
+      role,
+      you: desk,
+      // Parsed by openRoomRequestSchema when the room was opened.
+      room: { code: joined.code as RoomCode, phase: now?.phase ?? joined.phase },
+      members,
+      settings: joined.settings,
+      race: joined.race,
+      // The server's authority after a resume: the client reconciles from it (#215).
+      state: desk === null ? null : race.stateOf(lobby, desk),
+      overlay: desk === null ? null : race.overlayOf(lobby, desk),
+      bonus: desk === null ? null : race.bonusOf(lobby, desk),
+      resumeKey,
+      serverNow: deps.clock.now(),
+      // A reload or a reconnect during a public room's countdown sees it (#814).
+      autoStartAt: now?.autoStartAt ?? null,
+    });
+    return now;
+  }
   const guard = createSocketGuard({ limiter: deps.limiter, clock: deps.clock, log });
 
   io.on("connection", (socket: RaceSocket) => {
-    const { lobby, sub, name, role } = socket.data.claims;
+    const { lobby, sub, name, role, avatar } = socket.data.claims;
     const room = lobbyRoom(lobby);
     const everyone = audience(lobby);
     // Rate limits, payload cap and socket cap (#207) run before every handler below, spectators
@@ -123,35 +186,10 @@ export function attachSocketServer(
     // join, presence and leave go through the registry's per-room queue, so a disconnect that races
     // the join still runs after it. The desk comes from membership, never from the resume key.
     registry
-      .join(lobby, { userId: sub, name })
+      .join(lobby, { userId: sub, name, avatar })
       .then(async (joined) => {
         if (!joined.ok) return void socket.disconnect(true);
-        socket.data.desk = joined.desk;
-        void socket.join(deskRoom(lobby, joined.desk));
-        const { resumeKey } = await presence.seated(
-          lobby,
-          sub,
-          joined.desk,
-          socket.data.resume === true,
-        );
-        // The phase may have moved on while presence waited in the queue.
-        const now = await registry.room(lobby);
-        const phase = now?.phase ?? joined.room.phase;
-        socket.emit("welcome", {
-          v: PROTOCOL_VERSION,
-          role,
-          you: joined.desk,
-          // Parsed by openRoomRequestSchema when the room was opened.
-          room: { code: joined.room.code as RoomCode, phase },
-          members: joined.members,
-          settings: joined.room.settings,
-          race: joined.room.race,
-          // The server's authority after a resume: the client reconciles from it (#215).
-          state: race.stateOf(lobby, joined.desk),
-          overlay: race.overlayOf(lobby, joined.desk),
-          resumeKey,
-          serverNow: deps.clock.now(),
-        });
+        const now = await sendWelcome(socket, joined.desk, joined.members, joined.room);
         // A room voided by a restart (#204): this socket hears the race is over, never a frozen race.
         if (now?.phase === "ended" && now.endReason === "void" && now.raceId !== null) {
           socket.emit("ended", {
@@ -163,6 +201,8 @@ export function attachSocketServer(
         }
         io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });
+        // Eligibility is the lifecycle's one decision (#814); the edge only asks for a review.
+        void lifecycle.reviewAutoStart(lobby);
       })
       .catch(() => {
         log("join failed", { lobby });
@@ -180,14 +220,32 @@ export function attachSocketServer(
       }
       // Keys only, never values: the strict patch schema bounds them to known setting names.
       const keys = Object.keys(parsed.data.patch);
-      registry.updateSettings(lobby, sub, parsed.data.patch).then(
-        (result) => {
+      registry.updateSettings(lobby, sub, parsed.data.patch, { name, avatar }).then(
+        async (result) => {
           log("settings", { lobby, outcome: result.ok ? "ok" : result.reason, keys });
           if (!result.ok) return reply({ ok: false, error: result.reason });
+          // The host gave up its desk or took one again (#876): each of its sockets here gets a new
+          // `welcome` (its desk or none, its resume key) before the room hears the change.
+          if (result.hostDesk !== undefined && result.members) {
+            const { members, settings, hostDesk } = result;
+            if (hostDesk === null) await presence.left(lobby, sub);
+            const code = socket.data.claims.lobby && (await registry.room(lobby))?.code;
+            for (const s of await io.in(room).fetchSockets()) {
+              if (s.data.claims.sub !== sub) continue;
+              if (s.data.desk !== undefined) s.leave(deskRoom(lobby, s.data.desk));
+              await sendWelcome(s, hostDesk, members, {
+                code: code ?? "",
+                phase: "waiting",
+                settings,
+                race: null,
+              });
+            }
+          }
           io.to(everyone).emit("settings", { v: PROTOCOL_VERSION, settings: result.settings });
-          // A `bots` patch re-seated the room (#156): the bot desks changed.
+          // A `bots` patch, or a language change with bots, re-seated the room (#156, #361).
           if (result.members) {
             io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: result.members });
+            void lifecycle.reviewAutoStart(lobby);
           }
           reply({ ok: true, settings: result.settings });
         },
@@ -205,6 +263,41 @@ export function attachSocketServer(
         return log("start", { lobby, outcome: "invalid" });
       }
       void lifecycle.start(lobby, { sub, role }).then(reply);
+    });
+
+    // Host removal (#133, ARCHITECTURE 7.1, 7.2): the registry authorises (`sub` against the room's
+    // `hostUserId`, ADR 0009; `waiting`/`ended` only; never a bot or the host's desk) and blocks the
+    // user under the room's queue; the seat is freed through `leaveRoom` (roster to the room), then
+    // the room hears `kicked` (the removed sockets included) and the user's sockets are closed
+    // after it (no close of the transport: the event is flushed first). Malformed: no ack.
+    socket.on("host:kick", (raw: unknown, ack: unknown) => {
+      const reply = typeof ack === "function" ? (ack as (a: HostKickAck) => void) : () => {};
+      const parsed = hostKickSchema.safeParse(raw);
+      if (!parsed.success) return log("kick", { lobby, outcome: "invalid" });
+      const { desk } = parsed.data;
+      registry
+        .kick(lobby, sub, desk)
+        .then(async (result) => {
+          log("kick", { lobby, desk, outcome: result.ok ? "ok" : result.reason });
+          if (!result.ok) {
+            return reply({
+              ok: false,
+              // A room gone meanwhile is no waiting room: nothing to remove.
+              error: result.reason === "no-room" ? "not-waiting" : result.reason,
+            });
+          }
+          const removed = (await io.in(room).fetchSockets()).filter(
+            (s) => s.data.claims.sub === result.userId,
+          );
+          for (const s of removed) s.data.removed = true;
+          await leaveRoom(leaveDeps, lobby, result.userId);
+          io.to(everyone).emit("event", { v: PROTOCOL_VERSION, kind: "kicked", desk });
+          for (const s of removed) s.disconnect();
+          reply({ ok: true });
+          void lifecycle.reviewAutoStart(lobby);
+        })
+        // No wire code for a Redis failure: no ack; the client times out.
+        .catch(() => log("kick failed", { lobby, desk }));
     });
 
     // Keystrokes (#173, ADR 0006 point 3): parsed here, applied by the runtime only. A malformed
@@ -263,10 +356,27 @@ export function attachSocketServer(
       presence
         .socketClosed(lobby, sub)
         .then(async (closed) => {
-          // A new socket of the user queued its join meanwhile: it keeps the desk.
+          // A new socket of the user queued its join meanwhile: it keeps the desk. A removed
+          // user's seat was freed by the kick (#133): no second leave, no second roster.
           if (closed !== "leave" || presence.sockets(lobby, sub) > 0) return;
-          const { members, closed: roomClosed } = await leaveRoom(leaveDeps, lobby, sub);
-          log("left", { lobby, members: members.length, closed: roomClosed });
+          if (socket.data.removed) return;
+          const leave = async () => {
+            const { members, closed: roomClosed } = await leaveRoom(leaveDeps, lobby, sub);
+            log("left", { lobby, members: members.length, closed: roomClosed });
+            // A closed room's timers went with `onRoomClosed`; nothing is told to an empty room.
+            if (!roomClosed) void lifecycle.reviewAutoStart(lobby);
+          };
+          // The last human of a waiting room (#734): a reload must not close the room or its
+          // lobby, so the leave waits out the grace and is dropped if a socket of the user is back.
+          // The host with others in the room (#137, #884): a reload of the lobby page or the Dawn
+          // report must not pass the role on, so it passes only if the host is still away after
+          // the same grace.
+          if (
+            (await deps.lastLeave.closes(lobby, sub)) ||
+            (await deps.lastLeave.hostWithOthers(lobby, sub))
+          )
+            return deps.lastLeave.defer(lobby, sub, leave);
+          await leave();
         })
         .catch(() => log("leave failed", { lobby }));
     });

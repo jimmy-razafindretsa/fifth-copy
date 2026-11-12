@@ -85,7 +85,8 @@ describe("isClean (C2 matching)", () => {
  * card worktrees) only ever adds time to a sample, so the fastest one is the closest to the code's
  * own cost, while a single sample rose with the machine's load and failed unchanged code. The
  * 200 ms budget stays; a regression still fails because every sample, the fastest included, gets
- * slower.
+ * slower. Proof (#548, 2026-11-06): isClean ~35 ms min per batch; a temporary 10x slowdown (each call
+ * run ten times) measured 269 ms min and failed.
  */
 const RUNS = 20;
 const fastest = (xs: number[]) => Math.min(...xs);

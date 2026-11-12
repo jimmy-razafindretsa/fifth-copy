@@ -7,7 +7,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import type { ResumeKeys } from "../players/resume-keys";
-import type { RoomRegistry } from "../rooms/registry";
+import { mayRejoin, seatsFull, watches, type RoomRegistry } from "../rooms/registry";
 import { verifyRaceToken } from "./race-token";
 import type { SpectatorSlots } from "./spectator-slots";
 
@@ -30,8 +30,11 @@ export type HandshakeResult =
 /**
  * Decides whether a Socket.IO handshake may proceed (ADR 0006, 0009). Order: protocol version, then
  * the auth shape and race token (any failure is `bad-token`), then the room of the token's `lobby`
- * claim, the only source of the room: a client never names one; then `in-progress` for a new user of
- * a started room. Reads only; joining happens on connect.
+ * claim, the only source of the room: a client never names one; then `removed` for a user on the
+ * room's block list (#133, any role); then `in-progress` for a new user of
+ * a room whose race is on (`countdown`, `running`); `waiting` and `ended` admit anyone (#143, #732)
+ * while a desk is free, else `room-full`.
+ * Reads only; joining happens on connect.
  * A `spectator` token (#187, ADR 0006 point 8) needs only its room: it is let in in every phase,
  * member or not, and never resumes (its `resumeKey` is not even looked up): it never takes a desk.
  * Last, `auth.resumeKey` (#178, ADR 0009): read only after all of the above passed and only while a
@@ -52,14 +55,28 @@ export async function authenticateHandshake(
   if (!verified.ok) return { ok: false, reason: "bad-token" };
   const room = await registry.room(verified.claims.lobby);
   if (room === null) return { ok: false, reason: "no-room" };
+  // A user the host removed (#133, ADR 0009: the token's `sub`, never the socket) is refused in
+  // every role: never seated, never a spectator slot.
+  if (await registry.isBlocked(verified.claims.lobby, verified.claims.sub)) {
+    return { ok: false, reason: "removed" };
+  }
   if (verified.claims.role === "spectator")
     return { ok: true, claims: verified.claims, resume: false };
-  // Once started, only an existing member (a second tab, same `sub`) is let in (#166).
+  // During a race only an existing member (a second tab, same `sub`) is let in (#166); `ended`
+  // admits anyone again, like `waiting`: "Race again" and late joiners (#143, #732, `mayRejoin`).
+  const { sub, lobby } = verified.claims;
+  // The watching host (#876) takes no desk: in every phase, full or not, it holds a host socket.
+  if (watches(room.settings, room.hostUserId, sub)) {
+    return { ok: true, claims: verified.claims, resume: false };
+  }
+  const isMember = room.phase !== "waiting" && (await registry.hasMember(lobby, sub));
+  if (!mayRejoin(room, isMember)) return { ok: false, reason: "in-progress" };
+  // Every desk taken: `registry.join` refuses the same under the room's queue (#732).
+  const members = (await registry.members(lobby)) ?? [];
   if (
-    room.phase !== "waiting" &&
-    !(await registry.hasMember(verified.claims.lobby, verified.claims.sub))
+    seatsFull(members, room.phase === "waiting" ? await registry.hasMember(lobby, sub) : isMember)
   ) {
-    return { ok: false, reason: "in-progress" };
+    return { ok: false, reason: "room-full" };
   }
   const { resumeKey } = parsed.data;
   const raceOn = room.phase === "countdown" || room.phase === "running";

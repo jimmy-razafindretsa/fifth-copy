@@ -4,6 +4,7 @@ import { OUTFIT_CATALOGUE, OUTFIT_CATEGORIES } from "../src/features/identity/cl
 import { en } from "../src/i18n/en";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
 import { createLobby } from "./race/helpers";
+import { postResults, seedLobby, six, startRace, withoutWebGL } from "./results/helpers";
 import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "./timeouts";
 
 // Contract of #497 (with #489, #373): the whole landing of bible 14.1, ported from
@@ -79,6 +80,11 @@ const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']"
  */
 async function ready(page: Page) {
   await page.goto("/");
+  await hydrated(page);
+}
+
+/** Waits until the loaded landing has hydrated (`ready` without the navigation, e.g. after a reload). */
+async function hydrated(page: Page) {
   await expect(feedVideo(page)).toHaveAttribute("data-feed", /^(armed|near)$/, {
     timeout: HYDRATION_WAIT,
   });
@@ -115,6 +121,8 @@ test.describe("landing page (#497)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     const h2s = await page.getByRole("heading", { level: 2 }).allTextContents();
     expect(h2s).toEqual([
+      // the open-rooms docket's title, in the hero's actions column (#807)
+      "OPEN ROOMS",
       STORY,
       "THIS IS YOUR CLERK.",
       "A LITTLE HISTORY",
@@ -134,9 +142,10 @@ test.describe("landing page (#497)", () => {
     const header = page.locator("header");
     await expect(header.getByRole("link", { name: "FIFTH COPY" })).toHaveAttribute("href", "/");
     const nav = header.getByRole("navigation", { name: "Site" });
+    // the one guide href (#899): it names the landing, so it also works from every other page
     await expect(nav.getByRole("link", { name: "HOW TO TYPE É Ç « »" })).toHaveAttribute(
       "href",
-      "#how",
+      "/#how",
     );
     const language = nav.getByRole("group", { name: "Language" });
     await expect(language.getByRole("button", { name: "EN", exact: true })).toHaveAttribute(
@@ -200,12 +209,13 @@ test.describe("landing page (#497)", () => {
     expect(night).toBe(await role(page, "--color-bg"));
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.getByRole("button", { name: "NIGHT SHIFT" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await page.getByRole("button", { name: "NIGHT SHIFT" }).click();
+    // #855: the toggle's action is a client function, so a click before hydration is lost (mobile under
+    // load): gate the second click on hydration and on the toggle's restored pressed state
+    await hydrated(page);
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await toggle.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light", AFTER_ACTION);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
   });
 
   test("C5 the typing strip stamps ACCEPTED with WPM, RETURNED with errors, and resets", async ({
@@ -319,10 +329,8 @@ test.describe("landing page (#497)", () => {
     expect(values.every((v) => v.length > 1 && v !== "…")).toBe(true);
     await expect(page.getByText("UNASSIGNED", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "REISSUE UNIFORM" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveAttribute(
-      "href",
-      "/locker",
-    );
+    // #875: the locker is post-v1, so the personnel file offers no OPEN THE LOCKER button
+    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveCount(0);
     await expect(page.locator("[aria-labelledby='clerk-title'] ol li")).toHaveText([
       "RECRUIT",
       "CLERK",
@@ -368,25 +376,26 @@ test.describe("landing page (#497)", () => {
     await expect(page.getByRole("button", { name: QUICK })).toHaveCount(2);
 
     const footer = page.locator("footer");
-    for (const name of ["PLAY", "LEARN", "AEGIS CORP."]) {
+    // #875: a link appears when its route ships; AEGIS CORP. has none yet, nor do the social profiles
+    for (const name of ["PLAY", "LEARN"]) {
       await expect(footer.getByRole("navigation", { name })).toBeVisible();
     }
-    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(11);
-    const social = footer.getByRole("list").getByRole("link");
-    await expect(social).toHaveCount(4);
-    for (const link of await social.all()) {
-      await expect(link).toHaveAttribute("target", "_blank");
-      await expect(link).toHaveAttribute("rel", /noopener/);
-    }
+    await expect(footer.getByRole("navigation", { name: "AEGIS CORP." })).toHaveCount(0);
+    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(4);
+    await expect(footer.getByRole("list")).toHaveCount(0);
     await expect(footer.getByText("BUILT BYAEGIS CORP.")).toBeVisible();
     await expect(
       footer.getByText("© 2026 Fifth Copy · Built by Aegis Corp. · Made in Québec"),
     ).toBeVisible();
-    await expect(footer.getByText("No email. No chat. Your typing stays yours.")).toBeVisible();
+    await expect(
+      footer.getByText("No chat. Your typing stays yours.", { exact: true }),
+    ).toBeVisible();
     expect(await footer.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("14px");
   });
 
-  test("C10 QUICK RACE opens a room and the header then files the guest", async ({ page }) => {
+  test("C10 QUICK RACE opens a room and the header then files the guest @matchmaking", async ({
+    page,
+  }) => {
     await ready(page);
     await hero(page).getByRole("button", { name: QUICK }).click();
     await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
@@ -986,5 +995,110 @@ test.describe("landing clerk outfit (#687)", () => {
     } finally {
       await context.close();
     }
+  });
+});
+
+// Contract of #696: at phone width the site header is two rows (bible 14.1 item 1 phone rule): brand
+// with EN/FR and NIGHT SHIFT, then the guide link, the guest docket and SIGN IN. Nothing hidden, every
+// target >= 44px (bible 18), <= 120px tall, no item overlapping another, no horizontal scroll. The same
+// header stands on `/`, `/lobby/<code>` and the Dawn report `/results/<raceId>`.
+test.describe("site header at phone width (#696)", () => {
+  test.beforeEach(({}, info) => {
+    test.skip(
+      info.project.name !== "mobile",
+      "the phone rule (<= 480px) runs on the mobile project",
+    );
+    test.slow();
+  });
+
+  /** Every header item, each checked for size, row and overlap. */
+  async function expectTwoRowHeader(page: Page, { docket }: { docket: boolean }) {
+    const header = page.locator("header").first();
+    const nav = header.getByRole("navigation", { name: "Site" });
+    const items = {
+      brand: header.getByRole("link", { name: "FIFTH COPY" }),
+      en: nav.getByRole("button", { name: "EN", exact: true }),
+      fr: nav.getByRole("button", { name: "FR", exact: true }),
+      night: nav.getByRole("button", { name: "NIGHT SHIFT" }),
+      guide: nav.getByRole("link", { name: "HOW TO TYPE É Ç « »" }),
+      signIn: nav.getByRole("link", { name: "SIGN IN" }),
+      ...(docket ? { docket: nav.getByText("GUEST", { exact: true }).locator("xpath=..") } : {}),
+    };
+    const boxes: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    for (const [name, item] of Object.entries(items)) {
+      await expect(item, name).toBeVisible();
+      const box = await item.boundingBox();
+      expect(box, name).not.toBeNull();
+      boxes[name] = box!;
+    }
+    const height = await header.evaluate((el) => (el as HTMLElement).offsetHeight);
+    expect(height, "header height").toBeLessThanOrEqual(120);
+
+    // targets: links and toggles >= 44px tall (the docket is a label, not a target)
+    for (const name of ["brand", "en", "fr", "night", "guide", "signIn"]) {
+      expect(boxes[name]!.height, `${name} height`).toBeGreaterThanOrEqual(44);
+    }
+    // rows: row 1 = brand, EN, FR, NIGHT SHIFT; row 2 = guide, docket, SIGN IN
+    const mid = (n: string) => boxes[n]!.y + boxes[n]!.height / 2;
+    const row1 = ["brand", "en", "fr", "night"];
+    const row2 = ["guide", "signIn", ...(docket ? ["docket"] : [])];
+    for (const n of row1) expect(Math.abs(mid(n) - mid("brand")), `${n} on row 1`).toBeLessThan(8);
+    for (const n of row2) expect(Math.abs(mid(n) - mid("guide")), `${n} on row 2`).toBeLessThan(8);
+    expect(mid("guide") - mid("brand"), "row 2 under row 1").toBeGreaterThan(30);
+    // nothing overlaps, nothing leaves the viewport
+    const names = Object.keys(boxes);
+    const width = page.viewportSize()!.width;
+    for (const [i, a] of names.entries()) {
+      const p = boxes[a]!;
+      expect(p.x, `${a} left`).toBeGreaterThanOrEqual(0);
+      expect(p.x + p.width, `${a} right`).toBeLessThanOrEqual(width);
+      for (const b of names.slice(i + 1)) {
+        const q = boxes[b]!;
+        const apart =
+          p.x + p.width <= q.x + 0.5 ||
+          q.x + q.width <= p.x + 0.5 ||
+          p.y + p.height <= q.y + 0.5 ||
+          q.y + q.height <= p.y + 0.5;
+        expect(apart, `${a} and ${b} overlap`).toBe(true);
+      }
+    }
+    const scroll = await page.evaluate(() => [
+      document.documentElement.scrollWidth,
+      document.documentElement.clientWidth,
+    ]);
+    expect(scroll[0], "page scrollWidth").toBe(scroll[1]);
+  }
+
+  test("C1 C2 landing without a viewer: two rows, <= 120px, 44px targets, no scroll", async ({
+    page,
+  }) => {
+    await ready(page);
+    await expectTwoRowHeader(page, { docket: false });
+  });
+
+  test("C1 C2 landing with a guest docket", async ({ page }) => {
+    await ready(page);
+    // any entry files the guest; QUICK RACE would seat it in another test's open room (#128)
+    await hero(page).getByRole("button", { name: CREATE, exact: true }).click();
+    await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
+    await ready(page);
+    await expectTwoRowHeader(page, { docket: true });
+  });
+
+  test("C1 C2 waiting room /lobby/<code>", async ({ page }) => {
+    await createLobby(page);
+    await expect(page.locator("header").getByText("GUEST", { exact: true })).toBeVisible();
+    await expectTwoRowHeader(page, { docket: true });
+  });
+
+  test("C1 Dawn report /results/<raceId>", async ({ page, request }) => {
+    await withoutWebGL(page);
+    const lobby = await seedLobby(page);
+    const desks = six(lobby.hostUserId);
+    const raceId = await startRace(request, lobby, desks);
+    await postResults(request, raceId, desks);
+    await page.goto(`/results/${raceId}`);
+    await expect(page.getByText(/DAWN REPORT/).first()).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expectTwoRowHeader(page, { docket: true });
   });
 });

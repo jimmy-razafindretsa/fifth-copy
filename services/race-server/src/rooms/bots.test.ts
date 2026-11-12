@@ -22,7 +22,8 @@ import {
   until,
   type Booted,
 } from "../testing/harness";
-import { BOT_NAMES, botName, botUserId, isBotUserId, planBotSeats } from "./bots";
+import { BOT_NAMES, mulberry32 } from "@fifth-copy/engine";
+import { botName, botUserId, isBotUserId, planBotSeats } from "./bots";
 import { membersKey, ROOM_TTL_S, roomKey } from "./keys";
 import { createRoomRegistry, type RoomRegistry } from "./registry";
 
@@ -74,8 +75,8 @@ async function records(lobbyId: string) {
 
 const EMOJI = /\p{Extended_Pictographic}/u;
 
-describe("bot names (C4)", () => {
-  it("14 bots in one room have 14 distinct names from BOT_NAMES or suffixed ' II', no emoji", async () => {
+describe("bot names (#156 C4, #361 C7)", () => {
+  it("14 bots in one room have 14 distinct names from the race language's list or suffixed ' II', no emoji", async () => {
     const registry = setup();
     const lobbyId = await openRoom(registry);
     await registry.join(lobbyId, { userId: "host", name: "Ada" });
@@ -87,18 +88,40 @@ describe("bot names (C4)", () => {
     for (const name of names) {
       expect(EMOJI.test(name)).toBe(false);
       const base = name.endsWith(" II") ? name.slice(0, -3) : name;
-      expect(BOT_NAMES).toContain(base);
+      expect(BOT_NAMES[DEFAULT_RACE_SETTINGS.language]).toContain(base);
     }
   });
 
-  it("cycles the list by desk with roman suffixes, so 30 desks never repeat a name", () => {
-    expect(BOT_NAMES).toHaveLength(12);
-    expect(new Set(BOT_NAMES).size).toBe(12);
-    expect(botName(1)).toBe(BOT_NAMES[0]);
-    expect(botName(13)).toBe(`${BOT_NAMES[0]} II`);
-    expect(botName(25)).toBe(`${BOT_NAMES[0]} III`);
-    const names = Array.from({ length: 30 }, (_, i) => botName(i + 1));
-    expect(new Set(names).size).toBe(30);
+  it.each(["fr", "en"] as const)(
+    "%s: cycles the list by desk with roman suffixes, so 29 bot desks never repeat a name",
+    (language) => {
+      const list = BOT_NAMES[language];
+      expect(list.length).toBeGreaterThanOrEqual(30);
+      expect(botName(1, language)).toBe(list[0]);
+      expect(botName(list.length + 1, language)).toBe(`${list[0]} II`);
+      expect(botName(2 * list.length + 1, language)).toBe(`${list[0]} III`);
+      const desks = Array.from({ length: 29 }, (_, i) => i + 2);
+      expect(new Set(desks.map((d) => botName(d, language))).size).toBe(29);
+      const many = Array.from({ length: 100 }, (_, i) => botName(i + 1, language));
+      expect(new Set(many).size).toBe(100);
+    },
+  );
+
+  it("names the bots from the race language, and renames them when the host switches it", async () => {
+    const registry = setup();
+    const lobbyId = await openRoom(registry, levels("clerk", "major"));
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    const lang = DEFAULT_RACE_SETTINGS.language;
+    const other = lang === "fr" ? "en" : "fr";
+    const botNames = async () =>
+      (await registry.members(lobbyId))!.filter((m) => m.isBot).map((m) => m.name);
+    expect(await botNames()).toEqual([botName(2, lang), botName(3, lang)]);
+    const patched = await registry.updateSettings(lobbyId, "host", { language: other });
+    expect(patched.ok && patched.members?.filter((m) => m.isBot).map((m) => m.name)).toEqual([
+      botName(2, other),
+      botName(3, other),
+    ]);
+    expect(await botNames()).toEqual([botName(2, other), botName(3, other)]);
   });
 
   it("bot ids live in their own space", () => {
@@ -147,9 +170,10 @@ describe("registry: bots seated at open (C1)", () => {
     }
     expect(new Set(members.map((m) => m.name)).size).toBe(3);
     expect(await records(lobbyId)).toEqual({
-      host: { desk: 1, name: "Ada" },
-      "bot:2": { desk: 2, name: botName(2), isBot: true, level: "clerk" },
-      "bot:3": { desk: 3, name: botName(3), isBot: true, level: "officer" },
+      // #137 C1: a human seat records its join time (the host-promotion order).
+      host: { desk: 1, name: "Ada", joinedAt: expect.any(Number) },
+      "bot:2": { desk: 2, name: botName(2, "en"), isBot: true, level: "clerk" },
+      "bot:3": { desk: 3, name: botName(3, "en"), isBot: true, level: "officer" },
     });
     const ttl = await redis.ttl(membersKey(lobbyId));
     expect(ttl).toBeGreaterThan(0);
@@ -294,16 +318,22 @@ describe("registry: the last human leaving closes a room with bots (ARCHITECTURE
       [1, false],
       [2, true],
     ]);
-    expect(await registry.leave(lobbyId, "host")).toEqual({ members: [], closed: true });
+    expect(await registry.leave(lobbyId, "host")).toEqual({
+      members: [],
+      closed: true,
+      kept: false,
+    });
     expect(await redis.exists(roomKey(lobbyId), membersKey(lobbyId))).toBe(0);
   });
 });
 
 describe("race with a bot (C3)", () => {
-  it("host alone + 1 bot starts; the bot sits at cursor 0 typing, and ranks after the human on time", async () => {
+  it("host alone + 1 bot starts; the bot starts at cursor 0, types from GO (#366) and ranks first at the timer", async () => {
     const race = await startedRace(process.env.REDIS_URL, {
       players: 1,
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 60, bots: levels("clerk") },
+      // Seeded: the bot's first key lands after the +100 ms snapshot below.
+      rng: mulberry32(156),
     });
     t = race.booted;
     const [host] = race.racers;
@@ -333,9 +363,10 @@ describe("race with a bot (C3)", () => {
     await until(() => host!.seen.ended.length === 1, 2_000, "ended");
     const { reason, ranking } = host!.seen.ended[0]!;
     expect(reason).toBe("timer");
+    // The bot (#366) finished "bonjour" long before the timer; the host is still typing.
     expect(ranking.map((r) => [r.place, r.desk, r.isBot, r.status])).toEqual([
-      [1, 1, false, "typing"],
-      [2, 2, true, "typing"],
+      [1, 2, true, "finished"],
+      [2, 1, false, "typing"],
     ]);
   });
 });

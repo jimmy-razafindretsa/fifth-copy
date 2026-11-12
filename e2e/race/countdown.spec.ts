@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { HYDRATION_WAIT, scaled } from "../timeouts";
 import { createLobby, joinAsGuest, lobbyIdOf } from "./helpers";
 
 // Contract of #214: the host's START (C8), the lobby -> seat view move with no line cut and the phase
@@ -38,13 +39,28 @@ type Said = {
   role: string | null;
   live: string | null;
 };
-type Log = { phases: Phase[]; steps: Step[]; said: Said[] };
+/** A main-thread task of 50 ms or more (Long Tasks API), on the page's `Date.now()` clock. */
+type Task = { start: number; end: number };
+type Log = { phases: Phase[]; steps: Step[]; said: Said[]; tasks: Task[] };
 type Frame = { t: number; payload: string };
 
-/** Runs in the page before any of its scripts: logs every phase, countdown step and announcement. */
+/**
+ * Runs in the page before any of its scripts: logs every phase, countdown step and announcement, and
+ * every long task (#818: the task that commits a step, see `begunAt`).
+ */
 function recorder() {
-  const log: Log = { phases: [], steps: [], said: [] };
+  const log: Log = { phases: [], steps: [], said: [], tasks: [] };
   (window as unknown as { __countdown: Log }).__countdown = log;
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        const start = performance.timeOrigin + e.startTime;
+        log.tasks.push({ start, end: start + e.duration });
+      }
+    }).observe({ type: "longtask", buffered: true });
+  } catch {
+    // no Long Tasks API: every step is read at its commit (`begunAt` falls back to `t`)
+  }
   let phase: string | null = null;
   let step: string | null = null;
   let said: string | null = null;
@@ -129,6 +145,22 @@ const raceIdIn = (frames: Frame[]) => {
   const frame = frames.find((f) => f.payload.startsWith('42["countdown"'));
   return frame ? /"raceId":"([^"]+)"/.exec(frame.payload)![1]! : null;
 };
+/**
+ * The page's clock offset (server time = local time + offset) from the pongs its socket received, the
+ * way the binder refines it (#643 `bestOffset`): the pong with the shortest round trip, server time at
+ * the midpoint. Frame times are this process's clock, the same machine clock as the page's `sent`.
+ */
+const pageOffset = (frames: Frame[]) => {
+  let best: { rtt: number; offset: number } | null = null;
+  for (const f of frames) {
+    const m = /^42\["pong",\{[^}]*"sent":(\d+),"serverNow":(\d+)/.exec(f.payload);
+    if (!m) continue;
+    const sent = Number(m[1]);
+    const rtt = f.t - sent;
+    if (!best || rtt < best.rtt) best = { rtt, offset: Number(m[2]) - (sent + f.t) / 2 };
+  }
+  return best?.offset ?? 0;
+};
 const disjoint = (a: Box, b: Box) =>
   a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
 const centre = (b: Box) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
@@ -141,6 +173,41 @@ async function warm(page: Page, lobbyId: string) {
   await page.request.get(`/race/${lobbyId}`);
   await page.request.post("/api/internal/races", { data: {} });
 }
+
+/**
+ * The seat view is ready in `context` before START (#854): under load the move to `/race/<raceId>` could
+ * finish loading the seat view only after GO, so the countdown it must show was already gone. A second
+ * page of the same context opens the room's seat view at phone width, where it never takes a desk
+ * (#561: no mint, no socket, so no member joins or is line-cut), and waits for its client leaf's own
+ * ready marker (the telex strip's `data-telex-ready`, set in a layout effect: hydrated); the route's
+ * code is then compiled and loaded before the click.
+ */
+async function seatViewReady(context: BrowserContext, lobbyId: string) {
+  const seat = await context.newPage();
+  const sockets: string[] = [];
+  seat.on("websocket", (ws) => sockets.push(ws.url()));
+  await seat.setViewportSize({ width: 375, height: 812 });
+  await seat.goto(`/race/${lobbyId}`);
+  await expect(seat.locator('[data-telex-ready="true"]')).toHaveCount(1, {
+    timeout: HYDRATION_WAIT,
+  });
+  expect(
+    sockets.filter((u) => u.includes("/socket.io/")),
+    "warm-up seat view socket",
+  ).toEqual([]);
+  await seat.close();
+}
+
+/**
+ * When the page began showing a step (#818): the start of the long task that committed it, else its
+ * commit time. The store's GO timer fires on time and dispatches GO; the seat view then renders the
+ * running race in that same task, which on a loaded machine running `next dev` takes up to ~250 ms, so
+ * the stamp's commit time measured the page's render, not the countdown. A step fired at the wrong
+ * instant moves its task's start just as much, so the server-instant checks still catch it. The 1 ms
+ * margin covers `Date.now()`'s whole milliseconds against the timeline's fractional ones.
+ */
+const begunAt = (log: Log, t: number) =>
+  log.tasks.find((task) => task.start - 1 <= t && t <= task.end + 1)?.start ?? t;
 
 /** The steps a page showed on one path, in order (the recorder logs changes only). */
 const stepsOn = (log: Log, path: string) => log.steps.filter((s) => s.path === path);
@@ -226,6 +293,11 @@ test.describe("#214 countdown and GO stamp", () => {
     opened.push(guest.context);
     await expect(start(page)).toBeEnabled();
     await warm(page, lobbyId);
+    for (const p of [page, guest.page]) await seatViewReady(p.context(), lobbyId);
+    // both lobbies still hold their desks after the warm-up
+    for (const p of [page, guest.page]) {
+      await expect(roll(p).getByRole("listitem")).toHaveCount(2);
+    }
 
     const clickedAt = Date.now();
     await start(page).click();
@@ -234,12 +306,15 @@ test.describe("#214 countdown and GO stamp", () => {
     const raceId = raceIdIn(hostFrames)!;
     expect(raceId).toMatch(UUID);
     expect(raceId).not.toBe(lobbyId);
-    expect(raceIdIn(guestFrames)).toBe(raceId);
+    // the guest's countdown frame lands on its own socket, a moment after the host's
+    await expect.poll(() => raceIdIn(guestFrames)).toBe(raceId);
 
     for (const p of [page, guest.page]) {
       await expect(p).toHaveURL(new RegExp(`/race/${raceId}$`));
       await expect(p.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
-      await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
+      await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", {
+        timeout: scaled(10_000),
+      });
     }
     // one second after GO on both pages, then read what they saw
     await page.waitForTimeout(1_000);
@@ -285,7 +360,8 @@ test.describe("#214 countdown and GO stamp", () => {
   }) => {
     const room = await hostRoom(browser);
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.addInitScript(recorder);
+    const frames: Frame[] = [];
+    await prepare(page, frames);
     await page.goto(`/race/${room.lobbyId}`);
     await expect(
       page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
@@ -295,8 +371,10 @@ test.describe("#214 countdown and GO stamp", () => {
 
     await start(room.host).click();
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "countdown");
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
-    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: 5_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
+    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: scaled(5_000) });
 
     const log = await logOf(page);
     const path = `/race/${room.lobbyId}`;
@@ -312,14 +390,39 @@ test.describe("#214 countdown and GO stamp", () => {
       expect(digit.anim).toMatch(/fcSlam$/);
       expect(digit.dur).toBe("0.35s");
     }
-    // one second apart on the server clock
+    // One second apart on the server clock (#723). The server sets GO (`t0`) 3 s after its START and
+    // only then sends the countdown; the page shows its 3 once the frame arrived and the seat view
+    // rendered the new race (a long task of up to ~200 ms on a loaded dev machine). The 3 therefore
+    // lasts one second less that delay, by design (the server owns GO, every desk starts together):
+    // the old 3-2 gap on the page's clock measured delivery and render, not the countdown, and fell
+    // below 850 ms. Each later step is checked on the page's corrected clock (local time + the offset
+    // of the pong with the shortest round trip, as the binder computes it, #643) against `t0`.
+    const countdownAt = frames.find((f) => f.payload.startsWith('42["countdown"'))!;
+    const t0 = Number(/"t0":(\d+)/.exec(countdownAt.payload)![1]);
+    const offset = pageOffset(frames);
+    // each step's instant is when its task began (`begunAt`, #818), not when its render ended
+    const at = (s: Step) => begunAt(log, s.t);
+    const onServer = (s: Step) => at(s) + offset;
+    for (const [s, at] of [
+      [two, t0 - 2_000],
+      [one, t0 - 1_000],
+      [go, t0],
+    ] as const) {
+      expect(Math.abs(onServer(s) - at), `${s.step} at its server instant`).toBeLessThanOrEqual(
+        150,
+      );
+    }
+    // the 3 never shows before the server's start, and only after the countdown reached the page
+    expect(onServer(three)).toBeGreaterThanOrEqual(t0 - COUNTDOWN_MS - 150);
+    expect(three.t).toBeGreaterThanOrEqual(countdownAt.t - 150);
     for (const [a, b] of [
       [three, two],
       [two, one],
       [one, go],
     ] as const) {
-      expect(b.t - a.t).toBeGreaterThanOrEqual(850);
-      expect(b.t - a.t).toBeLessThanOrEqual(1_150);
+      // 3-2 is one second less the countdown's delivery, never more than one second
+      if (a !== three) expect(at(b) - at(a)).toBeGreaterThanOrEqual(850);
+      expect(at(b) - at(a)).toBeLessThanOrEqual(1_150);
     }
     // GO: the red stamp, НАЧАЛИ · GO, a fixed -6 degrees, slamming, gone 1.2 s after GO
     expect(go.text).toBe("НАЧАЛИ · GO");
@@ -328,13 +431,13 @@ test.describe("#214 countdown and GO stamp", () => {
     expect(go.angle).toBe("-6");
     expect(go.fontSize).toBe("56px");
     expect(go.anim).toMatch(/fcSlam$/);
-    expect(gone.t - go.t).toBeGreaterThanOrEqual(GO_STAMP_MS - 150);
-    expect(gone.t - go.t).toBeLessThanOrEqual(GO_STAMP_MS + 150);
-    // GO is the instant the phase turns running
+    expect(at(gone) - at(go)).toBeGreaterThanOrEqual(GO_STAMP_MS - 150);
+    expect(at(gone) - at(go)).toBeLessThanOrEqual(GO_STAMP_MS + 150);
+    // GO is the instant the phase turns running (the same commit: both read at their commit time)
     const runningAt = log.phases.find((e) => e.path === path && e.phase === "running")!.t;
     expect(Math.abs(go.t - runningAt)).toBeLessThanOrEqual(150);
     // the whole countdown fits the server's 3 s (the offset from the welcome is off by the latency)
-    expect(go.t - three.t).toBeLessThanOrEqual(COUNTDOWN_MS + 150);
+    expect(at(go) - at(three)).toBeLessThanOrEqual(COUNTDOWN_MS + 150);
 
     // centred over the scene area: on the typing surface's axis, between the strip and the sheet,
     // and the overlay never covers either
@@ -352,8 +455,8 @@ test.describe("#214 countdown and GO stamp", () => {
       expect(disjoint(s.overlay!, s.sheet!), `${s.step} overlay vs sheet`).toBe(true);
     }
 
-    // C5: one polite status region says 3, 2, 1, GO
-    const said = log.said.filter((e) => e.path === path && e.text);
+    // C5: one polite status region says 3, 2, 1, GO (then your place, #242)
+    const said = log.said.filter((e) => e.path === path && e.text).slice(0, 4);
     expect(said.map((e) => e.text)).toEqual(["3", "2", "1", "GO"]);
     for (const e of said) {
       expect(e.role).toBe("status");
@@ -378,8 +481,10 @@ test.describe("#214 countdown and GO stamp", () => {
     await warm(room.host, room.lobbyId);
 
     await start(room.host).click();
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", { timeout: 10_000 });
-    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: 5_000 });
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
+    await expect(page.locator("[data-countdown]")).toHaveCount(0, { timeout: scaled(5_000) });
 
     const log = await logOf(page);
     const path = `/race/${room.lobbyId}`;
@@ -391,11 +496,12 @@ test.describe("#214 countdown and GO stamp", () => {
       expect(disjoint(s.overlay!, s.sheet!), `${s.step} overlay vs sheet`).toBe(true);
     }
     expect(steps[3]!.angle).toBe("-6");
-    expect(log.said.filter((e) => e.path === path && e.text).map((e) => e.text)).toEqual([
-      "3",
-      "2",
-      "1",
-      "GO",
-    ]);
+    // then your place (#242)
+    expect(
+      log.said
+        .filter((e) => e.path === path && e.text)
+        .map((e) => e.text)
+        .slice(0, 4),
+    ).toEqual(["3", "2", "1", "GO"]);
   });
 });

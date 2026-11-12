@@ -35,6 +35,9 @@ export type ConnectSeatOptions = {
  * room's socket parked for this lobby (#214 C2: the desk is never line-cut in the handover). Returns the
  * cleanup: a mint still in flight never opens a socket (StrictMode mounts twice in dev); after
  * connecting it unbinds and closes (a parked socket is left to the next mount or its own timeout).
+ * A handshake refused `bad-token` (#235 C6: the 300 s token expired before a reconnect or a reload)
+ * mints once more and reconnects the same socket with the new token and the stored key; the store sees
+ * `reconnecting`. A second refusal before the next `welcome`, or a refused mint, is final.
  */
 export function connectSeat({
   code,
@@ -49,21 +52,47 @@ export function connectSeat({
   let unbind = () => {};
   // The last key a `welcome` issued, for reconnects when sessionStorage is blocked (#656).
   let issued: string | null = null;
+  // The token of the next handshake, and whether it was re-minted since the last `welcome` (#235 C6).
+  let token = "";
+  let reminted = false;
+  const tokenError = (error: "not-found" | "closed" | "rate-limited") =>
+    // A throttled mint (#207) is the generic error, as a failed load is.
+    dispatch({ type: "token-error", error: error === "rate-limited" ? "generic" : error });
+  const remint = () => {
+    reminted = true;
+    mint({ code }).then(
+      (again) => {
+        if (aborted) return;
+        if (!again.ok) return tokenError(again.error);
+        token = again.token;
+        socket?.reconnect();
+      },
+      () => {
+        if (!aborted) dispatch({ type: "token-error", error: "generic" });
+      },
+    );
+  };
+  // the store's events, with an expired token turned into one re-mint
+  const seatDispatch = (event: RaceEvent) => {
+    if (event.type === "connect-error" && event.reason === "bad-token" && !reminted) {
+      remint();
+      return dispatch({ type: "reconnecting" });
+    }
+    dispatch(event);
+  };
   Promise.all([mint({ code }), load()]).then(
     ([result, socketModule]) => {
       if (aborted) return;
-      if (!result.ok) {
-        // A throttled mint (#207) is the generic error, as a failed load is.
-        const error = result.error === "rate-limited" ? "generic" : result.error;
-        return dispatch({ type: "token-error", error });
-      }
-      socket = socketModule.connectToRoom(result.url, result.token, {
+      if (!result.ok) return tokenError(result.error);
+      token = result.token;
+      socket = socketModule.connectToRoom(result.url, () => token, {
         resumeKey: () => readResumeKey(lobbyId) ?? issued,
       });
       const offIssued = socket.onWelcome((welcome) => {
         if (welcome.resumeKey) issued = welcome.resumeKey;
+        reminted = false;
       });
-      const offBind = bindRaceSocket(socket, dispatch, { lobbyId });
+      const offBind = bindRaceSocket(socket, seatDispatch, { lobbyId });
       const offHandoff = socket.onWelcome(() => releaseParkedSocket(lobbyId));
       const offSocket = onSocket?.(socket) ?? (() => {});
       unbind = () => {

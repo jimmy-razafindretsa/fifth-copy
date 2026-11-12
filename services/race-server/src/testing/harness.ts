@@ -20,11 +20,20 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { createRaceServer, type RaceServer } from "../app";
+import { internalHeaders } from "../http/sign";
 import { createFakeClock, createFakeScheduler, type FakeClock, type FakeScheduler } from "../clock";
-import type { WebApi } from "../persist/web-api";
+import { WebApiStatusError, type WebApi } from "../persist/web-api";
 import type { RaceEnded } from "../rooms/lifecycle";
 import { createRedis } from "../redis/client";
-import { desksKey, membersKey, resumeIndexKey, resumeKey, roomKey, ROOMS_KEY } from "../rooms/keys";
+import {
+  blockedKey,
+  desksKey,
+  membersKey,
+  resumeIndexKey,
+  resumeKey,
+  roomKey,
+  ROOMS_KEY,
+} from "../rooms/keys";
 
 // Test-only harness for the race server's integration tests (real Redis, ARCHITECTURE testing table).
 // Fails, never skips, without Redis. Deletes only the keys of lobbies it created (shared db index).
@@ -70,10 +79,34 @@ export const ackResults: WebApi["postResults"] = async (request) => ({
  * A `WebApi` that accepts every start with `FIXTURE_TEXT` and acknowledges every results chunk;
  * `calls` records each start request, `results` each results request.
  */
+/** The web's answer to a lobby close (#734): closed now. */
+export const ackClose: WebApi["closeLobby"] = async (request) => ({
+  v: PROTOCOL_VERSION,
+  lobbyId: request.lobbyId,
+  changed: true,
+});
+
+/** The web's answer to a host transfer record (#137): written now. */
+export const ackHost: WebApi["setLobbyHost"] = async (request) => ({
+  v: PROTOCOL_VERSION,
+  lobbyId: request.lobbyId,
+  changed: true,
+});
+
 export function fixtureWebApi(clock: { now(): number }) {
   const calls: Parameters<WebApi["startRace"]>[0][] = [];
   const results: Parameters<WebApi["postResults"]>[0][] = [];
+  const closes: Parameters<WebApi["closeLobby"]>[0][] = [];
+  const hosts: Parameters<WebApi["setLobbyHost"]>[0][] = [];
   const api: WebApi = {
+    setLobbyHost: async (request) => {
+      hosts.push(request);
+      return ackHost(request);
+    },
+    closeLobby: async (request) => {
+      closes.push(request);
+      return ackClose(request);
+    },
     postResults: (request) => {
       results.push(request);
       return ackResults(request);
@@ -89,7 +122,39 @@ export function fixtureWebApi(clock: { now(): number }) {
       };
     },
   };
-  return { api, calls, results };
+  return { api, calls, results, closes, hosts };
+}
+
+/**
+ * A web fake with the web's host check (#897; `startRace` in src/features/results): a start whose
+ * `hostUserId` is not the lobby's recorded `Lobby.hostUserId` (`host`, the opener's, until a
+ * transfer) is refused 409; `setLobbyHost` records the new host once `beforeHost` resolves (a
+ * rejection is that call's failure, e.g. a `WebApiStatusError(503)`). `logOf(lobby)` lists the
+ * lobby's host records and start calls in order (the shared test db may drain other lobbies' calls).
+ */
+export function hostCheckingWebApi(clock: { now(): number }, host = HOST_SUB) {
+  const web = fixtureWebApi(clock);
+  const hosts = new Map<string, string>();
+  const log: { lobbyId: string; line: string }[] = [];
+  const state = { beforeHost: async (): Promise<void> => {} };
+  const api: WebApi = {
+    ...web.api,
+    setLobbyHost: async (request) => {
+      await state.beforeHost();
+      hosts.set(request.lobbyId, request.hostUserId);
+      log.push({ lobbyId: request.lobbyId, line: `host ${request.hostUserId}` });
+      return web.api.setLobbyHost(request);
+    },
+    startRace: async (request) => {
+      log.push({ lobbyId: request.lobbyId, line: `start ${request.hostUserId}` });
+      if (request.hostUserId !== (hosts.get(request.lobbyId) ?? host)) {
+        throw new WebApiStatusError(409);
+      }
+      return web.api.startRace(request);
+    },
+  };
+  const logOf = (lobbyId: string) => log.filter((l) => l.lobbyId === lobbyId).map((l) => l.line);
+  return { ...web, api, state, logOf };
 }
 
 export type Booted = {
@@ -207,6 +272,7 @@ export async function boot(
         membersKey(id),
         desksKey(id),
         resumeIndexKey(id),
+        blockedKey(id),
       ]);
       for (const id of lobbies) {
         // KEYS takes and returns full names: ioredis does not prefix a pattern.
@@ -258,6 +324,27 @@ export function connectError(client: Client): Promise<string> {
  */
 export const WAIT_MS = 10_000;
 
+/**
+ * Files a room's visibility over the signed `POST /internal/rooms/type` (#815), as the web's
+ * `setLobbyType` does; resolves with the parsed JSON answer.
+ */
+export async function postRoomType(
+  booted: Pick<Booted, "url" | "clock">,
+  lobbyId: string,
+  lobbyType: RaceSettings["lobbyType"],
+): Promise<{ status: number; body: unknown }> {
+  const rawBody = JSON.stringify({ v: PROTOCOL_VERSION, lobbyId, lobbyType });
+  const res = await fetch(`${booted.url}/internal/rooms/type`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...internalHeaders({ rawBody, secret: SECRET, nowMs: booted.clock.now() }),
+    },
+    body: rawBody,
+  });
+  return { status: res.status, body: await res.json() };
+}
+
 /** Polls `check` every 20 ms until it is true or `ms` elapses. */
 export async function until(
   check: () => boolean,
@@ -281,6 +368,8 @@ export function textWebApi(
 ): WebApi {
   return {
     postResults,
+    closeLobby: ackClose,
+    setLobbyHost: ackHost,
     startRace: async (request) => ({
       v: PROTOCOL_VERSION,
       raceId: request.raceId,

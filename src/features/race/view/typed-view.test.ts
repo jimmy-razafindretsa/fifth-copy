@@ -1,7 +1,18 @@
-import { applyKeystroke, initialState, type EngineSettings } from "@fifth-copy/engine";
+import {
+  applyKeystroke,
+  effectiveText,
+  initialState,
+  type EngineSettings,
+} from "@fifth-copy/engine";
 import { describe, expect, it } from "vitest";
 import { createPrediction } from "../client/prediction";
-import { type TypedView, typedViewFixtures, typedViewFrom } from "./typed-view";
+import {
+  NO_TEXT_VIEW,
+  surfacePhase,
+  type TypedView,
+  typedViewFixtures,
+  typedViewFrom,
+} from "./typed-view";
 
 // Contract of #558 C1: the TypedView shape and its static fixtures (no logic: #559 derives views).
 const NAMES = ["before-start", "racing", "continue-wrong", "block-jammed", "finished"] as const;
@@ -179,5 +190,72 @@ describe("typedViewFrom with the prediction's marks (#220 C1)", () => {
     const back = jammed.push({ t: 180, key: "Backspace" });
     expect(view(back)).toMatchObject({ cursor: 0, jammed: false, lastTypedAt: null });
     expect(view(back.push({ t: 220, key: "L" }))).toMatchObject({ cursor: 1, lastTypedAt: 220 });
+  });
+});
+
+// Contract of #236 C2: the view renders the effective text (`effectiveText(base, overlay)` from the
+// engine): added words read `remaining`, removed words vanish without moving the `done` spans; a pending
+// `blurUntil` sets `blurred` (the strip and the sheet carry it as `data-blur`).
+describe("typedViewFrom with the bonus effects (#236 C2)", () => {
+  const BASE = "one two three four five six";
+  const CONTINUE: EngineSettings = { errorMode: "continue", backspace: true };
+  const typeOn = (text: string, keys: string) =>
+    Array.from(keys).reduce(
+      (s, key, i) => applyKeystroke(s, { t: 100 + i * 40, key }, text, CONTINUE),
+      initialState(),
+    );
+  const spans = (view: TypedView, state: string) =>
+    view.chars.map((c, i) => (c.state === state ? i : -1)).filter((i) => i >= 0);
+  const textOf = (view: TypedView) => view.chars.map((c) => c.ch).join("");
+
+  it("Extra Paperwork: the added words follow the text as remaining; the done spans hold", () => {
+    const s = typeOn(BASE, "one tw");
+    const before = typedViewFrom(s, BASE);
+    const text = effectiveText(BASE, { extra: ["memo", "form"], removed: [] });
+    const after = typedViewFrom(s, text);
+    expect(textOf(after)).toBe(`${BASE} memo form`);
+    expect(spans(after, "done")).toEqual(spans(before, "done"));
+    expect(after.cursor).toBe(before.cursor);
+    const added = after.chars.slice(Array.from(BASE).length);
+    expect(added.length).toBeGreaterThan(0);
+    expect(added.every((c) => c.state === "remaining")).toBe(true);
+  });
+
+  it("Exemption: removed words vanish from the remaining text; the done spans do not move", () => {
+    const s = typeOn(BASE, "one tw");
+    const before = typedViewFrom(s, BASE);
+    // words 3 and 4 ("four", "five") are exempted: beyond the cursor
+    const text = effectiveText(BASE, { extra: [], removed: [3, 4] });
+    const after = typedViewFrom(s, text);
+    expect(textOf(after)).not.toContain("four");
+    expect(textOf(after)).not.toContain("five");
+    expect(after.chars.length).toBeLessThan(before.chars.length);
+    expect(spans(after, "done")).toEqual(spans(before, "done"));
+    expect(textOf(after).slice(0, s.cursor)).toBe(BASE.slice(0, s.cursor));
+    expect(after.chars[after.cursor]).toEqual(before.chars[before.cursor]);
+  });
+
+  it("Smoke Break: blurred while blurUntil > now, absent once it passed or without one", () => {
+    const s = typeOn(BASE, "on");
+    expect(typedViewFrom(s, BASE).blurred).toBeUndefined();
+    expect(typedViewFrom(s, BASE, { blurUntil: 5_000, now: 4_999 }).blurred).toBe(true);
+    expect(typedViewFrom(s, BASE, { blurUntil: 5_000, now: 5_000 }).blurred).toBeUndefined();
+    expect(typedViewFrom(s, BASE, { blurUntil: null, now: 0 }).blurred).toBeUndefined();
+    // the store's form: a pending blurUntil, cleared by its watcher when it passes
+    expect(typedViewFrom(s, BASE, { blurUntil: 5_000 }).blurred).toBe(true);
+    // the blur changes nothing else of the view
+    const blurred = typedViewFrom(s, BASE, { blurUntil: 5_000 });
+    expect({ ...blurred, blurred: undefined }).toEqual(typedViewFrom(s, BASE));
+  });
+});
+
+describe("surfacePhase (#215)", () => {
+  it("reads before, racing and finished off the view", () => {
+    expect(surfacePhase(NO_TEXT_VIEW)).toBe("before");
+    expect(surfacePhase(typedViewFixtures["before-start"])).toBe("before");
+    expect(surfacePhase(typedViewFixtures.racing)).toBe("racing");
+    expect(surfacePhase(typedViewFixtures["continue-wrong"])).toBe("racing");
+    expect(surfacePhase(typedViewFixtures["block-jammed"])).toBe("racing");
+    expect(surfacePhase(typedViewFixtures.finished)).toBe("finished");
   });
 });

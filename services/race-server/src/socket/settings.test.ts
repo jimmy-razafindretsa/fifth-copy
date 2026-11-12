@@ -6,6 +6,7 @@ import {
   type RaceSettings,
 } from "@fifth-copy/protocol";
 import { membersKey, roomKey } from "../rooms/keys";
+import { SOCKET_LIMITS } from "./rate-limit";
 import {
   boot,
   connectRedis,
@@ -212,5 +213,31 @@ describe("host:settings refusals (C2)", () => {
       ok: true,
       settings: { ...DEFAULT_RACE_SETTINGS, timerS: 90 },
     });
+  });
+});
+
+describe("host:settings over the budget (#750 C2)", () => {
+  it("answers `rate-limited` at once: nothing applied, nothing broadcast, the host stays seated", async () => {
+    const { host, seenPlayer } = await room();
+    const max = SOCKET_LIMITS["host:settings"].max;
+    for (let i = 0; i < max; i++) {
+      expect(await send(host, { v: PROTOCOL_VERSION, patch: { wordCount: 10 + i } })).toMatchObject(
+        {
+          ok: true,
+        },
+      );
+    }
+    await until(() => seenPlayer.settings.length === max, 2_000, "every change broadcast");
+    const started = Date.now();
+    expect(await send(host, { v: PROTOCOL_VERSION, patch: { wordCount: 400 } })).toEqual({
+      ok: false,
+      error: "rate-limited",
+    });
+    // Answered by the guard, well before the client's 5 s timeout.
+    expect(Date.now() - started).toBeLessThan(1_000);
+    await settle();
+    expect(seenPlayer.settings).toHaveLength(max);
+    expect(seenPlayer.settings.at(-1)!.wordCount).toBe(10 + max - 1);
+    expect(host.connected).toBe(true);
   });
 });

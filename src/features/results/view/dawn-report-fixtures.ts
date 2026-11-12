@@ -5,6 +5,10 @@
  */
 import { OUTFIT_CATALOGUE, outfitForDesk, type Outfit } from "@/features/identity";
 import type { DawnReport, ReportEntry, ReportRace } from "./dawn-report";
+import type { PersonalStats } from "./personal";
+import type { RaceSeries } from "./series";
+import type { MissedKey } from "./keys";
+import { coachingFrom, type Coaching } from "./tip";
 
 /** A saved outfit (the viewer's desk 12 in the six-desk race): ids from bible 10.1's catalogue. */
 export const SAVED_OUTFIT: Outfit = {
@@ -63,18 +67,130 @@ const race = (id: string): ReportRace => ({
   endedAt: new Date("2026-10-08T08:14:00Z"),
   endReason: "ALL_FINISHED",
   lobbyCode: "KGB-4821",
+  lobbyOpen: true,
 });
 
 const report = (
   id: string,
   entries: ReportEntry[],
   viewerDesk: number | null = null,
+  personal: PersonalStats | null = null,
 ): Extract<DawnReport, { kind: "report" }> => ({
   kind: "report",
   race: race(id),
   entries,
   viewerDesk,
+  personal,
 });
+
+/**
+ * `/design#results-personal` and the tests (#864 C4): the personal card's states, each the row of one
+ * desk of `SIX`: desk 12 populated (bonuses both ways) and with no bonuses, desk 9 timed out, desk 2
+ * under review.
+ */
+export const personalFixtures = {
+  populated: {
+    desk: 12,
+    place: 3,
+    wpm: 47.8,
+    accuracy: 0.92,
+    status: "FINISHED",
+    suspicious: false,
+    bonuses: {
+      sent: [
+        { kind: "extra-paperwork", count: 2 },
+        { kind: "smoke-break", count: 1 },
+      ],
+      received: [{ kind: "extra-paperwork", count: 1 }],
+    },
+  },
+  "no-bonuses": {
+    desk: 12,
+    place: 3,
+    wpm: 47.8,
+    accuracy: 0.92,
+    status: "FINISHED",
+    suspicious: false,
+    bonuses: { sent: [], received: [] },
+  },
+  unfinished: {
+    desk: 9,
+    place: 5,
+    wpm: 31,
+    accuracy: 0.97,
+    status: "TIMED_OUT",
+    suspicious: false,
+    bonuses: { sent: [{ kind: "exemption", count: 1 }], received: [] },
+  },
+  "under-review": {
+    desk: 2,
+    place: 6,
+    wpm: 29.5,
+    accuracy: 0.97,
+    status: "FINISHED",
+    suspicious: true,
+    bonuses: { sent: [], received: [{ kind: "smoke-break", count: 2 }] },
+  },
+} satisfies Record<string, PersonalStats>;
+
+export type PersonalFixture = keyof typeof personalFixtures;
+
+/** Clean WPM every 4 s of a 48 s race (desk 12 of `SIX`): a quick start, a dip after the hit at 30 s. */
+const DESK_12_WPM = [31.5, 42.8, 47.2, 50.1, 51.4, 52.6, 52.2, 47.9, 45.6, 46.4, 47.1, 47.8];
+const desk12Points = DESK_12_WPM.map((wpm, i) => ({ t: (i + 1) * 4_000, wpm }));
+
+/**
+ * `/design#results-personal` (#865 C5): the WPM graph's states on the populated card (desk 12, hit once
+ * by an extra paperwork at 30 s, as its `RECEIVED` row says), with no mark (the no-bonuses card), and no
+ * trace on file (the timed-out card: a purged trace).
+ */
+export const raceSeriesFixtures = {
+  marks: {
+    points: desk12Points,
+    marks: [{ t: 30_000, kind: "extra-paperwork" }],
+    endMs: 48_000,
+  },
+  "no-marks": { points: desk12Points, marks: [], endMs: 48_000 },
+  "no-trace": null,
+} satisfies Record<string, RaceSeries | null>;
+
+export type RaceSeriesFixture = keyof typeof raceSeriesFixtures;
+
+/** One specimen of the errors by key and the tip (#867 C5): the card it sits on and its coaching. */
+export type CoachingFixtureData = { stats: PersonalStats; coaching: Coaching };
+
+const coached = (stats: PersonalStats, missed: MissedKey[] | null): CoachingFixtureData => ({
+  stats,
+  coaching: coachingFrom({ accuracy: stats.accuracy, missed }),
+});
+
+/**
+ * `/design#results-personal-keys` (#867 C5): the keys listed (with a space, the `key` tip), a special
+ * key (the `special` tip and its guide link), no error (`NONE`, the `clean` tip), a few misses (the
+ * `steady` tip), and no trace on file with a low accuracy (the `accuracy` tip from the accuracy alone).
+ */
+export const coachingFixtures = {
+  key: coached(personalFixtures.populated, [
+    { char: "t", count: 4 },
+    { char: " ", count: 3 },
+    { char: "é", count: 2 },
+    { char: "a", count: 1 },
+    { char: "r", count: 1 },
+  ]),
+  special: coached(personalFixtures["no-bonuses"], [
+    { char: "é", count: 3 },
+    { char: "«", count: 2 },
+    { char: "e", count: 1 },
+  ]),
+  clean: coached({ ...personalFixtures["no-bonuses"], accuracy: 1 }, []),
+  steady: coached(personalFixtures["no-bonuses"], [
+    { char: "s", count: 2 },
+    { char: "o", count: 1 },
+  ]),
+  "no-trace": coached({ ...personalFixtures.unfinished, accuracy: 0.86 }, null),
+} satisfies Record<string, CoachingFixtureData>;
+
+export type CoachingFixture = keyof typeof coachingFixtures;
 
 /** `/design#results` and the tests: one fixture per podium state (C6). */
 export const dawnReportFixtures = {
@@ -93,7 +209,7 @@ export const dawnReportFixtures = {
     entry({ desk: 3, name: "Typist Bot 2", isBot: true, place: 2, wpm: 54.2, accuracy: 0.95 }),
     entry({ desk: 12, name: "Heron-302", place: 3, wpm: 47.8, accuracy: 0.92 }),
   ]),
-  viewer: report("0b1e8a52-77a4-4f0e-9d3b-2c8f5e6a1d44", SIX, 12),
+  viewer: report("0b1e8a52-77a4-4f0e-9d3b-2c8f5e6a1d44", SIX, 12, personalFixtures.populated),
   /** `/design#results-ranking` (#301 C5): six rows, one per status, a bot, a suspicious row, the viewer 3rd. */
   ranking: report(
     "5d0c7a9e-2f41-4b8a-9e63-1c7d2b4f8a10",

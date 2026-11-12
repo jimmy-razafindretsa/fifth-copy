@@ -127,7 +127,7 @@ describe("RaceCard lanes (#560 C2)", () => {
     expect([...shapes].sort()).toEqual(["circle", "diamond", "square", "triangle"]);
   });
 
-  it("shows the status label for line-cut, asleep, abandoned and finished, none while typing", () => {
+  it("shows the status label for line-cut, expired, asleep, abandoned and finished, none while typing", () => {
     const out = lanes(html(<RaceCard view={F["six-statuses"]} labels={EN} />));
     const statusOf = (body: string) => /data-status-label="[\w-]+"[^>]*>([^<]*)</.exec(body)?.[1];
     const byStatus = Object.fromEntries(
@@ -136,13 +136,13 @@ describe("RaceCard lanes (#560 C2)", () => {
     expect(byStatus).toEqual({
       finished1: "FILED",
       "line-cut2": "LINE CUT",
-      typing3: undefined,
+      expired3: "EXPIRED",
       typing5: undefined,
       asleep4: "ASLEEP AT DESK",
       abandoned6: "REASSIGNED",
     });
     const fr = html(<RaceCard view={F["six-statuses"]} labels={FR} />);
-    for (const label of ["CLASSÉ", "LIGNE COUPÉE", "ENDORMI AU BUREAU", "RÉAFFECTÉ"]) {
+    for (const label of ["CLASSÉ", "LIGNE COUPÉE", "EXPIRÉ", "ENDORMI AU BUREAU", "RÉAFFECTÉ"]) {
       expect(fr).toContain(label);
     }
   });
@@ -176,7 +176,7 @@ describe("RaceCard lanes (#560 C2)", () => {
     expect(out[1]!.attrs).toContain(
       'aria-label="Place 2, Badger-374, desk 02, 71% typed, LINE CUT"',
     );
-    expect(out[2]!.attrs).toContain('aria-label="Place 3, Heron-511, desk 03, 58% typed"');
+    expect(out[2]!.attrs).toContain('aria-label="Place 3, Heron-511, desk 03, 58% typed, EXPIRED"');
     expect(out[3]!.attrs).toContain('aria-label="Place 4, Lynx-785, YOU, desk 05, 52% typed"');
     view.lanes.forEach((lane, i) => {
       expect(out[i]!.body).toMatch(new RegExp(`data-rider[^>]*--_p:${lane.progress}`));
@@ -184,23 +184,27 @@ describe("RaceCard lanes (#560 C2)", () => {
   });
 });
 
-describe("RaceCard compact (#560 C3)", () => {
-  it("hides the names and keeps markers, desk numbers and the field line", () => {
+describe("RaceCard compact (#560 C3, #792)", () => {
+  it("keeps the names (#792), markers, desk numbers and the field line", () => {
     const view = F["thirty-mid-field"];
     const full = html(<RaceCard view={view} labels={EN} />);
     const compact = html(<RaceCard view={view} labels={EN} compact />);
     expect(compact).toMatch(/^<section[^>]*data-compact="true"/);
     expect(full).not.toContain("data-compact");
     for (const lane of lanes(compact)) {
-      // names stay for assistive tech in the lane's label, never as visible text
-      expect(lane.body).not.toMatch(/data-name/);
+      // #792: a 10-character name fits the compact main column, so names show there too
+      expect(lane.body).toMatch(/data-name/);
       expect(lane.body).toMatch(/<svg[^>]*data-marker=/);
       expect(lane.body).toMatch(/DESK \d\d/);
     }
     for (const lane of lanes(full)) expect(lane.body).toMatch(/data-name/);
     expect(tags(compact, "data-tick")).toHaveLength(view.field.length);
     expect(tags(compact, "data-finish")).toHaveLength(1);
-    expect(rule('[data-compact="true"] .lane')).toMatch(/grid-template-columns:/);
+    // compact and full lanes share the 80px | 1fr rows since #758 (bible 7.4a)
+    expect(rule(".lane")).toMatch(/grid-template-columns:\s*80px minmax\(0, 1fr\)/);
+    // #792: the name keeps 10ch (a monospace 10-character name) before it gives way; the tag and the label wrap under it instead
+    expect(rule(".name")).toMatch(/flex:\s*1 0 min\(10ch, 100%\)/);
+    expect(rule(".line")).toMatch(/flex-wrap:\s*wrap/);
   });
 });
 

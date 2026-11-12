@@ -18,11 +18,17 @@ describe("lobby.module.css lkPulse (#639 C1)", () => {
     expect(opacities).toEqual([0.75]);
   });
 
-  it("keeps the notice on lkPulse 1.3s and still under reduced motion", () => {
-    expect(css).toMatch(/\.notice \{[^}]*animation: lkPulse 1\.3s ease-in-out infinite;/);
+  it("keeps the pulsing notice (.pulse) on lkPulse 1.3s and still under reduced motion", () => {
+    expect(css).toMatch(/\.pulse \{[^}]*animation: lkPulse 1\.3s ease-in-out infinite;/);
     expect(css).toMatch(
-      /@media \(prefers-reduced-motion: reduce\) \{\s*\.notice \{\s*animation: none;/,
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.pulse \{\s*animation: none;/,
     );
-    expect(css).toMatch(/\[data-motion="reduce"\] \.notice \{\s*animation: none;/);
+    expect(css).toMatch(/\[data-motion="reduce"\] \.pulse \{\s*animation: none;/);
+  });
+
+  // #105: the notice row itself is a statement (WAITING FOR THE HOST) and never pulses
+  it("the plain .notice carries no animation", () => {
+    expect(css).toMatch(/\.notice \{[^}]*\}/);
+    expect(/\.notice \{([^}]*)\}/.exec(css)![1]).not.toContain("animation");
   });
 });

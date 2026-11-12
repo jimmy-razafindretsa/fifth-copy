@@ -4,11 +4,15 @@ export { getViewer, requireViewer, UnauthenticatedError, type Viewer } from "@/s
 export { ensureGuest } from "./actions/ensure-guest";
 export { uploadAvatar, type UploadAvatarResult } from "./actions/upload-avatar";
 export { importOauthAvatar, type ImportOauthAvatarResult } from "./avatars/import-oauth-avatar";
-export { readAvatarFile } from "./queries/avatar-file";
+export { readAvatarFile, type SharesLobby } from "./queries/avatar-file";
 export { avatarStore } from "./avatars/default-store";
 export type { AvatarStore, AvatarSize } from "./avatars/store";
 export type { AvatarErrorCode } from "./avatars/errors";
 export { avatarNotice } from "./avatars/moderation/notice";
+// One avatar everywhere (#60): the stored picture or the stamped portrait, and the viewer's version.
+export { Avatar, avatarSrc, type AvatarUser, type AvatarDisplaySize } from "./avatars/avatar";
+export { DefaultPortrait, portraitVariant } from "./avatars/default-portrait";
+export { getAvatarUser } from "./queries/avatar-user";
 export { avatarQuery, normalizeUsername } from "./schema";
 // The keyboard layouts (R179, #224): pure data the race machine, the settings picker (#66) and the heatmap read.
 export { keyboardLayoutIds, layouts, type KeyboardLayoutId } from "./keyboard/layouts";
@@ -28,3 +32,63 @@ export {
   type SaveClerkOutfitResult,
 } from "./actions/save-clerk-outfit";
 export { getClerkOutfit } from "./queries/clerk-outfit";
+// The guest merge (ADR 0009, #56): one transaction, then the guest row is deleted. Features that
+// store per-user rows register a step; merge/coverage.test.ts fails when one is missing.
+export { mergeGuestInto, type MergeCounts } from "./merge/merge-guest";
+export {
+  registerMergeStep,
+  type MergeContext,
+  type MergeStep,
+  type MergeTx,
+} from "./merge/registry";
+export { MergeGuestError } from "./merge/steps";
+// The teacher password reset (#788): the host issues a single-use code; the redeem (R2) and the host
+// control (R3) share the code helpers.
+export { issuePasswordReset, type IssuePasswordResetResult } from "./actions/issue-password-reset";
+export { formatResetCode, normalizeResetCode, RESET_CODE_TTL_MS } from "./password-reset/code";
+// The host control (#790): whether the viewer may issue codes in a lobby (the docket's render gate).
+export { canIssueResetIn } from "./queries/reset-eligibility";
+// The merge stamp (#57): merge callers leave the flash with `flashMerge(counts)`; the root layout mounts
+// `MergeStamp`, which shows it once.
+export { flashMerge } from "./merge/flash";
+export { MergeStamp } from "./components/merge-stamp";
+// Sign-up, sign-in and sign-out (#36): the actions, the two screens and the header account control.
+export { signUp, signUpAction } from "./actions/sign-up";
+export { signIn, signInAction } from "./actions/sign-in";
+export { signOut } from "./actions/sign-out";
+export type { AuthFormState } from "./actions/auth-form-state";
+export { AuthScreen, AUTH_LINKS, type AuthMode } from "./components/auth-screen";
+export {
+  AccountControl,
+  type AccountClasses,
+  type AccountLabels,
+} from "./components/account-control";
+export { safeCallbackUrl } from "./auth/callback-url";
+export { AuthStates } from "./components/auth-states";
+// The teacher reset, redeemed (#789): the action and the `/reset` screen and its `/design` states.
+export { redeemPasswordReset, redeemPasswordResetAction } from "./actions/redeem-password-reset";
+export type { ResetFormState } from "./actions/reset-form-state";
+export { ResetScreen } from "./components/reset-screen";
+export { ResetStates } from "./components/reset-states";
+// The one-time recovery code (#46, ADR 0009): issued at sign-up, revealed once, redeemed on `/recover`.
+export { issueRecoveryCode } from "./actions/issue-recovery-code";
+export { redeemRecoveryCode, redeemRecoveryCodeAction } from "./actions/redeem-recovery-code";
+export { takeReveal as takeRecoveryReveal } from "./recovery/reveal";
+export { RecoverScreen } from "./components/recover-screen";
+export { RecoveryRevealScreen } from "./components/recovery-reveal-screen";
+export { RecoverStates } from "./components/recover-states";
+// The viewer's settings (#66): the read, the save and the shape the settings screen and the header
+// toggles (#373) share; the screen itself and its `/design` states.
+export { getPreferences } from "./queries/get-preferences";
+export {
+  updatePreferences,
+  type UpdatePreferences,
+  type UpdatePreferencesResult,
+} from "./actions/update-preferences";
+export type { PreferenceMachineSkin, Preferences, PreferenceTheme } from "./schema";
+export { SettingsScreen } from "./components/settings/settings-screen";
+export { SettingsStates } from "./components/settings/settings-states";
+export type { MachineSpecimens } from "./components/settings/machine-picker";
+// The first-race keyboard prompt (#70): the lobby mounts it; `/design?dialog=layout` shows it open.
+export { FirstRaceLayoutPrompt } from "./components/first-race-layout-prompt";
+export { LayoutPrompt, LAYOUT_PROMPT_KEY } from "./components/layout-prompt";

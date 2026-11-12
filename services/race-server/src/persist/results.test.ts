@@ -388,6 +388,46 @@ describe("results at race end over the wire (C1)", () => {
   });
 });
 
+describe("a bot's results (#366 C4)", () => {
+  it("host + Clerk bot: both finish, the race ends all-finished, the bot row has no user, its WPM, accuracy and status", async () => {
+    const posted: RaceResultsRequest[] = [];
+    const text = "le bureau ouvre";
+    const r = await startedRace(process.env.REDIS_URL, {
+      players: 1,
+      text,
+      settings: { ...DEFAULT_RACE_SETTINGS, bots: [{ level: "clerk" }] },
+      redisPrefix: `t366-results-${randomUUID()}:`,
+      rng: mulberry32(366),
+      postResults: async (request) => {
+        posted.push(request);
+        return ackResults(request);
+      },
+    });
+    booted = r.booted;
+    const [host] = r.racers;
+    typeKeys(host!.client, text, 100, 60);
+    // The bot types on the server clock: advance it in steps until the results are posted.
+    for (let i = 0; i < 120 && posted.length === 0; i++) {
+      r.booted.clock.advance(500);
+      await new Promise((done) => setTimeout(done, 5));
+    }
+    await until(() => posted.length === 1, 3_000, "results posted");
+    const request = raceResultsRequestSchema.parse(posted[0]);
+    expect(request.reason).toBe("all-finished");
+    expect(request.results).toHaveLength(2);
+    const bot = request.results.find((x) => x.desk === 2)!;
+    expect(bot).toMatchObject({ userId: null, isBot: true, status: "finished", flags: [] });
+    expect(bot.wpm).toBeGreaterThan(10);
+    expect(bot.accuracy).toBeGreaterThan(0.8);
+    expect(bot.progress).toBe(1);
+    expect(request.results.find((x) => x.desk === host!.desk)).toMatchObject({
+      userId: HOST_SUB,
+      isBot: false,
+      status: "finished",
+    });
+  });
+});
+
 // #190 C6: clean and adjusted WPM, the bonus counts and log, and the analysis on the effective text.
 describe("bonus fields of the results (#190 C6)", () => {
   it("unit: extra words typed -> clean < adjusted; counts and log from the ledger; replayed on the effective text", () => {
@@ -496,11 +536,54 @@ describe("bonus fields of the results (#190 C6)", () => {
     });
     const entry = { t: 100, kind: "extra-paperwork", from: three.desk, to: one.desk };
     expect(leader.bonusLog).toEqual([entry]);
+    // #623 C2: the overlay the server scored the leader on travels with its result.
+    expect(leader.overlay).toEqual(overlay);
     expect(sender).toMatchObject({ bonusesSent: 1, bonusesReceived: 0, bonusLog: [entry] });
+    expect(sender.overlay).toBeNull();
     expect(results.find((x) => x.desk === two.desk)).toMatchObject({
       bonusesSent: 0,
       bonusLog: [],
+      overlay: null,
     });
     expect(leader.flags.map((f) => f.code)).not.toContain("unreproducible");
+  });
+});
+
+// #623 C2: each result carries its desk's final text overlay, verbatim, or null when untouched.
+describe("the overlay of the results (#623 C2)", () => {
+  it("an overlaid desk gets its extra words and removed indexes verbatim; an untouched desk gets null", () => {
+    const extraOnly = { extra: ["quota", "ration"], removed: [] };
+    const both = { extra: ["vite"], removed: [0, 2] };
+    const empty = { extra: [], removed: [] };
+    const states = new Map<number, DeskState>([
+      [1, deskState({ overlay: extraOnly })],
+      [2, deskState({ overlay: both })],
+      [3, deskState()],
+      [4, deskState({ overlay: empty })],
+    ]);
+    const desks = [1, 2, 3, 4].map((desk) => ({
+      desk,
+      userId: `usr_${desk}`,
+      name: `Clerk ${desk}`,
+      isBot: false,
+    }));
+    const ranking = [entry(1, 1), entry(2, 2), entry(3, 3), entry(4, 4)];
+    const [request] = buildResults(ended(ranking), { ...ROOM_TEXT, desks, states });
+    const byDesk = new Map(raceResultsRequestSchema.parse(request).results.map((r) => [r.desk, r]));
+    expect(byDesk.get(1)!.overlay).toEqual(extraOnly);
+    expect(byDesk.get(2)!.overlay).toEqual(both);
+    expect(byDesk.get(3)!.overlay).toBeNull();
+    // An empty overlay object is a real (if inert) value: sent as is, never coerced to null.
+    expect(byDesk.get(4)!.overlay).toEqual(empty);
+  });
+
+  it("a desk without a recorded state (bot, or a desk the room lost) gets null", () => {
+    const desks = [{ desk: 1, userId: null, name: "Bot-1", isBot: true }];
+    const [request] = buildResults(ended([entry(1, 1, true)]), {
+      ...ROOM_TEXT,
+      desks,
+      states: new Map(),
+    });
+    expect(raceResultsRequestSchema.parse(request).results[0]!.overlay).toBeNull();
   });
 });

@@ -102,7 +102,12 @@ describe("the seat shell on the server (#561 C4)", () => {
 });
 
 describe("the status slot, phase by phase (#561 C4)", () => {
-  const labels = { loading: en.race.loading, notice: en.race.notice, errors: en.race.errors };
+  const labels = {
+    loading: en.race.loading,
+    notice: en.race.notice,
+    errors: en.race.errors,
+    presence: en.race.presence,
+  };
   const view = (phase: RacePhase, lost: RaceLostReason | null = null) =>
     decode(
       renderToStaticMarkup(
@@ -129,6 +134,8 @@ describe("the status slot, phase by phase (#561 C4)", () => {
     ["no-room", "This room is no longer open."],
     ["in-progress", "This race started without you."],
     ["not-found", "This race is not on file."],
+    // a spectator past the room's cap (#616): its own sentence (#678)
+    ["room-full", "This room has reached its spectator limit."],
     ["bad-token", "Something jammed. Try again."],
     ["version", "Something jammed. Try again."],
     ["generic", "Something jammed. Try again."],
@@ -145,6 +152,40 @@ describe("the status slot, phase by phase (#561 C4)", () => {
       expect(html).toMatch(/<a href="\/lobby\/KGB-4821"[^>]*>BACK TO THE WAITING ROOM →<\/a>/);
     },
   );
+
+  it("#235 C4 lost room: the still notice row THE ROOM WAS LOST · BACK TO THE LOBBY, linking to /lobby/[code]", () => {
+    const html = view("lost", "room-lost");
+    expect(html).toContain('data-lost="room-lost"');
+    const row = /<p role="alert" data-notice="room-lost"[^>]*>([\s\S]*?)<\/p>/.exec(html);
+    expect(row).not.toBeNull();
+    expect(row![1]!.replace(/<[^>]+>/g, "")).toBe("THE ROOM WAS LOST · BACK TO THE LOBBY");
+    expect(row![1]).toMatch(/<a href="\/lobby\/KGB-4821"[^>]*>BACK TO THE LOBBY<\/a>/);
+    // a statement, not a live state: no pulse, no RETURNED line
+    expect(row![0]).not.toMatch(/pulse/);
+    expect(html).not.toContain("RETURNED");
+    const frHtml = decode(
+      renderToStaticMarkup(
+        <RaceSeatLiveView
+          phase="lost"
+          lost="room-lost"
+          code="KGB-4821"
+          labels={{ ...labels, presence: fr.race.presence }}
+        />,
+      ),
+    );
+    expect(frHtml.replace(/<[^>]+>/g, "")).toBe("LA SALLE EST PERDUE · RETOUR AU VESTIAIRE");
+  });
+
+  it("#235 C5 race.presence in both catalogs", () => {
+    expect(en.race.presence).toEqual({
+      roomLost: "THE ROOM WAS LOST",
+      backToLobby: "BACK TO THE LOBBY",
+    });
+    expect(fr.race.presence).toEqual({
+      roomLost: "LA SALLE EST PERDUE",
+      backToLobby: "RETOUR AU VESTIAIRE",
+    });
+  });
 
   it.each(["countdown", "running", "ended"] as const)(
     "%s: the view itself renders nothing (the countdown is RaceSeatLive's, #214; #559, #240)",

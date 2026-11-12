@@ -60,6 +60,20 @@ describe("createLimiter (C1, real Redis)", () => {
     });
   });
 
+  it("clear forgets a key's calls, so the next call starts a fresh window (#789)", async () => {
+    const rule = { max: 2, windowMs: 60_000 };
+    await limiter.limit("clr", rule, T0);
+    await limiter.limit("clr", rule, T0 + 1);
+    expect((await limiter.limit("clr", rule, T0 + 2)).ok).toBe(false);
+    await limiter.limit("other-clr", rule, T0);
+    await limiter.clear("clr");
+    expect(await redis.exists(`${prefix}:rl:clr`)).toBe(0);
+    expect(await limiter.limit("clr", rule, T0 + 3)).toMatchObject({ ok: true, remaining: 1 });
+    // other keys keep their counts
+    expect(await limiter.count("other-clr", 60_000, T0 + 3)).toBe(1);
+    await expect(limiter.clear("")).rejects.toThrow(RangeError);
+  });
+
   it("refused calls do not count against the window", async () => {
     const rule = { max: 1, windowMs: 1_000 };
     expect((await limiter.limit("c", rule, T0)).ok).toBe(true);
@@ -146,6 +160,68 @@ describe("createLimiter (C1, real Redis)", () => {
     expect((await limiter.limit("peek", rule, T0 + 1_000)).ok).toBe(true);
     await expect(limiter.count("", 1_000, T0)).rejects.toThrow(RangeError);
     await expect(limiter.count("peek", 0, T0)).rejects.toThrow(RangeError);
+  });
+
+  it("admit spends the budget once per item, even for concurrent first attempts (#701)", async () => {
+    const rule = { max: 3, windowMs: 1_000 };
+    const first = await Promise.all(
+      Array.from({ length: 50 }, () => limiter.admit("adm:budget", "adm:item:a", rule, T0)),
+    );
+    expect(first.every((r) => r.ok)).toBe(true);
+    expect(await limiter.count("adm:budget", rule.windowMs, T0)).toBe(1);
+    expect(await limiter.admit("adm:budget", "adm:item:a", rule, T0 + 10)).toEqual({
+      ok: true,
+      remaining: 2,
+      retryAfterMs: 0,
+    });
+    expect(await limiter.admit("adm:budget", "adm:item:b", rule, T0 + 20)).toEqual({
+      ok: true,
+      remaining: 1,
+      retryAfterMs: 0,
+    });
+    expect((await limiter.admit("adm:budget", "adm:item:c", rule, T0 + 30)).ok).toBe(true);
+    // The budget is spent: a new item is refused, not admitted, and stays refused on retry.
+    const refused = await limiter.admit("adm:budget", "adm:item:d", rule, T0 + 40);
+    expect(refused.ok).toBe(false);
+    expect(refused.retryAfterMs).toBe(960);
+    expect(await redis.exists(`${prefix}:rl:adm:item:d`)).toBe(0);
+    expect((await limiter.admit("adm:budget", "adm:item:d", rule, T0 + 50)).ok).toBe(false);
+    // An admitted item still passes while the budget is spent.
+    expect((await limiter.admit("adm:budget", "adm:item:a", rule, T0 + 60)).ok).toBe(true);
+    expect(await limiter.count("adm:budget", rule.windowMs, T0 + 60)).toBe(3);
+    // Both keys carry a TTL <= the window.
+    for (const key of ["adm:budget", "adm:item:a"]) {
+      const ttl = await redis.pttl(`${prefix}:rl:${key}`);
+      expect(ttl).toBeGreaterThan(0);
+      expect(ttl).toBeLessThanOrEqual(rule.windowMs);
+    }
+    // Once the window slid past the admission, the item spends again (b and c are still counted).
+    expect(await limiter.admit("adm:budget", "adm:item:a", rule, T0 + 1_000)).toEqual({
+      ok: true,
+      remaining: 0,
+      retryAfterMs: 0,
+    });
+  });
+
+  it("concurrent distinct items admit exactly max (#701)", async () => {
+    const rule = { max: 20, windowMs: 1_000 };
+    const results = await Promise.all(
+      Array.from({ length: 30 }, (_, i) =>
+        limiter.admit("adm2:budget", `adm2:item:${i}`, rule, T0),
+      ),
+    );
+    expect(results.filter((r) => r.ok)).toHaveLength(20);
+    expect(await limiter.count("adm2:budget", rule.windowMs, T0)).toBe(20);
+  });
+
+  it("admit refuses empty or equal keys and a bad rule", async () => {
+    const rule = { max: 1, windowMs: 1_000 };
+    await expect(limiter.admit("", "m", rule, T0)).rejects.toThrow(RangeError);
+    await expect(limiter.admit("b", "", rule, T0)).rejects.toThrow(RangeError);
+    await expect(limiter.admit("same", "same", rule, T0)).rejects.toThrow(RangeError);
+    await expect(limiter.admit("b", "m", { max: 0, windowMs: 1_000 }, T0)).rejects.toThrow(
+      RangeError,
+    );
   });
 
   it("surfaces a Redis failure to the caller (each process picks its own policy)", async () => {

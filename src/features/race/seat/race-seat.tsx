@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import type { MintRaceToken } from "../client/connect-seat";
 import { RaceStoreProvider } from "../client/use-race-store";
-import { SabotageTray } from "../components/sabotage-tray";
+import { SabotageTrayLive } from "../components/sabotage-tray-live";
 import { SeatLayout } from "../components/seat-layout";
-import type { MachineSkinProps } from "../components/machine/skin";
+import type { MachineSkinId, MachineSkinProps } from "../components/machine/skin";
 import { TypingMachineLive } from "../components/machine/typing-machine-live";
 import { NixieCountersLive } from "../components/nixie-counters-live";
 import type { RaceSeatInfo } from "../queries/get-race-seat";
 import { RaceSeatLive } from "./race-seat-live";
+import { SeatSound, type SaveSound } from "./seat-sound";
+import { SeatFrame } from "./seat-frame";
 import { SeatAbandon, SeatKicker, SeatRaceCard, SeatSheet, SeatTelex } from "./seat-leaves";
 import type { RaceSeatLabels } from "./seat-view";
 
@@ -20,6 +22,12 @@ export type RaceSeatProps = {
   mint: MintRaceToken;
   /** The machine's keys: the viewer's keyboard layout, chosen by the route (#224, `machineRows`). */
   rows: MachineSkinProps["rows"];
+  /** The machine's look: the viewer's filed skin (#638); the teleprinter by default. */
+  skin?: MachineSkinId;
+  /** The viewer's filed `sound` (#243, `getPreferences`): false (muted) by default. */
+  sound?: boolean;
+  /** The identity feature's `updatePreferences`, passed by the route (#243): the toggle files through it. */
+  saveSound?: SaveSound;
   /** The 3D seat scene (#563): the route's client leaf, which loads race-3d lazily after the HUD. */
   scene?: ReactNode;
 };
@@ -32,7 +40,16 @@ export type RaceSeatProps = {
  * import: the race feature's index stays importable from client modules; the route reads the seat and
  * the catalog and passes the lobby's action down.
  */
-export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
+export function RaceSeat({
+  seat,
+  labels,
+  mint,
+  rows,
+  skin,
+  sound = false,
+  saveSound,
+  scene,
+}: RaceSeatProps) {
   return (
     <RaceStoreProvider>
       <SeatLayout
@@ -50,19 +67,25 @@ export function RaceSeat({ seat, labels, mint, rows, scene }: RaceSeatProps) {
               loading: labels.loading,
               notice: labels.notice,
               errors: labels.errors,
+              presence: labels.presence,
               countdown: labels.countdown,
               stamps: labels.stamps,
               announce: labels.announce,
               finish: labels.finish,
+              exit: labels.exit,
               input: labels.telex.strip,
             }}
           />
         }
         sheet={<SeatSheet />}
-        machine={<TypingMachineLive rows={rows} />}
-        tray={<SabotageTray card={null} cooldownS={0} hint={null} labels={labels.sabotageTray} />}
+        machine={<TypingMachineLive rows={rows} skin={skin} />}
+        tray={<SabotageTrayLive labels={labels.sabotageTray} />}
         abandon={<SeatAbandon labels={labels.abandon} />}
+        sound={
+          saveSound ? <SeatSound initial={sound} save={saveSound} labels={labels.sound} /> : null
+        }
         phones={labels.notice.phones}
+        frame={SeatFrame}
       />
     </RaceStoreProvider>
   );

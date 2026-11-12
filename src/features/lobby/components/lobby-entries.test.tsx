@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { en } from "@/i18n/en";
 import { createLobby } from "../actions/create-lobby";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fr } from "@/i18n/fr";
 import { joinByCode } from "../actions/join-by-code";
+import { createPracticeLobby } from "../actions/create-practice-lobby";
+import { PracticeButtonView, makePracticeAction } from "./practice-button";
 import { CreateLobbyButtonView, makeCreateAction } from "./create-lobby-button";
 import { JoinByCodeFormView, makeJoinAction } from "./join-by-code-form";
 import type { EntryError } from "./entry-errors";
@@ -10,6 +15,7 @@ import type { EntryError } from "./entry-errors";
 // Contract of #99, C4 and C7. Labels come from the catalog, never literals (C5 greps `src`).
 vi.mock("../actions/create-lobby", () => ({ createLobby: vi.fn() }));
 vi.mock("../actions/join-by-code", () => ({ joinByCode: vi.fn() }));
+vi.mock("../actions/create-practice-lobby", () => ({ createPracticeLobby: vi.fn() }));
 
 const labels = en.landing.actions;
 const errors = en.landing.errors;
@@ -36,6 +42,7 @@ const joinView = (error: EntryError | null, pending = false) =>
 beforeEach(() => {
   vi.mocked(createLobby).mockReset();
   vi.mocked(joinByCode).mockReset();
+  vi.mocked(createPracticeLobby).mockReset();
 });
 
 describe("join action (C3, C4)", () => {
@@ -140,5 +147,88 @@ describe("pending states (C7)", () => {
     expect(html).toContain(labels.createPrivateRace);
     expect(html).not.toContain("aria-busy");
     expect(html).not.toContain("disabled");
+  });
+});
+
+// Contract of #367 C2: the practice entry, the secondary recipe (7.1) under CREATE PRIVATE RACE.
+describe("practice entry (#367 C2)", () => {
+  const practice = (props: {
+    pending?: boolean;
+    error?: EntryError | null;
+    lang?: "en" | "fr";
+  }) => {
+    const m = props.lang === "fr" ? fr : en;
+    return renderToStaticMarkup(
+      <PracticeButtonView
+        pending={props.pending ?? false}
+        error={props.error ?? null}
+        labels={m.landing.entries}
+        errors={m.landing.errors}
+      />,
+    );
+  };
+
+  it("reads the catalog in both languages, idle and enabled", () => {
+    expect(en.landing.entries).toEqual({
+      practise: "PRACTISE VS BOTS",
+      practising: "OPENING YOUR DESK…",
+    });
+    expect(fr.landing.entries).toEqual({
+      practise: "S'ENTRAÎNER CONTRE LES BOTS",
+      practising: "OUVERTURE DU BUREAU…",
+    });
+    for (const lang of ["en", "fr"] as const) {
+      const html = practice({ lang });
+      expect(html).toContain(
+        (lang === "fr" ? fr : en).landing.entries.practise.replace("'", "&#x27;"),
+      );
+      expect(html).not.toContain("aria-busy");
+      expect(html).not.toContain("disabled");
+    }
+  });
+
+  it("pending reads the pending copy, aria-busy and disabled", () => {
+    const html = practice({ pending: true });
+    expect(html).toContain(en.landing.entries.practising);
+    expect(html).not.toContain(en.landing.entries.practise);
+    expect(html).toMatch(
+      /<button[^>]*disabled=""[^>]*aria-busy="true"|<button[^>]*aria-busy="true"[^>]*disabled=""/,
+    );
+  });
+
+  it("uses the secondary recipe of CREATE PRIVATE RACE, at least 44px tall", () => {
+    const create = renderToStaticMarkup(
+      <CreateLobbyButtonView pending={false} error={null} labels={labels} errors={errors} />,
+    );
+    const cls = (html: string) => /<button[^>]*class="([^"]+)"/.exec(html)![1];
+    expect(cls(practice({}))).toBe(cls(create));
+    const css = readFileSync(
+      path.join(process.cwd(), "src/features/lobby/components/lobby-entry.module.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(/\.secondary \{([^}]*)\}/.exec(css)![1]).toMatch(/min-height: 44px;/);
+  });
+
+  it("navigates the host to the practice lobby", async () => {
+    vi.mocked(createPracticeLobby).mockResolvedValue({ ok: true, code: "KGB-4821" as never });
+    const navigate = vi.fn();
+    expect(await makePracticeAction(navigate)()).toEqual({ error: null });
+    expect(createPracticeLobby).toHaveBeenCalledWith();
+    expect(navigate).toHaveBeenCalledWith("/lobby/KGB-4821");
+  });
+
+  it("a failure shows the inline error line of the other entries", async () => {
+    vi.mocked(createPracticeLobby).mockResolvedValue({
+      ok: false,
+      error: "race-server-unavailable",
+    });
+    expect(await makePracticeAction(vi.fn())()).toEqual({ error: "race-server-unavailable" });
+    vi.mocked(createPracticeLobby).mockRejectedValue(new Error("boom: secret"));
+    const state = await makePracticeAction(vi.fn())();
+    expect(state).toEqual({ error: "generic" });
+    const html = practice({ error: "race-server-unavailable" });
+    expect(html).toContain('role="alert"');
+    expect(html).toContain(errors.prefix);
+    expect(html).toContain(errors.unavailable);
   });
 });

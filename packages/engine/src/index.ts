@@ -8,7 +8,7 @@
 export * from "./types";
 
 // text: normalisation to the typeable whitelist, word counting
-export { isTypeable, normalizeTypeable, TYPEABLE } from "./text/normalize";
+export { isTypeable, normalizeKey, normalizeTypeable, TYPEABLE } from "./text/normalize";
 export { wordCount } from "./text/word-count";
 export { charsOf } from "./text/chars";
 export {
@@ -35,6 +35,10 @@ export {
   rawWpm,
   wpm,
 } from "./scoring/scoring";
+// series (#865): the clean WPM through a race (the personal card's graph; the Personnel file, #311)
+export { MAX_SERIES_POINTS, wpmSeries, type WpmPoint, type WpmSeriesInput } from "./scoring/series";
+// key errors (#867): which characters a trace missed (the personal card's errors by key and its tip)
+export { keyErrors, type KeyErrorsInput, type KeyTally } from "./scoring/key-errors";
 
 // trace: the bound on one desk's stored keystrokes (race server ingest, web persistence)
 export { TRACE_ALLOWANCE, TRACE_KEYS_PER_CHAR, traceCapOf } from "./trace/cap";
@@ -82,8 +86,24 @@ export {
   type BonusLogEntry,
 } from "./bonus/ledger";
 
+// bots: the bot typing model (#361) and bilingual desk names; the race server driver (#366) calls
+// only `botProfile` and `nextBotKeystroke`; `RARE_LETTERS` is the one rare-letter list (#351 difficulty)
+export {
+  BOT_LEVEL_WPM,
+  BOT_LEVELS,
+  BOT_NAMES,
+  botProfile,
+  nextBotKeystroke,
+  RARE_LETTERS,
+  type BotAction,
+  type BotContext,
+  type BotLanguage,
+  type BotLevel,
+  type BotProfile,
+} from "./bots";
+
 // ranking: one comparator for live and final order
 export { compareResults, placeOf, rank, type Rankable } from "./ranking/compare";
 
 /** Bumped whenever scoring, ranking or text handling changes. Stored on every race result. */
-export const ENGINE_VERSION = "0.4.0";
+export const ENGINE_VERSION = "0.5.0";

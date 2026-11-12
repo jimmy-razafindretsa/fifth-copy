@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { scaled } from "../timeouts";
 import { closeLobby, createLobby, lobbyIdOf, roomlessLobbyLike } from "./helpers";
 
 // Contract of #561: the seat view `/race/[raceId]` (C1, C4, C5, C6, C11 in the browser), live over the
@@ -204,7 +205,7 @@ test.describe("#561 seat view shell", () => {
     await expect(notice(page, "WAITING FOR THE HOST")).toBeVisible();
     await sockets[0]!.close();
     const cut = notice(page, "LINE CUT · RECONNECTING");
-    await expect(cut).toBeVisible({ timeout: 10_000 });
+    await expect(cut).toBeVisible({ timeout: scaled(10_000) });
     expect(await cut.evaluate((el) => getComputedStyle(el).animationName)).toMatch(/lkPulse$/);
     // the HUD keeps what it knew
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);

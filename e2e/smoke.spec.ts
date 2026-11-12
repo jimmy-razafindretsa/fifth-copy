@@ -1,9 +1,15 @@
 import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { PROTOCOL_VERSION } from "@fifth-copy/protocol";
 
 test("health endpoint reports ok", async ({ request }) => {
   const res = await request.get("/api/health");
   expect(res.status()).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, db: "up" });
+  expect(await res.json()).toEqual({
+    ok: true,
+    db: "up",
+    commit: null,
+    protocol: PROTOCOL_VERSION,
+  });
 });
 
 test("home page renders without errors or a11y violations", async ({ page }) => {

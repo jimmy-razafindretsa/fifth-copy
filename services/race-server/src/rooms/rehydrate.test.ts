@@ -204,10 +204,49 @@ describe("room recovery: rehydrate on boot (#204 C1)", () => {
     expect(b.server.registry.count()).toBe(1);
     expect(await redis.smembers(ROOMS_KEY)).toEqual([kept]);
   });
+
+  it("#814 C3: a kept waiting room loses its stale automatic start; only its next join arms it again", async () => {
+    let { b } = await bootSpace();
+    const { redis } = open!;
+    const lobby = await b.openRoom("AUT-0001", {
+      ...DEFAULT_RACE_SETTINGS,
+      lobbyType: "public",
+      bots: [{ level: "clerk" }],
+    });
+    const join = async () => {
+      const token = await b.token({ lobby, sub: HOST_SUB, name: "Ada", role: "host" });
+      const seen = watchRace(b.connect({ v, token }));
+      await until(() => !!seen.welcome, 3_000, "welcome");
+      return seen;
+    };
+    const host = await join();
+    await eventually(
+      async () => (await redis.hexists(roomKey(lobby), "autoStartAt")) === 1,
+      3_000,
+      "armed",
+    );
+    expect(host.welcome).toBeDefined();
+    b = await restart();
+    expect(await redis.hget(roomKey(lobby), "phase")).toBe("waiting");
+    expect(await redis.hexists(roomKey(lobby), "autoStartAt")).toBe(0);
+    expect(await redis.ttl(roomKey(lobby))).toBeGreaterThan(0);
+    // No timer survives the restart: the room never starts by itself with no socket.
+    b.clock.advance(60_000);
+    await settle();
+    expect(await redis.hget(roomKey(lobby), "phase")).toBe("waiting");
+
+    expect((await join()).welcome!.autoStartAt).toBeNull();
+    await eventually(
+      async () =>
+        (await redis.hget(roomKey(lobby), "autoStartAt")) === String(b.clock.now() + 45_000),
+      3_000,
+      "re-armed by the join",
+    );
+  });
 });
 
 describe("room recovery: client view of a voided room (#204 C2)", () => {
-  it("welcome ended, then ended void; host:start not-waiting; deleted keys are no-room", async () => {
+  it("welcome ended, then ended void; host:start races again (#143); deleted keys are no-room", async () => {
     let { b } = await bootSpace();
     const { redis } = open!;
     const { lobby, racers, raceId } = await typingRoom(b, redis);
@@ -226,8 +265,9 @@ describe("room recovery: client view of a voided room (#204 C2)", () => {
     expect(seen.ended[0]).toEqual({ v, raceId, reason: "void", ranking: [] });
     expect(order.indexOf("welcome")).toBeLessThan(order.indexOf("ended"));
 
+    // A voided room is `ended`: its host may race again with its kept members (#143 C1).
     const ack: HostStartAck = await client.timeout(2_000).emitWithAck("host:start", { v });
-    expect(ack).toEqual({ ok: false, error: "not-waiting" });
+    expect(ack).toEqual({ ok: true, raceId: expect.any(String) });
     await settle();
     expect(seen.ended).toHaveLength(1);
 

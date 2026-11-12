@@ -48,6 +48,36 @@ describe("fill", () => {
   });
 });
 
+describe("podium frame titles (#714 C1, bible 14.4 Plinth clerk)", () => {
+  const words = {
+    en: {
+      clerk: /\bclerk\b/i,
+      medal: { gold: /gold medal/i, silver: /silver medal/i, bronze: /bronze medal/i },
+    },
+    fr: {
+      clerk: /\bcommis\b/i,
+      medal: {
+        gold: /médaille d'or/i,
+        silver: /médaille d'argent/i,
+        bronze: /médaille de bronze/i,
+      },
+    },
+  } as const;
+  for (const [locale, catalog] of [
+    ["en", en],
+    ["fr", fr],
+  ] as const) {
+    it(`${locale}: each title names the clerk and the medal of the place, never dragging or spinning`, () => {
+      for (const variant of ["gold", "silver", "bronze"] as const) {
+        const title = catalog.results.podium.medalTitle[variant];
+        expect(title, variant).toMatch(words[locale].clerk);
+        expect(title, variant).toMatch(words[locale].medal[variant]);
+        expect(title, variant).not.toMatch(/drag|spin|glisse|tourne/i);
+      }
+    });
+  }
+});
+
 describe("locale", () => {
   it("accepts only the supported locales", () => {
     expect(isLocale("fr")).toBe(true);

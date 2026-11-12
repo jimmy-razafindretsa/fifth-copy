@@ -18,13 +18,13 @@ const live = (contexts: string[], strict = true) => ({
 });
 
 describe("branch protection for main (card #8 C2)", () => {
-  it("lists exactly the ci.yml job names check, migrations, e2e, visual", () => {
+  it("lists exactly the ci.yml job names changes, check, migrations, e2e, visual", () => {
     // Matrix jobs (the e2e shards, #532) are not checks of their own: a required job aggregates them.
     const names = Object.entries(ciJobs.jobs)
       .filter(([, job]) => job.strategy?.matrix === undefined)
       .map(([id, job]) => job.name ?? id);
     const contexts = [...desired.required_status_checks.contexts].sort();
-    expect(contexts).toEqual(["check", "e2e", "migrations", "visual"]);
+    expect(contexts).toEqual(["changes", "check", "e2e", "migrations", "visual"]);
     expect(contexts).toEqual([...names].sort());
     expect(desired.required_status_checks.strict).toBe(true);
   });
@@ -34,7 +34,9 @@ describe("branch protection for main (card #8 C2)", () => {
   });
 
   it("reports no drift when the live settings match", () => {
-    expect(protectionDrift(desired, live(["visual", "e2e", "migrations", "check"]))).toEqual([]);
+    expect(
+      protectionDrift(desired, live(["visual", "e2e", "migrations", "check", "changes"])),
+    ).toEqual([]);
   });
 
   it("reports an unprotected branch", () => {
@@ -42,7 +44,7 @@ describe("branch protection for main (card #8 C2)", () => {
   });
 
   it("reports a missing check and a non-strict check", () => {
-    const drift = protectionDrift(desired, live(["check", "e2e", "migrations"], false));
+    const drift = protectionDrift(desired, live(["changes", "check", "e2e", "migrations"], false));
     expect(drift.join("\n")).toMatch(/visual/);
     expect(drift.join("\n")).toMatch(/up to date/);
   });

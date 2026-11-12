@@ -1,4 +1,4 @@
-# Required checks for main: check, migrations, e2e, visual. The merge gate is scripts/merge.sh (private
+# Required checks for main: changes, check, migrations, e2e, visual. The merge gate is scripts/merge.sh (private
 # free-plan repo, no branch protection); .github/branch-protection.json lists these job names as the
 # required contexts, so renaming a job means updating that file (scripts/lib/protection.test.ts).
 name: CI
@@ -29,6 +29,33 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  changes:
+    # Owner decision 2026-11-02 (velocity): a PR that only touches Markdown or work/ (card logs, plans)
+    # skips the e2e shards and the visual job; check and migrations always run, and main always runs all.
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only "$BASE...$HEAD")
+          echo "$files"
+          if [ -n "$files" ] && ! echo "$files" | grep -qvE '(\.md$|^work/)'; then
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
   check:
     # format, lint, types, boundaries, unit, ADR lint, prisma validate
     name: check
@@ -71,6 +98,8 @@ jobs:
         run: sed -E 's/\x1b\[[0-9;]*m//g' .cache/check/unit.log | grep -E '^ *(Test Files|Tests) '
       - name: Race server bundles (docs/adr/0006)
         run: npm run build:race
+      - name: Worker bundles (docs/adr/0011, #733)
+        run: npm run build:worker
       - name: Show failing logs
         if: failure()
         run: tail -n 60 .cache/check/*.log
@@ -119,14 +148,62 @@ jobs:
   e2e-shard:
     # Playwright, functional + a11y, split into shards (#532): one runner ran ~250 tests in ~17 min and
     # hit the 20-min timeout. Each shard has its own services and build; `e2e` below is the required check.
-    name: e2e (${{ matrix.shard }}/${{ matrix.shardTotal }})
+    # Suites (#891), each sharded on its own so no shard collects a slow tail: `parallel` = everything but
+    # e2e/race and @matchmaking; `race-desktop` = e2e/race on desktop, where most race specs run (they
+    # skip mobile/tablet at runtime, yet the skipped tests still count when Playwright splits shards by
+    # test count, so every real race run used to land in the last shard: 10.8 min); `race-small` = e2e/race
+    # on mobile and tablet; `matchmaking` = the serial project (playwright.config.ts, workers 1), which
+    # sorted last too. Each job has its own servers, Redis and DB, so matchmaking stays isolated.
+    # scripts/ci-workflow.test.ts checks that the suites' --list outputs partition the full suite.
+    name: e2e (${{ matrix.suite }} ${{ matrix.shard }}/${{ matrix.shardTotal }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-        shardTotal: [4]
+        include:
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 1,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 2,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 3,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 4,
+              shardTotal: 5,
+            }
+          - {
+              suite: parallel,
+              filter: '--grep-invert "@matchmaking| race/"',
+              shard: 5,
+              shardTotal: 5,
+            }
+          - { suite: race-desktop, filter: "--project=desktop e2e/race/", shard: 1, shardTotal: 3 }
+          - { suite: race-desktop, filter: "--project=desktop e2e/race/", shard: 2, shardTotal: 3 }
+          - { suite: race-desktop, filter: "--project=desktop e2e/race/", shard: 3, shardTotal: 3 }
+          - {
+              suite: race-small,
+              filter: "--project=mobile --project=tablet e2e/race/",
+              shard: 1,
+              shardTotal: 1,
+            }
+          - { suite: matchmaking, filter: "--project=matchmaking", shard: 1, shardTotal: 1 }
     services:
       postgres:
         image: postgres:17-alpine
@@ -164,45 +241,65 @@ jobs:
           cache: npm
       - run: npm ci
       # Chromium from a cache keyed by the installed @playwright/test version (#602): uncached downloads
-      # sometimes stalled until the shard timeout. On a hit the install step only installs OS packages.
+      # sometimes stalled until the shard timeout. The download runs only on a miss; OS packages (apt,
+      # the stall seen in #819) install every run. Both go through scripts/retry.sh: each attempt has
+      # its own timeout, so a stall is killed and retried inside the shard (scripts/ci-workflow.test.ts).
       - id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - id: playwright-cache
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - run: npx playwright install --with-deps chromium
-        timeout-minutes: 5
+      - name: Chromium download (cache miss only)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: scripts/retry.sh 2 150 npx playwright install chromium
+        timeout-minutes: 6
+      # A killed attempt's `sudo apt-get` survives in its own session and keeps the dpkg lock, as do the
+      # runner's boot-time apt jobs: apt waits for the lock instead of failing at once (exit 100).
+      - name: apt waits for the dpkg lock
+        run: echo 'DPkg::Lock::Timeout "120";' | sudo tee /etc/apt/apt.conf.d/90-lock-timeout
+      # An Ubuntu mirror outage (#910) fails apt on every attempt: fall back to a launch probe of the
+      # cached Chromium against the runner image's libraries; the step fails only if that launch fails.
+      - name: Playwright OS deps
+        run: scripts/retry.sh 2 150 npx playwright install-deps chromium || scripts/chromium-probe.sh
+        timeout-minutes: 6
       - run: scripts/test-db.sh
       - run: npm run build
       - run: npm run build:race
-      - run: npx playwright test --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+      - run: npx playwright test ${{ matrix.filter }} --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report-${{ matrix.shard }}
+          name: playwright-report-${{ matrix.suite }}-${{ matrix.shard }}
           path: playwright-report
           retention-days: 7
 
   e2e:
     # The one required e2e check (.github/branch-protection.json, scripts/merge.sh): fails unless every
-    # shard succeeded, including when a shard failed, timed out, was cancelled or skipped.
+    # shard of both suites succeeded, including when a shard failed, timed out, was cancelled or skipped.
     name: e2e
-    needs: e2e-shard
+    needs: [changes, e2e-shard]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: All e2e shards passed
+      - name: All e2e shards passed (or a docs-only PR)
         env:
+          CODE: ${{ needs.changes.outputs.code }}
+          CHANGES: ${{ needs.changes.result }}
           SHARDS: ${{ needs.e2e-shard.result }}
         run: |
-          echo "e2e shards: $SHARDS"
+          echo "changes: $CHANGES code=$CODE e2e shards: $SHARDS"
+          test "$CHANGES" = "success"
+          if [ "$CODE" = "false" ]; then exit 0; fi
           test "$SHARDS" = "success"
 
   visual:
     # pinned Playwright image
     name: visual
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Pinned to the @playwright/test version in package.json. Bump both together.

@@ -33,9 +33,11 @@ on:
         type: string
         default: ""
 
-# One board writer at a time: Status moves and gates are not safe to interleave.
+# One board writer at a time: Status moves and gates are not safe to interleave. Read-only ops (get, next,
+# list_ready, locks, hash, dag_check) run in their own group so parallel cards (velocity mode, WIP 3) do not
+# queue behind writers; a group keeps one pending run, so queued writers can still be cancelled and callers retry.
 concurrency:
-  group: board
+  group: ${{ contains(fromJSON('["get","next","list_ready","locks","hash","dag_check"]'), inputs.op) && format('board-read-{0}', github.run_id) || 'board' }}
   cancel-in-progress: false
 
 permissions:
@@ -43,6 +45,9 @@ permissions:
 
 env:
   NEXT_TELEMETRY_DISABLED: "1"
+  # Repo variables (Settings > Variables) override these: WIP limit (5 = owner decision 2026-11-09, v1 push; was 3) and the optional focus label (PROTOCOL 6, 7).
+  BOARD_WIP_LIMIT: ${{ vars.BOARD_WIP_LIMIT || '5' }}
+  BOARD_FOCUS_LABEL: ${{ vars.BOARD_FOCUS_LABEL || '' }}
 
 jobs:
   board:

@@ -1,0 +1,21 @@
+// Background jobs (ADR 0011): one row per run of a scheduled job, written by src/worker/scheduler.ts.
+// Non-personal: a run records a job name, times, a status and an error message, never a person.
+
+enum JobRunStatus {
+  RUNNING
+  OK
+  FAILED
+}
+
+model JobRun {
+  id         String       @id @default(cuid())
+  /// The job's registry name (src/worker/registry.ts), e.g. `heartbeat`.
+  name       String
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  status     JobRunStatus @default(RUNNING)
+  /// The thrown error's message when status is FAILED (truncated by the scheduler).
+  error      String?
+
+  @@index([name, startedAt])
+}

@@ -47,11 +47,30 @@ const press = (s: RaceState, key: string, t: number) =>
   reduceRace(s, { type: "key", keystroke: { t, key } });
 
 describe("selectMachineProps (#220 C2)", () => {
-  it("returns exactly { pressed, wrong, jammed, finished }; nothing on before a race", () => {
+  it("returns exactly { pressed, wrong, jammed, finished, ended }; nothing on before a race", () => {
     const props = selectMachineProps(initialRaceState);
-    expect(props).toEqual({ pressed: null, wrong: null, jammed: false, finished: false });
-    expect(Object.keys(props).sort()).toEqual(["finished", "jammed", "pressed", "wrong"]);
+    expect(props).toEqual({
+      pressed: null,
+      wrong: null,
+      jammed: false,
+      finished: false,
+      ended: false,
+    });
+    expect(Object.keys(props).sort()).toEqual(["ended", "finished", "jammed", "pressed", "wrong"]);
     expect(selectMachineProps(raceIn("block"))).toEqual(props);
+  });
+
+  it("#724 ended: true once the server ended the race, for a desk that did not finish; memoised", () => {
+    const typing = press(raceIn("continue"), "L", 10);
+    const ended = reduceRace(typing, {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "timer", ranking: [] },
+      at: 1_767_225_660_000,
+    } as RaceEvent);
+    expect(selectMachineProps(typing)).toMatchObject({ ended: false, finished: false });
+    expect(selectMachineProps(ended)).toMatchObject({ ended: true, finished: false, pressed: "l" });
+    expect(selectMachineProps(ended)).toBe(selectMachineProps(ended));
+    expect(selectMachineProps(ended)).not.toBe(selectMachineProps(typing));
   });
 
   it("Block: the refused key reads wrong and the machine jams (the typed view's jam); the right key clears both", () => {
@@ -61,6 +80,7 @@ describe("selectMachineProps (#220 C2)", () => {
       wrong: "x",
       jammed: true,
       finished: false,
+      ended: false,
     });
     expect(selectMachineProps(jammed).jammed).toBe(selectTypedView(jammed).jammed);
     const released = press(jammed, "L", 20);

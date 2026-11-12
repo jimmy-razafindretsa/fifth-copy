@@ -1,6 +1,7 @@
 import {
   engineSettingsOf,
   PLAYER_STATUSES,
+  type BonusKind,
   type Member,
   type Phase,
   type Snapshot,
@@ -9,8 +10,9 @@ import {
 import type { LastKey } from "../view/machine-props";
 import { raceCardViewFrom, type RaceCardView } from "../view/race-card-view";
 import { NO_TEXT_VIEW, typedViewFrom, type TypedView } from "../view/typed-view";
-import { clockOffset, remainingTo } from "./clock";
+import { bestOffset, clockOffset, remainingTo, type PongSample } from "./clock";
 import {
+  COOLDOWN_MS,
   createPrediction,
   typedText,
   type Keystroke,
@@ -19,7 +21,14 @@ import {
 } from "./prediction";
 import { storeResumeKey } from "./resume-key";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "./socket";
-import { expireStamp, pushStamp, STAMP_SHOW_MS, stampFromEvent, type RaceStamp } from "./stamps";
+import {
+  expireStamp,
+  newHostStamp,
+  pushStamp,
+  stampFromEvent,
+  stampShowMs,
+  type RaceStamp,
+} from "./stamps";
 
 /**
  * The race store (#561, ADR 0013 "two features, one store"): everything the seat view knows about its
@@ -34,8 +43,63 @@ export type RacePhase = "connecting" | Phase | "reconnecting" | "lost";
 /** Why the mint of the race token failed (`mintRaceToken`), or `generic` for a failed request. */
 export type RaceTokenError = "not-found" | "closed" | "generic";
 
-/** Why the page gave up: a handshake refusal (`transport` only reconnects) or a token error. */
-export type RaceLostReason = Exclude<ConnectErrorReason, "transport"> | RaceTokenError;
+/**
+ * Why the page gave up: a handshake refusal (`transport` only reconnects), a token error,
+ * `room-lost` (#235 C4): the room went away under a seated page (a voided race after a server restart
+ * or a Redis loss, #204, or a reconnect answered `no-room`), or `server-disconnect` (#661): the race
+ * server closed the socket (`io server disconnect`: a join refused after the handshake, an abusive
+ * client), which socket.io never reconnects.
+ */
+export type RaceLostReason =
+  Exclude<ConnectErrorReason, "transport"> | RaceTokenError | "room-lost" | "server-disconnect";
+
+/** How long the tray shows a refused play (`IMMUNE`, #236 C1). */
+export const REFUSAL_SHOW_MS = 1_200;
+
+/**
+ * Your desk's side of the bonus economy (#236, ADR 0016), as the server told it: the store keeps it and
+ * decides nothing (awarding, cooldown and immunity are #190's, in the engine and on the server). Times
+ * are this device's clock. Seeded by every `welcome` from `welcome.bonus` (#768: a reconnect gets back
+ * the held card, the cooldown end and the blur end, race ms converted here), reset by every `countdown`.
+ */
+export type BonusState = {
+  /** The card `bonus-earned` dealt you; `null` once `bonus-sent` says you played it. */
+  card: BonusKind | null;
+  /**
+   * When you may play again: set when you play (`COOLDOWN_MS`, the engine's constant, so a second
+   * Enter sends nothing while the first is in flight), confirmed by `bonus-sent`, rolled back by a
+   * refusal. The client never sends while it runs.
+   */
+  cooldownUntil: number | null;
+  /** A Smoke Break blurs your text until then (`bonus-hit.blurUntil` on this clock); `null` after. */
+  blurUntil: number | null;
+  /** The server refused your play (`rejected { no-bonus }` while a card is held): the tray says IMMUNE. */
+  refused: boolean;
+  /** When the refusal arrived (its 1.2 s run from here); `null` with `refused` false. */
+  refusedAt: number | null;
+  /** A play is in flight: the cooldown before it, to restore on a refusal. */
+  pending: { cooldownUntil: number | null } | null;
+  /** Plays sent so far on this page (never reset): `sendBonusPlays` emits one `bonus:play` per step. */
+  plays: number;
+};
+
+const NO_BONUS = {
+  card: null,
+  cooldownUntil: null,
+  blurUntil: null,
+  refused: false,
+  refusedAt: null,
+  pending: null,
+} as const satisfies Omit<BonusState, "plays">;
+
+/**
+ * How your desk left the race before filing (#233, ARCHITECTURE 7.1): `abandoned` (you confirmed
+ * ABANDON, Reassigned) or `asleep` (the server's idle kick, spec 4.5). The server decides it (its
+ * `event` or your status in a snapshot or a reload's `welcome`); `dismissed` once you chose KEEP
+ * WATCHING (the HUD stays live, without input).
+ */
+export type ExitKind = "abandoned" | "asleep";
+export type RaceExit = { kind: ExitKind; dismissed: boolean };
 
 export type RaceState = {
   phase: RacePhase;
@@ -54,7 +118,10 @@ export type RaceState = {
   resumeKey: Welcome["resumeKey"];
   /** The server clock at the welcome (the first clock offset, #172). */
   serverNow: Welcome["serverNow"] | null;
-  /** Server time = `Date.now()` + this (#214, `clockOffset` of the last welcome; 0 until one). */
+  /**
+   * Server time = `Date.now()` + this (#214: `clockOffset` of the last welcome, 0 until one; then the
+   * best pong of that welcome's ping round, #643).
+   */
   clockOffset: number;
   /**
    * Your desk's typing (#559, ADR 0007): the engine's state predicted from your keys, reconciled with
@@ -85,6 +152,23 @@ export type RaceState = {
   ending: RoomEvents["ended"] | null;
   /** This device's clock when `ended` arrived (the `event.at` convention); `null` with `ending`. */
   endedAt: number | null;
+  /** Your card, cooldown, blur and refusal (#236); the overlay stays `overlay`. */
+  bonus: BonusState;
+  /** Your exit (#233), or `null` while you type or filed. Reset by every `welcome` and `countdown`. */
+  exit: RaceExit | null;
+  /** The server warned your silent desk (`idle-warning`, #233): cleared by your next accepted key. */
+  idleWarning: boolean;
+  /** The desk the Major's lamp points at (#233 sets it to yours while warned; #267 reads it). */
+  lampTarget: number | null;
+  /** An abandon intent is in flight (taken, no answer yet): a second confirm sends nothing. */
+  abandoning: boolean;
+  /** Abandon intents sent so far on this page (never reset): `sendAbandons` emits one per step. */
+  abandons: number;
+  /**
+   * The line was cut (#661 C2): from the drop until the next `welcome`, input is off and no `keys` batch
+   * leaves (`createTyping` holds them), so none reaches the server before the reconnect's seat exists.
+   */
+  keysHeld: boolean;
 };
 
 /**
@@ -100,6 +184,8 @@ export type RaceEvent =
   | { type: "settings"; payload: RoomEvents["settings"] }
   /** The host started: the race and its GO instant (#214). */
   | { type: "countdown"; payload: RoomEvents["countdown"] }
+  /** The welcome's ping round refined the clock offset (#643, `bestOffset` of its pongs so far). */
+  | { type: "clock"; offset: number }
   /** `race.t0` passed on the corrected clock (scheduled by `bindRaceSocket`, #214). */
   | { type: "go" }
   /** A key typed after GO, `t` in ms since GO on the corrected clock (#559, `createTyping`). */
@@ -117,9 +203,28 @@ export type RaceEvent =
   | { type: "ended"; payload: RoomEvents["ended"]; at: number }
   /** The visible stamp's time is up (scheduled by `watchStampExpiry`). */
   | { type: "stamp-expired"; id: number; at: number }
+  /**
+   * You asked to play your card (#236: Enter in the race input or the tray's button), `at` = device
+   * clock. The reducer takes it only while you hold a card, may type and are not cooling.
+   */
+  | { type: "bonus-play"; at: number }
+  /** You confirmed ABANDON (#233): taken once while you may type; `sendAbandons` sends the intent. */
+  | { type: "abandon" }
+  /** KEEP WATCHING (#233): the exit docket closes, the HUD stays live without input. */
+  | { type: "exit-dismissed" }
+  /** The server refused a `keys`, `abandon` or `bonus:play` (#236 reads `no-bonus`). */
+  | { type: "rejected"; payload: RoomEvents["rejected"]; at: number }
+  /** The refusal that arrived at `refusedAt` has shown its 1.2 s (scheduled by `watchRefusalExpiry`). */
+  | { type: "refusal-expired"; refusedAt: number }
+  /** The blur until `blurUntil` is over (scheduled by `watchBlurExpiry`). */
+  | { type: "blur-expired"; blurUntil: number }
   | { type: "connect-error"; reason: ConnectErrorReason }
   | { type: "reconnecting" }
   | { type: "reconnected" }
+  /** The line dropped (`transport close`, `ping timeout`...: #661 C2), before socket.io's first retry. */
+  | { type: "disconnected" }
+  /** The server closed the socket (`io server disconnect`, #661 C1): final. */
+  | { type: "server-disconnect" }
   | { type: "token-error"; error: RaceTokenError };
 
 export const initialRaceState: RaceState = {
@@ -144,7 +249,38 @@ export const initialRaceState: RaceState = {
   stampSeq: 0,
   ending: null,
   endedAt: null,
+  bonus: { ...NO_BONUS, plays: 0 },
+  exit: null,
+  idleWarning: false,
+  lampTarget: null,
+  abandoning: false,
+  abandons: 0,
+  keysHeld: false,
 };
+
+/** No exit, no warning, no lamp, nothing in flight: a (re)connect or a new race (#233). */
+const NO_EXIT = {
+  exit: null,
+  idleWarning: false,
+  lampTarget: null,
+  abandoning: false,
+} as const satisfies Partial<RaceState>;
+
+/**
+ * The exit your desk's status implies (#233): `abandoned` and `asleep` are exits, any other status
+ * none. The server's status wins over a lost event: a snapshot or a reload's `welcome` brings it.
+ */
+function exitFromStatus(prediction: Prediction | null): ExitKind | null {
+  const status = prediction?.state.status;
+  return status === "abandoned" || status === "asleep" ? status : null;
+}
+
+/** `state` with the exit its prediction's status implies, unless an exit is already known. */
+function withStatusExit(state: RaceState): RaceState {
+  if (state.exit) return state;
+  const kind = exitFromStatus(state.prediction);
+  return kind ? { ...state, ...NO_EXIT, exit: { kind, dismissed: false } } : state;
+}
 
 const byDesk = (members: readonly Member[]) => [...members].sort((a, b) => a.desk - b.desk);
 
@@ -183,6 +319,44 @@ const lost = (state: RaceState, reason: RaceLostReason): RaceState => ({
   stamps: [],
 });
 
+/**
+ * Your prediction after a welcome (#235 C1, ADR 0007): the welcome of a reconnect to the same race and
+ * desk reconciles the one you have onto the server's state of your desk (every key sent before the cut
+ * was applied or dropped by then; a key not yet sent is typed again on top), so a sheet the server
+ * agrees with keeps its very state; any other welcome starts over from the server's state.
+ */
+function predictionAfterWelcome(state: RaceState, w: Welcome): Prediction | null {
+  const { prediction } = state;
+  const sameDesk =
+    prediction !== null &&
+    w.race !== null &&
+    w.state !== null &&
+    w.you !== null &&
+    w.you === state.you &&
+    w.race.raceId === state.race?.raceId;
+  if (!sameDesk || !w.race || !w.state)
+    return predictionOf(w.race, w.you, w.settings, w.overlay, w.state);
+  return prediction.withText(typedText(w.race.text, w.overlay)).reconcile(w.state, prediction.sent);
+}
+
+/**
+ * Your bonus after a welcome (#768): the server's `welcome.bonus` of your desk, its race ms (since
+ * `t0`, server clock) moved to this device's clock with the welcome's `offset`, like `bonus-hit`. No
+ * play is in flight and no refusal shows after a (re)connect; the play counter never goes back.
+ */
+function bonusFromWelcome(w: Welcome, offset: number, plays: number): BonusState {
+  const { bonus, race } = w;
+  if (!bonus || !race) return { ...NO_BONUS, plays };
+  const device = (ms: number | null) => (ms === null ? null : race.t0 + ms - offset);
+  return {
+    ...NO_BONUS,
+    card: bonus.card,
+    cooldownUntil: device(bonus.cooldownUntil),
+    blurUntil: device(bonus.blurUntil),
+    plays,
+  };
+}
+
 export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   // Lost is terminal: the room refused this viewer and nothing later revives the page (the lost line
   // links back to the waiting room).
@@ -190,7 +364,12 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   switch (event.type) {
     case "welcome": {
       const w = event.payload;
-      return {
+      const prediction = predictionAfterWelcome(state, w);
+      const offset =
+        event.receivedAt === undefined
+          ? state.clockOffset
+          : clockOffset(w.serverNow, event.receivedAt);
+      const next: RaceState = {
         phase: w.room.phase,
         lost: null,
         room: w.room,
@@ -203,44 +382,52 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         overlay: w.overlay,
         resumeKey: w.resumeKey,
         serverNow: w.serverNow,
-        clockOffset:
-          event.receivedAt === undefined
-            ? state.clockOffset
-            : clockOffset(w.serverNow, event.receivedAt),
-        // a (re)connect starts over from the server's state of your desk
-        prediction: predictionOf(w.race, w.you, w.settings, w.overlay, w.state),
+        clockOffset: offset,
+        // a connect starts from the server's state of your desk; a reconnect reconciles onto it (#235)
+        prediction,
         desks: state.desks,
         ranks: state.ranks,
-        lastKey: null,
+        // the struck cap stays when the reconcile kept your sheet as it was
+        lastKey:
+          prediction !== null && prediction.state === state.prediction?.state
+            ? state.lastKey
+            : null,
         stamps: [],
         stampSeq: state.stampSeq,
         ending: null,
         endedAt: null,
+        bonus: bonusFromWelcome(w, offset, state.bonus.plays),
+        ...NO_EXIT,
+        abandons: state.abandons,
+        // the reconnect's seat exists: held keys may leave (#661 C2)
+        keysHeld: false,
       };
+      // a reload after your exit: the server's status brings the docket back
+      return withStatusExit(next);
     }
+    case "clock":
+      return event.offset === state.clockOffset ? state : { ...state, clockOffset: event.offset };
     case "roster":
       return { ...state, members: byDesk(event.payload.members) };
     case "settings":
       return { ...state, settings: event.payload.settings };
     case "countdown":
+      // a new race: no overlay, no card yet (the server deals them once it runs)
       return {
         ...state,
         phase: "countdown",
         race: event.payload.race,
         room: state.room && { ...state.room, phase: "countdown" },
-        prediction: predictionOf(
-          event.payload.race,
-          state.you,
-          state.settings,
-          state.overlay,
-          null,
-        ),
+        overlay: null,
+        prediction: predictionOf(event.payload.race, state.you, state.settings, null, null),
         desks: [],
         ranks: [],
         lastKey: null,
         stamps: [],
         ending: null,
         endedAt: null,
+        bonus: { ...NO_BONUS, plays: state.bonus.plays },
+        ...NO_EXIT,
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -252,12 +439,20 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       };
     case "key": {
       // typing is locked before GO and after your own finish (the engine refuses a key once you stop)
-      if (state.phase !== "running" || !state.prediction) return state;
+      // ... and after your exit (#233: the server decided, the prediction may not know yet)
+      if (state.phase !== "running" || !state.prediction || state.exit) return state;
       const prediction = state.prediction.push(event.keystroke);
       if (prediction === state.prediction) return state;
       // the engine's verdict on the key, as the prediction read it (#220): no comparison here
       const { key, t } = event.keystroke;
-      return { ...state, prediction, lastKey: { key, t, wrong: prediction.wrong } };
+      // an accepted key ends the idle warning (#233): the Major looks away
+      return {
+        ...state,
+        prediction,
+        lastKey: { key, t, wrong: prediction.wrong },
+        idleWarning: false,
+        lampTarget: null,
+      };
     }
     case "sent": {
       const prediction = state.prediction?.markSent(event.count) ?? null;
@@ -269,51 +464,276 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       const server = prediction && state.you !== null ? serverProgressOf(desks, state.you) : null;
       if (prediction && server)
         prediction = prediction.reconcile(server, prediction.ackedBy(server, t));
-      return { ...state, desks, ranks, prediction };
+      return withStatusExit({ ...state, desks, ranks, prediction });
     }
     case "ended":
-      // reason-agnostic (#240, #661): the phase, the server's ranking as sent and when it arrived; the
-      // visible stamp keeps its 1.4 s (a finish stamp may still be on screen)
+      // a voided race is the lost room (#235 C4, #204): nothing to rank, the way back to the lobby
+      if (event.payload.reason === "void") return lost(state, "room-lost");
+      // otherwise the phase, the server's ranking as sent and when it arrived (#240); the visible stamp
+      // keeps its 1.4 s (a finish stamp may still be on screen)
       return {
         ...state,
         phase: "ended",
         room: state.room && { ...state.room, phase: "ended" },
         ending: event.payload,
         endedAt: event.at,
+        idleWarning: false,
+        lampTarget: null,
       };
     case "event": {
+      const bonus = reduceBonusEvent(state, event.payload, event.at);
+      if (bonus) return bonus;
+      const exit = reduceExitEvent(state, event.payload);
+      if (exit) return exit;
+      if (event.payload.kind === "new-host") return reduceNewHost(state, event.payload, event.at);
       const stamp = stampFromEvent(event.payload, state.you, state.prediction?.state.errors ?? 0);
-      if (!stamp) return state;
-      const id = state.stampSeq + 1;
-      const stamps = pushStamp(state.stamps, { id, ...stamp, at: event.at });
-      if (stamps === state.stamps) return state;
-      return { ...state, stamps, stampSeq: stamps.some((s) => s.id === id) ? id : state.stampSeq };
+      return stamp ? queueStamp(state, stamp, event.at) : state;
     }
     case "stamp-expired": {
       const stamps = expireStamp(state.stamps, event.id, event.at);
       return stamps === state.stamps ? state : { ...state, stamps };
     }
+    case "bonus-play": {
+      if (!mayPlayAt(state, event.at)) return state;
+      const { bonus } = state;
+      return {
+        ...state,
+        bonus: {
+          ...bonus,
+          cooldownUntil: event.at + COOLDOWN_MS,
+          pending: { cooldownUntil: bonus.cooldownUntil },
+          refused: false,
+          refusedAt: null,
+          plays: bonus.plays + 1,
+        },
+      };
+    }
+    case "abandon":
+      if (!selectCanType(state) || state.abandoning) return state;
+      return { ...state, abandoning: true, abandons: state.abandons + 1 };
+    case "exit-dismissed":
+      if (!state.exit || state.exit.dismissed) return state;
+      return { ...state, exit: { ...state.exit, dismissed: true } };
+    case "rejected": {
+      // an abandon refused (`not-running`: the race ended or you stopped first) may be confirmed again
+      if (event.payload.reason === "not-running" && state.abandoning)
+        return { ...state, abandoning: false };
+      // every refusal of a play is `no-bonus` on the wire (#190); the client never sends while cooling,
+      // so one while a card is held means the target is immune (or there is none)
+      const { bonus } = state;
+      if (event.payload.reason !== "no-bonus" || (!bonus.pending && !bonus.card)) return state;
+      return {
+        ...state,
+        bonus: {
+          ...bonus,
+          cooldownUntil: bonus.pending ? bonus.pending.cooldownUntil : bonus.cooldownUntil,
+          pending: null,
+          refused: true,
+          refusedAt: event.at,
+        },
+      };
+    }
+    case "refusal-expired": {
+      const { bonus } = state;
+      if (!bonus.refused || bonus.refusedAt !== event.refusedAt) return state;
+      return { ...state, bonus: { ...bonus, refused: false, refusedAt: null } };
+    }
+    case "blur-expired": {
+      const { bonus } = state;
+      if (bonus.blurUntil !== event.blurUntil) return state;
+      return { ...state, bonus: { ...bonus, blurUntil: null } };
+    }
     case "connect-error":
       // `transport` (network, timeout): socket.io keeps retrying; any refusal is final
-      return event.reason === "transport"
-        ? { ...state, phase: "reconnecting" }
-        : lost(state, event.reason);
+      if (event.reason === "transport") return { ...state, phase: "reconnecting", keysHeld: true };
+      // a reconnect after a welcome that finds no room: the room was lost under you (#235 C4)
+      if (event.reason === "no-room" && state.room !== null) return lost(state, "room-lost");
+      return lost(state, event.reason);
     case "reconnecting":
-      return { ...state, phase: "reconnecting" };
+    case "disconnected":
+      return { ...state, phase: "reconnecting", keysHeld: true };
     case "reconnected":
-      // the fresh `welcome` that follows a reconnect sets the real phase
+      // the fresh `welcome` that follows a reconnect sets the real phase and lets the keys go
       return { ...state, phase: state.room?.phase ?? "connecting" };
+    case "server-disconnect":
+      return lost(state, "server-disconnect");
     case "token-error":
       return lost(state, event.error);
   }
 }
 
-/** You may type: the race runs, you have a desk, and you have not stopped (finished, asleep...). */
-export function selectCanType(state: RaceState): boolean {
-  return state.phase === "running" && state.prediction?.state.status === "typing";
+/** Queues one stamp (`pushStamp`) under the next id; the same state when the queue drops it. */
+function queueStamp(
+  state: RaceState,
+  stamp: Omit<RaceStamp, "id" | "at" | "shownAt">,
+  at: number,
+): RaceState {
+  const id = state.stampSeq + 1;
+  const stamps = pushStamp(state.stamps, { id, ...stamp, at });
+  if (stamps === state.stamps) return state;
+  return { ...state, stamps, stampSeq: stamps.some((s) => s.id === id) ? id : state.stampSeq };
 }
 
-type ViewEntry = { text: string; jammed: boolean; typedAt: number | null; view: TypedView };
+/** The phases whose seat view shows the NEW HOST notice (#868 C1): the race, before and after GO. */
+const NOTICE_PHASES: ReadonlySet<string> = new Set(["countdown", "running", "ended"]);
+
+/**
+ * `event new-host { desk }` (#137 promotes, #868 shows it): the roster's host flag and your role follow
+ * the desk, and in a race's phases the seat view gets the NEW HOST notice with the desk's name from the
+ * roster. A desk the roster does not hold is ignored. The typing (prediction, last key) is untouched.
+ */
+function reduceNewHost(
+  state: RaceState,
+  payload: Extract<RoomEvents["event"], { kind: "new-host" }>,
+  at: number,
+): RaceState {
+  const notice = newHostStamp(payload, state.members);
+  if (!notice) return state;
+  const members = state.members.some((m) => m.isHost !== (m.desk === payload.desk))
+    ? state.members.map((m) => ({ ...m, isHost: m.desk === payload.desk }))
+    : state.members;
+  const role: RaceState["role"] =
+    state.role === "spectator" || state.role === null
+      ? state.role
+      : state.you === payload.desk
+        ? "host"
+        : "player";
+  const next =
+    members === state.members && role === state.role ? state : { ...state, members, role };
+  return state.room && NOTICE_PHASES.has(state.room.phase) ? queueStamp(next, notice, at) : next;
+}
+
+/**
+ * The bonus events of your desk (#236), or `null` for any other event (the stamps read those):
+ * `bonus-earned` deals you the card, `bonus-sent` from you confirms the play (the card is gone, the
+ * cooldown runs from its arrival), `bonus-hit` on you brings the overlay (the prediction types the new
+ * effective text, `typedText`) and the Smoke Break's end on this device's clock.
+ */
+function reduceBonusEvent(
+  state: RaceState,
+  payload: RoomEvents["event"],
+  at: number,
+): RaceState | null {
+  const { bonus, you } = state;
+  switch (payload.kind) {
+    case "bonus-earned":
+      if (payload.desk !== you || bonus.card === payload.bonus) return state;
+      return { ...state, bonus: { ...bonus, card: payload.bonus } };
+    case "bonus-sent":
+      if (payload.from !== you) return state;
+      return {
+        ...state,
+        bonus: { ...bonus, card: null, cooldownUntil: at + COOLDOWN_MS, pending: null },
+      };
+    case "bonus-hit": {
+      if (payload.desk !== you || !state.race) return state;
+      const overlay = payload.overlay ?? state.overlay;
+      const prediction = state.prediction?.withText(typedText(state.race.text, overlay)) ?? null;
+      // race ms -> server clock (`t0`) -> this device's clock
+      const blurUntil =
+        payload.blurUntil === null
+          ? bonus.blurUntil
+          : state.race.t0 + payload.blurUntil - state.clockOffset;
+      return { ...state, overlay, prediction, bonus: { ...bonus, blurUntil } };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The exit and idle events of your desk (#233, ADR 0006: the server decides both), or `null` for any
+ * other event: `abandoned` and `asleep` (the idle kick, C1's `kicked`) set your exit, `idle-warning`
+ * turns the warning on and points the Major's lamp at you. Another desk's changes nothing here (the
+ * race card reads its status from the snapshots).
+ */
+function reduceExitEvent(state: RaceState, payload: RoomEvents["event"]): RaceState | null {
+  switch (payload.kind) {
+    case "abandoned":
+    case "asleep":
+      if (payload.desk !== state.you || state.exit) return state;
+      return { ...state, ...NO_EXIT, exit: { kind: payload.kind, dismissed: false } };
+    case "idle-warning":
+      if (payload.desk !== state.you || !selectCanType(state)) return state;
+      if (state.idleWarning && state.lampTarget === state.you) return state;
+      return { ...state, idleWarning: true, lampTarget: state.you };
+    default:
+      return null;
+  }
+}
+
+/**
+ * A play at `at` (device clock) may go out: the race runs, you type, bonuses are on, you hold a card,
+ * no play is in flight and the cooldown is over. The server decides again (#190); this only keeps the
+ * client from sending what it knows is refused.
+ */
+function mayPlayAt(state: RaceState, at: number): boolean {
+  const { bonus } = state;
+  return (
+    selectCanType(state) &&
+    state.settings?.bonuses !== false &&
+    bonus.card !== null &&
+    bonus.pending === null &&
+    (bonus.cooldownUntil === null || at >= bonus.cooldownUntil)
+  );
+}
+
+/**
+ * You may type: the race runs, you have a desk, you have not stopped (finished, asleep...), and no cut
+ * line waits for its reconnect's welcome (#661 C2, bible 14.2: input is off until it).
+ */
+export function selectCanType(state: RaceState): boolean {
+  return (
+    state.phase === "running" &&
+    state.prediction?.state.status === "typing" &&
+    state.exit === null &&
+    !state.keysHeld
+  );
+}
+
+/** Abandon's state from the store (#233 C2): `idle` while you may type and none is in flight. */
+export function selectAbandonState(state: RaceState): "idle" | "disabled" {
+  return selectCanType(state) && !state.abandoning ? "idle" : "disabled";
+}
+
+/**
+ * The exit docket the seat view shows (#233 C3, C4): your exit while the race runs and until KEEP
+ * WATCHING; `null` otherwise (RACE OVER yields to the finished view).
+ */
+export function selectExit(state: RaceState): ExitKind | null {
+  const { exit } = state;
+  return state.phase === "running" && exit && !exit.dismissed ? exit.kind : null;
+}
+
+/** What the tray and the typing surface show of your bonus (#236 C1): stable between changes. */
+export type BonusView = {
+  card: BonusKind | null;
+  cooldownUntil: number | null;
+  overlay: RaceState["overlay"];
+  blurUntil: number | null;
+  refused: boolean;
+};
+
+const bonusViews = new WeakMap<BonusState, { overlay: RaceState["overlay"]; view: BonusView }>();
+
+/** The viewer's bonus as `{ card, cooldownUntil, overlay, blurUntil, refused }`, memoised per change. */
+export function selectBonus(state: RaceState): BonusView {
+  const { bonus, overlay } = state;
+  const hit = bonusViews.get(bonus);
+  if (hit && hit.overlay === overlay) return hit.view;
+  const { card, cooldownUntil, blurUntil, refused } = bonus;
+  const view = { card, cooldownUntil, overlay, blurUntil, refused };
+  bonusViews.set(bonus, { overlay, view });
+  return view;
+}
+
+type ViewEntry = {
+  text: string;
+  jammed: boolean;
+  typedAt: number | null;
+  blurUntil: number | null;
+  view: TypedView;
+};
 const views = new WeakMap<PlayerState, ViewEntry>();
 
 /**
@@ -326,10 +746,20 @@ export function selectTypedView(state: RaceState): TypedView {
   const p = state.prediction;
   if (!p) return NO_TEXT_VIEW;
   const { text, jammed, typedAt } = p;
+  // the blur watcher clears `blurUntil` when it passes: no clock here (#236)
+  const { blurUntil } = state.bonus;
   const hit = views.get(p.state);
-  if (hit && hit.text === text && hit.jammed === jammed && hit.typedAt === typedAt) return hit.view;
-  const view = typedViewFrom(p.state, text, { jammed, typedAt });
-  views.set(p.state, { text, jammed, typedAt, view });
+  if (
+    hit &&
+    hit.text === text &&
+    hit.jammed === jammed &&
+    hit.typedAt === typedAt &&
+    hit.blurUntil === blurUntil
+  ) {
+    return hit.view;
+  }
+  const view = typedViewFrom(p.state, text, { jammed, typedAt, blurUntil });
+  views.set(p.state, { text, jammed, typedAt, blurUntil, view });
   return view;
 }
 
@@ -392,11 +822,22 @@ export type BindRaceSocketOptions = {
 };
 
 /**
+ * The ping round after each `welcome` (#643): this many pings, this far apart. 600 ms keeps any 1 s
+ * window at 2 pings, inside the race server's `ping` budget (ADR 0020: 2 a second per identity, and 3
+ * refusals disconnect); the round (2.4 s) ends inside the 3 s countdown.
+ */
+export const PING_ROUND_COUNT = 5;
+export const PING_ROUND_INTERVAL_MS = 600;
+
+/**
  * Subscribes the room socket's events and turns them into race events; returns the unbind, which offs
  * every listener bound here (and only those) and cancels a pending GO. Every `welcome` stores its resume
  * key for this lobby, so the next page (a reload, the seat view after the lobby) can reclaim the desk,
  * and sets the clock offset. GO is scheduled at `race.t0` on the corrected clock from a `countdown`, or
  * from a `welcome` that finds the room counting down (the seat view connects after the broadcast, #214).
+ * Each `welcome` also starts a ping round (#643): `PING_ROUND_COUNT` pings `PING_ROUND_INTERVAL_MS`
+ * apart on the injected timer (never closer, across rounds too); each pong of the round that improves its best round trip sets the
+ * offset (`bestOffset`) and moves a pending GO onto it. The unbind cancels the pings still to send.
  */
 export function bindRaceSocket(
   socket: RoomSocket,
@@ -405,20 +846,67 @@ export function bindRaceSocket(
 ): Off {
   let offset = 0;
   let pendingGo: unknown = null;
+  let goAt: number | null = null;
   const cancelGo = () => {
     if (pendingGo !== null) timer.clearTimeout(pendingGo);
     pendingGo = null;
+    goAt = null;
   };
   const scheduleGo = (t0: number) => {
     cancelGo();
+    goAt = t0;
     pendingGo = timer.setTimeout(
       () => {
         pendingGo = null;
+        goAt = null;
         dispatch({ type: "go" });
       },
       remainingTo(t0, timer.now() + offset),
     );
   };
+
+  // the current welcome's ping round: the send times still awaited, its pongs, its best offset so far
+  let pendingPing: unknown = null;
+  let awaited = new Set<number>();
+  let samples: PongSample[] = [];
+  let roundOffset: number | null = null;
+  let lastPingAt: number | null = null;
+  const cancelPings = () => {
+    if (pendingPing !== null) timer.clearTimeout(pendingPing);
+    pendingPing = null;
+  };
+  const startPingRound = () => {
+    cancelPings();
+    awaited = new Set();
+    samples = [];
+    roundOffset = null;
+    let sentCount = 0;
+    const ping = () => {
+      pendingPing = null;
+      const sent = timer.now();
+      lastPingAt = sent;
+      awaited.add(sent);
+      socket.sendPing(sent);
+      if (++sentCount < PING_ROUND_COUNT)
+        pendingPing = timer.setTimeout(ping, PING_ROUND_INTERVAL_MS);
+    };
+    // a welcome soon after a ping (a reconnect mid-round) keeps the spacing across rounds too
+    const wait = lastPingAt === null ? 0 : lastPingAt + PING_ROUND_INTERVAL_MS - timer.now();
+    if (wait > 0) pendingPing = timer.setTimeout(ping, wait);
+    else ping();
+  };
+  const onPong = ({ sent, serverNow }: RoomEvents["pong"]) => {
+    if (!awaited.has(sent)) return; // a stale round's pong, or one this binder never asked for
+    awaited.delete(sent);
+    samples.push({ sent, serverNow, receivedAt: timer.now() });
+    const refined = bestOffset(samples);
+    if (refined === null || Math.round(refined) === roundOffset) return;
+    // whole milliseconds, like the welcome's offset: the countdown and the timers step on whole ms
+    roundOffset = offset = Math.round(refined);
+    dispatch({ type: "clock", offset });
+    if (goAt !== null) scheduleGo(goAt);
+  };
+
   const offs: Off[] = [
     socket.onWelcome((payload) => {
       const receivedAt = timer.now();
@@ -427,28 +915,34 @@ export function bindRaceSocket(
       dispatch({ type: "welcome", payload, receivedAt });
       if (payload.room.phase === "countdown" && payload.race) scheduleGo(payload.race.t0);
       else cancelGo();
+      startPingRound();
     }),
+    socket.onPong(onPong),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
     socket.onSnapshot((payload) => dispatch({ type: "snapshot", payload })),
     socket.onEvent((payload) => dispatch({ type: "event", payload, at: timer.now() })),
     socket.onEnded((payload) => dispatch({ type: "ended", payload, at: timer.now() })),
+    socket.onRejected((payload) => dispatch({ type: "rejected", payload, at: timer.now() })),
     socket.onCountdown((payload) => {
       dispatch({ type: "countdown", payload });
       scheduleGo(payload.race.t0);
     }),
     socket.onConnectError((reason) => dispatch({ type: "connect-error", reason })),
+    socket.onTransportDisconnect(() => dispatch({ type: "disconnected" })),
     socket.onReconnecting(() => dispatch({ type: "reconnecting" })),
     socket.onReconnected(() => dispatch({ type: "reconnected" })),
+    socket.onServerDisconnect(() => dispatch({ type: "server-disconnect" })),
   ];
   return () => {
     cancelGo();
+    cancelPings();
     for (const off of offs.splice(0)) off();
   };
 }
 
 /**
- * Expires the visible stamp `STAMP_SHOW_MS` after it shows (#232 C1): on each store change that brings
+ * Expires the visible stamp `stampShowMs` after it shows (#232 C1; 3 s for NEW HOST, #868): on each store change that brings
  * a new visible stamp, one timeout on the injected clock dispatches `stamp-expired`. Returns the stop,
  * which cancels a pending expiry.
  */
@@ -471,7 +965,7 @@ export function watchStampExpiry(store: RaceStore, timer: RaceTimer = deviceTime
         pending = null;
         store.dispatch({ type: "stamp-expired", id, at: timer.now() });
       },
-      Math.max(0, visible.shownAt + STAMP_SHOW_MS - timer.now()),
+      Math.max(0, visible.shownAt + stampShowMs(visible.kind) - timer.now()),
     );
   };
   const off = store.subscribe(check);
@@ -480,4 +974,95 @@ export function watchStampExpiry(store: RaceStore, timer: RaceTimer = deviceTime
     off();
     cancel();
   };
+}
+
+/**
+ * One timeout on the injected clock for a deadline the store holds (`pick`): each store change that
+ * brings a new deadline re-schedules it, and `fire` dispatches its expiry at that time. Returns the stop.
+ */
+function watchDeadline(
+  store: RaceStore,
+  timer: RaceTimer,
+  pick: (state: RaceState) => number | null,
+  fire: (deadline: number) => RaceEvent,
+  delay: (deadline: number) => number,
+): Off {
+  let watched: number | null = null;
+  let pending: unknown = null;
+  const cancel = () => {
+    if (pending !== null) timer.clearTimeout(pending);
+    pending = null;
+  };
+  const check = () => {
+    const deadline = pick(store.getState());
+    if (deadline === watched) return;
+    cancel();
+    watched = deadline;
+    if (deadline === null) return;
+    pending = timer.setTimeout(
+      () => {
+        pending = null;
+        store.dispatch(fire(deadline));
+      },
+      Math.max(0, delay(deadline) - timer.now()),
+    );
+  };
+  const off = store.subscribe(check);
+  check();
+  return () => {
+    off();
+    cancel();
+  };
+}
+
+/** Clears the tray's `IMMUNE` `REFUSAL_SHOW_MS` after the refusal arrived (#236 C1). */
+export function watchRefusalExpiry(store: RaceStore, timer: RaceTimer = deviceTimer): Off {
+  return watchDeadline(
+    store,
+    timer,
+    (s) => (s.bonus.refused ? s.bonus.refusedAt : null),
+    (refusedAt) => ({ type: "refusal-expired", refusedAt }),
+    (refusedAt) => refusedAt + REFUSAL_SHOW_MS,
+  );
+}
+
+/** Lifts a Smoke Break's blur at its `blurUntil` (#236 C2), so no selector reads the clock. */
+export function watchBlurExpiry(store: RaceStore, timer: RaceTimer = deviceTimer): Off {
+  return watchDeadline(
+    store,
+    timer,
+    (s) => s.bonus.blurUntil,
+    (blurUntil) => ({ type: "blur-expired", blurUntil }),
+    (blurUntil) => blurUntil,
+  );
+}
+
+/** The one send a bonus play needs (`RoomSocket.sendBonusPlay`). */
+export type BonusPlaySink = { sendBonusPlay(): void };
+
+/**
+ * Sends one `bonus:play` per play the store took (#236 C1): the reducer gates a `bonus-play` (a card,
+ * not cooling, no play in flight), so an Enter or a click it refused sends nothing. Returns the stop.
+ */
+export function sendBonusPlays(store: RaceStore, socket: BonusPlaySink): Off {
+  let sent = store.getState().bonus.plays;
+  return store.subscribe(() => {
+    const { plays } = store.getState().bonus;
+    for (; sent < plays; sent++) socket.sendBonusPlay();
+  });
+}
+
+/** The one send an abandon needs (`RoomSocket.sendAbandon`). */
+export type AbandonSink = { sendAbandon(): void };
+
+/**
+ * Sends one `abandon` per intent the store took (#233 C1): the reducer takes a confirm once, while you
+ * may type, so a double press or a press after the exit sends nothing. Returns the stop.
+ */
+export function sendAbandons(store: RaceStore, socket: AbandonSink): Off {
+  let sent = store.getState().abandons;
+  return store.subscribe(() => {
+    const { abandons } = store.getState();
+    for (; sent < abandons; sent++) socket.sendAbandon();
+  });
 }

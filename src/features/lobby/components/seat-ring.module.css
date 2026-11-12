@@ -1,0 +1,174 @@
+/* The seat ring diagram (#731, bible 1, 14.3 extension): 30 desks in a ring around the Major, pure CSS.
+   The ring is square and as wide as its slot (max 500px); `--ring-r` is measured from its own width
+   (container units), so the desks stay inside it at every width. Each desk is a one-cell 7.4 grid: the
+   2px ink gap is its plate, the paper face inside; desks never touch, so nothing doubles. */
+@reference "../../../app/globals.css";
+
+.ring {
+  /* 34px desks; under a 486px ring (481-520px screens) they shrink to stay apart (7cqi, min 30px) */
+  --cell: clamp(30px, 7cqi, 34px);
+  --ring-r: calc(50cqi - var(--cell) / 2 - 2px);
+  position: relative;
+  container-type: inline-size;
+  width: min(100%, 500px);
+  aspect-ratio: 1;
+  margin-inline: auto;
+}
+
+/* the Major's stand: the ink tag (the 7.4 YOU tag recipe) at the centre */
+.major {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* a desk: the 7.4 ink gap as a 2px plate; placed by its inline transform from the centre */
+.cell {
+  position: absolute;
+  top: calc(50% - var(--cell) / 2);
+  left: calc(50% - var(--cell) / 2);
+  box-sizing: border-box;
+  width: var(--cell);
+  height: var(--cell);
+  padding: 2px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the paper face; a taken desk's 4px top rule is its rival ink (bible 3.1, #565) */
+.face {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border-top: 4px solid var(--desk-ink);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* the desk number: Oswald 600 11px .2em (the roll's DESK label) */
+.num {
+  @apply type-label;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.2em;
+  margin-right: -0.2em;
+}
+
+/* initials of the first two words: IBM Plex Mono 500 12px */
+.initials {
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* the host: a red dot after the number (the link role, so Night shift keeps 3:1; bible 3.3) */
+.dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-link);
+}
+
+/* a bot: the ink BOT tag recipe at 9px, carrying `B` */
+.bot {
+  @apply type-label;
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 0 1px 0 3px;
+}
+
+/* an empty desk: dashed 1px muted rule, muted number, no plate */
+.cell[data-state="empty"] {
+  padding: 1px;
+  border: 1px dashed var(--color-fg-muted);
+  background: var(--color-bg);
+}
+
+.cell[data-state="empty"] .face {
+  border-top: 0;
+}
+
+.cell[data-state="empty"] .num {
+  color: var(--color-fg-muted);
+}
+
+/* the viewer: `you` red ground under paper text (bible 0, 3.2: red never changes between themes) */
+.cell[data-state="you"] .face {
+  background: var(--color-you);
+  color: var(--color-primary-fg);
+}
+
+.cell[data-state="you"] .dot {
+  background: var(--color-primary-fg);
+}
+
+/* the twelve rival inks, by the allocator's colour index (`rival-<Member.color>`) */
+.cell[data-ink="you"] {
+  --desk-ink: var(--color-you);
+}
+.cell[data-ink="rival-0"] {
+  --desk-ink: var(--color-rival-0);
+}
+.cell[data-ink="rival-1"] {
+  --desk-ink: var(--color-rival-1);
+}
+.cell[data-ink="rival-2"] {
+  --desk-ink: var(--color-rival-2);
+}
+.cell[data-ink="rival-3"] {
+  --desk-ink: var(--color-rival-3);
+}
+.cell[data-ink="rival-4"] {
+  --desk-ink: var(--color-rival-4);
+}
+.cell[data-ink="rival-5"] {
+  --desk-ink: var(--color-rival-5);
+}
+.cell[data-ink="rival-6"] {
+  --desk-ink: var(--color-rival-6);
+}
+.cell[data-ink="rival-7"] {
+  --desk-ink: var(--color-rival-7);
+}
+.cell[data-ink="rival-8"] {
+  --desk-ink: var(--color-rival-8);
+}
+.cell[data-ink="rival-9"] {
+  --desk-ink: var(--color-rival-9);
+}
+.cell[data-ink="rival-10"] {
+  --desk-ink: var(--color-rival-10);
+}
+.cell[data-ink="rival-11"] {
+  --desk-ink: var(--color-rival-11);
+}
+
+/* phones watch (bible 18): no ring at 480px and under */
+@media (max-width: 480px) {
+  .ring {
+    display: none;
+  }
+}

@@ -1,6 +1,7 @@
 export { connectToRoom } from "./client/socket";
 export type {
   ConnectErrorReason,
+  HostKickResult,
   HostSettingsResult,
   HostStartResult,
   Off,
@@ -56,6 +57,9 @@ export {
   type AbandonState,
 } from "./components/abandon-control";
 export { RaceNotice, type RaceNoticeProps } from "./components/race-notice";
+/** The exit dockets (#233): Reassigned after ABANDON, Asleep at desk after the idle kick. */
+export { ReassignedNotice, type ExitStatsProps } from "./components/reassigned-notice";
+export { AsleepAtDesk } from "./components/asleep-at-desk";
 export { raceCardViewFixtures, MARKER_SHAPES, LANE_STATUSES } from "./view/race-card-view";
 export type {
   FieldTick,
@@ -66,9 +70,11 @@ export type {
   RaceCardView,
   RaceCardViewFixture,
 } from "./view/race-card-view";
-export { hudLabelFixtures, RACE_NOTICES, SABOTAGE_CARDS } from "./view/hud-labels";
+export { EXIT_KINDS, hudLabelFixtures, RACE_NOTICES, SABOTAGE_CARDS } from "./view/hud-labels";
 export type {
   AbandonLabels,
+  ExitDocketKind,
+  ExitLabels,
   HudLabels,
   NixieLabels,
   RaceCardLabels,

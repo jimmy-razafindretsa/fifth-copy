@@ -83,6 +83,7 @@ describe("spectator welcome and membership (C2)", () => {
       room: { code: "KGB-4821", phase: "waiting" },
       state: null,
       overlay: null,
+      bonus: null,
       resumeKey: null,
     });
     expect(welcome.members.map((m) => m.desk)).toEqual([1, 2]);

@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { charsOf, normalizeTypeable, progress } from "@fifth-copy/engine";
 import {
@@ -19,7 +23,10 @@ import {
   type RaceEvent,
   type RaceState,
 } from "../client/store";
+import { RaceCard } from "../components/race-card";
+import { hudLabelFixtures } from "./hud-labels";
 import {
+  LANE_STATUSES,
   raceCardViewFixtures,
   raceCardViewFrom,
   selectField,
@@ -33,6 +40,10 @@ import { rivalIdentity } from "./rival-identity";
 // 0007: progress is the engine's own `progress`).
 
 type Desk = Snapshot["desks"][number];
+const css = readFileSync(
+  path.join(process.cwd(), "src/features/race/components/race-card.module.css"),
+  "utf8",
+).replace(/\/\*[\s\S]*?\*\//g, "");
 const { typing, finished, asleep, abandoned, expired } = PLAYER_STATUS_CODES;
 const desk = (n: number, cursor = 0, code: number = typing): Desk => [
   n,
@@ -175,6 +186,7 @@ const member = (n: number, name: string): Member => ({
   isBot: false,
   color: (n - 1) % 12,
   marker: (["circle", "square", "triangle", "diamond"] as const)[(n - 1) % 4]!,
+  avatar: null,
 });
 
 const TEXT = "Le reçu des formulaires";
@@ -279,18 +291,53 @@ describe("raceCardViewFrom (#564 C3)", () => {
     }
   });
 
-  it("the statuses map from the snapshot code; an expired desk shows no label", () => {
+  it("the statuses map from the snapshot code; line-cut and expired desks keep their own (#235 C2)", () => {
     const desks = [
       desk(1, 2, PLAYER_STATUS_CODES["line-cut"]),
       desk(3, 1, abandoned),
       desk(5, 3, expired),
+      desk(7, 0, typing),
     ];
-    const view = raceCardViewFrom(source({ desks, ranks: [5, 1, 3] }));
+    const view = raceCardViewFrom(source({ desks, ranks: [5, 1, 3, 7] }));
     expect(view.lanes.map((l) => [l.desk, l.status])).toEqual([
-      [5, "typing"],
+      [5, "expired"],
       [1, "line-cut"],
       [3, "abandoned"],
+      [7, "typing"],
     ]);
+  });
+
+  it("#235 C2 line-cut and expired are lane labels (data-status) and dim the marker; typing shows none", () => {
+    expect(LANE_STATUSES).toContain("line-cut");
+    expect(LANE_STATUSES).toContain("expired");
+    for (const lang of ["en", "fr"] as const) {
+      const { status } = hudLabelFixtures[lang].raceCard;
+      expect(status["line-cut"]).toBe(lang === "en" ? "LINE CUT" : "LIGNE COUPÉE");
+      expect(status.expired).toBe(lang === "en" ? "EXPIRED" : "EXPIRÉ");
+    }
+    const desks = [
+      desk(2, 4, PLAYER_STATUS_CODES["line-cut"]),
+      desk(4, 1, expired),
+      desk(6, 5, typing),
+    ];
+    const view = raceCardViewFrom(source({ desks, ranks: [6, 2, 4] }));
+    const html = renderToStaticMarkup(
+      createElement(RaceCard, { view, labels: hudLabelFixtures.en.raceCard }),
+    );
+    const lane = (d: number) =>
+      new RegExp(`<li[^>]*data-desk="${d}"[^>]*>([\\s\\S]*?)</li>`).exec(html)!;
+    expect(lane(2)[0]).toMatch(/data-status="line-cut"/);
+    expect(lane(2)[1]).toMatch(/data-status-label="line-cut"[^>]*>LINE CUT</);
+    expect(lane(4)[0]).toMatch(/data-status="expired"/);
+    expect(lane(4)[1]).toMatch(/data-status-label="expired"[^>]*>EXPIRED</);
+    expect(lane(6)[1]).not.toMatch(/data-status-label/);
+    // the dimmed marker: one rule for both statuses, on the rider only (the label keeps full ink)
+    const dim = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(
+      (r) =>
+        r[1]!.includes('[data-status="line-cut"]') && r[1]!.includes('[data-status="expired"]'),
+    );
+    expect(dim?.[1]).toMatch(/\.rider/);
+    expect(dim?.[2]).toMatch(/opacity:\s*0\.6/);
   });
 
   it("before the race (or before its first snapshot): every member at the start, yours marked, no lanes", () => {
@@ -322,8 +369,10 @@ describe("raceCardViewFrom (#564 C3)", () => {
       race: null,
       state: null,
       overlay: null,
+      bonus: null,
       resumeKey: null,
       serverNow: 1_767_225_600_000,
+      autoStartAt: null,
     };
     const start: RaceEvent[] = [
       { type: "welcome", payload: welcome },

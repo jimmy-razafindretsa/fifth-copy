@@ -1,6 +1,6 @@
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
@@ -20,8 +20,9 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - dev: `npm run dev` (web) · `npm run dev:race` (race server, `/health` on :4000) · build race server: `npm run build:race`
 - check (lint, types, boundaries, unit; prints <=20 lines): `scripts/check.sh`
   (unit step needs Redis: `npm run db:up` and `REDIS_URL` loaded from `.env`; race-server room tests fail without it)
+  (in a card worktree the unit step uses Redis db `REDIS_URL_TEST` from `.env`, the e2e race server `REDIS_URL`; no worktree/CI: db 0 for both)
 - e2e: `npx playwright test [path]`
-  (`E2E_TIMEOUT_SCALE=<n>` multiplies e2e test waits via `e2e/timeouts.ts`, default 1; use 2-3 on a loaded machine)
+  (`E2E_TIMEOUT_SCALE=<n>` multiplies e2e test waits via `e2e/timeouts.ts`, default 1; use 2-3 on a loaded machine; every spec wait goes through it, see its header, guarded by `src/lib/e2e-timeouts.test.ts`)
   (`PW_WORKERS=<n>` caps Playwright workers when parallel worktrees share the machine; unset = Playwright default)
 - prisma validate: `npx prisma validate`
 - prisma migrate (DEV DB only): `npx prisma migrate dev --name <slug>`
@@ -34,6 +35,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Board playbook (read before touching the board): `agents/BOARD.md`
 - Build a whole board from requirements: workflow `build-board` (see agents/BOARD.md)
 - Board operations: `npx tsx scripts/board.ts <op> ...` (see agents/PROTOCOL.md section 11)
+- GraphQL blocked (cloud session): dispatch the Board workflow `.github/workflows/board.yml`, see `agents/BOARD.md` "Board from a cloud session"
 - DB guard (run before any DB command): `scripts/db-guard.sh`
 - local DB up: `npm run db:up` · test DB prepare: `scripts/test-db.sh`
 - visual baselines (pinned image, needs `visual-change` label): `scripts/visual-baselines.sh [--check]`
@@ -41,7 +43,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - loop (mode C, parallel): `AGENT_CMD="claude -p" scripts/loop.sh [--parallel N] [--max-cards N]` · land a released card: `scripts/loop.sh --finish <n>`
 - card worktree (own branch, ports, DBs, deps): `scripts/worktree.sh <n>` · remove: `scripts/worktree.sh --remove <n>`
 - merge a card's PR (local merge queue; never merge around it): `scripts/merge.sh <n>`
-- gates/promotion (script-checked PROTOCOL 5): `npx tsx scripts/board.ts gate <n> "In Review"|QA|Done` · `promote` · `pickup <n>` · `locks <n>`
+- gates/promotion (script-checked PROTOCOL 5): `npx tsx scripts/board.ts gate <n> "In Review"|QA|Done` · `promote` · `pickup <n>` (bundle: `pickup <lead> --bundle <n,n>`) · `locks <n>`
 
 ## Where memory lives (write each fact to exactly ONE place)
 - Rules and hazards that must always apply: this file (add max 3 lines per card, via the card's PR).
@@ -70,7 +72,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 
 ## Hard rules
 - Design: every visual, motion, 3D, copy or UX choice comes from the design bible (section 0 precedence, section 18 checklist). Match its reference files 1:1; not covered = extend the closest bible pattern and add the decision to the bible in the same PR. Never invent a style.
-- One card per session. Do not widen scope. Out-of-scope findings become new Backlog cards labeled `discovered`.
+- One card or one bundle per session (PROTOCOL bundle section). Do not widen scope. Out-of-scope findings become new Backlog cards labeled `discovered`.
 - Never change a card's Contract section. If it is wrong, label `needs-replan` and stop.
 - If a change conflicts with an accepted ADR, stop. Write a `proposed` ADR in the PR and label `needs-human`. Do not choose architecture silently.
 - ADRs: agents propose; Deliver sets `status: accepted` in the card's PR when the ADR is consistent with `docs/architecture/ARCHITECTURE.md` and the accepted ADRs (roles/deliver.md 3b); conflicts go to `needs-human`.
@@ -108,7 +110,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Colours: follow `docs/design/components.md` "Colour usage rules" (no raw hex, no `--brand-*`, ink grounds carry paper text, gold and device colours only where owned); `scripts/check-colours.ts` (check.sh `colours`) enforces them.
 
 ## Architecture map
-Production is a Railway project (ADR 0019): **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: rollups, purges; planned), plus Railway Postgres and Redis. Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.
+Production is a Railway project (ADR 0019): **web** (Next.js, this root package: routes, auth, lobbies, texts, results, stats, all persistence), **race-server** (`services/race-server`: Socket.IO, live rooms in Redis, authoritative race loop, bots), **worker** (`src/worker`: advisory-lock job scheduler, `JobRun`; jobs in `src/features/*/jobs` listed in `src/worker/registry.ts`), plus Railway Postgres and Redis. Both web and race-server run the same pure engine. Full picture: `docs/architecture/ARCHITECTURE.md`.
 ```
 src/app/                         routes, thin (compose features); api/internal/* = HMAC routes for the race server
 src/features/<feature>/          components/ actions/ queries/ jobs/ schema.ts index.ts
@@ -126,7 +128,7 @@ prisma/schema/                   data model, one .prisma per feature
 e2e/                             Playwright, derived from card contracts
 docs/{spec,adr,design,architecture}/  work/log/  scripts/  agents/
 ```
-Import rules: app -> features -> server/lib. A feature imports another feature only through its `index.ts`. `components/ui` imports nothing from features. `packages/engine` imports nothing; `packages/protocol` only zod + engine; `services/*` never import `src/`; `src/` never imports `services/`; workspace packages are imported by name. Enforced in `scripts/check.sh` (dependency-cruiser over `src packages services`, ESLint).
+Import rules: app -> features -> server/lib. A feature imports another feature only through its `index.ts` (or its server-only `server.ts`, ADR 0021). `components/ui` imports nothing from features. `packages/engine` imports nothing; `packages/protocol` only zod + engine; `services/*` never import `src/`; `src/` never imports `services/`; workspace packages are imported by name. Enforced in `scripts/check.sh` (dependency-cruiser over `src packages services`, ESLint).
 
 ## Real-time hazards
 - Race rules live only in `@fifth-copy/engine` (pure, injected time and RNG). Never reimplement scoring in a component or on the server.

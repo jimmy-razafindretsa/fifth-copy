@@ -51,7 +51,16 @@ describe("env", () => {
     expect(String(error)).not.toMatch(/short-secret-value/);
   });
 
-  it("REDIS_URL is an optional redis url (#207): absent or empty disables the limiter", async () => {
+  it("RAILWAY_GIT_COMMIT_SHA is optional (#718): Railway's commit when set, undefined when absent or empty", async () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    expect((await loadEnv({ RAILWAY_GIT_COMMIT_SHA: sha })).RAILWAY_GIT_COMMIT_SHA).toBe(sha);
+    expect(
+      (await loadEnv({ RAILWAY_GIT_COMMIT_SHA: undefined })).RAILWAY_GIT_COMMIT_SHA,
+    ).toBeUndefined();
+    expect((await loadEnv({ RAILWAY_GIT_COMMIT_SHA: "" })).RAILWAY_GIT_COMMIT_SHA).toBeUndefined();
+  });
+
+  it("REDIS_URL is an optional redis url outside production (#207): absent or empty disables the limiter", async () => {
     expect((await loadEnv({ REDIS_URL: "redis://localhost:6379/3" })).REDIS_URL).toBe(
       "redis://localhost:6379/3",
     );
@@ -60,6 +69,55 @@ describe("env", () => {
     const error = await loadEnv({ REDIS_URL: "http://secret-host:6379" }).catch((e: Error) => e);
     expect(String(error)).toMatch(/REDIS_URL/);
     expect(String(error)).not.toMatch(/secret-host/);
+  });
+
+  it("#716 C3: REDIS_URL is required in production (the nonce store fails closed), not in dev/test", async () => {
+    for (const value of [undefined, ""]) {
+      const error = await loadEnv({ NODE_ENV: "production", REDIS_URL: value }).catch(
+        (e: Error) => e,
+      );
+      expect(String(error)).toMatch(/Invalid environment variables: REDIS_URL/);
+    }
+    const prod = await loadEnv({ NODE_ENV: "production", REDIS_URL: "redis://redis:6379/0" });
+    expect(prod.REDIS_URL).toBe("redis://redis:6379/0");
+    for (const NODE_ENV of ["development", "test"]) {
+      expect((await loadEnv({ NODE_ENV, REDIS_URL: undefined })).REDIS_URL).toBeUndefined();
+    }
+  });
+
+  it("#716: WEB_RATE_LIMIT is on by default and only on or off", async () => {
+    expect((await loadEnv({ WEB_RATE_LIMIT: undefined })).WEB_RATE_LIMIT).toBe("on");
+    expect((await loadEnv({ WEB_RATE_LIMIT: "off" })).WEB_RATE_LIMIT).toBe("off");
+    await expect(loadEnv({ WEB_RATE_LIMIT: "no" })).rejects.toThrow(/WEB_RATE_LIMIT/);
+  });
+
+  it("#716: WEB_RATE_LIMIT=off is refused on a deployed production server", async () => {
+    const prod = {
+      NODE_ENV: "production",
+      REDIS_URL: "redis://redis:6379/0",
+      WEB_RATE_LIMIT: "off",
+    };
+    for (const extra of [{}, { CI: "true" }, { RAILWAY_ENVIRONMENT_NAME: "production" }]) {
+      await expect(loadEnv({ ...prod, ...extra, PLAYWRIGHT_E2E: undefined })).rejects.toThrow(
+        /Invalid environment variables: WEB_RATE_LIMIT/,
+      );
+    }
+    await expect(loadEnv({ ...prod, PLAYWRIGHT_E2E: "true" })).rejects.toThrow(/PLAYWRIGHT_E2E/);
+  });
+
+  it("#716: WEB_RATE_LIMIT=off is allowed under Playwright (CI e2e) and in dev and test", async () => {
+    const prod = await loadEnv({
+      NODE_ENV: "production",
+      REDIS_URL: "redis://redis:6379/0",
+      WEB_RATE_LIMIT: "off",
+      PLAYWRIGHT_E2E: "1",
+      CI: "true",
+    });
+    expect(prod.WEB_RATE_LIMIT).toBe("off");
+    for (const NODE_ENV of ["development", "test"]) {
+      const env = await loadEnv({ NODE_ENV, WEB_RATE_LIMIT: "off", PLAYWRIGHT_E2E: undefined });
+      expect(env.WEB_RATE_LIMIT).toBe("off");
+    }
   });
 
   it.each(["RACE_SERVER_INTERNAL_URL", "NEXT_PUBLIC_RACE_SERVER_URL"])(
@@ -81,5 +139,29 @@ describe("env", () => {
 
   it("C6: an empty AVATAR_DIR is rejected, naming the variable", async () => {
     await expect(loadEnv({ AVATAR_DIR: "" })).rejects.toThrow(/AVATAR_DIR/);
+  });
+
+  it("#49 C2: the OAuth provider variables are optional; empty counts as unset", async () => {
+    const unset = await loadEnv({
+      AUTH_GITHUB_ID: undefined,
+      AUTH_GITHUB_SECRET: "",
+      AUTH_DISCORD_ID: undefined,
+      AUTH_DISCORD_SECRET: undefined,
+    });
+    expect(unset.AUTH_GITHUB_ID).toBeUndefined();
+    expect(unset.AUTH_GITHUB_SECRET).toBeUndefined();
+    expect(unset.AUTH_DISCORD_ID).toBeUndefined();
+    const set = await loadEnv({ AUTH_GITHUB_ID: "gh-id", AUTH_GITHUB_SECRET: "gh-secret" });
+    expect(set.AUTH_GITHUB_ID).toBe("gh-id");
+    expect(set.AUTH_GITHUB_SECRET).toBe("gh-secret");
+  });
+
+  it("#828 C3: AUTH_GOOGLE_ID/SECRET are optional; empty counts as unset", async () => {
+    const unset = await loadEnv({ AUTH_GOOGLE_ID: undefined, AUTH_GOOGLE_SECRET: "" });
+    expect(unset.AUTH_GOOGLE_ID).toBeUndefined();
+    expect(unset.AUTH_GOOGLE_SECRET).toBeUndefined();
+    const set = await loadEnv({ AUTH_GOOGLE_ID: "go-id", AUTH_GOOGLE_SECRET: "go-secret" });
+    expect(set.AUTH_GOOGLE_ID).toBe("go-id");
+    expect(set.AUTH_GOOGLE_SECRET).toBe("go-secret");
   });
 });

@@ -42,7 +42,9 @@
   text-wrap: balance;
 }
 
-/* room-code docket beside the roll; both wrap under each other on narrow screens */
+/* the room (bible 7.10, #498): the dockets column (room code and invite, settings, START) beside the
+   seat ring and the roll; from 481 to 1023px both wrap under each other (`flex-wrap`), from 1024px a
+   two-column grid; at 480px and under only the room docket, the roll and START (phones watch, bible 18) */
 .room {
   display: flex;
   flex-wrap: wrap;
@@ -50,31 +52,61 @@
   gap: 24px;
 }
 
-/* bible 7.4 docket: 2px ink, no radius, newsprint */
-.docket {
+/* the dockets column: newsprint dockets, START under the settings docket */
+.dockets {
   flex: 1 1 280px;
   max-width: 420px;
-  min-width: 0;
-  border: 2px solid var(--color-fg);
-  border-radius: 0;
-  background: var(--color-surface);
-}
-
-/* the roll and, for the host, START under it (#214) */
-.side {
-  flex: 2 1 320px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
+/* bible 7.4 docket: 2px ink, no radius, newsprint */
+.docket {
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-surface);
+}
+
+/* the seat ring and the roll under it (#731 fills the ring; empty, it takes no room and no gap). Its
+   500px basis is the ring's width: 30 upright desks need it, so below it the side wraps under the column */
+.side {
+  flex: 2 1 500px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ring:empty {
+  display: none;
+}
+
 /* the roll: the same docket on paper, so skeleton blocks can be newsprint */
 .roll {
+  position: relative;
   min-width: 0;
   border: 2px solid var(--color-fg);
   border-radius: 0;
   background: var(--color-bg);
+}
+
+/* NEW HOST (#137, bible 7.3, 14.3): the red stamp over the roll docket, centred under its header,
+   clipped sideways by the docket so the slam never paints over the dockets column beside it (a short
+   roll lets it hang below, over the empty page); never takes a click */
+.newHost {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 64px 12px 12px;
+  overflow-x: clip;
+  overflow-y: visible;
+  pointer-events: none;
 }
 
 /* header row: mono name plus Oswald tag, 2px ink rule under it (bible 7.4, 7.2 extension) */
@@ -166,6 +198,44 @@
   overflow-wrap: anywhere;
 }
 
+/* the portrait cell (#730; bible 14.4 portrait cell, 7.4 roll rows): a 32px paper square in a 2px ink
+   rule, first in the name cell; the initials (Plex Mono 500 12px) under the picture until it has loaded,
+   and again when it fails, in the same square (no layout shift). No motion. */
+.portrait {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.initials {
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.portrait[data-portrait="loaded"] .initials {
+  visibility: hidden;
+}
+
+.avatar {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* skeleton rows: newsprint blocks in the row grid, no shimmer (bible 6: no generic gradients) */
 .block {
   display: block;
@@ -178,7 +248,8 @@
   height: 18px;
 }
 
-/* reconnecting notice: an Oswald label row with the lkPulse opacity pulse (bible 8) */
+/* notice rows (bible 7.4): an Oswald label row; a live state (reconnecting) adds the lkPulse opacity
+   pulse (.pulse, bible 8), a statement (WAITING FOR THE HOST, #105) stays still */
 .notice {
   margin: 0;
   padding: 8px 12px;
@@ -187,6 +258,9 @@
   font-size: 11px;
   line-height: normal;
   letter-spacing: 0.16em;
+}
+
+.pulse {
   animation: lkPulse 1.3s ease-in-out infinite;
 }
 
@@ -195,13 +269,79 @@
 }
 
 /* the host's START (#214): the bible 7.1 primary stamp button, its reason line and its 7.4 error line
-   under it, left-aligned under the roll (#498 moves it into the full lobby layout) */
+   under it, left-aligned under the settings docket (#498); under the roll on phones */
 .start {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
+}
+
+/* the 7.1 ink button (Oswald 600 13px, ink ground and paper text, hover red), at least 44px tall (bible
+   18): the invite's COPY (#498; the recipe of race/components/hud-docket.module.css, CSS modules do
+   not cross features) */
+.ink {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ink:hover {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.ink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* the host's link row (#809): NEW LINK, then the issued URL and its COPY on one line, then its error */
+.links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.links > * {
+  max-width: 100%;
+}
+
+/* pending NEW LINK (ISSUING…, aria-busy): full strength, no press (7.2 pending) */
+.links > .ink:disabled {
+  cursor: progress;
+}
+
+.linkLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* the URL: IBM Plex Mono, one line, ellipsis; the full value stays selectable (title = the URL) */
+.url {
+  flex: 1 1 auto;
+  min-width: 0;
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
 }
 
 /* not startable yet: the Button primitive's disabled recipe (half strength, no press); while the start
@@ -221,6 +361,272 @@
   color: var(--color-fg-muted);
 }
 
+/* the host's controls in the settings rows (#110, bible 14.3 "Host settings form"): the 7.1 segmented
+   toggle (the recipe of preferences/components/toggles.module.css; CSS modules do not cross features),
+   wrapping inside the row's 1fr column, and 7.2 inputs at the row's 16px mono value size */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  border: 2px solid var(--color-fg);
+}
+
+.segment {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  padding: 5px 10px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-fg);
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* a lone toggle (NO TIMER) carries the group's 2px ink rule itself */
+.single {
+  border: 2px solid var(--color-fg);
+}
+
+.segment:focus-visible,
+.field:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* 7.2 input: IBM Plex Mono 500, 2px ink rule on newsprint, muted placeholder (#99) */
+.field {
+  width: 100%;
+  min-width: 0;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+  padding: 4px 8px;
+  @apply type-typing;
+  font-size: 16px;
+  line-height: normal;
+  font-weight: 500;
+  color: var(--color-fg);
+}
+
+.field::placeholder {
+  color: var(--color-fg-muted);
+  opacity: 1;
+}
+
+/* three digits plus the spin buttons */
+.fieldNumber {
+  width: calc(5ch + 40px);
+}
+
+/* TIMER: NO TIMER beside the minutes input and its MIN unit; a bot's sub-row (#114): its level, the
+   level's WPM in the same unit recipe, REMOVE */
+.timer,
+.minutes,
+.botRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.unit {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* the 7.1 secondary button (Oswald 600 .16em, transparent, 2px ink rule), row-sized like the segments
+   it sits beside (bible 14.3 "Bot rows", #114): ADD A BOT and REMOVE. On the newsprint docket its hover
+   is the paper ground, the hover newsprint would not show */
+.secondary {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  padding: 5px 12px;
+  border: 2px solid var(--color-fg);
+  background: transparent;
+  color: var(--color-fg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.secondary:hover:not([aria-disabled="true"]) {
+  background: var(--color-bg);
+}
+
+.secondary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.secondary[aria-disabled="true"] {
+  cursor: progress;
+}
+
+/* at the cap (MAX_BOTS bots, or 30 desks taken): the Button primitive's disabled recipe */
+.secondary[data-full] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* unavailable (the minutes under NO TIMER): the Button primitive's disabled recipe; while a change is on
+   its way (aria-disabled, the row aria-busy) the controls keep full strength and focus, as START's
+   pending does */
+.segment:disabled,
+.field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.segment[aria-disabled="true"],
+.field[aria-disabled="true"] {
+  cursor: progress;
+}
+
+/* the host's REMOVE on a typist's roll row (#133, bible 14.3): the bot row's row-sized 7.1 secondary,
+   pushed to the row's end; the roll is paper, so it hovers to the newsprint ground. CONFIRM (the first
+   press) takes the 7.1 ink fill in place (Abandon's confirm), paper text */
+.remove {
+  margin-left: auto;
+}
+
+.remove:hover:not([aria-disabled="true"]) {
+  background: var(--color-surface);
+}
+
+.remove[data-confirm],
+.remove[data-confirm]:hover:not([aria-disabled="true"]) {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the removed viewer's docket (#133, bible 14.3): the 7.4 exit docket recipe (#233), paper, 2px ink
+   rule, min(480px, 100%) and centred; the ink stamp in its own clipped band, one Courier Prime sentence,
+   the ink link closing it under a 2px ink rule */
+.removed {
+  width: min(480px, 100%);
+  margin-inline: auto;
+  border: 2px solid var(--color-fg);
+  border-radius: 0;
+  background: var(--color-bg);
+}
+
+.removedStamp {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 20px 12px;
+}
+
+.removedText {
+  margin: 0;
+  padding: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  @apply type-body;
+  font-size: 17px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.removedActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 2px solid var(--color-fg);
+}
+
+/* the ink button as a link: centred in its 44px, no underline */
+.removedLink {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: normal;
+  text-decoration: none;
+}
+
+/* bible 18: hit targets >= 44px on touch widths */
+@media (max-width: 768px) {
+  .segment,
+  .secondary,
+  .field {
+    min-height: 44px;
+  }
+}
+
+/* the host's PASSWORD RESET docket (#790, bible 14.3, 7.4): the newsprint docket under the settings
+   docket; its submit row right-aligned under a dashed separator, the issued 7.4 success alert row */
+.resetActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+/* the 7.1 secondary button (Oswald 600 13px .16em, transparent, 2px ink rule, padding 12px 18px), at
+   least 44px (bible 18); on the newsprint docket its hover is the paper ground (as ADD A BOT, #114) */
+.resetButton {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  min-height: 44px;
+  padding: 12px 18px;
+  border: 2px solid var(--color-fg);
+  background: transparent;
+  color: var(--color-fg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.resetButton:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
+.resetButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* pending (aria-busy): disabled at full strength, no spinner (bible 7.2 pending, printed) */
+.resetButton:disabled {
+  cursor: progress;
+}
+
+.resetIssued {
+  padding: 0 12px 12px;
+}
+
+/* the code: IBM Plex Mono 500 (bible 4: codes), ink at the 7.2 room-code tracking */
+.resetCode {
+  display: block;
+  margin: 4px 0 8px;
+  @apply type-typing;
+  font-size: 24px;
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--color-fg);
+}
+
+/* the expiry and the hand-over: 7.4 label lines (Oswald 600 11px .16em), ink */
+.resetNote {
+  display: block;
+  @apply type-label;
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: 0.16em;
+  color: var(--color-fg);
+}
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -234,12 +640,56 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .notice {
+  .pulse {
     animation: none;
   }
 }
 
 /* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
-:root[data-motion="reduce"] .notice {
+:root[data-motion="reduce"] .pulse {
   animation: none;
+}
+
+/* the room's layout per width (#498, bible 7.10, 18): last, so it wins over the row and docket rules */
+@media (min-width: 1024px) {
+  .room {
+    display: grid;
+    grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+    grid-template-areas: "dockets side";
+  }
+
+  .dockets {
+    grid-area: dockets;
+    max-width: none;
+  }
+
+  .side {
+    grid-area: side;
+  }
+}
+
+@media (max-width: 480px) {
+  .room {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* the column's dockets become the room's own rows, so START can follow the roll */
+  .dockets {
+    display: contents;
+  }
+
+  .side {
+    order: 1;
+  }
+
+  .start {
+    order: 2;
+  }
+
+  .settings,
+  .invite,
+  .reset {
+    display: none;
+  }
 }

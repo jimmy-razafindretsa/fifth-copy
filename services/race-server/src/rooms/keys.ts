@@ -8,9 +8,11 @@ export const ROOM_TTL_S = 2 * 3600;
 /**
  * Hash: `code`, `hostUserId`, `phase` (protocol `Phase`), `openedAt`, `settings` (JSON
  * `RaceSettings`, parsed on read); from `host:start` on (#166): `raceId`, `t0` and `endAt` (server ms
- * epoch of GO and of the timed end), `race` (JSON `RaceInfo`) and `desks` (JSON desks at start).
+ * epoch of GO and of the timed end), `race` (JSON `RaceInfo`), `desks` (JSON desks at start) and
+ * `owner` (instance id of the process running the race, #704; `instanceKey`).
  * A room voided by a restart (#204) is `phase: ended` with `endReason: void` and `endedAt` (server ms
- * epoch), keeps `raceId` and loses `race`, `t0`, `endAt` and `desks`.
+ * epoch), keeps `raceId` and loses `race`, `t0`, `endAt`, `desks` and `owner`. A new start ("Race again",
+ * #143) rewrites the race fields and drops `endReason` and `endedAt`.
  */
 export const roomKey = (lobbyId: string) => `room:${lobbyId}`;
 
@@ -28,10 +30,25 @@ export const ROOMS_KEY = "rooms";
 export const VOID_TTL_S = 300;
 
 /**
+ * TTL of an ended room whose last human left (#143 "Race again"): opening the Dawn report closes
+ * every member's socket, so the room, its settings and its bots wait this long for a member to come
+ * back to `/lobby/[code]`. A later join refreshes it to `ROOM_TTL_S` like any activity.
+ */
+export const ENDED_GRACE_TTL_S = 600;
+
+/**
  * Hash: `userId` -> JSON `{ desk, name }`; a bot seat (#156) is keyed `bot:<desk>` -> JSON
  * `{ desk, name, isBot: true, level }`.
  */
 export const membersKey = (lobbyId: string) => `room:${lobbyId}:members`;
+
+/**
+ * Set: the user ids the room refuses (#133, ADR 0008, 0009): a user the host removed (`host:kick`).
+ * The handshake and `join` consult it; a later moderation flow adds entries, not code paths. TTL
+ * `ROOM_TTL_S`, refreshed with every room write; follows an ended room's grace TTL; deleted with the
+ * room (close) and by a void. Never durable: Postgres holds no block.
+ */
+export const blockedKey = (lobbyId: string) => `room:${lobbyId}:blocked`;
 
 /**
  * Hash: desk number -> JSON `DeskState` without `trace` and `typed` (#173, #592): the live mirror of
@@ -44,7 +61,8 @@ export const desksKey = (lobbyId: string) => `room:${lobbyId}:desks`;
 /**
  * List: one JSON `Keystroke` per entry, in order (#592): the desk's trace, appended each tick with
  * only the keys accepted since the previous one. TTL set at each write (not refreshed by the room's
- * other writes); emptied by the first write of a new race and deleted with the room.
+ * other writes); deleted by the next race's start (#143), when the ended room is left, and with the
+ * room.
  */
 export const traceKey = (lobbyId: string, desk: number) => `room:${lobbyId}:trace:${desk}`;
 
@@ -77,3 +95,11 @@ export const resumeIndexKey = (lobbyId: string) => `room:${lobbyId}:resume`;
  * makes the same request a replay (`http/nonces.ts`).
  */
 export const nonceKey = (nonce: string) => `internal:nonce:${nonce}`;
+
+/**
+ * String `1`: the liveness lease of one race-server process (#704, `rooms/owner.ts`), `id` = its
+ * random instance id. TTL `LEASE_TTL_MS`, refreshed by its process; deleted when it closes. A room
+ * hash's `owner` names the process that runs its race: a boot voids a live race only once that
+ * owner's lease is gone (Railway boots the new deployment before it stops the old one).
+ */
+export const instanceKey = (id: string) => `instance:${id}`;

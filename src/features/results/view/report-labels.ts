@@ -1,6 +1,9 @@
 import type { Messages } from "@/i18n/en";
-import type { PodiumLabels } from "./dawn-report";
+import type { DawnReport, PodiumLabels, ReportStatus } from "./dawn-report";
+import { REPORT_LINKS } from "./links";
+import type { BonusKind } from "./personal";
 import type { RankingLabels } from "./ranking";
+import type { TipId } from "./tip";
 
 /** The filing notice's copy (#300 C2). */
 export type FilingLabels = {
@@ -31,9 +34,103 @@ export function rankingLabels(results: Messages["results"]): RankingLabels {
   };
 }
 
+/** The personal stats card's copy (#864, bible 14.4 "Personal stats card"). */
+export type PersonalLabels = {
+  /** The header's ink tag and the card's accessible name: `FORM 5-R · YOUR COPY`. */
+  tag: string;
+  /** `№ {n}` (the plinth tag, language-neutral). */
+  place: string;
+  wpm: string;
+  accuracy: string;
+  underReview: string;
+  sent: string;
+  received: string;
+  none: string;
+  /** `× {n}` */
+  count: string;
+  status: Record<ReportStatus, string>;
+  /** The Sabotage tray's card names (bible 7.4). */
+  bonus: Record<BonusKind, string>;
+  /** The WPM graph (#865): its row label, its accessible sentence (`{peak}`, `{final}`, `{n}`), no trace. */
+  graph: {
+    title: string;
+    summary: { zero: string; one: string; other: string };
+    noTrace: string;
+  };
+  /** Errors by key (#867): its row label, `NONE`, the space's name; `noTrace` is the graph's. */
+  keys: { title: string; none: string; space: string };
+  /**
+   * The tip (#867): its ink tag, one sentence per tip id (`{key}`, `{n}` in `special` and `key`), and
+   * the guide link of the `special` tip (the site header's `HOW TO TYPE É Ç « »`).
+   */
+  tip: { tag: string; guide: string } & Record<TipId, string>;
+};
+
+/** The catalog's strings as the personal card's labels: its own, the podium's figures, the tray's names. */
+export function personalLabels(t: Pick<Messages, "results" | "race" | "header">): PersonalLabels {
+  const { place, wpm, accuracy, underReview } = t.results.podium;
+  const { cards } = t.race.sabotageTray;
+  return {
+    ...t.results.personal,
+    tip: { ...t.results.personal.tip, guide: t.header.guide },
+    place,
+    wpm,
+    accuracy,
+    underReview,
+    status: t.results.status,
+    bonus: {
+      "extra-paperwork": cards["extra-paperwork"].name,
+      exemption: cards.exemption.name,
+      "smoke-break": cards["smoke-break"].name,
+    },
+  };
+}
+
 /** The filing notice's strings; the way back goes to the waiting room when the lobby is known. */
 export function filingLabels(results: Messages["results"], lobbyCode: string | null) {
   const { notice, prefix, late, lobby, home } = results.filing;
   const labels: FilingLabels = { notice, prefix, late, back: lobbyCode ? lobby : home };
-  return { labels, backHref: lobbyCode ? `/lobby/${lobbyCode}` : "/" };
+  return { labels, backHref: lobbyCode ? REPORT_LINKS.lobby(lobbyCode) : REPORT_LINKS.home };
+}
+
+/**
+ * The Dawn report's action row (#143, #863, bible 14.4 action row), as an ordered list. `again` (the way
+ * back to the waiting room for another race) only for a member of the race (the viewer has a desk), or
+ * the lobby's host without one (#876: it watched), while its lobby is open, then `home` (the front desk) for everyone; a guest member also gets `signup`, the
+ * prompt to open a file (`/sign-up`) so the results stay theirs (ADR 0009: the merge carries them). One
+ * entry per link, so a later `PERSONNEL FILE` is one more entry here.
+ */
+export type ReportAction =
+  | { kind: "again" | "home"; label: string; href: string }
+  | { kind: "signup"; label: string; href: string; prompt: string };
+
+export type ReportActionKind = ReportAction["kind"];
+
+export function reportActions(
+  results: Messages["results"],
+  {
+    race,
+    viewerDesk,
+    viewerHosts = false,
+    viewerIsGuest,
+  }: Pick<Extract<DawnReport, { kind: "report" }>, "race" | "viewerDesk" | "viewerHosts"> & {
+    /** The viewer is a guest (ADR 0009); `false` for an account and for no identity at all. */
+    viewerIsGuest: boolean;
+  },
+): ReportAction[] {
+  const member = viewerDesk !== null;
+  const actions: ReportAction[] = [];
+  if ((member || viewerHosts) && race.lobbyOpen && race.lobbyCode) {
+    actions.push({
+      kind: "again",
+      label: results.actions.again,
+      href: REPORT_LINKS.lobby(race.lobbyCode),
+    });
+  }
+  actions.push({ kind: "home", label: results.filing.home, href: REPORT_LINKS.home });
+  if (member && viewerIsGuest) {
+    const { signup, prompt } = results.actions;
+    actions.push({ kind: "signup", label: signup, href: REPORT_LINKS.signUp, prompt });
+  }
+  return actions;
 }

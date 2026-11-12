@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
-import { selectPlace, selectRemaining, selectWpm } from "../view/counters";
+import { selectClockPhase, selectPlace, selectRemaining, selectWpm } from "../view/counters";
 import type { NixieLabels } from "../view/hud-labels";
 import { NixieCounters } from "./nixie-counters";
 
@@ -39,9 +39,13 @@ export type Sampler<T> = {
   read(): T;
 };
 
-/** You are typing in a running race: the only time the figure moves with the clock. */
+/**
+ * You are typing in a running race: the only time the figure moves with the clock. A cut line keeps it
+ * moving (#235 C1: the race clock never pauses, `selectClockPhase`).
+ */
+// the store's `selectCanType` (#233: an exit stops the figure before the snapshot adopts the status)
 const typingNow = (s: RaceState) =>
-  s.phase === "running" && s.prediction?.state.status === "typing";
+  selectClockPhase(s) === "running" && s.prediction?.state.status === "typing" && s.exit === null;
 
 /**
  * A value as a tiny external store on a bounded clock (#225 C2, generalised by #240; the
@@ -133,9 +137,14 @@ export function createWpmSampler(
  * the two pages of C4 within a quarter second of the server clock. */
 export const TIMER_SAMPLE_MS = 250;
 
-/** The race clock runs: counting down to GO or racing, with a timer (`selectRemaining` moves). */
-const timerRuns = (s: RaceState) =>
-  (s.phase === "countdown" || s.phase === "running") && (s.race?.timerS ?? null) !== null;
+/**
+ * The race clock runs: counting down to GO or racing, with a timer (`selectRemaining` moves); a cut
+ * line keeps it running (#235 C1).
+ */
+const timerRuns = (s: RaceState) => {
+  const phase = selectClockPhase(s);
+  return (phase === "countdown" || phase === "running") && (s.race?.timerS ?? null) !== null;
+};
 
 /** The timer tube's sampler (#240 C1): `selectRemaining` every `TIMER_SAMPLE_MS` while the clock runs. */
 export function createRemainingSampler(

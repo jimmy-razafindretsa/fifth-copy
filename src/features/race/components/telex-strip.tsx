@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import type { TypedView } from "../view/typed-view";
+import { surfacePhase, type TypedView } from "../view/typed-view";
 import styles from "./telex-strip.module.css";
 import { TypingChars } from "./typing-chars";
 
@@ -52,6 +52,7 @@ function placeTape(
  * The telex strip (#558, bible 7.7): the whole text on one line of tape, each char in its state, scrolled
  * so the next char stays in view. Cursor changes follow with the CSS `scroll-behavior` (smooth, `auto`
  * under reduced motion); the first placement and re-placements after a resize or a font swap are instant.
+ * A Smoke Break (#236) blurs the tape while `view.blurred` (`data-blur`).
  */
 export function TelexStrip({ view, labels }: { view: TypedView; labels: TelexLabels }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -80,7 +81,14 @@ export function TelexStrip({ view, labels }: { view: TypedView; labels: TelexLab
   }, [focus]);
 
   return (
-    <div role="group" aria-label={labels.strip} className={styles.strip} data-telex>
+    <div
+      role="group"
+      aria-label={labels.strip}
+      className={styles.strip}
+      data-telex
+      data-phase={surfacePhase(view)}
+      data-blur={view.blurred}
+    >
       <div ref={viewport} className={styles.viewport}>
         <span ref={tape} className={styles.tape} aria-hidden="true">
           <TypingChars chars={view.chars} last={view.cursor - 1} stamp={view.lastTypedAt} />

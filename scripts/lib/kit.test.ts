@@ -129,10 +129,19 @@ describe("lockViolation", () => {
     expect(lockViolation({ labels: ["area:a"] }, [{ id: "X", labels: ["area:b"] }], 3)).toBeNull();
   });
 
-  it("treats every touches:* label as a hotspot lock", () => {
+  it("treats every touches:* label as a hotspot lock; touches:i18n allows two in flight (#869)", () => {
+    const i18n = (id: string) => ({ id, labels: ["touches:i18n"] });
+    expect(lockViolation({ labels: ["touches:i18n"] }, [i18n("X")], 3)).toBeNull();
+    expect(lockViolation({ labels: ["touches:i18n"] }, [i18n("X"), i18n("Y")], 3)).toMatch(
+      /touches:i18n cards are in flight \(X, Y\)/,
+    );
     expect(
-      lockViolation({ labels: ["touches:i18n"] }, [{ id: "X", labels: ["touches:i18n"] }], 3),
-    ).toMatch(/touches:i18n card is in flight \(X\)/);
+      lockViolation(
+        { labels: ["touches:protocol"] },
+        [{ id: "X", labels: ["touches:protocol"] }],
+        3,
+      ),
+    ).toMatch(/touches:protocol card is in flight \(X\)/);
     expect(
       lockViolation({ labels: ["touches:i18n"] }, [{ id: "X", labels: ["touches:protocol"] }], 3),
     ).toBeNull();

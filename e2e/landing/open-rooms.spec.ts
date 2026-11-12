@@ -1,0 +1,160 @@
+import type { Browser, BrowserContext, Page } from "@playwright/test";
+import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { createLobby, makePublic } from "../race/helpers";
+import { ACTION_WAIT, scaled } from "../timeouts";
+
+// Contract of #807: the landing's open-rooms docket (bible 14.1 "Open rooms docket", 7.4). Parallel
+// workers open public rooms too, so every assertion targets this test's own room code.
+
+/** The viewport projects' sizes (playwright.config.ts `VIEWPORTS`), for C6's visitor. */
+const VIEWPORTS = {
+  mobile: { width: 375, height: 812 },
+  tablet: { width: 768, height: 1024 },
+  desktop: { width: 1280, height: 800 },
+} as const;
+
+const docket = (page: Page) => page.locator("section[data-open-rooms]");
+const joinLink = (page: Page, code: string) =>
+  docket(page).getByRole("link", { name: `Join room ${code}`, exact: true });
+const roll = (page: Page) => page.getByRole("list", { name: "Typists in the room" });
+/** Human rows of the waiting-room roll (a bot row carries the ink BOT tag). */
+const typistRows = (page: Page) =>
+  roll(page)
+    .getByRole("listitem")
+    .filter({ hasNot: page.getByText("BOT", { exact: true }) });
+const overflow = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+
+/** Loads the landing and waits for the docket to leave its skeleton (the query answered). */
+async function landing(page: Page) {
+  await page.goto("/");
+  await expect(docket(page)).toBeVisible();
+  await expect(docket(page).locator("[aria-busy='true']")).toHaveCount(0, {
+    timeout: ACTION_WAIT,
+  });
+}
+
+/**
+ * Loads the landing until the docket lists `code`. The docket shows the 5 busiest rooms, and parallel
+ * workers open public rooms too, so the test's own room is found by its code, reloading while busier
+ * rooms of other tests crowd it out.
+ */
+async function landingListing(page: Page, code: string) {
+  await expect(async () => {
+    await landing(page);
+    await expect(joinLink(page, code)).toBeVisible({ timeout: scaled(500) });
+  }).toPass({ timeout: ACTION_WAIT });
+}
+
+/**
+ * Hosts a fresh public room: a private race filed PUBLIC (#114's toggle, written to the row). Not
+ * QUICK RACE, which seats a visitor in any open public room (#128), another worker's included.
+ */
+async function hostPublicRoom(page: Page): Promise<string> {
+  const code = await createLobby(page);
+  // seated: the roll shows the host, so the race server has the room
+  await expect(typistRows(page)).toHaveCount(1, { timeout: ACTION_WAIT });
+  await makePublic(code);
+  return code;
+}
+
+async function freshContext(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
+  const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+  return { context, page: await context.newPage() };
+}
+
+// Public rooms are joinable by any QUICK RACE (#128): this file runs in the `matchmaking` project.
+test.describe("open rooms docket (#807) @matchmaking", () => {
+  test.beforeEach(() => test.slow());
+
+  test("C1 a visitor sees a public room, follows JOIN → and both rolls show two typists", async ({
+    page,
+    browser,
+  }) => {
+    const code = await hostPublicRoom(page);
+    const b = await freshContext(browser);
+    await landingListing(b.page, code);
+    await expect(docket(b.page).getByRole("heading", { level: 2 })).toHaveText("OPEN ROOMS");
+    await expect(docket(b.page).getByText("LIVE", { exact: true })).toBeVisible();
+    const link = joinLink(b.page, code);
+    await expect(link).toHaveText("JOIN →");
+    await expect(link).toHaveAttribute("href", `/lobby/${code}`);
+    const row = link.locator("xpath=ancestor::li");
+    await expect(row).toContainText(code);
+    await expect(row).toContainText(/1 TYPIST · \d+ BOTS?/);
+
+    await link.click();
+    await b.page.waitForURL(`**/lobby/${code}`, { timeout: ACTION_WAIT });
+    await expect(typistRows(b.page)).toHaveCount(2, { timeout: ACTION_WAIT });
+    await expect(typistRows(page)).toHaveCount(2, { timeout: scaled(2_000) });
+    await b.context.close();
+  });
+
+  test("C3 a private room is never listed", async ({ page, browser }) => {
+    const code = await createLobby(page);
+    await expect(typistRows(page)).toHaveCount(1, { timeout: ACTION_WAIT });
+    const b = await freshContext(browser);
+    await landing(b.page);
+    await expect(joinLink(b.page, code)).toHaveCount(0);
+    await expect(docket(b.page)).not.toContainText(code);
+    await b.context.close();
+  });
+
+  test("C4 once the host leaves and the room closes, a reload no longer lists it", async ({
+    browser,
+  }) => {
+    const a = await freshContext(browser);
+    const code = await hostPublicRoom(a.page);
+    const b = await freshContext(browser);
+    await landingListing(b.page, code);
+    await expect(joinLink(b.page, code)).toBeVisible();
+
+    // the last human's socket closes: the race server closes the waiting room (#145)
+    await a.context.close();
+    await expect(async () => {
+      await landing(b.page);
+      await expect(joinLink(b.page, code)).toHaveCount(0, { timeout: scaled(500) });
+    }).toPass({ timeout: ACTION_WAIT });
+    await b.context.close();
+  });
+
+  // The `matchmaking` project is desktop only: the visitor's viewport is each of the three here.
+  for (const scheme of ["light", "dark"] as const)
+    for (const [name, viewport] of Object.entries(VIEWPORTS)) {
+      test(`C6 ${scheme} ${name}: no axe violation with a populated docket, no horizontal scroll, 44px JOIN`, async ({
+        page,
+        browser,
+      }) => {
+        const code = await hostPublicRoom(page);
+        const b = await freshContext(browser);
+        await b.page.setViewportSize(viewport);
+        if (scheme === "dark") {
+          // the landing opens on paper whatever the OS (bible 3.2): Night shift is the saved choice
+          await b.page.emulateMedia({ colorScheme: "dark" });
+          await b.context.addCookies([
+            { name: "theme", value: "dark", url: test.info().project.use.baseURL! },
+          ]);
+        }
+        await landingListing(b.page, code);
+        if (scheme === "dark")
+          await expect(b.page.locator("html")).toHaveAttribute("data-theme", "dark");
+        const link = joinLink(b.page, code);
+        await link.scrollIntoViewIfNeeded();
+        await expect(link).toBeVisible();
+        await expectNoA11yViolations(b.page);
+        expect(await overflow(b.page)).toBeLessThanOrEqual(0);
+
+        const box = await link.boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+        if (viewport.width <= 375) {
+          // full width: the docket spans the hero's actions column
+          const [own, column] = await docket(b.page).evaluate((el) => [
+            el.getBoundingClientRect().width,
+            el.parentElement!.getBoundingClientRect().width,
+          ]);
+          expect(Math.abs(own! - column!)).toBeLessThanOrEqual(1);
+        }
+        await b.context.close();
+      });
+    }
+});

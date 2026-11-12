@@ -1,8 +1,8 @@
 import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
-import type { Clock, Scheduler, TimerHandle } from "../clock";
+import type { Scheduler, TimerHandle } from "../clock";
 import type { DesksState } from "../rooms/desks-state";
 import type { Durations } from "../rooms/durations";
-import type { RoomRegistry } from "../rooms/registry";
+import { watches, type RoomRegistry } from "../rooms/registry";
 import type { ResumeKeys } from "./resume-keys";
 
 /** What the socket edge does after a user's socket closed. */
@@ -11,7 +11,10 @@ export type Closed =
   | "still-connected"
   /** `waiting` or `ended` (or no room): the edge frees the desk (`registry.leave`, `roster`). */
   | "leave"
-  /** `countdown` or `running`: the desk is line-cut (or already was, or is past typing). */
+  /**
+   * `countdown` or `running`: the desk is line-cut (or already was, or is past typing), or the
+   * watching host (#876) is kept for the race like a seated host, released at its end (#658).
+   */
   | "kept";
 
 export type Presence = {
@@ -37,7 +40,10 @@ export type Presence = {
   socketClosed(lobbyId: string, userId: string): Promise<Closed>;
   /** Open sockets of the user on this process. */
   sockets(lobbyId: string, userId: string): number;
-  /** Users seated through a socket on this process that now have none (#658: released at race end). */
+  /**
+   * Users seated through a socket on this process that now have none (#658: released at race end),
+   * and the watching host kept for the race with none (#876).
+   */
   dropped(lobbyId: string): string[];
   /** Whether the desk's user has an open socket (#183 reads it: idle is decided only while connected). */
   isConnected(lobbyId: string, desk: number): boolean;
@@ -73,27 +79,36 @@ export function createPresence({
   registry,
   desksState,
   resumeKeys,
-  clock,
   scheduler,
   durations,
   emit,
+  onExpired,
 }: {
   registry: RoomRegistry;
   desksState: DesksState;
   resumeKeys: ResumeKeys;
-  clock: Clock;
   scheduler: Scheduler;
   durations: Pick<Durations, "GRACE_MS">;
   /** `event` to the room (`line-cut`, `resumed`). */
   emit: (lobbyId: string, event: RaceEvent) => void;
+  /**
+   * A line-cut desk turned `expired` (#137 C2 b: its user is gone for good, the host role may pass).
+   * Called inside the room's queue: it must not call the registry's queued methods.
+   */
+  onExpired?: (lobbyId: string, userId: string) => Promise<void>;
 }): Presence {
   const counts = new Map<string, number>();
   /** Per room: userId -> desk and resume key, from `seated`. */
   const seats = new Map<string, Map<string, { desk: number; key: string }>>();
+  /** Per room: the watching host whose last socket closed during the race (#876), kept for it. */
+  const watchers = new Map<string, Set<string>>();
   /** Per room: line-cut desks awaiting their user. */
   const cuts = new Map<string, Map<number, Cut>>();
   const v = PROTOCOL_VERSION;
-  /** Set by `close()`: the sockets closing at shutdown arm no grace timer. */
+  /**
+   * Set by `close()`: the sockets closing at shutdown arm no grace timer. Read again after every
+   * wait (#886): a disconnect queued before `close()` must not arm one once its reads come back.
+   */
   let shut = false;
 
   const userKey = (lobbyId: string, userId: string) => `${lobbyId}\u0000${userId}`;
@@ -114,9 +129,9 @@ export function createPresence({
     const runtime = desksState.get(lobbyId);
     const state = runtime?.states.get(desk);
     if (runtime?.phase !== "running" || state?.status !== from) return;
-    // `lastKeyAt` restarts at the resume, so idle (#183) never counts the time away.
-    const lastKeyAt = to === "typing" ? clock.now() : state.lastKeyAt;
-    desksState.set(lobbyId, desk, { ...state, status: to, lastKeyAt });
+    // `lastKeyAt` is kept across the cut (#609, owner decision 2026-11-04): only an accepted key
+    // moves it, so cycling disconnect and resume never dodges the idle warning and kick (#183).
+    desksState.set(lobbyId, desk, { ...state, status: to });
   }
 
   /** Line-cut -> expired with the frozen progress; the key goes. Caller is in the room's queue. */
@@ -125,6 +140,7 @@ export function createPresence({
     cuts.get(lobbyId)?.delete(desk);
     setStatus(lobbyId, desk, "line-cut", "expired");
     await resumeKeys.drop(lobbyId, cut.userId);
+    await onExpired?.(lobbyId, cut.userId);
   }
 
   /** The grace ran out: the next tick sees `expired` and asks the lifecycle (all terminal?). */
@@ -175,8 +191,18 @@ export function createPresence({
       return registry.withRoom(lobbyId, async (): Promise<Closed> => {
         // A socket of the user reopened while this waited in the queue.
         if (sockets(lobbyId, userId) > 0) return "still-connected";
+        // `close()` ran while this waited in the queue (#886): a socket that dropped just before
+        // the shutdown arms no grace timer either.
+        if (shut) return "kept";
         const room = await registry.room(lobbyId);
         if (room?.phase !== "countdown" && room?.phase !== "running") return "leave";
+        // The watching host (#876) has no desk to cut: kept for the race as a seated host is, its
+        // leave (and the host role's passing) waits for the race end (`dropped`, #658).
+        if (watches(room.settings, room.hostUserId, userId)) {
+          if (!watchers.has(lobbyId)) watchers.set(lobbyId, new Set());
+          watchers.get(lobbyId)!.add(userId);
+          return "kept";
+        }
         const desk = (room.desks ?? room.seated).find((d) => d.userId === userId)?.desk;
         if (desk === undefined) return "leave";
         if (cuts.get(lobbyId)?.has(desk)) return "kept";
@@ -187,6 +213,8 @@ export function createPresence({
         const resumeKey =
           seats.get(lobbyId)?.get(userId)?.key ?? (await resumeKeys.issue(lobbyId, userId, desk));
         await resumeKeys.grace(resumeKey, durations.GRACE_MS);
+        // ... or during the Redis reads above (#886): `close()` already cleared the cuts.
+        if (shut) return "kept";
         const cut: Cut = {
           userId,
           key: resumeKey,
@@ -203,7 +231,9 @@ export function createPresence({
     sockets,
 
     dropped: (lobbyId) =>
-      [...(seats.get(lobbyId)?.keys() ?? [])].filter((userId) => sockets(lobbyId, userId) === 0),
+      [...(seats.get(lobbyId)?.keys() ?? []), ...(watchers.get(lobbyId) ?? [])].filter(
+        (userId) => sockets(lobbyId, userId) === 0,
+      ),
 
     isConnected(lobbyId, desk) {
       for (const [userId, seat] of seats.get(lobbyId) ?? []) {
@@ -215,6 +245,7 @@ export function createPresence({
     left: (lobbyId, userId) =>
       registry.withRoom(lobbyId, async () => {
         seats.get(lobbyId)?.delete(userId);
+        watchers.get(lobbyId)?.delete(userId);
         await resumeKeys.drop(lobbyId, userId);
       }),
 
@@ -234,6 +265,7 @@ export function createPresence({
       for (const cut of cuts.get(lobbyId)?.values() ?? []) scheduler.clear(cut.timer);
       cuts.delete(lobbyId);
       seats.delete(lobbyId);
+      watchers.delete(lobbyId);
       resumeKeys
         .dropRoom(lobbyId)
         .catch((err: unknown) =>

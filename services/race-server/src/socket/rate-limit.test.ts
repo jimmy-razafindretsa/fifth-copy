@@ -1,14 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { keysSchema, pingSchema, PROTOCOL_VERSION, type Rejected } from "@fifth-copy/protocol";
+import {
+  keysSchema,
+  pingSchema,
+  PROTOCOL_VERSION,
+  type HostSettings,
+  type HostSettingsAck,
+  type Rejected,
+} from "@fifth-copy/protocol";
 import type { Limiter } from "@fifth-copy/limiter";
 import { createFakeClock } from "../clock";
-import { boot, HOST_SUB, startedRace, until, watchRace, type Booted } from "../testing/harness";
+import {
+  boot,
+  HOST_SUB,
+  startedRace,
+  until,
+  watchRace,
+  type Booted,
+  type Client,
+} from "../testing/harness";
 import {
   createSocketGuard,
   exceedsBytes,
   MAX_PAYLOAD_BYTES,
   MAX_SOCKETS_PER_USER,
   REFUSAL_WINDOW_MS,
+  REFUSALS_TO_DISCONNECT,
   SOCKET_LIMITS,
   type GuardedSocket,
   type RateLimitDeps,
@@ -175,9 +191,14 @@ describe("one budget per token identity (real Redis)", () => {
   it(`${MAX_SOCKETS_PER_USER} sockets of one token share one host:settings budget; the excess never reaches the room queue`, async () => {
     const { tabs } = await sameToken(MAX_SOCKETS_PER_USER);
     const update = vi.spyOn(booted!.server.registry, "updateSettings");
-    const acks: unknown[] = [];
+    const acks: HostSettingsAck[] = [];
+    const max = SOCKET_LIMITS["host:settings"].max;
+    // One budget for every tab: max + 3 calls spread over the tabs, then a few more.
+    const perTab = Math.ceil((max + 3) / tabs.length) + 1;
     for (const { client } of tabs) {
-      for (let i = 0; i < 2; i++) client.emit("host:settings", settingsCall, (a) => acks.push(a));
+      for (let i = 0; i < perTab; i++) {
+        client.emit("host:settings", settingsCall, (a) => acks.push(a));
+      }
     }
     await until(
       () => tabs.every((t) => t.client.disconnected),
@@ -185,28 +206,31 @@ describe("one budget per token identity (real Redis)", () => {
       "every tab of the flooding identity cut",
     );
     await settle();
-    // 2 x 4 calls, one budget of 5: 5 reach the registry (and are refused `not-host`), 3 are refused.
-    expect(update).toHaveBeenCalledTimes(SOCKET_LIMITS["host:settings"].max);
-    expect(acks.length).toBeLessThanOrEqual(SOCKET_LIMITS["host:settings"].max);
-    expect(tabs.flatMap((t) => t.seen.rejected)).toHaveLength(3);
+    // `max` calls reach the registry (and are refused `not-host`); 3 are refused by the budget,
+    // each answered by its ack (#750 C2), the 3rd cuts the identity; the rest are dropped.
+    expect(update).toHaveBeenCalledTimes(max);
+    expect(acks.filter((a) => !a.ok && a.error === "rate-limited")).toHaveLength(3);
+    expect(acks.filter((a) => !a.ok && a.error === "not-host").length).toBeLessThanOrEqual(max);
+    expect(tabs.flatMap((t) => t.seen.rejected)).toHaveLength(0);
   });
 
   it("a reconnection does not refill the bucket", async () => {
     const { tabs, token } = await sameToken(1);
-    const acks: unknown[] = [];
-    for (let i = 0; i < SOCKET_LIMITS["host:settings"].max; i++) {
+    const acks: HostSettingsAck[] = [];
+    const max = SOCKET_LIMITS["host:settings"].max;
+    for (let i = 0; i < max; i++) {
       tabs[0]!.client.emit("host:settings", settingsCall, (a) => acks.push(a));
     }
-    await until(() => acks.length === SOCKET_LIMITS["host:settings"].max, undefined, "5 acks");
+    await until(() => acks.length === max, undefined, `${max} acks`);
     tabs[0]!.client.disconnect();
     const again = booted!.connect({ v: PROTOCOL_VERSION, token });
     const seen = watchRace(again);
     await until(() => !!seen.welcome, undefined, "reconnected");
     again.emit("host:settings", settingsCall, (a) => acks.push(a));
-    await until(() => seen.rejected.length === 1, undefined, "refused after the reconnection");
-    await settle();
-    expect(acks).toHaveLength(SOCKET_LIMITS["host:settings"].max);
-    expect(seen.rejected[0]!.reason).toBe("rate-limit");
+    await until(() => acks.length === max + 1, undefined, "refused after the reconnection");
+    expect(acks.at(-1)).toEqual({ ok: false, error: "rate-limited" });
+    expect(acks.slice(0, max).every((a) => !a.ok && a.error === "not-host")).toBe(true);
+    expect(seen.rejected).toHaveLength(0);
   });
 
   it(`the socket past ${MAX_SOCKETS_PER_USER} of one token is refused and closed; the others stay seated`, async () => {
@@ -401,6 +425,143 @@ describe("createSocketGuard (unit)", () => {
     guard.admit(b.socket, ID);
     b.socket.disconnect(true);
     expect(guard.size()).toBe(0);
+  });
+});
+
+describe("host:settings budget sized for the host settings form (#750)", () => {
+  it("C1: allows at least 12 patches per 10 s (13 controls, bot rows), still bounded", () => {
+    const rule = SOCKET_LIMITS["host:settings"];
+    expect(rule.windowMs).toBe(10_000);
+    expect(rule.max).toBeGreaterThanOrEqual(12);
+    // A flood is still refused: at most a few patches a second, sustained.
+    expect(rule.max).toBeLessThanOrEqual(30);
+  });
+
+  it("C3: the other events' limits and the cut rule are unchanged", () => {
+    const others = Object.fromEntries(
+      Object.entries(SOCKET_LIMITS).filter(([event]) => event !== "host:settings"),
+    );
+    expect(others).toEqual({
+      keys: { max: 25, windowMs: 1_000 },
+      ping: { max: 2, windowMs: 1_000 },
+      "host:start": { max: 5, windowMs: 10_000 },
+      // #133: a host removal, like the other host and race actions.
+      "host:kick": { max: 5, windowMs: 10_000 },
+      abandon: { max: 5, windowMs: 10_000 },
+      "bonus:play": { max: 5, windowMs: 10_000 },
+    });
+    expect(REFUSALS_TO_DISCONNECT).toBe(3);
+    expect(REFUSAL_WINDOW_MS).toBe(10_000);
+  });
+
+  /** A waiting room, its host seated and welcomed. */
+  async function hostRoom() {
+    booted = await boot(process.env.REDIS_URL);
+    const lobby = await booted.openRoom();
+    const host = booted.connect({
+      v: PROTOCOL_VERSION,
+      token: await booted.token({ lobby, sub: HOST_SUB, role: "host" }),
+    });
+    const seen = watchRace(host);
+    await until(() => !!seen.welcome, undefined, "host welcomed");
+    return { host, seen };
+  }
+  const patchAt = (i: number): HostSettings => ({
+    v: PROTOCOL_VERSION,
+    patch: { wordCount: 10 + i },
+  });
+  const ask = (client: Client, payload: unknown) =>
+    client
+      .timeout(2_000)
+      .emitWithAck("host:settings", payload as never) as Promise<HostSettingsAck>;
+
+  it("C1: a host editing 13 controls in a row within one window gets every change, socket kept (real Redis)", async () => {
+    const { host, seen } = await hostRoom();
+    // The form keeps one patch in flight: each waits for the previous ack.
+    for (let i = 0; i < 13; i++) {
+      const ack = await ask(host, patchAt(i));
+      expect(ack, `patch ${i}`).toMatchObject({ ok: true, settings: { wordCount: 10 + i } });
+    }
+    expect(host.connected).toBe(true);
+    expect(seen.rejected).toHaveLength(0);
+  });
+
+  it("C1, C2: a sustained flood past the budget is refused by the ack and still cut after 3 refusals (real Redis)", async () => {
+    const { host, seen } = await hostRoom();
+    const max = SOCKET_LIMITS["host:settings"].max;
+    for (let i = 0; i < max; i++) {
+      expect(await ask(host, patchAt(i))).toMatchObject({ ok: true });
+    }
+    let disconnected = false;
+    host.on("disconnect", () => (disconnected = true));
+    // The first refusal answers at once (no 5 s client timeout) and keeps the socket.
+    expect(await ask(host, patchAt(0))).toEqual({ ok: false, error: "rate-limited" });
+    expect(host.connected).toBe(true);
+    const acks: HostSettingsAck[] = [];
+    for (let i = 0; i < 5; i++) host.emit("host:settings", patchAt(i), (a) => acks.push(a));
+    await until(() => disconnected, undefined, "flood cut");
+    expect(acks.filter((a) => !a.ok && a.error === "rate-limited")).toHaveLength(
+      REFUSALS_TO_DISCONNECT - 1,
+    );
+    expect(acks.every((a) => !a.ok)).toBe(true);
+    expect(seen.rejected).toHaveLength(0);
+  });
+
+  it("C2: a budget refusal of host:settings answers its ack instead of `rejected`; without an ack it is `rejected` (unit)", async () => {
+    const limit = allow();
+    const { socket, emitted, passed, send } = fakeSocket();
+    guardOf(limit).admit(socket, ID);
+    const max = SOCKET_LIMITS["host:settings"].max;
+    for (let i = 0; i < max; i++)
+      send("host:settings", { v: PROTOCOL_VERSION, patch: {} }, () => {});
+    await settle();
+    expect(passed).toHaveLength(max);
+    const acks: unknown[] = [];
+    send("host:settings", { v: PROTOCOL_VERSION, patch: {} }, (a: unknown) => acks.push(a));
+    expect(acks).toEqual([{ ok: false, error: "rate-limited" }]);
+    expect(emitted).toEqual([]);
+    send("host:settings", { v: PROTOCOL_VERSION, patch: {} });
+    expect(emitted).toEqual([{ v: PROTOCOL_VERSION, reason: "rate-limit" }]);
+    // Both refusals count: the 3rd cuts the identity (the disconnect rule still holds).
+    expect(socket.disconnected).toBe(false);
+    send("host:settings", { v: PROTOCOL_VERSION, patch: {} }, (a: unknown) => acks.push(a));
+    expect(acks).toHaveLength(2);
+    await settle();
+    expect(socket.disconnected).toBe(true);
+    expect(passed).toHaveLength(max);
+  });
+
+  it("C2: a Redis budget refusal of host:settings answers the ack too (unit)", async () => {
+    const limit = vi.fn<Limiter["limit"]>(async () => ({
+      ok: false,
+      remaining: 0,
+      retryAfterMs: 1_000,
+    }));
+    const { socket, emitted, passed, send } = fakeSocket();
+    guardOf(limit).admit(socket, ID);
+    const acks: unknown[] = [];
+    send("host:settings", { v: PROTOCOL_VERSION, patch: {} }, (a: unknown) => acks.push(a));
+    await settle();
+    expect(acks).toEqual([{ ok: false, error: "rate-limited" }]);
+    expect(emitted).toEqual([]);
+    expect(passed).toEqual([]);
+  });
+
+  it("C2: an oversized host:settings is still `rejected` (payload cap), never acked; other events keep `rejected` (unit)", async () => {
+    const limit = allow();
+    const { socket, emitted, send } = fakeSocket();
+    guardOf(limit).admit(socket, ID);
+    const acks: unknown[] = [];
+    send("host:settings", { v: PROTOCOL_VERSION, pad: oversized }, (a: unknown) => acks.push(a));
+    for (let i = 0; i <= SOCKET_LIMITS["host:start"].max; i++) {
+      send("host:start", { v: PROTOCOL_VERSION }, (a: unknown) => acks.push(a));
+    }
+    await settle();
+    expect(acks).toHaveLength(0);
+    expect(emitted).toEqual([
+      { v: PROTOCOL_VERSION, reason: "rate-limit" },
+      { v: PROTOCOL_VERSION, reason: "rate-limit" },
+    ]);
   });
 });
 

@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { COOLDOWN_MS, effectiveText, initialState } from "@fifth-copy/engine";
 import {
   DEFAULT_RACE_SETTINGS,
   PLAYER_STATUS_CODES,
@@ -29,13 +30,24 @@ const {
   createRaceStore,
   initialRaceState,
   reduceRace,
+  selectAbandonState,
+  selectBonus,
   selectCanType,
+  selectExit,
   selectTypedView,
   selectVisibleStamp,
+  sendAbandons,
+  sendBonusPlays,
+  watchBlurExpiry,
+  watchRefusalExpiry,
   watchStampExpiry,
+  REFUSAL_SHOW_MS,
+  PING_ROUND_COUNT,
+  PING_ROUND_INTERVAL_MS,
 } = await import("./store");
 const { RaceStoreProvider, useRaceStore } = await import("./use-race-store");
 const { connectToRoom } = await import("./socket");
+const { selectClockPhase } = await import("../view/counters");
 type RaceEvent = import("./store").RaceEvent;
 type RaceState = import("./store").RaceState;
 
@@ -46,6 +58,7 @@ const member = (desk: number, name: string, isHost = false): Member => ({
   isBot: false,
   color: (desk - 1) % 12,
   marker: (["circle", "square", "triangle", "diamond"] as const)[Math.floor((desk - 1) / 12) % 4]!,
+  avatar: null,
 });
 
 const KEY = "k".repeat(40);
@@ -59,8 +72,10 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: KEY,
   serverNow: 1_767_225_600_000,
+  autoStartAt: null,
   ...over,
 });
 
@@ -106,6 +121,24 @@ describe("reduceRace (#561 C2)", () => {
       // #240: the server's end
       ending: null,
       endedAt: null,
+      // #236: your card, cooldown, blur and refusal
+      bonus: {
+        card: null,
+        cooldownUntil: null,
+        blurUntil: null,
+        refused: false,
+        refusedAt: null,
+        pending: null,
+        plays: 0,
+      },
+      // #233: your exit, the idle warning, the Major's lamp and the abandon intents sent
+      exit: null,
+      idleWarning: false,
+      lampTarget: null,
+      abandoning: false,
+      abandons: 0,
+      // #661 C2: no cut line waiting for its welcome
+      keysHeld: false,
     });
   });
 
@@ -179,7 +212,8 @@ describe("reduceRace (#561 C2)", () => {
     expect(reduceRace(again, { type: "reconnected" }).phase).toBe("waiting");
   });
 
-  it.each(["closed", "no-room", "bad-token", "version", "in-progress"] as const)(
+  // a `no-room` after a welcome is the lost room (#235 C4, below)
+  it.each(["closed", "bad-token", "version", "in-progress"] as const)(
     "a %s refusal is lost, from connecting and from waiting",
     (reason) => {
       expect(run({ type: "connect-error", reason })).toMatchObject({ phase: "lost", lost: reason });
@@ -367,8 +401,12 @@ describe("bindRaceSocket (#561 C3)", () => {
     expect([...fake.listeners.keys()].sort()).toEqual([
       "connect_error",
       "countdown",
+      // #661: the server's close and the transport drop
+      "disconnect",
       "ended",
       "event",
+      "pong",
+      "rejected",
       "roster",
       "settings",
       "snapshot",
@@ -601,6 +639,7 @@ describe("countdown and GO (#214 C1)", () => {
   it("one go per countdown: a repeated countdown or a later welcome reschedules or cancels it", () => {
     const { fake, clock, gos } = setup();
     fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    clock.advance(2_400); // the welcome's ping round (#643) is over
     fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
     fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 2_000 }));
     expect(clock.pending()).toBe(1);
@@ -609,6 +648,7 @@ describe("countdown and GO (#214 C1)", () => {
     // a welcome that no longer counts down (the race was voided) cancels the pending go
     fake.deliver("countdown", countdown({ ...RACE, t0: clock.now + 3_000 }));
     fake.deliver("welcome", welcome({ serverNow: clock.now }));
+    clock.advance(2_400); // its ping round (#643); the go was cancelled, nothing else is due
     expect(clock.pending()).toBe(0);
     clock.advance(5_000);
     expect(gos()).toBe(1);
@@ -636,6 +676,173 @@ describe("countdown and GO (#214 C1)", () => {
     expect(store.getState().phase).toBe("countdown");
     clock.advance(3_000);
     expect(store.getState().phase).toBe("running");
+  });
+
+  // Contract of #643 C3: after each welcome the binder sends 5 pings 600 ms apart on the injected timer
+  // (inside the ADR 0020 ping budget of 2 a second),
+  // sets the offset to the best pong of the round (`bestOffset`), reschedules a pending GO on it (still
+  // one go) and its unbind cancels the pings still to send.
+  describe("ping/pong refinement (#643 C3)", () => {
+    const pings = (fake: ReturnType<typeof makeRoom>["fake"]) =>
+      fake.emit.mock.calls.filter(([event]) => event === "ping").map(([, payload]) => payload);
+    /** The server answers `sent` at `serverNow`; the pong reaches this device `after` ms later. */
+    const answer = (
+      fake: ReturnType<typeof makeRoom>["fake"],
+      clock: ReturnType<typeof fakeTimer>,
+      sent: number,
+      serverNow: number,
+      after = 0,
+    ) => {
+      clock.advance(after);
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent, serverNow });
+    };
+
+    it("sends 5 pings 600 ms apart after a welcome, stamped with the injected clock", () => {
+      const { fake, clock } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      expect(pings(fake)).toEqual([{ v: PROTOCOL_VERSION, sent: start }]);
+      clock.advance(599);
+      expect(pings(fake)).toHaveLength(1);
+      clock.advance(1);
+      expect(pings(fake)).toHaveLength(2);
+      clock.advance(3_000);
+      expect(pings(fake)).toEqual(
+        [0, 600, 1_200, 1_800, 2_400].map((d) => ({ v: PROTOCOL_VERSION, sent: start + d })),
+      );
+      expect(clock.pending()).toBe(0);
+      // never more than 2 pings in any 1 s window (ADR 0020)
+      const sent = pings(fake).map((p) => (p as { sent: number }).sent);
+      for (const at of sent)
+        expect(sent.filter((t) => t > at - 1_000 && t <= at).length).toBeLessThanOrEqual(2);
+    });
+
+    it("the round ends inside the 3 s countdown and keeps the ADR 0020 budget", () => {
+      expect(PING_ROUND_INTERVAL_MS * (PING_ROUND_COUNT - 1)).toBeLessThan(3_000);
+      expect(PING_ROUND_INTERVAL_MS).toBeGreaterThanOrEqual(500);
+    });
+
+    it("sets the store's clock offset to the best pong of the round", () => {
+      const { fake, room } = makeRoom();
+      const clock = fakeTimer();
+      const store = createRaceStore();
+      bindRaceSocket(room, store.dispatch, { timer: clock.timer });
+      const start = clock.now;
+      // the welcome was 60 ms in flight: the welcome offset reads 500, the true offset is 560
+      fake.deliver("welcome", welcome({ serverNow: start + 500 }));
+      expect(store.getState().clockOffset).toBe(500);
+      // ping 1: 200 ms round trip, answered half way -> 560
+      answer(fake, clock, start, start + 100 + 560, 200);
+      expect(store.getState().clockOffset).toBe(560);
+      // ping 3 (sent at +1200): 20 ms round trip -> 560 + 4 (the server read late) = 564
+      clock.advance(start + 1_200 - clock.now);
+      answer(fake, clock, start + 1_200, start + 1_214 + 560, 20);
+      expect(store.getState().clockOffset).toBe(564);
+      // ping 4 (sent at +1800): 80 ms round trip, worse than 20: ignored
+      clock.advance(start + 1_800 - clock.now);
+      answer(fake, clock, start + 1_800, start + 1_800 + 900, 80);
+      expect(store.getState().clockOffset).toBe(564);
+      clock.advance(600);
+      expect(pings(fake)).toHaveLength(5);
+    });
+
+    it("rounds the offset to whole milliseconds (the countdown steps on whole ms)", () => {
+      const { fake, room } = makeRoom();
+      const clock = fakeTimer();
+      const store = createRaceStore();
+      bindRaceSocket(room, store.dispatch, { timer: clock.timer });
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      // 1 ms round trip: pongOffset = 100 - 0.5 = 99.5
+      answer(fake, clock, start, start + 100, 1);
+      expect(Number.isInteger(store.getState().clockOffset)).toBe(true);
+      expect(store.getState().clockOffset).toBe(Math.round(99.5));
+    });
+
+    it("dispatches a clock event only when the best offset changes", () => {
+      const { fake, clock, dispatch } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      answer(fake, clock, start, start + 20, 40);
+      clock.advance(start + 600 - clock.now);
+      answer(fake, clock, start + 600, start + 600 + 50, 100); // worse round trip
+      const clocks = dispatch.mock.calls.map(([e]) => e).filter((e) => e.type === "clock");
+      expect(clocks).toEqual([{ type: "clock", offset: 0 }]);
+    });
+
+    it("ignores a pong that answers no ping of the current round", () => {
+      const { fake, clock, dispatch } = setup();
+      const first = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: first }));
+      clock.advance(3_000);
+      // a second welcome (a reconnect) starts a new round: the first round's pongs are stale
+      const second = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: second }));
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent: first, serverNow: first + 9_999 });
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent: second + 1, serverNow: second + 9_999 });
+      expect(dispatch.mock.calls.some(([e]) => e.type === "clock")).toBe(false);
+      answer(fake, clock, second, second + 300, 10);
+      expect(dispatch.mock.calls.at(-1)![0]).toEqual({ type: "clock", offset: 295 });
+    });
+
+    it("a second welcome restarts the round: 5 more pings, the old ones cancelled", () => {
+      const { fake, clock } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      clock.advance(650); // 2 pings sent, at +0 and +600
+      fake.deliver("welcome", welcome({ serverNow: clock.now }));
+      // the new round's first ping keeps 600 ms after the last one, not at once
+      expect(pings(fake)).toHaveLength(2);
+      clock.advance(549);
+      expect(pings(fake)).toHaveLength(2);
+      clock.advance(1);
+      expect(pings(fake).at(-1)).toEqual({ v: PROTOCOL_VERSION, sent: start + 1_200 });
+      clock.advance(5_000);
+      expect(pings(fake)).toHaveLength(2 + 5);
+      const sent = pings(fake).map((p) => (p as { sent: number }).sent);
+      for (let i = 1; i < sent.length; i++) expect(sent[i]! - sent[i - 1]!).toBe(600);
+    });
+
+    it("reschedules a pending GO on the refined offset: still one go, now on time", () => {
+      const { fake, clock, gos } = setup();
+      const start = clock.now;
+      // the welcome reads 500; the true offset is 560, so GO on the welcome offset would be 60 ms late
+      fake.deliver("welcome", welcome({ serverNow: start + 500 }));
+      const t0 = start + 560 + 3_000; // server clock: 3 s after the welcome left
+      fake.deliver("countdown", countdown({ ...RACE, t0 }));
+      answer(fake, clock, start, start + 10 + 560, 20);
+      // GO now due at start + 3_000 on this device's clock
+      clock.advance(start + 2_999 - clock.now);
+      expect(gos()).toBe(0);
+      clock.advance(1);
+      expect(gos()).toBe(1);
+      clock.advance(10_000);
+      expect(gos()).toBe(1);
+    });
+
+    it("a pong without a pending GO schedules none", () => {
+      const { fake, clock, gos } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      answer(fake, clock, start, start + 100, 20);
+      clock.advance(10_000);
+      expect(gos()).toBe(0);
+      expect(clock.pending()).toBe(0);
+    });
+
+    it("the unbind cancels the pending pings and offs the pong listener", () => {
+      const { fake, clock, unbind, dispatch } = setup();
+      const start = clock.now;
+      fake.deliver("welcome", welcome({ serverNow: start }));
+      clock.advance(650);
+      unbind();
+      expect(clock.pending()).toBe(0);
+      clock.advance(1_000);
+      expect(pings(fake)).toHaveLength(2);
+      fake.deliver("pong", { v: PROTOCOL_VERSION, sent: start, serverNow: start + 100 });
+      expect(dispatch.mock.calls.some(([e]) => e.type === "clock")).toBe(false);
+      expect(fake.listeners.get("pong")?.size ?? 0).toBe(0);
+    });
   });
 });
 
@@ -1303,9 +1510,10 @@ describe("#240 ended and the finish stamp", () => {
     at: T + 9_000,
   });
 
-  it("sets phase ended with the server ranking as sent and the device time, for every reason", () => {
+  // a `void` end is the lost room since #235 C4 (its own describe, below)
+  it("sets phase ended with the server ranking as sent and the device time, for both ranked reasons", () => {
     const s = running();
-    for (const reason of ["all-finished", "timer", "void"] as const) {
+    for (const reason of ["all-finished", "timer"] as const) {
       const payload = endedPayload(reason);
       const next = reduceRace(s, ended(payload, T + 61_000));
       expect(next.phase).toBe("ended");
@@ -1391,5 +1599,867 @@ describe("#240 ended and the finish stamp", () => {
     expect(dispatch.mock.calls.map(([e]) => e)).toEqual([{ type: "ended", payload, at: T + 42 }]);
     off();
     expect(listeners.get("ended")?.size ?? 0).toBe(0);
+  });
+});
+
+// Contract of #236 C1: the server's bonus events map to `bonus = { card, cooldownUntil, overlay,
+// blurUntil, refused }` for the viewer (snapshots carry no bonus field: protocol v7); a `bonus:play` goes
+// out on Enter or the tray's button only while a card is held and not cooling (`COOLDOWN_MS` from the
+// engine, the client decides nothing else); `refused` (set by `rejected { no-bonus }`) clears after 1.2 s.
+describe("#236 bonus state", () => {
+  const TEXT = "one two three four five six";
+  const T0 = 1_767_225_603_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "en" as const,
+    wordCount: 6,
+    t0: T0,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const NOW = T0 + 2_000;
+  const ev = (payload: Record<string, unknown>, at = NOW): RaceEvent =>
+    ({ type: "event", payload: { v: PROTOCOL_VERSION, ...payload }, at }) as RaceEvent;
+  const earned = (desk = 5, bonus = "extra-paperwork") => ev({ kind: "bonus-earned", desk, bonus });
+  const sent = (from = 5, at = NOW, to = [1]) =>
+    ev({ kind: "bonus-sent", from, to, bonus: "extra-paperwork" }, at);
+  const hit = (over: Record<string, unknown> = {}, at = NOW) =>
+    ev(
+      {
+        kind: "bonus-hit",
+        desk: 5,
+        bonus: "extra-paperwork",
+        overlay: null,
+        blurUntil: null,
+        ...over,
+      },
+      at,
+    );
+  const rejected = (reason = "no-bonus", at = NOW): RaceEvent =>
+    ({ type: "rejected", payload: { v: PROTOCOL_VERSION, reason }, at }) as RaceEvent;
+  const play = (at = NOW): RaceEvent => ({ type: "bonus-play", at });
+  const racing = (w = welcome()) =>
+    run(
+      { type: "welcome", payload: w },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      { type: "go" },
+    );
+
+  it("selectBonus reads { card, cooldownUntil, overlay, blurUntil, refused }, stable between changes", () => {
+    const s = racing();
+    expect(selectBonus(s)).toEqual({
+      card: null,
+      cooldownUntil: null,
+      overlay: null,
+      blurUntil: null,
+      refused: false,
+    });
+    expect(selectBonus(s)).toBe(selectBonus(s));
+    expect(selectBonus(reduceRace(s, { type: "key", keystroke: { t: 10, key: "o" } }))).toBe(
+      selectBonus(s),
+    );
+  });
+
+  it("a welcome mid-race seeds the overlay (welcome.overlay) and the prediction types it", () => {
+    const overlay = { extra: ["memo"], removed: [] };
+    const w = welcome({
+      room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+      race: RACE,
+      overlay,
+    });
+    const s = run({ type: "welcome", payload: w });
+    expect(selectBonus(s).overlay).toEqual(overlay);
+    expect(s.prediction?.text).toBe(effectiveText(TEXT, overlay));
+    // the next race starts clean
+    const next = reduceRace(s, { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } });
+    expect(selectBonus(next).overlay).toBeNull();
+    expect(next.prediction?.text).toBe(TEXT);
+  });
+
+  it("bonus-earned for your desk deals the card; another desk's changes nothing", () => {
+    const s = racing();
+    expect(reduceRace(s, earned(3))).toBe(s);
+    const mine = reduceRace(s, earned(5, "smoke-break"));
+    expect(selectBonus(mine).card).toBe("smoke-break");
+    // a spectator holds nothing
+    const spectator = racing(welcome({ role: "spectator", you: null }));
+    expect(reduceRace(spectator, earned(5))).toBe(spectator);
+  });
+
+  it("a play goes out only while a card is held and not cooling; bonus-sent confirms the cooldown", () => {
+    const s = racing();
+    // no card: nothing
+    expect(reduceRace(s, play())).toBe(s);
+    const held = reduceRace(s, earned());
+    const playing = reduceRace(held, play());
+    expect(playing.bonus.plays).toBe(1);
+    expect(selectBonus(playing).cooldownUntil).toBe(NOW + COOLDOWN_MS);
+    // a second Enter while the first is in flight sends nothing
+    expect(reduceRace(playing, play(NOW + 50))).toBe(playing);
+    const confirmed = reduceRace(playing, sent(5, NOW + 80));
+    expect(selectBonus(confirmed)).toMatchObject({
+      card: null,
+      cooldownUntil: NOW + 80 + COOLDOWN_MS,
+    });
+    expect(confirmed.bonus.pending).toBeNull();
+    // another desk's play is not yours
+    expect(reduceRace(playing, sent(3))).toBe(playing);
+    // the next card arrives while cooling: no play until the cooldown is over
+    const again = reduceRace(confirmed, earned());
+    expect(reduceRace(again, play(NOW + 80 + COOLDOWN_MS - 1))).toBe(again);
+    expect(reduceRace(again, play(NOW + 80 + COOLDOWN_MS)).bonus.plays).toBe(2);
+  });
+
+  it("no play before GO, after your finish, or with bonuses off", () => {
+    const counting = run(
+      { type: "welcome", payload: welcome() },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+      earned(),
+    );
+    expect(reduceRace(counting, play())).toBe(counting);
+    const off = reduceRace(
+      racing(welcome({ settings: { ...DEFAULT_RACE_SETTINGS, bonuses: false } })),
+      earned(),
+    );
+    expect(reduceRace(off, play())).toBe(off);
+    const ended = reduceRace(reduceRace(racing(), earned()), {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "all-finished", ranking: [] },
+      at: NOW,
+    });
+    expect(reduceRace(ended, play())).toBe(ended);
+  });
+
+  it("rejected { no-bonus } while a card is held sets refused and rolls the optimistic cooldown back", () => {
+    const held = reduceRace(racing(), earned());
+    const playing = reduceRace(held, play());
+    const refused = reduceRace(playing, rejected("no-bonus", NOW + 40));
+    expect(selectBonus(refused)).toMatchObject({
+      card: "extra-paperwork",
+      cooldownUntil: null,
+      refused: true,
+    });
+    expect(refused.bonus.refusedAt).toBe(NOW + 40);
+    expect(refused.bonus.pending).toBeNull();
+    // the card is kept: the player may try again at once (the server re-checks)
+    expect(reduceRace(refused, play(NOW + 100)).bonus.plays).toBe(2);
+    // other refusals and a no-bonus with nothing held change nothing
+    expect(reduceRace(playing, rejected("rate-limit"))).toBe(playing);
+    const empty = racing();
+    expect(reduceRace(empty, rejected())).toBe(empty);
+  });
+
+  it("refused clears 1.2 s after it arrived (watchRefusalExpiry on the injected clock)", () => {
+    expect(REFUSAL_SHOW_MS).toBe(1_200);
+    let now = NOW;
+    const timers: { at: number; fn: () => void }[] = [];
+    const timer = {
+      now: () => now,
+      setTimeout: (fn: () => void, ms: number) => {
+        const t = { at: now + ms, fn };
+        timers.push(t);
+        return t;
+      },
+      clearTimeout: (h: unknown) => void timers.splice(timers.indexOf(h as never), 1),
+    };
+    const advance = (ms: number) => {
+      now += ms;
+      for (const t of [...timers].sort((a, b) => a.at - b.at)) {
+        if (t.at > now) continue;
+        timers.splice(timers.indexOf(t), 1);
+        t.fn();
+      }
+    };
+    const store = createRaceStore(reduceRace(reduceRace(racing(), earned()), play()));
+    const stop = watchRefusalExpiry(store, timer);
+    store.dispatch(rejected("no-bonus", now));
+    expect(selectBonus(store.getState()).refused).toBe(true);
+    advance(REFUSAL_SHOW_MS - 1);
+    expect(selectBonus(store.getState()).refused).toBe(true);
+    advance(1);
+    expect(selectBonus(store.getState()).refused).toBe(false);
+    // a late expiry of an older refusal clears nothing
+    store.dispatch(play(now));
+    store.dispatch(rejected("no-bonus", now));
+    const s = store.getState();
+    expect(reduceRace(s, { type: "refusal-expired", refusedAt: now - 5_000 })).toBe(s);
+    stop();
+    expect(timers).toHaveLength(0);
+  });
+
+  it("bonus-hit on you: the overlay changes the prediction's text; a Smoke Break blurs until its end", () => {
+    const s = reduceRace(racing(), { type: "key", keystroke: { t: 10, key: "o" } });
+    const overlay = { extra: ["memo", "form"], removed: [] };
+    const paper = reduceRace(s, hit({ overlay }));
+    expect(selectBonus(paper).overlay).toEqual(overlay);
+    expect(paper.prediction?.text).toBe(effectiveText(TEXT, overlay));
+    expect(paper.prediction?.state).toBe(s.prediction?.state);
+    expect(
+      selectTypedView(paper)
+        .chars.map((c) => c.ch)
+        .join(""),
+    ).toBe(`${TEXT} memo form`);
+    // another desk's hit is not yours
+    expect(reduceRace(s, hit({ desk: 3, overlay }))).toBe(s);
+    // smoke break: no overlay change, the blur end on this device's clock (race ms + t0 - offset)
+    const smoke = reduceRace(paper, hit({ bonus: "smoke-break", blurUntil: 7_000 }));
+    expect(selectBonus(smoke).overlay).toEqual(overlay);
+    expect(selectBonus(smoke).blurUntil).toBe(T0 + 7_000 - smoke.clockOffset);
+    expect(selectTypedView(smoke).blurred).toBe(true);
+    const clear = reduceRace(smoke, { type: "blur-expired", blurUntil: smoke.bonus.blurUntil! });
+    expect(selectTypedView(clear).blurred).toBeUndefined();
+    expect(reduceRace(smoke, { type: "blur-expired", blurUntil: 1 })).toBe(smoke);
+  });
+
+  it("watchBlurExpiry lifts the blur at blurUntil", () => {
+    let now = T0;
+    let pending: { at: number; fn: () => void } | null = null;
+    const timer = {
+      now: () => now,
+      setTimeout: (fn: () => void, ms: number) => (pending = { at: now + ms, fn }),
+      clearTimeout: () => void (pending = null),
+    };
+    const store = createRaceStore(racing());
+    const stop = watchBlurExpiry(store, timer);
+    store.dispatch(hit({ bonus: "smoke-break", blurUntil: 5_000 }));
+    const until = store.getState().bonus.blurUntil!;
+    expect(pending!.at).toBe(until);
+    now = until;
+    pending!.fn();
+    expect(store.getState().bonus.blurUntil).toBeNull();
+    stop();
+  });
+
+  it("a welcome without a bonus (no race running) resets the card, the cooldown and the blur", () => {
+    const s = reduceRace(
+      reduceRace(reduceRace(racing(), earned()), play()),
+      hit({ bonus: "smoke-break", blurUntil: 5_000 }),
+    );
+    const back = reduceRace(s, { type: "welcome", payload: welcome() });
+    expect(selectBonus(back)).toMatchObject({ card: null, cooldownUntil: null, blurUntil: null });
+    // the play counter never goes back (the sender counts on it)
+    expect(back.bonus.plays).toBe(1);
+  });
+
+  // #768 C2: a reconnect's welcome brings the desk's bonus back, race ms -> this device's clock
+  describe("#768 C2 the welcome seeds the bonus", () => {
+    const SERVER_NOW = T0 + 9_000;
+    const RECEIVED_AT = SERVER_NOW - 250; // this device runs 250 ms behind the server
+    const reload = (bonus: Welcome["bonus"]) =>
+      reduceRace(initialRaceState, {
+        type: "welcome",
+        payload: welcome({
+          room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+          race: RACE,
+          state: { ...initialState(), typed: [] },
+          bonus,
+          serverNow: SERVER_NOW,
+          autoStartAt: null,
+        }),
+        receivedAt: RECEIVED_AT,
+      });
+
+    it("the card, the cooldown end and the blur end land on the device clock", () => {
+      const s = reload({ card: "exemption", cooldownUntil: 20_000, blurUntil: 11_000 });
+      expect(s.clockOffset).toBe(250);
+      expect(s.bonus).toMatchObject({
+        card: "exemption",
+        cooldownUntil: T0 + 20_000 - 250,
+        blurUntil: T0 + 11_000 - 250,
+        refused: false,
+        pending: null,
+      });
+      expect(selectBonus(s)).toMatchObject({ card: "exemption", blurUntil: T0 + 10_750 });
+    });
+
+    it("a reconnect of a page that held nothing seeds it; the play counter is kept", () => {
+      const before = reduceRace(reduceRace(racing(), earned()), play());
+      const back = reduceRace(before, {
+        type: "welcome",
+        payload: welcome({
+          room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+          race: RACE,
+          state: { ...initialState(), typed: [] },
+          bonus: { card: "smoke-break", cooldownUntil: null, blurUntil: null },
+          serverNow: SERVER_NOW,
+          autoStartAt: null,
+        }),
+        receivedAt: RECEIVED_AT,
+      });
+      expect(back.bonus).toMatchObject({ card: "smoke-break", cooldownUntil: null, pending: null });
+      expect(back.bonus.plays).toBe(1);
+    });
+
+    it("the seeded cooldown gates a play until its end; a seeded card plays after", () => {
+      const s = reload({ card: "extra-paperwork", cooldownUntil: 20_000, blurUntil: null });
+      const end = s.bonus.cooldownUntil!;
+      expect(reduceRace(s, play(end - 1)).bonus.plays).toBe(0);
+      expect(reduceRace(s, play(end)).bonus.plays).toBe(1);
+    });
+
+    it("an all-null bonus or none leaves nothing held", () => {
+      for (const bonus of [null, { card: null, cooldownUntil: null, blurUntil: null }]) {
+        expect(reload(bonus).bonus).toMatchObject({
+          card: null,
+          cooldownUntil: null,
+          blurUntil: null,
+        });
+      }
+    });
+
+    it("watchBlurExpiry lifts a seeded blur at its end", () => {
+      let now = RECEIVED_AT;
+      let pending: { at: number; fn: () => void } | null = null;
+      const timer = {
+        now: () => now,
+        setTimeout: (fn: () => void, ms: number) => (pending = { at: now + ms, fn }),
+        clearTimeout: () => void (pending = null),
+      };
+      const store = createRaceStore(reload({ card: null, cooldownUntil: null, blurUntil: 11_000 }));
+      const stop = watchBlurExpiry(store, timer);
+      const until = store.getState().bonus.blurUntil!;
+      expect(pending!.at).toBe(until);
+      now = until;
+      pending!.fn();
+      expect(store.getState().bonus.blurUntil).toBeNull();
+      stop();
+    });
+  });
+
+  it("sendBonusPlays emits one bonus:play per play the store took, and nothing for a refused Enter", () => {
+    const store = createRaceStore(racing());
+    const socket = { sendBonusPlay: vi.fn() };
+    const stop = sendBonusPlays(store, socket);
+    store.dispatch(play()); // no card
+    expect(socket.sendBonusPlay).not.toHaveBeenCalled();
+    store.dispatch(earned());
+    store.dispatch(play());
+    store.dispatch(play(NOW + 10)); // in flight
+    expect(socket.sendBonusPlay).toHaveBeenCalledTimes(1);
+    stop();
+    store.dispatch(rejected());
+    store.dispatch(play(NOW + 20));
+    expect(socket.sendBonusPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it("bindRaceSocket turns a parsed `rejected` into a race event stamped with the device clock", () => {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const io = vi.fn(() => fake) as unknown as IoFactory;
+    const room = connectToRoom("http://localhost:7236", "tok", { io });
+    const dispatch = vi.fn();
+    bindRaceSocket(room, dispatch, {
+      timer: { now: () => 42, setTimeout: () => 0, clearTimeout: () => {} },
+    });
+    for (const fn of listeners.get("rejected") ?? [])
+      fn({ v: PROTOCOL_VERSION, reason: "no-bonus" });
+    expect(dispatch.mock.calls.map(([e]) => e)).toContainEqual({
+      type: "rejected",
+      payload: { v: PROTOCOL_VERSION, reason: "no-bonus" },
+      at: 42,
+    });
+    room.sendBonusPlay();
+    expect(fake.emit).toHaveBeenCalledWith("bonus:play", { v: PROTOCOL_VERSION });
+  });
+});
+
+describe("#233 abandon, idle warning and asleep (C1)", () => {
+  const TEXT = "one two three";
+  const T0 = 1_767_225_603_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "en" as const,
+    wordCount: 3,
+    t0: T0,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const ev = (payload: Record<string, unknown>, at = T0 + 2_000): RaceEvent =>
+    ({ type: "event", payload: { v: PROTOCOL_VERSION, ...payload }, at }) as RaceEvent;
+  const key = (key: string, t: number): RaceEvent => ({ type: "key", keystroke: { t, key } });
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const racing = (w = welcome()) => run({ type: "welcome", payload: w }, countdown, { type: "go" });
+  const abandon: RaceEvent = { type: "abandon" };
+  const snapshot = (code: number, cursor = 2, t = 3_000): RaceEvent => ({
+    type: "snapshot",
+    payload: {
+      v: PROTOCOL_VERSION,
+      t,
+      desks: [
+        [5, cursor, cursor, 0, code, cursor],
+        [1, 6, 6, 0, PLAYER_STATUS_CODES.typing, 6],
+      ],
+      ranks: [1, 5],
+    },
+  });
+
+  it("takes the abandon intent once, only while you may type", () => {
+    expect(reduceRace(run({ type: "welcome", payload: welcome() }), abandon).abandons).toBe(0);
+    const counting = run({ type: "welcome", payload: welcome() }, countdown);
+    expect(reduceRace(counting, abandon)).toBe(counting);
+    const s = reduceRace(racing(), abandon);
+    expect(s.abandons).toBe(1);
+    expect(s.abandoning).toBe(true);
+    expect(selectAbandonState(s)).toBe("disabled");
+    // a second confirm while the first is in flight sends nothing
+    expect(reduceRace(s, abandon)).toBe(s);
+    expect(selectAbandonState(racing())).toBe("idle");
+  });
+
+  it("the server's `abandoned` for your desk locks typing and freezes the exit; other desks change nothing", () => {
+    const typed = [key("o", 400), key("n", 800)].reduce(reduceRace, reduceRace(racing(), abandon));
+    const other = reduceRace(typed, ev({ kind: "abandoned", desk: 1 }));
+    expect(other.exit).toBeNull();
+    const s = reduceRace(typed, ev({ kind: "abandoned", desk: 5 }));
+    expect(s.exit).toEqual({ kind: "abandoned", dismissed: false });
+    expect(s.phase).toBe("running");
+    expect(selectCanType(s)).toBe(false);
+    expect(selectExit(s)).toBe("abandoned");
+    expect(selectAbandonState(s)).toBe("disabled");
+    // a key after the exit is refused
+    expect(reduceRace(s, key("e", 900))).toBe(s);
+  });
+
+  it("the server's `asleep` (the idle kick) for your desk sets the asleep exit", () => {
+    const warned = reduceRace(racing(), ev({ kind: "idle-warning", desk: 5, kickAt: 60_000 }));
+    const s = reduceRace(warned, ev({ kind: "asleep", desk: 5 }));
+    expect(s.exit).toEqual({ kind: "asleep", dismissed: false });
+    expect(selectExit(s)).toBe("asleep");
+    expect(selectCanType(s)).toBe(false);
+    // the warning is over once kicked
+    expect(s.idleWarning).toBe(false);
+    expect(s.lampTarget).toBeNull();
+    expect(reduceRace(racing(), ev({ kind: "asleep", desk: 3 })).exit).toBeNull();
+  });
+
+  it("`idle-warning` for you turns the warning and the lamp on; your next accepted key clears both", () => {
+    const base = racing();
+    expect(reduceRace(base, ev({ kind: "idle-warning", desk: 3, kickAt: 60_000 }))).toBe(base);
+    const s = reduceRace(base, ev({ kind: "idle-warning", desk: 5, kickAt: 60_000 }));
+    expect(s.idleWarning).toBe(true);
+    expect(s.lampTarget).toBe(5);
+    const typed = reduceRace(s, key("o", 46_000));
+    expect(typed.idleWarning).toBe(false);
+    expect(typed.lampTarget).toBeNull();
+  });
+
+  it("a snapshot or a reload's welcome that carries your exit status sets it (the docket survives a reload)", () => {
+    const viaSnapshot = reduceRace(racing(), snapshot(PLAYER_STATUS_CODES.abandoned));
+    expect(viaSnapshot.exit).toEqual({ kind: "abandoned", dismissed: false });
+    const reloaded = run({
+      type: "welcome",
+      payload: welcome({
+        room: { code: roomCodeSchema.parse("KGB-4821"), phase: "running" },
+        race: RACE,
+        state: {
+          cursor: 2,
+          correct: 2,
+          errors: 0,
+          total: 2,
+          typed: ["o", "n"],
+          status: "asleep",
+          lastT: 1_200,
+          finishedAt: null,
+        },
+      }),
+    });
+    expect(selectExit(reloaded)).toBe("asleep");
+    expect(selectCanType(reloaded)).toBe(false);
+  });
+
+  it("KEEP WATCHING dismisses the docket but keeps the exit (typing stays locked)", () => {
+    const s = reduceRace(racing(), ev({ kind: "abandoned", desk: 5 }));
+    const watching = reduceRace(s, { type: "exit-dismissed" });
+    expect(watching.exit).toEqual({ kind: "abandoned", dismissed: true });
+    expect(selectExit(watching)).toBeNull();
+    expect(selectCanType(watching)).toBe(false);
+    expect(reduceRace(watching, { type: "exit-dismissed" })).toBe(watching);
+    expect(reduceRace(racing(), { type: "exit-dismissed" }).exit).toBeNull();
+    // a later snapshot with the same status does not bring the docket back
+    expect(selectExit(reduceRace(watching, snapshot(PLAYER_STATUS_CODES.abandoned)))).toBeNull();
+  });
+
+  it("a welcome or a new countdown resets the exit, the warning and the lamp; RACE OVER hides the docket", () => {
+    const warned = reduceRace(racing(), ev({ kind: "idle-warning", desk: 5, kickAt: 60_000 }));
+    const out = reduceRace(reduceRace(warned, abandon), ev({ kind: "abandoned", desk: 5 }));
+    for (const next of [
+      reduceRace(out, countdown),
+      reduceRace(out, { type: "welcome", payload: welcome() }),
+    ]) {
+      expect(next.exit).toBeNull();
+      expect(next.idleWarning).toBe(false);
+      expect(next.lampTarget).toBeNull();
+      expect(next.abandoning).toBe(false);
+      // the sender's counter never goes back
+      expect(next.abandons).toBe(1);
+    }
+    const ended = reduceRace(out, {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "timer", ranking: [] },
+      at: T0 + 60_000,
+    } as RaceEvent);
+    expect(selectExit(ended)).toBeNull();
+    const endedWarned = reduceRace(warned, {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "timer", ranking: [] },
+      at: T0 + 60_000,
+    } as RaceEvent);
+    expect(endedWarned.idleWarning).toBe(false);
+    expect(endedWarned.lampTarget).toBeNull();
+  });
+
+  it("a refused abandon (`not-running`) lets you confirm again", () => {
+    const s = reduceRace(racing(), abandon);
+    const refused = reduceRace(s, {
+      type: "rejected",
+      payload: { v: PROTOCOL_VERSION, reason: "not-running" },
+      at: T0 + 2_000,
+    } as RaceEvent);
+    expect(refused.abandoning).toBe(false);
+  });
+
+  it("sendAbandons emits one abandon per intent the store took", () => {
+    const store = createRaceStore(racing());
+    const socket = { sendAbandon: vi.fn() };
+    const stop = sendAbandons(store, socket);
+    store.dispatch(abandon);
+    store.dispatch(abandon); // in flight
+    expect(socket.sendAbandon).toHaveBeenCalledTimes(1);
+    stop();
+    store.dispatch({
+      type: "rejected",
+      payload: { v: PROTOCOL_VERSION, reason: "not-running" },
+      at: 1,
+    } as RaceEvent);
+    store.dispatch(abandon);
+    expect(socket.sendAbandon).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Contract of #235 C1 and C4 (ARCHITECTURE 7.4: the race clock never pauses; ADR 0007: the server's state
+// wins on the fresh welcome). A cut line keeps the race, your sheet, the GO instant and the settings;
+// the reconnect's welcome reconciles your prediction onto the server's state of your desk; a voided
+// race or a reconnect refused `no-room` is the lost room.
+describe("#235 line cut, reconnect and the lost room", () => {
+  const T = 1_767_225_600_000;
+  const TEXT = "ab cd ef";
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: TEXT,
+    language: "en" as const,
+    wordCount: 3,
+    t0: T + 3_000,
+    timerS: 60,
+  };
+  const code = roomCodeSchema.parse("KGB-4821");
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const running = () => run({ type: "welcome", payload: welcome() }, countdown, { type: "go" });
+  const press = (s: RaceState, chars: string, from = 100) =>
+    Array.from(chars).reduce(
+      (acc, key, i) => reduceRace(acc, { type: "key", keystroke: { t: from + i * 100, key } }),
+      s,
+    );
+  /** The server's state of your desk after `n` correct keys (the welcome's `state`). */
+  const serverState = (n: number, lastT = 100 * n) => ({
+    cursor: n,
+    correct: n,
+    errors: 0,
+    total: n,
+    typed: Array<null>(n).fill(null),
+    status: "typing" as const,
+    lastT,
+    finishedAt: null,
+  });
+  const rewelcome = (n: number, over: Partial<Welcome> = {}): RaceEvent => ({
+    type: "welcome",
+    payload: welcome({
+      room: { code, phase: "running" },
+      race: RACE,
+      state: serverState(n),
+      ...over,
+    }),
+  });
+
+  describe("C1 reconnecting keeps the race alive", () => {
+    it("keeps the text, your prediction, GO and the settings; input is off; the race clock still runs", () => {
+      const typed = press(running(), "ab ");
+      const cut = reduceRace(typed, { type: "reconnecting" });
+      expect(cut.phase).toBe("reconnecting");
+      expect(cut.race).toBe(typed.race);
+      expect(cut.prediction).toBe(typed.prediction);
+      expect(cut.settings).toBe(typed.settings);
+      expect(cut.room).toEqual({ code, phase: "running" });
+      expect(selectTypedView(cut)).toBe(selectTypedView(typed));
+      // the nixie and the timer read the room's phase: running (ARCHITECTURE 7.4)
+      expect(selectClockPhase(cut)).toBe("running");
+      expect(selectClockPhase(typed)).toBe("running");
+      // input is disabled: no key is taken
+      expect(selectCanType(cut)).toBe(false);
+      expect(reduceRace(cut, { type: "key", keystroke: { t: 900, key: "c" } })).toBe(cut);
+    });
+
+    it("a cut during the countdown keeps the GO instant: the clock phase follows GO", () => {
+      const counting = run({ type: "welcome", payload: welcome() }, countdown);
+      const cut = reduceRace(counting, { type: "reconnecting" });
+      expect(selectClockPhase(cut)).toBe("countdown");
+      const gone = reduceRace(cut, { type: "go" });
+      expect(gone.phase).toBe("reconnecting");
+      expect(selectClockPhase(gone)).toBe("running");
+      expect(gone.race).toBe(counting.race);
+    });
+
+    it("the binder keeps a pending GO across a reconnect attempt", () => {
+      const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+      const emitter = () => ({
+        on: (event: string, fn: (...args: unknown[]) => void) => {
+          if (!listeners.has(event)) listeners.set(event, new Set());
+          listeners.get(event)!.add(fn);
+        },
+        off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      });
+      const deliver = (event: string, ...args: unknown[]) => {
+        for (const fn of [...(listeners.get(event) ?? [])]) fn(...args);
+      };
+      const fake = {
+        ...emitter(),
+        io: emitter(),
+        emit: vi.fn(),
+        disconnect: vi.fn(),
+        connect: vi.fn(),
+      };
+      const room = connectToRoom("http://localhost:7235", "tok", {
+        io: vi.fn(() => fake) as unknown as IoFactory,
+      });
+      let now = T;
+      const due: { at: number; fn: () => void }[] = [];
+      const timer = {
+        now: () => now,
+        setTimeout: (fn: () => void, ms: number) => due.push({ at: now + ms, fn }),
+        clearTimeout: () => {},
+      };
+      const store = createRaceStore();
+      bindRaceSocket(room, store.dispatch, { timer });
+      deliver("welcome", welcome({ serverNow: T }));
+      deliver("countdown", { v: PROTOCOL_VERSION, race: RACE });
+      deliver("reconnect_attempt", 1);
+      expect(store.getState().phase).toBe("reconnecting");
+      now = RACE.t0;
+      for (const d of due.splice(0).filter((d) => d.at <= now)) d.fn();
+      expect(store.getState().room?.phase).toBe("running");
+      expect(selectClockPhase(store.getState())).toBe("running");
+    });
+
+    it("the fresh welcome reconciles your prediction onto the server's state instead of resetting it", () => {
+      const typed = reduceRace(press(running(), "ab "), { type: "sent", count: 3 });
+      const back = reduceRace(reduceRace(typed, { type: "reconnecting" }), { type: "reconnected" });
+      // the server applied the three keys: the shown state stands, same object, nothing re-renders
+      const s = reduceRace(back, rewelcome(3));
+      expect(s.phase).toBe("running");
+      expect(s.prediction?.state).toBe(typed.prediction?.state);
+      expect(s.prediction?.unacked).toEqual([]);
+      expect(selectTypedView(s)).toBe(selectTypedView(typed));
+      expect(s.lastKey).toEqual(typed.lastKey);
+      expect(selectCanType(s)).toBe(true);
+    });
+
+    it("keys the server never got give way to its state; a key not yet sent is typed again on top", () => {
+      // three keys sent, a fourth still in the 50 ms batch window at the cut
+      const typed = press(
+        reduceRace(press(running(), "ab "), { type: "sent", count: 3 }),
+        "c",
+        400,
+      );
+      const back = reduceRace(reduceRace(typed, { type: "reconnecting" }), { type: "reconnected" });
+      // the server dropped the third key (its desk was cut): cursor 2
+      const s = reduceRace(back, rewelcome(2));
+      expect(s.prediction?.base.cursor).toBe(2);
+      expect(s.prediction?.unacked).toEqual([{ t: 400, key: "c" }]);
+      // "ab" then the unsent "c" where the space was: an error at 2, no reset to 0
+      expect(s.prediction?.state).toMatchObject({ cursor: 3, errors: 1, total: 3 });
+    });
+
+    it("a welcome for another race, or for a spectator, still starts over from it", () => {
+      const typed = press(running(), "ab ");
+      const other = reduceRace(
+        typed,
+        rewelcome(1, { race: { ...RACE, raceId: "9b241101-e2bb-4255-8caf-4136c566a962" } }),
+      );
+      expect(other.prediction?.state.cursor).toBe(1);
+      expect(other.lastKey).toBeNull();
+      const watching = reduceRace(typed, rewelcome(1, { role: "spectator", you: null }));
+      expect(watching.prediction).toBeNull();
+    });
+  });
+
+  describe("C4 the lost room", () => {
+    const voided: Ended = { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "void", ranking: [] };
+
+    it("ended { void } is lost with the room-lost reason", () => {
+      const s = reduceRace(press(running(), "ab"), {
+        type: "ended",
+        payload: voided,
+        at: T + 9_000,
+      });
+      expect(s).toMatchObject({ phase: "lost", lost: "room-lost" });
+      expect(selectCanType(s)).toBe(false);
+      // terminal, like any lost
+      expect(reduceRace(s, rewelcome(2))).toBe(s);
+    });
+
+    // #661 C3: a voided race never leaves the page frozen on `running`, even when it arrives on a
+    // cut line (the `ended` a reconnect's welcome is followed by, #204)
+    it("#661 C3: ended { void } moves the store out of running, from running or reconnecting", () => {
+      const live = running();
+      expect(live.phase).toBe("running");
+      const voidOf = (s: RaceState) =>
+        reduceRace(s, { type: "ended", payload: voided, at: T + 9_000 });
+      for (const from of [live, reduceRace(live, { type: "disconnected" })]) {
+        const s = voidOf(from);
+        expect(s.phase).not.toBe("running");
+        expect(s).toMatchObject({ phase: "lost", lost: "room-lost", keysHeld: from.keysHeld });
+        expect(selectCanType(s)).toBe(false);
+      }
+    });
+
+    it("an all-finished or timer end is still RACE OVER", () => {
+      const over = reduceRace(running(), {
+        type: "ended",
+        payload: { ...voided, reason: "timer" },
+        at: T + 63_000,
+      });
+      expect(over.phase).toBe("ended");
+    });
+
+    it("a reconnect answered no-room is the lost room; before any welcome it stays no-room", () => {
+      const cut = reduceRace(running(), { type: "reconnecting" });
+      expect(reduceRace(cut, { type: "connect-error", reason: "no-room" })).toMatchObject({
+        phase: "lost",
+        lost: "room-lost",
+      });
+      const waiting = run({ type: "welcome", payload: welcome() });
+      expect(reduceRace(waiting, { type: "connect-error", reason: "no-room" })).toMatchObject({
+        phase: "lost",
+        lost: "room-lost",
+        members: waiting.members,
+      });
+      expect(run({ type: "connect-error", reason: "no-room" })).toMatchObject({
+        phase: "lost",
+        lost: "no-room",
+      });
+    });
+  });
+});
+
+// Contract of #868 C1: `event new-host { desk }` in `countdown`, `running` and `ended` records one NEW
+// HOST notice (the desk's name from the roster) in the stamp queue and moves the host flag; an unknown
+// desk is ignored; the typing state (cursor, errors, trace) is untouched.
+describe("#868 C1 new host", () => {
+  const T = 1_767_225_600_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "Le reçu du café est prêt.",
+    language: "fr" as const,
+    wordCount: 5,
+    t0: T + 3_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const newHost = (desk: number, at = T + 5_000): RaceEvent => ({
+    type: "event",
+    payload: { v: PROTOCOL_VERSION, kind: "new-host", desk },
+    at,
+  });
+  const key = (key: string, t: number): RaceEvent => ({ type: "key", keystroke: { t, key } });
+  const counting = () =>
+    run(
+      { type: "welcome", payload: welcome() },
+      { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } },
+    );
+  /** Running, with three keys typed (two right, one wrong). */
+  function typing(): RaceState {
+    let s = reduceRace(counting(), { type: "go" });
+    for (const [i, k] of ["L", "e", "x"].entries()) s = reduceRace(s, key(k, 100 + i * 100));
+    return s;
+  }
+  const hostOf = (s: RaceState) => s.members.filter((m) => m.isHost).map((m) => m.desk);
+  const notices = (s: RaceState) =>
+    s.stamps.map(({ kind, other, name }) => ({ kind, other, name }));
+
+  it("running: one notice with the roster's name, the host flag moves, the typing is untouched", () => {
+    const before = typing();
+    expect(before.phase).toBe("running");
+    expect(before.prediction!.state.errors).toBe(1);
+    expect(hostOf(before)).toEqual([1]);
+    const after = reduceRace(freeze(before), newHost(3));
+    expect(notices(after)).toEqual([{ kind: "new-host", other: 3, name: "Heron-411" }]);
+    expect(after.stamps[0]!.shownAt).toBe(T + 5_000);
+    expect(hostOf(after)).toEqual([3]);
+    expect(after.role).toBe("player");
+    // the typing state is the same object: cursor, errors and trace unchanged
+    expect(after.prediction).toBe(before.prediction);
+    expect(after.lastKey).toBe(before.lastKey);
+    expect(after.exit).toBe(before.exit);
+    // and the next key still counts
+    const next = reduceRace(after, key("r", 400));
+    expect(next.prediction).not.toBe(after.prediction);
+    expect(next.prediction!.state.cursor).toBeGreaterThan(before.prediction!.state.cursor);
+  });
+
+  it("countdown and ended take it too; your own promotion makes you the host", () => {
+    const c = reduceRace(counting(), newHost(5));
+    expect(notices(c)).toEqual([{ kind: "new-host", other: 5, name: "Lynx-785" }]);
+    expect(c.role).toBe("host");
+    expect(hostOf(c)).toEqual([5]);
+    const ended = reduceRace(typing(), {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "all-finished", ranking: [] },
+      at: T + 9_000,
+    });
+    expect(ended.phase).toBe("ended");
+    const e = reduceRace(ended, newHost(3, T + 9_500));
+    expect(notices(e)).toEqual([{ kind: "new-host", other: 3, name: "Heron-411" }]);
+  });
+
+  it("records one notice per event (ids unique), and the next one replaces it", () => {
+    const s = reduceRace(reduceRace(typing(), newHost(3)), newHost(5, T + 6_000));
+    expect(notices(s)).toEqual([{ kind: "new-host", other: 5, name: "Lynx-785" }]);
+    expect(s.stamps[0]!.id).toBe(2);
+  });
+
+  it("an unknown desk is ignored: the same state", () => {
+    const s = typing();
+    expect(reduceRace(s, newHost(9))).toBe(s);
+  });
+
+  it("waiting moves the host flag without a notice (the lobby shows it, #137)", () => {
+    const s = reduceRace(run({ type: "welcome", payload: welcome() }), newHost(3));
+    expect(s.stamps).toEqual([]);
+    expect(hostOf(s)).toEqual([3]);
+  });
+
+  it("watchStampExpiry holds the notice 3 s (slow x 5), then it goes", () => {
+    let now = T + 5_000;
+    const due: { at: number; fn: () => void }[] = [];
+    const timer = {
+      now: () => now,
+      setTimeout: (fn: () => void, ms: number) => due.push({ at: now + ms, fn }),
+      clearTimeout: () => undefined,
+    };
+    const store = createRaceStore(typing());
+    const stop = watchStampExpiry(store, timer);
+    store.dispatch(newHost(3));
+    expect(due.map((d) => d.at)).toEqual([T + 8_000]);
+    now = T + 8_000;
+    due[0]!.fn();
+    expect(store.getState().stamps).toEqual([]);
+    stop();
   });
 });

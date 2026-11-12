@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { REPORT_STATUSES, type ReportEntry } from "../view/dawn-report";
 import { rankingRowsFrom, type RankingRow } from "../view/ranking";
 import { rankingLabels } from "../view/report-labels";
 import { RankingTable } from "./ranking-table";
+
+// The report links reach src/env.ts through the identity index (#899); these tests need no secrets.
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
 
 // Contract of #301 C2: a real <table> with its caption, scope="col" headers, one tr per row carrying
 // data-place / data-you / data-status, the BOT, UNDER REVIEW and YOU tags, the initials (or an <img alt="">

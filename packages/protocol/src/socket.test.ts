@@ -1,12 +1,16 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { initialState } from "@fifth-copy/engine";
 import {
+  autoStartSchema,
   clientAcks,
   clientEvents,
   DEFAULT_RACE_SETTINGS,
   handshakeAuthSchema,
   hostSettingsAckSchema,
   hostSettingsSchema,
+  hostKickAckSchema,
+  hostKickSchema,
+  MAX_RACE_MS,
   memberSchema,
   rejectReasonSchema,
   PROTOCOL_VERSION,
@@ -29,10 +33,19 @@ import {
   type ClientToServerEvents,
   type HostStartAck,
   type HostSettingsAck,
+  type HostKickAck,
   type Keys,
 } from "./index";
 
-const member = { desk: 1, name: "Ada", isHost: true, isBot: false, color: 0, marker: "circle" };
+const member = {
+  desk: 1,
+  name: "Ada",
+  isHost: true,
+  isBot: false,
+  color: 0,
+  marker: "circle",
+  avatar: null,
+};
 const member13 = { ...member, desk: 13, isHost: false, color: 0, marker: "square" };
 const v = PROTOCOL_VERSION;
 const settings = DEFAULT_RACE_SETTINGS;
@@ -46,8 +59,10 @@ const welcome = {
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: 1767225600000,
+  autoStartAt: null,
 };
 const running = {
   ...welcome,
@@ -63,6 +78,7 @@ const running = {
   },
   state: initialState(),
   overlay: { extra: [], removed: [] },
+  bonus: { card: "smoke-break", cooldownUntil: 21_000, blurUntil: 9_500 },
   resumeKey: "0123456789abcdef".repeat(4),
 };
 
@@ -88,6 +104,7 @@ describe("socket schemas", () => {
     ["reject example", rejectReasonSchema, "bad-token", true],
     ["reject in-progress", rejectReasonSchema, "in-progress", true],
     ["reject room-full", rejectReasonSchema, "room-full", true],
+    ["reject removed (#133)", rejectReasonSchema, "removed", true],
     ["reject wrong enum", rejectReasonSchema, "banned", false],
     ["member example", memberSchema, member, true],
     ["member desk 0", memberSchema, { ...member, desk: 0 }, false],
@@ -98,11 +115,66 @@ describe("socket schemas", () => {
     ["member identity not of its desk", memberSchema, { ...member13, marker: "circle" }, false],
     ["member empty name", memberSchema, { ...member, name: "" }, false],
     ["member oversize name", memberSchema, { ...member, name: "a".repeat(65) }, false],
+    // #730: what the roll needs to address a portrait through the avatar route, or null.
+    ["member avatar", memberSchema, { ...member, avatar: { userId: "usr_1", v: 2 } }, true],
+    ["member missing avatar", memberSchema, { ...member, avatar: undefined }, false],
+    ["member avatar v 0", memberSchema, { ...member, avatar: { userId: "usr_1", v: 0 } }, false],
+    ["member avatar no userId", memberSchema, { ...member, avatar: { v: 2 } }, false],
+    [
+      "bot member with an avatar",
+      memberSchema,
+      { ...member, isHost: false, isBot: true, avatar: { userId: "usr_1", v: 2 } },
+      false,
+    ],
     ["welcome example", welcomeSchema, welcome, true],
     ["welcome running", welcomeSchema, running, true],
+    [
+      "#768 welcome bonus all null",
+      welcomeSchema,
+      { ...running, bonus: { card: null, cooldownUntil: null, blurUntil: null } },
+      true,
+    ],
+    ["#768 welcome missing bonus", welcomeSchema, { ...running, bonus: undefined }, false],
+    [
+      "#768 welcome bonus wrong card",
+      welcomeSchema,
+      { ...running, bonus: { ...running.bonus, card: "vodka" } },
+      false,
+    ],
+    [
+      "#768 welcome bonus missing blur",
+      welcomeSchema,
+      { ...running, bonus: { card: null, cooldownUntil: null } },
+      false,
+    ],
+    [
+      "#768 welcome bonus cooldown past race max",
+      welcomeSchema,
+      { ...running, bonus: { ...running.bonus, cooldownUntil: MAX_RACE_MS + 1 } },
+      false,
+    ],
+    [
+      "#768 welcome bonus negative blur",
+      welcomeSchema,
+      { ...running, bonus: { ...running.bonus, blurUntil: -1 } },
+      false,
+    ],
     ["welcome spectator", welcomeSchema, { ...welcome, role: "spectator", you: null }, true],
     ["welcome wrong role", welcomeSchema, { ...welcome, role: "admin" }, false],
     ["welcome missing serverNow", welcomeSchema, { ...welcome, serverNow: undefined }, false],
+    [
+      "#814 welcome auto start pending",
+      welcomeSchema,
+      { ...welcome, autoStartAt: 1767225645000 },
+      true,
+    ],
+    [
+      "#814 welcome missing autoStartAt",
+      welcomeSchema,
+      { ...welcome, autoStartAt: undefined },
+      false,
+    ],
+    ["#814 welcome negative autoStartAt", welcomeSchema, { ...welcome, autoStartAt: -5 }, false],
     ["welcome missing race", welcomeSchema, { ...welcome, race: undefined }, false],
     ["welcome bad resume key", welcomeSchema, { ...welcome, resumeKey: "short" }, false],
     ["welcome v: 1", welcomeSchema, { ...welcome, v: 1 }, false],
@@ -140,9 +212,22 @@ describe("socket schemas", () => {
     ["ack ok without settings", hostSettingsAckSchema, { ok: true }, false],
     ["ack not-host", hostSettingsAckSchema, { ok: false, error: "not-host" }, true],
     ["ack not-waiting", hostSettingsAckSchema, { ok: false, error: "not-waiting" }, true],
+    ["ack rate-limited (#750)", hostSettingsAckSchema, { ok: false, error: "rate-limited" }, true],
     ["ack invalid", hostSettingsAckSchema, { ok: false, error: "invalid" }, true],
     ["ack no-room", hostSettingsAckSchema, { ok: false, error: "no-room" }, true],
     ["ack unknown error", hostSettingsAckSchema, { ok: false, error: "teapot" }, false],
+    ["host:kick example (#133)", hostKickSchema, { v, desk: 3 }, true],
+    ["host:kick previous v", hostKickSchema, { v: v - 1, desk: 3 }, false],
+    ["host:kick desk 0", hostKickSchema, { v, desk: 0 }, false],
+    ["host:kick missing desk", hostKickSchema, { v }, false],
+    ["host:kick extra userId", hostKickSchema, { v, desk: 3, userId: "usr_x" }, false],
+    ["kick ack ok", hostKickAckSchema, { ok: true }, true],
+    ...(["not-host", "not-waiting", "no-such-desk", "is-bot", "self"] as const).map(
+      (error) => [`kick ack ${error}`, hostKickAckSchema, { ok: false, error }, true] as const,
+    ),
+    ["kick ack rate-limited", hostKickAckSchema, { ok: false, error: "rate-limited" }, false],
+    ["kick ack unknown error", hostKickAckSchema, { ok: false, error: "teapot" }, false],
+    ["kicked event (#133)", eventSchema, { v, kind: "kicked", desk: 3 }, true],
   ] as const)("%s", (_, schema, payload, ok) => {
     expect(schema.safeParse(payload).success).toBe(ok);
   });
@@ -153,6 +238,7 @@ describe("socket schemas", () => {
       roster: rosterSchema,
       settings: settingsSchema,
       countdown: countdownSchema,
+      "auto-start": autoStartSchema,
       snapshot: snapshotSchema,
       event: eventSchema,
       ended: endedSchema,
@@ -161,10 +247,11 @@ describe("socket schemas", () => {
     });
   });
 
-  it("maps every client event to its schema, and the two acked ones to their ack", () => {
+  it("maps every client event to its schema, and the three acked ones to their ack", () => {
     expect(clientEvents).toEqual({
       "host:settings": hostSettingsSchema,
       "host:start": hostStartSchema,
+      "host:kick": hostKickSchema,
       keys: keysSchema,
       abandon: abandonSchema,
       "bonus:play": bonusPlaySchema,
@@ -173,6 +260,7 @@ describe("socket schemas", () => {
     expect(clientAcks).toEqual({
       "host:settings": hostSettingsAckSchema,
       "host:start": hostStartAckSchema,
+      "host:kick": hostKickAckSchema,
     });
   });
 
@@ -182,6 +270,9 @@ describe("socket schemas", () => {
     >();
     expectTypeOf<Parameters<ClientToServerEvents["host:settings"]>[1]>().toEqualTypeOf<
       (a: HostSettingsAck) => void
+    >();
+    expectTypeOf<Parameters<ClientToServerEvents["host:kick"]>[1]>().toEqualTypeOf<
+      (a: HostKickAck) => void
     >();
     expectTypeOf<Parameters<ClientToServerEvents["keys"]>>().toEqualTypeOf<[payload: Keys]>();
   });

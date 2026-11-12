@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { Redis } from "ioredis";
+import type { Redis } from "ioredis";
 import { createLimiter, type LimitRule } from "@fifth-copy/limiter";
+import { createRedisClient } from "../redis";
 
 // The web app's side of the shared limiter (ADR 0020): one table of actions, one lazy Redis client,
 // fail open. Pure of `env`: `index.ts` wires it to `env.REDIS_URL`; tests build their own.
@@ -12,9 +13,22 @@ export type LimitAction =
   | "mint-race-token-new-guest"
   | "lobby-codes"
   | "sign-in"
+  | "sign-in-account"
+  | "sign-up"
+  | "avatar-upload"
   | "recovery"
   | "invite"
-  | "clerk-outfit";
+  | "invite-redeem"
+  | "clerk-outfit"
+  | "set-lobby-type"
+  | "quick-race"
+  | "password-reset-issue"
+  | "password-reset-redeem"
+  | "password-reset-redeem-account"
+  | "recovery-redeem"
+  | "recovery-redeem-account"
+  | "guest-create"
+  | "avatar-view";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -24,20 +38,56 @@ export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
  * actions (#699, ADR 0020 amendment) let a class behind one address share one code:
  * `join-by-code` and `mint-race-token-new-guest` (a mint without a guest cookie) count per
  * (subject, code), sized above a class of 100; `lobby-codes` counts the distinct codes a subject
- * tries, so guessing stays slow; `mint-race-token` counts per guest. `sign-in`, `recovery` and
- * `invite` are defined for #90, #120 and #121, which wire them. `clerk-outfit` (#687) counts the
+ * tries, so guessing stays slow; `mint-race-token` counts per guest. `recovery` is defined for #120,
+ * which wires it; `invite` and `invite-redeem` are #808's; the sign-in, sign-up and avatar rows are #87's. `clerk-outfit` (#687) counts the
  * clerk outfit saves of one viewer (`user:<id>`): one per REISSUE UNIFORM, 30 a minute is a click
- * every two seconds for a whole minute, well above a person trying uniforms on.
+ * every two seconds for a whole minute, well above a person trying uniforms on. `set-lobby-type`
+ * (#114) counts one host's PUBLIC / PRIVATE changes (`user:<id>`), on the same 30 a minute.
+ * `password-reset-issue` (#788) counts the reset codes one host issues (`user:<id>`), refusals
+ * included, so a host cannot probe accounts quickly: 5 an hour. The `/reset` redeem (#789, owner
+ * decision 2026-11-04) has two budgets, both spent before any lookup: `password-reset-redeem`
+ * per client (`requestSubject()`, 30 an hour, so a class behind one address can still reset), then
+ * `password-reset-redeem-account` per account (`reset:<usernameNormalized>`, 5 an hour), counted only
+ * when the client budget admitted the attempt; issuing a new code clears the account budget.
  */
 export const LIMITS = {
   "join-by-code": { max: 120, windowMs: 60_000 },
   "mint-race-token": { max: 10, windowMs: 60_000 },
   "mint-race-token-new-guest": { max: 120, windowMs: 60_000 },
   "lobby-codes": { max: 20, windowMs: 60_000 },
-  "sign-in": { max: 10, windowMs: 10 * 60_000 },
+  // Account entry points (#87, ADR 0009 "Hardening"): sign-in 30 per 15 min per client IP, then 10 per
+  // 15 min per account (`signin:<usernameNormalized>`, counted only when the client was admitted; the
+  // action and the Auth.js credentials callback both spend them); sign-up 10 per hour per client IP;
+  // avatar upload 5 per minute per viewer (`user:<id>`).
+  "sign-in": { max: 30, windowMs: 15 * 60_000 },
+  "sign-in-account": { max: 10, windowMs: 15 * 60_000 },
+  "sign-up": { max: 10, windowMs: 60 * 60_000 },
+  "avatar-upload": { max: 5, windowMs: 60_000 },
   recovery: { max: 5, windowMs: 60 * 60_000 },
   invite: { max: 20, windowMs: 60_000 },
+  // Invite links (#808, ADR 0008): `invite` counts the links one host issues (`user:<id>`);
+  // `invite-redeem` counts the redeems and peeks of one client (`requestSubject()`).
+  "invite-redeem": { max: 20, windowMs: 60_000 },
   "clerk-outfit": { max: 30, windowMs: 60_000 },
+  "set-lobby-type": { max: 30, windowMs: 60_000 },
+  // QUICK RACE (#128) counts one client's presses (`requestSubject()`: the guest, else the IP), before
+  // any lookup or write: each can open a room on the race server.
+  "quick-race": { max: 20, windowMs: 60_000 },
+  "password-reset-issue": { max: 5, windowMs: 60 * 60_000 },
+  "password-reset-redeem": { max: 30, windowMs: 60 * 60_000 },
+  "password-reset-redeem-account": { max: 5, windowMs: 60 * 60_000 },
+  // The recovery code redeem (#46) takes the same two budgets, client first, then the account
+  // (`recovery:<usernameNormalized>`); a success clears the account budget.
+  "recovery-redeem": { max: 30, windowMs: 60 * 60_000 },
+  "recovery-redeem-account": { max: 5, windowMs: 60 * 60_000 },
+  // Guest creation by a settings save (#840): per client IP (`requestIpSubject()`, a fresh guest
+  // cookie must not reset it), spent only when the save would mint a guest; sized above a class of
+  // 100 behind one address, as `mint-race-token-new-guest`.
+  "guest-create": { max: 120, windowMs: 60_000 },
+  // Another typist's avatar (#880, ADR 0022): one viewer's lookups (`user:<id>`), spent before the
+  // race server is asked. A full 30-desk roll is 29 portraits per version and size, so 240 a minute
+  // is a few rolls a minute; the owner's own avatar is never counted.
+  "avatar-view": { max: 240, windowMs: 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */
@@ -63,11 +113,17 @@ export type LimitVerdict = { ok: boolean; retryAfterMs: number };
 export type WebLimit = ((action: LimitAction, subject: string) => Promise<LimitVerdict>) & {
   /**
    * One attempt of `subject` at room code `code` (`null`: unparsable) for `action`. A code new to
-   * the subject in the window spends one `lobby-codes` call first (a refused one is not admitted,
-   * so retrying it is refused again); `null` spends one on every call. Then the call counts
+   * the subject in the window spends one `lobby-codes` call first, atomically with its admission
+   * (a refused one is not admitted, so retrying it is refused again; concurrent first calls spend
+   * once, #701); `null` spends one on every call. Then the call counts
    * against `action` per (subject, code). Fails open like `limit`.
    */
   code(action: CodeAction, subject: string, code: string | null): Promise<LimitVerdict>;
+  /**
+   * Forgets the calls `subject` spent on `action` (#789: a new reset code clears its account's
+   * redeem budget). Fails open like `limit`: a Redis error or timeout is one warning, never a throw.
+   */
+  clear(action: LimitAction, subject: string): Promise<void>;
 };
 type Warn = (msg: string, fields: Record<string, unknown>) => void;
 
@@ -102,7 +158,11 @@ export function createWebLimit({
       }
       return ALLOW;
     };
-    return Object.assign(disabled, { code: disabled, close: () => {} });
+    return Object.assign(disabled, {
+      code: disabled,
+      clear: async () => void (await disabled()),
+      close: () => {},
+    });
   }
 
   let redis: Redis | undefined;
@@ -117,13 +177,8 @@ export function createWebLimit({
   };
   const client = () => {
     if (!limiter) {
-      redis = new Redis(url, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 1_000,
-        retryStrategy: (attempt) => Math.min(attempt * 500, 5_000),
-      });
       // Reconnect errors are reported through `failOpen` by the calls; never with the URL.
-      redis.on("error", () => {});
+      redis = createRedisClient(url);
       limiter = createLimiter(redis, { prefix: WEB_LIMITER_PREFIX });
     }
     return limiter;
@@ -175,18 +230,22 @@ export function createWebLimit({
   ): Promise<LimitVerdict> => {
     if (roomCode === null) return limit("lobby-codes", subject);
     const pair = subjectKey(`${subject}:${roomCode}`);
-    const window = LIMITS["lobby-codes"].windowMs;
-    const admittedKey = `${CODE_ADMITTED}:${pair}`;
-    const admitted = await guarded(() => client().count(admittedKey, window));
-    if (admitted === undefined) return ALLOW;
-    if (admitted === 0) {
-      const budget = await count(`lobby-codes:${subjectKey(subject)}`, LIMITS["lobby-codes"]);
-      if (!budget) return ALLOW;
-      if (!budget.ok) return budget;
-      if (!(await count(admittedKey, { max: 1, windowMs: window }))) return ALLOW;
-    }
+    // One atomic call (#701): concurrent first calls of one pair spend the budget once.
+    const budget = await guarded(() =>
+      client().admit(
+        `lobby-codes:${subjectKey(subject)}`,
+        `${CODE_ADMITTED}:${pair}`,
+        LIMITS["lobby-codes"],
+      ),
+    );
+    if (!budget) return ALLOW;
+    if (!budget.ok) return { ok: false, retryAfterMs: budget.retryAfterMs };
     return (await count(`${action}:${pair}`, LIMITS[action])) ?? ALLOW;
   };
 
-  return Object.assign(limit, { code, close: () => redis?.disconnect() });
+  const clear = async (action: LimitAction, subject: string): Promise<void> => {
+    await guarded(() => client().clear(`${action}:${subjectKey(subject)}`));
+  };
+
+  return Object.assign(limit, { code, clear, close: () => redis?.disconnect() });
 }

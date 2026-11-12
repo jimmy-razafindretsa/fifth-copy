@@ -1,6 +1,8 @@
+import * as engine from "@fifth-copy/engine";
 import { describe, expect, it } from "vitest";
 import {
   BOT_LEVEL_WPM,
+  botLevelSchema,
   DEFAULT_RACE_SETTINGS,
   engineSettingsOf,
   MAX_BOTS,
@@ -65,6 +67,11 @@ describe("raceSettingsSchema", () => {
     });
     expect(MAX_BOTS).toBe(29);
   });
+
+  it("derives the bot levels from the engine: one source, no drift (#361 C1)", () => {
+    expect(botLevelSchema.options).toEqual([...engine.BOT_LEVELS]);
+    expect(BOT_LEVEL_WPM).toBe(engine.BOT_LEVEL_WPM);
+  });
 });
 
 describe("raceSettingsPatchSchema", () => {
@@ -93,5 +100,20 @@ describe("helpers", () => {
       errorMode: "block",
       backspace: false,
     });
+  });
+});
+
+describe("hostWatches (#876 C1)", () => {
+  it("is part of the settings, false by default; a settings object stored before it parses as false", () => {
+    expect(DEFAULT_RACE_SETTINGS.hostWatches).toBe(false);
+    const older: Partial<typeof DEFAULT_RACE_SETTINGS> = { ...DEFAULT_RACE_SETTINGS };
+    delete older.hostWatches;
+    expect(raceSettingsSchema.parse(older).hostWatches).toBe(false);
+    expect(raceSettingsSchema.safeParse({ ...older, hostWatches: "yes" }).success).toBe(false);
+  });
+
+  it("is part of the host:settings patch; a patch without it never carries it", () => {
+    expect(raceSettingsPatchSchema.parse({ hostWatches: true })).toEqual({ hostWatches: true });
+    expect(raceSettingsPatchSchema.parse({ wordCount: 60 })).toEqual({ wordCount: 60 });
   });
 });

@@ -21,11 +21,26 @@ export function countdownStep(msToGo: number): CountdownStep | null {
   return null;
 }
 
-/** Milliseconds until `countdownStep` changes, or `null` once the stamp is gone. */
+/**
+ * Milliseconds until `countdownStep` changes, or `null` once the stamp is gone. Exact for a fractional
+ * `msToGo` too (#643: a ping/pong clock offset need not be whole): the next whole second below it.
+ */
 export function nextStepIn(msToGo: number): number | null {
-  if (msToGo > 0) return ((msToGo - 1) % 1000) + 1;
+  if (msToGo > 0) return msToGo - (Math.ceil(msToGo / 1000) - 1) * 1000;
   if (msToGo > -GO_STAMP_MS) return msToGo + GO_STAMP_MS;
   return null;
+}
+
+/**
+ * The GO stamp lands with the store's GO (#723): the step's own timer and the store's GO timer aim at
+ * the same instant, but a long task between them (a loaded page) used to show the stamp before the
+ * phase turned `running`, or a digit after it. The phase decides: `go` waits for `running`, and a digit
+ * still showing once the race runs reads `go`, in the same render as the phase.
+ */
+export function atGo(step: CountdownStep | null, phase: string): CountdownStep | null {
+  if (phase === "countdown" && step === "go") return 1;
+  if (phase === "running" && typeof step === "number") return "go";
+  return step;
 }
 
 /**

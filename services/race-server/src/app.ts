@@ -10,20 +10,30 @@ import { createInternalHandler } from "./http/internal";
 import { createNonceStore } from "./http/nonces";
 import { createHttpHandler } from "./http/router";
 import { createOutbox, type Outbox } from "./persist/outbox";
-import { buildResults, sendResults } from "./persist/results";
+import { closeLobbyRequest, lobbyCloseOutboxId, sendOutboxEntry } from "./persist/lobby-close";
+import { lobbyHostOutboxId, setLobbyHostRequest } from "./persist/lobby-host";
+import { buildResults } from "./persist/results";
 import type { WebApi } from "./persist/web-api";
 import { createIdle } from "./players/idle";
+import { createLastLeave } from "./players/last-leave";
 import { releaseDropped, type LeaveDeps } from "./players/leave";
 import { createPresence, type Presence } from "./players/presence";
 import { createResumeKeys } from "./players/resume-keys";
 import { createBonuses } from "./rooms/bonus-step";
+import { createBotDrivers, type BotDrivers } from "./rooms/bot-driver";
 import { createDesksState, playerStateOf, type DesksState } from "./rooms/desks-state";
 import { durationsFor } from "./rooms/durations";
 import { ingest } from "./rooms/ingest";
 import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecycle";
-import { createRoomRegistry, RECONCILE_MS, type RoomRegistry } from "./rooms/registry";
+import { createOwnerLease } from "./rooms/owner";
+import {
+  createRoomRegistry,
+  RECONCILE_MS,
+  type NewHost,
+  type RoomRegistry,
+} from "./rooms/registry";
 import { createTicker } from "./rooms/tick";
-import { audience, deskRoom, spectatorRoom } from "./socket/rooms";
+import { audience, deskRoom, lobbyRoom, spectatorRoom } from "./socket/rooms";
 import { RACE_LIMITER_PREFIX } from "./socket/rate-limit";
 import { attachSocketServer, type RacePort, type RaceIo } from "./socket/server";
 import {
@@ -45,14 +55,28 @@ export type RaceServer = {
   presence: Presence;
   /** Spectator admission slots per room (#616). */
   spectators: SpectatorSlots;
+  /** The bots' drivers of the running rooms (#366). */
+  bots: BotDrivers;
   /**
    * Rehydrates the rooms of the previous process (#204) before it binds, then starts the count
    * reconciliation; resolves with the bound port (pass 0 for an ephemeral one in tests).
    */
   listen(port: number, host?: string): Promise<number>;
+  /** This process's random id: the `owner` of the races it runs (#704). */
+  instanceId: string;
+  /**
+   * SIGTERM (#704): marks draining (`/health` 503, new rooms refused with a retryable 503) and keeps
+   * every live room ticking; resolves `empty` once this process serves no room, `cap` after `capMs`.
+   * The caller then closes. Rooms with no live race and no socket here stop counting (Redis keeps
+   * them for the next deployment).
+   */
+  drain(capMs: number): Promise<"empty" | "cap">;
   /** Marks draining, disconnects every socket, closes HTTP, then quits Redis. */
   close(): Promise<void>;
 };
+
+/** Period of the drain's room check (#704). */
+export const DRAIN_POLL_MS = 1_000;
 
 const log = (msg: string, fields: Record<string, unknown>) =>
   console.log(JSON.stringify({ level: "info", msg, ...fields }));
@@ -69,7 +93,10 @@ export function createRaceServer({
   rng = Math.random,
   maxSpectatorsPerRoom = MAX_SPECTATORS_PER_ROOM,
 }: {
-  env: Pick<RaceServerEnv, "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK">;
+  env: Pick<
+    RaceServerEnv,
+    "RACE_TOKEN_SECRET" | "WEB_ORIGIN" | "RACE_FAST_CLOCK" | "RAILWAY_GIT_COMMIT_SHA"
+  >;
   redis: Redis;
   clock: Clock;
   scheduler: Scheduler;
@@ -81,12 +108,17 @@ export function createRaceServer({
    * files' live rooms (`testing/harness.ts`).
    */
   recovery?: boolean;
-  /** Randomness of the bonus effects (#190: Extra Paperwork's words); tests seed it. */
+  /**
+   * Randomness of the bonus effects (#190: Extra Paperwork's words) and of the bots' keys (#366);
+   * tests seed it.
+   */
   rng?: Rng;
   /** Spectator sockets one room admits on this process (#616); tests lower it. */
   maxSpectatorsPerRoom?: number;
 }): RaceServer {
-  const registry = createRoomRegistry({ redis, clock });
+  // Liveness lease (#704): the next deployment boots while this one drains, on the same Redis.
+  const lease = createOwnerLease({ redis, scheduler });
+  const registry = createRoomRegistry({ redis, clock, owner: lease });
   const spectators = createSpectatorSlots(maxSpectatorsPerRoom);
   // Assigned below: the lifecycle broadcasts through the socket server it is handed to.
   const sockets: { io?: RaceIo } = {};
@@ -106,10 +138,11 @@ export function createRaceServer({
     registry,
     desksState,
     resumeKeys,
-    clock,
     scheduler,
     durations,
     emit: roomEvent,
+    // The host's desk expired (#137 C2 b): the role passes on; already inside the room's queue.
+    onExpired: (lobbyId, userId) => hostGone(lobbyId, userId),
   });
   // Idle and abandon (#183): a tick step over the connected typing desks, and the abandon edge.
   const idle = createIdle({ desksState, presence, durations, emit: roomEvent });
@@ -122,6 +155,8 @@ export function createRaceServer({
     emit: { room: roomEvent, desk: deskEvent },
     rng,
   });
+  // Bots (#366): one timer per bot desk from GO, keys through `ingest`; real ms, never fast-clocked.
+  const bots = createBotDrivers({ clock, scheduler, rng });
   const ticker = createTicker({
     desksState,
     clock,
@@ -141,9 +176,24 @@ export function createRaceServer({
   });
   const race: RacePort = {
     ingest: (lobbyId, desk, batch) => ingest(desksState.get(lobbyId), desk, batch, clock.now()),
-    abandon: idle.abandon,
+    abandon: (lobbyId, desk) => {
+      const result = idle.abandon(lobbyId, desk);
+      // The host abandoned (#137 C2 b): it stays seated and connected, but no longer hosts.
+      const userId = result.terminal
+        ? desksState.get(lobbyId)?.desks.find((d) => d.desk === desk)?.userId
+        : null;
+      if (userId) {
+        registry
+          .withRoom(lobbyId, () => hostGone(lobbyId, userId))
+          .catch((err: unknown) =>
+            log("host transfer failed", { lobby: lobbyId, err: String(err) }),
+          );
+      }
+      return result;
+    },
     playBonus: (lobbyId, desk) => bonuses.play(lobbyId, desk, clock.now()),
     overlayOf: bonuses.overlayOf,
+    bonusOf: (lobbyId, desk) => bonuses.bonusOf(lobbyId, desk, clock.now()),
     stateOf: (lobbyId, desk) => {
       const state = desksState.states(lobbyId).get(desk);
       return state && desksState.get(lobbyId)?.phase === "running" ? playerStateOf(state) : null;
@@ -151,8 +201,8 @@ export function createRaceServer({
   };
   // Results (#189, ADR 0008 write path): built from the in-process states and traces before
   // `release` frees them, then queued in Redis and posted; pending entries of a previous process
-  // are re-sent now.
-  const outbox = createOutbox({ redis, clock, scheduler, send: sendResults(webApi) });
+  // are re-sent now. The lobby close calls (#734) ride the same queue.
+  const outbox = createOutbox({ redis, clock, scheduler, send: sendOutboxEntry(webApi) });
   const persist = (ended: RaceEnded) => {
     if (ended.reason === "void") return;
     const runtime = desksState.get(ended.lobbyId);
@@ -167,13 +217,49 @@ export function createRaceServer({
       );
   };
   outbox.drain().catch((err: unknown) => log("outbox drain failed", { err: String(err) }));
+  // The room is gone for good (#734): the web closes the `Lobby` row. Never awaited by the leave.
+  const closeLobby = (lobbyId: string) => {
+    outbox
+      .enqueue(lobbyCloseOutboxId(lobbyId), [closeLobbyRequest(lobbyId, clock.now())])
+      .catch((err: unknown) =>
+        log("lobby close enqueue failed", { lobby: lobbyId, err: String(err) }),
+      );
+  };
+
+  // Host transfer (#137, spec 5.4): the room hears `event new-host { desk }` (after the roster that
+  // flags the new host); the web's `Lobby.hostUserId` follows through the outbox, never awaited by
+  // the leave; a start flushes it before its own call (#897, `syncHost`).
+  const onNewHost = (lobbyId: string, host: NewHost) => {
+    roomEvent(lobbyId, { v: PROTOCOL_VERSION, kind: "new-host", desk: host.desk });
+    log("new host", { lobby: lobbyId, desk: host.desk });
+    outbox
+      .enqueue(lobbyHostOutboxId(lobbyId), [setLobbyHostRequest(lobbyId, host.userId)])
+      .catch((err: unknown) =>
+        log("lobby host enqueue failed", { lobby: lobbyId, err: String(err) }),
+      );
+  };
+  // The host's desk is gone for good mid-race (#137 C2 b: expired, abandoned; never asleep): its seat
+  // stays, the role passes. Runs inside the room's queue.
+  const hostGone = async (lobbyId: string, userId: string) => {
+    const handed = await registry.handOverHost(lobbyId, userId);
+    if (!handed) return;
+    to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members: handed.members });
+    onNewHost(lobbyId, handed.newHost);
+  };
 
   const leaveDeps: LeaveDeps = {
     registry,
     presence,
     onRoomClosed: (lobbyId) => lifecycle.onRoomClosed(lobbyId),
+    onLobbyClosed: closeLobby,
+    onNewHost,
     announce: (lobbyId, members) =>
       void to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members }),
+    announceSettings: (lobbyId, settings) =>
+      void to(audience(lobbyId))?.emit("settings", { v: PROTOCOL_VERSION, settings }),
+    // The watching host kept for the race (#876) waits out the last-leave grace after its end;
+    // `lastLeave` is created below, before any race can end.
+    deferLeave: (lobbyId, userId, leave) => lastLeave.defer(lobbyId, userId, leave),
   };
 
   const raceHooks = {
@@ -182,14 +268,20 @@ export function createRaceServer({
       // Synchronous, before any await of the ending: abandon and the idle kick stand down (#183).
       const runtime = desksState.get(lobbyId);
       if (runtime) runtime.ending = true;
+      bots.stop(lobbyId);
       return presence.settle(lobbyId);
     },
-    onGo: (lobbyId: string, init: Parameters<typeof desksState.open>[1]) => {
-      desksState.open(lobbyId, init);
+    onGo: (
+      lobbyId: string,
+      init: Parameters<typeof desksState.open>[1] & { bots: Parameters<BotDrivers["start"]>[1] },
+    ) => {
+      const runtime = desksState.open(lobbyId, init);
       presence.onGo(lobbyId);
       ticker.start(lobbyId);
+      bots.start(runtime, init.bots, init.race.language);
     },
     onEnded: (lobbyId: string) => {
+      bots.stop(lobbyId);
       ticker.finish(lobbyId);
       desksState.end(lobbyId);
     },
@@ -202,7 +294,16 @@ export function createRaceServer({
         desks: runtime.desks.map(({ desk }) => desk),
       };
     },
+    // "Race again" (#143): race 1's runtime goes before race 2's countdown; presence keeps the
+    // seats of the members still connected (GO rebuilds the rest).
+    onRestart: (lobbyId: string) => {
+      bots.stop(lobbyId);
+      ticker.stop(lobbyId);
+      desksState.close(lobbyId);
+      idle.closeRoom(lobbyId);
+    },
     onClosed: (lobbyId: string) => {
+      bots.stop(lobbyId);
       ticker.stop(lobbyId);
       desksState.close(lobbyId);
       presence.closeRoom(lobbyId);
@@ -240,6 +341,10 @@ export function createRaceServer({
       void to(audience(lobbyId))?.emit(event, payload);
     },
     ...raceHooks,
+    // An armed auto-start waits out a pending leave grace (#890); `lastLeave` is created below.
+    leavePending: (lobbyId) => lastLeave.pending(lobbyId),
+    // A start delivers the room's host transfer first (#897): the web checks the host it recorded.
+    syncHost: (lobbyId) => outbox.flush(lobbyHostOutboxId(lobbyId)),
   });
   const secret = env.RACE_TOKEN_SECRET;
   let draining = false;
@@ -248,21 +353,70 @@ export function createRaceServer({
   const reconcileEvery = () => {
     reconcileTimer = scheduler.setTimeout(() => {
       reconcileEvery();
-      registry.reconcile().catch((err: unknown) => log("reconcile failed", { err: String(err) }));
+      registry.reconcile().then(
+        // A race whose process is gone (#704): the sockets that reconnected here hear it is over.
+        (voided) => {
+          for (const { lobbyId, raceId } of voided) {
+            to(audience(lobbyId))?.emit("ended", {
+              v: PROTOCOL_VERSION,
+              raceId,
+              reason: "void",
+              ranking: [],
+            });
+          }
+        },
+        (err: unknown) => log("reconcile failed", { err: String(err) }),
+      );
     }, RECONCILE_MS);
+  };
+
+  // Drain (#704): a room this process no longer serves stops counting, so the drain ends after the
+  // last live race. Live = a race in countdown/running, or a socket of the room on this process.
+  let drainTimer: TimerHandle | null = null;
+  const hasSockets = (lobbyId: string) =>
+    [lobbyRoom(lobbyId), spectatorRoom(lobbyId)].some(
+      (name) => (sockets.io?.of("/").adapter.rooms.get(name)?.size ?? 0) > 0,
+    );
+  const releaseIdle = async () => {
+    for (const lobbyId of registry.ids()) {
+      if (hasSockets(lobbyId)) continue;
+      const room = await registry.room(lobbyId).catch(() => undefined);
+      if (room === undefined) continue;
+      if (room && (room.phase === "countdown" || room.phase === "running")) continue;
+      registry.release(lobbyId);
+    }
   };
 
   const httpServer = createServer(
     createHttpHandler({
-      health: { rooms: () => registry.count(), draining: () => draining },
+      health: {
+        rooms: () => registry.count(),
+        draining: () => draining,
+        commit: env.RAILWAY_GIT_COMMIT_SHA ?? null,
+      },
       internal: createInternalHandler({
         registry,
         secret,
         clock,
         nonces: createNonceStore({ redis }),
+        draining: () => draining,
+        // The room's visibility changed (#815): the existing `settings` broadcast, then the one
+        // automatic-start decision (#814), queued behind the write.
+        onLobbyType: (lobbyId, settings) => {
+          to(audience(lobbyId))?.emit("settings", { v: PROTOCOL_VERSION, settings });
+          void lifecycle.reviewAutoStart(lobbyId);
+        },
       }),
     }),
   );
+  // A reload of the lobby page keeps the room and its lobby open (#734).
+  const lastLeave = createLastLeave({
+    registry,
+    scheduler,
+    sockets: presence.sockets,
+    // The grace resolved: an auto-start it held fires or drops now (#890).
+    onSettled: (lobbyId) => void lifecycle.reviewAutoStart(lobbyId),
+  });
   const io = attachSocketServer(httpServer, {
     registry,
     lifecycle,
@@ -275,6 +429,9 @@ export function createRaceServer({
     spectators,
     // Per-identity buckets (#207): fails closed, a message Redis cannot count is dropped.
     limiter: createLimiter(redis, { prefix: RACE_LIMITER_PREFIX }),
+    onLobbyClosed: closeLobby,
+    onNewHost,
+    lastLeave,
   });
   sockets.io = io;
 
@@ -287,22 +444,55 @@ export function createRaceServer({
     outbox,
     presence,
     spectators,
+    bots,
+    instanceId: lease.id,
     listen: async (port, host) => {
       if (recovery) {
-        const { kept, voided, gone } = await registry.rehydrate();
-        log("rooms rehydrated", { kept: kept.length, voided: voided.length, gone: gone.length });
+        await lease.start();
+        const { kept, voided, gone, foreign } = await registry.rehydrate();
+        // A room whose keys expired while no process ran (#204): its lobby is closed too (#734).
+        for (const lobbyId of gone) closeLobby(lobbyId);
+        log("rooms rehydrated", {
+          kept: kept.length,
+          voided: voided.length,
+          gone: gone.length,
+          foreign: foreign.length,
+        });
         reconcileEvery();
       }
       return new Promise((resolve) => {
         httpServer.listen(port, host, () => resolve((httpServer.address() as AddressInfo).port));
       });
     },
+    drain: (capMs) => {
+      draining = true;
+      const deadline = clock.now() + capMs;
+      return new Promise((resolve) => {
+        const poll = () => {
+          drainTimer = null;
+          releaseIdle().then(
+            () => {
+              if (registry.count() === 0) return resolve("empty");
+              if (clock.now() >= deadline) return resolve("cap");
+              drainTimer = scheduler.setTimeout(poll, DRAIN_POLL_MS);
+            },
+            () => resolve("cap"),
+          );
+        };
+        poll();
+      });
+    },
     close: async () => {
       draining = true;
+      if (drainTimer) scheduler.clear(drainTimer);
+      drainTimer = null;
       if (reconcileTimer) scheduler.clear(reconcileTimer);
       reconcileTimer = null;
+      await lease.stop();
       lifecycle.close();
       presence.close();
+      lastLeave.close();
+      bots.close();
       ticker.close();
       outbox.close();
       await new Promise<void>((resolve) => void io.close(() => resolve()));

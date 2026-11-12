@@ -42,11 +42,32 @@ vi.mock("next/headers", () => ({
   headers: async () => state.headers,
 }));
 vi.mock("@/env", () => ({ env: state.env }));
+// #741: the limiter fails open when Redis answers slower than LIMIT_TIMEOUT_MS (ADR 0020, kept on
+// purpose; covered in src/server/limiter/index.test.ts). Under parallel DB load the first call on a
+// fresh client (connect + script load) can take longer than 250 ms, and a refusal case then saw
+// `not-found`. These cases test the lobby actions' budgets, not the timeout policy, so the client
+// on the real test Redis waits long enough to always get Redis's answer. Other URLs (the closed
+// port case) keep the production timeout.
+vi.mock("@/server/limiter/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/limiter/core")>();
+  return {
+    ...actual,
+    createWebLimit: (opts: Parameters<typeof actual.createWebLimit>[0]) =>
+      actual.createWebLimit(
+        // eslint-disable-next-line no-restricted-properties
+        opts.url === process.env.REDIS_URL ? { ...opts, timeoutMs: 10_000 } : opts,
+      ),
+  };
+});
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));
 
-const { joinByCode, mintRaceToken } = await import("../index");
+// #128 C3: the matchmaking behind the limiter is stubbed (it needs the race server); the budget is real.
+const matchmaking = vi.hoisted(() => ({ runQuickRace: vi.fn() }));
+vi.mock("../internal/quick-race", () => matchmaking);
+
+const { joinByCode, mintRaceToken, quickRace } = await import("../index");
 const { ensureGuest } = await import("@/features/identity");
 
 const PREFIX = `test-rl-${randomUUID().slice(0, 8)}-`;
@@ -67,11 +88,55 @@ async function closedPort(): Promise<number> {
   return port;
 }
 
+// Wraps a real client and records every write it is asked to make, on any model or raw (same
+// recorder as src/features/identity/actions/ensure-guest.test.ts, #594). A Proxy, because Prisma 7
+// model delegates are lazy getters that vi.spyOn cannot redefine.
+const WRITES = new Set([
+  "create",
+  "createMany",
+  "createManyAndReturn",
+  "upsert",
+  "update",
+  "updateMany",
+  "updateManyAndReturn",
+  "delete",
+  "deleteMany",
+]);
+const RAW_WRITES = new Set(["$executeRaw", "$executeRawUnsafe", "$transaction"]);
+function recordWrites<T extends object>(client: T) {
+  const writes: string[] = [];
+  const bind = (target: object, key: PropertyKey) => {
+    const value = Reflect.get(target, key, target) as unknown;
+    return typeof value === "function" ? value.bind(target) : value;
+  };
+  const db = new Proxy(client, {
+    get(target, key) {
+      const value = bind(target, key);
+      if (typeof key !== "string") return value;
+      if (RAW_WRITES.has(key) && typeof value === "function") {
+        return (...args: unknown[]) => (writes.push(key), value(...args));
+      }
+      if (key.startsWith("$") || value === null || typeof value !== "object") return value;
+      return new Proxy(value, {
+        get(delegate, method) {
+          const fn = bind(delegate, method);
+          if (typeof method !== "string" || !WRITES.has(method) || typeof fn !== "function") {
+            return fn;
+          }
+          return (...args: unknown[]) => (writes.push(`${key}.${method}`), fn(...args));
+        },
+      });
+    },
+  });
+  return { db, writes };
+}
+
 describe.skipIf(!testDatabaseUrl)(
   "lobby actions behind the limiter (C3, test DB + Redis)",
   { timeout: 30_000 },
   () => {
     let db: ReturnType<typeof createPrismaClient>;
+    let hostId: string;
     const ip = () => {
       const value = freshIp();
       state.headers = new Headers({ "x-forwarded-for": value });
@@ -84,6 +149,7 @@ describe.skipIf(!testDatabaseUrl)(
       await db.$connect();
       await db.lobby.deleteMany({ where: { code: CODE } });
       const host = await db.user.create({ data: { isGuest: true, typistName: `${PREFIX}host` } });
+      hostId = host.id;
       await db.lobby.create({ data: { code: CODE, hostUserId: host.id } });
     }, 30_000);
     beforeEach(() => {
@@ -100,6 +166,33 @@ describe.skipIf(!testDatabaseUrl)(
 
     /** A well-formed code no lobby uses. */
     const otherCode = (i: number) => `ZQX-${String(i).padStart(4, "0")}`;
+
+    /**
+     * Wraps the client for the refused calls of one case (#710, the #594 pattern): records every
+     * write it is asked to make, so "nothing was created" is exact while other DB test files insert
+     * users in parallel. Counts are scoped to the guest ids this file issued, never global.
+     */
+    const refusedCalls = async () => {
+      const recorded = recordWrites(db);
+      state.db = recorded.db; // the next beforeEach restores the plain client
+      const issued = state.issued.length;
+      const scoped = async () => {
+        const ids = state.issued;
+        return {
+          users: await db.user.count({ where: { id: { in: ids } } }),
+          lobbies: await db.lobby.count({ where: { hostUserId: { in: [hostId, ...ids] } } }),
+        };
+      };
+      const before = await scoped();
+      return {
+        async expectNothingCreated() {
+          state.db = db;
+          expect(recorded.writes).toEqual([]);
+          expect(state.issued.length).toBe(issued);
+          expect(await scoped()).toEqual(before);
+        },
+      };
+    };
 
     it("C1: 100 cookie-less joinByCode from one IP for one open lobby within 60 s all succeed", async () => {
       ip();
@@ -120,8 +213,7 @@ describe.skipIf(!testDatabaseUrl)(
           error: "not-found",
         });
       }
-      const users = await db.user.count();
-      const lobbies = await db.lobby.count();
+      const refused = await refusedCalls();
       await expect(joinByCode({ code: otherCode(20) })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
@@ -140,8 +232,7 @@ describe.skipIf(!testDatabaseUrl)(
         ok: false,
         error: "rate-limited",
       });
-      expect(await db.user.count()).toBe(users);
-      expect(await db.lobby.count()).toBe(lobbies);
+      await refused.expectNothingCreated();
       expect(state.jar.size).toBe(0);
       // The code this subject already found still works; another client is not throttled.
       await expect(joinByCode({ code: CODE })).resolves.toEqual({ ok: true, code: CODE });
@@ -171,12 +262,12 @@ describe.skipIf(!testDatabaseUrl)(
         const result = await mintRaceToken({ code: CODE });
         expect(result.ok).toBe(true);
       }
-      const users = await db.user.count();
+      const refused = await refusedCalls();
       await expect(mintRaceToken({ code: CODE })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
       });
-      expect(await db.user.count()).toBe(users);
+      await refused.expectNothingCreated();
     });
 
     it("C2: a cookie-less client cycling codes is refused before any guest is created", async () => {
@@ -188,14 +279,32 @@ describe.skipIf(!testDatabaseUrl)(
           error: "not-found",
         });
       }
-      const before = await db.user.count();
+      const refused = await refusedCalls();
       // A 21st distinct code is refused before the lookup, even one of an open lobby.
       await expect(mintRaceToken({ code: CODE })).resolves.toEqual({
         ok: false,
         error: "rate-limited",
       });
-      expect(await db.user.count()).toBe(before);
+      await refused.expectNothingCreated();
       expect(state.jar.size).toBe(0);
+    });
+
+    it("#128 C3: the 21st quickRace of one subject within 60 s is refused before any write", async () => {
+      matchmaking.runQuickRace.mockResolvedValue({ ok: true, code: CODE, joined: true });
+      ip();
+      for (let i = 0; i < 20; i++) {
+        await expect(quickRace()).resolves.toEqual({ ok: true, code: CODE, joined: true });
+      }
+      expect(matchmaking.runQuickRace).toHaveBeenCalledTimes(20);
+      const refused = await refusedCalls();
+      await expect(quickRace()).resolves.toEqual({ ok: false, error: "rate-limited" });
+      expect(matchmaking.runQuickRace).toHaveBeenCalledTimes(20);
+      await refused.expectNothingCreated();
+      expect(state.jar.size).toBe(0);
+      // A guest is its own subject: its first press is admitted whatever its IP spent.
+      await ensureGuest();
+      await expect(quickRace()).resolves.toEqual({ ok: true, code: CODE, joined: true });
+      matchmaking.runQuickRace.mockReset();
     });
 
     it("with REDIS_URL on a closed port both actions still succeed and one warning is logged", async () => {

@@ -10,7 +10,13 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { initialRaceState, reduceRace, type RaceEvent, type RaceState } from "../client/store";
-import { selectFinishWpm, selectPlace, selectRemaining, selectWpm } from "./counters";
+import {
+  selectAccuracy,
+  selectFinishWpm,
+  selectPlace,
+  selectRemaining,
+  selectWpm,
+} from "./counters";
 
 // Contract of #225 C1: the nixie's two numbers as pure selectors over the race store. WPM is the
 // engine's clean WPM (ADR 0016) of your predicted state over the corrected clock (#214: device clock +
@@ -31,6 +37,7 @@ const member = (desk: number, name: string): Member => ({
   isBot: false,
   color: desk - 1,
   marker: "circle",
+  avatar: null,
 });
 
 const welcome = (over: Partial<Welcome> = {}): Welcome => ({
@@ -43,8 +50,10 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   race: null,
   state: null,
   overlay: null,
+  bonus: null,
   resumeKey: null,
   serverNow: SERVER_NOW,
+  autoStartAt: null,
   ...over,
 });
 
@@ -109,7 +118,20 @@ describe("selectWpm (#225 C1)", () => {
 
   it("counts only base-text characters when an Extra Paperwork overlay adds words (ADR 0016)", () => {
     const overlay: TextOverlay = { extra: ["xy"], removed: [] };
-    const s = keys(`${TEXT} x`, 100).reduce(reduceRace, running(welcome({ overlay })));
+    // the overlay arrives with a `bonus-hit` (#236; a new countdown starts without one)
+    const hit: RaceEvent = {
+      type: "event",
+      payload: {
+        v: PROTOCOL_VERSION,
+        kind: "bonus-hit",
+        desk: welcome().you!,
+        bonus: "extra-paperwork",
+        overlay,
+        blurUntil: null,
+      },
+      at: T0,
+    };
+    const s = keys(`${TEXT} x`, 100).reduce(reduceRace, reduceRace(running(), hit));
     expect(s.prediction!.text).toBe(`${TEXT} xy`);
     expect(s.prediction!.state.status).toBe("typing");
     const { clean, adjusted } = cleanAndAdjustedWpm(s.prediction!.state, TEXT, overlay, 6_000);
@@ -298,5 +320,35 @@ describe("selectRemaining (#240 C1)", () => {
     const { finishedAt } = s.prediction!.state;
     expect(selectFinishWpm(s)).toBe(engine(s, finishedAt!));
     expect(selectFinishWpm(s)).toBe(selectWpm(s, at(finishedAt! + 10_000)));
+  });
+});
+
+// Contract of #233 C1: after your exit (Reassigned, or asleep) your partial WPM and accuracy are frozen,
+// the engine's numbers over the local state: WPM at your last key, accuracy `correct / total`.
+describe("partial stats after an exit (#233 C1)", () => {
+  const exited = (kind: "abandoned" | "asleep") =>
+    reduceRace(keys("ab cd", 100).reduce(reduceRace, running()), {
+      type: "event",
+      payload: { v: PROTOCOL_VERSION, kind, desk: 2 },
+      at: at(2_000),
+    });
+
+  it("selectWpm freezes at your last key once the server took your exit, before any snapshot", () => {
+    for (const kind of ["abandoned", "asleep"] as const) {
+      const s = exited(kind);
+      expect(s.prediction!.state.status).toBe("typing");
+      const lastT = s.prediction!.state.lastT;
+      expect(selectWpm(s, at(6_000))).toBe(engine(s, lastT));
+      expect(selectWpm(s, at(30_000))).toBe(selectWpm(s, at(6_000)));
+    }
+  });
+
+  it("selectAccuracy is the engine's accuracy in whole percent; null without a desk", () => {
+    expect(selectAccuracy(initialRaceState)).toBeNull();
+    expect(selectAccuracy(running())).toBe(100);
+    // "ab xd": 4 correct out of 5 presses
+    const s = keys("ab xd", 100).reduce(reduceRace, running());
+    expect(selectAccuracy(s)).toBe(Math.round((s.prediction!.state.correct / 5) * 100));
+    expect(selectAccuracy(exited("abandoned"))).toBe(100);
   });
 });

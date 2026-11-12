@@ -22,6 +22,7 @@ import { MAX_AVATAR_BYTES } from "./store-avatar";
 // Network is never real here: every test injects a fake `fetch` returning WHATWG Responses.
 const GITHUB = "https://avatars.githubusercontent.com/u/123?v=4";
 const DISCORD = "https://cdn.discordapp.com/avatars/42/abc.png";
+const GOOGLE = "https://lh3.googleusercontent.com/a/ACg8ocJ-example=s96-c";
 const USER = "user1";
 
 const png = (width = 300, height = 200) =>
@@ -78,8 +79,15 @@ describe("fetchProviderImage (SSRF guard, C1)", () => {
     await expect(fetchProviderImage(DISCORD, { fetch: fake })).resolves.toBeInstanceOf(Uint8Array);
   });
 
+  it("accepts Google's picture host (#828)", async () => {
+    const fake: FakeFetch = vi.fn(async () => imageResponse(await png()));
+    await expect(fetchProviderImage(GOOGLE, { fetch: fake })).resolves.toBeInstanceOf(Uint8Array);
+  });
+
   it.each([
     ["a non-provider host", "https://evil.example/a.png"],
+    ["another googleusercontent host", "https://storage.googleusercontent.com/a.png"],
+    ["a Google lookalike suffix", "https://lh3.googleusercontent.com.evil.example/a.png"],
     ["plain http", "http://avatars.githubusercontent.com/u/1"],
     ["userinfo before the host", "https://avatars.githubusercontent.com@evil.example/a.png"],
     ["userinfo on an allowed host", "https://user:pw@cdn.discordapp.com/avatars/1/a.png"],

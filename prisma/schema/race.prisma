@@ -1,7 +1,8 @@
 // Race domain (ADR 0008): the durable record of a race, owned by src/features/results.
 // The race server is database-less; the web app writes these rows through /api/internal/* (#199, #189).
 // Extension points (additive migrations, later cards): stats.prisma (PersonalBest, Achievement,
-// CharStatDaily) relates to Race.id / User.id; texts.prisma (#346) adds a Text foreign key.
+// CharStatDaily) relates to Race.id / User.id. texts.prisma (#346) holds the corpus with no relation
+// from Race: the race keeps its own text snapshot.
 
 enum RaceLanguage {
   FR
@@ -38,7 +39,7 @@ model Race {
   textContent     String
   textLanguage    RaceLanguage
   textWordCount   Int
-  /// Free reference to the text source until texts.prisma (#346) adds a foreign key.
+  /// Free reference to the text source (`files:<lang>:<version>` or `db:<rows>:<newest createdAt>`).
   textSourceRef   String?
   /// Race settings as sent on the wire (@fifth-copy/protocol), including the text type.
   settings        Json
@@ -88,6 +89,10 @@ model RaceResult {
   bonusesSent      Int
   bonusesReceived  Int
   bonusLog         Json
+  /// The desk's final text overlay `{ extra: string[], removed: int[] }` (@fifth-copy/protocol
+  /// textOverlaySchema, #623): replay the trace on effectiveText(base, overlay). Null when no
+  /// text-changing bonus hit the desk, and for rows stored before #623.
+  overlay          Json?
   suspicious       Boolean      @default(false)
   suspiciousReason String?
   engineVersion    String

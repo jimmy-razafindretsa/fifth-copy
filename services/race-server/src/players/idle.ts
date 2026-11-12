@@ -25,8 +25,10 @@ export type Idle = {
  * accepted keystroke for `IDLE_WARN_MS` gets one `idle-warning { desk, kickAt }` to the room
  * (`kickAt` in ms since GO), and at `IDLE_KICK_MS` turns `asleep` (`asleep { desk }`); a line-cut
  * desk is never idle (presence's grace decides it). The silence is measured from the desk's
- * `lastKeyAt`, which ingest moves at every accepted batch and presence at a resume, so neither
- * knows about idling. The warning marker lives in this process only (ADR 0008, like presence's
+ * `lastKeyAt`, which only ingest moves, at every accepted batch: a resume keeps it (#609), so a
+ * desk that cycles disconnect and resume without typing is warned and kicked on the schedule of a
+ * connected silent desk, at the first tick after its resume when the time away covered the warning
+ * or the kick (a desk never turns `asleep` without its warning). The warning marker lives in this process only (ADR 0008, like presence's
  * timers): a desk is warned for the silence that started at the `lastKeyAt` it holds, and any newer
  * `lastKeyAt` opens a fresh window. Status writes go through `desksState.set`; the tick's terminal
  * check then asks the lifecycle to end the race. Bots hold no seat in presence and are never idle.
@@ -57,11 +59,8 @@ export function createIdle({
       for (const [desk, state] of runtime.states) {
         if (state.status !== "typing" || !presence.isConnected(lobbyId, desk)) continue;
         const silent = now - state.lastKeyAt;
-        if (silent >= durations.IDLE_KICK_MS) {
-          desksState.set(lobbyId, desk, { ...state, status: "asleep" });
-          room?.delete(desk);
-          emit(lobbyId, { v, kind: "asleep", desk });
-        } else if (silent >= durations.IDLE_WARN_MS && room?.get(desk) !== state.lastKeyAt) {
+        if (silent < durations.IDLE_WARN_MS) continue;
+        if (room?.get(desk) !== state.lastKeyAt) {
           if (!room) warned.set(lobbyId, (room = new Map()));
           room.set(desk, state.lastKeyAt);
           const kickAt = state.lastKeyAt - t0 + durations.IDLE_KICK_MS;
@@ -71,6 +70,11 @@ export function createIdle({
             desk,
             kickAt: Math.min(MAX_RACE_MS, Math.max(0, kickAt)),
           });
+        }
+        if (silent >= durations.IDLE_KICK_MS) {
+          desksState.set(lobbyId, desk, { ...state, status: "asleep" });
+          room.delete(desk);
+          emit(lobbyId, { v, kind: "asleep", desk });
         }
       }
     },

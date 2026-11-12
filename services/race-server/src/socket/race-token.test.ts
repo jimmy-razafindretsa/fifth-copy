@@ -5,7 +5,14 @@ import { verifyRaceToken } from "./race-token";
 
 const secret = "s".repeat(32);
 const now = 1_767_225_600;
-const claims = { v: PROTOCOL_VERSION, sub: "usr_1", name: "Ada", lobby: "lob_1", role: "player" };
+const claims = {
+  v: PROTOCOL_VERSION,
+  sub: "usr_1",
+  name: "Ada",
+  lobby: "lob_1",
+  role: "player",
+  avatar: null,
+};
 
 // Built with jose directly, never with the web signer: the race server never imports src/.
 // `iat`/`exp` default to the web minter's shape (iat now, exp now + TTL); `null` omits the claim.
@@ -58,6 +65,17 @@ describe("verifyRaceToken", () => {
     ["299 s later", now + RACE_TOKEN_TTL_S - 1],
   ])("accepts a web-like token (iat now, exp now + TTL) %s", async (_, at) => {
     expect(await verifyRaceToken(await sign(claims), secret, at)).toEqual({ ok: true, claims });
+  });
+
+  it("returns the avatar version claim, and null when the token carries none (#730)", async () => {
+    const result = await verifyRaceToken(await sign({ ...claims, avatar: 7 }), secret, now + 10);
+    expect(result).toEqual({ ok: true, claims: { ...claims, avatar: 7 } });
+    const without: Record<string, unknown> = { ...claims };
+    delete without.avatar;
+    expect(await verifyRaceToken(await sign(without), secret, now + 10)).toEqual({
+      ok: true,
+      claims,
+    });
   });
 
   it.each([

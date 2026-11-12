@@ -15,6 +15,7 @@ const member = (desk: number): Member => ({
   isBot: false,
   color: desk - 1,
   marker: "circle",
+  avatar: null,
 });
 const { typing, finished } = PLAYER_STATUS_CODES;
 const TEXT = "abcdefghij"; // 10 characters

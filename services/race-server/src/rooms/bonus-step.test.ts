@@ -224,6 +224,43 @@ describe("effects over the wire (C4)", () => {
   });
 });
 
+describe("#768 C1 welcome carries the desk's bonus while its race runs", () => {
+  it("the card held, the cooldown end and the blur end in race ms, each null once over; null before GO", async () => {
+    const race = await fourDesks();
+    const { booted: b, t0 } = race;
+    const [one, two, three, four] = race.racers as [Racer, Racer, Racer, Racer];
+    // the welcome of the join, before GO, has no bonus
+    expect(one.seen.welcome!.bonus).toBeNull();
+    await at(b, t0, 100, four);
+    await until(() => kinds(three, "bonus-earned").length === 1, 2_000, "three dealt");
+    play(four);
+    await until(() => kinds(three, "bonus-hit").length === 1, 2_000, "three hit");
+    await until(() => kinds(four, "bonus-sent").length === 1, 2_000, "sent");
+
+    const welcomeOf = async (r: Racer) => {
+      const seen = watchRace(b.connect({ v, token: r.token }));
+      await until(() => !!seen.welcome, 2_000, `welcome of ${r.desk}`);
+      return seen.welcome!.bonus;
+    };
+    // the sender: card gone, cooldown 15 s from its play at +100
+    expect(await welcomeOf(four)).toEqual({ card: null, cooldownUntil: 15_100, blurUntil: null });
+    // rank 3 holds extra-paperwork and is blurred until +5100
+    expect(await welcomeOf(three)).toEqual({
+      card: "extra-paperwork",
+      cooldownUntil: null,
+      blurUntil: 5_100,
+    });
+    expect(await welcomeOf(one)).toEqual({ card: null, cooldownUntil: null, blurUntil: 5_100 });
+
+    // past the blur: it is over
+    await at(b, t0, 6_000, two);
+    expect(await welcomeOf(two)).toEqual({ card: null, cooldownUntil: null, blurUntil: null });
+    // past the cooldown: ready again (it may have been dealt a new card since)
+    await at(b, t0, 15_200, four);
+    expect(await welcomeOf(four)).toMatchObject({ cooldownUntil: null, blurUntil: null });
+  });
+});
+
 describe("cooldown, immunity, bots (C5)", () => {
   it("a second play within 15 s is rejected and the card kept; accepted at 15 s; the same kind on the same target twice is refused", async () => {
     // Desk 1 far ahead: 5 extra words do not cost it the lead (30 / 113 > 8 / 88).

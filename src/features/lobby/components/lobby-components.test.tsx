@@ -3,16 +3,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { deskIdentity, type Member } from "@fifth-copy/protocol";
+import { DEFAULT_RACE_SETTINGS, deskIdentity, type Member } from "@fifth-copy/protocol";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { deskLabel, fill, playersLabel } from "./lobby-labels";
 import { LobbyLiveView, type StartState } from "./lobby-live";
-import { initialLobbyState, type LobbyState } from "./lobby-store";
+import { initialLobbyState, NO_AUTO_START, type LobbyState } from "./lobby-store";
+import { NEW_HOST_HOLD_FACTOR, NEW_HOST_REDUCED_HOLD_MS, newHostHoldMs } from "./new-host-stamp";
 import { PlayerList } from "./player-list";
+import { PortraitCellView, portraitSlot, portraitSrc } from "./portrait-cell";
+import { CONFIRM_HOLD_FACTOR, confirmHoldMs, type RemoveState } from "./remove-control";
+import { IDLE_FORM, type FormState } from "./settings-form";
+import styles from "./lobby.module.css";
 
 // Contract of card 107, C6: every state renders, every string from the catalog (C6 greps `src`).
 vi.mock("../actions/mint-race-token", () => ({ mintRaceToken: vi.fn() }));
+vi.mock("../actions/set-lobby-type", () => ({ setLobbyType: vi.fn() }));
+vi.mock("../actions/create-invite", () => ({ createInvite: vi.fn() }));
 
 const labels = en.lobby;
 const errors = en.landing.errors;
@@ -24,13 +31,19 @@ const member = (desk: number, isHost = false): Member => ({
   isHost,
   isBot: false,
   ...deskIdentity(desk),
+  avatar: null,
 });
 const live = (members: Member[], you = 1): LobbyState => ({
   phase: "live",
   error: null,
   you,
+  watching: false,
   members,
   raceId: null,
+  settings: DEFAULT_RACE_SETTINGS,
+  autoStart: NO_AUTO_START,
+  newHost: null,
+  newHosts: 0,
 });
 const view = (state: LobbyState) =>
   renderToStaticMarkup(<LobbyLiveView code={CODE} state={state} labels={labels} errors={errors} />);
@@ -95,6 +108,8 @@ describe("LobbyLiveView states", () => {
   it.each([
     ["closed", errors.closed],
     ["not-found", errors.notFound],
+    // every desk taken (#678): "All 30 desks in this room are taken."
+    ["room-full", errors.roomFull],
     ["generic", errors.generic],
   ] as const)("error %s: an InlineError line, no list", (error, message) => {
     const html = view({ ...initialLobbyState, phase: "error", error });
@@ -130,7 +145,13 @@ describe("START (#214 C8)", () => {
         onStart={() => {}}
       />,
     );
-  const button = (html: string) => /<button[^>]*>[^<]*<\/button>/.exec(html)?.[0] ?? null;
+  // START, not the invite row's COPY (#498 puts it first in the dockets column)
+  const copyLabels = [en.lobby.invite.copy, fr.lobby.invite.copy].map((c) => `>${c}<`);
+  // START's own block (#110 puts the host's settings buttons before it)
+  const button = (html: string) =>
+    [...(html.split("data-start")[1] ?? "").matchAll(/<button[^>]*>[^<]*<\/button>/g)]
+      .map((m) => m[0])
+      .find((b) => !copyLabels.some((c) => b.includes(c))) ?? null;
   const host = member(1, true);
   const guest = member(2);
 
@@ -221,6 +242,349 @@ describe("START (#214 C8)", () => {
   });
 });
 
+// Contract of #105 C1: a bot's row carries the ink BOT tag (the YOU tag recipe) after its name; a human
+// none; a bot never gets YOU or HOST.
+describe("BOT tag (#105 C1)", () => {
+  const bot = (desk: number): Member => ({ ...member(desk), name: `Agent ${desk}`, isBot: true });
+  const tag = (text: string) => new RegExp(`<span class="_tag_[^"]*">${text}</span>`);
+
+  it("a bot row: the BOT tag after the name, in the YOU tag's class", () => {
+    const html = view(live([member(1, true), bot(2)], 1));
+    const [first, second] = html.split("<li").slice(1);
+    expect(second).toMatch(tag(labels.bot));
+    expect(second!.indexOf("Agent 2")).toBeLessThan(second!.indexOf(`>${labels.bot}<`));
+    expect(first).not.toContain(`>${labels.bot}<`);
+    expect(labels.bot).toBe("BOT");
+  });
+
+  it("a bot never gets YOU or HOST, even with the flags on its member", () => {
+    const html = renderToStaticMarkup(
+      <PlayerList members={[{ ...bot(4), isHost: true }]} you={4} labels={labels} />,
+    );
+    expect(html).toContain(`>${labels.bot}<`);
+    expect(html).not.toContain(`>${labels.you}<`);
+    expect(html).not.toContain(labels.host);
+  });
+
+  it("several bots, each tagged; no bots, no tag", () => {
+    expect(view(live([member(1, true), bot(2), bot(3)])).match(/>BOT</g)).toHaveLength(2);
+    expect(view(live([member(1, true), member(2)]))).not.toContain(`>${labels.bot}<`);
+  });
+
+  it("French: the tag stays BOT (language-neutral, as the Dawn report's)", () => {
+    expect(fr.lobby.bot).toBe("BOT");
+  });
+});
+
+// Contract of #105 C2: a non-host sees the 7.4 notice row WAITING FOR THE HOST (role status, no pulse)
+// at the top of the roll and no START; the host sees START and no notice; absent while loading, in error
+// and once the phase is starting.
+describe("non-host notice row (#105 C2)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const waiting = (html: string) => html.includes(`>${labels.waitingForHost}<`);
+
+  it("the guest: one status row WAITING FOR THE HOST above the list, no pulse, no START", () => {
+    const html = view(live([host, guest], 2));
+    expect(html.match(new RegExp(`>${labels.waitingForHost}<`, "g"))).toHaveLength(1);
+    expect(html).toMatch(
+      new RegExp(`<p role="status" class="[^"]*"[^>]*>${labels.waitingForHost}<`),
+    );
+    const cls = new RegExp(`<p role="status" class="([^"]*)"[^>]*>${labels.waitingForHost}<`).exec(
+      html,
+    )![1]!;
+    expect(cls).toMatch(/_notice_/);
+    expect(cls).not.toMatch(/_pulse_/);
+    expect(html.indexOf(labels.waitingForHost)).toBeLessThan(html.indexOf("<ul"));
+    // the invite row's COPY is the guest's only button (#498)
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).not.toContain(`>${labels.start.button}<`);
+    expect(labels.waitingForHost).toBe("WAITING FOR THE HOST");
+  });
+
+  it("the host: START and no notice", () => {
+    const html = view(live([host, guest], 1));
+    expect(html).toContain(`>${labels.start.button}<`);
+    expect(waiting(html)).toBe(false);
+  });
+
+  it("absent while loading, in error and once starting", () => {
+    expect(waiting(view(initialLobbyState))).toBe(false);
+    expect(waiting(view({ ...initialLobbyState, phase: "error", error: "generic" }))).toBe(false);
+    expect(waiting(view({ ...live([host, guest], 2), phase: "starting", raceId: "r" }))).toBe(
+      false,
+    );
+  });
+
+  it("a reconnecting guest: the pulsing reconnecting row above the notice", () => {
+    const html = view({ ...live([host, guest], 2), phase: "reconnecting" });
+    const statuses = [...html.matchAll(/<p role="status" class="([^"]*)"[^>]*>([^<]*)</g)];
+    expect(statuses.map((m) => m[2])).toEqual([labels.reconnecting, labels.waitingForHost]);
+    expect(statuses[0]![1]).toMatch(/_pulse_/);
+    expect(statuses[1]![1]).not.toMatch(/_pulse_/);
+  });
+
+  it("French: EN ATTENTE DE L'HÔTE", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={live([host, guest], 2)}
+        labels={fr.lobby}
+        errors={errors}
+      />,
+    );
+    expect(html).toContain("EN ATTENTE DE L&#x27;HÔTE");
+    expect(html).not.toContain("WAITING FOR");
+  });
+});
+
+// Contract of #732 C1: a late joiner (phase `spectating`) sees the 7.4 notice row RACE IN PROGRESS (role
+// status, no pulse: a statement) at the top of the roll, the skeleton rows under it, the settings
+// skeleton and no START, whoever hosts the room.
+describe("late joiner notice row (#732 C1)", () => {
+  const spectating: LobbyState = { ...initialLobbyState, phase: "spectating" };
+  const statuses = (html: string) => [
+    ...html.matchAll(/<p role="status" class="([^"]*)"[^>]*>([^<]*)</g),
+  ];
+
+  it("one status row RACE IN PROGRESS above the skeleton rows, no pulse, no START", () => {
+    const html = view(spectating);
+    const rows = statuses(html);
+    expect(rows.map((m) => m[2])).toEqual([labels.raceInProgress]);
+    expect(rows[0]![1]).toMatch(/_notice_/);
+    expect(rows[0]![1]).not.toMatch(/_pulse_/);
+    // the roll's skeleton (aria-busy list) under the notice, and the settings docket's skeleton
+    const notice = html.indexOf(labels.raceInProgress);
+    const roll = html.indexOf(`aria-label="${labels.listName}" aria-busy="true"`);
+    expect(roll).toBeGreaterThan(notice);
+    expect(html).toContain("data-skeleton");
+    expect(html).not.toContain(`>${labels.start.button}<`);
+    expect(html).not.toContain(`>${labels.waitingForHost}<`);
+    expect(labels.raceInProgress).toBe("RACE IN PROGRESS · YOU ARE SEATED WHEN IT ENDS");
+  });
+
+  it("absent while loading, live and in error", () => {
+    const has = (html: string) => html.includes(`>${labels.raceInProgress}<`);
+    expect(has(view(initialLobbyState))).toBe(false);
+    expect(has(view(live([member(1, true), member(2)], 2)))).toBe(false);
+    expect(has(view({ ...initialLobbyState, phase: "error", error: "generic" }))).toBe(false);
+  });
+
+  it("French: COURSE EN COURS · TU SERAS PLACÉ À LA FIN", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView code={CODE} state={spectating} labels={fr.lobby} errors={errors} />,
+    );
+    expect(html).toContain(">COURSE EN COURS · TU SERAS PLACÉ À LA FIN<");
+    expect(html).not.toContain("RACE IN PROGRESS");
+  });
+});
+
+// Contract of #498 C5/C6: the dockets column (room docket with its invite row, the settings docket, then
+// the host's START), beside the ring slot and the roll.
+describe("lobby layout (#498)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const at = (html: string, needle: string) => html.indexOf(needle);
+
+  it("the host: room docket, invite row, settings docket, START, then the roll", () => {
+    const html = view(live([host, guest], 1));
+    const order = [
+      labels.codeTag,
+      `>${labels.invite.copy}<`,
+      labels.settings.tag,
+      `>${labels.start.button}<`,
+      `aria-label="${labels.listName}"`,
+    ].map((s) => at(html, s));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("a guest: the same dockets, no START", () => {
+    const html = view(live([host, guest], 2));
+    expect(html).toContain(labels.settings.tag);
+    expect(html).toContain(`>${labels.invite.copy}<`);
+    expect(html).not.toContain(`>${labels.start.button}<`);
+  });
+
+  it("#809 C4 the host's link row follows INVITE; a guest has none", () => {
+    const hostHtml = view(live([host, guest], 1));
+    expect(at(hostHtml, `>${labels.invite.copy}<`)).toBeLessThan(
+      at(hostHtml, `>${labels.links.label}</dt>`),
+    );
+    expect(hostHtml).toContain(`>${labels.links.newLink}</button>`);
+    const guestHtml = view(live([host, guest], 2));
+    expect(guestHtml).not.toContain(`>${labels.links.label}</dt>`);
+    expect(guestHtml).not.toContain(labels.links.newLink);
+    expect(view(initialLobbyState)).not.toContain(labels.links.newLink);
+  });
+
+  it("loading: the settings docket's skeleton rows; an error shows no settings docket", () => {
+    expect(view(initialLobbyState)).toContain(labels.settings.loading);
+    const error = view({ ...initialLobbyState, phase: "error", error: "closed" });
+    expect(error).not.toContain(labels.settings.tag);
+  });
+
+  it("the settings rows follow the state's settings", () => {
+    const html = view({
+      ...live([host, guest], 2),
+      settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "block", timerS: 300 },
+    });
+    expect(html).toContain(">BLOCK</dd>");
+    expect(html).toContain(">5 MIN</dd>");
+    expect(html).not.toContain(">BACKSPACE</dt>");
+  });
+});
+
+// Contract of #110 C1, C2: the host's form in the docket's rows, its pending, refusal and not-host
+// states from props (the waiting room owns them; the fake socket drives them in settings-form.test.ts).
+describe("host settings form (#110)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const settingsOf = (html: string) =>
+    html.slice(html.indexOf(labels.settings.tag), html.indexOf("data-start"));
+  const controls = (html: string) => settingsOf(html).match(/<(button|input)[ >]/g)?.length ?? 0;
+  const hostView = (
+    form: FormState,
+    state = live([host, guest], 1),
+    lobbyType?: "public" | "private",
+  ) =>
+    renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={state}
+        lobbyType={lobbyType}
+        labels={labels}
+        errors={errors}
+        form={form}
+        revision={0}
+      />,
+    );
+
+  it("the host edits every row, BOTS and LOBBY included (#114); the guest reads the rows", () => {
+    const html = hostView(IDLE_FORM);
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-errorMode"/);
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-lobbyType"/);
+    expect(settingsOf(html)).toContain(">ADD A BOT</button>");
+    expect(controls(html)).toBeGreaterThan(20);
+    expect(controls(view(live([host, guest], 2)))).toBe(0);
+    expect(view(live([host, guest], 2))).toContain(">CONTINUE</dd>");
+  });
+
+  it("#114 C3, C4: LOBBY shows the row's Lobby.type over the room's copy, host and guest", () => {
+    expect(hostView(IDLE_FORM, live([host, guest], 1), "public")).toMatch(
+      /aria-pressed="true"[^>]*>PUBLIC<\/button>/,
+    );
+    const guestView = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={live([host, guest], 2)}
+        lobbyType="public"
+        labels={labels}
+        errors={errors}
+      />,
+    );
+    expect(guestView).toMatch(/data-setting="lobbyType"[\s\S]*?>PUBLIC<\/dd>/);
+  });
+
+  it("pending: the changed row is busy and every control waits", () => {
+    const html = hostView({ status: "pending", key: "errorMode" });
+    expect(html).toMatch(/data-setting="errorMode" aria-busy="true"/);
+    expect(settingsOf(html)).not.toMatch(/<button(?![^>]*aria-disabled="true")[^>]*>/);
+  });
+
+  it("a refusal: the RETURNED line under the rows, the broadcast value still pressed", () => {
+    const html = hostView({ status: "error", key: "errorMode", error: "not-waiting" });
+    expect(html).toMatch(
+      /role="alert"[^>]*><span[^>]*>RETURNED ·<\/span> This race has already started.<\/p>/,
+    );
+    expect(html).toMatch(/aria-pressed="true"[^>]*>CONTINUE<\/button>/);
+  });
+
+  it("not-host hides the controls: read-only rows, like START's", () => {
+    const html = hostView({ status: "hidden" });
+    expect(controls(html)).toBe(0);
+    expect(html).toContain(">CONTINUE</dd>");
+  });
+
+  it("no controls while reconnecting or starting", () => {
+    expect(
+      controls(hostView(IDLE_FORM, { ...live([host, guest], 1), phase: "reconnecting" })),
+    ).toBe(0);
+  });
+});
+
+describe("the host watches (#876 C5)", () => {
+  const a = member(2);
+  const b = member(3);
+  const watchingSettings = { ...DEFAULT_RACE_SETTINGS, hostWatches: true };
+  const watchingHost: LobbyState = {
+    ...live([a, b], 1),
+    you: null,
+    watching: true,
+    settings: watchingSettings,
+  };
+  const formView = (state: LobbyState, form: FormState = IDLE_FORM) =>
+    renderToStaticMarkup(
+      <LobbyLiveView code={CODE} state={state} labels={labels} errors={errors} form={form} />,
+    );
+
+  it("FORM 5-L opens with HOST: the host's TYPES | WATCHES toggle, a guest's read-only value", () => {
+    const html = formView(live([member(1, true), a], 1));
+    const first = html.indexOf('data-setting="');
+    expect(html.slice(first)).toMatch(/^data-setting="hostWatches"/);
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-hostWatches"/);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>TYPES<\/button>/);
+    expect(html).toMatch(/aria-pressed="false"[^>]*>WATCHES<\/button>/);
+    const guest = view({ ...live([a], 2), settings: watchingSettings });
+    expect(guest).toMatch(/data-setting="hostWatches"[\s\S]*?>HOST<\/dt><dd[^>]*>WATCHES<\/dd>/);
+  });
+
+  it("while the host watches: its page keeps START, the settings and the invite rows; no host desk; the notice; TYPISTS counts desks", () => {
+    const html = formView(watchingHost);
+    expect(html).toContain("data-start");
+    expect(html).toMatch(/aria-pressed="true"[^>]*>WATCHES<\/button>/);
+    expect(html).toContain(">ADD A BOT</button>");
+    expect(html.slice(html.indexOf(labels.listName))).not.toContain(`>${labels.host}<`);
+    expect(rows(html)).toBe(2);
+    expect(html).toMatch(
+      new RegExp(`role="status" class="${styles.notice}">${labels.hostWatching}</p>`),
+    );
+    expect(html).not.toContain(labels.waitingForHost);
+    expect(html).toContain(fill(labels.typistsValue, { n: 2, max: 30 }));
+  });
+
+  it("a guest sees the notice above WAITING FOR THE HOST; nothing when the host types", () => {
+    const guest = view({ ...live([a, b], 2), settings: watchingSettings });
+    expect(guest.indexOf(labels.hostWatching)).toBeGreaterThan(-1);
+    expect(guest.indexOf(labels.hostWatching)).toBeLessThan(guest.indexOf(labels.waitingForHost));
+    expect(view(live([member(1, true), a], 2))).not.toContain(labels.hostWatching);
+  });
+
+  it("a refused switch back: the 7.4 inline error line with the room-full sentence", () => {
+    const html = formView(watchingHost, {
+      status: "error",
+      key: "hostWatches",
+      error: "room-full",
+    });
+    expect(html).toContain(`RETURNED ·</span> ${labels.settings.form.errors["room-full"]}`);
+    expect(labels.settings.form.errors["room-full"]).toBe("All 30 desks in this room are taken.");
+  });
+
+  it("French: HÔTE, TAPE | REGARDE, L'HÔTE REGARDE", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={watchingHost}
+        labels={fr.lobby}
+        errors={fr.landing.errors}
+      />,
+    );
+    expect(html).toContain(">HÔTE</dt>");
+    expect(html).toContain("REGARDE");
+    expect(html).toContain("L&#x27;HÔTE REGARDE");
+  });
+});
+
 describe("PlayerList slots", () => {
   it("renders leading before the name and tags after the badges", () => {
     const html = renderToStaticMarkup(
@@ -268,5 +632,399 @@ describe("lobby client code keeps @/features/race out of the first load", () => 
   it("lobby-live loads the race module lazily", () => {
     const text = readFileSync(path.join(dir, "lobby-live.tsx"), "utf8");
     expect(text).toMatch(/import\(\s*["']@\/features\/race["']\s*\)/);
+  });
+});
+
+// Contract of #814 C7: a public room's automatic start in the waiting room (bible 7.4, 14.3, 8).
+describe("public room auto start (#814 C7)", () => {
+  const host = member(1, true);
+  const guest = member(2);
+  const NOW = 1767225600000;
+  const armed = (you: number, seconds = 45): LobbyState => ({
+    ...live([host, guest], you),
+    settings: { ...DEFAULT_RACE_SETTINGS, lobbyType: "public" },
+    autoStart: { at: NOW + 45_000, offset: 0, notice: { kind: "armed", seconds } },
+  });
+  const render = (state: LobbyState, autoStartS?: number | null, l = labels) =>
+    renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={state}
+        labels={l}
+        errors={errors}
+        autoStartS={autoStartS}
+      />,
+    );
+  /** The STATUS row's value, tags stripped. */
+  const status = (html: string, l = labels) =>
+    new RegExp(`<dt[^>]*>${l.status}</dt><dd[^>]*>(.*?)</dd>`)
+      .exec(html)![1]!
+      .replace(/<[^>]+>/g, "");
+  const statuses = (html: string) =>
+    [...html.matchAll(/<p role="status" class="([^"]*)"[^>]*>([^<]*)</g)].map((m) => ({
+      cls: m[1]!,
+      text: m[2]!,
+    }));
+  const polite = (html: string) =>
+    [...html.matchAll(/<p aria-live="polite"[^>]*>([^<]*)</g)].map((m) => m[1]);
+
+  it("pending: STATUS reads STARTS IN n S with only the figure pulsing, outside any live region", () => {
+    const html = render(armed(1), 45);
+    expect(status(html)).toBe("STARTS IN 45 S");
+    expect(html).toMatch(/<dd[^>]*>STARTS IN <span class="[^"]*_pulse_[^"]*">45<\/span> S<\/dd>/);
+    expect(status(render(armed(1), 12))).toBe("STARTS IN 12 S");
+    // the figure is never inside a live region
+    for (const region of html.match(/<p aria-live="polite"[^>]*>[^<]*<\/p>/g) ?? [])
+      expect(region).not.toContain("STARTS IN");
+  });
+
+  it("the host keeps START, enabled, and sees no notice row", () => {
+    const html = render(armed(1), 45);
+    expect(html).toMatch(new RegExp(`<button[^>]*>${labels.start.button}<`));
+    expect(html).not.toMatch(new RegExp(`<button[^>]*disabled[^>]*>${labels.start.button}<`));
+    expect(statuses(html).map((s) => s.text)).not.toContain(labels.autoStart.notice);
+    expect(html).not.toContain(labels.waitingForHost);
+  });
+
+  it("a guest: the still AUTOMATIC START row in the place of WAITING FOR THE HOST, no START", () => {
+    const html = render(armed(2), 30);
+    expect(status(html)).toBe("STARTS IN 30 S");
+    const rows = statuses(html);
+    expect(rows.map((r) => r.text)).toEqual([labels.autoStart.notice]);
+    expect(rows[0]!.cls).toMatch(/_notice_/);
+    expect(rows[0]!.cls).not.toMatch(/_pulse_/);
+    expect(html).not.toContain(labels.waitingForHost);
+    expect(html).not.toContain(`>${labels.start.button}<`);
+  });
+
+  it("zero: STARTING… until the countdown moves the page", () => {
+    expect(status(render(armed(2), 0))).toBe(labels.start.pending);
+    expect(status(render(armed(2), 0))).toBe("STARTING…");
+  });
+
+  it("dropped: WAITING and WAITING FOR THE HOST again, one polite announcement", () => {
+    const dropped: LobbyState = {
+      ...armed(2),
+      autoStart: { at: null, offset: 0, notice: { kind: "dropped" } },
+    };
+    const html = render(dropped, null);
+    expect(status(html)).toBe(labels.waiting);
+    expect(statuses(html).map((r) => r.text)).toEqual([labels.waitingForHost]);
+    expect(polite(html)).toContain("The race waits for the host.");
+  });
+
+  it("armed: one polite announcement with the seconds at arrival; none without an instant", () => {
+    expect(polite(render(armed(2), 40))).toContain("The race starts by itself in 45 seconds.");
+    expect(polite(render(armed(2, 41), 40))).toContain("The race starts by itself in 41 seconds.");
+    expect(polite(view(live([host, guest], 2)))).toEqual(["2 players in the room"]);
+    // a public room keeps its (empty) second region mounted, so the arming is announced
+    expect(polite(render({ ...armed(2), autoStart: NO_AUTO_START }))).toEqual([
+      "2 players in the room",
+      "",
+    ]);
+    expect(status(view(live([host, guest], 2)))).toBe(labels.waiting);
+  });
+
+  it("reconnecting keeps the last figure under the pulsing CONNECTION LOST row", () => {
+    const html = render({ ...armed(2), phase: "reconnecting" }, 20);
+    expect(status(html)).toBe("STARTS IN 20 S");
+    expect(statuses(html).map((r) => r.text)).toEqual([
+      labels.reconnecting,
+      labels.autoStart.notice,
+    ]);
+  });
+
+  it("reduced motion: the figure's pulse is the lobby's .pulse, which stops under both switches", () => {
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), "lobby.module.css"),
+      "utf8",
+    );
+    expect(css).toMatch(
+      /prefers-reduced-motion: reduce\)\s*\{[^}]*\.pulse\s*\{\s*animation: none;/,
+    );
+    expect(css).toMatch(/:root\[data-motion="reduce"\] \.pulse\s*\{\s*animation: none;/);
+    // the count still steps: the figure is rendered text, not an animation
+    expect(status(render(armed(2), 9))).toBe("STARTS IN 9 S");
+  });
+
+  it("French: DÉPART DANS n S, DÉPART AUTOMATIQUE, DÉMARRAGE… at zero", () => {
+    const l = fr.lobby;
+    expect(status(render(armed(2), 45, l), l)).toBe("DÉPART DANS 45 S");
+    expect(render(armed(2), 45, l)).toContain("DÉPART AUTOMATIQUE");
+    expect(status(render(armed(2), 0, l), l)).toBe("DÉMARRAGE…");
+    expect(polite(render(armed(2), 45, l))).toContain(
+      "La course démarre toute seule dans 45 secondes.",
+    );
+  });
+});
+
+// Contract of #133 C4, C5, C7: the host's REMOVE on typists' rows, its CONFIRM, the refusal line, and the
+// removed viewer's docket (bible 14.3).
+describe("remove a typist (#133 C4 C5)", () => {
+  const bot: Member = { ...member(3), name: "Agent 3", isBot: true };
+  const roll = [member(1, true), member(2), bot, member(4)];
+  const removeView = (state: LobbyState, remove?: RemoveState) =>
+    renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={state}
+        labels={labels}
+        errors={errors}
+        remove={remove}
+        onRemove={() => {}}
+      />,
+    );
+  const removeButtons = (html: string) =>
+    [...html.matchAll(/<button[^>]*aria-label="([^"]*)"[^>]*>([^<]*)<\/button>/g)]
+      .filter((m) => m[2] === labels.remove.button || m[2] === labels.remove.confirm)
+      .map((m) => [m[1], m[2]]);
+
+  it("the host sees REMOVE on every human non-host row, named REMOVE <name>", () => {
+    expect(removeButtons(removeView(live(roll, 1)))).toEqual([
+      [fill(labels.remove.name, { name: "Clerk-2" }), "REMOVE"],
+      [fill(labels.remove.name, { name: "Clerk-4" }), "REMOVE"],
+    ]);
+  });
+
+  it("the row-sized 7.1 secondary (the bot row's recipe), never on the host's row or a bot's", () => {
+    const html = removeView(live(roll, 1));
+    expect(html).toContain(`class="${styles.secondary} ${styles.remove}"`);
+    expect(html).not.toContain(fill(labels.remove.name, { name: "Clerk-1" }));
+    expect(html).not.toContain(fill(labels.remove.name, { name: "Agent 3" }));
+  });
+
+  it("a non-host sees no REMOVE, nor the host in another phase", () => {
+    expect(removeButtons(removeView(live(roll, 2)))).toEqual([]);
+    expect(removeButtons(removeView({ ...live(roll, 1), phase: "reconnecting" }))).toEqual([]);
+    expect(removeButtons(removeView({ ...live(roll, 1), phase: "starting" }))).toEqual([]);
+  });
+
+  it("the first press reads CONFIRM in place, named CONFIRM · REMOVE <name>; pending is aria-disabled", () => {
+    const confirm = removeView(live(roll, 1), { confirm: 4, pending: null, error: null });
+    expect(removeButtons(confirm)).toEqual([
+      [fill(labels.remove.name, { name: "Clerk-2" }), "REMOVE"],
+      [fill(labels.remove.confirmName, { name: "Clerk-4" }), "CONFIRM"],
+    ]);
+    expect(confirm).toContain("data-confirm");
+    expect(confirm).not.toContain('aria-disabled="true"');
+    const pending = removeView(live(roll, 1), { confirm: 4, pending: 4, error: null });
+    expect(pending).toMatch(/aria-disabled="true"[^>]*>CONFIRM</);
+  });
+
+  it.each(["not-host", "not-waiting", "no-such-desk", "is-bot", "self", "timeout"] as const)(
+    "a refused removal (%s) shows the roll's 7.4 inline error line",
+    (error) => {
+      const html = removeView(live(roll, 1), { confirm: null, pending: null, error });
+      expect(html).toContain('role="alert"');
+      expect(html).toContain(labels.remove.errors[error]);
+      expect(html).toContain(errors.prefix);
+    },
+  );
+
+  it("CONFIRM holds slow x 5, and until blur under reduced motion", () => {
+    expect(CONFIRM_HOLD_FACTOR).toBe(5);
+    expect(confirmHoldMs("600ms")).toBe(3000);
+    expect(confirmHoldMs("0ms")).toBe(0);
+  });
+
+  it("removed: the docket named by the ink REMOVED stamp, one sentence, the ink link to /", () => {
+    const html = view({ ...live(roll, 2), phase: "removed" });
+    expect(html).toContain(`aria-label="${labels.remove.docket.stamp}"`);
+    expect(html).toContain(labels.remove.docket.sentence.replace(/'/g, "&#x27;"));
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/"[^>]*>${labels.remove.docket.back}</a>`));
+    // the room is gone: no roll, no room docket, no reconnecting row
+    expect(rows(html)).toBe(0);
+    expect(html).not.toContain(CODE);
+  });
+
+  it("the strings exist in both catalogs with identical keys", () => {
+    const keys = (o: object): string[] =>
+      Object.entries(o).flatMap(([k, v]) =>
+        typeof v === "object" ? keys(v).map((s) => `${k}.${s}`) : [k],
+      );
+    expect(keys(fr.lobby.remove)).toEqual(keys(en.lobby.remove));
+    expect(fr.lobby.remove.button).toBe("RETIRER");
+    expect(fr.lobby.remove.confirm).toBe("CONFIRMER");
+    expect(fr.lobby.remove.docket.stamp).toBe("RETIRÉ");
+    expect(fr.lobby.remove.docket.back).toBe("RETOUR À L'ACCUEIL →");
+    expect(en.lobby.remove.docket.back).toBe("BACK TO THE FRONT DESK →");
+  });
+});
+
+// #137 C4: the host left for good. The roster moved the HOST stamp and the controls; the `new-host`
+// event shows the red NEW HOST stamp over the roll, aria-hidden, said once by the roll's polite region.
+describe("new host (#137 C4)", () => {
+  // the old host (desk 1) has left; Clerk-2 is promoted, Clerk-3 stays a guest
+  const promoted = [member(2, true), member(3)];
+  const stamped = (you: number, seq = 1): LobbyState => ({
+    ...live(promoted, you),
+    newHost: { desk: 2, seq },
+    newHosts: seq,
+  });
+  const stampOf = (html: string) =>
+    /<div[^>]*data-new-host="2"[^>]*>(.*?)<\/div>/.exec(html)?.[0] ?? "";
+  const hostTags = (html: string) =>
+    [...html.matchAll(/data-stamp-size="sm"[^>]*>(?:<span[^>]*>)?([^<]*)</g)].map((m) => m[1]);
+
+  it("every participant sees the red md stamp NEW HOST: <NAME> over the roll, aria-hidden, at a seeded angle", () => {
+    for (const you of [2, 3]) {
+      const html = view(stamped(you));
+      const stamp = stampOf(html);
+      expect(stamp).toContain('aria-hidden="true"');
+      expect(stamp).toContain('data-stamp-tone="red"');
+      expect(stamp).toContain('data-stamp-size="md"');
+      expect(stamp).toContain(fill(labels.newHost.stamp, { name: "CLERK-2" }));
+      expect(stamp).not.toContain("role=");
+      const angle = Number(/data-stamp-angle="([^"]+)"/.exec(stamp)?.[1]);
+      expect(Math.abs(angle)).toBeGreaterThanOrEqual(2);
+      expect(Math.abs(angle)).toBeLessThanOrEqual(6);
+      // the same event, the same angle; the stamp sits inside the roll docket
+      expect(stampOf(view(stamped(you)))).toBe(stamp);
+      expect(html).toMatch(new RegExp(`class="${styles.roll}"><div class="${styles.newHost}"`));
+    }
+  });
+
+  it("the roll's one polite region adds the sentence while the stamp shows; nothing without a stamp", () => {
+    const html = view(stamped(3));
+    expect(html.match(/aria-live="polite"/g)).toHaveLength(1);
+    expect(html).toContain(
+      `<p aria-live="polite" class="${styles.srOnly}">2 players in the room ${fill(labels.newHost.announce, { name: "Clerk-2" })}</p>`,
+    );
+    expect(view(live(promoted, 3))).not.toContain("data-new-host");
+    expect(view(live(promoted, 3))).not.toContain(
+      fill(labels.newHost.announce, { name: "Clerk-2" }),
+    );
+  });
+
+  it("French: NOUVEL HÔTE : <NOM>", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView code={CODE} state={stamped(3)} labels={fr.lobby} errors={fr.landing.errors} />,
+    );
+    expect(html).toContain("NOUVEL HÔTE : CLERK-2");
+    expect(html).toContain("Clerk-2 est le nouvel hôte.");
+  });
+
+  it("the HOST stamp is on the new host's row; the promoted viewer gets START, the settings form, REMOVE and the link row", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={stamped(2)}
+        labels={labels}
+        errors={errors}
+        onStart={() => {}}
+        onSetting={() => {}}
+        onRemove={() => {}}
+      />,
+    );
+    expect(hostTags(html)).toEqual([labels.host]);
+    expect(html).toContain(`>${labels.start.button}<`);
+    expect(html).toContain(fill(labels.remove.name, { name: "Clerk-3" }));
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-lobbyType"/);
+    expect(html).toContain(">ADD A BOT</button>");
+  });
+
+  it("the other guest keeps no host controls", () => {
+    const html = view(stamped(3));
+    expect(html).not.toContain(`>${labels.start.button}<`);
+    expect(html).not.toContain(">ADD A BOT</button>");
+    expect(html).not.toMatch(/role="group" aria-labelledby="lobby-setting-/);
+    expect(html).toContain(labels.waitingForHost);
+  });
+
+  it("holds slow x 5, and the same 3 s under reduced motion", () => {
+    expect(NEW_HOST_HOLD_FACTOR).toBe(5);
+    expect(newHostHoldMs("600ms")).toBe(3000);
+    expect(newHostHoldMs("0ms")).toBe(NEW_HOST_REDUCED_HOLD_MS);
+    expect(NEW_HOST_REDUCED_HOLD_MS).toBe(3000);
+  });
+});
+
+// Contract of #730 C2: human rows lead with the portrait cell (bible 14.4): the avatar `<img>` from the
+// lobby-scoped route when `avatar` is set, the initials otherwise; a failed load falls back to the
+// initials in the same square; bot rows have none.
+describe("portrait cell (#730 C2)", () => {
+  const pictured = (desk: number): Member => ({
+    ...member(desk),
+    name: "Clerk Novak",
+    avatar: { userId: "usr_novak", v: 7 },
+  });
+  const bot = (desk: number): Member => ({ ...member(desk), name: "Agent 3", isBot: true });
+  // `<li ` only: React adds a `<link rel="preload">` for each img to the static markup
+  const rows = (html: string) => html.split(/<li[ >]/).slice(1);
+  const roll = (members: Member[]) =>
+    renderToStaticMarkup(
+      <PlayerList members={members} you={1} labels={labels} leading={portraitSlot} />,
+    );
+
+  it("addresses the picture through the avatar route: 64 px file, the wire version", () => {
+    expect(portraitSrc({ userId: "usr_novak", v: 7 })).toBe("/api/avatars/usr_novak?size=64&v=7");
+    expect(portraitSrc({ userId: "a/b", v: 1 })).toBe("/api/avatars/a%2Fb?size=64&v=1");
+  });
+
+  it("a member with an avatar: the img (32px box, alt empty) over its initials, before the name", () => {
+    const [row] = rows(roll([pictured(1)]));
+    expect(row).toMatch(
+      /<span class="_portrait_[^"]*" data-portrait="loading" aria-hidden="true"><span class="_initials_[^"]*">CN<\/span><img src="\/api\/avatars\/usr_novak\?size=64&amp;v=7" alt="" width="32" height="32" class="_avatar_[^"]*"\/><\/span>/,
+    );
+    expect(row!.indexOf("data-portrait")).toBeLessThan(row!.indexOf(">Clerk Novak<"));
+  });
+
+  it("a member without one: the initials only, no img", () => {
+    const [row] = rows(roll([member(1, true)]));
+    expect(row).toMatch(
+      /data-portrait="initials"[^>]*><span class="_initials_[^"]*">C<\/span><\/span>/,
+    );
+    expect(row).not.toContain("<img");
+  });
+
+  it("a failed picture falls back to the initials in the same square", () => {
+    const cell = (state: "loading" | "failed") =>
+      renderToStaticMarkup(
+        <PortraitCellView
+          name="Clerk Novak"
+          src={portraitSrc({ userId: "u", v: 1 })}
+          state={state}
+        />,
+      ).replace(/<link[^>]*\/>/, "");
+    const failed = cell("failed");
+    expect(failed).not.toContain("<img");
+    expect(failed).toContain(">CN</span>");
+    // the same box, so nothing moves: only the img leaves
+    expect(failed.replace(/data-portrait="[a-z]+"/, "")).toBe(
+      cell("loading")
+        .replace(/<img[^>]*\/>/, "")
+        .replace(/data-portrait="[a-z]+"/, ""),
+    );
+  });
+
+  it("the cell is a fixed 32px square in a 2px ink rule; the loaded picture hides the initials", () => {
+    const css = readFileSync(
+      path.join(process.cwd(), "src/features/lobby/components/lobby.module.css"),
+      "utf8",
+    );
+    const rule = css.match(/\n\.portrait \{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toMatch(/width: 32px;/);
+    expect(rule).toMatch(/height: 32px;/);
+    expect(rule).toMatch(/border: 2px solid var\(--color-fg\);/);
+    expect(rule).toMatch(/background: var\(--color-bg\);/);
+    expect(css).toMatch(/\.portrait\[data-portrait="loaded"\] \.initials \{\s*visibility: hidden;/);
+    expect(css).toMatch(/\n\.avatar \{[^}]*position: absolute;[^}]*inset: 0;/);
+  });
+
+  it("bot rows have no cell, even with an avatar on the wire", () => {
+    const html = roll([member(1, true), bot(2), { ...bot(3), avatar: { userId: "x", v: 1 } }]);
+    const [human, b2, b3] = rows(html);
+    expect(human).toContain("data-portrait");
+    expect(b2).not.toContain("data-portrait");
+    expect(b3).not.toContain("data-portrait");
+  });
+
+  it("the live roll uses it: a mix of avatar and initials rows", () => {
+    const html = view(live([member(1, true), pictured(2), bot(3)]));
+    const [first, second, third] = rows(html);
+    expect(first).toContain('data-portrait="initials"');
+    expect(second).toContain('data-portrait="loading"');
+    expect(second).toContain('src="/api/avatars/usr_novak?size=64&amp;v=7"');
+    expect(third).not.toContain("data-portrait");
   });
 });

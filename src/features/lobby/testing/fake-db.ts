@@ -2,8 +2,22 @@ import { vi } from "vitest";
 
 // Test-only in-memory User and Lobby tables with the real unique indexes (typistName, code).
 // Not imported by app code. Duplicates throw a plain Error: tests that need Prisma's P2002 inject it.
-type UserRow = { id: string; typistName: string; isGuest: boolean; avatarStatus: "NONE" };
-type LobbyRow = { id: string; code: string; status: "WAITING" | "CLOSED"; hostUserId: string };
+type UserRow = {
+  id: string;
+  typistName: string;
+  isGuest: boolean;
+  avatarStatus: "NONE" | "PENDING" | "APPROVED";
+  /** `<userId>/<version>` once a picture is stored (ADR 0014; #730 tests set it). */
+  avatarKey?: string | null;
+};
+type LobbyRow = {
+  id: string;
+  code: string;
+  status: "WAITING" | "CLOSED";
+  hostUserId: string;
+  type?: "PUBLIC" | "PRIVATE";
+  createdAt?: Date;
+};
 
 const uniqueViolation = () => new Error("Unique constraint failed (fake db)");
 
@@ -30,13 +44,69 @@ export function fakeLobbyDb() {
   const lobby = {
     create: vi.fn(async ({ data }: { data: { code: string; hostUserId: string } }) => {
       if (lobbies.some((l) => l.code === data.code)) throw uniqueViolation();
-      const row: LobbyRow = { id: `lob${next++}`, status: "WAITING", ...data };
+      const row: LobbyRow = {
+        id: `lob${next++}`,
+        status: "WAITING",
+        type: "PRIVATE",
+        createdAt: new Date(),
+        ...data,
+      };
       lobbies.push(row);
       return { id: row.id, code: row.code };
     }),
     findUnique: vi.fn(
-      async ({ where }: { where: { code: string } }) =>
-        lobbies.find((l) => l.code === where.code) ?? null,
+      async ({ where }: { where: { code: string } | { id: string } }) =>
+        lobbies.find((l) => ("code" in where ? l.code === where.code : l.id === where.id)) ?? null,
+    ),
+    // The subset listOpenLobbies uses (#806): equality on type/status, createdAt gte, newest first, take.
+    findMany: vi.fn(
+      async ({
+        where = {},
+        orderBy,
+        take,
+      }: {
+        where?: {
+          type?: LobbyRow["type"];
+          status?: LobbyRow["status"];
+          createdAt?: { gte: Date };
+        };
+        orderBy?: { createdAt: "desc" | "asc" };
+        take?: number;
+      }) => {
+        const time = (row: LobbyRow) => row.createdAt?.getTime() ?? 0;
+        let rows = lobbies.filter(
+          (l) =>
+            (where.type === undefined || l.type === where.type) &&
+            (where.status === undefined || l.status === where.status) &&
+            (where.createdAt === undefined || time(l) >= where.createdAt.gte.getTime()),
+        );
+        if (orderBy)
+          rows = [...rows].sort((a, b) =>
+            orderBy.createdAt === "desc" ? time(b) - time(a) : time(a) - time(b),
+          );
+        return rows.slice(0, take ?? rows.length).map((row) => ({ ...row }));
+      },
+    ),
+    update: vi.fn(
+      async ({ where, data }: { where: { id: string }; data: Partial<Omit<LobbyRow, "id">> }) => {
+        const row = lobbies.find((l) => l.id === where.id);
+        if (!row) throw new Error("Record to update not found");
+        return Object.assign(row, data);
+      },
+    ),
+    // The subset setLobbyHost uses (#137): one id, and a host other than the new one.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string; hostUserId: { not: string } };
+        data: { hostUserId: string };
+      }) => {
+        const row = lobbies.find((l) => l.id === where.id && l.hostUserId !== where.hostUserId.not);
+        if (row) Object.assign(row, data);
+        return { count: row ? 1 : 0 };
+      },
     ),
     delete: vi.fn(async ({ where }: { where: { id: string } }) => {
       const index = lobbies.findIndex((l) => l.id === where.id);
@@ -45,6 +115,6 @@ export function fakeLobbyDb() {
     }),
   };
   const seedLobby = (row: Omit<LobbyRow, "id"> & { id?: string }) =>
-    lobbies.push({ id: row.id ?? `lob${next++}`, ...row });
+    lobbies.push({ id: row.id ?? `lob${next++}`, type: "PRIVATE", ...row });
   return { users, lobbies, seedLobby, db: { user, lobby } };
 }

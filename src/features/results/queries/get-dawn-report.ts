@@ -3,6 +3,7 @@ import { z } from "zod";
 import { outfitForDesk, parseOutfit } from "@/features/identity";
 import type { db as appDb } from "@/server/db";
 import type { DawnReport, ReportEntry } from "../view/dawn-report";
+import { personalFrom } from "../view/personal";
 
 /** Who is looking: only the id matters (ADR 0009: the viewer's desk is the row whose `userId` is theirs). */
 type ReportViewer = { id: string } | null;
@@ -14,11 +15,13 @@ const raceIdSchema = z.uuid();
 /**
  * The Dawn report of one race (#300 C1, ADR 0008, ARCHITECTURE 8.2): `null` for an id that is not a uuid
  * or names no race, `filing` while the race has no `RaceResult` row yet (the race server posts them after
- * `ended`, ARCHITECTURE 9.3), else the race and every desk in place order with the viewer's desk. One
+ * `ended`, ARCHITECTURE 9.3), `null` for a voided race too (#613), else the race and every desk in place order with the viewer's desk. One
  * query; the WPM is `cleanWpm` (ADR 0016), `adjustedWpm` is never read. Suspicious rows are kept and
  * flagged: the podium shows them under review (ARCHITECTURE 7.7). Each entry's clerk outfit (#688) comes
  * from the same query (the result's `user.outfit`): the saved outfit when the catalogue accepts it, else
  * the desk's fixed one (bots, guests with nothing saved, a stored value the catalogue now rejects).
+ * `personal` (#864) is the viewer's own row as the personal stats card reads it: their bonus log is
+ * tallied by kind here, and every other desk's log stays inside this function.
  */
 export async function getDawnReport(
   raceId: string,
@@ -35,7 +38,7 @@ export async function getDawnReport(
       textLanguage: true,
       endedAt: true,
       endReason: true,
-      lobby: { select: { code: true } },
+      lobby: { select: { code: true, status: true, hostUserId: true } },
       results: {
         orderBy: [{ place: "asc" }, { desk: "asc" }],
         select: {
@@ -50,12 +53,15 @@ export async function getDawnReport(
           progress: true,
           finishedAtMs: true,
           suspicious: true,
+          // #864: read for the viewer's own row only; no other desk's log leaves this function
+          bonusLog: true,
           user: { select: { outfit: true } },
         },
       },
     },
   });
-  if (!race) return null;
+  // #613 C2: a voided race (race.void job) has no report, not even a filing notice.
+  if (!race || race.endReason === "VOID") return null;
   const lobbyCode = race.lobby?.code ?? null;
   if (race.results.length === 0) return { kind: "filing", raceId: race.id, lobbyCode };
 
@@ -81,8 +87,13 @@ export async function getDawnReport(
       endedAt: race.endedAt,
       endReason: race.endReason,
       lobbyCode,
+      // "Race again" (#143): the same lobby takes another race while it is open.
+      lobbyOpen: race.lobby?.status === "WAITING",
     },
     entries,
     viewerDesk: mine?.desk ?? null,
+    viewerHosts: !!viewer && race.lobby?.hostUserId === viewer.id,
+    // #864 C1: the viewer's own figures and bonuses; null for a spectator and a visitor
+    personal: mine ? personalFrom(mine) : null,
   };
 }

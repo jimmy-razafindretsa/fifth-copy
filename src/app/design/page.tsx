@@ -17,6 +17,7 @@ import {
   Star,
   Wordmark,
 } from "@/components/ui";
+import { AuthStates, RecoverStates, ResetStates, SettingsStates } from "@/features/identity";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -39,19 +40,32 @@ import {
   type TypingMachineProps,
 } from "@/features/race";
 import {
+  type CoachingFixture,
+  coachingFixtures,
   dawnReportFixtures,
   type DawnReportFixture,
   filingLabels,
   FilingNoticeView,
+  PersonalCard,
+  type PersonalFixture,
+  personalFixtures,
+  personalLabels,
   Podium,
+  type RaceSeriesFixture,
+  raceSeriesFixtures,
   podiumLabels,
   RankingTable,
   rankingLabels,
   rankingRowsFrom,
+  ReportActions,
+  reportActions,
 } from "@/features/results";
 import { getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
+import { ExitSpecimen } from "./exit-demo";
+import { AvatarSpecimens, DesignDialogs } from "./identity-demo";
 import demo from "./motion-demo.module.css";
+import { fileSpecimenPreference } from "./settings-demo-action";
 import { StampReplay } from "./stamp-demo";
 
 export const metadata: Metadata = { title: "Design system" };
@@ -188,6 +202,8 @@ type TypingState = {
   view: TypedViewFixture;
   machine: Pick<TypingMachineProps, "pressed" | "wrong" | "disabledKeys">;
   reduce?: boolean;
+  /** A Smoke Break blurs the strip and the sheet (#236, bible 7.7). */
+  blurred?: boolean;
 };
 
 const TYPING_STATES: TypingState[] = [
@@ -229,6 +245,15 @@ const TYPING_STATES: TypingState[] = [
     machine: { disabledKeys: [...QWERTY.flat(), " "] },
   },
   {
+    id: "smoke-break",
+    title: "Smoke Break",
+    caption:
+      "A rival's Smoke Break: the tape and the typed lines blur 3px for a few seconds, the rules stay crisp. Static, also under reduced motion.",
+    view: "racing",
+    machine: {},
+    blurred: true,
+  },
+  {
     id: "reduced-motion",
     title: "Reduced motion",
     caption: "A solid red cell, no pop, and the tape jumps instead of gliding.",
@@ -240,7 +265,8 @@ const TYPING_STATES: TypingState[] = [
 
 /** One typing-surface state on its paper backdrop: strip on top, the sheet rising out of the machine. */
 function TypingSpecimen({ state }: { state: TypingState }) {
-  const view = typedViewFixtures[state.view];
+  const fixture = typedViewFixtures[state.view];
+  const view = state.blurred ? { ...fixture, blurred: true as const } : fixture;
   return (
     <figure
       data-typing-state={state.id}
@@ -298,6 +324,83 @@ function HudSpecimen({
   );
 }
 
+/** The personal stats card's states (#864 C4, bible 14.4): one specimen each, at the slot's width. */
+const PERSONAL_STATES: { id: PersonalFixture; title: string; caption: string }[] = [
+  {
+    id: "populated",
+    title: "Personal card",
+    caption: "Your copy: third, 48 WPM; two cards sent, one received.",
+  },
+  {
+    id: "no-bonuses",
+    title: "Personal card, no bonuses",
+    caption: "Nothing sent, nothing received.",
+  },
+  {
+    id: "unfinished",
+    title: "Personal card, timed out",
+    caption: "The status in words when not filed.",
+  },
+  {
+    id: "under-review",
+    title: "Personal card, under review",
+    caption: "A suspicious result keeps its figures under the review row.",
+  },
+];
+
+/** The personal card's WPM graph (#865 C5, bible 14.4): with marks, without, and no trace on file. */
+const GRAPH_STATES: {
+  id: RaceSeriesFixture;
+  card: PersonalFixture;
+  title: string;
+  caption: string;
+}[] = [
+  {
+    id: "marks",
+    card: "populated",
+    title: "Personal card, WPM graph",
+    caption: "The clean WPM through the race; a red tick where an extra paperwork hit at 0:30.",
+  },
+  {
+    id: "no-marks",
+    card: "no-bonuses",
+    title: "WPM graph, no bonus received",
+    caption: "The line alone: nothing hit this desk.",
+  },
+  {
+    id: "no-trace",
+    card: "unfinished",
+    title: "WPM graph, no trace on file",
+    caption: "The keystrokes are purged after 30 days, or were never filed.",
+  },
+];
+
+/** The personal card's errors by key and tip (#867 C5, bible 14.4): each of the five tips. */
+const COACHING_STATES: { id: CoachingFixture; title: string; caption: string }[] = [
+  {
+    id: "key",
+    title: "Errors by key",
+    caption:
+      "Five keys, most missed first, a space named; the tip names the key missed four times.",
+  },
+  {
+    id: "special",
+    title: "Errors by key, a special key",
+    caption: "An accented letter missed three times: the tip sends the typist to the guide.",
+  },
+  { id: "clean", title: "Errors by key, none", caption: "Not one error: NONE, and the clean tip." },
+  {
+    id: "steady",
+    title: "Errors by key, a few misses",
+    caption: "No key missed three times, accuracy at 90 % or more: the steady tip.",
+  },
+  {
+    id: "no-trace",
+    title: "Errors by key, no trace on file",
+    caption: "No keystrokes on file: the tip comes from the accuracy alone (86 %).",
+  },
+];
+
 const NIXIE_STATES = [
   { id: "nixie-before-start", title: "Before the start", wpm: 0, place: null, caption: "00 / 30" },
   { id: "nixie-racing", title: "Racing", wpm: 42, place: 4, caption: "42 WPM, fourth" },
@@ -319,7 +422,8 @@ const CARD_STATES: { id: RaceCardViewFixture; title: string; caption: string }[]
   {
     id: "six-statuses",
     title: "Statuses",
-    caption: "Filed, line cut, asleep at desk, reassigned.",
+    caption:
+      "Filed, line cut, expired, asleep at desk, reassigned; a cut or expired line dims its marker.",
   },
   {
     id: "thirty-mid-field",
@@ -349,10 +453,12 @@ const PODIUM_STATES: { id: DawnReportFixture; title: string; caption: string; re
   ];
 
 /** Living inventory of src/components/ui (see docs/design/components.md). Used by e2e + visual tests. */
-export default async function DesignPage() {
-  const [t, theme] = await Promise.all([getT(), getTheme()]);
+export default async function DesignPage({ searchParams }: PageProps<"/design">) {
+  const [t, theme, query] = await Promise.all([getT(), getTheme(), searchParams]);
+  const dialog = typeof query.dialog === "string" ? query.dialog : undefined;
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-4 py-10 md:px-8">
+      <DesignDialogs dialog={dialog} t={t} />
       <header className="flex flex-col gap-3">
         <h1 className="type-display-lg text-fg">Design system</h1>
         <p data-intro className="type-body max-w-prose text-fg">
@@ -676,6 +782,50 @@ export default async function DesignPage() {
         </div>
       </section>
 
+      <section id="auth" aria-labelledby="auth-heading" className="flex flex-col gap-3">
+        <h2 id="auth-heading" className="type-display-md">
+          Sign-in and sign-up
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The username form of the two screens in each state: default, pending, a field refused by
+          the server, a server error, and the banner a failed GitHub, Discord or Google sign-in
+          returns to.
+        </p>
+        <AuthStates />
+        <p className="type-body max-w-prose text-fg">
+          The password reset form of /reset in each state: default, pending, a refused field, the
+          one generic answer, rate-limited, and the success row that links to sign-in.
+        </p>
+        <ResetStates />
+        <p className="type-body max-w-prose text-fg">
+          The one-time recovery code: the reveal card after sign-up, the reveal once shown, and the
+          /recover form in each state, its success revealing the new code once.
+        </p>
+        <RecoverStates />
+      </section>
+
+      <section id="settings" aria-labelledby="settings-heading" className="flex flex-col gap-3">
+        <h2 id="settings-heading" className="type-display-md">
+          Settings
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The /settings docket for a guest and for an account, then its controls while a change is
+          on its way, once it is filed, and when it is returned.
+        </p>
+        <SettingsStates action={fileSpecimenPreference} />
+      </section>
+
+      <section id="avatars" aria-labelledby="avatars-heading" className="flex flex-col gap-3">
+        <h2 id="avatars-heading" className="type-display-md">
+          Avatars
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The stamped portrait every typist gets until a picture is on file: four variants chosen
+          from the typist&apos;s id, at 32, 64 and 128 px, on paper and on newsprint.
+        </p>
+        <AvatarSpecimens />
+      </section>
+
       <section aria-labelledby="stamps" className="flex flex-col gap-3">
         <h2 id="stamps" className="type-display-md">
           Stamps
@@ -791,7 +941,7 @@ export default async function DesignPage() {
           <HudSpecimen
             id="card-thirty-compact"
             title="30 typists, compact"
-            caption="Tablets and small laptops: no names; markers, desks and the field line stay."
+            caption="Tablets and small laptops: names, markers, desks and the field line stay; a label that leaves no room for a 10-character name goes under it."
           >
             <div className="w-full max-w-[208px]">
               <RaceCard
@@ -893,6 +1043,21 @@ export default async function DesignPage() {
             </div>
           </HudSpecimen>
           <HudSpecimen
+            id="tray-refused"
+            title="Refused"
+            caption="The target is immune: IMMUNE shakes once (still under reduced motion), then leaves after 1.2 s; the card is kept."
+          >
+            <div className="max-w-[320px]">
+              <SabotageTray
+                card="extra-paperwork"
+                cooldownS={0}
+                hint={HUD.sabotageTray.hint}
+                labels={HUD.sabotageTray}
+                refused
+              />
+            </div>
+          </HudSpecimen>
+          <HudSpecimen
             id="tray-held-cooling"
             title="Held while cooling"
             caption="The card waits out the cooldown; no hint."
@@ -932,6 +1097,24 @@ export default async function DesignPage() {
           </HudSpecimen>
         </div>
 
+        <h3 className="type-label text-fg">Exit dockets</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          <HudSpecimen
+            id="exit-reassigned"
+            title="Reassigned"
+            caption="After CONFIRM · REASSIGN ME: your stats frozen at your last key, placed last."
+          >
+            <ExitSpecimen kind="abandoned" labels={HUD.exit} />
+          </HudSpecimen>
+          <HudSpecimen
+            id="exit-asleep"
+            title="Asleep at desk"
+            caption="After the idle kick at 60 s: no place row, the race card keeps the lane."
+          >
+            <ExitSpecimen kind="asleep" labels={HUD.exit} />
+          </HudSpecimen>
+        </div>
+
         <h3 className="type-label text-fg">Notices</h3>
         <div className="grid gap-6 md:grid-cols-2">
           {RACE_NOTICES.map((kind) => (
@@ -939,7 +1122,11 @@ export default async function DesignPage() {
               key={kind}
               id={`notice-${kind}`}
               title={kind}
-              caption="Pulses with lkPulse."
+              caption={
+                kind === "idle-warning"
+                  ? "The urgent tone, from the server's warning at 45 s until your next key; pulses with lkPulse."
+                  : "Pulses with lkPulse."
+              }
             >
               <RaceNotice kind={kind} labels={HUD.notice} />
             </HudSpecimen>
@@ -1034,6 +1221,70 @@ export default async function DesignPage() {
             />
           </HudSpecimen>
         </div>
+        <div id="results-personal" className="grid gap-6 md:grid-cols-2">
+          {PERSONAL_STATES.map((state) => (
+            <HudSpecimen
+              key={state.id}
+              id={`personal-${state.id}`}
+              title={state.title}
+              caption={state.caption}
+            >
+              <div className="w-full max-w-[400px]">
+                <PersonalCard stats={personalFixtures[state.id]} labels={personalLabels(t)} />
+              </div>
+            </HudSpecimen>
+          ))}
+        </div>
+        <div id="results-personal-graph" className="grid gap-6 md:grid-cols-2">
+          {GRAPH_STATES.map((state) => (
+            <HudSpecimen
+              key={state.id}
+              id={`personal-graph-${state.id}`}
+              title={state.title}
+              caption={state.caption}
+            >
+              <div className="w-full max-w-[400px]">
+                <PersonalCard
+                  stats={personalFixtures[state.card]}
+                  labels={personalLabels(t)}
+                  series={raceSeriesFixtures[state.id]}
+                />
+              </div>
+            </HudSpecimen>
+          ))}
+        </div>
+        <div id="results-personal-keys" className="grid gap-6 md:grid-cols-2">
+          {COACHING_STATES.map((state) => (
+            <HudSpecimen
+              key={state.id}
+              id={`personal-keys-${state.id}`}
+              title={state.title}
+              caption={state.caption}
+            >
+              <div className="w-full max-w-[400px]">
+                <PersonalCard
+                  stats={coachingFixtures[state.id].stats}
+                  labels={personalLabels(t)}
+                  coaching={coachingFixtures[state.id].coaching}
+                />
+              </div>
+            </HudSpecimen>
+          ))}
+        </div>
+        <HudSpecimen
+          id="report-actions"
+          title="Action row, guest member"
+          caption="A guest who raced, lobby open: RACE AGAIN, the way home, then the prompt to open a file."
+        >
+          <ReportActions
+            actions={reportActions(t.results, {
+              ...dawnReportFixtures.full,
+              race: { ...dawnReportFixtures.full.race, lobbyOpen: true, lobbyCode: "KGB-4821" },
+              viewerDesk: 7,
+              viewerIsGuest: true,
+            })}
+          />
+        </HudSpecimen>
         <div className="grid gap-6 md:grid-cols-2">
           <HudSpecimen
             id="filing"

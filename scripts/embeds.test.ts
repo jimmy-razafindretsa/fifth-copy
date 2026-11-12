@@ -141,6 +141,86 @@ describe("seat page (#563)", () => {
       expect(seat).toContain(`reason: '${reason}'`);
   });
 
+  // #912 C2, C3 (bible 12 Benchmark): the probe's constants and its pure helpers, run from the served page's
+  // own source (the clerk `?cfg=` pattern below), so the test exercises exactly what ships.
+  describe("auto probe verdict (#912)", () => {
+    const source = (re: RegExp) => {
+      const m = re.exec(seat);
+      if (!m) throw new Error(`not found: ${re}`);
+      return m[0];
+    };
+    const probe = new Function(
+      [
+        source(/const PROBE_MIN_FPS = [^\n]*;/),
+        source(/const PROBE_QUADS = [^\n]*;/),
+        source(/const probeFps = [^\n]*;/),
+        source(/const probeDone = [^\n]*;/),
+        source(/const probeViewport = [^\n]*;/),
+        "return { PROBE_MIN_FPS, PROBE_MEDIUM_FPS, PROBE_HIGH_FPS, PROBE_WINDOW, PROBE_SPAN, PROBE_MAX_PIXELS, probeFps, probeDone, probeViewport };",
+      ].join("\n"),
+    )() as {
+      PROBE_MIN_FPS: number;
+      PROBE_MEDIUM_FPS: number;
+      PROBE_HIGH_FPS: number;
+      PROBE_WINDOW: number;
+      PROBE_SPAN: number;
+      PROBE_MAX_PIXELS: number;
+      probeFps: (ms: number[]) => number;
+      probeDone: (ms: number[], s: number) => boolean;
+      probeViewport: (w: number, h: number) => [number, number];
+    };
+
+    it("C2: the floor is 5; MEDIUM 53 and HIGH 57 are unchanged; the window and span too", () => {
+      expect(probe.PROBE_MIN_FPS).toBe(5);
+      expect(probe.PROBE_MEDIUM_FPS).toBe(53);
+      expect(probe.PROBE_HIGH_FPS).toBe(57);
+      expect(probe.PROBE_WINDOW).toBe(0.5);
+      expect(probe.PROBE_SPAN).toBe(1.5);
+      expect(seat).toContain(
+        "if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' });",
+      );
+    });
+
+    it("C1: the reading is the median frame interval, so one stall among short frames does not move it", () => {
+      const frame = 1000 / 60;
+      expect(Math.round(probe.probeFps([frame, frame, frame, frame]))).toBe(60);
+      expect(Math.round(probe.probeFps([frame, frame, 500, frame, frame]))).toBe(60);
+      // two intervals: the lower median, so a stall then one short frame still reads the short frame
+      expect(Math.round(probe.probeFps([500, frame]))).toBe(60);
+      expect(probe.probeFps([1000, 1000, 1000])).toBe(1);
+    });
+
+    it("C1: the early weak verdict needs at least 2 intervals; a passing device is measured to the span", () => {
+      expect(probe.probeDone([500], 0.52)).toBe(false); // one stall alone decides nothing
+      expect(probe.probeDone([500, 1000 / 60], 0.53)).toBe(false); // a short frame after it: capable, go on
+      expect(probe.probeDone([400, 400], 0.8)).toBe(true); // two slow intervals: weak at once
+      expect(probe.probeDone([1000 / 60, 1000 / 60], 0.4)).toBe(false); // inside the window
+      expect(probe.probeDone(Array(90).fill(1000 / 60), 1.5)).toBe(true); // the span ends any probe
+    });
+
+    it("C3: the quads cover at most PROBE_MAX_PIXELS (1280×800) of the buffer, keeping its aspect; the clear covers the canvas", () => {
+      expect(probe.PROBE_MAX_PIXELS).toBe(1_024_000);
+      expect(probe.probeViewport(1280, 800)).toEqual([1280, 800]);
+      expect(probe.probeViewport(160, 100)).toEqual([160, 100]);
+      const screens: [number, number][] = [
+        [1920, 1080],
+        [2560, 1440],
+        [3840, 2160],
+        [1080, 1920],
+      ];
+      for (const [w, h] of screens) {
+        const [vw, vh] = probe.probeViewport(w, h);
+        expect(vw * vh).toBeLessThanOrEqual(1_024_000);
+        expect(vw * vh).toBeGreaterThan(1_024_000 * 0.99);
+        expect(Math.abs(vw / vh - w / h)).toBeLessThan(0.01);
+      }
+      expect(seat).toContain(
+        "gl.viewport(0, 0, CANVAS.width, CANVAS.height); gl.clearColor(...CLEAR_RGB, 1); gl.clear(gl.COLOR_BUFFER_BIT);",
+      );
+      expect(seat).toContain("gl.viewport(0, 0, ...probeViewport(CANVAS.width, CANVAS.height));");
+    });
+  });
+
   it("under reduced motion the bulb burns steady and nothing turns or bobs (bible 8)", () => {
     expect(seat).toContain("STUTTER = !r; TURN = !r; Clerks.setBob(!r);");
     expect(seat).toContain("matchMedia('(prefers-reduced-motion: reduce)')");

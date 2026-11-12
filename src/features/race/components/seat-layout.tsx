@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import styles from "./seat-layout.module.css";
 
 export type SeatLayoutProps = {
@@ -25,21 +25,42 @@ export type SeatLayoutProps = {
   tray: ReactNode;
   /** ...and Abandon under it, always visible (bible 7.1). */
   abandon: ReactNode;
+  /** ...and the sound toggle under Abandon (#243, bible 7.1). */
+  sound?: ReactNode;
   /** The only thing phones see (<= 480 px). */
   phones: string;
+  /**
+   * The root element (#251): the seat view passes its client frame, which adds `data-osk` and
+   * `data-orientation`; a plain `div` otherwise (the design page's specimens).
+   */
+  frame?: ComponentType<SeatFrameProps>;
 };
+
+/** What the root element of the seat view takes. */
+export type SeatFrameProps = { className?: string; children: ReactNode };
+
+function PlainFrame({ className, children }: SeatFrameProps) {
+  return (
+    <div data-seat data-backdrop="paper" className={className}>
+      {children}
+    </div>
+  );
+}
 
 /**
  * The seat view's HTML layer (#561, design bible 14.3, 7.10): the HUD over the flat paper backdrop, which
  * is also the race view when there is no 3D scene (ADR 0013 fallback; the scene mounts behind the HUD,
  * #563). Desktop and laptop: the race card in the left gutter, the typing surface in the middle column at
  * the bottom, the tray and Abandon in the right gutter, the telex across the top and the nixie counters top
- * right. Tablets: the card and the tray share a row above the typing surface. Phones: only the notice.
+ * right. Tablets: the card and the tray share a row above the typing surface; under an on-screen keyboard
+ * (`data-osk="open"`, #251) the machine folds away and the strip and the sheet move up under the kicker.
+ * Phones: only the notice.
  * Presentational: every part arrives as a slot.
  */
 export function SeatLayout(props: SeatLayoutProps) {
+  const Frame = props.frame ?? PlainFrame;
   return (
-    <div data-seat data-backdrop="paper" className={styles.seat}>
+    <Frame className={styles.seat}>
       <div data-hud className={styles.hud}>
         <div className={styles.kicker}>{props.kicker}</div>
         <div className={styles.nixie}>{props.nixie}</div>
@@ -64,11 +85,12 @@ export function SeatLayout(props: SeatLayoutProps) {
         <div className={styles.right}>
           {props.tray}
           <div className={styles.abandon}>{props.abandon}</div>
+          {props.sound ? <div className={styles.sound}>{props.sound}</div> : null}
         </div>
       </div>
       <p data-phones className={styles.phones}>
         {props.phones}
       </p>
-    </div>
+    </Frame>
   );
 }

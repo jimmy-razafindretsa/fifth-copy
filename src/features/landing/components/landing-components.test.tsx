@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Star } from "@/components/ui";
 import { en } from "@/i18n/en";
+import { fr } from "@/i18n/fr";
+import { LINKS } from "../links";
 import { ClerkSection } from "./clerk-section";
+import { FooterView } from "./landing-footer";
 import { LiveFeed } from "./live-feed";
 import { TypingStrip } from "./typing-strip";
 
@@ -46,7 +49,7 @@ describe("ClerkSection", () => {
       <ClerkSection
         labels={en.landing.clerk}
         name={null}
-        lockerHref="/locker"
+        lockerHref={LINKS.locker ?? null}
         savedOutfit={null}
         save={null}
       />,
@@ -56,7 +59,23 @@ describe("ClerkSection", () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('aria-current="step">RECRUIT<');
     expect(html).toContain("HERO OF PAPERWORK");
-    expect(html).toContain('href="/locker"');
+    // #875 C2: the locker is post-v1, so the file carries no OPEN THE LOCKER button
+    expect(html).toContain("REISSUE UNIFORM");
+    expect(html).not.toContain(en.landing.clerk.locker);
+    expect(html).not.toContain('href="/locker"');
+  });
+
+  it("offers OPEN THE LOCKER once the locker's route ships (#875)", () => {
+    const html = renderToStaticMarkup(
+      <ClerkSection
+        labels={en.landing.clerk}
+        name={null}
+        lockerHref="/locker"
+        savedOutfit={null}
+        save={null}
+      />,
+    );
+    expect(html).toMatch(/href="\/locker"[^>]*>OPEN THE LOCKER →</);
   });
 
   it("files the viewer's name when there is one", () => {
@@ -64,13 +83,64 @@ describe("ClerkSection", () => {
       <ClerkSection
         labels={en.landing.clerk}
         name="Comrade Sparrow-482"
-        lockerHref="/locker"
+        lockerHref={null}
         savedOutfit={null}
         save={null}
       />,
     );
     expect(html).toContain("Comrade Sparrow-482");
     expect(html).not.toContain("UNASSIGNED");
+  });
+});
+
+// #875 C2: a link appears when its route ships; the footer offers only those.
+const HELD_BACK = ["/locker", "/teachers", "/profile", "/about", "/privacy", "/terms", "/contact"];
+
+describe("FooterView (#875)", () => {
+  for (const [locale, t] of [
+    ["en", en],
+    ["fr", fr],
+  ] as const) {
+    it(`C2 ${locale}: PLAY and LEARN with shipped entries only, no AEGIS CORP. column, no social row`, () => {
+      const f = t.landing.footer;
+      const html = renderToStaticMarkup(<FooterView brand={t.brand} labels={f} />);
+      for (const href of HELD_BACK) expect(html).not.toContain(`href="${href}"`);
+      expect(html).not.toMatch(/href="https?:/);
+      expect(html).not.toContain("<ul");
+      // the brand column, the gold stamp and the bottom bar stay
+      expect(html).toContain(t.brand.tagline);
+      expect(html).toContain(f.about);
+      expect(html).toContain(`${f.builtBy}<br/>${f.builtByName}`);
+      expect(html).toContain(f.copyright);
+      // two columns: PLAY (three race entries) and LEARN (the guide); AEGIS CORP. is gone, heading included
+      const navs = [...html.matchAll(/<nav[^>]*aria-label="([^"]+)"[^>]*>(.*?)<\/nav>/g)];
+      expect(navs.map((n) => n[1])).toEqual([f.play, f.learn]);
+      expect([...html.matchAll(/<h3[^>]*>([^<]*)<\/h3>/g)].map((h) => h[1])).toEqual([
+        f.play,
+        f.learn,
+      ]);
+      expect(navs[0]![2]!.match(/<a /g)).toHaveLength(3);
+      expect(navs[1]![2]).toContain(`href="/#how"`);
+      expect(navs[1]![2]!.match(/<a /g)).toHaveLength(1);
+      for (const held of [f.links.locker, f.links.teachers, f.links.profile, f.links.privacy]) {
+        expect(html).not.toContain(`>${held}<`);
+      }
+    });
+  }
+
+  it("brings an entry, its column and the social row back once they exist", () => {
+    const html = renderToStaticMarkup(
+      <FooterView
+        brand={en.brand}
+        labels={en.landing.footer}
+        links={{ ...LINKS, privacy: "/privacy" }}
+        social={[{ key: "github", tag: "GH", href: "https://github.com/aegis-corp" }]}
+      />,
+    );
+    expect(html).toContain('aria-label="AEGIS CORP."');
+    expect(html).toMatch(/href="\/privacy"[^>]*>Privacy · Law 25</);
+    expect(html).not.toContain('href="/terms"');
+    expect(html).toMatch(/<ul[^>]*><li><a href="https:\/\/github.com\/aegis-corp" target="_blank"/);
   });
 });
 

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
@@ -113,12 +114,13 @@ describe("CI unit step runs the DB-backed suites (card #501)", () => {
 // while `e2e` stays ONE required check (.github/branch-protection.json, scripts/merge.sh): an
 // aggregating job that needs every shard and passes only when all of them succeeded.
 describe("CI e2e is sharded behind one required check (card #532)", () => {
+  type Combo = { suite: string; filter: string; shard: number; shardTotal: number };
   type MatrixJob = Job & {
     name?: string;
     needs?: string | string[];
     if?: string;
     "timeout-minutes"?: number;
-    strategy?: { "fail-fast"?: boolean; matrix?: { shard?: number[]; shardTotal?: number[] } };
+    strategy?: { "fail-fast"?: boolean; matrix?: { include?: Combo[] } };
   };
   const all = workflow.jobs as Record<string, MatrixJob>;
   const required = (
@@ -126,7 +128,7 @@ describe("CI e2e is sharded behind one required check (card #532)", () => {
       required_status_checks: { contexts: string[] };
     }
   ).required_status_checks.contexts;
-  const shardIds = Object.keys(all).filter((id) => all[id]?.strategy?.matrix?.shard);
+  const shardIds = Object.keys(all).filter((id) => all[id]?.strategy?.matrix);
   const shardId = shardIds[0] ?? "";
   const shard = all[shardId];
   const gate = all.e2e;
@@ -150,18 +152,68 @@ describe("CI e2e is sharded behind one required check (card #532)", () => {
     expect(JSON.stringify(gate?.steps)).toContain(`needs.${shardId}.result`);
   });
 
-  it("C1 the shard matrix covers 1..N exactly and each shard runs its slice of the full suite", () => {
-    const total = shard?.strategy?.matrix?.shardTotal ?? [];
-    expect(total).toHaveLength(1);
-    const n = total[0] ?? 0;
-    expect(n).toBeGreaterThan(1);
-    expect(shard?.strategy?.matrix?.shard).toEqual(Array.from({ length: n }, (_, i) => i + 1));
+  // Card #891: the matrix lists suites explicitly (include entries), each sharded 1..N on its own, so
+  // no shard collects a slow tail (the serial matchmaking project, or the desktop race specs that the
+  // skipped mobile/tablet race tests pushed into the last shard). The suites' filters must partition
+  // the suite: every test of `playwright test --list` runs in exactly one suite.
+  const combos = shard?.strategy?.matrix?.include ?? [];
+  const suites = [...new Set(combos.map((c) => c.suite))];
+  const filterOf = (suite: string) => combos.find((c) => c.suite === suite)?.filter ?? "";
+  // splits a filter like the runner's bash does for the shapes used: words and "double-quoted" words
+  const argv = (filter: string) =>
+    [...filter.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? "");
+  const list = (args: string[]) => {
+    const out = spawnSync("npx", ["playwright", "test", "--list", ...args], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, PW_VISUAL: "" },
+    });
+    expect(out.status, out.stderr).toBe(0);
+    return out.stdout.split("\n").filter((l) => /^\s+\[[a-z]+\] › /.test(l));
+  };
+
+  it("C1 the matrix is the only shape: include entries, fail-fast off, one run line, suite in the name", () => {
+    expect(Object.keys(shard?.strategy?.matrix ?? {})).toEqual(["include"]);
     expect(shard?.strategy?.["fail-fast"]).toBe(false);
     const pw = runs(shard ?? { steps: [] }).filter((r) => r.includes("playwright test"));
     expect(pw).toEqual([
-      "npx playwright test --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}",
+      "npx playwright test ${{ matrix.filter }} --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}",
     ]);
+    expect(shard?.name).toContain("${{ matrix.suite }}");
     expect(shard?.["timeout-minutes"]).toBeLessThanOrEqual(15);
+  });
+
+  it("C1 each suite has one filter and its shards cover 1..N exactly", () => {
+    expect(suites.length).toBeGreaterThan(1);
+    for (const suite of suites) {
+      const own = combos.filter((c) => c.suite === suite);
+      const totals = [...new Set(own.map((c) => c.shardTotal))];
+      expect(totals, suite).toHaveLength(1);
+      expect(
+        own.map((c) => c.shard).sort((x, y) => x - y),
+        suite,
+      ).toEqual(Array.from({ length: totals[0] ?? 0 }, (_, i) => i + 1));
+      expect(new Set(own.map((c) => c.filter)).size, suite).toBe(1);
+    }
+    expect(suites).toContain("matchmaking");
+    expect(filterOf("matchmaking")).toBe("--project=matchmaking");
+  });
+
+  it("C2 the suites partition the e2e suite: every listed test runs in exactly one suite", () => {
+    const all = list([]);
+    expect(all.length).toBeGreaterThan(0);
+    const seen = new Map<string, string>();
+    for (const suite of suites) {
+      for (const test of list(argv(filterOf(suite)))) {
+        expect(seen.get(test), `${test} in ${suite} and ${seen.get(test)}`).toBeUndefined();
+        seen.set(test, suite);
+      }
+    }
+    expect([...seen.keys()].sort()).toEqual([...all].sort());
+  }, 60_000);
+
+  it("C3 the e2e check gates on the matrix job, so every suite (matchmaking included) gates it", () => {
+    expect(gate?.needs).toContain(shardId);
   });
 });
 
@@ -235,15 +287,14 @@ describe("CI concurrency never cancels a main run (card #543)", () => {
 // skips the browser and only installs the OS packages. The contract's other arm (the pinned container
 // image of `visual`) was not chosen: it moves a bigger pull into the same job (#602 BRIEF).
 describe("CI e2e shards install Chromium from a cache (card #602)", () => {
-  type ShardJob = Job & { strategy?: { matrix?: { shard?: unknown } } };
-  const shard = Object.values(workflow.jobs).find(
-    (job) => (job as ShardJob).strategy?.matrix?.shard,
-  );
+  type ShardJob = Job & { strategy?: { matrix?: unknown } };
+  const shard = Object.values(workflow.jobs).find((job) => (job as ShardJob).strategy?.matrix);
   const steps = shard?.steps ?? [];
   const at = (s: Step | undefined) => (s ? steps.indexOf(s) : -1);
   const version = steps.find((s) => s.run?.includes("@playwright/test/package.json"));
   const cache = steps.find((s) => s.uses?.startsWith("actions/cache@"));
-  const install = steps.find((s) => s.run === "npx playwright install --with-deps chromium");
+  // #819 split the old `install --with-deps` step: browser download (cache miss) + OS deps (retried).
+  const install = steps.find((s) => s.run?.includes("playwright install-deps chromium"));
 
   it("C1 a step with an id writes the installed @playwright/test version to $GITHUB_OUTPUT", () => {
     expect(version?.id).toBeTruthy();
@@ -260,7 +311,7 @@ describe("CI e2e shards install Chromium from a cache (card #602)", () => {
     expect(cache?.with?.key).toContain(`steps.${version?.id}.outputs.version`);
   });
 
-  it("C1 the cache is restored after the version step and before the unchanged install step", () => {
+  it("C1 the cache is restored after the version step and before the install steps", () => {
     expect(install).toBeDefined();
     expect(at(version)).toBeGreaterThanOrEqual(0);
     expect(at(version)).toBeLessThan(at(cache));
@@ -269,6 +320,187 @@ describe("CI e2e shards install Chromium from a cache (card #602)", () => {
 
   it("C1 a stalled install fails fast instead of eating the shard's time budget", () => {
     expect(install?.["timeout-minutes"]).toBeGreaterThan(0);
-    expect(install?.["timeout-minutes"]).toBeLessThanOrEqual(5);
+    expect(install?.["timeout-minutes"]).toBeLessThanOrEqual(6);
+  });
+});
+
+// Card #819: on a browser-cache hit the shard only installs OS packages, and that apt step (the stall
+// seen on PRs #810-#817) runs under scripts/retry.sh: each attempt has its own timeout and a stalled
+// attempt is killed and retried inside the shard instead of eating the step timeout once.
+describe("CI e2e shards retry a stalled Playwright dependency install (card #819)", () => {
+  type ShardJob = Job & { strategy?: { matrix?: unknown } };
+  const shard = Object.values(workflow.jobs).find((job) => (job as ShardJob).strategy?.matrix);
+  const steps = shard?.steps ?? [];
+  const cache = steps.find((s) => s.uses?.startsWith("actions/cache@"));
+  const pwSteps = steps.filter((s) => /playwright install/.test(s.run ?? ""));
+  const download = pwSteps.find((s) => /playwright install chromium/.test(s.run ?? ""));
+  const deps = pwSteps.find((s) => /playwright install-deps chromium/.test(s.run ?? ""));
+  const retry = (s: Step | undefined) =>
+    /^scripts\/retry\.sh (\d+) (\d+) /
+      .exec(s?.run ?? "")
+      ?.slice(1)
+      .map(Number) ?? [];
+
+  it("C1 no step runs the full `playwright install --with-deps` path", () => {
+    expect(pwSteps.length).toBeGreaterThan(0);
+    for (const s of pwSteps) expect(s.run).not.toContain("--with-deps");
+  });
+
+  it("C1 the browser download runs only on a cache miss", () => {
+    expect(cache?.id).toBeTruthy();
+    expect(download?.if?.replace(/\s+/g, " ")).toBe(
+      `steps.${cache?.id}.outputs.cache-hit != 'true'`,
+    );
+  });
+
+  it("C1 OS deps are installed by their own step on every run (hit or miss)", () => {
+    expect(deps).toBeDefined();
+    expect(deps?.if).toBeUndefined();
+    expect(steps.indexOf(cache!)).toBeLessThan(steps.indexOf(deps!));
+  });
+
+  it.each([
+    ["download", download],
+    ["OS deps", deps],
+  ])("C2 the %s step retries with a per-attempt timeout inside its step timeout", (_n, step) => {
+    const [attempts, seconds] = retry(step);
+    expect(attempts).toBeGreaterThanOrEqual(2);
+    expect(seconds).toBeGreaterThan(0);
+    // every attempt fits in the step budget, with a minute of slack for kill + backoff
+    expect(attempts! * seconds!).toBeLessThanOrEqual(((step?.["timeout-minutes"] ?? 0) - 1) * 60);
+  });
+
+  it("C1 (lock) apt waits for a held dpkg lock before the OS deps step", () => {
+    const lock = steps.find((s) => /DPkg::Lock::Timeout "\d+"/.test(s.run ?? ""));
+    expect(lock?.run).toMatch(/\/etc\/apt\/apt\.conf\.d\//);
+    expect(steps.indexOf(lock!)).toBeGreaterThanOrEqual(0);
+    expect(steps.indexOf(lock!)).toBeLessThan(steps.indexOf(deps!));
+  });
+
+  it("#910 C1 a failed OS deps install falls back to the Chromium launch probe", () => {
+    expect(deps?.run).toMatch(
+      /^scripts\/retry\.sh \d+ \d+ npx playwright install-deps chromium \|\| scripts\/chromium-probe\.sh$/,
+    );
+    const probe = readFileSync(path.join(root, "scripts/chromium-probe.sh"), "utf8");
+    expect(probe).toContain("::warning::");
+    expect(probe).toMatch(/chromium\.launch\(\)/);
+  });
+
+  it("#910 C2 the probe fails when Chromium cannot launch", () => {
+    const r = spawnSync("scripts/chromium-probe.sh", [], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 30_000,
+      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: path.join(tmpdir(), "no-browsers-910") },
+    });
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("::error::");
+  }, 30_000);
+
+  it("C2 (lock) each OS deps attempt has time to wait out the lock", () => {
+    const [attempts, seconds] = retry(deps);
+    expect(attempts).toBeGreaterThanOrEqual(2);
+    expect(seconds).toBeGreaterThanOrEqual(150);
+  });
+
+  const run = (args: string[], timeout = 20_000) =>
+    spawnSync("scripts/retry.sh", args, {
+      cwd: root,
+      encoding: "utf8",
+      timeout,
+      env: { ...process.env, RETRY_BACKOFF_SECONDS: "0" },
+    });
+
+  it("C2 retry.sh kills a stalled attempt at its timeout and succeeds on the retry", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "retry-"));
+    const mark = path.join(dir, "first");
+    // first attempt stalls (sleeps past the 1 s per-attempt timeout), second succeeds at once
+    const cmd = `if [ -e ${mark} ]; then echo ok; else touch ${mark}; sleep 30; fi`;
+    const t0 = Date.now();
+    const r = run(["2", "1", "bash", "-c", cmd]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("ok");
+    expect(r.stderr).toMatch(/attempt 1\/2/);
+    expect(Date.now() - t0).toBeLessThan(15_000);
+  }, 20_000);
+
+  it("C2 retry.sh fails after the last attempt with the command's failure", () => {
+    const r = run(["3", "5", "bash", "-c", "echo try >&2; exit 7"]);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr.match(/^try$/gm)?.length).toBe(3);
+  });
+
+  it("C2 retry.sh rejects a missing attempt count or timeout", () => {
+    expect(run(["x", "5", "true"]).status).toBe(2);
+    expect(run(["2"]).status).toBe(2);
+  });
+});
+
+// Card #718 C4: after every push to main, deploy-check polls the public health endpoints until both
+// Railway services run what main expects (scripts/deploy-check.ts), or fails after 20 min. It reads
+// public URLs from repository variables; it holds no secret and never calls Railway.
+describe("deploy-check workflow detects a stale Railway deploy (card #718)", () => {
+  type DeployWorkflow = {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: Record<string, Job & { "timeout-minutes"?: number }>;
+  };
+  const file = path.join(root, ".github/workflows/deploy-check.yml");
+  const text = readFileSync(file, "utf8");
+  const wf = parseYaml(text) as DeployWorkflow;
+  const steps = Object.values(wf.jobs).flatMap((j) => j.steps);
+  const script = steps.map((s) => s.run ?? "").join("\n");
+  const env = Object.assign({}, ...Object.values(wf.jobs).map((j) => j.env ?? {})) as Record<
+    string,
+    string
+  >;
+
+  it("C4 runs on push to main and workflow_dispatch only, with contents: read", () => {
+    expect(Object.keys(wf.on).sort()).toEqual(["push", "workflow_dispatch"]);
+    expect(wf.on.push).toEqual({ branches: ["main"] });
+    expect(wf.permissions).toEqual({ contents: "read" });
+  });
+
+  it("C4 checks out the full history (ancestry needs every commit)", () => {
+    const checkout = steps.find((s) => s.uses?.startsWith("actions/checkout@"));
+    expect(checkout?.with?.["fetch-depth"]).toBe(0);
+  });
+
+  it("C4 polls every 30 s for at most 20 min, running scripts/deploy-check.ts after each poll", () => {
+    expect(Number(env.POLL_SECONDS)).toBe(30);
+    expect(Number(env.TIMEOUT_SECONDS)).toBe(1200);
+    expect(script).toMatch(
+      /scripts\/deploy-check\.ts --web "\$WEB_PUBLIC_URL" --race "\$RACE_SERVER_PUBLIC_URL"/,
+    );
+    expect(script).toContain('sleep "$POLL_SECONDS"');
+    for (const job of Object.values(wf.jobs))
+      expect(job["timeout-minutes"]).toBeLessThanOrEqual(25);
+  });
+
+  it("C4 ends green on the first OK and, after the timeout, fails with the last verdict in the job summary", () => {
+    expect(script).toMatch(/exit 0/);
+    expect(script).toContain("$GITHUB_STEP_SUMMARY");
+    expect(script).toMatch(/exit 1/);
+  });
+
+  it("C4 reads the public URLs from repository variables and names a missing one", () => {
+    expect(env.WEB_PUBLIC_URL).toBe("${{ vars.WEB_PUBLIC_URL }}");
+    expect(env.RACE_SERVER_PUBLIC_URL).toBe("${{ vars.RACE_SERVER_PUBLIC_URL }}");
+    for (const name of ["WEB_PUBLIC_URL", "RACE_SERVER_PUBLIC_URL"]) {
+      const empty = {
+        ...process.env,
+        WEB_PUBLIC_URL: "https://w",
+        RACE_SERVER_PUBLIC_URL: "https://r",
+        [name]: "",
+      };
+      const guard = steps.find((s) => s.id === "vars")!;
+      const r = spawnSync("bash", ["-c", guard.run!], { encoding: "utf8", env: empty });
+      expect(r.status).toBe(1);
+      expect(r.stdout + r.stderr).toContain(name);
+    }
+  });
+
+  it("C4 holds no secret, no Railway token and no Railway CLI", () => {
+    expect(text).not.toMatch(/secrets\.|RAILWAY_TOKEN|railway /);
   });
 });

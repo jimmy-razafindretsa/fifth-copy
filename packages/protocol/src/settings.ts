@@ -1,4 +1,4 @@
-import { type EngineSettings, type ErrorMode, isTypeable } from "@fifth-copy/engine";
+import { BOT_LEVELS, type EngineSettings, type ErrorMode, isTypeable } from "@fifth-copy/engine";
 import { z } from "zod";
 
 /**
@@ -26,19 +26,14 @@ export const difficultySchema = z.discriminatedUnion("level", [
 ]);
 export type Difficulty = z.infer<typeof difficultySchema>;
 
-export const botLevelSchema = z.enum(["recruit", "clerk", "officer", "commissar", "major"]);
+/** The engine's level scale is the one source (#361): this only parses it. */
+export const botLevelSchema = z.enum(BOT_LEVELS);
 export type BotLevel = z.infer<typeof botLevelSchema>;
 
-/** Target typing speed of each bot level (spec 9). */
-export const BOT_LEVEL_WPM: Record<BotLevel, number> = {
-  recruit: 20,
-  clerk: 35,
-  officer: 50,
-  commissar: 70,
-  major: 90,
-};
+/** Target typing speed of each bot level (spec 9), the engine's own table. */
+export { BOT_LEVEL_WPM } from "@fifth-copy/engine";
 
-/** 30 desks in the waiting-room ring, one for the host. */
+/** 30 desks in the waiting-room ring, one for the host (or, while the host watches, #876, for a typist). */
 export const MAX_BOTS = 29;
 
 /** The engine owns the error modes (ADR 0007); this only mirrors its type for parsing. */
@@ -72,6 +67,11 @@ export const raceSettingsSchema = z.strictObject({
   bonuses: z.boolean(),
   bots: z.array(z.strictObject({ level: botLevelSchema })).max(MAX_BOTS),
   lobbyType: z.enum(["public", "private"]),
+  /**
+   * The host follows the race without a desk (#876, spec 5.4): all 30 desks are for typists. Additive
+   * with a default, so a room stored before it parses as the host typing.
+   */
+  hostWatches: z.boolean().default(false),
 });
 export type RaceSettings = z.infer<typeof raceSettingsSchema>;
 
@@ -91,10 +91,17 @@ export const DEFAULT_RACE_SETTINGS: RaceSettings = {
   bonuses: true,
   bots: [],
   lobbyType: "private",
+  hostWatches: false,
 };
 
-/** What `host:settings` may change. `lobbyType` is excluded: `Lobby.type` is Postgres-owned. */
-export const raceSettingsPatchSchema = raceSettingsSchema.omit({ lobbyType: true }).partial();
+/**
+ * What `host:settings` may change. `lobbyType` is excluded: `Lobby.type` is Postgres-owned.
+ * `hostWatches` drops its default here (#876): a patch that leaves it out never sends the host back.
+ */
+export const raceSettingsPatchSchema = raceSettingsSchema
+  .omit({ lobbyType: true })
+  .extend({ hostWatches: z.boolean() })
+  .partial();
 export type RaceSettingsPatch = z.infer<typeof raceSettingsPatchSchema>;
 
 /** Merges a partial over the defaults and parses the result; throws on invalid input. */

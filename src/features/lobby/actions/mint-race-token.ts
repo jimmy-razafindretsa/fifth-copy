@@ -2,7 +2,7 @@
 
 import { parseRoomCode, PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import { env } from "@/env";
-import { ensureGuest } from "@/features/identity";
+import { ensureGuest, getAvatarUser } from "@/features/identity";
 import { isGuestSubject, limit, limitCode, requestSubject } from "@/server/limiter";
 import { signRaceToken } from "@/server/race-token";
 import { findLobbyByCode } from "../queries/get-lobby-by-code";
@@ -33,6 +33,9 @@ export async function mintRaceToken(input: {
   if (lobby.status !== "WAITING") return { ok: false, error: "closed" };
 
   const viewer = await ensureGuest();
+  // #730: the roll's portrait is addressed with the approved avatar's version (display data only;
+  // the avatar route still decides who may see it, ADR 0014, 0022). No picture reads no row.
+  const { avatarVersion } = await getAvatarUser(viewer);
   const token = await signRaceToken(
     {
       v: PROTOCOL_VERSION,
@@ -40,6 +43,7 @@ export async function mintRaceToken(input: {
       name: viewer.name,
       lobby: lobby.id,
       role: roleFor(lobby, viewer.id, { spectator: parsed.data?.spectator }),
+      avatar: avatarVersion,
     },
     { secret: env.RACE_TOKEN_SECRET },
   );

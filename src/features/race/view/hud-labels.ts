@@ -54,6 +54,22 @@ export type SabotageTrayLabels = {
   play: string;
   cooldown: string;
   seconds: string;
+  /** How to play a ready card (#236): `ENTER TO PLAY`, the `PLAY` row's value. */
+  hint: string;
+  /** The pointer path's ink button (#236): `PLAY CARD`. */
+  playButton: string;
+  /** The refused play's row (#236; the server's `no-bonus` while a card is held): `IMMUNE`. */
+  immune: string;
+};
+
+/** The sound toggle (#243, bible 7.1, 7.2, 7.4): `SOUND` + `OFF | ON`, its pending word and refusal line. */
+export type SoundLabels = {
+  label: string;
+  off: string;
+  on: string;
+  pending: string;
+  errorPrefix: string;
+  error: string;
 };
 
 export type AbandonLabels = {
@@ -61,6 +77,30 @@ export type AbandonLabels = {
   abandon: string;
   /** The ink confirm button. */
   confirm: string;
+};
+
+/** How your desk left the race (#233): the store's `ExitKind`, mirrored (the HUD never imports the client). */
+export const EXIT_KINDS = ["abandoned", "asleep"] as const;
+export type ExitDocketKind = (typeof EXIT_KINDS)[number];
+
+/** The exit dockets (#233, bible 7.3, 7.4): Reassigned after ABANDON, Asleep at desk after the idle kick. */
+export type ExitLabels = {
+  /** The ink stamp, also the docket's name: `REASSIGNED`, `ASLEEP AT DESK`. */
+  stamp: Record<ExitDocketKind, string>;
+  /** Row labels of your partial stats. */
+  wpm: string;
+  accuracy: string;
+  place: string;
+  /** Reassigned ranks last (ADR 0007): the `PLACE` row's value. */
+  last: string;
+  /** The accuracy value: `{n} %` (U+00A0 before the sign). */
+  percent: string;
+  /** The secondary button: the docket closes, the HUD stays live without input. */
+  keepWatching: string;
+  /** The ink link to `/lobby/[code]` after Reassigned (the seat view's lost-line string). */
+  back: string;
+  /** The ink link to `/lobby/[code]` after the idle kick. */
+  leave: string;
 };
 
 export const RACE_NOTICES = [
@@ -78,6 +118,7 @@ export type HudLabels = {
   sabotageTray: SabotageTrayLabels;
   abandon: AbandonLabels;
   notice: RaceNoticeLabels;
+  exit: ExitLabels;
 };
 
 export const hudLabelFixtures = {
@@ -100,6 +141,7 @@ export const hudLabelFixtures = {
       lane: "Place {rank}, {name}{you}, desk {desk}, {progress}% typed{status}",
       status: {
         "line-cut": "LINE CUT",
+        expired: "EXPIRED",
         asleep: "ASLEEP AT DESK",
         abandoned: "REASSIGNED",
         finished: "FILED",
@@ -122,6 +164,9 @@ export const hudLabelFixtures = {
       play: "PLAY",
       cooldown: "COOLDOWN",
       seconds: "{n} S",
+      hint: "ENTER TO PLAY",
+      playButton: "PLAY CARD",
+      immune: "IMMUNE",
     },
     abandon: { abandon: "ABANDON", confirm: "CONFIRM · REASSIGN ME" },
     notice: {
@@ -129,6 +174,17 @@ export const hudLabelFixtures = {
       reconnecting: "LINE CUT · RECONNECTING",
       "idle-warning": "THE MAJOR IS LOOKING AT YOU. TYPE.",
       "no-scene": "NO PICTURE FROM THE ROOM · KEEP TYPING",
+    },
+    exit: {
+      stamp: { abandoned: "REASSIGNED", asleep: "ASLEEP AT DESK" },
+      wpm: "WPM",
+      accuracy: "ACCURACY",
+      place: "PLACE",
+      last: "LAST",
+      percent: "{n}\u00a0%",
+      keepWatching: "KEEP WATCHING",
+      back: "BACK TO THE WAITING ROOM →",
+      leave: "LEAVE →",
     },
   },
   fr: {
@@ -150,6 +206,7 @@ export const hudLabelFixtures = {
       lane: "Rang {rank}, {name}{you}, bureau {desk}, {progress} % tapé{status}",
       status: {
         "line-cut": "LIGNE COUPÉE",
+        expired: "EXPIRÉ",
         asleep: "ENDORMI AU BUREAU",
         abandoned: "RÉAFFECTÉ",
         finished: "CLASSÉ",
@@ -172,6 +229,9 @@ export const hudLabelFixtures = {
       play: "JOUER",
       cooldown: "RECHARGE",
       seconds: "{n} S",
+      hint: "ENTRÉE POUR JOUER",
+      playButton: "JOUER LA CARTE",
+      immune: "IMMUNISÉ",
     },
     abandon: { abandon: "ABANDONNER", confirm: "CONFIRMER · ME RÉAFFECTER" },
     notice: {
@@ -179,6 +239,17 @@ export const hudLabelFixtures = {
       reconnecting: "LIGNE COUPÉE · RECONNEXION",
       "idle-warning": "LE MAJOR TE REGARDE. TAPE.",
       "no-scene": "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
+    },
+    exit: {
+      stamp: { abandoned: "RÉAFFECTÉ", asleep: "ENDORMI AU BUREAU" },
+      wpm: "MPM",
+      accuracy: "PRÉCISION",
+      place: "RANG",
+      last: "DERNIER",
+      percent: "{n}\u00a0%",
+      keepWatching: "CONTINUER À REGARDER",
+      back: "RETOUR À LA SALLE D'ATTENTE →",
+      leave: "QUITTER →",
     },
   },
 } satisfies Record<"en" | "fr", HudLabels>;

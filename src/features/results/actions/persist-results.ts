@@ -1,8 +1,6 @@
 // Called only by the HMAC-verified route `POST /api/internal/races/:id/results`. `server-only`, and
 // never a `"use server"` module: a server action would be callable from any browser without the HMAC.
 import "server-only";
-import { gunzipSync } from "node:zlib";
-import { z } from "zod";
 import {
   charsOf,
   MAX_EXTRA_WORD_LENGTH,
@@ -13,7 +11,6 @@ import {
   type PlayerStatus,
 } from "@fifth-copy/engine";
 import {
-  keystrokeSchema,
   MAX_OVERLAY_WORDS,
   MAX_RESULTS_PER_REQUEST,
   MAX_TRACE_BASE64_LENGTH,
@@ -24,6 +21,7 @@ import {
 } from "@fifth-copy/protocol";
 import { Prisma, type RaceEndReason, type ResultStatus } from "@/generated/prisma/client";
 import { db as appDb } from "@/server/db";
+import { decodeKeystrokes, MAX_KEYSTROKE_JSON_BYTES } from "../trace-codec";
 
 /**
  * Body cap of `POST /api/internal/races/:id/results`, from the protocol's own bounds:
@@ -53,19 +51,16 @@ const REASON_TO_DB: Record<RaceResultsRequest["reason"], RaceEndReason> = {
   timer: "TIMER",
 };
 
-/**
- * The largest JSON of one keystroke plus its separator, in bytes: `{"t":3600000,"key":"Backspace"},`
- * (`t` <= MAX_RACE_MS; any other key is one character, at most 6 bytes once quoted or escaped).
- * Bounds the inflated size of a trace of `count` keystrokes.
- */
-export const MAX_KEYSTROKE_JSON_BYTES = 32;
+// The stored blob's codec (#865 moved it to a pure module the WPM series reads too).
+export { MAX_KEYSTROKE_JSON_BYTES };
 
 /**
  * The most keystrokes a stored trace may hold for a race whose base text has `baseLength`
  * characters (#190): the race server caps each desk at `traceCapOf` of its effective text, which
  * Extra Paperwork lengthens by at most `MAX_OVERLAY_WORDS` words of `MAX_EXTRA_WORD_LENGTH`
- * characters plus a separator each (Exemption only shortens it). The web stores no overlay yet
- * (#623), so it bounds by the largest one the wire allows; the inflation cap of `decodeTrace`
+ * characters plus a separator each (Exemption only shortens it). The check runs before the
+ * result's own overlay is trusted, so it bounds by the largest one the wire allows (#623 stores the
+ * overlay; tightening this bound to it is ADR 0016's follow-up); the inflation cap of `decodeTrace`
  * follows from the count it admits.
  */
 export function maxStoredTraceKeys(baseLength: number): number {
@@ -87,22 +82,8 @@ export function decodeTrace(
 ): DecodedTrace | null {
   if (trace.count > maxKeys) return null;
   const data = Buffer.from(trace.data, "base64");
-  let json: string;
-  try {
-    json = gunzipSync(data, {
-      maxOutputLength: trace.count * MAX_KEYSTROKE_JSON_BYTES + 2,
-    }).toString("utf8");
-  } catch {
-    return null;
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(json);
-  } catch {
-    return null;
-  }
-  const parsed = z.array(keystrokeSchema).length(trace.count).safeParse(value);
-  return parsed.success ? { data, keystrokes: parsed.data } : null;
+  const keystrokes = decodeKeystrokes(data, trace.count);
+  return keystrokes ? { data, keystrokes } : null;
 }
 
 /** Same printable rule as the protocol's names and keys (#557): ids reach Postgres as text. */
@@ -122,9 +103,11 @@ const isKnownError = (err: unknown, code: string) =>
 
 /**
  * Stores one chunk of an ended race's results (ADR 0008 write path, ARCHITECTURE 9.3), in one
- * transaction: the race's end (`endedAt`, `endReason`, `lobbySize`; first write wins), one
+ * transaction: the race's end (`endedAt`, `endReason`, `lobbySize`; first write wins, over a VOID set
+ * by the `race.void` sweep too, #613), one
  * `RaceResult` per desk and the `RaceKeystrokes` of each human desk with keystrokes, all upserted by
- * `(raceId, desk)` with no update, so a repeat is a no-op and answers the same. Numbers are stored
+ * `(raceId, desk)` with no update, so a repeat is a no-op and answers the same. Each result keeps the
+ * desk's final text `overlay` (`null` when untouched, #623). Numbers are stored
  * as sent: the race server ran the engine (ADR 0007), its anti-cheat flags included (`suspicious`,
  * `suspiciousReason` = the flag codes joined by `,`; #195). Refuses an unknown race (`not-found`) and an
  * incoherent chunk or a trace that does not inflate to `count` keystrokes within
@@ -162,7 +145,8 @@ export async function persistRaceResults(
     const stored = request.results.filter((r) => r.userId === null || known.has(r.userId));
     await db.$transaction(async (tx) => {
       await tx.race.updateMany({
-        where: { id: request.raceId, endedAt: null },
+        // First real end wins; a VOID end is the race.void sweep's guess (#613) and gives way.
+        where: { id: request.raceId, OR: [{ endedAt: null }, { endReason: "VOID" }] },
         data: {
           endedAt: new Date(request.endedAt),
           endReason: REASON_TO_DB[request.reason],
@@ -195,6 +179,9 @@ export async function persistRaceResults(
             bonusesSent: r.bonusesSent,
             bonusesReceived: r.bonusesReceived,
             bonusLog: r.bonusLog,
+            // The desk's final text overlay (#623): what a replay of its trace must type. Prisma
+            // takes SQL NULL on a `Json?` column only as `DbNull`; it reads back as `null`.
+            overlay: r.overlay ?? Prisma.DbNull,
             // Flags from the race server's trace analysis (#195, ADR 0007): stored, never re-run.
             suspicious: r.flags.length > 0,
             suspiciousReason: r.flags.map((f) => f.code).join(",") || null,

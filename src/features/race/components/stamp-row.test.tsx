@@ -99,3 +99,33 @@ describe("StampRow finish stamps (#240 C2)", () => {
     );
   });
 });
+
+// #868 C2 at unit level: the NEW HOST notice through the same row (the #232 queue holds it 3 s).
+describe("StampRow NEW HOST (#868 C2)", () => {
+  const html = (name: string, labels = en.race.stamps) =>
+    renderToStaticMarkup(
+      <StampRow stamp={{ id: 4, kind: "new-host", errors: 0, name }} labels={labels} />,
+    );
+
+  it("the ink md stamp NEW HOST: <NAME>, the name upper case, hidden and never focusable", () => {
+    const out = html("Heron-411");
+    expect(out).toContain('data-stamps="new-host"');
+    expect(out).toContain('aria-hidden="true"');
+    expect(out).toContain('data-stamp-tone="ink"');
+    expect(out).toContain('data-stamp-size="md"');
+    expect(out).toContain("NEW HOST: HERON-411");
+    expect(out).not.toMatch(/tabindex|<button|<a |role=/);
+  });
+
+  it("French: NOUVEL HÔTE : <NOM>, the lobby's own strings (#137)", () => {
+    expect(html("Bea", fr.race.stamps)).toContain("NOUVEL HÔTE : BEA");
+    expect(en.race.stamps.newHost).toBe(en.lobby.newHost);
+    expect(fr.race.stamps.newHost).toBe(fr.lobby.newHost);
+  });
+
+  it("the stamp's line in words, as it reads", () => {
+    expect(stampText({ kind: "new-host", errors: 0, name: "Bea" }, 0, en.race.stamps)).toBe(
+      "NEW HOST: BEA",
+    );
+  });
+});

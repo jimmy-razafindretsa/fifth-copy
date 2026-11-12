@@ -3,11 +3,19 @@ import {
   INTERNAL_HEADERS,
   PROTOCOL_VERSION,
   openRoomRequestSchema,
+  roomStatusRequestSchema,
+  roomTypeRequestSchema,
+  sharedRoomRequestSchema,
   type InternalError,
   type OpenRoomResponse,
+  type RoomStatus,
+  type RoomStatusResponse,
+  type RoomTypeResponse,
+  type RaceSettings,
+  type SharedRoomResponse,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
-import type { RoomRegistry } from "../rooms/registry";
+import { ROOM_SEATS, type RoomRegistry } from "../rooms/registry";
 import { verifyInternalRequest } from "./hmac";
 import type { NonceStore } from "./nonces";
 
@@ -21,10 +29,27 @@ export type InternalRoute = {
    * Called only after the timestamp, nonce and signature verified and the nonce was claimed; `body` is
    * parsed JSON, not yet a schema.
    */
-  handle(body: unknown): Promise<{ status: number; body: unknown }>;
+  handle(
+    body: unknown,
+  ): Promise<{ status: number; body: unknown; headers?: Record<string, string> }>;
 };
 
-type Deps = { registry: RoomRegistry; secret: string; clock: Clock; nonces: NonceStore };
+type Deps = {
+  registry: RoomRegistry;
+  secret: string;
+  clock: Clock;
+  nonces: NonceStore;
+  /** SIGTERM drain (#704): new rooms are refused with a retryable 503. */
+  draining?: () => boolean;
+  /**
+   * A room's visibility changed (#815): the composition root broadcasts the new settings and asks
+   * the lifecycle to review the automatic start. Not called when the type was already stored.
+   */
+  onLobbyType?: (lobbyId: string, settings: RaceSettings) => void;
+};
+
+/** `Retry-After` of a room refused while draining (#704): the next deployment is already up. */
+export const DRAIN_RETRY_AFTER_S = 2;
 
 const error = (status: number, code: InternalError["error"]) => ({
   status,
@@ -32,10 +57,15 @@ const error = (status: number, code: InternalError["error"]) => ({
 });
 
 /**
- * Web -> race server routes (ADR 0006 point 6). One entry per path: `PATCH /internal/rooms/:id/settings`
- * and `/close` land here later. Each handler parses its body with a protocol schema.
+ * Web -> race server routes (ADR 0006 point 6). One entry per path: `POST /internal/rooms` (open),
+ * `POST /internal/rooms/status` (#806), `POST /internal/rooms/type` (#815), `POST /internal/rooms/shared`
+ * (#65, ADR 0022); `PATCH /internal/rooms/:id/settings` and `/close` land here later. Each handler parses its body with a protocol schema.
  */
-export function internalRoutes({ registry }: Pick<Deps, "registry">): InternalRoute[] {
+export function internalRoutes({
+  registry,
+  draining = () => false,
+  onLobbyType = () => {},
+}: Pick<Deps, "registry" | "draining" | "onLobbyType">): InternalRoute[] {
   return [
     {
       method: "POST",
@@ -43,6 +73,14 @@ export function internalRoutes({ registry }: Pick<Deps, "registry">): InternalRo
       async handle(body) {
         const parsed = openRoomRequestSchema.safeParse(body);
         if (!parsed.success) return error(400, "bad-body");
+        // Outside the wire schemas like the router's 500: the web treats every non-200 as
+        // `race-server-unavailable`, and the retry reaches the next deployment (#704).
+        if (draining())
+          return {
+            status: 503,
+            body: { error: "draining" },
+            headers: { "retry-after": String(DRAIN_RETRY_AFTER_S) },
+          };
         const { lobbyId, code, hostUserId, settings } = parsed.data;
         const { created, room } = await registry.open({ lobbyId, code, hostUserId, settings });
         const res: OpenRoomResponse = {
@@ -50,6 +88,76 @@ export function internalRoutes({ registry }: Pick<Deps, "registry">): InternalRo
           roomId: room.roomId,
           phase: room.phase,
           created,
+        };
+        return { status: 200, body: res };
+      },
+    },
+    {
+      // Room status lookup (#806): read only, so it answers while draining too. Counts only: the
+      // body never carries names, user ids or settings.
+      method: "POST",
+      path: "/internal/rooms/status",
+      async handle(body) {
+        const parsed = roomStatusRequestSchema.safeParse(body);
+        if (!parsed.success) return error(400, "bad-body");
+        const lobbyIds = [...new Set(parsed.data.lobbyIds)];
+        const found = await Promise.all(
+          lobbyIds.map(async (lobbyId): Promise<RoomStatus | null> => {
+            // A corrupt room hash is not joinable: left out like a missing room, never a 500
+            // for the whole list. The log names the error class only (a parse error quotes values).
+            const room = await registry.room(lobbyId).catch((err: unknown) => {
+              const kind = err instanceof Error ? err.name : "unknown";
+              console.log(JSON.stringify({ level: "warn", msg: "room status unreadable", kind }));
+              return null;
+            });
+            if (!room) return null;
+            const bots = room.seated.filter((desk) => desk.isBot).length;
+            return {
+              lobbyId,
+              phase: room.phase,
+              typists: room.seated.length - bots,
+              bots,
+              seats: ROOM_SEATS,
+            };
+          }),
+        );
+        const res: RoomStatusResponse = {
+          v: PROTOCOL_VERSION,
+          rooms: found.filter((room) => room !== null),
+        };
+        return { status: 200, body: res };
+      },
+    },
+    {
+      // The host filed PUBLIC or PRIVATE (#815, ADR 0008): the web writes `Lobby.type` only on `ok`.
+      // Not refused while draining: it writes a live room, it opens none. The body is a result only.
+      method: "POST",
+      path: "/internal/rooms/type",
+      async handle(body) {
+        const parsed = roomTypeRequestSchema.safeParse(body);
+        if (!parsed.success) return error(400, "bad-body");
+        const { lobbyId, lobbyType } = parsed.data;
+        const typed = await registry.setLobbyType(lobbyId, lobbyType);
+        if (typed.ok && typed.changed) onLobbyType(lobbyId, typed.settings);
+        const res: RoomTypeResponse = {
+          v: PROTOCOL_VERSION,
+          result: typed.ok ? "ok" : typed.reason,
+        };
+        return { status: 200, body: res };
+      },
+    },
+    {
+      // Do these two users share a live room (#65, ADR 0022)? Read only, so it answers while
+      // draining. The body is the boolean alone: never a lobby id, a code, a name or a count.
+      method: "POST",
+      path: "/internal/rooms/shared",
+      async handle(body) {
+        const parsed = sharedRoomRequestSchema.safeParse(body);
+        if (!parsed.success) return error(400, "bad-body");
+        const [userId, otherUserId] = parsed.data.userIds;
+        const res: SharedRoomResponse = {
+          v: PROTOCOL_VERSION,
+          shared: await registry.sharedRoom(userId, otherUserId),
         };
         return { status: 200, body: res };
       },
@@ -81,8 +189,13 @@ function header(req: IncomingMessage, name: string) {
   return typeof value === "string" ? value : undefined;
 }
 
-function send(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "content-type": "application/json" });
+function send(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers?: Record<string, string>,
+) {
+  res.writeHead(status, { "content-type": "application/json", ...headers });
   res.end(JSON.stringify(body));
 }
 
@@ -99,10 +212,18 @@ export function createInternalHandler(deps: Deps, routes = internalRoutes(deps))
     const route = routes.find((r) => r.method === req.method && r.path === path);
     if (!route) return false;
 
-    const reply = ({ status, body }: { status: number; body: unknown }) => {
+    const reply = ({
+      status,
+      body,
+      headers,
+    }: {
+      status: number;
+      body: unknown;
+      headers?: Record<string, string>;
+    }) => {
       const outcome = (body as { error?: string }).error ?? "ok";
       console.log(JSON.stringify({ level: "info", msg: "internal", path, status, outcome }));
-      send(res, status, body);
+      send(res, status, body, headers);
     };
 
     const rawBody = await readBody(req);

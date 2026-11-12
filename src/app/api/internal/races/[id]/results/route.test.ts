@@ -22,7 +22,19 @@ const { SECRET, state } = vi.hoisted(() => ({
   SECRET: "internal-results-route-test-secret-0123456789",
   state: { db: null as unknown },
 }));
+const store = vi.hoisted(() => ({ seen: new Set<string>(), outage: false }));
 vi.mock("@/env", () => ({ env: { NODE_ENV: "test", RACE_TOKEN_SECRET: SECRET } }));
+vi.mock("@/server/internal-api/nonces", () => ({
+  // #716: an in-memory replay store (the Redis one is src/server/internal-api/nonces.test.ts).
+  webNonceStore: () => ({
+    claim: async (nonce: string) => {
+      if (store.outage) return "unavailable";
+      if (store.seen.has(nonce)) return "replay";
+      store.seen.add(nonce);
+      return "claimed";
+    },
+  }),
+}));
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: (_t, key) => (state.db as Record<PropertyKey, unknown>)[key] }),
 }));
@@ -56,7 +68,8 @@ describe.skipIf(!testDatabaseUrl)(
   "POST /api/internal/races/:id/results (needs TEST_DATABASE_URL, run scripts/test-db.sh)",
   () => {
     let db: ReturnType<typeof createPrismaClient>;
-    const PREFIX = "test-race-results-";
+    // Not under "test-race-": race-model.test.ts cleans that prefix up and would cascade to this lobby.
+    const PREFIX = "test-results-route-";
     const CODE = "TXT-1890";
     const raceIds: string[] = [];
     let host: { id: string };
@@ -113,6 +126,7 @@ describe.skipIf(!testDatabaseUrl)(
       bonusesSent: 0,
       bonusesReceived: 0,
       bonusLog: [],
+      overlay: null,
       flags: [],
       engineVersion: ENGINE_VERSION,
       trace: { encoding: "gzip+base64", data: gz([]), count: 0 },
@@ -120,6 +134,8 @@ describe.skipIf(!testDatabaseUrl)(
     });
 
     const traces = { 1: keysOf("bonjour"), 2: keysOf("bon", 40) };
+    /** Desk 2's final text overlay (#623 C3): stored and read back verbatim. */
+    const OVERLAY = { extra: ["quota", "ration"], removed: [0] };
     const request = (raceId: string): RaceResultsRequest => ({
       v: PROTOCOL_VERSION,
       raceId,
@@ -136,6 +152,7 @@ describe.skipIf(!testDatabaseUrl)(
           status: "typing",
           progress: 0.4,
           finishedAtMs: null,
+          overlay: OVERLAY,
           trace: { encoding: "gzip+base64", data: gz(traces[2]), count: 3 },
         }),
         result({
@@ -201,8 +218,11 @@ describe.skipIf(!testDatabaseUrl)(
         durationMs: 48_210,
         finishedAtMs: 48_210,
         bonusLog: [],
+        overlay: null,
         engineVersion: ENGINE_VERSION,
       });
+      // #623 C3: the overlay reads back equal to the payload; an untouched desk stays null.
+      expect(rows.results.map((r) => r.overlay)).toEqual([null, OVERLAY, null]);
       expect(rows.keystrokes.map((k) => [k.desk, k.userId, k.count])).toEqual([
         [1, host.id, 7],
         [2, other.id, 3],
@@ -217,6 +237,47 @@ describe.skipIf(!testDatabaseUrl)(
       expect(again.status).toBe(200);
       expect(await again.json()).toEqual(answer);
       expect(await rowsOf(raceId)).toEqual(rows);
+    });
+
+    it("#613: results arriving after the void sweep replace its VOID end with the real one", async () => {
+      // The sweep (race.void) guesses VOID for a race open past VOID_AFTER_MS; a race the race server
+      // voided never posts results (ADR 0008), so a late chunk (outbox retry) proves it really ended.
+      const raceId = await startedRace();
+      await db.race.update({
+        where: { id: raceId },
+        data: { endedAt: new Date(), endReason: "VOID" },
+      });
+      const body = request(raceId);
+      expect((await signed(body)).status).toBe(200);
+      const rows = await rowsOf(raceId);
+      expect(rows.race?.endReason).toBe("TIMER");
+      expect(rows.race?.endedAt?.getTime()).toBe(body.endedAt);
+      expect(rows.results).toHaveLength(3);
+    });
+
+    it("#716 C1: the same signed chunk twice: the second is 401 replay and changes nothing", async () => {
+      const raceId = await startedRace();
+      const rawBody = JSON.stringify(request(raceId));
+      const headers = internalHeaders({ rawBody, secret: SECRET, now: nowS() });
+      expect((await post(raceId, rawBody, headers)).status).toBe(200);
+      const rows = await rowsOf(raceId);
+      const again = await post(raceId, rawBody, headers);
+      expect(again.status).toBe(401);
+      expect(await again.json()).toEqual({ v: PROTOCOL_VERSION, error: "replay" });
+      expect(await rowsOf(raceId)).toEqual(rows);
+    });
+
+    it("#716 C3: nonce store unavailable: a bare 503 and no result row", async () => {
+      const raceId = await startedRace();
+      store.outage = true;
+      try {
+        const res = await signed(request(raceId));
+        expect(res.status).toBe(503);
+        expect(await res.text()).toBe("");
+        expect((await rowsOf(raceId)).results).toHaveLength(0);
+      } finally {
+        store.outage = false;
+      }
     });
 
     it("#195 C4: a flagged result is stored suspicious with its codes; an unflagged one is not", async () => {

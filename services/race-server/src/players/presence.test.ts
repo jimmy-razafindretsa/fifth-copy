@@ -8,11 +8,16 @@ import {
   type RaceEvent,
 } from "@fifth-copy/protocol";
 import { BACKSPACE, type PlayerStatus } from "@fifth-copy/engine";
-import { resumeKey } from "../rooms/keys";
+import { resumeKey, roomKey } from "../rooms/keys";
+import { LAST_LEAVE_GRACE_MS } from "./last-leave";
 import {
   connectError,
+  boot,
   connectRedis,
+  HOST_SUB,
+  reachGo,
   startedRace,
+  textWebApi,
   typeKeys,
   until,
   WAIT_MS,
@@ -397,5 +402,172 @@ describe("members who dropped during the race leave at its end (#658)", () => {
     // the release runs after the end: give it the same chance it had in C1
     await new Promise((r) => setTimeout(r, 100));
     expect((await b.server.registry.members(lobby))?.map((m) => m.desk)).toEqual([1, 2]);
+  });
+});
+
+describe("close() while a disconnect is still reading Redis (#886)", () => {
+  it("the queued disconnect arms no grace timer and cuts no line once close() ran", async () => {
+    const race = await startedRace(process.env.REDIS_URL, { players: 2 });
+    booted = race.booted;
+    const [host, player] = race.racers as [Racer, Racer];
+    const { registry, presence } = race.booted.server;
+    const armed = race.booted.scheduler.armed();
+    // The disconnect's room read is held until after close(): the order a shutdown can meet
+    // when a socket drops just before it (the flaky "close() leaves no timer armed").
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const read = registry.room.bind(registry);
+    const room = vi.spyOn(registry, "room").mockImplementation(async (id) => {
+      await held;
+      return read(id);
+    });
+    player.client.disconnect();
+    await until(() => room.mock.calls.length > 0, WAIT_MS, "disconnect reading the room");
+    presence.close();
+    release();
+    // The room's queue is FIFO: once this runs, the queued disconnect has finished.
+    await registry.withRoom(race.lobby, async () => {});
+    expect(race.booted.scheduler.armed()).toBe(armed);
+    expect(kinds(host.seen.events, "line-cut")).toEqual([]);
+    expect(statusOf(race.booted, race.lobby, player.desk)).toBe("typing");
+  });
+});
+
+describe("host hand-over mid-race (#137 C2)", () => {
+  it("the host's line-cut expiring passes the role to the earliest-joined human: new-host, roster, host commands", async () => {
+    const race = await startedRace(process.env.REDIS_URL, {
+      players: 3,
+      settings: { ...DEFAULT_RACE_SETTINGS, timerS: 180 },
+    });
+    booted = race.booted;
+    const b = race.booted;
+    const { lobby } = race;
+    const [host, a, guest] = race.racers as [Racer, Racer, Racer];
+    host.client.disconnect();
+    await until(() => kinds(a.seen.events, "line-cut").length === 1, WAIT_MS, "line-cut");
+    // Inside the grace the host keeps the role (a reload resumes it).
+    await advance(b, GRACE_MS - 1_000, { who: a, lobby });
+    expect(kinds(a.seen.events, "new-host")).toHaveLength(0);
+
+    await advance(b, 1_000);
+    await until(() => kinds(guest.seen.events, "new-host").length === 1, WAIT_MS, "new-host");
+    expect(kinds(a.seen.events, "new-host")).toEqual([
+      { v: PROTOCOL_VERSION, kind: "new-host", desk: a.desk },
+    ]);
+    await until(
+      () => guest.seen.roster?.find((m) => m.desk === a.desk)?.isHost === true,
+      WAIT_MS,
+      "roster with the new host",
+    );
+    expect(guest.seen.roster?.filter((m) => m.isHost).map((m) => m.desk)).toEqual([a.desk]);
+    expect(await redis.hget(roomKey(lobby), "hostUserId")).toBe(a.sub);
+  });
+
+  it("the host abandoning (Reassigned) hands the role over at once; a guest abandoning does not", async () => {
+    const race = await startedRace(process.env.REDIS_URL, { players: 3 });
+    booted = race.booted;
+    const [host, a, guest] = race.racers as [Racer, Racer, Racer];
+    guest.client.emit("abandon", { v: PROTOCOL_VERSION });
+    await until(
+      () => race.booted.server.desks.states(race.lobby).get(guest.desk)?.status === "abandoned",
+      WAIT_MS,
+      "guest abandoned",
+    );
+    expect(kinds(a.seen.events, "new-host")).toHaveLength(0);
+
+    host.client.emit("abandon", { v: PROTOCOL_VERSION });
+    await until(() => kinds(a.seen.events, "new-host").length === 1, WAIT_MS, "new-host");
+    expect(kinds(a.seen.events, "new-host")[0]).toMatchObject({ desk: a.desk });
+  });
+});
+
+// #876 C4: the watching host has no desk to cut, yet a drop during the countdown or the race keeps
+// it as a seated host is kept (#658): the role passes only after the race end and the last-leave grace.
+describe("the watching host dropped during the race is kept until its end (#876 C4)", () => {
+  /** A room on "bonjour" whose host watches; two typists; started, GO reached unless `go: false`. */
+  async function watchedRace(go: boolean) {
+    const b = (booted = await boot(process.env.REDIS_URL, { webApi: textWebApi("bonjour") }));
+    const lobby = await b.openRoom("KGB-4821", { ...DEFAULT_RACE_SETTINGS, hostWatches: true });
+    const join = async (sub: string, role: "host" | "player") => {
+      const token = await b.token({ lobby, sub, name: sub, role });
+      const client = b.connect({ v: PROTOCOL_VERSION, token });
+      const seen = watchRace(client);
+      await until(() => !!seen.welcome, WAIT_MS, `welcome ${sub}`);
+      return { client, seen, desk: seen.welcome!.you, sub };
+    };
+    const host = await join(HOST_SUB, "host");
+    expect(host.desk).toBeNull();
+    const a = await join("usr_a", "player");
+    const c = await join("usr_c", "player");
+    await until(() => a.seen.roster?.length === 2, WAIT_MS, "two typists");
+    const ack = await host.client.timeout(2_000).emitWithAck("host:start", { v: PROTOCOL_VERSION });
+    expect(ack).toMatchObject({ ok: true });
+    const t0 = b.clock.now() + 3_000;
+    if (go) await reachGo(b, lobby, t0);
+    return { b, lobby, host, a, c, t0 };
+  }
+  const newHosts = (events: RaceEvent[]) => events.filter((e) => e.kind === "new-host");
+
+  async function finishAndPromote(
+    b: Booted,
+    lobby: string,
+    a: { client: Racer["client"]; seen: Racer["seen"] },
+    c: { client: Racer["client"]; seen: Racer["seen"] },
+  ) {
+    typeKeys(a.client, "bonjour", 0);
+    typeKeys(c.client, "bonjour", 0);
+    await until(() => a.seen.ended.length === 1, WAIT_MS, "ended");
+    await new Promise((r) => setTimeout(r, 100));
+    // released at the end through the last-leave grace: nobody promoted before it runs out
+    expect(newHosts(a.seen.events)).toEqual([]);
+    expect((await b.server.registry.room(lobby))?.hostUserId).toBe(HOST_SUB);
+    b.clock.advance(LAST_LEAVE_GRACE_MS);
+    await until(() => newHosts(a.seen.events).length === 1, WAIT_MS, "new-host after the grace");
+    const room = await b.server.registry.room(lobby);
+    expect(room?.hostUserId).toBe("usr_a");
+    expect(room?.settings.hostWatches).toBe(false);
+  }
+
+  it("running: past the last-leave grace no new host; the role passes after the end and the grace", async () => {
+    const { b, lobby, host, a, c } = await watchedRace(true);
+    host.client.disconnect();
+    await until(() => b.server.presence.dropped(lobby).includes(HOST_SUB), WAIT_MS, "kept");
+    b.clock.advance(LAST_LEAVE_GRACE_MS + 1_000);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(newHosts(a.seen.events)).toEqual([]);
+    expect(kinds(a.seen.events, "line-cut")).toEqual([]);
+    expect((await b.server.registry.room(lobby))?.hostUserId).toBe(HOST_SUB);
+    await finishAndPromote(b, lobby, a, c);
+  });
+
+  it("countdown: kept through GO and the grace; the role passes after the end and the grace", async () => {
+    const { b, lobby, host, a, c, t0 } = await watchedRace(false);
+    host.client.disconnect();
+    await until(() => b.server.presence.dropped(lobby).includes(HOST_SUB), WAIT_MS, "kept");
+    await reachGo(b, lobby, t0);
+    b.clock.advance(LAST_LEAVE_GRACE_MS);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(newHosts(a.seen.events)).toEqual([]);
+    expect((await b.server.registry.room(lobby))?.hostUserId).toBe(HOST_SUB);
+    await finishAndPromote(b, lobby, a, c);
+  });
+
+  it("back before the end: the host keeps the role and watches on", async () => {
+    const { b, lobby, host, a, c } = await watchedRace(true);
+    host.client.disconnect();
+    await until(() => b.server.presence.dropped(lobby).includes(HOST_SUB), WAIT_MS, "kept");
+    const token = await b.token({ lobby, sub: HOST_SUB, name: HOST_SUB, role: "host" });
+    const back = watchRace(b.connect({ v: PROTOCOL_VERSION, token }));
+    await until(() => !!back.welcome, WAIT_MS, "welcome back");
+    expect(back.welcome?.you).toBeNull();
+    typeKeys(a.client, "bonjour", 0);
+    typeKeys(c.client, "bonjour", 0);
+    await until(() => a.seen.ended.length === 1, WAIT_MS, "ended");
+    b.clock.advance(LAST_LEAVE_GRACE_MS + 1_000);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(newHosts(a.seen.events)).toEqual([]);
+    const room = await b.server.registry.room(lobby);
+    expect(room?.hostUserId).toBe(HOST_SUB);
+    expect(room?.settings.hostWatches).toBe(true);
   });
 });

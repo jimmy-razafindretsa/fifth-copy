@@ -1,0 +1,70 @@
+# Card #718 (ADR 0019): a stale production deploy goes red. After every push to main, poll the public web
+# /api/health and race-server /health until both services run the commit main expects for them and the
+# PROTOCOL_VERSION of main (scripts/deploy-check.ts), or fail after 20 min with the last verdict.
+# No secret, no Railway token, no redeploy: the manual redeploy is in docs/ops/runbook.md "Stale deploy".
+# Not a PR-required check (.github/branch-protection.json is unchanged).
+name: deploy-check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push supersedes the wait for an older one: its run checks the newer main.
+concurrency:
+  group: deploy-check
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-check:
+    name: deploy-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Public URLs, not secrets: the owner sets them with `gh variable set`.
+      WEB_PUBLIC_URL: ${{ vars.WEB_PUBLIC_URL }}
+      RACE_SERVER_PUBLIC_URL: ${{ vars.RACE_SERVER_PUBLIC_URL }}
+      POLL_SECONDS: "30"
+      TIMEOUT_SECONDS: "1200"
+    steps:
+      - id: vars
+        name: Repository variables are set
+        run: |
+          missing=0
+          for name in WEB_PUBLIC_URL RACE_SERVER_PUBLIC_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::repository variable $name is not set (gh variable set $name --body <public URL>)"
+              missing=1
+            fi
+          done
+          exit "$missing"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24 runs the TypeScript script directly (type stripping); it imports node builtins only.
+          node-version: 24
+      - name: Wait for Railway to run main
+        run: |
+          deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
+          while :; do
+            if node scripts/deploy-check.ts --web "$WEB_PUBLIC_URL" --race "$RACE_SERVER_PUBLIC_URL" > verdict.txt 2>&1; then
+              cat verdict.txt
+              { echo "### deploy-check: OK"; echo '```'; cat verdict.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            cat verdict.txt
+            if [ "$(date +%s)" -ge "$deadline" ]; then break; fi
+            sleep "$POLL_SECONDS"
+          done
+          {
+            echo "### deploy-check: stale deploy after $(( TIMEOUT_SECONDS / 60 )) min"
+            echo '```'; cat verdict.txt; echo '```'
+            echo 'Redeploy steps: docs/ops/runbook.md, section "Stale deploy".'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while read -r line; do echo "::error::$line"; done < verdict.txt
+          exit 1

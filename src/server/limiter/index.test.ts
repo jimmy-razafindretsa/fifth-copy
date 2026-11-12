@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:net";
+import { connect, createServer, type Server, type Socket } from "node:net";
 import { Redis } from "ioredis";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { signGuestCookie } from "../auth/guest-cookie";
@@ -49,6 +49,45 @@ async function closedPort(): Promise<number> {
   return port;
 }
 
+/**
+ * A TCP proxy to the test Redis that holds every reply until `release()` (#830): a client behind
+ * it is late for certain, whatever the machine load. A `timeoutMs: 0` limiter is not: its 1 ms
+ * timer can lose to a fast local Redis, and a call that wins ends the outage (a second warning).
+ */
+async function heldRedis(): Promise<{ url: string; release(): void; close(): void }> {
+  const upstream = new URL(redisUrl!);
+  let held = true;
+  const queued: (() => void)[] = [];
+  const sockets: Socket[] = [];
+  const server = createServer((client) => {
+    const redisSide = connect(Number(upstream.port || 6379), upstream.hostname);
+    sockets.push(client, redisSide);
+    client.on("error", () => {});
+    redisSide.on("error", () => {});
+    client.pipe(redisSide);
+    redisSide.on("data", (chunk) => {
+      const write = () => void client.write(chunk);
+      if (held) queued.push(write);
+      else write();
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const proxied = new URL(redisUrl!);
+  proxied.hostname = "127.0.0.1";
+  proxied.port = String((server.address() as { port: number }).port);
+  return {
+    url: proxied.toString(),
+    release: () => {
+      held = false;
+      queued.splice(0).forEach((write) => write());
+    },
+    close: () => {
+      sockets.forEach((s) => s.destroy());
+      server.close();
+    },
+  };
+}
+
 describe("createWebLimit (C3, real Redis)", () => {
   const limits: { close(): void }[] = [];
   afterEach(() => limits.splice(0).forEach((l) => l.close()));
@@ -82,22 +121,97 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(verdicts).toEqual([...Array<boolean>(10).fill(true), false]);
   });
 
-  it("defines the lobby rules (#699), the clerk outfit rule (#687) and the rules #90, #120 and #121 will wire", () => {
+  it("password-reset-issue (#788): the 6th within an hour is refused, with retryAfterMs", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const verdicts = [];
+    for (let i = 0; i < 6; i++) verdicts.push(await limit("password-reset-issue", subject("pr")));
+    expect(verdicts.map((v) => v.ok)).toEqual([...Array<boolean>(5).fill(true), false]);
+    expect(verdicts[5]!.retryAfterMs).toBeGreaterThan(0);
+    expect(verdicts[5]!.retryAfterMs).toBeLessThanOrEqual(3_600_000);
+  });
+
+  it("password-reset-redeem (#789): 30 per client an hour, the 31st refused with retryAfterMs", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const verdicts = [];
+    for (let i = 0; i < 31; i++) verdicts.push(await limit("password-reset-redeem", subject("rr")));
+    expect(verdicts.map((v) => v.ok)).toEqual([...Array<boolean>(30).fill(true), false]);
+    expect(verdicts[30]!.retryAfterMs).toBeGreaterThan(0);
+    expect(verdicts[30]!.retryAfterMs).toBeLessThanOrEqual(3_600_000);
+  });
+
+  it("password-reset-redeem-account (#789): 5 an hour, and clear gives the subject a fresh window", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const account = subject("reset:acct");
+    const verdicts = [];
+    for (let i = 0; i < 6; i++)
+      verdicts.push(await limit("password-reset-redeem-account", account));
+    expect(verdicts.map((v) => v.ok)).toEqual([...Array<boolean>(5).fill(true), false]);
+    const other = subject("reset:other");
+    await limit("password-reset-redeem-account", other);
+    await limit.clear("password-reset-redeem-account", account);
+    expect((await limit("password-reset-redeem-account", account)).ok).toBe(true);
+    // only that action and subject are cleared
+    const key = `${WEB_LIMITER_PREFIX}:rl:password-reset-redeem-account:${subjectKey(other)}`;
+    expect(await redis.zcard(key)).toBe(1);
+  });
+
+  it("clear fails open: no URL, or Redis down, never throws", async () => {
+    const off = make({ url: undefined, nodeEnv: "test" });
+    await expect(off.clear("password-reset-redeem-account", subject("x"))).resolves.toBeUndefined();
+    const warn = vi.fn();
+    const down = make({ url: `redis://127.0.0.1:${await closedPort()}/0`, nodeEnv: "test", warn });
+    await expect(
+      down.clear("password-reset-redeem-account", subject("x")),
+    ).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("defines the lobby rules (#699), the clerk outfit rule (#687), the lobby type rule (#114), the password reset rules (#788, #789), the recovery redeem rules (#46), the quick race rule (#128), the guest creation rule (#840) and the rules #90, #120 and #121 will wire", () => {
     expect(Object.keys(LIMITS).sort()).toEqual([
+      "avatar-upload",
+      "avatar-view",
       "clerk-outfit",
+      "guest-create",
       "invite",
+      "invite-redeem",
       "join-by-code",
       "lobby-codes",
       "mint-race-token",
       "mint-race-token-new-guest",
+      "password-reset-issue",
+      "password-reset-redeem",
+      "password-reset-redeem-account",
+      "quick-race",
       "recovery",
+      "recovery-redeem",
+      "recovery-redeem-account",
+      "set-lobby-type",
       "sign-in",
+      "sign-in-account",
+      "sign-up",
     ]);
     expect(LIMITS["join-by-code"]).toEqual({ max: 120, windowMs: 60_000 });
     expect(LIMITS["mint-race-token"]).toEqual({ max: 10, windowMs: 60_000 });
     expect(LIMITS["mint-race-token-new-guest"]).toEqual({ max: 120, windowMs: 60_000 });
     expect(LIMITS["lobby-codes"]).toEqual({ max: 20, windowMs: 60_000 });
     expect(LIMITS["clerk-outfit"]).toEqual({ max: 30, windowMs: 60_000 });
+    expect(LIMITS["set-lobby-type"]).toEqual({ max: 30, windowMs: 60_000 });
+    expect(LIMITS["quick-race"]).toEqual({ max: 20, windowMs: 60_000 });
+    expect(LIMITS["guest-create"]).toEqual({ max: 120, windowMs: 60_000 });
+    // #880 C6: another typist's avatar, per viewer
+    expect(LIMITS["avatar-view"]).toEqual({ max: 240, windowMs: 60_000 });
+    expect(LIMITS.invite).toEqual({ max: 20, windowMs: 60_000 });
+    expect(LIMITS["invite-redeem"]).toEqual({ max: 20, windowMs: 60_000 });
+    expect(LIMITS["password-reset-issue"]).toEqual({ max: 5, windowMs: 3_600_000 });
+    expect(LIMITS["password-reset-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
+    expect(LIMITS["password-reset-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
+    expect(LIMITS["recovery-redeem"]).toEqual({ max: 30, windowMs: 3_600_000 });
+    expect(LIMITS["recovery-redeem-account"]).toEqual({ max: 5, windowMs: 3_600_000 });
+    // #87 C5
+    expect(LIMITS["sign-in"]).toEqual({ max: 30, windowMs: 900_000 });
+    expect(LIMITS["sign-in-account"]).toEqual({ max: 10, windowMs: 900_000 });
+    expect(LIMITS["sign-up"]).toEqual({ max: 10, windowMs: 3_600_000 });
+    expect(LIMITS["avatar-upload"]).toEqual({ max: 5, windowMs: 60_000 });
   });
 
   it("fails open on a closed port with one warning, never the URL", async () => {
@@ -123,6 +237,29 @@ describe("createWebLimit (C3, real Redis)", () => {
     expect(warn).toHaveBeenCalledWith("rate limiter unavailable, allowing", { cause: "timeout" });
   });
 
+  it("a timed-out call is allowed, warned once per outage, and still counted when Redis answers late (#741)", async () => {
+    const warn = vi.fn();
+    const held = await heldRedis();
+    limits.push(held);
+    const slow = make({ url: held.url, nodeEnv: "test", warn, timeoutMs: 20 });
+    const s = subject("late");
+    const rule = LIMITS["password-reset-issue"];
+    for (let i = 0; i < rule.max; i++) {
+      expect(await slow("password-reset-issue", s)).toEqual({ ok: true, retryAfterMs: 0 });
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith("rate limiter unavailable, allowing", { cause: "timeout" });
+    // The calls that lost the race still reach Redis: fail-open lets them through, it does not
+    // forgive them. Once they land, a limiter that waits for Redis refuses the next one.
+    held.release();
+    const key = `${WEB_LIMITER_PREFIX}:rl:password-reset-issue:${subjectKey(s)}`;
+    await vi.waitFor(async () => expect(await redis.zcard(key)).toBe(rule.max));
+    const patient = make({ url: redisUrl, nodeEnv: "test", warn: vi.fn(), timeoutMs: 10_000 });
+    const verdict = await patient("password-reset-issue", s);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.retryAfterMs).toBeGreaterThan(0);
+  });
+
   it("without a URL: every call allowed, one warning in production, none elsewhere", async () => {
     const warnProd = vi.fn();
     const prod = make({ url: undefined, nodeEnv: "production", warn: warnProd });
@@ -146,6 +283,13 @@ describe("requestSubject", () => {
     state.cookie = signGuestCookie("usr_abc", "a".repeat(32));
     state.headers = new Headers({ "x-forwarded-for": "203.0.113.9" });
     expect(await (await load())()).toBe("guest:usr_abc");
+  });
+
+  it("requestIpSubject ignores a valid guest cookie (#87: a fresh guest never resets an IP budget)", async () => {
+    state.cookie = signGuestCookie("usr_abc", "a".repeat(32));
+    state.headers = new Headers({ "x-forwarded-for": "1.2.3.4, 203.0.113.9" });
+    const { requestIpSubject } = await import("./subject");
+    expect(await requestIpSubject()).toBe("ip:203.0.113.9");
   });
 
   it("is the last X-Forwarded-For hop otherwise (the proxy's; earlier hops are client-supplied)", async () => {
@@ -245,6 +389,30 @@ describe("createWebLimit.code: room-code attempts (#699, real Redis)", () => {
     expect((await limit.code("join-by-code", s, otherCode(3))).ok).toBe(true);
     // Another subject is unaffected.
     expect((await limit.code("join-by-code", subject("cycle-2"), otherCode(20))).ok).toBe(true);
+  });
+
+  it("100 concurrent first calls of one (subject, code) all pass and charge the budget once (#701 C1)", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const s = subject("burst");
+    const verdicts = await Promise.all(
+      Array.from({ length: 100 }, () => limit.code("join-by-code", s, "KGB-4821")),
+    );
+    expect(verdicts.filter((v) => v.ok)).toHaveLength(100);
+    expect(await codeBudget(s)).toBe(1);
+  });
+
+  it("concurrent distinct codes admit exactly 20; a refused code stays refused (#701 C2)", async () => {
+    const limit = make({ url: redisUrl, nodeEnv: "test" });
+    const s = subject("burst-cycle");
+    const codes = Array.from({ length: 25 }, (_, i) => otherCode(i));
+    const verdicts = await Promise.all(codes.map((c) => limit.code("join-by-code", s, c)));
+    expect(verdicts.filter((v) => v.ok)).toHaveLength(20);
+    expect(await codeBudget(s)).toBe(20);
+    const refused = codes.filter((_, i) => !verdicts[i]!.ok);
+    const admitted = codes.filter((_, i) => verdicts[i]!.ok);
+    for (const c of refused) expect((await limit.code("join-by-code", s, c)).ok).toBe(false);
+    for (const c of admitted) expect((await limit.code("join-by-code", s, c)).ok).toBe(true);
+    expect(await codeBudget(s)).toBe(20);
   });
 
   it("an unparsable code (null) counts against the code budget on every call", async () => {

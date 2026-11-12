@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { keyOf, RaceInput, TYPING_SURFACE } from "./race-input";
+import { isPlayKey, keyOf, RaceInput, TYPING_SURFACE } from "./race-input";
 
 // #559 C4, the markup and the key filter (the focus, the lock and the clipboard live in a browser:
 // e2e/race/input.spec.ts).
@@ -103,5 +103,35 @@ describe("RaceInput live attributes (#220 C6)", () => {
     for (const attr of ["data-mode", "data-backspace", "data-errors"]) {
       expect(out, attr).not.toContain(attr);
     }
+  });
+});
+
+// #236 C1: a bare Enter plays the Sabotage card and types nothing; Space and printable keys stay keys,
+// and a modified or composing Enter does nothing (the handler itself runs in e2e/race/bonus.spec.ts).
+describe("RaceInput play key (#236 C1)", () => {
+  const press = (
+    key: string,
+    mods: Partial<
+      Record<"ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing", boolean>
+    > = {},
+  ) => ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+
+  it("a bare Enter is the play key and never a keystroke", () => {
+    expect(isPlayKey(press("Enter"))).toBe(true);
+    expect(keyOf(press("Enter"))).toBeNull();
+  });
+
+  it("a modified or composing Enter is not", () => {
+    for (const mod of ["ctrlKey", "metaKey", "altKey", "shiftKey", "isComposing"] as const) {
+      expect(isPlayKey(press("Enter", { [mod]: true })), mod).toBe(false);
+    }
+  });
+
+  it("Space, letters, Backspace and Tab are never the play key; the typed ones stay keystrokes", () => {
+    for (const key of [" ", "a", "É", "Backspace", "Tab", "NumpadEnter"]) {
+      expect(isPlayKey(press(key)), key).toBe(false);
+    }
+    expect(keyOf(press(" "))).toBe(" ");
+    expect(keyOf(press("a"))).toBe("a");
   });
 });

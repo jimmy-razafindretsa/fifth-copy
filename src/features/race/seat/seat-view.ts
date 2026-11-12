@@ -4,10 +4,12 @@ import type { TelexLabels } from "../components/telex-strip";
 import type { FinishLabels } from "../view/standings";
 import type {
   AbandonLabels,
+  ExitLabels,
   NixieLabels,
   RaceCardLabels,
   RaceNoticeLabels,
   SabotageTrayLabels,
+  SoundLabels,
 } from "../view/hud-labels";
 
 /**
@@ -23,14 +25,20 @@ export type RaceSeatLabels = {
   countdown: CountdownLabels;
   /** The overtake stamps (#232) and your finish stamp (#240): `ACCEPTED · 48 WPM`, `RETURNED · 2 ERRORS`. */
   stamps: StampRowLabels;
-  /** The race announcer (#232 C4): `{desk}` is the other desk as paperwork (`07`). */
+  /** The race announcer (#232 C4, #242): countdown, place, overtakes, your finish, the race over. */
   announce: SeatAnnounceLabels;
   /** The connecting skeleton's name. */
   loading: string;
   /** The live notices, plus the phones-only notice (bible 7.4 notice row). */
   notice: RaceNoticeLabels & { phones: string };
   errors: SeatErrorLabels;
+  /** The room-lost notice (#235 C4): its statement and the link back to the lobby. */
+  presence: SeatPresenceLabels;
   abandon: AbandonLabels;
+  /** The sound toggle (#243): muted by default, filed per viewer. */
+  sound: SoundLabels;
+  /** The exit dockets (#233): Reassigned after ABANDON, Asleep at desk after the idle kick. */
+  exit: ExitLabels;
   /** The nixie counters (#225): the tube tags and the words their `aria-label` reads. */
   counters: NixieLabels;
   raceCard: RaceCardLabels;
@@ -39,8 +47,18 @@ export type RaceSeatLabels = {
   finish: FinishLabels;
 };
 
-/** The polite status region's race lines (#232 C4; #242 adds the rest). */
-export type SeatAnnounceLabels = { overtake: string; passed: string };
+/**
+ * The race announcer's lines (#232 C4, #242; bible 14.3): `{desk}` is the other desk as paperwork,
+ * `{place}` / `{total}` your place and the desks in the race; `overUnranked` when you hold no place.
+ */
+export type SeatAnnounceLabels = {
+  overtake: string;
+  passed: string;
+  place: string;
+  finished: string;
+  over: string;
+  overUnranked: string;
+};
 
 /** The lost line (bible 7.4 inline error line): the prefix, one sentence per reason, the way back. */
 export type SeatErrorLabels = {
@@ -49,9 +67,18 @@ export type SeatErrorLabels = {
   noRoom: string;
   inProgress: string;
   notFound: string;
+  /** A spectator past the room's cap (#616, #678). */
+  roomFull: string;
   generic: string;
   /** The link back to `/lobby/[code]`. */
   back: string;
+};
+
+/** The room-lost notice (#235 C4, bible 7.4 notice row): `THE ROOM WAS LOST · BACK TO THE LOBBY`. */
+export type SeatPresenceLabels = {
+  roomLost: string;
+  /** The link to `/lobby/[code]`. */
+  backToLobby: string;
 };
 
 /** Phones watch from the back of the room (spectator mode is #292): the seat view shows only a notice. */

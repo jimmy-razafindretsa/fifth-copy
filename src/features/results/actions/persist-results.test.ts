@@ -16,6 +16,8 @@ import {
   type RaceResultsRequest,
 } from "@fifth-copy/protocol";
 
+import { Prisma } from "@/generated/prisma/client";
+
 vi.mock("@/server/db", () => ({ db: {} }));
 const { decodeTrace, MAX_KEYSTROKE_JSON_BYTES, maxStoredTraceKeys, persistRaceResults } =
   await import("./persist-results");
@@ -117,6 +119,7 @@ describe("persistRaceResults status mapping (#183 C4)", () => {
         bonusesSent: 0,
         bonusesReceived: 0,
         bonusLog: [],
+        overlay: null,
         flags: [],
         engineVersion: ENGINE_VERSION,
         trace: trace([], 0),
@@ -176,6 +179,7 @@ describe("persistRaceResults flags mapping (#195 C4)", () => {
         bonusesSent: 0,
         bonusesReceived: 0,
         bonusLog: [],
+        overlay: null,
         flags,
         engineVersion: ENGINE_VERSION,
         trace: trace([], 0),
@@ -259,6 +263,7 @@ describe("persistRaceResults trace bound with bonus overlays (#190)", () => {
         bonusesSent: 0,
         bonusesReceived: 1,
         bonusLog: [{ t: 100, kind: "extra-paperwork", from: 2, to: 1 }],
+        overlay: { extra: ["quota"], removed: [] },
         flags: [],
         engineVersion: ENGINE_VERSION,
         trace: t,
@@ -286,5 +291,68 @@ describe("persistRaceResults trace bound with bonus overlays (#190)", () => {
     const outcome = await persistRaceResults(request(trace([], bound + 1)), { db: db as never });
     expect(outcome).toEqual({ ok: false, error: "bad-body" });
     expect(stored).toHaveLength(0);
+  });
+});
+
+// #623 C3: the desk's final overlay is stored next to its result: verbatim when sent, SQL NULL
+// (`Prisma.DbNull`, read back as `null`) for a desk never hit by a text-changing bonus.
+describe("persistRaceResults overlay (#623 C3)", () => {
+  it("writes the overlay verbatim, and DbNull for a null overlay", async () => {
+    const created: { desk: number; overlay: unknown }[] = [];
+    const tx = {
+      race: { updateMany: async () => ({ count: 1 }) },
+      raceResult: {
+        upsert: async ({ create }: { create: (typeof created)[number] }) =>
+          void created.push(create),
+      },
+      raceKeystrokes: { upsert: async () => undefined },
+    };
+    const db = {
+      race: { findUnique: async () => ({ textContent: "bonjour" }) },
+      user: { findMany: async () => [{ id: "usr_1" }, { id: "usr_2" }, { id: "usr_3" }] },
+      $transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx),
+    };
+    const result = (desk: number, overlay: InternalRaceResult["overlay"]): InternalRaceResult => ({
+      desk,
+      userId: `usr_${desk}`,
+      name: `Clerk ${desk}`,
+      isBot: false,
+      place: desk,
+      status: "finished",
+      wpm: 10,
+      rawWpm: 10,
+      cleanWpm: 10,
+      adjustedWpm: 10,
+      accuracy: 1,
+      progress: 1,
+      correct: 7,
+      errors: 0,
+      total: 7,
+      durationMs: 1_000,
+      finishedAtMs: 1_000,
+      bonusesSent: 0,
+      bonusesReceived: 1,
+      bonusLog: [],
+      overlay,
+      flags: [],
+      engineVersion: ENGINE_VERSION,
+      trace: trace([], 0),
+    });
+    const overlaid = { extra: ["quota", "ration"], removed: [0] };
+    const empty = { extra: [], removed: [] };
+    const request: RaceResultsRequest = {
+      v: PROTOCOL_VERSION,
+      raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+      endedAt: 1_767_225_660_000,
+      reason: "all-finished",
+      lobbySize: 3,
+      results: [result(1, overlaid), result(2, null), result(3, empty)],
+    };
+    expect((await persistRaceResults(request, { db: db as never })).ok).toBe(true);
+    expect(created.map(({ desk, overlay }) => ({ desk, overlay }))).toEqual([
+      { desk: 1, overlay: overlaid },
+      { desk: 2, overlay: Prisma.DbNull },
+      { desk: 3, overlay: empty },
+    ]);
   });
 });

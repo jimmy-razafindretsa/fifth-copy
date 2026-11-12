@@ -2,7 +2,10 @@
  * The Dawn report page (#300, bible 14.4): paper ground, fluid gutters (7.10), the kicker pattern and the
  * lobby H1 scale (4), the podium, then the ranking docket and the personal card side by side from 1024px
  * (#301, #302). The filing state is the 7.4 one-row notice (lkPulse, 8) and, late, the 7.4 inline error
- * line with a 7.1 secondary link. Colours are roles, faces the type roles (#531).
+ * line with a 7.1 secondary link. Under the ranking, the action row (#143): the 7.1 primary stamp
+ * RACE AGAIN and the 7.1 secondary way home, 44px, full width on phones; a guest member's prompt
+ * to open a file is one 7.4 docket row under them (#863). Colours are roles, faces the
+ * type roles (#531).
  */
 
 @reference "../../../app/globals.css";
@@ -53,8 +56,9 @@
   gap: 24px;
 }
 
+/* the second track only when the personal card is there: a spectator's ranking takes the full width */
 @media (min-width: 1024px) {
-  .slots {
+  .slots:has(> [data-slot="personal"]) {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
     align-items: start;
   }
@@ -120,6 +124,88 @@
 
 .secondary:hover {
   background: var(--color-surface);
+}
+
+/* the action row under the ranking (#143, #863, bible 14.4): the links, then a guest's prompt */
+.actionRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+/* RACE AGAIN then the way home, left-aligned; full width on phones */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* the guest's prompt (#863): one 7.4 docket row, newsprint under a 2px ink rule, one Courier sentence */
+.prompt {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  max-width: 640px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+@media (max-width: 639px) {
+  .actionRow,
+  .actions,
+  .prompt {
+    align-self: stretch;
+  }
+
+  .actions > *,
+  .prompt > a {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* bible 7.1 primary stamp button as a link (recipe of the lobby's QUICK RACE stamp); active = pressed */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-display-md;
+  font-size: clamp(30px, 3.4vw, 44px);
+  letter-spacing: 0.08em;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 3px solid var(--color-fg);
+  padding: 20px 36px;
+  box-shadow: 6px 6px 0 var(--color-fg);
+  text-decoration: none;
+  text-wrap: nowrap;
+}
+
+.stamp:hover {
+  background: var(--color-primary-hover);
+}
+
+.stamp:active {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0 var(--color-fg);
+}
+
+/* phones: the stamp fills the row and may balance onto two lines (ENCORE UNE FOIS at 375px) */
+@media (max-width: 639px) {
+  .stamp {
+    padding: 16px 20px;
+    text-wrap: balance;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

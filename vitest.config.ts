@@ -1,5 +1,6 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
+import { unitRedisEnv } from "./scripts/lib/redis-env";
 
 const INCLUDE = [
   "src/**/*.test.{ts,tsx}",
@@ -21,6 +22,8 @@ const SLOW_FILES = [
   "scripts/deploy-smoke.test.ts",
   "scripts/merged-migrations.test.ts",
   "scripts/see.test.ts",
+  // Boots the worker with tsx against the test database (#733 C3).
+  "src/worker/main.test.ts",
   "services/race-server/src/rooms/lifecycle.test.ts",
   "services/race-server/src/players/presence.test.ts",
   "services/race-server/src/rooms/snapshot.bench.test.ts",
@@ -39,6 +42,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // A card worktree's unit run gets its own Redis db (REDIS_URL_TEST), not the e2e race server's (#680).
+    env: unitRedisEnv(process.env),
+    // next-auth imports `next/server` without the extension Node ESM needs; Vite resolves it when inlined (#786).
+    server: { deps: { inline: ["next-auth"] } },
     projects: [
       {
         extends: true,

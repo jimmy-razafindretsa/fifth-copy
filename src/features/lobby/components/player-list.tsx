@@ -8,9 +8,10 @@ type Slot = (member: Member) => ReactNode;
 
 /**
  * The roll of the waiting room: one bible 7.4 docket row per member (`DESK 05 | name`), with the
- * crooked `HOST` stamp (7.3, the `Stamp` primitive) and the ink `YOU` tag. Slots: `leading` (avatar, card 490) before the name,
- * `tags` (BOT docket card 490, stamps card 139) after the badges. Scrolls inside its docket, so it is a
- * focusable, named region for keyboard users.
+ * crooked `HOST` stamp (7.3, the `Stamp` primitive), the ink `YOU` tag and, on a bot's row, the ink `BOT`
+ * tag (#105; a bot never hosts and is never you). Slots: `leading` (avatar, #730) before the name, `tags`
+ * (stamps, card 139) after the badges. Scrolls inside its docket, so it is a focusable, named region for
+ * keyboard users.
  */
 export function PlayerList({
   members,
@@ -33,11 +34,16 @@ export function PlayerList({
           <span className={styles.label}>{deskLabel(labels, member.desk)}</span>
           <span className={styles.who}>
             {leading?.(member)}
-            <span className={styles.name}>{member.name}</span>
-            {member.isHost ? (
+            <span className={styles.name} data-name>
+              {member.name}
+            </span>
+            {member.isHost && !member.isBot ? (
               <Stamp lines={[labels.host]} tone="red" size="sm" rotation={-6} role={null} />
             ) : null}
-            {member.desk === you ? <span className={styles.tag}>{labels.you}</span> : null}
+            {member.desk === you && !member.isBot ? (
+              <span className={styles.tag}>{labels.you}</span>
+            ) : null}
+            {member.isBot ? <span className={styles.tag}>{labels.bot}</span> : null}
             {tags?.(member)}
           </span>
         </li>

@@ -5,6 +5,7 @@ import {
   estimateOf,
   evaluateGate,
   latestPickup,
+  mainCiStatus,
   pickupComment,
   promotionBlockers,
   isTrusted,
@@ -12,6 +13,7 @@ import {
   type Comment,
   type GateFacts,
 } from "./flow";
+import { bundledInComment, bundlePickupComment, evaluateBundleGate } from "./bundle";
 
 const body = (boxes = "[ ]", est = "estimate 2 because x") =>
   `## Outcome\nX\n\n## Contract\n- ${boxes} C1 shows a list | verify: \`e2e/list.spec.ts\`\n\n## Size rationale\n${est}\n`;
@@ -31,6 +33,8 @@ const at = (body: string, t = "2026-10-04T11:00:00Z", author: string | null = OW
 /** The same comment written by someone outside BOARD_TRUSTED_AUTHORS. */
 const forged = (body: string, t = "2026-10-04T11:00:00Z") => at(body, t, "stranger");
 
+/** The Status each gate expects the card to be in (PROTOCOL 5: In Progress -> In Review -> QA -> Done). */
+const FROM = { "In Review": "In Progress", QA: "In Review", Done: "QA" } as const;
 const facts = (over: Partial<GateFacts>): GateFacts => ({
   n: 12,
   target: "In Review",
@@ -39,6 +43,7 @@ const facts = (over: Partial<GateFacts>): GateFacts => ({
   comments: [pickup],
   pr: { number: 3, state: "OPEN" },
   mainCi: null,
+  status: FROM[over.target ?? "In Review"],
   trusted,
   ...over,
 });
@@ -153,7 +158,7 @@ describe("evaluateGate", () => {
 
   it("Done needs a merged PR and green CI on main", () => {
     const merged = { number: 3, state: "MERGED" as const };
-    const base = { target: "Done" as const, body: body("[x]"), pr: merged };
+    const base = { target: "Done" as const, status: "QA", body: body("[x]"), pr: merged };
     expect(evaluateGate(facts({ ...base, mainCi: "success" }))).toEqual([]);
     expect(evaluateGate(facts({ ...base, mainCi: "pending" }))).toContain(
       "CI on main for the merge commit: pending",
@@ -161,6 +166,97 @@ describe("evaluateGate", () => {
     expect(
       evaluateGate(facts({ ...base, pr: { number: 3, state: "OPEN" }, mainCi: "success" })),
     ).toContain("PR not merged");
+  });
+});
+
+describe("gate order: Done after QA, QA on a merged PR (#759)", () => {
+  const merged = { number: 3, state: "MERGED" as const };
+  const pass = at("HANDOFF deliver 2026-10-04\nverdict: pass\nblockers: 0");
+
+  it("C1 Done fails unless the card's Status is QA", () => {
+    const done = {
+      target: "Done" as const,
+      body: body("[x]"),
+      pr: merged,
+      mainCi: "success" as const,
+    };
+    for (const status of ["In Review", "In Progress", "Ready", null]) {
+      expect(evaluateGate(facts({ ...done, status }))).toContain(
+        `card is in ${status ?? "an unknown status"}, not QA (run gate QA first)`,
+      );
+    }
+    expect(evaluateGate(facts({ ...done, status: "QA" }))).toEqual([]);
+  });
+
+  it("C2 QA passes for a merged PR with a trusted Deliver pass after the newest PICKUP", () => {
+    const repick = { ...pickup, createdAt: "2026-11-03T00:54:46Z" };
+    const deliver = at("HANDOFF deliver 2026-11-03\nverdict: pass", "2026-11-03T01:01:00Z");
+    const qa = { target: "QA" as const, body: body("[x]"), pr: merged, status: "In Review" };
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, pass, repick, deliver] }))).toEqual([]);
+    // A pass older than the newest PICKUP does not count, nor does a forged one, nor unticked boxes.
+    expect(evaluateGate(facts({ ...qa, comments: [pickup, pass, repick] }))).toContain(
+      "no Deliver HANDOFF with verdict: pass after PICKUP",
+    );
+    const fake = forged("HANDOFF deliver x\nverdict: pass", "2026-11-03T01:01:00Z");
+    expect(evaluateGate(facts({ ...qa, comments: [repick, fake] }))).toContain(
+      "no Deliver HANDOFF with verdict: pass after PICKUP",
+    );
+    expect(evaluateGate(facts({ ...qa, body: body(), comments: [repick, deliver] }))).toContain(
+      "contract not ticked by Deliver: C1",
+    );
+  });
+
+  it("C1 QA requires In Review: any other status fails, named", () => {
+    const qa = { target: "QA" as const, body: body("[x]"), pr: merged, comments: [pickup, pass] };
+    for (const status of ["In Progress", "Ready", "QA", null]) {
+      expect(evaluateGate(facts({ ...qa, status }))).toContain(
+        `card is in ${status ?? "an unknown status"}, not In Review (run gate "In Review" first)`,
+      );
+    }
+    expect(evaluateGate(facts({ ...qa, status: "In Review" }))).toEqual([]);
+  });
+
+  it("C1 QA requires In Review for every card of a bundle, checked per card", () => {
+    const b = body("[x]");
+    const h = contractHash(b)!;
+    const lead: GateFacts = facts({
+      n: 10,
+      target: "QA",
+      body: b,
+      pr: { number: 7, state: "OPEN", cards: [10, 11] },
+      comments: [
+        at(bundlePickupComment(10, h, "10-x", [10, 11]), "2026-11-03T10:00:00Z"),
+        at("HANDOFF deliver 2026-11-03\nverdict: pass", "2026-11-03T12:00:00Z"),
+      ],
+    });
+    const member: GateFacts = {
+      ...lead,
+      n: 11,
+      comments: [at(bundledInComment(10, 11, h, "10-x"), "2026-11-03T10:00:01Z"), ...lead.comments],
+    };
+    expect(evaluateBundleGate([lead, member])).toEqual([]);
+    expect(evaluateBundleGate([lead, { ...member, status: "In Progress" }])).toEqual([
+      '#11: card is in In Progress, not In Review (run gate "In Review" first)',
+    ]);
+  });
+
+  it("QA still refuses a PR closed without merge, or no PR", () => {
+    const qa = { target: "QA" as const, body: body("[x]"), comments: [pickup, pass] };
+    expect(evaluateGate(facts({ ...qa, pr: { number: 3, state: "CLOSED" } }))).toContain(
+      "PR is neither open nor merged",
+    );
+    expect(evaluateGate(facts({ ...qa, pr: null }))).toContain("PR is neither open nor merged");
+  });
+
+  it("a verdict after a blank line stays outside the header and the failure says so (#651)", () => {
+    const spaced = at("HANDOFF deliver 2026-11-03\n\nverdict: pass\nblockers: 0");
+    const r = evaluateGate(
+      facts({ target: "QA", body: body("[x]"), pr: merged, comments: [pickup, spaced] }),
+    );
+    expect(r).toContain("no Deliver HANDOFF with verdict: pass after PICKUP");
+    expect(r).toContain(
+      "a HANDOFF deliver after PICKUP has no verdict: in its header block (blank line or fence before it? PROTOCOL 9)",
+    );
   });
 });
 
@@ -348,5 +444,29 @@ describe("estimateOf / cardTier", () => {
     expect(cardTier(["type:feature"], 3)).toBe("full");
     expect(cardTier(["type:chore", "touches:prisma"], 1)).toBe("full");
     expect(cardTier(["pentest"], 1)).toBe("full");
+  });
+});
+
+describe("mainCiStatus: the Done gate's CI on the merge commit (#914 C3)", () => {
+  const run = (workflowName: string, conclusion: string | null, status = "completed") => ({
+    workflowName,
+    conclusion,
+    status,
+    event: "push",
+  });
+
+  it("a deploy-check run cancelled by a newer push is ignored", () => {
+    expect(mainCiStatus([run("CI", "success"), run("deploy-check", "cancelled")])).toBe("success");
+  });
+
+  it("a cancelled or failed run of any other workflow still fails", () => {
+    expect(mainCiStatus([run("CI", "cancelled"), run("deploy-check", "success")])).toBe("failure");
+    expect(mainCiStatus([run("CI", "success"), run("deploy-check", "failure")])).toBe("failure");
+  });
+
+  it("pending while a run is open; missing with no push run", () => {
+    expect(mainCiStatus([run("CI", null, "in_progress")])).toBe("pending");
+    expect(mainCiStatus([{ ...run("CI", "success"), event: "workflow_dispatch" }])).toBe("missing");
+    expect(mainCiStatus([run("deploy-check", "cancelled")])).toBe("missing");
   });
 });

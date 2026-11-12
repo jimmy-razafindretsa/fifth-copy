@@ -43,7 +43,7 @@ tool in class, the school decides whether the tool is part of its teaching and i
 |---|---|---|---|---|
 | Guest (default) | Nothing | A generated typist name, races, typing stats, under a cookie id ([inventory](inventory.md)) | Anyone | Under the school's mandate in class; outside class see [Residual risk](#residual-risk) |
 | Username account | A username and a password, no email, no real name | Same as guest, plus the username, a password hash and a recovery code hash | Anyone; the conduct rules ask students not to use their full real name | Same as guest. The account is the student's choice, never required by a teacher |
-| GitHub or Discord sign-in (OAuth) | Signs in with an account they already have | Provider name, provider account id and login, optionally the provider's picture | Students 13 or older: GitHub and Discord both require users to be at least 13 under their own terms | The sign-in buttons carry an under-13 notice (#49): students under 13 use a guest or username account. Fifth Copy does not check ages |
+| GitHub, Discord or Google sign-in (OAuth) | Signs in with an account they already have | Provider name, provider account id and login (Google: first name), optionally the provider's picture | Students 13 or older: GitHub, Discord and Google all require users to be at least 13 under their own terms (Google: without a parent-managed account) | The sign-in buttons carry an under-13 notice (#49): students under 13 use a guest or username account. Fifth Copy does not check ages |
 
 No account type collects an email address, a phone number, a birth date, a school name or a real name.
 
@@ -64,7 +64,8 @@ No account type collects an email address, a phone number, a birth date, a schoo
 
 Fifth Copy is also open outside class: a student can play a public Quick race at home. No school mandate covers that
 use, and the app collects no consent. The project accepts this risk because the app collects so little (guest by
-default, generated names, no contact details, avatars only in lobbies) and because inactive guests are deleted after
+default, generated names, no contact details, avatars seen only by their owner, live room mates and race mates for
+24 h after the race ends (ADR 0022), each viewer keeping its copy in its own browser cache (ADR 0014)) and because inactive guests are deleted after
 the period in [retention.md](retention.md). The [PIA](pia.md) records it as a residual risk. If a qualified review says
 this is not enough, the fix is a new card, not a change to this file alone.
 

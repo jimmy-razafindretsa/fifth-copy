@@ -108,17 +108,27 @@ const initMessage = new Promise(go => {
 });
 send({ type: 'fc-scene-hello' });
 
-// Bible 12 Benchmark (#695): `auto` measures the device, not the room. The probe is its own tiny WebGL2 program
-// (no three.js: a weak device never loads it): PROBE_QUADS full-buffer quads blended in the clear colour (the
-// player sees a flat ground behind the loading card, never a test pattern), drawn into the LOW drawing buffer on
-// the visible canvas, so its reading follows the viewport as the room's cost does. Its first frame (compile) is
-// dropped; then it draws back to back and measures on the wall clock, frame to frame (each frame's commit
-// counts): a first window of PROBE_WINDOW s decides a weak device at once, a passing one is measured to
-// PROBE_SPAN s in all (ADR 0013: at most 2 s). Below PROBE_MIN_FPS: `benchmark-low`, the loop stops and the room
-// is never built; otherwise LOW / MEDIUM / HIGH by PROBE_MEDIUM_FPS / PROBE_HIGH_FPS, and a browser cap (flat
-// 27-33 fps, low CPU ms; bible 12) settles MEDIUM. Calibrated against the room per preset (table: bible 12).
-const PROBE_MIN_FPS = 13, PROBE_MEDIUM_FPS = 53, PROBE_HIGH_FPS = 57;
-const PROBE_QUADS = 128, PROBE_WINDOW = 0.5, PROBE_SPAN = 1.5;
+// Bible 12 Benchmark (#695, #912): `auto` measures the device, not the room. The probe is its own tiny WebGL2
+// program (no three.js: a weak device never loads it): PROBE_QUADS quads blended in the clear colour (the player
+// sees a flat ground behind the loading card, never a test pattern), drawn into the LOW drawing buffer on the
+// visible canvas, the quads bounded to PROBE_MAX_PIXELS of it (same aspect; the clear still covers the whole
+// canvas), so its fill load follows the viewport up to 1280×800 and no further (#912). Its first frame
+// (compile) is dropped; then it draws back to back and measures on the wall clock, frame to frame (each
+// frame's commit counts). The reading is the median frame interval (`probeFps`), so one stall of the main
+// thread the race page shares (ADR 0017) is one long interval among short ones and moves nothing (#912): a
+// first window of PROBE_WINDOW s decides a weak device at once, from at least 2 intervals (`probeDone`), a
+// passing one is measured to PROBE_SPAN s in all (ADR 0013: at most 2 s). Below PROBE_MIN_FPS (a hopeless
+// device: the room would starve input): `benchmark-low`, the loop stops and the room is never built;
+// otherwise LOW / MEDIUM / HIGH by PROBE_MEDIUM_FPS / PROBE_HIGH_FPS, and a browser cap (flat 27-33 fps, low
+// CPU ms; bible 12) settles MEDIUM. Above the floor the running scene's frame budget is the judge (bible 12).
+const PROBE_MIN_FPS = 5, PROBE_MEDIUM_FPS = 53, PROBE_HIGH_FPS = 57;
+const PROBE_QUADS = 128, PROBE_WINDOW = 0.5, PROBE_SPAN = 1.5, PROBE_MAX_PIXELS = 1024000;
+// the reading: frames per second at the median frame interval (ms; the lower middle of an even count)
+const probeFps = ms => { const o = [...ms].sort((a, b) => a - b); return 1000 / o[(o.length - 1) >> 1]; };
+// the verdict is due: a weak reading from at least 2 intervals after the first window, or the whole span
+const probeDone = (ms, s) => (s >= PROBE_WINDOW && ms.length >= 2 && probeFps(ms) < PROBE_MIN_FPS) || s >= PROBE_SPAN;
+// the quads' viewport: the drawing buffer scaled down to at most PROBE_MAX_PIXELS, same aspect
+const probeViewport = (w, h) => { const k = Math.min(1, Math.sqrt(PROBE_MAX_PIXELS / (w * h))); return [Math.max(1, Math.floor(w * k)), Math.max(1, Math.floor(h * k))]; };
 function probe() {
   const gl = GL, prog = gl.createProgram(), shaders = [];
   for (const [type, src] of [
@@ -134,29 +144,33 @@ function probe() {
     gl.useProgram(prog); gl.bindVertexArray(vao); gl.uniform4f(gl.getUniformLocation(prog, 'c'), ...CLEAR_RGB, 0.5);
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.viewport(0, 0, CANVAS.width, CANVAS.height); gl.clearColor(...CLEAR_RGB, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0, 0, ...probeViewport(CANVAS.width, CANVAS.height));
     for (let k = 0; k < PROBE_QUADS; k++) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
   // hand the context back in its default state (three.js's renderer may take it over)
   const release = () => {
     gl.disable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ZERO); gl.clearColor(0, 0, 0, 0); gl.useProgram(null);
+    gl.viewport(0, 0, CANVAS.width, CANVAS.height);
     gl.bindVertexArray(null); gl.bindBuffer(gl.ARRAY_BUFFER, null);
     gl.deleteVertexArray(vao); gl.deleteBuffer(buf); shaders.forEach(sh => gl.deleteShader(sh)); gl.deleteProgram(prog);
   };
   return new Promise(done => {
-    let skip = true, start = -1, frames = 0, cpu = 0;
+    let skip = true, start = -1, last = -1, cpu = 0;
+    const ms = []; // frame-to-frame intervals
     const end = fps => { release(); done(fps); };
     const frame = now => {
       if (LOST) return done(0);
       if (!skip) {
         if (start < 0) start = now;
         else {
-          frames++;
-          const s = (now - start) / 1000, fps = frames / s;
-          if ((s >= PROBE_WINDOW && fps < PROBE_MIN_FPS) || s >= PROBE_SPAN) {
-            CAPPED = fps >= 27 && fps <= 33 && cpu / frames < 12;
+          ms.push(now - last);
+          if (probeDone(ms, (now - start) / 1000)) {
+            const fps = probeFps(ms);
+            CAPPED = fps >= 27 && fps <= 33 && cpu / ms.length < 12;
             return end(fps);
           }
         }
+        last = now;
       }
       skip = false;
       const c0 = performance.now(); draw(); if (start >= 0) cpu += performance.now() - c0;

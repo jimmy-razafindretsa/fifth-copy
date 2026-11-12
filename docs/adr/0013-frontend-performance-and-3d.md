@@ -24,6 +24,7 @@ rule: WebGL code is confined to src/features/race-3d (client-only, next/dynamic 
 ## Consequences
 - A UI card can touch the HUD without loading WebGL; a 3D card can be verified with the bot room and the perf spec, no humans needed.
 - Two client-heavy features: both are `"use client"` leaves under a server-rendered race route.
+- 2026-11-12, #926 (proposed in the card's PR; Deliver accepts): HUD first and the paper fallback stand; the race now waits for the scene, within a bound. A started room loads (ADR 0006 amendment #926): the loading card shows on every seat page with a READY count until the room counts down, and a seat reports ready once its scene is settled (first frame, or paper). A typist whose scene is not up when the room counts down (the 30 s load limit) races on paper for that race; the 2 s probe and the frame budget are unchanged. The rest of this ADR is unchanged.
 
 ## Alternatives considered
 - **react-three-fiber:** declarative and nice, but adds a reconciler on the hot path and a dependency; imperative three.js with one `RaceScene` class is enough for one scene. Rejected for now.

@@ -111,7 +111,7 @@ Typed-text colour states: **done = ink**, **next character = red cell**, **remai
 
 ### 4.1 Rules
 1. Every participant types **the same text**.
-2. **The host starts the race.** Countdown 3-2-1 (the Major stamps "НАЧАЛИ / GO").
+2. **The host starts the race.** Countdown 3-2-1 (the Major stamps "НАЧАЛИ / GO"). Before it, the room loads (#926): every typist's device shows the same loading card while it loads the text and the 3D room, and the 3-2-1 starts for everyone at the same instant once every connected typist is ready, or after 30 seconds at the latest; a typist whose 3D room is not up by then races on the paper view.
 3. Live positions are shown **in real time** (see §6).
 4. A **visual indicator fires on every overtake** (you pass someone, or someone passes you).
 5. The race ends when **everyone has finished**, **or** when the **timer** runs out (if a timer is set).

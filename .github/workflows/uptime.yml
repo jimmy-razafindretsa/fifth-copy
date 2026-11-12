@@ -1,0 +1,62 @@
+# Card #423 (ADR 0019): production uptime. Every 15 min, run scripts/deploy-smoke.sh against the public web URL
+# and the race server's /health. A failed probe is retried 3 times, 20 s apart, so one dropped request does not
+# page anyone; a red run emails the owner (GitHub "failed workflows" notification).
+# No secret, no Railway token, no restart: the manual steps are in docs/ops/runbook.md "Site down".
+# Not a PR-required check (.github/branch-protection.json is unchanged).
+name: uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# A slow run is never stacked under the next scheduled one.
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  uptime:
+    name: uptime
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Public URLs, not secrets: the owner sets them with `gh variable set`.
+      WEB_PUBLIC_URL: ${{ vars.WEB_PUBLIC_URL }}
+      RACE_SERVER_PUBLIC_URL: ${{ vars.RACE_SERVER_PUBLIC_URL }}
+      ATTEMPTS: "3"
+      RETRY_SECONDS: "20"
+    steps:
+      - id: vars
+        name: Repository variables are set
+        run: |
+          missing=0
+          for name in WEB_PUBLIC_URL RACE_SERVER_PUBLIC_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::repository variable $name is not set (gh variable set $name --body <public URL>)"
+              missing=1
+            fi
+          done
+          exit "$missing"
+      - uses: actions/checkout@v4
+      - name: Smoke production
+        run: |
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            if RACE_SMOKE_URL="$RACE_SERVER_PUBLIC_URL" scripts/deploy-smoke.sh "$WEB_PUBLIC_URL" > smoke.txt 2>&1; then
+              cat smoke.txt
+              { echo "### uptime: OK (attempt $attempt)"; echo '```'; cat smoke.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            cat smoke.txt
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then sleep "$RETRY_SECONDS"; fi
+          done
+          {
+            echo "### uptime: DOWN after $ATTEMPTS attempts"
+            echo '```'; cat smoke.txt; echo '```'
+            echo 'Steps: docs/ops/runbook.md, section "Site down".'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep '^FAIL' smoke.txt | while read -r line; do echo "::error::$line"; done
+          exit 1

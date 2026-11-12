@@ -130,7 +130,9 @@ describe("seat page (#563)", () => {
   it("shows the seat POV (bible 11.3) and hides your clerk and paper", () => {
     // #927: the POV's FOV and eye follow the seating block (62 is its floor, R its ring)
     expect(seat).toContain("FOV_POV = 62");
-    expect(seat).toContain("camera.position.set(0, 1.02, L.ring - 0.05); camera.lookAt(0, 0.95, 0);");
+    expect(seat).toContain(
+      "camera.position.set(0, 1.02, L.ring - 0.05); camera.lookAt(0, 0.95, 0);",
+    );
     expect(seat).toContain("let FORCE = 'pov'");
     expect(seat).toContain("Clerks.update(dt, VIEW === 'pov')");
     expect(seat).toContain("if ((i === 0 && HIDE0) || !OCC[i]) _w.scale(ZERO)");
@@ -561,46 +563,51 @@ describe("seating (#927)", () => {
   });
 
   describe.each(ASPECTS)("C1 staged seats at %s", (_name, aspect) => {
-    it.each(STAGED)("%i players: you at 0, rivals on the far side, right/left, in view, never overlapping", (n) => {
-      const L = S.povLayout(n, aspect);
-      expect(L.staged).toBe(true);
-      expect(L.angles).toHaveLength(n); // one desk per player
-      expect(L.angles[0]).toBe(0);
-      const rivals = L.angles.slice(1);
-      const kR = Math.ceil((n - 1) / 2);
-      const kL = Math.floor((n - 1) / 2);
-      const right: number[] = [];
-      const left: number[] = [];
-      rivals.forEach((a, k) => {
-        const off = offsetOf(a);
-        expect(Math.abs(off), `rival ${k} offset`).toBeGreaterThanOrEqual(28 * DEG - EPS);
-        // alternating right (x > 0 seen from your seat), left, ... in cyclic desk order
-        const x = Math.sin(a);
-        if (k % 2 === 0) {
-          expect(x, `rival ${k} on the right`).toBeGreaterThan(0);
-          right.push(Math.abs(off));
-        } else {
-          expect(x, `rival ${k} on the left`).toBeLessThan(0);
-          left.push(Math.abs(off));
-        }
-        // its full desk (1.2 wide, 0.3..0.9 in front of its chair) inside the horizontal FOV
-        const h = halfH(L.fov, aspect);
-        for (const [dx, dz] of [
-          [-0.6, 0.3],
-          [0.6, 0.3],
-          [-0.6, 0.9],
-          [0.6, 0.9],
-        ] as const)
-          expect(Math.abs(seen(a, L.ring, dx, dz)), `rival ${k} desk corner`).toBeLessThanOrEqual(h);
-      });
-      expect(right).toHaveLength(kR);
-      expect(left).toHaveLength(kL);
-      for (const side of [right, left])
-        for (let j = 1; j < side.length; j++)
-          expect(side[j]! - side[j - 1]!, "neighbours of a side").toBeGreaterThanOrEqual(
-            S.pitch(L.ring) - EPS,
-          );
-    });
+    it.each(STAGED)(
+      "%i players: you at 0, rivals on the far side, right/left, in view, never overlapping",
+      (n) => {
+        const L = S.povLayout(n, aspect);
+        expect(L.staged).toBe(true);
+        expect(L.angles).toHaveLength(n); // one desk per player
+        expect(L.angles[0]).toBe(0);
+        const rivals = L.angles.slice(1);
+        const kR = Math.ceil((n - 1) / 2);
+        const kL = Math.floor((n - 1) / 2);
+        const right: number[] = [];
+        const left: number[] = [];
+        rivals.forEach((a, k) => {
+          const off = offsetOf(a);
+          expect(Math.abs(off), `rival ${k} offset`).toBeGreaterThanOrEqual(28 * DEG - EPS);
+          // alternating right (x > 0 seen from your seat), left, ... in cyclic desk order
+          const x = Math.sin(a);
+          if (k % 2 === 0) {
+            expect(x, `rival ${k} on the right`).toBeGreaterThan(0);
+            right.push(Math.abs(off));
+          } else {
+            expect(x, `rival ${k} on the left`).toBeLessThan(0);
+            left.push(Math.abs(off));
+          }
+          // its full desk (1.2 wide, 0.3..0.9 in front of its chair) inside the horizontal FOV
+          const h = halfH(L.fov, aspect);
+          for (const [dx, dz] of [
+            [-0.6, 0.3],
+            [0.6, 0.3],
+            [-0.6, 0.9],
+            [0.6, 0.9],
+          ] as const)
+            expect(Math.abs(seen(a, L.ring, dx, dz)), `rival ${k} desk corner`).toBeLessThanOrEqual(
+              h,
+            );
+        });
+        expect(right).toHaveLength(kR);
+        expect(left).toHaveLength(kL);
+        for (const side of [right, left])
+          for (let j = 1; j < side.length; j++)
+            expect(side[j]! - side[j - 1]!, "neighbours of a side").toBeGreaterThanOrEqual(
+              S.pitch(L.ring) - EPS,
+            );
+      },
+    );
   });
 
   it("C2: the FOV grows with the lobby: 62..100 up to 13, never decreasing; 62 at 2 (and 3 at 16:9), 100 at 13", () => {

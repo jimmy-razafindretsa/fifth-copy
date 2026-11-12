@@ -554,7 +554,9 @@ export function createLifecycle({
     reviewLoading: (lobbyId) =>
       registry
         .withRoom(lobbyId, () => decide(lobbyId, false))
-        .catch((err: unknown) => log("loading review failed", { lobby: lobbyId, err: String(err) })),
+        .catch((err: unknown) =>
+          log("loading review failed", { lobby: lobbyId, err: String(err) }),
+        ),
 
     away: (lobbyId, userId) => {
       const load = loads.get(lobbyId);

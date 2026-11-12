@@ -213,6 +213,37 @@ const COL = {
   gold: 0xE2B23A, ink: 0x2A2420, paper: 0xE4D6B8, wood: 0x4E3424, leather: 0x2B1E16, glass: 0xCFE0DC, beige: 0xC9C2AE, cab: 0x60645D, enamel: 0x2F5A40,
 };
 const N = 30, R_CHAIR = 6.9, WALL_R = 10, H = 5.5, DESK_Y = 0.44;
+// seating:start (#927, bible 11.1, 11.3; Art Direction 05): pure, no three.js, no DOM. You stand at angle 0; a desk
+// at `a` stands at (sin a, cos a) · ring facing the centre; a rival's offset is its angle from the point opposite
+// you. Up to SEAT_STAGED_MAX players each seat is staged for its owner: rivals alternate right, left, never within
+// SEAT_MIN_OFFSET of the Major, the FOV widens until they fit (SEAT_MARGIN to the view's edge), the ring grows from
+// RING_SMALL only as far as the right side's desks need not to overlap. Above: the real ring, evenly spaced.
+const SEAT_STAGED_MAX = 13, RING_FULL = 6.9, RING_SMALL = 4.35, SEAT_MIN_OFFSET = 28, SEAT_MARGIN = 7;
+const FOV_POV = 62, FOV_WIDE = 100, FOV_RING = 84, FOV_OVER = 55, RAD = Math.PI / 180;
+/** the angle of a 1.2 desk and its gap on a ring (12° on the full ring) */
+const pitch = ring => 2 * Math.atan(0.63 / (ring - 0.9));
+/** the horizontal half-angle of a vertical FOV (degrees) at an aspect */
+const halfH = (fov, aspect) => Math.atan(Math.tan(fov * RAD / 2) * aspect);
+const even = n => Array.from({ length: n }, (_, k) => k / n * 2 * Math.PI);
+/** the seat POV for n players (you first, rivals in cyclic desk order): { staged, ring, fov, angles } */
+function povLayout(n, aspect) {
+  n = Math.max(1, n | 0);
+  if (n > SEAT_STAGED_MAX) return { staged: false, ring: RING_FULL, fov: Math.min(FOV_RING, FOV_POV + 0.8 * (n - 2)), angles: even(n) };
+  const m = n - 1, kR = Math.ceil(m / 2), kL = m >> 1, p = pitch(RING_SMALL), d = SEAT_MIN_OFFSET * RAD, mg = SEAT_MARGIN * RAD;
+  const need = m === 1 ? d + 0.6 * p : d + kR * p;
+  const fov = Math.min(FOV_WIDE, Math.max(FOV_POV, 2 * Math.atan(Math.tan(need / 2 + mg) / aspect) / RAD));
+  const span = Math.max(p, 2 * (halfH(fov, aspect) - mg) - d), gap = span / kR;
+  const ring = kR > 1 && gap < p ? Math.min(RING_FULL, 0.9 + 0.63 / Math.tan(gap / 2)) : RING_SMALL;
+  const angles = [0];
+  for (let k = 0; k < m; k++) { const off = m === 1 ? d + 0.4 * p : d + span * ((k >> 1) + 0.5) / (k % 2 ? kL : kR); angles.push(Math.PI + (k % 2 ? off : -off)); }
+  return { staged: true, ring, fov, angles };
+}
+/** the overview (projector, spectators): even spacing (2 players: 90°), the orbit's start where no desk hides behind the Major */
+const overLayout = n => (n = Math.max(1, n | 0), {
+  ring: n > SEAT_STAGED_MAX ? RING_FULL : RING_SMALL, fov: FOV_OVER, angles: n === 2 ? [0, Math.PI / 2] : even(n),
+  start: n === 2 ? Math.PI / 4 : Math.PI / (n % 2 ? 2 * n : n),
+});
+// seating:end
 const S = (r, w = 8, h = 6) => new THREE.SphereGeometry(r, w, h);
 const C = (rt, rb, h, s = 8, open = false) => new THREE.CylinderGeometry(rt, rb, h, s, 1, open);
 const B = (x, y, z) => new THREE.BoxGeometry(x, y, z);
@@ -326,10 +357,9 @@ const WALL_SLOTS = { 0: portrait, 2: flag, 3: flag, 7: flag, 8: flag, 1: cabinet
 Object.entries(WALL_SLOTS).forEach(([k, fn]) => {
   const a = k / 10 * Math.PI * 2, g = new THREE.Group(); g.position.set(Math.sin(a) * (WALL_R - 0.08), 0, Math.cos(a) * (WALL_R - 0.08)); g.rotation.y = a + Math.PI; fn(g); room.add(g);
 });
-for (let i = 0; i < N; i++) {
-  const a = i / N * Math.PI * 2, g = desk(i); g.position.set(Math.sin(a) * R_CHAIR, 0, Math.cos(a) * R_CHAIR); g.rotation.y = a + Math.PI; room.add(g);
-  await slice();
-}
+// the 30 stations: one geometry each, drawn by one batched mesh below and placed by `arrange` (#927)
+const stationGeo = [];
+for (let i = 0; i < N; i++) stationGeo.push(await mergeSliced(desk(i)));
 // litter: paper scraps, dockets and cigarette butts on the floor
 for (let k = 0; k < 45; k++) {
   const a = hash(k * 3.3) * Math.PI * 2, r = 1.8 + hash(k * 5.1) * 7.6, x = Math.sin(a) * r, z = Math.cos(a) * r;
@@ -373,7 +403,6 @@ await slice();
 // ---------- scene, lights, materials (the renderer is the probe's, above) ----------
 const scene = new THREE.Scene(); scene.background = new THREE.Color(CLEAR); scene.fog = new THREE.Fog(CLEAR, 20, 42);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 60);
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 const mat = new THREE.MeshLambertMaterial({ vertexColors: true }); mat.name = 'room_vertex_colour';
 // ---- age & grime: one tileable noise texture, triplanar in the room shader (no extra draw calls) ----
@@ -399,7 +428,12 @@ function dirty(m, amt) {
   m.onBeforeCompile = sh => {
     sh.uniforms.uGrime = { value: grimeTex }; sh.uniforms.uAmt = { value: amt };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
+      .replace('#include <project_vertex>', `#include <project_vertex>
+      vec4 wP = vec4(transformed, 1.0); vec3 wN = objectNormal;
+      #ifdef USE_BATCHING
+      wP = batchingMatrix * wP; wN = mat3(batchingMatrix) * wN;
+      #endif
+      vWP = (modelMatrix * wP).xyz; vWN = normalize(mat3(modelMatrix) * wN);`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uGrime; uniform float uAmt; varying vec3 vWP; varying vec3 vWN;')
       .replace('#include <color_fragment>', `#include <color_fragment>
       vec3 nw = abs(normalize(vWN)); nw /= (nw.x + nw.y + nw.z);
@@ -417,6 +451,10 @@ function dirty(m, amt) {
 await slice();
 dirty(mat, 0.55);
 const roomMesh = new THREE.Mesh(await mergeSliced(room), mat); roomMesh.receiveShadow = true; roomMesh.castShadow = true; scene.add(roomMesh);
+await slice();
+// one batched mesh for the stations (one draw), instance i = ring slot i, hidden while its desk is empty (#927)
+const stations = new THREE.BatchedMesh(N, stationGeo.reduce((s, g) => s + g.attributes.position.count, 0), stationGeo.reduce((s, g) => s + g.index.count, 0), mat);
+stationGeo.forEach(g => stations.addInstance(stations.addGeometry(g))); stations.frustumCulled = false; scene.add(stations);
 await slice();
 const platMesh = new THREE.Mesh(merge(plat), mat); platMesh.castShadow = platMesh.receiveShadow = true;
 const platG = new THREE.Group(); platG.add(platMesh); scene.add(platG);
@@ -877,7 +915,7 @@ function animClerk(c, d, dt, i) {
   }
   aimArm(c, 'armL', tL, d); aimArm(c, 'armR', tR, d);
   _s.set(1, 1, 1); _p.set(d.x + cx, DESK_Y + 0.19, d.z + 0.56); _m.compose(_p, _I, _s);
-  _w.multiplyMatrices(DM, _m); carrIM.setMatrixAt(i, _w);
+  _w.multiplyMatrices(DM, _m); if (!OCC[i]) _w.scale(ZERO); carrIM.setMatrixAt(i, _w);
   _p.set(d.x + cx, DESK_Y + 0.14 + cur * 0.022, d.z + 0.54); _e.set(-0.15, 0, 0); _q.setFromEuler(_e); _m.compose(_p, _q, _s);
   _w.multiplyMatrices(DM, _m); if ((i === 0 && HIDE0) || !OCC[i]) _w.scale(ZERO); paperIM.setMatrixAt(i, _w);
 }
@@ -923,7 +961,10 @@ function update(dt, hide0) {
 /** slots[i] = { occ, typing } for the ring's 30 desks; `near` = the preset's LOD0 seats (12). */
 function seat(slots, near) { slots.forEach((s, i) => { OCC[i] = s.occ; TYPING[i] = s.typing; }); P.near = near; lodT = 0; }
 const setBob = on => { BOB = on ? 1 : 0; };
-return { init, update, seat, setBob };
+/** puts slot i's clerk at ring angle `a` (#927): the same clerk, only its station moves */
+const _y = new THREE.Vector3(0, 1, 0), _r = new THREE.Quaternion();
+function place(i, a, r) { L.desks[i].set(Math.sin(a) * r, 0, Math.cos(a) * r); deskM[i].compose(L.desks[i], _r.setFromAxisAngle(_y, a + Math.PI), _s.set(1, 1, 1)); }
+return { init, update, seat, setBob, place, deskM };
 })();
 await Clerks.init(N, R_CHAIR);
 
@@ -943,17 +984,11 @@ function dustUpdate(t) {
 await slice();
 // ---------- behaviour (the race page drives the scene, #563) ----------
 let FORCE = 'pov';
-let VIEW = 'over', TURN = true, STUTTER = true, t = 0, last = performance.now(), nextStutter = 4, stutterT = -1, orbitA = 0.6;
+let VIEW = 'pov', TURN = true, STUTTER = true, t = 0, last = performance.now(), nextStutter = 4, stutterT = -1, orbitA = 0.6;
 // ?orbit=<seconds>: one full overview orbit in that many seconds; default 0.05 rad/s
 const ORBIT = +Q.get('orbit') > 0 ? 2 * Math.PI / +Q.get('orbit') : 0.05;
 const STUTTER_PATTERN = [[0, 0.06, 0], [0.06, 0.14, 1], [0.14, 0.2, 0], [0.2, 0.42, 0.6], [0.42, 0.5, 0], [0.5, 9, 1]];
-function setView(v) {
-  VIEW = v;
-  if (v === 'pov') { camera.fov = 62; camera.position.set(0, 1.02, R_CHAIR - 0.05); camera.lookAt(0, 0.95, 0); }
-  if (v === 'over') camera.fov = 55;
-  camera.updateProjectionMatrix();
-}
-setView('pov');
+function setView(v) { VIEW = v; arrange(); }
 
 // motion (bible 8): the OS setting or the page's `data-motion`, never the scene's own
 const MQ = matchMedia('(prefers-reduced-motion: reduce)');
@@ -977,8 +1012,27 @@ function applyView(view) {
     slots[i] = { occ: true, typing: view.phase === 'running' && d.status === 'typing' };
   }
   DESKS = slots; PLACED = slots.filter(s => s.occ).length;
-  Clerks.seat(DESKS, PRESETS[PRESET].near);
+  Clerks.seat(DESKS, PRESETS[PRESET].near); arrange();
 }
+// #927 (bible 11.1, 11.3): one station per player, the seating block's layout for the view and the window's
+// aspect, recomputed without animation on every view, roster and size change; the overview's orbit restarts at
+// its offset only when the view or the player count changes. `<html>` reports it (data-seats|layout|fov|ring|rivals-in-view).
+let LAID = '';
+const _c = new THREE.Vector3();
+function arrange() {
+  const order = [0]; DESKS.forEach((s, i) => { if (i && s.occ) order.push(i); });
+  const n = order.length, over = VIEW === 'over', L = over ? overLayout(n) : povLayout(n, innerWidth / innerHeight);
+  order.forEach((i, k) => Clerks.place(i, L.angles[k], L.ring));
+  DESKS.forEach((s, i) => { stations.setVisibleAt(i, s.occ); stations.setMatrixAt(i, Clerks.deskM[i]); });
+  camera.fov = L.fov; camera.aspect = innerWidth / innerHeight;
+  if (over) { if (LAID !== 'over' + n) orbitA = L.start; LAID = 'over' + n; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
+  else { LAID = ''; camera.position.set(0, 1.02, L.ring - 0.05); camera.lookAt(0, 0.95, 0); }
+  camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  let seen = 0;
+  for (const i of order.slice(1)) { _c.set(0, DESK_Y, 0.6).applyMatrix4(Clerks.deskM[i]).project(camera); if (Math.abs(_c.x) <= 1 && Math.abs(_c.y) <= 1 && _c.z < 1) seen++; }
+  Object.assign(ROOT.dataset, { seats: PLACED, layout: over ? 'even' : L.staged ? 'staged' : 'ring', fov: +L.fov.toFixed(1), ring: +L.ring.toFixed(2), rivalsInView: seen });
+}
+arrange(); addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); arrange(); });
 function applyPreset(p) {
   PRESET = p;
   if (PRESETS[p].aa !== AA) makeRenderer(PRESETS[p].aa); else { renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth, innerHeight); }
@@ -989,7 +1043,7 @@ function applyPreset(p) {
 let READY = false, INIT = false, pendingReady = false;
 const ready = () => {
   if (READY || LOST) return; READY = true; ROOT.dataset.room = 'ready';
-  send({ type: 'fc-scene-ready', preset: PRESET, fov: camera.fov, desks: PLACED });
+  send({ type: 'fc-scene-ready', preset: PRESET, fov: +camera.fov.toFixed(1), desks: PLACED });
 };
 
 function onMessage(e) {
@@ -1044,7 +1098,7 @@ function loop(now) {
   bulb.intensity = 70 * k; bulbMesh.material.color.copy(bulbOff).lerp(bulbOn, Math.min(1, k));
   if (FORCE !== VIEW) setView(FORCE);
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
-  if (VIEW === 'over') { orbitA += reduced() ? 0 : dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
+  if (VIEW === 'over' && !reduced()) { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
   if (pendingReady) { pendingReady = false; ready(); }
   fr++; ft += wall;

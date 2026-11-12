@@ -54,6 +54,7 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   resumeKey: null,
   serverNow: SERVER_NOW,
   autoStartAt: null,
+  pending: null,
   ...over,
 });
 

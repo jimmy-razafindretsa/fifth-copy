@@ -169,6 +169,16 @@ export type RaceState = {
    * leaves (`createTyping` holds them), so none reaches the server before the reconnect's seat exists.
    */
   keysHeld: boolean;
+  /**
+   * The desks the loading room still awaits (#926, `loading`/`readiness`/`welcome.pending`); `null`
+   * outside the room's `loading`.
+   */
+  pending: number[] | null;
+  /**
+   * This page's scene is settled (#926): its first frame is in, or it is on paper (no WebGL2, a
+   * fallback, a phone). Told once by the scene leaf (`scene-settled`); never goes back.
+   */
+  sceneSettled: boolean;
 };
 
 /**
@@ -182,7 +192,13 @@ export type RaceEvent =
   | { type: "roster"; payload: RoomEvents["roster"] }
   /** The host changed the room's settings while waiting (#654): the next countdown predicts with them. */
   | { type: "settings"; payload: RoomEvents["settings"] }
-  /** The host started: the race and its GO instant (#214). */
+  /** The race started and the room loads (#926): the race (its sheet drawn), no GO yet. */
+  | { type: "loading"; payload: RoomEvents["loading"] }
+  /** The desks the loading room still awaits (#926). */
+  | { type: "readiness"; payload: RoomEvents["readiness"] }
+  /** This page's scene settled (#926: first frame, or paper); the scene leaf tells it once. */
+  | { type: "scene-settled" }
+  /** Every seat is ready (or the limit passed): the race and its GO instant (#214, #926). */
   | { type: "countdown"; payload: RoomEvents["countdown"] }
   /** The welcome's ping round refined the clock offset (#643, `bestOffset` of its pongs so far). */
   | { type: "clock"; offset: number }
@@ -256,6 +272,8 @@ export const initialRaceState: RaceState = {
   abandoning: false,
   abandons: 0,
   keysHeld: false,
+  pending: null,
+  sceneSettled: false,
 };
 
 /** No exit, no warning, no lamp, nothing in flight: a (re)connect or a new race (#233). */
@@ -357,6 +375,24 @@ function bonusFromWelcome(w: Welcome, offset: number, plays: number): BonusState
   };
 }
 
+/** A new race (`loading`, #926, or `countdown`): no overlay, no card yet (dealt once it runs). */
+function newRace(state: RaceState, race: NonNullable<Welcome["race"]>): RaceState {
+  return {
+    ...state,
+    race,
+    overlay: null,
+    prediction: predictionOf(race, state.you, state.settings, null, null),
+    desks: [],
+    ranks: [],
+    lastKey: null,
+    stamps: [],
+    ending: null,
+    endedAt: null,
+    bonus: { ...NO_BONUS, plays: state.bonus.plays },
+    ...NO_EXIT,
+  };
+}
+
 export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
   // Lost is terminal: the room refused this viewer and nothing later revives the page (the lost line
   // links back to the waiting room).
@@ -401,6 +437,8 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         abandons: state.abandons,
         // the reconnect's seat exists: held keys may leave (#661 C2)
         keysHeld: false,
+        pending: w.room.phase === "loading" ? w.pending : null,
+        sceneSettled: state.sceneSettled,
       };
       // a reload after your exit: the server's status brings the docket back
       return withStatusExit(next);
@@ -411,23 +449,35 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
       return { ...state, members: byDesk(event.payload.members) };
     case "settings":
       return { ...state, settings: event.payload.settings };
-    case "countdown":
-      // a new race: no overlay, no card yet (the server deals them once it runs)
+    case "loading":
+      // a new race (#926): its sheet is drawn behind the loading card; GO is not scheduled yet
       return {
-        ...state,
+        ...newRace(state, event.payload.race),
+        phase: "loading",
+        room: state.room && { ...state.room, phase: "loading" },
+        pending: event.payload.pending,
+      };
+    case "readiness":
+      if (state.room?.phase !== "loading" || state.race?.raceId !== event.payload.raceId)
+        return state;
+      return { ...state, pending: event.payload.pending };
+    case "scene-settled":
+      return state.sceneSettled ? state : { ...state, sceneSettled: true };
+    case "countdown":
+      // the race's GO (#214); the race may be new (a page that missed its `loading`)
+      if (state.race?.raceId === event.payload.race.raceId && state.room?.phase === "loading")
+        return {
+          ...state,
+          phase: "countdown",
+          race: event.payload.race,
+          room: { ...state.room, phase: "countdown" },
+          pending: null,
+        };
+      return {
+        ...newRace(state, event.payload.race),
         phase: "countdown",
-        race: event.payload.race,
         room: state.room && { ...state.room, phase: "countdown" },
-        overlay: null,
-        prediction: predictionOf(event.payload.race, state.you, state.settings, null, null),
-        desks: [],
-        ranks: [],
-        lastKey: null,
-        stamps: [],
-        ending: null,
-        endedAt: null,
-        bonus: { ...NO_BONUS, plays: state.bonus.plays },
-        ...NO_EXIT,
+        pending: null,
       };
     case "go":
       // GO only ends a countdown; a cut line keeps reconnecting and its fresh welcome lands running
@@ -924,6 +974,12 @@ export function bindRaceSocket(
     socket.onEvent((payload) => dispatch({ type: "event", payload, at: timer.now() })),
     socket.onEnded((payload) => dispatch({ type: "ended", payload, at: timer.now() })),
     socket.onRejected((payload) => dispatch({ type: "rejected", payload, at: timer.now() })),
+    socket.onLoading((payload) => {
+      // no GO from a loading race: its `t0` is only the latest GO (#926)
+      cancelGo();
+      dispatch({ type: "loading", payload });
+    }),
+    socket.onReadiness((payload) => dispatch({ type: "readiness", payload })),
     socket.onCountdown((payload) => {
       dispatch({ type: "countdown", payload });
       scheduleGo(payload.race.t0);
@@ -1065,4 +1121,64 @@ export function sendAbandons(store: RaceStore, socket: AbandonSink): Off {
     const { abandons } = store.getState();
     for (; sent < abandons; sent++) socket.sendAbandon();
   });
+}
+
+/** The one send a readiness report needs (`RoomSocket.sendReady`). */
+export type ReadySink = { sendReady(raceId: string): void };
+
+/**
+ * Whether this seat should report ready (#926 C3): the room loads, the race text is in, your desk is
+ * awaited and your scene is settled. A page without a desk (the watching host, a spectator) never is.
+ */
+export function selectShouldReady(state: RaceState): boolean {
+  return (
+    state.room?.phase === "loading" &&
+    state.phase === "loading" &&
+    state.race !== null &&
+    state.you !== null &&
+    state.sceneSettled &&
+    (state.pending?.includes(state.you) ?? false)
+  );
+}
+
+/**
+ * Sends `ready` once per race and welcome when `selectShouldReady` turns true (#926 C3): a reconnect's
+ * `welcome` that still lists your desk sends it again; a repeat on the same connection never does (the
+ * server drops it, and its budget is small). Returns the stop.
+ */
+export function sendReady(store: RaceStore, socket: ReadySink): Off {
+  let sent: string | null = null;
+  const check = () => {
+    const state = store.getState();
+    if (!selectShouldReady(state) || !state.race) return;
+    const key = `${state.race.raceId}:${state.serverNow}`;
+    if (key === sent) return;
+    sent = key;
+    socket.sendReady(state.race.raceId);
+  };
+  const off = store.subscribe(check);
+  check();
+  return off;
+}
+
+/**
+ * What the seat scene may do (#926 C4): `wait` until the room's phase is known, `paper` once a typist's
+ * room counts down or runs (a scene not up by then never loads in that race: the typist races on
+ * paper), else `load`. The watching host and spectators (no desk) always `load`.
+ */
+export function selectSceneGate(state: RaceState): "wait" | "load" | "paper" {
+  const phase = state.room?.phase;
+  if (!phase) return "wait";
+  if (state.you !== null && (phase === "countdown" || phase === "running")) return "paper";
+  return "load";
+}
+
+/**
+ * The loading card's READY row (#926 C5): desks ready over desks in the race, bots included; `null`
+ * outside the room's `loading`.
+ */
+export function selectReadyCount(state: RaceState): { ready: number; total: number } | null {
+  if (state.room?.phase !== "loading" || state.pending === null) return null;
+  const total = state.members.length;
+  return { ready: Math.max(0, total - state.pending.length), total };
 }

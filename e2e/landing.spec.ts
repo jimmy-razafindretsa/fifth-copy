@@ -376,12 +376,11 @@ test.describe("landing page (#497)", () => {
     await expect(page.getByRole("button", { name: QUICK })).toHaveCount(2);
 
     const footer = page.locator("footer");
-    // #875: a link appears when its route ships; AEGIS CORP. has none yet, nor do the social profiles
-    for (const name of ["PLAY", "LEARN"]) {
+    // #875: a link appears when its route ships (AEGIS CORP. holds privacy, #76); no social profiles yet
+    for (const name of ["PLAY", "LEARN", "AEGIS CORP."]) {
       await expect(footer.getByRole("navigation", { name })).toBeVisible();
     }
-    await expect(footer.getByRole("navigation", { name: "AEGIS CORP." })).toHaveCount(0);
-    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(4);
+    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(5);
     await expect(footer.getByRole("list")).toHaveCount(0);
     await expect(footer.getByText("BUILT BYAEGIS CORP.")).toBeVisible();
     await expect(

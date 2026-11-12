@@ -93,15 +93,15 @@ describe("ClerkSection", () => {
   });
 });
 
-// #875 C2: a link appears when its route ships; the footer offers only those.
-const HELD_BACK = ["/locker", "/teachers", "/profile", "/about", "/privacy", "/terms", "/contact"];
+// #875 C2: a link appears when its route ships; the footer offers only those (/privacy shipped, #76).
+const HELD_BACK = ["/locker", "/teachers", "/profile", "/about", "/terms", "/contact"];
 
 describe("FooterView (#875)", () => {
   for (const [locale, t] of [
     ["en", en],
     ["fr", fr],
   ] as const) {
-    it(`C2 ${locale}: PLAY and LEARN with shipped entries only, no AEGIS CORP. column, no social row`, () => {
+    it(`C2 ${locale}: PLAY, LEARN and AEGIS CORP. with shipped entries only, no social row`, () => {
       const f = t.landing.footer;
       const html = renderToStaticMarkup(<FooterView brand={t.brand} labels={f} />);
       for (const href of HELD_BACK) expect(html).not.toContain(`href="${href}"`);
@@ -112,17 +112,20 @@ describe("FooterView (#875)", () => {
       expect(html).toContain(f.about);
       expect(html).toContain(`${f.builtBy}<br/>${f.builtByName}`);
       expect(html).toContain(f.copyright);
-      // two columns: PLAY (three race entries) and LEARN (the guide); AEGIS CORP. is gone, heading included
+      // three columns: PLAY (three race entries), LEARN (the guide) and AEGIS CORP. (privacy, #76)
       const navs = [...html.matchAll(/<nav[^>]*aria-label="([^"]+)"[^>]*>(.*?)<\/nav>/g)];
-      expect(navs.map((n) => n[1])).toEqual([f.play, f.learn]);
+      expect(navs.map((n) => n[1])).toEqual([f.play, f.learn, f.aegis]);
       expect([...html.matchAll(/<h3[^>]*>([^<]*)<\/h3>/g)].map((h) => h[1])).toEqual([
         f.play,
         f.learn,
+        f.aegis,
       ]);
       expect(navs[0]![2]!.match(/<a /g)).toHaveLength(3);
       expect(navs[1]![2]).toContain(`href="/#how"`);
       expect(navs[1]![2]!.match(/<a /g)).toHaveLength(1);
-      for (const held of [f.links.locker, f.links.teachers, f.links.profile, f.links.privacy]) {
+      expect(navs[2]![2]!.match(/<a /g)).toHaveLength(1);
+      expect(navs[2]![2]).toContain(`href="/privacy"`);
+      for (const held of [f.links.locker, f.links.teachers, f.links.profile, f.links.about]) {
         expect(html).not.toContain(`>${held}<`);
       }
     });
@@ -133,13 +136,14 @@ describe("FooterView (#875)", () => {
       <FooterView
         brand={en.brand}
         labels={en.landing.footer}
-        links={{ ...LINKS, privacy: "/privacy" }}
+        links={{ ...LINKS, terms: "/terms" }}
         social={[{ key: "github", tag: "GH", href: "https://github.com/aegis-corp" }]}
       />,
     );
     expect(html).toContain('aria-label="AEGIS CORP."');
     expect(html).toMatch(/href="\/privacy"[^>]*>Privacy · Law 25</);
-    expect(html).not.toContain('href="/terms"');
+    expect(html).toContain('href="/terms"');
+    expect(html).not.toContain('href="/about"');
     expect(html).toMatch(/<ul[^>]*><li><a href="https:\/\/github.com\/aegis-corp" target="_blank"/);
   });
 });

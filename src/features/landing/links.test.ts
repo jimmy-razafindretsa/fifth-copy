@@ -50,19 +50,19 @@ const internal = (links: Record<string, string | undefined>) =>
 
 describe("public links (#875 C1)", () => {
   it("the route walk finds the shipped pages and refuses the ones that do not exist", () => {
-    for (const ok of ["/", "/sign-in", "/sign-up", "/recover", "/settings", "/lobby/KGB-4821"]) {
+    for (const ok of [
+      "/",
+      "/sign-in",
+      "/sign-up",
+      "/recover",
+      "/settings",
+      "/privacy",
+      "/lobby/KGB-4821",
+    ]) {
       expect(served(ok), ok).toBe(true);
     }
-    // the seven paths main offered before #875: none has a page
-    for (const dead of [
-      "/locker",
-      "/teachers",
-      "/profile",
-      "/about",
-      "/privacy",
-      "/terms",
-      "/contact",
-    ]) {
+    // six of the seven paths main offered before #875 have no page yet (/privacy shipped with #76)
+    for (const dead of ["/locker", "/teachers", "/profile", "/about", "/terms", "/contact"]) {
       expect(served(dead), dead).toBe(false);
     }
   });

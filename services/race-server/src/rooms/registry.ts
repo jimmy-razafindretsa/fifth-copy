@@ -656,15 +656,16 @@ export function createRoomRegistry({
           room.desks === undefined
             ? null
             : (raceDesksSchema.safeParse(JSON.parse(room.desks)).data ?? null);
+        const room_ = { roomId: lobbyId, code: room.code, phase, settings, race: parseRace(room.race) };
+        // The watching host (#876) holds a host socket without a desk in every phase: never seated,
+        // never refused full or in progress (it watches the race it started).
+        if (watches(settings, room.hostUserId, userId)) {
+          return { ok: true, desk: null, members: toMembers(seats, room.hostUserId), room: room_ };
+        }
         // Defence in depth behind the handshake: during a race only existing members come back;
         // `waiting` and `ended` seat anyone (#143, #732).
         if (!mayRejoin({ phase }, seats.has(userId))) {
           return { ok: false, reason: "in-progress" };
-        }
-        const room_ = { roomId: lobbyId, code: room.code, phase, settings, race: parseRace(room.race) };
-        // The watching host (#876) holds a host socket without a desk: never seated, never refused full.
-        if (watches(settings, room.hostUserId, userId)) {
-          return { ok: true, desk: null, members: toMembers(seats, room.hostUserId), room: room_ };
         }
         if (seatsFull([...seats.values()], seats.has(userId))) {
           return { ok: false, reason: "room-full" };

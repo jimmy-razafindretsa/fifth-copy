@@ -1467,6 +1467,22 @@ describe("room registry: the host watches (#876)", () => {
     expect(await registry.members(lobbyId)).toEqual([m(2, "Bob", false)]);
   });
 
+  it("C2 the watching host joins with no desk during the race it started (its seat view)", async () => {
+    const { registry } = setup();
+    const lobbyId = await watching(registry);
+    await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    await registry.setPhase(lobbyId, "running");
+    expect(await registry.join(lobbyId, { userId: "host", name: "Ada" })).toMatchObject({
+      ok: true,
+      desk: null,
+      members: [m(2, "Bob", false)],
+    });
+    expect(await registry.join(lobbyId, { userId: "c", name: "Cy" })).toEqual({
+      ok: false,
+      reason: "in-progress",
+    });
+  });
+
   it("C2 the patch false seats the host at the lowest free desk; refused room-full at 30 desks", async () => {
     const { registry } = setup();
     const lobbyId = await watching(registry);

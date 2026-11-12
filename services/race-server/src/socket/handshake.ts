@@ -7,7 +7,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import type { ResumeKeys } from "../players/resume-keys";
-import { mayRejoin, seatsFull, type RoomRegistry } from "../rooms/registry";
+import { mayRejoin, seatsFull, watches, type RoomRegistry } from "../rooms/registry";
 import { verifyRaceToken } from "./race-token";
 import type { SpectatorSlots } from "./spectator-slots";
 
@@ -65,6 +65,10 @@ export async function authenticateHandshake(
   // During a race only an existing member (a second tab, same `sub`) is let in (#166); `ended`
   // admits anyone again, like `waiting`: "Race again" and late joiners (#143, #732, `mayRejoin`).
   const { sub, lobby } = verified.claims;
+  // The watching host (#876) takes no desk: in every phase, full or not, it holds a host socket.
+  if (watches(room.settings, room.hostUserId, sub)) {
+    return { ok: true, claims: verified.claims, resume: false };
+  }
   const isMember = room.phase !== "waiting" && (await registry.hasMember(lobby, sub));
   if (!mayRejoin(room, isMember)) return { ok: false, reason: "in-progress" };
   // Every desk taken: `registry.join` refuses the same under the room's queue (#732).

@@ -37,6 +37,7 @@ const live = (members: Member[], you = 1): LobbyState => ({
   phase: "live",
   error: null,
   you,
+  watching: false,
   members,
   raceId: null,
   settings: DEFAULT_RACE_SETTINGS,
@@ -509,6 +510,78 @@ describe("host settings form (#110)", () => {
     expect(
       controls(hostView(IDLE_FORM, { ...live([host, guest], 1), phase: "reconnecting" })),
     ).toBe(0);
+  });
+});
+
+describe("the host watches (#876 C5)", () => {
+  const a = member(2);
+  const b = member(3);
+  const watchingSettings = { ...DEFAULT_RACE_SETTINGS, hostWatches: true };
+  const watchingHost: LobbyState = {
+    ...live([a, b], 1),
+    you: null,
+    watching: true,
+    settings: watchingSettings,
+  };
+  const formView = (state: LobbyState, form: FormState = IDLE_FORM) =>
+    renderToStaticMarkup(
+      <LobbyLiveView code={CODE} state={state} labels={labels} errors={errors} form={form} />,
+    );
+
+  it("FORM 5-L opens with HOST: the host's TYPES | WATCHES toggle, a guest's read-only value", () => {
+    const html = formView(live([member(1, true), a], 1));
+    const first = html.indexOf('data-setting="');
+    expect(html.slice(first)).toMatch(/^data-setting="hostWatches"/);
+    expect(html).toMatch(/role="group" aria-labelledby="lobby-setting-hostWatches"/);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>TYPES<\/button>/);
+    expect(html).toMatch(/aria-pressed="false"[^>]*>WATCHES<\/button>/);
+    const guest = view({ ...live([a], 2), settings: watchingSettings });
+    expect(guest).toMatch(/data-setting="hostWatches"[\s\S]*?>HOST<\/dt><dd[^>]*>WATCHES<\/dd>/);
+  });
+
+  it("while the host watches: its page keeps START, the settings and the invite rows; no host desk; the notice; TYPISTS counts desks", () => {
+    const html = formView(watchingHost);
+    expect(html).toContain("data-start");
+    expect(html).toMatch(/aria-pressed="true"[^>]*>WATCHES<\/button>/);
+    expect(html).toContain(">ADD A BOT</button>");
+    expect(html.slice(html.indexOf(labels.listName))).not.toContain(`>${labels.host}<`);
+    expect(rows(html)).toBe(2);
+    expect(html).toMatch(
+      new RegExp(`role="status" class="${styles.notice}">${labels.hostWatching}</p>`),
+    );
+    expect(html).not.toContain(labels.waitingForHost);
+    expect(html).toContain(fill(labels.typistsValue, { n: 2, max: 30 }));
+  });
+
+  it("a guest sees the notice above WAITING FOR THE HOST; nothing when the host types", () => {
+    const guest = view({ ...live([a, b], 2), settings: watchingSettings });
+    expect(guest.indexOf(labels.hostWatching)).toBeGreaterThan(-1);
+    expect(guest.indexOf(labels.hostWatching)).toBeLessThan(guest.indexOf(labels.waitingForHost));
+    expect(view(live([member(1, true), a], 2))).not.toContain(labels.hostWatching);
+  });
+
+  it("a refused switch back: the 7.4 inline error line with the room-full sentence", () => {
+    const html = formView(watchingHost, {
+      status: "error",
+      key: "hostWatches",
+      error: "room-full",
+    });
+    expect(html).toContain(`RETURNED ·</span> ${labels.settings.form.errors["room-full"]}`);
+    expect(labels.settings.form.errors["room-full"]).toBe("All 30 desks in this room are taken.");
+  });
+
+  it("French: HÔTE, TAPE | REGARDE, L'HÔTE REGARDE", () => {
+    const html = renderToStaticMarkup(
+      <LobbyLiveView
+        code={CODE}
+        state={watchingHost}
+        labels={fr.lobby}
+        errors={fr.landing.errors}
+      />,
+    );
+    expect(html).toContain(">HÔTE</dt>");
+    expect(html).toContain("REGARDE");
+    expect(html).toContain("L&#x27;HÔTE REGARDE");
   });
 });
 

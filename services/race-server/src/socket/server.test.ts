@@ -5,6 +5,7 @@ import {
   deskIdentity,
   PROTOCOL_VERSION,
   type RaceSettings,
+  type Welcome,
   welcomeSchema,
 } from "@fifth-copy/protocol";
 import {
@@ -594,6 +595,103 @@ describe("host transfer when the host leaves (#137 C2, C3)", () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(a.seen.events.filter((e) => e.kind === "new-host")).toEqual([]);
     expect(a.seen.roster?.find((m) => m.desk === host.desk)?.isHost).toBe(true);
+  });
+});
+
+describe("the host watches (#876 C2, C4)", () => {
+  type EventSeen = { v: number; kind: string; desk?: number };
+  async function room() {
+    const web = fixtureWebApi({ now: () => 0 });
+    const booted = (t = await boot(process.env.REDIS_URL, { webApi: web.api }));
+    const lobby = await booted.openRoom();
+    const connect = async (sub: string, name: string, role: "host" | "player" = "player") => {
+      const token = await booted.token({ lobby, sub, name, role });
+      const client = booted.connect({ v: PROTOCOL_VERSION, token });
+      const seen = track(client);
+      const events: EventSeen[] = [];
+      const welcomes: Welcome[] = [];
+      client.on("welcome", (w) => void welcomes.push(w));
+      client.on("event", (e) => void events.push(e as EventSeen));
+      await until(() => !!seen.welcome, WAIT_MS, `welcome ${name}`);
+      return { client, seen, events, welcomes };
+    };
+    const host = await connect("usr_host", "Ada", "host");
+    const a = await connect("usr_a", "Bea");
+    await until(() => host.seen.roster?.length === 2, WAIT_MS, "roster 2");
+    const watch = (on: boolean) =>
+      host.client
+        .timeout(2_000)
+        .emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch: { hostWatches: on } });
+    return { booted, lobby, web, host, a, connect, watch };
+  }
+
+  it("WATCHES: the host's desk goes (settings, roster without it, a welcome with no desk); hostUserId stays, no new-host", async () => {
+    const { booted, lobby, host, a, watch } = await room();
+    expect(await watch(true)).toMatchObject({ ok: true, settings: { hostWatches: true } });
+    await until(() => a.seen.roster?.length === 1, WAIT_MS, "host desk gone");
+    expect(a.seen.settings.at(-1)?.hostWatches).toBe(true);
+    expect(a.seen.roster?.map((m) => m.name)).toEqual(["Bea"]);
+    expect(host.welcomes.at(-1)).toMatchObject({ you: null, resumeKey: null });
+    expect((await booted.server.registry.room(lobby))?.hostUserId).toBe("usr_host");
+    expect([...host.events, ...a.events].filter((e) => e.kind === "new-host")).toEqual([]);
+    // its host:settings still go through; keys from a socket with no desk change nothing
+    expect(await watch(true)).toMatchObject({ ok: true });
+    host.client.emit("keys", { v: PROTOCOL_VERSION, batch: [{ key: "a", t: 1 }] } as never);
+    host.client.emit("abandon", { v: PROTOCOL_VERSION } as never);
+    host.client.emit("bonus:play", { v: PROTOCOL_VERSION } as never);
+    // TYPES again: the lowest free desk, a welcome with it
+    expect(await watch(false)).toMatchObject({ ok: true, settings: { hostWatches: false } });
+    await until(() => a.seen.roster?.length === 2, WAIT_MS, "host seated again");
+    expect(host.welcomes.at(-1)?.you).toBe(1);
+    expect(host.welcomes.at(-1)?.resumeKey).toEqual(expect.any(String));
+  });
+
+  it("a host socket that connects while it watches takes no desk; another user's patch is not-host", async () => {
+    const { host, a, connect, watch } = await room();
+    await watch(true);
+    const tab = await connect("usr_host", "Ada", "host");
+    expect(tab.seen.welcome?.you).toBeNull();
+    expect(tab.seen.welcome?.members.map((m) => m.name)).toEqual(["Bea"]);
+    expect(
+      await a.client
+        .timeout(2_000)
+        .emitWithAck("host:settings", { v: PROTOCOL_VERSION, patch: { hostWatches: false } }),
+    ).toEqual({ ok: false, error: "not-host" });
+    expect(host.seen.roster?.map((m) => m.name)).toEqual(["Bea"]);
+  });
+
+  it("C4 the watching host closes its page: after the same grace A is promoted at its desk, hostWatches goes back to false", async () => {
+    const { booted, lobby, host, a, watch } = await room();
+    await watch(true);
+    await until(() => a.seen.roster?.length === 1, WAIT_MS, "host desk gone");
+    host.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS - 1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(a.events.filter((e) => e.kind === "new-host")).toEqual([]);
+    booted.clock.advance(1);
+    await until(() => a.events.some((e) => e.kind === "new-host"), WAIT_MS, "new-host");
+    expect(a.events).toEqual([{ v: PROTOCOL_VERSION, kind: "new-host", desk: 2 }]);
+    expect(a.seen.settings.at(-1)?.hostWatches).toBe(false);
+    expect(a.seen.roster?.map((m) => [m.name, m.isHost])).toEqual([["Bea", true]]);
+    expect((await booted.server.registry.room(lobby))?.hostUserId).toBe("usr_a");
+  });
+
+  it("C2 with no seated human the room stays open while the host is connected; its leave then closes it", async () => {
+    const { booted, lobby, host, a, watch } = await room();
+    await watch(true);
+    a.client.disconnect();
+    await until(() => host.seen.roster?.length === 0, WAIT_MS, "A left");
+    expect(await booted.server.registry.room(lobby)).not.toBeNull();
+    host.client.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    booted.clock.advance(LAST_LEAVE_GRACE_MS);
+    let gone = false;
+    for (let i = 0; i < 100 && !gone; i++) {
+      gone = (await booted.server.registry.room(lobby)) === null;
+      if (!gone) await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(gone).toBe(true);
   });
 });
 

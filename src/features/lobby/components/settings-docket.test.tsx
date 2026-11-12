@@ -26,6 +26,7 @@ describe("SETTING_ROWS", () => {
       Object.keys(DEFAULT_RACE_SETTINGS).sort(),
     );
     expect(SETTING_ROWS.map((r) => r.key)).toEqual([
+      "hostWatches",
       "language",
       "textType",
       "wordCount",
@@ -48,6 +49,7 @@ describe("SETTING_ROWS", () => {
 describe("settingRows (#498 C2)", () => {
   it("the defaults read in words, without the accents row (English race)", () => {
     expect(table(S())).toEqual({
+      HOST: "TYPES",
       LANGUAGE: "ENGLISH",
       "TEXT TYPE": "REAL SENTENCES",
       WORDS: "50 WORDS",
@@ -127,8 +129,8 @@ describe("SettingsDocket view (#498 C2)", () => {
     const html = renderToStaticMarkup(<SettingsDocket settings={S()} labels={EN} />);
     expect(html).toMatch(/<span class="[^"]*code[^"]*">FORM 5-L<\/span>/);
     expect(html).toMatch(/<span class="[^"]*tag[^"]*">RACE SETTINGS<\/span>/);
-    expect(html.match(/<dt/g)).toHaveLength(14);
-    expect(html.match(/<dd/g)).toHaveLength(14);
+    expect(html.match(/<dt/g)).toHaveLength(15);
+    expect(html.match(/<dd/g)).toHaveLength(15);
     expect(html).toContain('data-setting="errorMode"');
     expect(html).not.toContain('aria-busy="true"');
   });
@@ -143,7 +145,7 @@ describe("SettingsDocket view (#498 C2)", () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain(EN.loading);
     expect(html).not.toContain("<dt");
-    expect(html.match(/data-skeleton/g)).toHaveLength(14);
+    expect(html.match(/data-skeleton/g)).toHaveLength(15);
   });
 
   it("controls: a key's control replaces its value (the #110 seam), the label stays", () => {
@@ -157,7 +159,7 @@ describe("SettingsDocket view (#498 C2)", () => {
     expect(html).toContain('<select aria-label="Error mode"></select>');
     expect(html).toContain(">ERROR MODE</dt>");
     expect(html).not.toContain(">CONTINUE</dd>");
-    expect(html.match(/<dt/g)).toHaveLength(14);
+    expect(html.match(/<dt/g)).toHaveLength(15);
   });
 });
 

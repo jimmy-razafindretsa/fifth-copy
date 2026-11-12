@@ -39,6 +39,7 @@ describe("BOUNDS (read from the schema, never restated)", () => {
 describe("hostRows (C1, C3)", () => {
   it("defaults: every field, no accents row, the backspace row, no bot sub-row", () => {
     expect(hostRows(S())).toEqual([
+      "hostWatches",
       "language",
       "textType",
       "wordCount",
@@ -54,6 +55,15 @@ describe("hostRows (C1, C3)", () => {
       "bots",
       "lobbyType",
     ]);
+  });
+
+  it("#876 C5: HOST opens the form; TYPES | WATCHES files the boolean, a pressed segment files nothing", () => {
+    expect(hostRows(S())[0]).toBe("hostWatches");
+    expect(buildPatch("hostWatches", "watches", S())).toEqual({ hostWatches: true });
+    expect(buildPatch("hostWatches", "types", S({ hostWatches: true }))).toEqual({
+      hostWatches: false,
+    });
+    expect(buildPatch("hostWatches", "types", S())).toBeNull();
   });
 
   it("#114 C1: one sub-row per bot right under BOTS, 1-based in desk order", () => {

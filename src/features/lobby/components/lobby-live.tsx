@@ -130,8 +130,12 @@ type ViewProps = {
   onRemoveBlur?: (desk: number) => void;
 };
 
-/** The viewer's own row says whether they host (`Member.isHost`, protocol v4). */
-const isHost = (state: LobbyState) => state.members.some((m) => m.desk === state.you && m.isHost);
+/**
+ * The viewer's own row says whether they host (`Member.isHost`, protocol v4); a watching host (#876) has
+ * no row and is the host.
+ */
+const isHost = (state: LobbyState) =>
+  state.watching || state.members.some((m) => m.desk === state.you && m.isHost);
 
 /**
  * The waiting room's layout for one lobby state (no hooks, so every state renders in tests; #498, bible
@@ -263,6 +267,12 @@ export function LobbyLiveView({
           {state.phase === "reconnecting" ? (
             <p role="status" className={cn(styles.notice, styles.pulse)}>
               {labels.reconnecting}
+            </p>
+          ) : null}
+          {/* the host follows the race without a desk (#876): a statement row, so it does not pulse */}
+          {known && state.settings?.hostWatches ? (
+            <p role="status" className={styles.notice}>
+              {labels.hostWatching}
             </p>
           ) : null}
           {waitsForHost ? (

@@ -87,7 +87,8 @@ export type Voided = { lobbyId: string; raceId: string };
  * `room-full`: a user who is not a member while `ROOM_SEATS` desks (typists and bots) are seated (#732).
  */
 export type JoinResult =
-  | { ok: true; desk: number; members: Member[]; room: Room }
+  /** `desk: null`: the room's host while it watches (#876): a host socket without a desk. */
+  | { ok: true; desk: number | null; members: Member[]; room: Room }
   | { ok: false; reason: "no-room" | "in-progress" | "bot-id" | "room-full" | "removed" };
 /**
  * `closed` is true only when this call removed the last human member and deleted the room's keys
@@ -98,6 +99,11 @@ export type JoinResult =
  */
 export type LeaveResult = {
   members: Member[];
+  /**
+   * Set only when the leave turned `hostWatches` off (#876: the watching host left, the promoted host
+   * keeps its desk): the settings after it, written in the same MULTI.
+   */
+  settings?: RaceSettings;
   closed: boolean;
   kept: boolean;
   /**
@@ -136,6 +142,14 @@ function botsOverflow(seats: Map<string, Seat>, bots: readonly unknown[]): boole
 }
 
 /**
+ * Whether `userId` is the room's host while it watches (#876): a human in the room without a desk. The
+ * one notion of a seat-less human; a projector tab (#287) or a co-teacher would reuse it.
+ */
+export function watches(settings: RaceSettings, hostUserId: string, userId: string): boolean {
+  return settings.hostWatches && userId === hostUserId;
+}
+
+/**
  * Who may take a seat (#166, #143, #732), behind the verified race token: anyone while the room is
  * `waiting` or `ended` (spec 5.1: a late joiner is seated once the race is over); while a race is
  * on (`countdown`, `running`) only a current member (a second tab, a resume). Never a stranger
@@ -165,10 +179,14 @@ export function promoteHost(
   return best && { userId: best.userId, desk: best.desk };
 }
 
-/** `members` is set when the patch carried `bots`: the room was re-seated (#156). */
+/**
+ * `members` is set when the patch re-seated the room: `bots` (#156), or `hostWatches` (#876: the host's
+ * desk freed, or taken again at `desk`). `room-full`: the host's switch back to typing found every
+ * desk seated; nothing changed.
+ */
 export type UpdateSettingsResult =
-  | { ok: true; settings: RaceSettings; members?: Member[] }
-  | { ok: false; reason: "no-room" | "not-host" | "not-waiting" | "invalid" };
+  | { ok: true; settings: RaceSettings; members?: Member[]; hostDesk?: number | null }
+  | { ok: false; reason: "no-room" | "not-host" | "not-waiting" | "invalid" | "room-full" };
 export type SetBotsResult =
   { ok: true; members: Member[] } | { ok: false; reason: "no-room" | "not-waiting" | "invalid" };
 /**
@@ -255,6 +273,12 @@ export type RoomRegistry = {
     lobbyId: string,
     byUserId: string,
     patch: RaceSettingsPatch,
+    /**
+     * The sender's name and avatar from its race token: a `hostWatches: false` patch seats the host
+     * with them (#876; without them it is `invalid`). In the same step: the patch `true` frees the
+     * host's desk, `false` seats it at the lowest free desk or is refused `room-full`.
+     */
+    host?: { name: string; avatar?: number | null },
   ): Promise<UpdateSettingsResult>;
   /**
    * Runs `fn` in the room's queue, after every pending join/leave/settings call of that room and
@@ -632,6 +656,18 @@ export function createRoomRegistry({
           room.desks === undefined
             ? null
             : (raceDesksSchema.safeParse(JSON.parse(room.desks)).data ?? null);
+        const room_ = {
+          roomId: lobbyId,
+          code: room.code,
+          phase,
+          settings,
+          race: parseRace(room.race),
+        };
+        // The watching host (#876) holds a host socket without a desk in every phase: never seated,
+        // never refused full or in progress (it watches the race it started).
+        if (watches(settings, room.hostUserId, userId)) {
+          return { ok: true, desk: null, members: toMembers(seats, room.hostUserId), room: room_ };
+        }
         // Defence in depth behind the handshake: during a race only existing members come back;
         // `waiting` and `ended` seat anyone (#143, #732).
         if (!mayRejoin({ phase }, seats.has(userId))) {
@@ -662,12 +698,7 @@ export function createRoomRegistry({
           lobbyId,
           redis.multi().hset(membersKey(lobbyId), userId, JSON.stringify(seat)),
         );
-        return {
-          ok: true,
-          desk,
-          members: toMembers(seats, room.hostUserId),
-          room: { roomId: lobbyId, code: room.code, phase, settings, race: parseRace(room.race) },
-        };
+        return { ok: true, desk, members: toMembers(seats, room.hostUserId), room: room_ };
       }),
 
     leave: (lobbyId, userId) =>
@@ -677,7 +708,12 @@ export function createRoomRegistry({
         const seats = await readSeats(lobbyId);
         const removed = seats.delete(userId);
         const humans = [...seats.values()].filter((s) => !s.isBot).length;
-        if (removed && humans === 0) {
+        // #876: the watching host is a human in the room without a desk. Its own leave counts as a
+        // seat freed; anyone else's leaves it holding the room open.
+        const settings = parseSettings(lobbyId, room.settings);
+        const hostLeft = userId === room.hostUserId && (removed || settings.hostWatches);
+        const watcherStays = settings.hostWatches && userId !== room.hostUserId;
+        if ((removed || hostLeft) && humans === 0 && !watcherStays) {
           // The trace lists (#592) of the last race's desks go with the room.
           const traces = traceKeysOf(lobbyId, room.desks);
           if (room.phase === "ended") {
@@ -712,13 +748,22 @@ export function createRoomRegistry({
           openRooms.delete(lobbyId);
           return { members: [], closed: true, kept: false };
         }
-        // The host's seat is gone (#137 C2 a, c, d): the role passes in the leave's own MULTI.
-        const newHost = removed && userId === room.hostUserId ? promoteHost(seats) : null;
+        // The host's seat is gone (#137 C2 a, c, d): the role passes in the leave's own MULTI; a
+        // watching host's (#876) also turns `hostWatches` off there, so the new host keeps its desk.
+        const newHost = hostLeft ? promoteHost(seats) : null;
+        const reset = newHost && settings.hostWatches ? { ...settings, hostWatches: false } : null;
         const tx = redis.multi().hdel(membersKey(lobbyId), userId);
         if (newHost) tx.hset(roomKey(lobbyId), "hostUserId", newHost.userId);
+        if (reset) tx.hset(roomKey(lobbyId), "settings", JSON.stringify(reset));
         await withTtl(lobbyId, tx);
         const members = toMembers(seats, newHost?.userId ?? room.hostUserId);
-        return { members, closed: false, kept: false, ...(newHost ? { newHost } : {}) };
+        return {
+          members,
+          closed: false,
+          kept: false,
+          ...(newHost ? { newHost } : {}),
+          ...(reset ? { settings: reset } : {}),
+        };
       }),
 
     setBots: (lobbyId, bots) =>
@@ -797,7 +842,7 @@ export function createRoomRegistry({
       return room ? parseSettings(lobbyId, room.settings) : null;
     },
 
-    updateSettings: (lobbyId, byUserId, patch) =>
+    updateSettings: (lobbyId, byUserId, patch, host) =>
       serial(lobbyId, async (): Promise<UpdateSettingsResult> => {
         const room = await readRoom(lobbyId);
         if (!room) return { ok: false, reason: "no-room" };
@@ -814,7 +859,8 @@ export function createRoomRegistry({
         const merged = raceSettingsSchema.safeParse({ ...current, ...clean });
         if (!merged.success) return { ok: false, reason: "invalid" };
         const renamed = merged.data.language !== current.language && merged.data.bots.length > 0;
-        const seats = "bots" in clean || renamed ? await readSeats(lobbyId) : null;
+        const switched = merged.data.hostWatches !== current.hostWatches;
+        const seats = "bots" in clean || renamed || switched ? await readSeats(lobbyId) : null;
         // Every desk counts, bots too (#732): a bots patch never seats past ROOM_SEATS.
         if (seats && botsOverflow(seats, merged.data.bots)) return { ok: false, reason: "invalid" };
         const tx = redis.multi().hset(roomKey(lobbyId), "settings", JSON.stringify(merged.data));
@@ -822,11 +868,33 @@ export function createRoomRegistry({
           await withTtl(lobbyId, tx);
           return { ok: true, settings: merged.data };
         }
+        // The host gives up its desk or takes the lowest free one again (#876), in the same MULTI.
+        let hostDesk: number | null | undefined;
+        if (switched) {
+          if (merged.data.hostWatches) {
+            seats.delete(byUserId);
+            tx.hdel(membersKey(lobbyId), byUserId);
+            hostDesk = null;
+          } else {
+            if (seats.size >= ROOM_SEATS) return { ok: false, reason: "room-full" };
+            hostDesk = nextDesk([...seats.values()].map((s) => s.desk));
+            if (!host) return { ok: false, reason: "invalid" };
+            const seat: Seat = {
+              desk: hostDesk,
+              name: host.name,
+              joinedAt: clock.now(),
+              ...(host.avatar ? { avatar: host.avatar } : {}),
+            };
+            seats.set(byUserId, seat);
+            tx.hset(membersKey(lobbyId), byUserId, JSON.stringify(seat));
+          }
+        }
         // A bots patch, or a language change in a room with bots, re-seats in the same step and
         // the same MULTI (#156): bot names follow the race language (#361).
         const { bots, language } = merged.data;
         await withTtl(lobbyId, seatBots(tx, lobbyId, seats, bots, language));
-        return { ok: true, settings: merged.data, members: toMembers(seats, room.hostUserId) };
+        const members = toMembers(seats, room.hostUserId);
+        return { ok: true, settings: merged.data, members, ...(switched ? { hostDesk } : {}) };
       }),
 
     withRoom: serial,

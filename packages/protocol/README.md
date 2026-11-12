@@ -11,7 +11,7 @@ Every message that crosses a process boundary is declared here once, as a zod sc
 - Keep snapshots compact: arrays of numbers keyed by desk id, not objects per player (10 Hz x 100 players).
 
 ## Modules
-`version.ts` (`PROTOCOL_VERSION`, now 18) · `room-code.ts` (`roomCodeSchema`; re-exports the zod-free `room-code-format.ts`: `ROOM_CODE_RE`, `formatRoomCode`, `parseRoomCode`, also importable as `@fifth-copy/protocol/room-code` for client first loads, #675) · `race-token.ts` (claims, `RACE_TOKEN_TTL_S`) · `race.ts` (race value schemas) · `events.ts` (race events) · `socket.ts` (handshake, welcome/roster, event maps) · `internal.ts` (web <-> race-server HTTP) · `settings.ts` (race settings).
+`version.ts` (`PROTOCOL_VERSION`, now 19) · `room-code.ts` (`roomCodeSchema`; re-exports the zod-free `room-code-format.ts`: `ROOM_CODE_RE`, `formatRoomCode`, `parseRoomCode`, also importable as `@fifth-copy/protocol/room-code` for client first loads, #675) · `race-token.ts` (claims, `RACE_TOKEN_TTL_S`) · `race.ts` (race value schemas) · `events.ts` (race events) · `socket.ts` (handshake, welcome/roster, event maps) · `internal.ts` (web <-> race-server HTTP) · `settings.ts` (race settings).
 
 Bounds: every string and array is capped (`MAX_DESKS` 256, `MAX_NAME_LENGTH` 64, `MAX_TEXT_LENGTH` 20 000, `MAX_OVERLAY_WORDS` 500, ids 128, token 4096, `MAX_KEYS_PER_BATCH` 64, `MAX_RESULTS_PER_REQUEST` 25, `MAX_TRACE_BASE64_LENGTH` 256 KiB). Times are integer ms: `t`, `lastT`, `kickAt`, `blurUntil`, `finishedAt`, `durationMs` since GO, capped at `MAX_RACE_MS` (1 h: the timer stops at 600 s, an untimed 500-word text at 10 WPM takes 50 min); `t0`, `serverNow`, `startedAt`, `endedAt` server epoch. Names and keys are printable: no control, format (bidi), surrogate, private-use or line-separator code points (names keep ZWJ/ZWNJ).
 
@@ -33,7 +33,7 @@ Bounds: every string and array is capped (`MAX_DESKS` 256, `MAX_NAME_LENGTH` 64,
 - `pong { v, sent, serverNow }`.
 
 ### Client -> server (`clientEvents` + `clientAcks`, typed as `ClientToServerEvents`)
-- `host:settings { v, patch: RaceSettingsPatch }`, ack `hostSettingsAckSchema`: `{ ok: true, settings } | { ok: false, error: not-host|not-waiting|invalid|no-room|rate-limited }` (`rate-limited`: the race server's guard, #750).
+- `host:settings { v, patch: RaceSettingsPatch }`, ack `hostSettingsAckSchema`: `{ ok: true, settings } | { ok: false, error: not-host|not-waiting|invalid|no-room|rate-limited|room-full }` (`rate-limited`: the race server's guard, #750; `room-full`: a watching host's switch back finds the 30 desks seated, #876, protocol 19).
 - `host:kick { v, desk }` (#133, protocol 15; strict, names a desk, never a user; host only, `waiting` or `ended` only), ack `hostKickAckSchema`: `{ ok: true } | { ok: false, error: not-host|not-waiting|no-such-desk|is-bot|self }`. The room hears `event kicked {desk}`, the removed user's sockets are disconnected and refused `removed` from then on.
 - `host:start { v }`, ack `hostStartAckSchema`: `{ ok: true, raceId } | { ok: false, error: not-host|too-few|not-waiting|start-failed }`.
 - `keys { v, batch: Keystroke[] (1..64) }`: `Keystroke = { t: ms since GO, key: one character or "Backspace" }`; `t` need not be monotonic (the server clamps). `abandon { v }`, `bonus:play { v }`, `ping { v, sent }`: no ack, refused by `rejected`.
@@ -47,6 +47,7 @@ Bounds: every string and array is capped (`MAX_DESKS` 256, `MAX_NAME_LENGTH` 64,
 - Race rules: `timerS` (int 60-600 or `null`), `errorMode` (engine `ErrorMode`), `backspace`, `bonuses`; `engineSettingsOf()` returns the engine's `{ errorMode, backspace }`.
 - Bots: `bots: { level }[]`, at most `MAX_BOTS` (29); `BOT_LEVEL_WPM` maps `recruit|clerk|officer|commissar|major` to 20-90 WPM.
 - Lobby: `lobbyType` (`public`|`private`), owned by `Lobby.type` in Postgres, so `raceSettingsPatchSchema` (the `host:settings` patch: every field optional) omits it.
+- Host (#876, protocol 19): `hostWatches` (boolean, default `false`): the host follows the race without a desk. The schema's one `.default`, so rooms and rows stored before it parse as the host typing; the patch schema drops that default (a patch without it never sends the host back). `true` frees the host's desk (`welcome.you: null` for its sockets), `false` seats it at the lowest free desk or is refused `room-full`.
 - `withDefaults(partial)` merges over the defaults and parses (throws on invalid input).
 - Storage: the race server keeps them as JSON in the room hash (`settings` field) under the room TTL.
 

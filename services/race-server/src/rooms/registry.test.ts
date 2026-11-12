@@ -209,7 +209,7 @@ describe("room registry: join (C2, C3)", () => {
         registry.join(lobbyId, { userId: `u${i}`, name: `U${i}` }),
       ),
     );
-    const desks = results.map((r) => (r.ok ? r.desk : 0)).sort((x, y) => x - y);
+    const desks = results.map((r) => (r.ok ? (r.desk ?? 0) : 0)).sort((x, y) => x - y);
     expect(desks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
@@ -1439,5 +1439,123 @@ describe("room registry: sharedRoom (#65 C3)", () => {
       for (const userId of [u.a, u.b])
         expect(lookups).toContainEqual(["hexists", membersKey(lobbyId), userId]);
     expect(lookups.length % 2).toBe(0);
+  });
+});
+
+describe("room registry: the host watches (#876)", () => {
+  const ada = { name: "Ada" };
+  async function watching(registry: RoomRegistry) {
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    await registry.join(lobbyId, { userId: "b", name: "Bob" });
+    return lobbyId;
+  }
+
+  it("C2 the patch true frees the host's desk; hostUserId stays; the host joins with no desk", async () => {
+    const { registry } = setup();
+    const lobbyId = await watching(registry);
+    const on = await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    expect(on).toEqual({
+      ok: true,
+      settings: { ...settings, hostWatches: true },
+      members: [m(2, "Bob", false)],
+      hostDesk: null,
+    });
+    expect((await registry.room(lobbyId))?.hostUserId).toBe("host");
+    const again = await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    expect(again).toMatchObject({ ok: true, desk: null, members: [m(2, "Bob", false)] });
+    expect(await registry.members(lobbyId)).toEqual([m(2, "Bob", false)]);
+  });
+
+  it("C2 the watching host joins with no desk during the race it started (its seat view)", async () => {
+    const { registry } = setup();
+    const lobbyId = await watching(registry);
+    await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    await registry.setPhase(lobbyId, "running");
+    expect(await registry.join(lobbyId, { userId: "host", name: "Ada" })).toMatchObject({
+      ok: true,
+      desk: null,
+      members: [m(2, "Bob", false)],
+    });
+    expect(await registry.join(lobbyId, { userId: "c", name: "Cy" })).toEqual({
+      ok: false,
+      reason: "in-progress",
+    });
+  });
+
+  it("C2 the patch false seats the host at the lowest free desk; refused room-full at 30 desks", async () => {
+    const { registry } = setup();
+    const lobbyId = await watching(registry);
+    await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    const back = await registry.updateSettings(lobbyId, "host", { hostWatches: false }, ada);
+    expect(back).toMatchObject({
+      ok: true,
+      hostDesk: 1,
+      members: [m(1, "Ada", true), m(2, "Bob", false)],
+    });
+
+    await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    for (let i = 0; i < ROOM_SEATS - 1; i++) {
+      expect((await registry.join(lobbyId, { userId: `u${i}`, name: `U${i}` })).ok).toBe(true);
+    }
+    expect(await registry.members(lobbyId)).toHaveLength(ROOM_SEATS);
+    const full = await registry.updateSettings(lobbyId, "host", { hostWatches: false }, ada);
+    expect(full).toEqual({ ok: false, reason: "room-full" });
+    expect((await registry.settings(lobbyId))?.hostWatches).toBe(true);
+    expect(await registry.join(lobbyId, { userId: "late", name: "Late" })).toEqual({
+      ok: false,
+      reason: "room-full",
+    });
+  });
+
+  it("C2 anyone else's patch is not-host", async () => {
+    const { registry } = setup();
+    const lobbyId = await watching(registry);
+    expect(await registry.updateSettings(lobbyId, "b", { hostWatches: true }, ada)).toEqual({
+      ok: false,
+      reason: "not-host",
+    });
+  });
+
+  it("C2 the room stays open with no seated human while the host watches", async () => {
+    const { registry } = setup();
+    const lobbyId = await watching(registry);
+    await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    expect(await registry.leave(lobbyId, "b")).toEqual({ members: [], closed: false, kept: false });
+    expect(await registry.room(lobbyId)).not.toBeNull();
+  });
+
+  it("C4 the watching host's leave promotes the earliest-joined human and turns hostWatches off in the same write", async () => {
+    const { registry, clock } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    await registry.join(lobbyId, { userId: "b", name: "Bob" });
+    clock.advance(1_000);
+    await registry.join(lobbyId, { userId: "c", name: "Cy" });
+    const left = await registry.leave(lobbyId, "host");
+    expect(left).toEqual({
+      members: [m(1, "Bob", true), m(2, "Cy", false)],
+      closed: false,
+      kept: false,
+      newHost: { userId: "b", desk: 1 },
+      settings: { ...settings, hostWatches: false },
+    });
+    const room = await registry.room(lobbyId);
+    expect(room?.hostUserId).toBe("b");
+    expect(room?.settings.hostWatches).toBe(false);
+  });
+
+  it("C4 the watching host's leave with no human seated closes the room", async () => {
+    const { registry } = setup();
+    const lobbyId = await openRoom(registry);
+    await registry.join(lobbyId, { userId: "host", name: "Ada" });
+    await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
+    expect(await registry.leave(lobbyId, "host")).toEqual({
+      members: [],
+      closed: true,
+      kept: false,
+    });
+    expect(await registry.room(lobbyId)).toBeNull();
   });
 });

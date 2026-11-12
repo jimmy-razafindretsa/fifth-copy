@@ -15,6 +15,8 @@ import {
   type HostKickAck,
   type HostSettingsAck,
   type HostStartAck,
+  type Phase,
+  type RaceSettings,
   type RaceTokenClaims,
   type RoomCode,
   type ServerToClientEvents,
@@ -103,12 +105,54 @@ export function attachSocketServer(
     onNewHost: deps.onNewHost,
     announce: (lobbyId, members) =>
       void io.to(audience(lobbyId)).emit("roster", { v: PROTOCOL_VERSION, members }),
+    announceSettings: (lobbyId, settings) =>
+      void io.to(audience(lobbyId)).emit("settings", { v: PROTOCOL_VERSION, settings }),
   };
   const io: RaceIo = new Server(httpServer, {
     cors: { origin: deps.origin, credentials: false },
     transports: ["websocket", "polling"],
   });
   io.use(createHandshakeMiddleware(deps));
+
+  /**
+   * Sends `welcome` to a seat socket at `desk` (`null`: the watching host, #876: no desk, no resume
+   * key, no race state): joins its desk's room, has presence issue the desk's resume key (or resume
+   * it), then reads the phase again, which may have moved on while presence waited in the queue.
+   */
+  async function sendWelcome(
+    target: Pick<RaceSocket, "data" | "emit" | "join">,
+    desk: number | null,
+    members: Welcome["members"],
+    joined: { code: string; phase: Phase; settings: RaceSettings; race: Welcome["race"] },
+  ) {
+    const { lobby, sub, role } = target.data.claims;
+    target.data.desk = desk ?? undefined;
+    if (desk !== null) void target.join(deskRoom(lobby, desk));
+    const resumeKey =
+      desk === null
+        ? null
+        : (await presence.seated(lobby, sub, desk, target.data.resume === true)).resumeKey;
+    const now = await registry.room(lobby);
+    target.emit("welcome", {
+      v: PROTOCOL_VERSION,
+      role,
+      you: desk,
+      // Parsed by openRoomRequestSchema when the room was opened.
+      room: { code: joined.code as RoomCode, phase: now?.phase ?? joined.phase },
+      members,
+      settings: joined.settings,
+      race: joined.race,
+      // The server's authority after a resume: the client reconciles from it (#215).
+      state: desk === null ? null : race.stateOf(lobby, desk),
+      overlay: desk === null ? null : race.overlayOf(lobby, desk),
+      bonus: desk === null ? null : race.bonusOf(lobby, desk),
+      resumeKey,
+      serverNow: deps.clock.now(),
+      // A reload or a reconnect during a public room's countdown sees it (#814).
+      autoStartAt: now?.autoStartAt ?? null,
+    });
+    return now;
+  }
   const guard = createSocketGuard({ limiter: deps.limiter, clock: deps.clock, log });
 
   io.on("connection", (socket: RaceSocket) => {
@@ -145,35 +189,7 @@ export function attachSocketServer(
       .join(lobby, { userId: sub, name, avatar })
       .then(async (joined) => {
         if (!joined.ok) return void socket.disconnect(true);
-        socket.data.desk = joined.desk;
-        void socket.join(deskRoom(lobby, joined.desk));
-        const { resumeKey } = await presence.seated(
-          lobby,
-          sub,
-          joined.desk,
-          socket.data.resume === true,
-        );
-        // The phase may have moved on while presence waited in the queue.
-        const now = await registry.room(lobby);
-        const phase = now?.phase ?? joined.room.phase;
-        socket.emit("welcome", {
-          v: PROTOCOL_VERSION,
-          role,
-          you: joined.desk,
-          // Parsed by openRoomRequestSchema when the room was opened.
-          room: { code: joined.room.code as RoomCode, phase },
-          members: joined.members,
-          settings: joined.room.settings,
-          race: joined.room.race,
-          // The server's authority after a resume: the client reconciles from it (#215).
-          state: race.stateOf(lobby, joined.desk),
-          overlay: race.overlayOf(lobby, joined.desk),
-          bonus: race.bonusOf(lobby, joined.desk),
-          resumeKey,
-          serverNow: deps.clock.now(),
-          // A reload or a reconnect during a public room's countdown sees it (#814).
-          autoStartAt: now?.autoStartAt ?? null,
-        });
+        const now = await sendWelcome(socket, joined.desk, joined.members, joined.room);
         // A room voided by a restart (#204): this socket hears the race is over, never a frozen race.
         if (now?.phase === "ended" && now.endReason === "void" && now.raceId !== null) {
           socket.emit("ended", {
@@ -204,10 +220,27 @@ export function attachSocketServer(
       }
       // Keys only, never values: the strict patch schema bounds them to known setting names.
       const keys = Object.keys(parsed.data.patch);
-      registry.updateSettings(lobby, sub, parsed.data.patch).then(
-        (result) => {
+      registry.updateSettings(lobby, sub, parsed.data.patch, { name, avatar }).then(
+        async (result) => {
           log("settings", { lobby, outcome: result.ok ? "ok" : result.reason, keys });
           if (!result.ok) return reply({ ok: false, error: result.reason });
+          // The host gave up its desk or took one again (#876): each of its sockets here gets a new
+          // `welcome` (its desk or none, its resume key) before the room hears the change.
+          if (result.hostDesk !== undefined && result.members) {
+            const { members, settings, hostDesk } = result;
+            if (hostDesk === null) await presence.left(lobby, sub);
+            const code = socket.data.claims.lobby && (await registry.room(lobby))?.code;
+            for (const s of await io.in(room).fetchSockets()) {
+              if (s.data.claims.sub !== sub) continue;
+              if (s.data.desk !== undefined) s.leave(deskRoom(lobby, s.data.desk));
+              await sendWelcome(s, hostDesk, members, {
+                code: code ?? "",
+                phase: "waiting",
+                settings,
+                race: null,
+              });
+            }
+          }
           io.to(everyone).emit("settings", { v: PROTOCOL_VERSION, settings: result.settings });
           // A `bots` patch, or a language change with bots, re-seated the room (#156, #361).
           if (result.members) {

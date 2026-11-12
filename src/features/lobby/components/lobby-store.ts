@@ -51,6 +51,11 @@ export type LobbyState = {
   error: LobbyError | null;
   /** The viewer's desk, from `welcome`. */
   you: number | null;
+  /**
+   * The viewer hosts without a desk (#876, `hostWatches`): a seat socket welcomed with `you: null`. The
+   * race server sends a new `welcome` when the host switches, so only `welcome` sets it.
+   */
+  watching: boolean;
   /** Sorted by desk. */
   members: Member[];
   /** The started race (`countdown.race.raceId`, the stored `Race.id`), `null` before the start. */
@@ -99,6 +104,7 @@ export const initialLobbyState: LobbyState = {
   phase: "loading",
   error: null,
   you: null,
+  watching: false,
   members: [],
   raceId: null,
   settings: null,
@@ -160,6 +166,7 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
         phase: started || (underway && state.phase === "starting") ? "starting" : "live",
         error: null,
         you: event.payload.you,
+        watching: event.payload.you === null && event.payload.role !== "spectator",
         members: byDesk(event.payload.members),
         raceId: started ? race.raceId : state.raceId,
         settings: event.payload.settings,
@@ -201,7 +208,7 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
       if (reason === "removed") return { ...state, phase: "removed", error: null };
       // A late joiner (#732): refused before its first seat, it holds until the race ends; transport
       // errors keep the notice, a full room ends it. A viewer seated before keeps today's path.
-      const neverSeated = state.you === null && state.phase !== "starting";
+      const neverSeated = state.you === null && !state.watching && state.phase !== "starting";
       if (reason === "in-progress" && neverSeated) return { ...state, phase: "spectating" };
       if (state.phase === "spectating" && reason === "transport") return state;
       const error = connectError(reason);
@@ -211,11 +218,11 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
       return state.phase === "spectating" ? state : { ...state, phase: "reconnecting" };
     case "reconnected":
       if (state.phase === "spectating") return state;
-      return { ...state, phase: state.you === null ? "loading" : "live" };
+      return { ...state, phase: state.you === null && !state.watching ? "loading" : "live" };
     case "server-disconnect": {
       // Never seated (loading, spectating): a join refused after the handshake, the late-join hold's
       // to decide (#732). Seated: the page would wait forever, so it ends on the error line.
-      const neverSeated = state.you === null && state.phase !== "starting";
+      const neverSeated = state.you === null && !state.watching && state.phase !== "starting";
       if (neverSeated || state.phase === "spectating") return state;
       return { ...state, phase: "error", error: "server-disconnect" };
     }

@@ -77,7 +77,7 @@ const RECIPE_ROWS: ReadonlyArray<FormKey> = [
  * mode (the docket's own `when` rules, #498).
  */
 export function hostRows(settings: RaceSettings): FormKey[] {
-  const rows: FormKey[] = ["language", "textType", "wordCount"];
+  const rows: FormKey[] = ["hostWatches", "language", "textType", "wordCount"];
   if (settings.language === "fr") rows.push("accentEveryWord");
   rows.push("difficulty");
   if (settings.difficulty.level === "custom") rows.push(...RECIPE_ROWS);
@@ -118,6 +118,8 @@ function patchOf(key: FormKey, raw: RawValue, current: RaceSettings): RaceSettin
   if (key === "lobbyType") return null; // the web action's, never a room patch (ADR 0008)
   if (key === "bots" || key.startsWith("bots.")) return botsPatch(key, raw, current);
   switch (key) {
+    case "hostWatches":
+      return { hostWatches: raw === "watches" };
     case "wordCount":
       return { wordCount: wholeNumber(raw) };
     case "timerS":
@@ -167,7 +169,8 @@ export function buildPatch(
 /** Why the page refused a change itself: never the typed text (C4). */
 export type LocalError = "words" | "timer" | "too-many-letters" | "letters" | "invalid";
 /** Why the room refused one (`not-host` hides the form instead). */
-export type RoomError = "not-waiting" | "invalid" | "no-room" | "timeout";
+/** `room-full`: a watching host's switch back finds every desk seated (#876). */
+export type RoomError = "not-waiting" | "invalid" | "no-room" | "room-full" | "timeout";
 export type FormError = LocalError | RoomError;
 
 export type Validated = { ok: true; patch: RaceSettingsPatch } | { ok: false; error: LocalError };

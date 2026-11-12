@@ -33,7 +33,7 @@ type RaceRow = {
   textLanguage: "FR" | "EN";
   endedAt: Date | null;
   endReason: "ALL_FINISHED" | "TIMER" | "VOID" | null;
-  lobby: { code: string; status: "WAITING" | "CLOSED" } | null;
+  lobby: { code: string; status: "WAITING" | "CLOSED"; hostUserId?: string } | null;
   results: Row[];
 };
 
@@ -80,7 +80,7 @@ const RACES: RaceRow[] = [
     textLanguage: "FR",
     endedAt: ENDED,
     endReason: "ALL_FINISHED",
-    lobby: { code: "KGB-4821", status: "WAITING" },
+    lobby: { code: "KGB-4821", status: "WAITING", hostUserId: "usr_host" },
     // stored out of order: the query orders by place, then desk
     results: [
       row({
@@ -191,6 +191,16 @@ describe("getDawnReport (#300 C1)", () => {
     await expect(getDawnReport(VOID_ID, null, { db: fakeDb(withRows).db })).resolves.toBeNull();
   });
 
+  it("#876 C7 viewerHosts: the lobby's host, with or without a desk; nobody else", async () => {
+    const { db } = fakeDb();
+    const host = await getDawnReport(RACE_ID, { id: "usr_host" }, { db });
+    const other = await getDawnReport(RACE_ID, { id: "usr_other" }, { db });
+    const visitor = await getDawnReport(RACE_ID, null, { db });
+    expect(host?.kind === "report" && host.viewerHosts).toBe(true);
+    expect(other?.kind === "report" && other.viewerHosts).toBe(false);
+    expect(visitor?.kind === "report" && visitor.viewerHosts).toBe(false);
+  });
+
   it("lobbyOpen is true only while the race's lobby is WAITING (#143 C4)", async () => {
     const closed = RACES.map((r) =>
       r.id === RACE_ID ? { ...r, lobby: { code: "KGB-4821", status: "CLOSED" as const } } : r,
@@ -228,7 +238,7 @@ describe("getDawnReport (#300 C1)", () => {
       viewerDesk: null,
     });
     expect(findUnique.mock.calls[0]![0].select.lobby).toEqual({
-      select: { code: true, status: true },
+      select: { code: true, status: true, hostUserId: true },
     });
     if (report?.kind !== "report") throw new Error("report expected");
     expect(report.entries.map((e) => [e.place, e.desk, e.wpm])).toEqual([

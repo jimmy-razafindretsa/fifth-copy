@@ -678,7 +678,8 @@ test.describe("host settings form (#110)", () => {
     for (const p of [page, b.page]) {
       await expect(p.locator("html")).toHaveAttribute("lang", "en");
       await expect(p.getByRole("heading", { level: 1 })).toHaveText("REPORT TO YOUR DESK");
-      await expect(settingsDocket(p).locator("dt").first()).toHaveText("LANGUAGE");
+      // FORM 5-L opens with HOST since #876, then the race language
+      await expect(settingsDocket(p).locator("dt").nth(1)).toHaveText("LANGUAGE");
       await expect(settingsDocket(p).getByText("ACCENTS", { exact: true })).toBeVisible();
     }
     await b.context.close();

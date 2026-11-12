@@ -153,6 +153,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 ### 5.2 Size
 - **Minimum 2 participants** to start (bots count toward the minimum).
 - **30 desks per room**, typists and bots together (owner decision 2026-11-03): a newcomer finds the room full once 30 desks are seated, and the host cannot add a bot past 30. Must be tested and smooth with **30 live players**.
+- **The host may watch instead of typing** (owner decision 2026-11-02, #876): a watching host holds no desk, so all 30 desks are for typists (a class of 30 plus the teacher) and the host does not count toward the minimum of 2.
 - **No offline mode**, except racing against **bots**.
 
 ### 5.3 Landing page matchmaking
@@ -162,6 +163,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 ### 5.4 Host powers
 - **Only the host can invite** others (generate code / single-use links).
 - Host configures the race (§8), starts it, and can remove players in the lobby.
+- **The host types by default, with an option to only watch** (owner decision 2026-11-02, #876): the settings row `HOST` is `TYPES` or `WATCHES`, changed in the waiting room only. A watching host keeps every power (settings, invites, START, removals) and follows the race on the seat view without a typing surface; switching back takes the lowest free desk, refused when all 30 are seated. If a watching host leaves, the transfer rule below applies and the new host types.
 - **Host transfer:** if the host leaves, host role passes automatically to the next player who joined earliest (human, never a bot). Everyone sees a "New host: X" stamp.
 
 ---

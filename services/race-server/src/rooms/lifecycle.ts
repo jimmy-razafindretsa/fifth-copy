@@ -21,7 +21,10 @@ import type { BotSeat } from "./bot-driver";
 import type { RaceDesk, RoomRegistry, RoomState } from "./registry";
 
 /** The room broadcasts the lifecycle sends; implemented by the socket edge with `io.to(room)`. */
-type RoomEvents = Pick<ServerToClientEvents, "countdown" | "ended" | "auto-start">;
+type RoomEvents = Pick<
+  ServerToClientEvents,
+  "loading" | "readiness" | "countdown" | "ended" | "auto-start"
+>;
 export type Emit = <E extends keyof RoomEvents>(
   lobbyId: string,
   event: E,
@@ -53,6 +56,27 @@ export type Lifecycle = {
    * dropped (instant deleted, timer cleared, `auto-start { null }`). Never rejects.
    */
   reviewAutoStart(lobbyId: string): Promise<void>;
+  /**
+   * A seat socket at `desk` sent `ready { raceId }` (#926), in the room's queue: dropped unless the
+   * room loads that race and `desk` is one of its human desks; a repeat changes nothing. Otherwise
+   * the desk's mark is set and the barrier reviewed (`reviewLoading`). Never rejects.
+   */
+  ready(lobbyId: string, desk: number, raceId: string): Promise<void>;
+  /**
+   * The readiness barrier's one decision (#926), in the room's queue: after a `ready`, a user's last
+   * socket closing (`away`), a user back, and at the limit. Awaited = the race's human desks whose
+   * user has a socket open (`connected`); pending = awaited without a mark. None pending, or the
+   * limit passed: the room turns `countdown` with `t0 = now + COUNTDOWN_MS` (the release). Else the
+   * room hears `readiness { pending }` when the set changed. A room lost while loading is voided.
+   */
+  reviewLoading(lobbyId: string): Promise<void>;
+  /**
+   * The user's last socket closed during `loading` (#926, synchronous): its desk loses its ready
+   * mark (a user back must report again), then the barrier is reviewed.
+   */
+  away(lobbyId: string, userId: string): void;
+  /** The desks the barrier awaits while the room loads (`welcome.pending`), else `null`. */
+  pending(lobbyId: string): number[] | null;
   /**
    * The one exit of a race: timer (here), all-finished (#173), void (#204). Idempotent. A room whose
    * keys are gone while its race runs in this process is voided (`voidRoom`), never left frozen.
@@ -95,6 +119,15 @@ export function autoStartEligible(room: Pick<RoomState, "phase" | "settings" | "
 /** Who starts a race: the host's socket (`host:start`), or the room's own clock (#814). */
 type Starter = { sub: string; role: RaceRole } | "room";
 
+/**
+ * Who the readiness barrier awaits (#926): a human desk of the race whose user has a socket open.
+ * Bots, the watching host (no desk) and spectators never are. The seam a later rule (a per-room
+ * choice, an absence grace) changes.
+ */
+export function awaited(desk: RaceDesk, connected: boolean): boolean {
+  return !desk.isBot && desk.userId !== null && connected;
+}
+
 /** Bound on the web start call (card #166); the room's queue waits for it. */
 export const START_TIMEOUT_MS = 5_000;
 
@@ -103,8 +136,9 @@ const log = (msg: string, fields: Record<string, unknown>) =>
 
 /**
  * The room's phase transitions and clock (ADR 0006, 0008; ARCHITECTURE 7.1): `waiting ->
- * countdown` (or `ended -> countdown`, "Race again", #143) on a host start with >= 2 desks, `countdown -> running` at GO (`t0`), `running ->
- * ended` through `endRace`. Every transition runs in the registry's per-room queue and writes Redis
+ * loading` (or `ended -> loading`, "Race again", #143) on a host start with >= 2 desks, `loading ->
+ * countdown` once every awaited seat is ready or at `LOAD_LIMIT_MS` (#926, the readiness barrier),
+ * `countdown -> running` at GO (`t0`), `running -> ended` through `endRace`. Every transition runs in the registry's per-room queue and writes Redis
  * (the single state) before it emits; only timer handles live in this process.
  */
 export function createLifecycle({
@@ -124,6 +158,7 @@ export function createLifecycle({
   liveRace = () => null,
   leavePending = () => false,
   syncHost = async () => true,
+  connected = () => true,
 }: {
   registry: RoomRegistry;
   clock: Clock;
@@ -171,10 +206,41 @@ export function createLifecycle({
    * the outbox. `false` or a rejection fails the start (`start-failed`); a later start tries again.
    */
   syncHost?: (lobbyId: string) => Promise<boolean>;
+  /** Whether the user seated at `desk` has a socket open (#926: presence; the barrier's awaited). */
+  connected?: (lobbyId: string, desk: number) => boolean;
 }): Lifecycle {
   const timers = new Map<string, TimerHandle[]>();
   /** The pending automatic start of each armed room (#814), apart so a start clears it alone. */
   const autoTimers = new Map<string, TimerHandle>();
+  /**
+   * The readiness barrier of each loading room (#926), process state like the timers: the race,
+   * its human desks by user, the desks that reported, the limit timer and the last `pending` sent.
+   */
+  const loads = new Map<
+    string,
+    {
+      raceId: string;
+      humans: Map<string, number>;
+      ready: Set<number>;
+      timer: TimerHandle;
+      sent: string;
+    }
+  >();
+
+  function clearLoad(lobbyId: string) {
+    const load = loads.get(lobbyId);
+    if (load) scheduler.clear(load.timer);
+    loads.delete(lobbyId);
+  }
+
+  /** The awaited desks without a mark, ascending; `null` when the room is not loading here. */
+  function pendingOf(lobbyId: string): number[] | null {
+    const load = loads.get(lobbyId);
+    if (!load) return null;
+    return [...load.humans.values()]
+      .filter((desk) => !load.ready.has(desk) && connected(lobbyId, desk))
+      .sort((a, b) => a - b);
+  }
 
   function clearAuto(lobbyId: string) {
     const handle = autoTimers.get(lobbyId);
@@ -186,6 +252,7 @@ export function createLifecycle({
     for (const handle of timers.get(lobbyId) ?? []) scheduler.clear(handle);
     timers.delete(lobbyId);
     clearAuto(lobbyId);
+    clearLoad(lobbyId);
   }
 
   const autoLog = (lobbyId: string, outcome: string) =>
@@ -334,6 +401,39 @@ export function createLifecycle({
     });
 
   /**
+   * The barrier's decision (#926), inside the room's queue. `limit`: the limit timer fired, the
+   * room goes whatever is pending.
+   */
+  async function decide(lobbyId: string, limit: boolean) {
+    const load = loads.get(lobbyId);
+    if (!load) return;
+    const room = await registry.room(lobbyId);
+    // Lost while loading (#204): the clients must not wait for a countdown that never comes.
+    if (room === null) return lose(lobbyId, load.raceId);
+    if (room.phase !== "loading" || room.race?.raceId !== load.raceId) return clearLoad(lobbyId);
+    const pending = pendingOf(lobbyId) ?? [];
+    if (!limit && pending.length > 0) {
+      const sent = pending.join(",");
+      if (sent === load.sent) return;
+      load.sent = sent;
+      emit(lobbyId, "readiness", { v: PROTOCOL_VERSION, raceId: load.raceId, pending });
+      return;
+    }
+    clearLoad(lobbyId);
+    // The GO instant is decided now, the same for every socket of the room (ADR 0006).
+    const t0 = clock.now() + durations.COUNTDOWN_MS;
+    const { timerS } = room.settings;
+    // An untimed race still ends on the wire's bound (MAX_RACE_MS, #557), as a timer end.
+    const endAt = t0 + (timerS === null ? MAX_RACE_MS : timerS * 1000);
+    const race: RaceInfo = { ...room.race, t0 };
+    await registry.releaseRace(lobbyId, { race, endAt });
+    at(lobbyId, t0, () => goRunning(lobbyId, race.raceId));
+    at(lobbyId, endAt, () => lifecycle.endRace(lobbyId, "timer"));
+    emit(lobbyId, "countdown", { v: PROTOCOL_VERSION, race });
+    log("countdown", { lobby: lobbyId, outcome: limit ? "limit" : "ready", late: pending.length });
+  }
+
+  /**
    * The one start path: a host START (`by` the socket's claims, authorised here) or the room's
    * automatic start (`"room"`, #814: authorised by the room's own clock, so it fires even after the
    * host's socket left; `hostUserId` still names the host to the web).
@@ -346,7 +446,7 @@ export function createLifecycle({
     if (by !== "room" && (by.role === "spectator" || by.sub !== room.hostUserId)) {
       return { ok: false, error: "not-host" } as const;
     }
-    // `not-waiting`: a race is on (countdown or running).
+    // `not-waiting`: a race is on (loading, countdown or running).
     if (!canStart(room.phase)) return { ok: false, error: "not-waiting" } as const;
     if (room.seated.length < 2) return { ok: false, error: "too-few" } as const;
 
@@ -378,9 +478,10 @@ export function createLifecycle({
       return { ok: false, error: "start-failed" } as const;
     }
 
-    const t0 = clock.now() + durations.COUNTDOWN_MS;
+    // Loading (#926): GO waits for the seats; `t0` is the latest it can be until the release.
+    const loadingAt = clock.now();
+    const t0 = loadingAt + durations.LOAD_LIMIT_MS + durations.COUNTDOWN_MS;
     const { timerS } = room.settings;
-    // An untimed race still ends on the wire's bound (MAX_RACE_MS, #557), as a timer end.
     const endAt = t0 + (timerS === null ? MAX_RACE_MS : timerS * 1000);
     const race: RaceInfo = {
       raceId,
@@ -397,13 +498,36 @@ export function createLifecycle({
         log("onRestart failed", { lobby: lobbyId, err: String(err) });
       }
     }
-    // `startRace` deletes the stored instant; its timer goes here. `countdown` supersedes it.
+    // `startRace` deletes the stored instant; its timer goes here. `loading` supersedes it.
     clearAuto(lobbyId);
+    clearLoad(lobbyId);
     await registry.startRace(lobbyId, { race, endAt, desks: room.seated });
-    at(lobbyId, t0, () => goRunning(lobbyId, raceId));
-    at(lobbyId, endAt, () => lifecycle.endRace(lobbyId, "timer"));
-    emit(lobbyId, "countdown", { v: PROTOCOL_VERSION, race });
+    const humans = new Map(
+      room.seated.flatMap((desk) =>
+        awaited(desk, true) && desk.userId !== null ? [[desk.userId, desk.desk] as const] : [],
+      ),
+    );
+    loads.set(lobbyId, {
+      raceId,
+      humans,
+      ready: new Set(),
+      sent: "",
+      timer: scheduler.setTimeout(
+        () =>
+          void registry
+            .withRoom(lobbyId, () => decide(lobbyId, true))
+            .catch((err: unknown) =>
+              log("loading limit failed", { lobby: lobbyId, err: String(err) }),
+            ),
+        loadingAt + durations.LOAD_LIMIT_MS - clock.now(),
+      ),
+    });
+    const pending = pendingOf(lobbyId) ?? [];
+    loads.get(lobbyId)!.sent = pending.join(",");
+    emit(lobbyId, "loading", { v: PROTOCOL_VERSION, race, pending });
     log("start", { lobby: lobbyId, outcome: "ok", desks: room.seated.length });
+    // Nobody to wait for (every human away): the countdown follows at once.
+    if (pending.length === 0) await decide(lobbyId, false);
     return { ok: true, raceId } as const;
   }
 
@@ -415,6 +539,34 @@ export function createLifecycle({
           log("start", { lobby: lobbyId, outcome: "start-failed", cause: String(err) });
           return { ok: false, error: "start-failed" } as const;
         }),
+
+    ready: (lobbyId, desk, raceId) =>
+      registry
+        .withRoom(lobbyId, async () => {
+          const load = loads.get(lobbyId);
+          if (load?.raceId !== raceId || load.ready.has(desk)) return;
+          if (![...load.humans.values()].includes(desk)) return;
+          load.ready.add(desk);
+          await decide(lobbyId, false);
+        })
+        .catch((err: unknown) => log("ready failed", { lobby: lobbyId, err: String(err) })),
+
+    reviewLoading: (lobbyId) =>
+      registry
+        .withRoom(lobbyId, () => decide(lobbyId, false))
+        .catch((err: unknown) =>
+          log("loading review failed", { lobby: lobbyId, err: String(err) }),
+        ),
+
+    away: (lobbyId, userId) => {
+      const load = loads.get(lobbyId);
+      const desk = load?.humans.get(userId);
+      if (!load || desk === undefined) return;
+      load.ready.delete(desk);
+      void lifecycle.reviewLoading(lobbyId);
+    },
+
+    pending: pendingOf,
 
     reviewAutoStart: (lobbyId) =>
       registry
@@ -492,7 +644,9 @@ export function createLifecycle({
     },
 
     close: () => {
-      for (const lobbyId of [...timers.keys(), ...autoTimers.keys()]) cancel(lobbyId);
+      for (const lobbyId of [...timers.keys(), ...autoTimers.keys(), ...loads.keys()]) {
+        cancel(lobbyId);
+      }
     },
   };
   return lifecycle;

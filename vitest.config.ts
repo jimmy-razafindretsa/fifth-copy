@@ -26,6 +26,8 @@ const SLOW_FILES = [
   "src/worker/main.test.ts",
   "services/race-server/src/rooms/lifecycle.test.ts",
   "services/race-server/src/players/presence.test.ts",
+  // The readiness barrier over real sockets (#926): several races per test.
+  "services/race-server/src/rooms/loading.test.ts",
   "services/race-server/src/rooms/snapshot.bench.test.ts",
   // 20 timed 10,000-name batches (#647): over the 5 s default when the machine is loaded.
   "src/features/texts/profanity/is-clean.test.ts",

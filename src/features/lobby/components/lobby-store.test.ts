@@ -48,6 +48,7 @@ const welcome = (you: number, members: Member[]): RoomEvents["welcome"] => ({
   resumeKey: null,
   serverNow: 1767225600000,
   autoStartAt: null,
+  pending: null,
 });
 
 function run(...events: LobbyEvent[]) {
@@ -75,6 +76,9 @@ function fakeSocket() {
     onRoster: bind("roster"),
     onSettings: bind("settings"),
     sendHostSettings: vi.fn(),
+    onLoading: bind("loading"),
+    onReadiness: bind("readiness"),
+    sendReady: vi.fn(),
     onCountdown: bind("countdown"),
     onAutoStart: bind("autoStart"),
     sendHostStart: vi.fn(),
@@ -223,6 +227,7 @@ describe("bindRoomSocket", () => {
         "connectError",
         "countdown",
         "event",
+        "loading",
         "reconnected",
         "reconnecting",
         "roster",
@@ -491,6 +496,7 @@ describe("countdown and the resume key (#214 C2)", () => {
         "connectError",
         "countdown",
         "event",
+        "loading",
         "reconnected",
         "reconnecting",
         "roster",
@@ -515,13 +521,14 @@ describe("welcome during the countdown (#659)", () => {
     t0: 1_767_225_603_000,
     timerS: DEFAULT_RACE_SETTINGS.timerS,
   };
-  const started = (phase: "countdown" | "running"): RoomEvents["welcome"] => ({
+  const started = (phase: "loading" | "countdown" | "running"): RoomEvents["welcome"] => ({
     ...welcome(2, [ada, bob]),
     room: { code: "KGB-4821" as never, phase },
     race,
   });
 
-  it.each(["countdown", "running"] as const)(
+  // #926 C5: a welcome while the room loads moves the page too.
+  it.each(["loading", "countdown", "running"] as const)(
     "C1: a %s welcome with the race gives the state a countdown would",
     (phase) => {
       expect(run({ type: "welcome", payload: started(phase) })).toEqual({
@@ -538,6 +545,25 @@ describe("welcome during the countdown (#659)", () => {
       });
     },
   );
+
+  it("#926 C5: loading moves the page to the seat view as a countdown does", () => {
+    const loading: RoomEvents["loading"] = { v: PROTOCOL_VERSION, race, pending: [1, 2] };
+    expect(
+      run(
+        { type: "welcome", payload: welcome(2, [ada, bob]) },
+        { type: "loading", payload: loading },
+      ),
+    ).toMatchObject({ phase: "starting", raceId: RACE_ID });
+  });
+
+  it("#926: binds loading and dispatches it", () => {
+    const { socket, fire } = fakeSocket();
+    const dispatch = vi.fn();
+    bindRoomSocket(socket, dispatch, { versionReload: fakeReload().deps });
+    const loading: RoomEvents["loading"] = { v: PROTOCOL_VERSION, race, pending: [] };
+    fire("loading", loading);
+    expect(dispatch).toHaveBeenCalledWith({ type: "loading", payload: loading });
+  });
 
   it("C1: a reconnect that missed the countdown broadcast still reaches the race", () => {
     const state = run(

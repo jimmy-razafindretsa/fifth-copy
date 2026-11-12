@@ -95,10 +95,13 @@ describe("authenticateHandshake (C2)", () => {
     expect(await as("usr_host")).toMatchObject({ ok: true });
     // A late joiner is seated once the race is over (#732, spec 5.1).
     expect(await as("usr_new")).toMatchObject({ ok: true, resume: false });
-    // Countdown and running stay members only.
-    await registry.setPhase(lobby, "running");
-    expect(await as("usr_b")).toEqual({ ok: false, reason: "in-progress" });
-    expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
+    // Loading (#926), countdown and running stay members only.
+    for (const phase of ["loading", "countdown", "running"] as const) {
+      await registry.setPhase(lobby, phase);
+      expect(await as("usr_b")).toEqual({ ok: false, reason: "in-progress" });
+      expect(await as("usr_new")).toEqual({ ok: false, reason: "in-progress" });
+      expect(await as("usr_host")).toMatchObject({ ok: true });
+    }
   });
 
   it("refuses a stranger room-full once ROOM_SEATS typists are seated; a member still passes (#732)", async () => {

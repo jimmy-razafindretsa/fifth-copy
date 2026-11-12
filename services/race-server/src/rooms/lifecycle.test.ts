@@ -75,8 +75,21 @@ function watch(client: Client): Seen {
   return seen;
 }
 
-function start(client: Client, payload: unknown = { v: PROTOCOL_VERSION }): Promise<HostStartAck> {
-  return client.timeout(2_000).emitWithAck("host:start", payload as never);
+/**
+ * `host:start`; an `ok` start resolves once the client heard its `countdown`: every harness client
+ * answers the readiness barrier (#926), so the countdown follows the `loading` at the same instant.
+ */
+async function start(
+  client: Client,
+  payload: unknown = { v: PROTOCOL_VERSION },
+): Promise<HostStartAck> {
+  let counted = false;
+  const onCountdown = () => void (counted = true);
+  client.once("countdown", onCountdown);
+  const ack = await client.timeout(2_000).emitWithAck("host:start", payload as never);
+  if (ack.ok) await until(() => counted, WAIT_MS, "countdown after the loading");
+  else client.off("countdown", onCountdown);
+  return ack;
 }
 
 /** Boots a room with the host and `players` players connected and seated. */

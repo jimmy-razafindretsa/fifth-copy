@@ -2,7 +2,7 @@ import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
 import type { Scheduler, TimerHandle } from "../clock";
 import type { DesksState } from "../rooms/desks-state";
 import type { Durations } from "../rooms/durations";
-import { watches, type RoomRegistry } from "../rooms/registry";
+import { raceOn, watches, type RoomRegistry } from "../rooms/registry";
 import type { ResumeKeys } from "./resume-keys";
 
 /** What the socket edge does after a user's socket closed. */
@@ -12,7 +12,7 @@ export type Closed =
   /** `waiting` or `ended` (or no room): the edge frees the desk (`registry.leave`, `roster`). */
   | "leave"
   /**
-   * `countdown` or `running`: the desk is line-cut (or already was, or is past typing), or the
+   * `loading` (#926), `countdown` or `running`: the desk is line-cut (or already was, or is past typing), or the
    * watching host (#876) is kept for the race like a seated host, released at its end (#658).
    */
   | "kept";
@@ -33,7 +33,7 @@ export type Presence = {
   ): Promise<{ resumeKey: string; resumed: boolean }>;
   /**
    * A socket of the user closed. The last one decides, in the room's queue: `leave` in `waiting`
-   * and `ended`; in `countdown`/`running` a typing desk turns `line-cut` (progress kept, clock
+   * and `ended`; in `loading`/`countdown`/`running` a typing desk turns `line-cut` (progress kept, clock
    * untouched), `event line-cut { desk }` to the room, the key's TTL becomes `GRACE_MS` and a grace
    * timer runs. The members hash is left alone.
    */
@@ -49,7 +49,7 @@ export type Presence = {
   isConnected(lobbyId: string, desk: number): boolean;
   /** The user left the room (desk freed): the resume key goes. */
   left(lobbyId: string, userId: string): Promise<void>;
-  /** GO (runtime just opened): desks cut during the countdown get their `line-cut` status. */
+  /** GO (runtime just opened): desks cut during the loading or countdown get their `line-cut` status. */
   onGo(lobbyId: string): void;
   /**
    * The race is ending (inside `endRace`, before the ranking): every line-cut desk turns `expired`
@@ -195,7 +195,7 @@ export function createPresence({
         // the shutdown arms no grace timer either.
         if (shut) return "kept";
         const room = await registry.room(lobbyId);
-        if (room?.phase !== "countdown" && room?.phase !== "running") return "leave";
+        if (!room || !raceOn(room.phase)) return "leave";
         // The watching host (#876) has no desk to cut: kept for the race as a seated host is, its
         // leave (and the host role's passing) waits for the race end (`dropped`, #658).
         if (watches(room.settings, room.hostUserId, userId)) {

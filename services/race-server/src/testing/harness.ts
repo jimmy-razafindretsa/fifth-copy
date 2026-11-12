@@ -9,6 +9,7 @@ import {
   RACE_TOKEN_TTL_S,
   type ClientToServerEvents,
   type Ended,
+  type HostStartAck,
   type Member,
   type RaceEvent,
   type RaceSettings,
@@ -168,7 +169,12 @@ export type Booted = {
   /** A fresh lobby id with no room (cleaned up by `stop`). */
   lobby(): string;
   token(claims: Partial<RaceTokenClaims> & { lobby: string }, key?: string): Promise<string>;
-  connect(auth: unknown): Client;
+  /**
+   * A client of the server. Unless `ready` is false it answers the readiness barrier as a seat page
+   * whose scene is settled (#926): `ready` on `loading`, on a `welcome` in `loading` and on a
+   * `readiness` that lists its desk, so a race never waits out the load limit.
+   */
+  connect(auth: unknown, options?: { ready?: boolean }): Client;
   /** Disconnects the clients, closes the server and deletes this boot's keys. */
   stop(): Promise<void>;
   /**
@@ -253,7 +259,7 @@ export async function boot(
         .setExpirationTime(iat + RACE_TOKEN_TTL_S)
         .sign(new TextEncoder().encode(key));
     },
-    connect(auth) {
+    connect(auth, { ready = true } = {}) {
       const client: Client = connectClient(url, {
         auth: auth as Record<string, unknown>,
         transports: ["websocket"],
@@ -261,6 +267,7 @@ export async function boot(
         forceNew: true,
       });
       clients.push(client);
+      if (ready) answerLoading(client);
       return client;
     },
     async stop() {
@@ -292,6 +299,41 @@ export async function boot(
       return boot(redisUrl, { ...options, carry: { now: clock.now(), lobbies } });
     },
   };
+}
+
+/**
+ * `host:start` from `client`; an `ok` start resolves once `client` heard the `countdown` that follows
+ * the `loading` (#926: every `answerLoading` client reports at once, the clock does not move).
+ */
+export async function hostStart(client: Client): Promise<HostStartAck> {
+  let counted = false;
+  const onCountdown = () => void (counted = true);
+  client.once("countdown", onCountdown);
+  const ack = await client.timeout(2_000).emitWithAck("host:start", { v: PROTOCOL_VERSION });
+  if (ack.ok) await until(() => counted, WAIT_MS, "countdown after the loading");
+  else client.off("countdown", onCountdown);
+  return ack;
+}
+
+/**
+ * Sends `ready` once per race when the room loads a race that awaits this client's desk (#926), as
+ * a seat page does: on `loading`, on a `welcome` in `loading` and on a `readiness` that lists it.
+ */
+export function answerLoading(client: Client) {
+  let you: number | null = null;
+  let sent: string | null = null;
+  const ready = (raceId: string, pending: number[] | null) => {
+    if (you === null || sent === raceId || !pending?.includes(you)) return;
+    sent = raceId;
+    client.emit("ready", { v: PROTOCOL_VERSION, raceId });
+  };
+  client.on("welcome", (w) => {
+    you = w.you;
+    sent = null;
+    if (w.room.phase === "loading" && w.race) ready(w.race.raceId, w.pending);
+  });
+  client.on("loading", (l) => ready(l.race.raceId, l.pending));
+  client.on("readiness", (r) => ready(r.raceId, r.pending));
 }
 
 /** Records every `welcome`, the latest `roster` and every `settings` broadcast a client received. */
@@ -452,10 +494,14 @@ export async function startedRace(
   // Bots of the settings are seated at open (#156) and count in the roster.
   const seated = players + settings.bots.length;
   await until(() => racers.every((r) => r.seen.roster?.length === seated), WAIT_MS, "seated");
+  const countdowns: number[] = [];
+  for (const r of racers) r.client.on("countdown", (c) => void countdowns.push(c.race.t0));
   const ack = await racers[0]!.client.timeout(2_000).emitWithAck("host:start", {
     v: PROTOCOL_VERSION,
   });
   if (!ack.ok) throw new Error(`start failed: ${ack.error}`);
+  // The readiness barrier (#926): every racer answers `loading`, the countdown follows at once.
+  await until(() => countdowns.length === racers.length, WAIT_MS, "countdown");
   const t0 = booted.clock.now() + 3_000;
   if (go) await reachGo(booted, lobby, t0);
   return { booted, lobby, racers, t0 };

@@ -21,7 +21,7 @@ export const RACE_LIMITER_PREFIX = "race";
 /**
  * One bucket per client event and identity (all of its sockets). `keys`: 25 batches a second (a client batches <= 50 ms of
  * keys, so 20 a second, plus slack; each batch holds at most `MAX_KEYS_PER_BATCH` keys, bounded by
- * the protocol schema). `ping`: 2 a second (clock sync, #172). Host and race actions: 5 per 10 s,
+ * the protocol schema). `ping`: 2 a second (clock sync, #172). Host and race actions (`ready`, #926, too): 5 per 10 s,
  * except `host:settings`: 30 per 10 s (#750), since the host settings form sends one patch per
  * control (13 controls, up to 2 per bot row) with one patch in flight, and its budget is shared
  * with the e2e helper `setHostSettings`; a flood past it is still refused and cut.
@@ -34,6 +34,7 @@ export const SOCKET_LIMITS = {
   "host:kick": { max: 5, windowMs: 10_000 },
   abandon: { max: 5, windowMs: 10_000 },
   "bonus:play": { max: 5, windowMs: 10_000 },
+  ready: { max: 5, windowMs: 10_000 },
 } as const satisfies Record<keyof ClientToServerEvents, LimitRule>;
 
 /**

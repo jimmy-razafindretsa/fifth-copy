@@ -28,6 +28,11 @@ export function useRaceStoreApi(): RaceStore {
   return store;
 }
 
+/** The store's dispatch, for a leaf that reports its own state (#926: the seat scene settled). */
+export function useRaceDispatch(): RaceStore["dispatch"] {
+  return useRaceStoreApi().dispatch;
+}
+
 /**
  * One value of the race state, re-rendering when it changes (`useSyncExternalStore`). On the server and
  * during hydration it reads the initial state (the server snapshot), so the HTML is the before-start

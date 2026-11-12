@@ -1,7 +1,8 @@
 /*
  * The scene's loading card (#563, design bible 7.3, 7.4 extension): a 7.4 docket (2px ink rule, paper
  * ground) holding the slammed ink stamp; the slam is clipped by the card, so it never paints over the
- * telex strip or the typed sheet. The optional tip is a 7.4 row (`120px | 1fr`, dashed separator).
+ * telex strip or the typed sheet. The optional tip is a 7.4 row (`120px | 1fr`, dashed separator), as
+ * is the READY row while the room loads (#926: the 7.4 value, tabular digits).
  */
 
 @reference "../../../app/globals.css";
@@ -21,6 +22,10 @@
 .tip {
   margin: 0;
   border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
 }
 
 .line {

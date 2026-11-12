@@ -65,6 +65,7 @@ describe("waiting room over Socket.IO (C1)", () => {
       resumeKey: expect.stringMatching(/^[0-9a-f]{64}$/),
       serverNow: t.clock.now(),
       autoStartAt: null,
+      pending: null,
     });
 
     const b = t.connect({ v: PROTOCOL_VERSION, token: await t.token({ lobby, name: "Bob" }) });

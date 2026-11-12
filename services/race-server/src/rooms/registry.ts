@@ -82,7 +82,7 @@ export type Rehydrated = { kept: string[]; voided: string[]; gone: string[]; for
 export type Voided = { lobbyId: string; raceId: string };
 
 /**
- * `in-progress`: a user who is not already a member while a race is on (`countdown`, `running`; #166).
+ * `in-progress`: a user who is not already a member while a race is on (`raceOn`; #166, #926).
  * `bot-id`: a user id in the bots' reserved `bot:` space (#156; web user ids are cuids).
  * `room-full`: a user who is not a member while `ROOM_SEATS` desks (typists and bots) are seated (#732).
  */
@@ -150,9 +150,16 @@ export function watches(settings: RaceSettings, hostUserId: string, userId: stri
 }
 
 /**
+ * Whether the room's race is on (#926): `loading`, `countdown` or `running`. A stranger is refused,
+ * a member's last socket closing line-cuts its desk, a restart voids it.
+ */
+export const raceOn = (phase: Phase): boolean =>
+  phase === "loading" || phase === "countdown" || phase === "running";
+
+/**
  * Who may take a seat (#166, #143, #732), behind the verified race token: anyone while the room is
  * `waiting` or `ended` (spec 5.1: a late joiner is seated once the race is over); while a race is
- * on (`countdown`, `running`) only a current member (a second tab, a resume). Never a stranger
+ * on (`loading`, `countdown`, `running`) only a current member (a second tab, a resume). Never a stranger
  * mid-race: a late joiner holds a spectator socket until `ended`. The last race's racers keep
  * their desk preference in `join`.
  */
@@ -303,13 +310,18 @@ export type RoomRegistry = {
    */
   botLevels(lobbyId: string): Promise<Map<number, BotLevel>>;
   /**
-   * Phase `countdown` with the race, its clock and its desks, in one MULTI with both TTLs (ADR
-   * 0008). The caller checked the phase under `withRoom`.
+   * Phase `loading` (#926) with the race, its latest clock and its desks, in one MULTI with both
+   * TTLs (ADR 0008). The caller checked the phase under `withRoom`.
    */
   startRace(
     lobbyId: string,
     fields: { race: RaceInfo; endAt: number; desks: RaceDesk[] },
   ): Promise<void>;
+  /**
+   * The readiness barrier released the room (#926): phase `countdown` with the race's GO (`race.t0`)
+   * and its end, in one MULTI with both TTLs. The caller checked the phase under `withRoom`.
+   */
+  releaseRace(lobbyId: string, fields: { race: RaceInfo; endAt: number }): Promise<void>;
   /** Writes the phase in one MULTI with both TTLs; the caller checked the room under `withRoom`. */
   setPhase(lobbyId: string, phase: Phase): Promise<void>;
   /**
@@ -328,7 +340,7 @@ export type RoomRegistry = {
   voidRoom(lobbyId: string, desks?: readonly number[]): Promise<{ lost: boolean }>;
   /**
    * Boot (#204): for every id of the `rooms` index whose hash exists, `waiting`/`ended` rooms are
-   * counted as they are, `countdown`/`running` ones are voided; ids whose hash is gone leave the index.
+   * counted as they are, `loading`/`countdown`/`running` ones are voided; ids whose hash is gone leave the index.
    * A live race whose `owner` is another process still holding its lease (#704: the deployment being
    * drained) is left alone and not counted (`foreign`) until `reconcile` finds that owner gone.
    * Reads only `room:<id>` (and the members through later calls), never the desks mirror.
@@ -357,6 +369,7 @@ const log = (msg: string, fields: Record<string, unknown>) =>
 const RECOVERY: Record<Phase, "keep" | "void"> = {
   waiting: "keep",
   ended: "keep",
+  loading: "void",
   countdown: "void",
   running: "void",
 };
@@ -962,7 +975,7 @@ export function createRoomRegistry({
           .hdel(roomKey(lobbyId), "endReason", "endedAt", "autoStartAt")
           .del(desksKey(lobbyId), ...traces)
           .hset(roomKey(lobbyId), {
-            phase: "countdown",
+            phase: "loading",
             ...(owner ? { owner: owner.id } : {}),
             raceId: race.raceId,
             t0: String(race.t0),
@@ -970,6 +983,18 @@ export function createRoomRegistry({
             race: JSON.stringify(race),
             desks: JSON.stringify(desks),
           }),
+      );
+    },
+
+    releaseRace: async (lobbyId, { race, endAt }) => {
+      await withTtl(
+        lobbyId,
+        redis.multi().hset(roomKey(lobbyId), {
+          phase: "countdown",
+          t0: String(race.t0),
+          endAt: String(endAt),
+          race: JSON.stringify(race),
+        }),
       );
     },
 

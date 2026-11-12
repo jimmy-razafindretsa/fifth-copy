@@ -29,7 +29,10 @@ import {
   keysSchema,
   abandonSchema,
   bonusPlaySchema,
+  loadingSchema,
   pingSchema,
+  readinessSchema,
+  readySchema,
   type ClientToServerEvents,
   type HostStartAck,
   type HostSettingsAck,
@@ -63,6 +66,7 @@ const welcome = {
   resumeKey: null,
   serverNow: 1767225600000,
   autoStartAt: null,
+  pending: null,
 };
 const running = {
   ...welcome,
@@ -176,6 +180,15 @@ describe("socket schemas", () => {
     ],
     ["#814 welcome negative autoStartAt", welcomeSchema, { ...welcome, autoStartAt: -5 }, false],
     ["welcome missing race", welcomeSchema, { ...welcome, race: undefined }, false],
+    // #926: the readiness barrier's awaited desks, `null` outside `loading`.
+    [
+      "#926 welcome loading with pending",
+      welcomeSchema,
+      { ...running, room: { code: "KGB-4821", phase: "loading" }, state: null, pending: [1, 13] },
+      true,
+    ],
+    ["#926 welcome missing pending", welcomeSchema, { ...welcome, pending: undefined }, false],
+    ["#926 welcome pending desk 0", welcomeSchema, { ...welcome, pending: [0] }, false],
     ["welcome bad resume key", welcomeSchema, { ...welcome, resumeKey: "short" }, false],
     ["welcome v: 1", welcomeSchema, { ...welcome, v: 1 }, false],
     ["welcome previous v", welcomeSchema, { ...welcome, v: v - 1 }, false],
@@ -237,6 +250,8 @@ describe("socket schemas", () => {
       welcome: welcomeSchema,
       roster: rosterSchema,
       settings: settingsSchema,
+      loading: loadingSchema,
+      readiness: readinessSchema,
       countdown: countdownSchema,
       "auto-start": autoStartSchema,
       snapshot: snapshotSchema,
@@ -255,6 +270,7 @@ describe("socket schemas", () => {
       keys: keysSchema,
       abandon: abandonSchema,
       "bonus:play": bonusPlaySchema,
+      ready: readySchema,
       ping: pingSchema,
     });
     expect(clientAcks).toEqual({

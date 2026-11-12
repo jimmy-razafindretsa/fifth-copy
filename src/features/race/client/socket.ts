@@ -6,6 +6,7 @@ import {
   keysSchema,
   pingSchema,
   PROTOCOL_VERSION,
+  readySchema,
   rejectReasonSchema,
   serverEvents,
   type HostKickAck,
@@ -61,7 +62,16 @@ export interface RoomSocket {
   onSettings(cb: (payload: RoomEvents["settings"]) => void): Off;
   /** Host only: asks the server to apply `patch`; never rejects. */
   sendHostSettings(patch: RaceSettingsPatch): Promise<HostSettingsResult>;
-  /** The host pressed START: the race and its GO instant (`race.t0`, server clock). */
+  /**
+   * The race started and the room loads (#926): the text, the desks awaited; `race.t0` is the latest
+   * possible GO, never GO.
+   */
+  onLoading(cb: (payload: RoomEvents["loading"]) => void): Off;
+  /** The desks the loading room still awaits, after each report, departure or return (#926). */
+  onReadiness(cb: (payload: RoomEvents["readiness"]) => void): Off;
+  /** Your seat loaded the race (#926): `ready { v, raceId }`, no ack; an invalid one is not sent. */
+  sendReady(raceId: string): void;
+  /** Every awaited seat is ready (or the load limit passed): the race and its GO instant (`race.t0`, server clock). */
   onCountdown(cb: (payload: RoomEvents["countdown"]) => void): Off;
   /**
    * A public room's automatic start (#814): `startsAt` on the server clock, `null` when dropped. A
@@ -276,6 +286,12 @@ export function connectToRoom(
         clientAcks["host:settings"],
         HOST_SETTINGS_TIMEOUT_MS,
       ),
+    onLoading: (cb) => on("loading", cb),
+    onReadiness: (cb) => on("readiness", cb),
+    sendReady: (raceId) => {
+      const ready = readySchema.safeParse({ v: PROTOCOL_VERSION, raceId });
+      if (ready.success) socket.emit("ready", ready.data);
+    },
     onCountdown: (cb) => on("countdown", cb),
     onAutoStart: (cb) => on("auto-start", cb),
     sendHostStart: () =>

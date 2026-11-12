@@ -507,6 +507,7 @@ export const fr = {
       loading: "CHARGEMENT DE LA SALLE",
       title: "La salle, vue de ton bureau",
       didYouKnow: "LE SAVAIS-TU ?",
+      ready: "PRÊTS",
     },
     /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
     didYouKnow: [],

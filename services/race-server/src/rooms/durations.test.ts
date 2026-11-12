@@ -5,6 +5,7 @@ import { durationsFor } from "./durations";
 // #178 C6: the reconnection grace (spec 7.4: 2 minutes) lives in the same table and scales with it.
 // #814 C2: a public room's automatic start (45 s, owner decision 2026-11-04), 4 500 ms fast.
 // #183 C6: the idle warning (45 s) and kick (60 s) of spec 4.5 too (4 500 / 6 000 ms fast).
+// #926 C2: the readiness barrier's hard limit (30 s), 3 000 ms fast.
 describe("durations", () => {
   it("uses the spec durations by default", () => {
     expect(durationsFor({ RACE_FAST_CLOCK: "0" })).toEqual({
@@ -13,6 +14,7 @@ describe("durations", () => {
       IDLE_WARN_MS: 45_000,
       IDLE_KICK_MS: 60_000,
       AUTO_START_MS: 45_000,
+      LOAD_LIMIT_MS: 30_000,
     });
   });
 
@@ -23,6 +25,7 @@ describe("durations", () => {
       IDLE_WARN_MS: 4_500,
       IDLE_KICK_MS: 6_000,
       AUTO_START_MS: 4_500,
+      LOAD_LIMIT_MS: 3_000,
     });
   });
 

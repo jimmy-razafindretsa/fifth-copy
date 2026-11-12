@@ -449,6 +449,8 @@ describe("host:settings budget sized for the host settings form (#750)", () => {
       "host:kick": { max: 5, windowMs: 10_000 },
       abandon: { max: 5, windowMs: 10_000 },
       "bonus:play": { max: 5, windowMs: 10_000 },
+      // #926: a seat's readiness report, its own budget like the other race actions.
+      ready: { max: 5, windowMs: 10_000 },
     });
     expect(REFUSALS_TO_DISCONNECT).toBe(3);
     expect(REFUSAL_WINDOW_MS).toBe(10_000);

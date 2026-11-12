@@ -67,3 +67,35 @@ A missing repository variable fails the run with a line naming it.
 
 **Confirm.** Actions, `deploy-check`, Run workflow on `main` (`workflow_dispatch`, or
 `gh workflow run deploy-check.yml --ref main`). The run goes green with an `OK` line.
+
+## Site down
+
+The `uptime` workflow (`.github/workflows/uptime.yml`, #423) runs every 15 min. It runs `scripts/deploy-smoke.sh`
+against the public web URL (`/api/health`, `/`, a 404 probe) and, through `RACE_SMOKE_URL`, the race server's
+`/health`. A failed run is retried 3 times, 20 s apart, before it goes red. It reads the same repository variables as
+`deploy-check` (`WEB_PUBLIC_URL`, `RACE_SERVER_PUBLIC_URL`); a missing one fails the run with a line naming it.
+
+**Alert.** GitHub emails the owner about a failed scheduled run when the account's notification settings have
+Actions, "Send notifications for failed workflows only" on (Settings, Notifications, System, Actions). Scheduled
+runs notify the user who last edited the cron line in `uptime.yml`, so keep that the owner.
+
+**Read the red run.** Open the failed `uptime` run; the job summary shows the last attempt, one line per probe:
+
+- `FAIL health: GET /api/health -> 000`: the web service does not answer at all.
+- `FAIL health: GET /api/health -> 503`: web runs but cannot reach Postgres (its body reads `"db":"down"`).
+- `FAIL home` / `FAIL not-found` with a healthy `/api/health`: web answers but renders errors; read the web logs.
+- `FAIL race-health: GET /health -> 503`: the race server is draining (#704). That is expected for a minute during a
+  deploy; a red run means it stayed draining across all 3 attempts, so the new deployment never became healthy.
+- `FAIL race-health: GET /health -> 000`: the race server is down.
+
+**Restart or redeploy by hand** (CI holds no Railway token and never restarts anything):
+
+1. Railway dashboard: project, the named service (`web` or `race-server`), Deployments. Read the latest deployment's
+   logs first; if the build or the healthcheck failed, fix the cause on `main`.
+2. A crashed or hung service: its menu, Restart. A bad deployment: Redeploy the last good one (its menu, Redeploy), or
+   from a shell already logged in to Railway: `railway redeploy --service <web|race-server>`.
+3. Postgres down (web `/api/health` 503): restart the Postgres service, then web.
+4. Wait until Railway marks the deployment Active and its healthcheck passes.
+
+**Confirm.** Actions, `uptime`, Run workflow on `main` (`workflow_dispatch`, or
+`gh workflow run uptime.yml --ref main`). The run goes green with an `OK` line.

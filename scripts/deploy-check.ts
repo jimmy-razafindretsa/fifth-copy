@@ -72,17 +72,23 @@ export function verdict(records: ServiceRecord[], git: Git): Verdict {
 }
 
 /**
- * Railway watch paths per service (ADR 0019), as git pathspecs. web: everything except the race server,
- * docs, card logs, agents and e2e; race-server: its workspace, the shared packages and the lockfile.
+ * Railway watch paths per service (ADR 0019), as git pathspecs, copied from the live service settings
+ * (#917): web watches an allow-list, so a change only to scripts/, .github/, docs or e2e skips its deploy.
+ * A new root config file the web build reads goes into Railway's watch patterns and this list together.
  */
 export const WATCH_PATHS = {
   web: [
-    ".",
-    ":(exclude)services/race-server",
-    ":(exclude)docs",
-    ":(exclude)work",
-    ":(exclude)agents",
-    ":(exclude)e2e",
+    "src",
+    "packages",
+    "prisma",
+    "public",
+    "package.json",
+    "package-lock.json",
+    "next.config.ts",
+    "prisma.config.ts",
+    "postcss.config.mjs",
+    "tsconfig.json",
+    "tsconfig.base.json",
   ],
   "race-server": ["services/race-server", "packages", "package-lock.json"],
 } as const;

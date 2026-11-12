@@ -383,6 +383,7 @@ flowchart LR
   railway --> rw
 ```
 Environments: local (`npm run dev`, `npm run dev:race`, `npm run dev:worker`, compose Postgres + Redis), CI (service containers), production (Railway project, ADR 0019). A preview/staging environment is optional (another Railway environment).
+Watch paths (ADR 0019, amended #917): web watches an allow-list (`src/**`, `packages/**`, `prisma/**`, `public/**`, `package.json`, `package-lock.json`, `next.config.ts`, `prisma.config.ts`, `postcss.config.mjs`, `tsconfig.json`, `tsconfig.base.json`); race-server watches `services/race-server/**`, `packages/**`, `package-lock.json`. `deploy-check` (`scripts/deploy-check.ts` `WATCH_PATHS`) mirrors both lists; a new root config file the web build reads is added to Railway and `WATCH_PATHS` together.
 
 ### 11.2 Environment variables (names only)
 | Name | Process | Purpose |

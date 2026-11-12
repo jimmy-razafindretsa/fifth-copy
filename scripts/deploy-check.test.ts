@@ -174,9 +174,14 @@ describe("expectedCommit and run against a real git history (#718 C3)", () => {
     write("docs/notes.md", "x");
     write("e2e/a.spec.ts", "x");
     docs = commit("docs and e2e only");
+    // #917: Railway's web allow-list does not watch tooling, CI or other root files
+    write("scripts/deploy-check.ts", "x");
+    write(".github/workflows/ci.yml", "x");
+    write("README.md", "x");
+    commit("tooling, CI and README only");
   });
 
-  it("web's expected commit skips race-server, docs and e2e changes", () => {
+  it("web's expected commit skips race-server, docs, e2e, scripts, .github and README changes (#917 C1)", () => {
     expect(expectedCommit("web", repo)).toBe(webOnly);
   });
 

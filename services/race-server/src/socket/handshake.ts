@@ -7,7 +7,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
 import type { ResumeKeys } from "../players/resume-keys";
-import { mayRejoin, seatsFull, watches, type RoomRegistry } from "../rooms/registry";
+import { mayRejoin, raceOn, seatsFull, watches, type RoomRegistry } from "../rooms/registry";
 import { verifyRaceToken } from "./race-token";
 import type { SpectatorSlots } from "./spectator-slots";
 
@@ -79,8 +79,7 @@ export async function authenticateHandshake(
     return { ok: false, reason: "room-full" };
   }
   const { resumeKey } = parsed.data;
-  const raceOn = room.phase === "countdown" || room.phase === "running";
-  if (!resumeKey || !raceOn || !resumeKeys) {
+  if (!resumeKey || !raceOn(room.phase) || !resumeKeys) {
     return { ok: true, claims: verified.claims, resume: false };
   }
   const entry = await resumeKeys.lookup(resumeKey).catch(() => null);

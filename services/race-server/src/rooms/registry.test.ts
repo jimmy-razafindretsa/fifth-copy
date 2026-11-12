@@ -481,8 +481,9 @@ describe("room registry: lifecycle fields (#166)", () => {
 
     await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks: seated });
     expect(await redis.hexists(roomKey(lobbyId), "autoStartAt")).toBe(0);
+    // #926: a start loads first; the readiness barrier's release turns it `countdown`.
     expect(await registry.room(lobbyId)).toMatchObject({
-      phase: "countdown",
+      phase: "loading",
       race,
       endAt: race.t0 + 60_000,
       desks: seated,
@@ -581,15 +582,17 @@ describe("room registry: atomic writes (#517)", () => {
     await registry.leave(lobbyId, "a");
     await registry.updateSettings(lobbyId, "host", { timerS: 60 });
     await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks: [] });
+    // #926: the readiness barrier's release writes GO and the end under both TTLs too.
+    await registry.releaseRace(lobbyId, { race, endAt: race.t0 + 60_000 });
     await registry.setPhase(lobbyId, "running");
 
     const writes = ["hset", "hsetnx", "hmset"];
     const writing = groups().filter(({ commands }) =>
       commands.some(([name, key]) => writes.includes(name!) && hashKeys.includes(key!)),
     );
-    // open twice + join twice + updateSettings + startRace + setPhase (#166): seven write
-    // transactions, nothing outside them.
-    expect(writing).toHaveLength(7);
+    // open twice + join twice + updateSettings + startRace + releaseRace (#926) + setPhase (#166):
+    // eight write transactions, nothing outside them.
+    expect(writing).toHaveLength(8);
     for (const { atomic, commands } of writing) {
       expect(atomic).toBe(true);
       for (const key of hashKeys)
@@ -614,7 +617,7 @@ describe("room registry: atomic writes (#517)", () => {
       "hset",
       roomKey(lobbyId),
       "phase",
-      "countdown",
+      "loading",
       "raceId",
       race.raceId,
       "t0",
@@ -626,7 +629,19 @@ describe("room registry: atomic writes (#517)", () => {
       "desks",
       "[]",
     ]);
-    expect(writing[6]!.commands).toContainEqual(["hset", roomKey(lobbyId), "phase", "running"]);
+    expect(writing[6]!.commands).toContainEqual([
+      "hset",
+      roomKey(lobbyId),
+      "phase",
+      "countdown",
+      "t0",
+      String(race.t0),
+      "endAt",
+      String(race.t0 + 60_000),
+      "race",
+      JSON.stringify(race),
+    ]);
+    expect(writing[7]!.commands).toContainEqual(["hset", roomKey(lobbyId), "phase", "running"]);
   });
 
   it("open repairs a half-written room hash without overwriting its fields", async () => {
@@ -975,7 +990,7 @@ describe("room registry: race again (#143)", () => {
     await registry.startRace(lobbyId, { race: next, endAt: next.t0 + 60_000, desks });
 
     expect(await registry.room(lobbyId)).toMatchObject({
-      phase: "countdown",
+      phase: "loading",
       race: next,
       raceId: next.raceId,
       endAt: next.t0 + 60_000,
@@ -1382,7 +1397,7 @@ describe("room registry: sharedRoom (#65 C3)", () => {
     expect(groups()).toEqual([]);
   });
 
-  it("counts a room in any phase: waiting, countdown, running, ended, voided", async () => {
+  it("counts a room in any phase: waiting, loading, countdown, running, ended, voided", async () => {
     const { registry } = setup();
     const u = users();
     const lobbyId = await roomWith(registry, u.host, u.a);
@@ -1392,9 +1407,9 @@ describe("room registry: sharedRoom (#65 C3)", () => {
     ];
     expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
     await registry.startRace(lobbyId, { race, endAt: race.t0 + 60_000, desks });
-    expect((await registry.room(lobbyId))?.phase).toBe("countdown");
+    expect((await registry.room(lobbyId))?.phase).toBe("loading");
     expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
-    for (const phase of ["running", "ended"] as const) {
+    for (const phase of ["countdown", "running", "ended"] as const) {
       await registry.setPhase(lobbyId, phase);
       expect(await registry.sharedRoom(u.host, u.a)).toBe(true);
     }

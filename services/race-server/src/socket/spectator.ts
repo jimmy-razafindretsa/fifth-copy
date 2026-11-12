@@ -36,7 +36,16 @@ const log = (msg: string, fields: Record<string, unknown>) =>
 export function attachSpectator(
   socket: SpectatorSocket,
   claims: RaceTokenClaims,
-  { registry, clock }: { registry: RoomRegistry; clock: Clock },
+  {
+    registry,
+    clock,
+    pending = () => null,
+  }: {
+    registry: RoomRegistry;
+    clock: Clock;
+    /** The desks the loading room awaits (#926, `welcome.pending`), else `null`. */
+    pending?: (lobbyId: string) => number[] | null;
+  },
 ) {
   const { lobby, role } = claims;
   // Joined before the read, so no `roster` or `countdown` broadcast after it is missed.
@@ -61,6 +70,7 @@ export function attachSpectator(
         resumeKey: null,
         serverNow: clock.now(),
         autoStartAt: room.autoStartAt,
+        pending: room.phase === "loading" ? pending(lobby) : null,
       });
       // A room voided by a restart (#204): the spectator hears the race is over, like a player.
       if (room.phase === "ended" && room.endReason === "void" && room.raceId !== null) {

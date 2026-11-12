@@ -183,7 +183,6 @@ export function attachSocketServer(
     presence.socketOpened(lobby, sub);
     void socket.join(room);
 
-
     // join, presence and leave go through the registry's per-room queue, so a disconnect that races
     // the join still runs after it. The desk comes from membership, never from the resume key.
     registry

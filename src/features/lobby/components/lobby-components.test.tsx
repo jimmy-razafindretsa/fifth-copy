@@ -561,14 +561,23 @@ describe("the host watches (#876 C5)", () => {
   });
 
   it("a refused switch back: the 7.4 inline error line with the room-full sentence", () => {
-    const html = formView(watchingHost, { status: "error", key: "hostWatches", error: "room-full" });
+    const html = formView(watchingHost, {
+      status: "error",
+      key: "hostWatches",
+      error: "room-full",
+    });
     expect(html).toContain(`RETURNED ·</span> ${labels.settings.form.errors["room-full"]}`);
     expect(labels.settings.form.errors["room-full"]).toBe("All 30 desks in this room are taken.");
   });
 
   it("French: HÔTE, TAPE | REGARDE, L'HÔTE REGARDE", () => {
     const html = renderToStaticMarkup(
-      <LobbyLiveView code={CODE} state={watchingHost} labels={fr.lobby} errors={fr.landing.errors} />,
+      <LobbyLiveView
+        code={CODE}
+        state={watchingHost}
+        labels={fr.lobby}
+        errors={fr.landing.errors}
+      />,
     );
     expect(html).toContain(">HÔTE</dt>");
     expect(html).toContain("REGARDE");

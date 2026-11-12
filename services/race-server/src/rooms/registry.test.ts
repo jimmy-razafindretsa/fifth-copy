@@ -1488,7 +1488,11 @@ describe("room registry: the host watches (#876)", () => {
     const lobbyId = await watching(registry);
     await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
     const back = await registry.updateSettings(lobbyId, "host", { hostWatches: false }, ada);
-    expect(back).toMatchObject({ ok: true, hostDesk: 1, members: [m(1, "Ada", true), m(2, "Bob", false)] });
+    expect(back).toMatchObject({
+      ok: true,
+      hostDesk: 1,
+      members: [m(1, "Ada", true), m(2, "Bob", false)],
+    });
 
     await registry.updateSettings(lobbyId, "host", { hostWatches: true }, ada);
     for (let i = 0; i < ROOM_SEATS - 1; i++) {

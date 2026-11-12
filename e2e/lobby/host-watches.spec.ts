@@ -72,15 +72,20 @@ test.describe("#876 the host watches", () => {
     // START: the guests race, the host watches
     await warmRace(host, lobbyId);
     await startButton(host).click();
-    for (const p of [host, ...guests]) await expect(p).toHaveURL(RACE_PATH, { timeout: scaled(10_000) });
+    for (const p of [host, ...guests])
+      await expect(p).toHaveURL(RACE_PATH, { timeout: scaled(10_000) });
     const raceId = RACE_PATH.exec(host.url())![1]!;
     for (const p of guests) expect(RACE_PATH.exec(p.url())![1]).toBe(raceId);
 
     for (const p of guests) {
-      await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", { timeout: scaled(10_000) });
+      await expect(phaseOf(p)).toHaveAttribute("data-phase", "running", {
+        timeout: scaled(10_000),
+      });
       await expect(input(p)).toHaveAttribute("data-mode", "block");
     }
-    await expect(phaseOf(host)).toHaveAttribute("data-phase", "running", { timeout: scaled(10_000) });
+    await expect(phaseOf(host)).toHaveAttribute("data-phase", "running", {
+      timeout: scaled(10_000),
+    });
     // the host's seat view: no desk (SEAT VIEW alone), both rivals on the race card, nothing to type
     await expect(host.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW$/);
     const card = SEAT_HUD.raceCard(host);
@@ -92,7 +97,8 @@ test.describe("#876 the host watches", () => {
     const texts = await Promise.all(guests.map(stripText));
     for (const text of texts) expect(text.trim().split(/\s+/)).toHaveLength(10);
     await Promise.all(guests.map((p, i) => p.keyboard.type(texts[i]!, { delay: 40 })));
-    for (const p of [host, ...guests]) await expect(ended(p)).toBeVisible({ timeout: scaled(20_000) });
+    for (const p of [host, ...guests])
+      await expect(ended(p)).toBeVisible({ timeout: scaled(20_000) });
 
     // the host's Dawn report ranks the two guests and offers RACE AGAIN
     const link = host.getByRole("link", { name: "DAWN REPORT →" });

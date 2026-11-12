@@ -656,7 +656,13 @@ export function createRoomRegistry({
           room.desks === undefined
             ? null
             : (raceDesksSchema.safeParse(JSON.parse(room.desks)).data ?? null);
-        const room_ = { roomId: lobbyId, code: room.code, phase, settings, race: parseRace(room.race) };
+        const room_ = {
+          roomId: lobbyId,
+          code: room.code,
+          phase,
+          settings,
+          race: parseRace(room.race),
+        };
         // The watching host (#876) holds a host socket without a desk in every phase: never seated,
         // never refused full or in progress (it watches the race it started).
         if (watches(settings, room.hostUserId, userId)) {

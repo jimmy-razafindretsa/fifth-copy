@@ -128,7 +128,9 @@ describe("seat page (#563)", () => {
   });
 
   it("shows the seat POV (bible 11.3) and hides your clerk and paper", () => {
-    expect(seat).toContain("camera.fov = 62; camera.position.set(0, 1.02, R_CHAIR - 0.05)");
+    // #927: the POV's FOV and eye follow the seating block (62 is its floor, R its ring)
+    expect(seat).toContain("FOV_POV = 62");
+    expect(seat).toContain("camera.position.set(0, 1.02, L.ring - 0.05); camera.lookAt(0, 0.95, 0);");
     expect(seat).toContain("let FORCE = 'pov'");
     expect(seat).toContain("Clerks.update(dt, VIEW === 'pov')");
     expect(seat).toContain("if ((i === 0 && HIDE0) || !OCC[i]) _w.scale(ZERO)");
@@ -512,5 +514,184 @@ describe("podium clerk page (#688)", () => {
   it("draws no text in WebGL and takes no pointer or orbit input", () => {
     expect(page).not.toMatch(/fillText|\.font = |fonts\.load|embed-fonts/);
     expect(page).not.toMatch(/pointermove|pointerdown|OrbitControls|fc-look|fc-reissue/);
+  });
+});
+
+// #927 C1-C4, C7 (bible 11.1, 11.3; Art Direction slide 05): the seat page's seating block, evaluated on its own
+// from the served page's source (no three.js, no DOM), and the stations drawn by one batched mesh.
+describe("seating (#927)", () => {
+  const seat = fs.readFileSync(path.join(EMBED_DIR, "seat.html"), "utf8");
+  const block = /\/\/ seating:start[\s\S]*?\/\/ seating:end/.exec(seat)?.[0] ?? "";
+  type Pov = { staged: boolean; ring: number; fov: number; angles: number[] };
+  type Over = { ring: number; fov: number; angles: number[]; start: number };
+  const S = new Function(
+    "THREE",
+    "document",
+    "window",
+    `${block}\nreturn { povLayout, overLayout, pitch };`,
+  )(undefined, undefined, undefined) as {
+    povLayout: (n: number, aspect: number) => Pov;
+    overLayout: (n: number) => Over;
+    pitch: (ring: number) => number;
+  };
+  const DEG = Math.PI / 180;
+  const EPS = 1e-9;
+  const ASPECTS: [string, number][] = [
+    ["16:9", 16 / 9],
+    ["16:10", 16 / 10],
+    ["4:3", 4 / 3],
+  ];
+  const STAGED = Array.from({ length: 12 }, (_, k) => k + 2); // 2..13
+  const RING = Array.from({ length: 17 }, (_, k) => k + 14); // 14..30
+  /** a rival's offset: its angle from the point opposite you, signed (+ = left of the view) */
+  const offsetOf = (a: number) => Math.atan2(Math.sin(a - Math.PI), Math.cos(a - Math.PI));
+  /** the horizontal angle (from straight ahead) of a station-local point, seen from the POV eye */
+  function seen(a: number, ring: number, x: number, z: number) {
+    const th = a + Math.PI;
+    const wx = Math.sin(a) * ring + x * Math.cos(th) + z * Math.sin(th);
+    const wz = Math.cos(a) * ring - x * Math.sin(th) + z * Math.cos(th);
+    return Math.atan2(wx, -(wz - (ring - 0.05)));
+  }
+  const halfH = (fov: number, aspect: number) => Math.atan(Math.tan((fov * DEG) / 2) * aspect);
+  const round1 = (x: number) => Math.round(x * 10) / 10;
+
+  it("is pure: no three.js, no DOM, no outer name", () => {
+    expect(block).not.toBe("");
+    expect(block).not.toMatch(/THREE|document|window|innerWidth|\bROOT\b|\bcamera\b/);
+  });
+
+  describe.each(ASPECTS)("C1 staged seats at %s", (_name, aspect) => {
+    it.each(STAGED)("%i players: you at 0, rivals on the far side, right/left, in view, never overlapping", (n) => {
+      const L = S.povLayout(n, aspect);
+      expect(L.staged).toBe(true);
+      expect(L.angles).toHaveLength(n); // one desk per player
+      expect(L.angles[0]).toBe(0);
+      const rivals = L.angles.slice(1);
+      const kR = Math.ceil((n - 1) / 2);
+      const kL = Math.floor((n - 1) / 2);
+      const right: number[] = [];
+      const left: number[] = [];
+      rivals.forEach((a, k) => {
+        const off = offsetOf(a);
+        expect(Math.abs(off), `rival ${k} offset`).toBeGreaterThanOrEqual(28 * DEG - EPS);
+        // alternating right (x > 0 seen from your seat), left, ... in cyclic desk order
+        const x = Math.sin(a);
+        if (k % 2 === 0) {
+          expect(x, `rival ${k} on the right`).toBeGreaterThan(0);
+          right.push(Math.abs(off));
+        } else {
+          expect(x, `rival ${k} on the left`).toBeLessThan(0);
+          left.push(Math.abs(off));
+        }
+        // its full desk (1.2 wide, 0.3..0.9 in front of its chair) inside the horizontal FOV
+        const h = halfH(L.fov, aspect);
+        for (const [dx, dz] of [
+          [-0.6, 0.3],
+          [0.6, 0.3],
+          [-0.6, 0.9],
+          [0.6, 0.9],
+        ] as const)
+          expect(Math.abs(seen(a, L.ring, dx, dz)), `rival ${k} desk corner`).toBeLessThanOrEqual(h);
+      });
+      expect(right).toHaveLength(kR);
+      expect(left).toHaveLength(kL);
+      for (const side of [right, left])
+        for (let j = 1; j < side.length; j++)
+          expect(side[j]! - side[j - 1]!, "neighbours of a side").toBeGreaterThanOrEqual(
+            S.pitch(L.ring) - EPS,
+          );
+    });
+  });
+
+  it("C2: the FOV grows with the lobby: 62..100 up to 13, never decreasing; 62 at 2 (and 3 at 16:9), 100 at 13", () => {
+    for (const [name, aspect] of ASPECTS) {
+      let prev = 0;
+      for (const n of STAGED) {
+        const { fov } = S.povLayout(n, aspect);
+        expect(fov, `${name} n=${n}`).toBeGreaterThanOrEqual(62);
+        expect(fov, `${name} n=${n}`).toBeLessThanOrEqual(100);
+        expect(fov, `${name} n=${n} never decreases`).toBeGreaterThanOrEqual(prev);
+        prev = fov;
+      }
+      expect(S.povLayout(2, aspect).fov, name).toBe(62);
+      expect(S.povLayout(13, aspect).fov, name).toBe(100);
+    }
+    expect(S.povLayout(3, 16 / 9).fov).toBe(62);
+  });
+
+  it("C2: from 14 players the FOV is min(84, 62 + 0.8·(n − 2)) whatever the aspect: 71.6 at 14, 84 at 30", () => {
+    for (const [, aspect] of ASPECTS)
+      for (const n of RING) {
+        const L = S.povLayout(n, aspect);
+        expect(L.staged).toBe(false);
+        expect(L.fov).toBeCloseTo(Math.min(84, 62 + 0.8 * (n - 2)), 9);
+      }
+    expect(round1(S.povLayout(14, 16 / 9).fov)).toBe(71.6);
+    expect(S.povLayout(30, 4 / 3).fov).toBe(84);
+    // the resize of C5: 6 players, 1280×720 then 1024×768
+    expect(round1(S.povLayout(6, 1280 / 720).fov)).toBe(71.6);
+    expect(round1(S.povLayout(6, 1024 / 768).fov)).toBe(87.8);
+  });
+
+  it("C3: the ring pulls in: 4.35..6.9 up to 13, never decreasing, 4.35 at 2", () => {
+    for (const [name, aspect] of ASPECTS) {
+      let prev = 0;
+      for (const n of STAGED) {
+        const { ring } = S.povLayout(n, aspect);
+        expect(ring, `${name} n=${n}`).toBeGreaterThanOrEqual(4.35);
+        expect(ring, `${name} n=${n}`).toBeLessThanOrEqual(6.9);
+        expect(ring, `${name} n=${n} never decreases`).toBeGreaterThanOrEqual(prev);
+        prev = ring;
+      }
+      expect(S.povLayout(2, aspect).ring, name).toBe(4.35);
+    }
+  });
+
+  it("C3: from 14 players the real ring, evenly spaced in cyclic desk order; 30 desks stand where they do today", () => {
+    for (const [, aspect] of ASPECTS)
+      for (const n of RING) {
+        const L = S.povLayout(n, aspect);
+        expect(L.ring).toBe(6.9);
+        expect(L.angles).toHaveLength(n);
+        L.angles.forEach((a, k) => expect(a).toBeCloseTo((k * 2 * Math.PI) / n, 9));
+      }
+    // with every desk taken, rival k is slot k = (desk - self) mod 30, at k · 12°
+    S.povLayout(30, 16 / 9).angles.forEach((a, slot) => expect(a).toBeCloseTo(slot * 12 * DEG, 9));
+  });
+
+  it("C4: the overview spaces every room evenly (2 players: 90°), ring 4.35 up to 13 and 6.9 above, FOV 55", () => {
+    for (let n = 2; n <= 30; n++) {
+      const L = S.overLayout(n);
+      expect(L.fov).toBe(55);
+      expect(L.ring).toBe(n <= 13 ? 4.35 : 6.9);
+      expect(L.angles).toHaveLength(n);
+      const step = n === 2 ? Math.PI / 2 : (2 * Math.PI) / n;
+      L.angles.forEach((a, k) => expect(a).toBeCloseTo(k * step, 9));
+    }
+    expect(S.overLayout(2).angles[1]! - S.overLayout(2).angles[0]!).toBeCloseTo(Math.PI / 2, 9);
+  });
+
+  it("C4: the orbit starts where no desk stands within π/(2n) of the azimuth behind the Major", () => {
+    const gap = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+    for (let n = 2; n <= 30; n++) {
+      const L = S.overLayout(n);
+      const behind = L.start + Math.PI;
+      for (const a of L.angles)
+        expect(gap(a, behind), `n=${n} desk ${a}`).toBeGreaterThanOrEqual(Math.PI / (2 * n) - EPS);
+    }
+    // 2 players: both desks in the camera's half of the room
+    const two = S.overLayout(2);
+    for (const a of two.angles) expect(gap(a, two.start)).toBeLessThan(Math.PI / 2);
+  });
+
+  it("C7: the stations are one batched mesh, hidden when empty; carriages and paper of empty desks are not drawn", () => {
+    expect(seat).toContain("const stations = new THREE.BatchedMesh(N,");
+    expect(seat).toContain("stations.setVisibleAt(i, s.occ)");
+    expect(seat).toContain("if (!OCC[i]) _w.scale(ZERO); carrIM.setMatrixAt(i, _w);");
+    expect(seat).not.toMatch(/room\.add\(g\);\s*await slice\(\);/); // no station merged into the room
+    // the grime follows each station (the batching matrix), not the origin
+    expect(seat).toContain("wP = batchingMatrix * wP;");
+    // a clerk types only while the race runs and its desk is typing
+    expect(seat).toContain("typing: view.phase === 'running' && d.status === 'typing'");
   });
 });

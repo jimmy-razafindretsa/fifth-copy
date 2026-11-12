@@ -74,84 +74,87 @@ async function init(page: Page, stall: boolean) {
   );
 }
 
-const bench = (page: Page) =>
-  page.evaluate(() => document.documentElement.dataset.bench ?? null);
+const bench = (page: Page) => page.evaluate(() => document.documentElement.dataset.bench ?? null);
 const probeOf = (page: Page) =>
   page.evaluate(() => (window as unknown as { __probe: Probe }).__probe);
 const reading = (b: string) => Number(/^probe:(\d+)/.exec(b)?.[1]);
 
-test.describe("#912 the auto probe judges the device, not a stall or the window size", { tag: "@scene" }, () => {
-  test.skip(({ viewport }) => viewport?.width !== 1280, "desktop project only (software WebGL)");
+test.describe(
+  "#912 the auto probe judges the device, not a stall or the window size",
+  { tag: "@scene" },
+  () => {
+    test.skip(({ viewport }) => viewport?.width !== 1280, "desktop project only (software WebGL)");
 
-  test.beforeEach(async ({ page }) => {
-    const webgl = await page.evaluate(
-      () => !!document.createElement("canvas").getContext("webgl2"),
-    );
-    test.skip(!webgl, "no WebGL2 in this browser");
-  });
-
-  /** A passing verdict: a reading at or above the floor, a settled preset, and the room leaving `none`. */
-  async function passes(page: Page) {
-    await expect
-      .poll(() => bench(page), { timeout: scaled(10_000) })
-      .toMatch(/^probe:\d+ (low|medium|high)$/);
-    const b = (await bench(page))!;
-    expect(reading(b), `the probe reading (${b})`).toBeGreaterThanOrEqual(PROBE_MIN_FPS);
-    await expect
-      .poll(async () => (await probeOf(page)).rooms.some((r) => r !== "none"), {
-        timeout: scaled(10_000),
-      })
-      .toBe(true);
-  }
-
-  /** A fallback: one reading under the floor, no preset, `data-room` only ever `none`. */
-  async function fallsBack(page: Page) {
-    await expect.poll(() => bench(page), { timeout: scaled(20_000) }).toMatch(/^probe:\d+/);
-    // the page stops at `benchmark-low`: give a passing verdict the time to show itself if it came
-    await page.waitForTimeout(1_000);
-    const b = (await bench(page))!;
-    expect(b, "data-bench: one probe reading, no preset").toMatch(/^probe:\d+$/);
-    expect(reading(b)).toBeLessThan(PROBE_MIN_FPS);
-    expect((await probeOf(page)).rooms, "data-room never left none").toEqual(["none"]);
-  }
-
-  test("C1 control: 160×100 without a stall passes", async ({ page }) => {
-    await openSeat(page, 160, 100);
-    await init(page, false);
-    await passes(page);
-  });
-
-  test("C1: 160×100 with one 500 ms main-thread task in the first window still passes", async ({
-    page,
-  }) => {
-    await openSeat(page, 160, 100);
-    await init(page, true);
-    await passes(page);
-  });
-
-  test("C2: 1280×800 on software WebGL reads under the floor and falls back before the room", async ({
-    page,
-  }) => {
-    await openSeat(page, 1280, 800);
-    await init(page, false);
-    await fallsBack(page);
-  });
-
-  test("C3: 1920×1080 draws the quads into at most 1280×800 (same aspect), clears the canvas, and falls back", async ({
-    page,
-  }) => {
-    await openSeat(page, 1920, 1080);
-    await init(page, false);
-    await fallsBack(page);
-    const { quads, clears } = await probeOf(page);
-    expect(clears, "the clear covers the whole canvas").toContain("1920x1080");
-    expect(quads.length, "the probe drew").toBeGreaterThan(0);
-    for (const q of quads) {
-      const [w, h] = q.split("x").map(Number);
-      expect(w * h, `quads viewport ${q}`).toBeLessThanOrEqual(PROBE_MAX_PIXELS);
-      expect(Math.abs(w / h - 1920 / 1080), `quads viewport ${q} keeps the aspect`).toBeLessThan(
-        0.01,
+    test.beforeEach(async ({ page }) => {
+      const webgl = await page.evaluate(
+        () => !!document.createElement("canvas").getContext("webgl2"),
       );
+      test.skip(!webgl, "no WebGL2 in this browser");
+    });
+
+    /** A passing verdict: a reading at or above the floor, a settled preset, and the room leaving `none`. */
+    async function passes(page: Page) {
+      await expect
+        .poll(() => bench(page), { timeout: scaled(10_000) })
+        .toMatch(/^probe:\d+ (low|medium|high)$/);
+      const b = (await bench(page))!;
+      expect(reading(b), `the probe reading (${b})`).toBeGreaterThanOrEqual(PROBE_MIN_FPS);
+      await expect
+        .poll(async () => (await probeOf(page)).rooms.some((r) => r !== "none"), {
+          timeout: scaled(10_000),
+        })
+        .toBe(true);
     }
-  });
-});
+
+    /** A fallback: one reading under the floor, no preset, `data-room` only ever `none`. */
+    async function fallsBack(page: Page) {
+      await expect.poll(() => bench(page), { timeout: scaled(20_000) }).toMatch(/^probe:\d+/);
+      // the page stops at `benchmark-low`: give a passing verdict the time to show itself if it came
+      await page.waitForTimeout(1_000);
+      const b = (await bench(page))!;
+      expect(b, "data-bench: one probe reading, no preset").toMatch(/^probe:\d+$/);
+      expect(reading(b)).toBeLessThan(PROBE_MIN_FPS);
+      expect((await probeOf(page)).rooms, "data-room never left none").toEqual(["none"]);
+    }
+
+    test("C1 control: 160×100 without a stall passes", async ({ page }) => {
+      await openSeat(page, 160, 100);
+      await init(page, false);
+      await passes(page);
+    });
+
+    test("C1: 160×100 with one 500 ms main-thread task in the first window still passes", async ({
+      page,
+    }) => {
+      await openSeat(page, 160, 100);
+      await init(page, true);
+      await passes(page);
+    });
+
+    test("C2: 1280×800 on software WebGL reads under the floor and falls back before the room", async ({
+      page,
+    }) => {
+      await openSeat(page, 1280, 800);
+      await init(page, false);
+      await fallsBack(page);
+    });
+
+    test("C3: 1920×1080 draws the quads into at most 1280×800 (same aspect), clears the canvas, and falls back", async ({
+      page,
+    }) => {
+      await openSeat(page, 1920, 1080);
+      await init(page, false);
+      await fallsBack(page);
+      const { quads, clears } = await probeOf(page);
+      expect(clears, "the clear covers the whole canvas").toContain("1920x1080");
+      expect(quads.length, "the probe drew").toBeGreaterThan(0);
+      for (const q of quads) {
+        const [w = 0, h = 1] = q.split("x").map(Number);
+        expect(w * h, `quads viewport ${q}`).toBeLessThanOrEqual(PROBE_MAX_PIXELS);
+        expect(Math.abs(w / h - 1920 / 1080), `quads viewport ${q} keeps the aspect`).toBeLessThan(
+          0.01,
+        );
+      }
+    });
+  },
+);

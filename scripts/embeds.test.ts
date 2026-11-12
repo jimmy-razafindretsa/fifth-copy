@@ -176,7 +176,9 @@ describe("seat page (#563)", () => {
       expect(probe.PROBE_HIGH_FPS).toBe(57);
       expect(probe.PROBE_WINDOW).toBe(0.5);
       expect(probe.PROBE_SPAN).toBe(1.5);
-      expect(seat).toContain("if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' });");
+      expect(seat).toContain(
+        "if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' });",
+      );
     });
 
     it("C1: the reading is the median frame interval, so one stall among short frames does not move it", () => {
@@ -200,12 +202,13 @@ describe("seat page (#563)", () => {
       expect(probe.PROBE_MAX_PIXELS).toBe(1_024_000);
       expect(probe.probeViewport(1280, 800)).toEqual([1280, 800]);
       expect(probe.probeViewport(160, 100)).toEqual([160, 100]);
-      for (const [w, h] of [
+      const screens: [number, number][] = [
         [1920, 1080],
         [2560, 1440],
         [3840, 2160],
         [1080, 1920],
-      ]) {
+      ];
+      for (const [w, h] of screens) {
         const [vw, vh] = probe.probeViewport(w, h);
         expect(vw * vh).toBeLessThanOrEqual(1_024_000);
         expect(vw * vh).toBeGreaterThan(1_024_000 * 0.99);

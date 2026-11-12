@@ -257,6 +257,9 @@ export function createRaceServer({
       void to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members }),
     announceSettings: (lobbyId, settings) =>
       void to(audience(lobbyId))?.emit("settings", { v: PROTOCOL_VERSION, settings }),
+    // The watching host kept for the race (#876) waits out the last-leave grace after its end;
+    // `lastLeave` is created below, before any race can end.
+    deferLeave: (lobbyId, userId, leave) => lastLeave.defer(lobbyId, userId, leave),
   };
 
   const raceHooks = {

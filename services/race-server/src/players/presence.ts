@@ -2,7 +2,7 @@ import { PROTOCOL_VERSION, type RaceEvent } from "@fifth-copy/protocol";
 import type { Scheduler, TimerHandle } from "../clock";
 import type { DesksState } from "../rooms/desks-state";
 import type { Durations } from "../rooms/durations";
-import type { RoomRegistry } from "../rooms/registry";
+import { watches, type RoomRegistry } from "../rooms/registry";
 import type { ResumeKeys } from "./resume-keys";
 
 /** What the socket edge does after a user's socket closed. */
@@ -11,7 +11,10 @@ export type Closed =
   | "still-connected"
   /** `waiting` or `ended` (or no room): the edge frees the desk (`registry.leave`, `roster`). */
   | "leave"
-  /** `countdown` or `running`: the desk is line-cut (or already was, or is past typing). */
+  /**
+   * `countdown` or `running`: the desk is line-cut (or already was, or is past typing), or the
+   * watching host (#876) is kept for the race like a seated host, released at its end (#658).
+   */
   | "kept";
 
 export type Presence = {
@@ -37,7 +40,10 @@ export type Presence = {
   socketClosed(lobbyId: string, userId: string): Promise<Closed>;
   /** Open sockets of the user on this process. */
   sockets(lobbyId: string, userId: string): number;
-  /** Users seated through a socket on this process that now have none (#658: released at race end). */
+  /**
+   * Users seated through a socket on this process that now have none (#658: released at race end),
+   * and the watching host kept for the race with none (#876).
+   */
   dropped(lobbyId: string): string[];
   /** Whether the desk's user has an open socket (#183 reads it: idle is decided only while connected). */
   isConnected(lobbyId: string, desk: number): boolean;
@@ -94,6 +100,8 @@ export function createPresence({
   const counts = new Map<string, number>();
   /** Per room: userId -> desk and resume key, from `seated`. */
   const seats = new Map<string, Map<string, { desk: number; key: string }>>();
+  /** Per room: the watching host whose last socket closed during the race (#876), kept for it. */
+  const watchers = new Map<string, Set<string>>();
   /** Per room: line-cut desks awaiting their user. */
   const cuts = new Map<string, Map<number, Cut>>();
   const v = PROTOCOL_VERSION;
@@ -188,6 +196,13 @@ export function createPresence({
         if (shut) return "kept";
         const room = await registry.room(lobbyId);
         if (room?.phase !== "countdown" && room?.phase !== "running") return "leave";
+        // The watching host (#876) has no desk to cut: kept for the race as a seated host is, its
+        // leave (and the host role's passing) waits for the race end (`dropped`, #658).
+        if (watches(room.settings, room.hostUserId, userId)) {
+          if (!watchers.has(lobbyId)) watchers.set(lobbyId, new Set());
+          watchers.get(lobbyId)!.add(userId);
+          return "kept";
+        }
         const desk = (room.desks ?? room.seated).find((d) => d.userId === userId)?.desk;
         if (desk === undefined) return "leave";
         if (cuts.get(lobbyId)?.has(desk)) return "kept";
@@ -216,7 +231,9 @@ export function createPresence({
     sockets,
 
     dropped: (lobbyId) =>
-      [...(seats.get(lobbyId)?.keys() ?? [])].filter((userId) => sockets(lobbyId, userId) === 0),
+      [...(seats.get(lobbyId)?.keys() ?? []), ...(watchers.get(lobbyId) ?? [])].filter(
+        (userId) => sockets(lobbyId, userId) === 0,
+      ),
 
     isConnected(lobbyId, desk) {
       for (const [userId, seat] of seats.get(lobbyId) ?? []) {
@@ -228,6 +245,7 @@ export function createPresence({
     left: (lobbyId, userId) =>
       registry.withRoom(lobbyId, async () => {
         seats.get(lobbyId)?.delete(userId);
+        watchers.get(lobbyId)?.delete(userId);
         await resumeKeys.drop(lobbyId, userId);
       }),
 
@@ -247,6 +265,7 @@ export function createPresence({
       for (const cut of cuts.get(lobbyId)?.values() ?? []) scheduler.clear(cut.timer);
       cuts.delete(lobbyId);
       seats.delete(lobbyId);
+      watchers.delete(lobbyId);
       resumeKeys
         .dropRoom(lobbyId)
         .catch((err: unknown) =>

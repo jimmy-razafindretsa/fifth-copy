@@ -25,21 +25,25 @@ function deps({
   result = () => ({ members: [], closed: false, kept: false }),
   dropped = [],
   sockets = {},
+  watching = false,
 }: {
   phase?: RoomState["phase"];
   result?: (userId: string) => LeaveResult;
   dropped?: string[];
   sockets?: Record<string, number>;
+  /** The host watches (#876): no desk of its own. */
+  watching?: boolean;
 } = {}) {
+  const seated = watching ? desks.filter((d) => d.userId !== "host") : desks;
   const room: RoomState = {
     code: "ABCD",
     hostUserId: "host",
     phase,
-    settings: DEFAULT_RACE_SETTINGS,
+    settings: { ...DEFAULT_RACE_SETTINGS, hostWatches: watching },
     race: null,
     endAt: null,
-    seated: desks,
-    desks,
+    seated,
+    desks: seated,
     raceId: "r1",
     endReason: null,
     autoStartAt: null,
@@ -195,5 +199,32 @@ describe("releaseDropped after the end (#658, #143 C3)", () => {
     const d = deps({ phase: "running", dropped: ["b"] });
     await releaseDropped(d, "lob");
     expect(d.registry.leave).not.toHaveBeenCalled();
+  });
+});
+
+describe("releaseDropped: the watching host kept for the race (#876 C4)", () => {
+  it("leaves after the end through the last-leave grace; the dropped typists leave at once", async () => {
+    const d = deps({ watching: true, dropped: ["b", "host"] });
+    const deferred: Array<() => Promise<void>> = [];
+    const deferLeave = vi.fn((_lobbyId: string, _userId: string, leave: () => Promise<void>) => {
+      deferred.push(leave);
+    });
+    await releaseDropped({ ...d, deferLeave }, "lob");
+    expect(d.registry.leave.mock.calls.map(([, userId]) => userId)).toEqual(["b"]);
+    expect(deferLeave).toHaveBeenCalledWith("lob", "host", expect.any(Function));
+    await deferred[0]!();
+    expect(d.registry.leave.mock.calls.map(([, userId]) => userId)).toEqual(["b", "host"]);
+  });
+
+  it("without a grace it leaves at once; back with a socket, or before the end, it stays", async () => {
+    const d = deps({ watching: true, dropped: ["host"] });
+    await releaseDropped(d, "lob");
+    expect(d.registry.leave.mock.calls.map(([, userId]) => userId)).toEqual(["host"]);
+    const back = deps({ watching: true, dropped: ["host"], sockets: { host: 1 } });
+    await releaseDropped(back, "lob");
+    expect(back.registry.leave).not.toHaveBeenCalled();
+    const racing = deps({ watching: true, phase: "running", dropped: ["host"] });
+    await releaseDropped(racing, "lob");
+    expect(racing.registry.leave).not.toHaveBeenCalled();
   });
 });

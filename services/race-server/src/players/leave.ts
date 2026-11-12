@@ -22,6 +22,12 @@ export type LeaveDeps = {
    * `Lobby.hostUserId` through the outbox. Called after the roster went out; never awaited.
    */
   onNewHost: (lobbyId: string, host: NewHost) => void;
+  /**
+   * The watching host kept for the race (#876) leaves after the race end through the last-leave
+   * grace (`lastLeave.defer`: a reload of the Dawn report keeps the role), as its disconnect would.
+   * Absent: it leaves at once.
+   */
+  deferLeave?: (lobbyId: string, userId: string, leave: () => Promise<void>) => void;
 };
 
 /**
@@ -55,9 +61,17 @@ export async function releaseDropped(deps: LeaveDeps, lobbyId: string): Promise<
   const room = await deps.registry.withRoom(lobbyId, () => deps.registry.room(lobbyId));
   if (room?.phase !== "ended") return;
   const members = new Set(room.seated.map(({ userId }) => userId));
+  const watcher = room.settings.hostWatches ? room.hostUserId : null;
   for (const userId of deps.presence.dropped(lobbyId)) {
-    // A socket that reopened since the end keeps its seat.
-    if (!members.has(userId) || deps.presence.sockets(lobbyId, userId) > 0) continue;
+    // A socket that reopened since the end keeps its seat (or its watch).
+    if (deps.presence.sockets(lobbyId, userId) > 0) continue;
+    if (userId === watcher) {
+      const leave = async () => void (await leaveRoom(deps, lobbyId, userId));
+      if (deps.deferLeave) deps.deferLeave(lobbyId, userId, leave);
+      else await leave();
+      continue;
+    }
+    if (!members.has(userId)) continue;
     const { closed, kept } = await leaveRoom(deps, lobbyId, userId);
     if (closed || kept) return;
   }

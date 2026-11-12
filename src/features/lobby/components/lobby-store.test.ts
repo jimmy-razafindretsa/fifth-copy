@@ -111,6 +111,7 @@ describe("reduceLobby", () => {
       phase: "loading",
       error: null,
       you: null,
+      watching: false,
       members: [],
       raceId: null,
       settings: null,
@@ -126,6 +127,7 @@ describe("reduceLobby", () => {
       phase: "live",
       error: null,
       you: 2,
+      watching: false,
       members: [ada, bob, cyd],
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
@@ -260,6 +262,7 @@ describe("bindRoomSocket", () => {
       phase: "live",
       error: null,
       you: 2,
+      watching: false,
       members: [ada, bob],
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
@@ -421,6 +424,7 @@ describe("countdown and the resume key (#214 C2)", () => {
       phase: "starting",
       error: null,
       you: 1,
+      watching: false,
       members: [ada, bob],
       raceId: RACE_ID,
       settings: DEFAULT_RACE_SETTINGS,
@@ -524,6 +528,7 @@ describe("welcome during the countdown (#659)", () => {
         phase: "starting",
         error: null,
         you: 2,
+        watching: false,
         members: [ada, bob],
         raceId: RACE_ID,
         settings: DEFAULT_RACE_SETTINGS,
@@ -549,6 +554,7 @@ describe("welcome during the countdown (#659)", () => {
       phase: "live",
       error: null,
       you: 2,
+      watching: false,
       members: [ada, bob],
       raceId: null,
       settings: DEFAULT_RACE_SETTINGS,
@@ -1258,5 +1264,37 @@ describe("new host (#137 C4)", () => {
     fire("event", payload);
     fire("event", { v: PROTOCOL_VERSION, kind: "new-leader", desk: 2 });
     expect(dispatch.mock.calls).toEqual([[{ type: "event", payload }]]);
+  });
+});
+
+describe("the host watches (#876 C5)", () => {
+  const watching = (): RoomEvents["welcome"] => ({
+    ...welcome(1, [bob]),
+    you: null,
+    settings: { ...DEFAULT_RACE_SETTINGS, hostWatches: true },
+  });
+
+  it("a seat welcome with no desk: live, watching, the roll without the host", () => {
+    const state = run({ type: "welcome", payload: watching() });
+    expect(state).toMatchObject({ phase: "live", you: null, watching: true, members: [bob] });
+  });
+
+  it("the switch back's welcome seats the viewer: watching off, its desk", () => {
+    const state = run(
+      { type: "welcome", payload: watching() },
+      { type: "welcome", payload: welcome(1, [ada, bob]) },
+    );
+    expect(state).toMatchObject({ phase: "live", you: 1, watching: false });
+  });
+
+  it("a spectator's no-desk welcome is not watching; a watching host's reconnect is live again", () => {
+    const spectator = { ...watching(), role: "spectator" as const };
+    expect(run({ type: "welcome", payload: spectator }).watching).toBe(false);
+    const back = run(
+      { type: "welcome", payload: watching() },
+      { type: "reconnecting" },
+      { type: "reconnected" },
+    );
+    expect(back.phase).toBe("live");
   });
 });

@@ -59,6 +59,8 @@ export type DawnReport =
       race: ReportRace;
       entries: ReportEntry[];
       viewerDesk: number | null;
+      /** The viewer hosts the race's lobby (#876): a watching host has no desk yet races again. */
+      viewerHosts?: boolean;
       /** The viewer's own figures (#864): `null` for a spectator and a visitor. */
       personal: PersonalStats | null;
     };

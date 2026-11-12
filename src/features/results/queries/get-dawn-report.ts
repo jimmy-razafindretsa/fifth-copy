@@ -38,7 +38,7 @@ export async function getDawnReport(
       textLanguage: true,
       endedAt: true,
       endReason: true,
-      lobby: { select: { code: true, status: true } },
+      lobby: { select: { code: true, status: true, hostUserId: true } },
       results: {
         orderBy: [{ place: "asc" }, { desk: "asc" }],
         select: {
@@ -92,6 +92,7 @@ export async function getDawnReport(
     },
     entries,
     viewerDesk: mine?.desk ?? null,
+    viewerHosts: !!viewer && race.lobby?.hostUserId === viewer.id,
     // #864 C1: the viewer's own figures and bonuses; null for a spectator and a visitor
     personal: mine ? personalFrom(mine) : null,
   };

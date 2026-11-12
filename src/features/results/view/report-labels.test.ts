@@ -80,3 +80,13 @@ describe("reportActions (#863 C1)", () => {
     }
   });
 });
+
+describe("reportActions: the lobby's host without a desk (#876 C7)", () => {
+  it("RACE AGAIN while the lobby is open, then the front desk; nothing more once it closed", () => {
+    expect(
+      reportActions(en.results, { ...make(true, null), viewerHosts: true, viewerIsGuest: false }),
+    ).toEqual([AGAIN, HOME]);
+    expect(kinds({ ...make(false, null), viewerHosts: true }, false)).toEqual(["home"]);
+    expect(kinds({ ...make(true, null), viewerHosts: false }, false)).toEqual(["home"]);
+  });
+});

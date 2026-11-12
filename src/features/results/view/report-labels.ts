@@ -95,8 +95,8 @@ export function filingLabels(results: Messages["results"], lobbyCode: string | n
 
 /**
  * The Dawn report's action row (#143, #863, bible 14.4 action row), as an ordered list. `again` (the way
- * back to the waiting room for another race) only for a member of the race (the viewer has a desk) while
- * its lobby is open, then `home` (the front desk) for everyone; a guest member also gets `signup`, the
+ * back to the waiting room for another race) only for a member of the race (the viewer has a desk), or
+ * the lobby's host without one (#876: it watched), while its lobby is open, then `home` (the front desk) for everyone; a guest member also gets `signup`, the
  * prompt to open a file (`/sign-up`) so the results stay theirs (ADR 0009: the merge carries them). One
  * entry per link, so a later `PERSONNEL FILE` is one more entry here.
  */
@@ -111,15 +111,16 @@ export function reportActions(
   {
     race,
     viewerDesk,
+    viewerHosts = false,
     viewerIsGuest,
-  }: Pick<Extract<DawnReport, { kind: "report" }>, "race" | "viewerDesk"> & {
+  }: Pick<Extract<DawnReport, { kind: "report" }>, "race" | "viewerDesk" | "viewerHosts"> & {
     /** The viewer is a guest (ADR 0009); `false` for an account and for no identity at all. */
     viewerIsGuest: boolean;
   },
 ): ReportAction[] {
   const member = viewerDesk !== null;
   const actions: ReportAction[] = [];
-  if (member && race.lobbyOpen && race.lobbyCode) {
+  if ((member || viewerHosts) && race.lobbyOpen && race.lobbyCode) {
     actions.push({
       kind: "again",
       label: results.actions.again,

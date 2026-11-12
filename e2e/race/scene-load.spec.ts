@@ -1,6 +1,6 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
-import { scaled } from "../timeouts";
+import { LOAD_LIMIT_MS, scaled } from "../timeouts";
 import {
   hostRoom,
   phaseOf,
@@ -214,9 +214,16 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     return { ...room, sent };
   }
 
-  /** START on the host; resolves at GO on the page (its `running` phase) within scaled(10 s). */
+  /**
+   * START on the host; resolves at GO on the page (its `running` phase). #926: the room first loads
+   * (every seat's scene settles, or the load limit passes), so "on time" is measured from the page's
+   * `countdown`: GO within scaled(10 s) of it.
+   */
   async function go(page: Page, host: Page): Promise<number> {
     await startButton(host).click();
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", /^(countdown|running)$/, {
+      timeout: LOAD_LIMIT_MS + scaled(10_000),
+    });
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
       timeout: scaled(10_000),
     });

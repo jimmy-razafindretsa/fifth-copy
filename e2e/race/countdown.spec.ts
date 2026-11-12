@@ -274,7 +274,7 @@ test.describe("#214 countdown and GO stamp", () => {
     await expectNoA11yViolations(page);
   });
 
-  test("C4 C2 host and guest: START moves both to /race/<raceId>, no line cut, running 2.5-4 s after the click", async ({
+  test("C4 C2 host and guest: START moves both to /race/<raceId>, no line cut, running 2.5-4 s after the countdown", async ({
     page,
     browser,
   }) => {
@@ -330,9 +330,13 @@ test.describe("#214 countdown and GO stamp", () => {
       expect(phases).toContain("countdown");
       expect(phases.indexOf("countdown")).toBeLessThan(phases.indexOf("running"));
       const runningAt = log.phases.find((e) => e.path === path && e.phase === "running")!.t;
-      const sinceClick = runningAt - clickedAt;
-      expect(sinceClick, "running after the click").toBeGreaterThanOrEqual(2_500);
-      expect(sinceClick, "running after the click").toBeLessThanOrEqual(4_000);
+      // #926: START loads the room first (every seat loads, then reports ready); the 3-2-1 runs from
+      // the release, so the bound is measured from the page's countdown, no longer from the click
+      const countdownAt = log.phases.find((e) => e.path === path && e.phase === "countdown")!.t;
+      expect(countdownAt, "the countdown after the click").toBeGreaterThanOrEqual(clickedAt);
+      const sinceCountdown = runningAt - countdownAt;
+      expect(sinceCountdown, "running after the countdown").toBeGreaterThanOrEqual(2_500);
+      expect(sinceCountdown, "running after the countdown").toBeLessThanOrEqual(4_000);
       for (const e of log.phases.filter((e) => e.path === path && e.t < runningAt)) {
         expect(e.phase).not.toBe("running");
       }
@@ -370,7 +374,10 @@ test.describe("#214 countdown and GO stamp", () => {
     await warm(room.host, room.lobbyId);
 
     await start(room.host).click();
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "countdown");
+    // #926: the room loads (every seat reports ready) before it counts down
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "countdown", {
+      timeout: scaled(10_000),
+    });
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "running", {
       timeout: scaled(10_000),
     });

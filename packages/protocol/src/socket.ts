@@ -9,7 +9,11 @@ import {
   hostStartAckSchema,
   hostStartSchema,
   keysSchema,
+  loadingSchema,
+  pendingDesksSchema,
   pingSchema,
+  readinessSchema,
+  readySchema,
   pongSchema,
   rejectedSchema,
   snapshotSchema,
@@ -131,6 +135,8 @@ export const welcomeSchema = z.object({
   serverNow: msSchema,
   /** The room's pending automatic start (#814, server ms epoch), else `null`. */
   autoStartAt: msSchema.nullable(),
+  /** The desks the readiness barrier still awaits while the room is `loading` (#926), else `null`. */
+  pending: pendingDesksSchema.nullable(),
 });
 export type Welcome = z.infer<typeof welcomeSchema>;
 
@@ -201,6 +207,8 @@ export const serverEvents = {
   welcome: welcomeSchema,
   roster: rosterSchema,
   settings: settingsSchema,
+  loading: loadingSchema,
+  readiness: readinessSchema,
   countdown: countdownSchema,
   "auto-start": autoStartSchema,
   snapshot: snapshotSchema,
@@ -218,6 +226,7 @@ export const clientEvents = {
   keys: keysSchema,
   abandon: abandonSchema,
   "bonus:play": bonusPlaySchema,
+  ready: readySchema,
   ping: pingSchema,
 } as const;
 

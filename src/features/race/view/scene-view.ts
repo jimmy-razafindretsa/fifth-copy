@@ -48,9 +48,19 @@ export type SceneSource = {
 
 const ROOM_PHASES: readonly string[] = ["waiting", "countdown", "running", "ended"];
 
-/** The room's phase; connecting, a cut line and a lost seat keep the room as it was (running with a race). */
+/**
+ * The room's phase; connecting, a cut line and a lost seat keep the room as it was (running with a
+ * race). The room's `loading` (#926) is the scene's `countdown`: the embed and its `fc-*` messages know
+ * no other phase (`SCENE_PROTOCOL` unchanged).
+ */
 const scenePhase = (phase: string, racing: boolean): ScenePhase =>
-  ROOM_PHASES.includes(phase) ? (phase as ScenePhase) : racing ? "running" : "waiting";
+  phase === "loading"
+    ? "countdown"
+    : ROOM_PHASES.includes(phase)
+      ? (phase as ScenePhase)
+      : racing
+        ? "running"
+        : "waiting";
 
 function viewFrom({ phase, you, members, desks, ranks, race }: SceneSource): SceneView {
   const textLength = race ? charsOf(normalizeTypeable(race.text)).length : 0;

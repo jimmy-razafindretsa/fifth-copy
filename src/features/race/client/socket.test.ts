@@ -85,6 +85,7 @@ const welcome: Welcome = {
   resumeKey: null,
   serverNow: 1767225600000,
   autoStartAt: null,
+  pending: null,
 };
 const roster: Roster = { v: PROTOCOL_VERSION, members: [member] };
 
@@ -669,6 +670,7 @@ describe("#661 server-side disconnect and the cut line", () => {
     state: desk(typed),
     serverNow: T0 + 1_000,
     autoStartAt: null,
+    pending: null,
   });
 
   function bound() {

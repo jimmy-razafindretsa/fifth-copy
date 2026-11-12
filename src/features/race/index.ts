@@ -18,7 +18,14 @@ export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
 export { machineRows } from "./view/machine-rows";
 export type { RaceSeatLabels, SeatErrorLabels } from "./seat/seat-view";
 export type { MintRaceToken } from "./client/connect-seat";
-export { bindRaceSocket, createRaceStore, initialRaceState, reduceRace } from "./client/store";
+export {
+  bindRaceSocket,
+  createRaceStore,
+  initialRaceState,
+  reduceRace,
+  selectReadyLine,
+  selectSceneGate,
+} from "./client/store";
 export type {
   RaceEvent,
   RaceLostReason,
@@ -27,7 +34,7 @@ export type {
   RaceStore,
   RaceTokenError,
 } from "./client/store";
-export { RaceStoreProvider, useRaceStore } from "./client/use-race-store";
+export { RaceStoreProvider, useRaceDispatch, useRaceStore } from "./client/use-race-store";
 export { readResumeKey, storeResumeKey, clearResumeKey } from "./client/resume-key";
 /** The waiting room -> seat view handover (#214): the lobby parks its socket; `connectSeat` closes it. */
 export { parkSocket } from "./client/handoff";

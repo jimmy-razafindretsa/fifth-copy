@@ -3,6 +3,7 @@ import type { Redis } from "ioredis";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RACE_SETTINGS, PROTOCOL_VERSION, type HostStartAck } from "@fifth-copy/protocol";
 import {
+  hostStart,
   boot,
   connectError,
   connectRedis,
@@ -83,7 +84,7 @@ async function seat(b: Booted, lobby: string, players = 2): Promise<Racer[]> {
 
 /** Starts the race from the host's socket and reaches GO; returns the race id. */
 async function run(b: Booted, lobby: string, racers: Racer[]) {
-  const ack: HostStartAck = await racers[0]!.client.timeout(2_000).emitWithAck("host:start", { v });
+  const ack: HostStartAck = await hostStart(racers[0]!.client);
   if (!ack.ok) throw new Error(`start failed: ${ack.error}`);
   b.clock.advance(3_000);
   await until(() => b.server.desks.get(lobby)?.phase === "running", 3_000, "GO");
@@ -194,6 +195,23 @@ describe("room recovery: rehydrate on boot (#204 C1)", () => {
     );
   });
 
+  it("#926 C7: a room found loading at boot is voided like a countdown", async () => {
+    let { b } = await bootSpace();
+    const { redis } = open!;
+    const lobby = await b.openRoom("LOA-0001");
+    await b.server.registry.join(lobby, { userId: HOST_SUB, name: "Host" });
+    await b.server.registry.join(lobby, { userId: "usr_l1", name: "Lea" });
+    // Seated without sockets: the race loads; nobody connected is awaited, so it releases at
+    // once. Written back to `loading` as a process killed mid-loading would leave it.
+    expect((await b.server.lifecycle.start(lobby, { sub: HOST_SUB, role: "host" })).ok).toBe(true);
+    await b.server.registry.setPhase(lobby, "loading");
+    b = await restart();
+    expect(await redis.hgetall(roomKey(lobby))).toMatchObject({
+      phase: "ended",
+      endReason: "void",
+    });
+  });
+
   it("drops from the index an id whose room keys are gone", async () => {
     let { b } = await bootSpace();
     const { redis } = open!;
@@ -266,7 +284,7 @@ describe("room recovery: client view of a voided room (#204 C2)", () => {
     expect(order.indexOf("welcome")).toBeLessThan(order.indexOf("ended"));
 
     // A voided room is `ended`: its host may race again with its kept members (#143 C1).
-    const ack: HostStartAck = await client.timeout(2_000).emitWithAck("host:start", { v });
+    const ack: HostStartAck = await hostStart(client);
     expect(ack).toEqual({ ok: true, raceId: expect.any(String) });
     await settle();
     expect(seen.ended).toHaveLength(1);

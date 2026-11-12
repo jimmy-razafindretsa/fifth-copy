@@ -11,6 +11,7 @@ import {
   keysSchema,
   pingSchema,
   PROTOCOL_VERSION,
+  readySchema,
   type ClientToServerEvents,
   type HostKickAck,
   type HostSettingsAck,
@@ -75,7 +76,7 @@ const log = (msg: string, fields: Record<string, unknown>) =>
  * user's last disconnect means is presence's decision (`players/presence.ts`, #178): in `waiting` and
  * `ended` the desk is released (`roster`); during a race it is line-cut and kept for the grace. A
  * handshake with the user's own resume key resumes the desk, and its `welcome` carries the server's
- * state. Client events (`keys`, `abandon`, `bonus:play`, `host:*`, `ping`) register on the socket by name; phase transitions
+ * state. Client events (`keys`, `abandon`, `bonus:play`, `ready`, `host:*`, `ping`) register on the socket by name; phase transitions
  * belong to the lifecycle (`rooms/lifecycle.ts`, #166). A `spectator` token takes the read-only edge
  * (`spectator.ts`, #187) instead; room-wide broadcasts go to the `audience` (players and spectators).
  */
@@ -150,6 +151,8 @@ export function attachSocketServer(
       serverNow: deps.clock.now(),
       // A reload or a reconnect during a public room's countdown sees it (#814).
       autoStartAt: now?.autoStartAt ?? null,
+      // A seat back during the loading sees who the room still waits for (#926).
+      pending: now?.phase === "loading" ? lifecycle.pending(lobby) : null,
     });
     return now;
   }
@@ -177,7 +180,11 @@ export function attachSocketServer(
     // A spectator (#187) branches off before anything below: it must never reach presence, the
     // registry's join/leave/settings or the race, whatever `sub` it carries (a host's projector tab).
     if (role === "spectator") {
-      return attachSpectator(socket, socket.data.claims, { registry, clock: deps.clock });
+      return attachSpectator(socket, socket.data.claims, {
+        registry,
+        clock: deps.clock,
+        pending: lifecycle.pending,
+      });
     }
     // Two tabs of one user share a desk: presence counts the user's sockets on this process.
     presence.socketOpened(lobby, sub);
@@ -201,6 +208,8 @@ export function attachSocketServer(
         }
         io.to(everyone).emit("roster", { v: PROTOCOL_VERSION, members: joined.members });
         log("joined", { lobby, desk: joined.desk, members: joined.members.length });
+        // A user back during the loading is awaited again (#926): the room hears the new pending.
+        if (now?.phase === "loading") void lifecycle.reviewLoading(lobby);
         // Eligibility is the lifecycle's one decision (#814); the edge only asks for a review.
         void lifecycle.reviewAutoStart(lobby);
       })
@@ -352,10 +361,22 @@ export function attachSocketServer(
       }
     });
 
+    // Readiness (#926, ADR 0006): the desk is the socket's seat, the race the payload's; the
+    // lifecycle owns the barrier. Dropped silently when malformed or unseated (the watching host);
+    // another race, another phase or a repeat is dropped by the lifecycle. Rate limited (#207).
+    socket.on("ready", (raw: unknown) => {
+      const parsed = readySchema.safeParse(raw);
+      const { desk } = socket.data;
+      if (!parsed.success || desk === undefined) return;
+      void lifecycle.ready(lobby, desk, parsed.data.raceId);
+    });
+
     socket.on("disconnect", () => {
       presence
         .socketClosed(lobby, sub)
         .then(async (closed) => {
+          // Kept during the loading (#926): the user is no longer awaited and loses its mark.
+          if (closed === "kept") lifecycle.away(lobby, sub);
           // A new socket of the user queued its join meanwhile: it keeps the desk. A removed
           // user's seat was freed by the kick (#133): no second leave, no second roster.
           if (closed !== "leave" || presence.sockets(lobby, sub) > 0) return;

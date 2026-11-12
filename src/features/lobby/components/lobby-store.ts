@@ -89,6 +89,8 @@ export type LobbyEvent =
   | { type: "roster"; payload: RoomEvents["roster"] }
   | { type: "settings"; payload: RoomEvents["settings"] }
   | { type: "countdown"; payload: RoomEvents["countdown"] }
+  /** The race started and the room loads (#926): the lobby moves to the seat view as on `countdown`. */
+  | { type: "loading"; payload: RoomEvents["loading"] }
   /** A room event (`event`); the lobby reads `kicked` (#133) and `new-host` (#137). */
   | { type: "event"; payload: RoomEvents["event"] }
   /** The NEW HOST stamp's hold ended (#137): clears stamp `seq`, never a later one. */
@@ -153,10 +155,11 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
   if (state.phase === "error" || state.phase === "removed") return state;
   switch (event.type) {
     case "welcome": {
-      // A welcome after START (a reload or a reconnect during the countdown, #659) carries the race:
+      // A welcome after START (a reload or a reconnect during the loading, #926, or the countdown, #659) carries the race:
       // the same state a `countdown` would give, so the page still moves to the seat view.
       const { room, race } = event.payload;
-      const underway = room.phase === "countdown" || room.phase === "running";
+      const underway =
+        room.phase === "loading" || room.phase === "countdown" || room.phase === "running";
       const started = underway && race !== null;
       const { receivedAt } = event;
       const offset =
@@ -187,6 +190,7 @@ export function reduceLobby(state: LobbyState, event: LobbyEvent): LobbyState {
       return { ...state, members: byDesk(event.payload.members) };
     case "settings":
       return { ...state, settings: event.payload.settings };
+    case "loading":
     case "countdown":
       return { ...state, phase: "starting", raceId: event.payload.race.raceId };
     case "event": {
@@ -309,6 +313,7 @@ export function bindRoomSocket(
     }),
     socket.onRoster((payload) => dispatch({ type: "roster", payload })),
     socket.onSettings((payload) => dispatch({ type: "settings", payload })),
+    socket.onLoading((payload) => dispatch({ type: "loading", payload })),
     socket.onCountdown((payload) => dispatch({ type: "countdown", payload })),
     socket.onEvent((payload) => {
       if (payload.kind === "kicked" || payload.kind === "new-host")

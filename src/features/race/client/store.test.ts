@@ -9,6 +9,7 @@ import {
   roomCodeSchema,
   type Countdown,
   type Ended,
+  type Loading,
   type Member,
   type Roster,
   type Snapshot,
@@ -38,6 +39,10 @@ const {
   selectVisibleStamp,
   sendAbandons,
   sendBonusPlays,
+  sendReady,
+  selectReadyLine,
+  selectSceneGate,
+  selectShouldReady,
   watchBlurExpiry,
   watchRefusalExpiry,
   watchStampExpiry,
@@ -76,6 +81,7 @@ const welcome = (over: Partial<Welcome> = {}): Welcome => ({
   resumeKey: KEY,
   serverNow: 1_767_225_600_000,
   autoStartAt: null,
+  pending: null,
   ...over,
 });
 
@@ -139,6 +145,9 @@ describe("reduceRace (#561 C2)", () => {
       abandons: 0,
       // #661 C2: no cut line waiting for its welcome
       keysHeld: false,
+      // #926: the readiness barrier's awaited desks and this page's settled scene
+      pending: null,
+      sceneSettled: false,
     });
   });
 
@@ -405,7 +414,10 @@ describe("bindRaceSocket (#561 C3)", () => {
       "disconnect",
       "ended",
       "event",
+      // #926: the readiness barrier
+      "loading",
       "pong",
+      "readiness",
       "rejected",
       "roster",
       "settings",
@@ -1855,6 +1867,7 @@ describe("#236 bonus state", () => {
           bonus,
           serverNow: SERVER_NOW,
           autoStartAt: null,
+          pending: null,
         }),
         receivedAt: RECEIVED_AT,
       });
@@ -1883,6 +1896,7 @@ describe("#236 bonus state", () => {
           bonus: { card: "smoke-break", cooldownUntil: null, blurUntil: null },
           serverNow: SERVER_NOW,
           autoStartAt: null,
+          pending: null,
         }),
         receivedAt: RECEIVED_AT,
       });
@@ -2461,5 +2475,150 @@ describe("#868 C1 new host", () => {
     due[0]!.fn();
     expect(store.getState().stamps).toEqual([]);
     stop();
+  });
+});
+
+// Contract of #926 C3, C5, C8 (the seat side of the readiness barrier): the store takes `loading`
+// (the race, no GO), `readiness` and the scene leaf's `scene-settled`; `sendReady` reports once per
+// race and welcome when the room loads, your desk is awaited and your scene is settled.
+describe("#926 the shared loading", () => {
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "Le reçu du café est prêt.",
+    language: "fr" as const,
+    wordCount: 5,
+    // while loading: the latest possible GO, never GO
+    t0: 1_767_225_633_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const loading = (pending = [1, 3, 5]): Loading => ({ v: PROTOCOL_VERSION, race: RACE, pending });
+  const readiness = (pending: number[], raceId = RACE.raceId) =>
+    ({ type: "readiness", payload: { v: PROTOCOL_VERSION, raceId, pending } }) as RaceEvent;
+  const settled = { type: "scene-settled" } as RaceEvent;
+  const loaded = (...more: RaceEvent[]) =>
+    run({ type: "welcome", payload: welcome() }, { type: "loading", payload: loading() }, ...more);
+
+  it("loading: phase loading, the race and its sheet, the pending desks", () => {
+    const s = loaded();
+    expect(s.phase).toBe("loading");
+    expect(s.room?.phase).toBe("loading");
+    expect(s.race).toEqual(RACE);
+    expect(s.pending).toEqual([1, 3, 5]);
+    expect(s.prediction).not.toBeNull();
+  });
+
+  it("readiness updates pending for this race only; countdown clears it", () => {
+    expect(loaded(readiness([5])).pending).toEqual([5]);
+    expect(loaded(readiness([5], "0e7a3c1b-5d2f-4a6b-8c9d-1e2f3a4b5c6d")).pending).toEqual([
+      1, 3, 5,
+    ]);
+    const counted = loaded(settled, {
+      type: "countdown",
+      payload: { v: PROTOCOL_VERSION, race: { ...RACE, t0: 1_767_225_605_000 } },
+    });
+    expect(counted).toMatchObject({ phase: "countdown", pending: null, sceneSettled: true });
+    expect(counted.race?.t0).toBe(1_767_225_605_000);
+  });
+
+  it("a welcome in loading carries pending; any other phase none", () => {
+    const w = welcome({ room: { ...welcome().room, phase: "loading" }, race: RACE, pending: [5] });
+    expect(run({ type: "welcome", payload: w }).pending).toEqual([5]);
+    expect(run({ type: "welcome", payload: { ...w, room: welcome().room } }).pending).toBeNull();
+  });
+
+  it("C3: should report only when loading, the text in, its desk pending and its scene settled", () => {
+    expect(selectShouldReady(loaded())).toBe(false); // scene still loading
+    expect(selectShouldReady(loaded(settled))).toBe(true);
+    expect(selectShouldReady(loaded(settled, readiness([1, 3])))).toBe(false); // desk 5 reported
+    expect(selectShouldReady(run({ type: "welcome", payload: welcome() }, settled))).toBe(false);
+    // a page without a desk (the watching host) never reports
+    const watching = run(
+      { type: "welcome", payload: welcome({ you: null, role: "host" }) },
+      { type: "loading", payload: loading() },
+      settled,
+    );
+    expect(selectShouldReady(watching)).toBe(false);
+  });
+
+  it("C3: sendReady sends once when the scene settles, again after a reconnect's welcome", () => {
+    const store = createRaceStore(loaded());
+    const socket = { sendReady: vi.fn() };
+    const stop = sendReady(store, socket);
+    expect(socket.sendReady).not.toHaveBeenCalled(); // never while the scene loads
+    store.dispatch(settled);
+    expect(socket.sendReady).toHaveBeenCalledWith(RACE.raceId);
+    store.dispatch(readiness([1, 3, 5])); // another desk's change: no repeat on this connection
+    store.dispatch(readiness([1, 5]));
+    expect(socket.sendReady).toHaveBeenCalledTimes(1);
+    const back = welcome({
+      room: { ...welcome().room, phase: "loading" },
+      race: RACE,
+      pending: [1, 5],
+      serverNow: 1_767_225_610_000,
+    });
+    store.dispatch({ type: "welcome", payload: back });
+    expect(socket.sendReady).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it("C8: the binder schedules no GO from a loading race", () => {
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    const fake = {
+      on: (event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)!.add(fn);
+      },
+      off: (event: string, fn: (...args: unknown[]) => void) => listeners.get(event)?.delete(fn),
+      io: { on: vi.fn(), off: vi.fn() },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    const deliver = (event: string, payload: unknown) => {
+      for (const fn of [...(listeners.get(event) ?? [])]) fn(payload);
+    };
+    const room = connectToRoom("http://localhost:7926", "tok", {
+      io: vi.fn(() => fake) as unknown as IoFactory,
+    });
+    const scheduled: number[] = [];
+    const timer = {
+      now: () => 1_767_225_600_000,
+      setTimeout: (_fn: () => void, ms: number) => scheduled.push(ms),
+      clearTimeout: () => {},
+    };
+    const dispatch = vi.fn();
+    bindRaceSocket(room, dispatch, { timer });
+    deliver("welcome", welcome({ serverNow: 1_767_225_600_000 }));
+    const before = scheduled.length;
+    deliver("loading", loading());
+    deliver("readiness", { v: PROTOCOL_VERSION, raceId: RACE.raceId, pending: [5] });
+    expect(dispatch.mock.calls.map(([e]) => e.type)).toEqual(
+      expect.arrayContaining(["loading", "readiness"]),
+    );
+    // only ping rounds may be scheduled: none at the loading race's t0
+    expect(scheduled.slice(before)).not.toContain(RACE.t0 - 1_767_225_600_000);
+    expect(dispatch.mock.calls.some(([e]) => e.type === "go")).toBe(false);
+  });
+
+  it("C4: a typist's scene may load until its room counts down; the watching host's always", () => {
+    expect(selectSceneGate(initialRaceState)).toBe("wait");
+    expect(selectSceneGate(loaded())).toBe("load");
+    const counted = loaded({
+      type: "countdown",
+      payload: { v: PROTOCOL_VERSION, race: RACE },
+    });
+    expect(selectSceneGate(counted)).toBe("paper");
+    const running = welcome({ room: { ...welcome().room, phase: "running" }, race: RACE });
+    expect(selectSceneGate(run({ type: "welcome", payload: running }))).toBe("paper");
+    expect(
+      selectSceneGate(run({ type: "welcome", payload: { ...running, you: null, role: "host" } })),
+    ).toBe("load");
+  });
+
+  it("C5: the READY count is desks ready over desks in the race, while loading only", () => {
+    // three members (bots count as members), desks 1, 3, 5 pending
+    expect(selectReadyLine(loaded())).toBe("00 / 03");
+    expect(selectReadyLine(loaded(readiness([5])))).toBe("02 / 03");
+    expect(selectReadyLine(loaded(readiness([])))).toBe("03 / 03");
+    expect(selectReadyLine(run({ type: "welcome", payload: welcome() }))).toBeNull();
   });
 });

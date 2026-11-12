@@ -23,3 +23,19 @@ export function scaled(baseMs: number): number {
 export const HYDRATION_WAIT = scaled(30_000);
 /** A server-action re-render, or a client effect that follows a user action. */
 export const ACTION_WAIT = scaled(20_000);
+
+/**
+ * #926 C6: how far apart two pages of one room may turn `running` (their seats' GO), measured on this
+ * machine's clock. A tolerance, scaled like the waits: a loaded machine renders the GO late.
+ */
+export const SAME_START_TOLERANCE = scaled(500);
+/**
+ * #926: the race server's readiness limit in this run (`LOAD_LIMIT_MS`, 30 s; 3 s with
+ * `RACE_FAST_CLOCK=1`), the longest a started room waits for its seats before its countdown.
+ */
+export const LOAD_LIMIT_MS = process.env.RACE_FAST_CLOCK === "1" ? 3_000 : 30_000;
+/**
+ * #926 C6: how long the guest's move to `/race/*` is held: longer than the countdown, shorter than the
+ * load limit (4 s; 2 s with `RACE_FAST_CLOCK=1`).
+ */
+export const HOLD_MS = process.env.RACE_FAST_CLOCK === "1" ? 2_000 : 4_000;

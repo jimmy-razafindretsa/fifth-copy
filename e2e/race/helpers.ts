@@ -9,6 +9,7 @@ import {
   PROTOCOL_VERSION,
   RACE_TOKEN_TTL_S,
   type Countdown,
+  type Loading,
   type RaceSettings,
   type RaceSettingsPatch,
   type Welcome,
@@ -298,13 +299,21 @@ function playerToken(lobbyId: string, name: string): Promise<string> {
  * proof, `services/race-server/src/testing/harness.ts`): each is a Node `socket.io-client` with its own
  * race token, signed here with the local `RACE_TOKEN_SECRET` (the web app's mint stays the product
  * path). Resolves once every one is seated (its `welcome`), in join order. Each keeps the clock offset
- * of its welcome and the race of its `countdown`, so `type()` works after GO. `close()` every player
+ * of its welcome and the race of its `countdown`, so `type()` works after GO, and answers the room's
+ * `loading` with `ready` (#926). `close()` every player
  * in the test's cleanup.
  */
 export async function simulatedPlayers(
   n: number,
   lobbyId: string,
-  { names }: { names?: readonly string[] } = {},
+  {
+    names,
+    ready: answers = true,
+  }: {
+    names?: readonly string[];
+    /** `false`: the players never report ready (#926), so the room waits out its load limit. */
+    ready?: boolean;
+  } = {},
 ): Promise<SimulatedPlayer[]> {
   const players: SimulatedPlayer[] = [];
   // one at a time: desks follow the join order
@@ -321,11 +330,23 @@ export async function simulatedPlayers(
     socket.on("countdown", (payload: Countdown) => {
       race = payload.race;
     });
+    // #926: a Node player has no scene to load: it reports ready at once, once per race, so the
+    // room never waits out its load limit for it.
+    let you: number | null = null;
+    let readyFor: string | null = null;
+    const ready = (raceId: string, pending: readonly number[] | null) => {
+      if (!answers || you === null || readyFor === raceId || !pending?.includes(you)) return;
+      readyFor = raceId;
+      socket.emit("ready", { v: PROTOCOL_VERSION, raceId });
+    };
+    socket.on("loading", (payload: Loading) => ready(payload.race.raceId, payload.pending));
     const welcome = await new Promise<Welcome>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`${name}: no welcome`)), scaled(10_000));
       socket.once("welcome", (w: Welcome) => {
         clearTimeout(timer);
         offset = w.serverNow - Date.now();
+        you = w.you;
+        if (w.room.phase === "loading" && w.race) ready(w.race.raceId, w.pending);
         resolve(w);
       });
       socket.once("connect_error", (err) => {

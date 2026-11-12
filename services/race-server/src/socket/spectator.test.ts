@@ -6,6 +6,7 @@ import {
   type RaceResultsRequest,
 } from "@fifth-copy/protocol";
 import {
+  hostStart,
   ackResults,
   boot,
   connectError,
@@ -57,8 +58,7 @@ async function room(players = 2, text = "bonjour", maxSpectatorsPerRoom?: number
   }
   await until(() => seats.every((s) => s.seen.roster?.length === players), 5_000, "seated");
   const spectate = (sub = `usr_watch_${Math.random()}`) => seat(sub, "spectator");
-  const start = () =>
-    seats[0]!.client.timeout(2_000).emitWithAck("host:start", { v: PROTOCOL_VERSION });
+  const start = () => hostStart(seats[0]!.client);
   return { booted, lobby, seats, seat, spectate, start, results };
 }
 

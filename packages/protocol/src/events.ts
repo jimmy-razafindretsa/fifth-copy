@@ -23,9 +23,32 @@ import { versionSchema } from "./version";
 
 /* ---------- server -> client ---------- */
 
-/** Host pressed start: the text and the GO instant (`race.t0`, server ms epoch). */
+/** Every awaited seat is ready (or the load limit passed): the text and the GO instant (`race.t0`, server ms epoch). */
 export const countdownSchema = z.object({ v: versionSchema, race: raceInfoSchema });
 export type Countdown = z.infer<typeof countdownSchema>;
+
+/** Desks still awaited by the readiness barrier (#926), ascending. */
+export const pendingDesksSchema = z.array(deskSchema).max(MAX_DESKS);
+
+/**
+ * The race started and the room loads (#926, ARCHITECTURE 7.1): the text, and `race.t0` = the latest
+ * possible GO (`start + LOAD_LIMIT_MS + COUNTDOWN_MS`), never GO itself. `pending`: the seated human
+ * desks the room awaits. A `countdown` follows once none is pending, or at the limit.
+ */
+export const loadingSchema = z.object({
+  v: versionSchema,
+  race: raceInfoSchema,
+  pending: pendingDesksSchema,
+});
+export type Loading = z.infer<typeof loadingSchema>;
+
+/** A desk reported ready, or an awaited user left or came back (#926): the desks still awaited. */
+export const readinessSchema = z.object({
+  v: versionSchema,
+  raceId: raceIdSchema,
+  pending: pendingDesksSchema,
+});
+export type Readiness = z.infer<typeof readinessSchema>;
 
 /**
  * A public room's automatic start (#814, ARCHITECTURE 7.1): `startsAt` is the server ms epoch at
@@ -155,6 +178,14 @@ export type Keys = z.infer<typeof keysSchema>;
 
 export const abandonSchema = z.object({ v: versionSchema });
 export const bonusPlaySchema = z.object({ v: versionSchema });
+
+/**
+ * A seat finished loading the race (#926): its text is in, its scene is up or settled on paper.
+ * Strict, no ack; names the race, never a desk (the socket's desk is the server's). Dropped when it
+ * names another race, arrives outside `loading` or comes from a socket without a desk.
+ */
+export const readySchema = z.strictObject({ v: versionSchema, raceId: raceIdSchema });
+export type Ready = z.infer<typeof readySchema>;
 
 /** `sent`: the client's own clock (ms), echoed by `pong`. */
 export const pingSchema = z.object({ v: versionSchema, sent: msSchema });

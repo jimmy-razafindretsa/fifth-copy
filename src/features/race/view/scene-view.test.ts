@@ -81,4 +81,10 @@ describe("selectSceneView (#563, ADR 0017)", () => {
     );
     expect(selectSceneView({ ...base, phase: "ended", race: { text: "a" } }).phase).toBe("ended");
   });
+
+  it("#926 C4: the room's loading is the scene's countdown (no embed or fc-* change)", () => {
+    expect(selectSceneView({ ...base, phase: "loading", race: { text: "a" } }).phase).toBe(
+      "countdown",
+    );
+  });
 });

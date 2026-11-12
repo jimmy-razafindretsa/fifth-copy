@@ -11,6 +11,7 @@ import { BACKSPACE, type PlayerStatus } from "@fifth-copy/engine";
 import { resumeKey, roomKey } from "../rooms/keys";
 import { LAST_LEAVE_GRACE_MS } from "./last-leave";
 import {
+  hostStart,
   connectError,
   boot,
   connectRedis,
@@ -500,7 +501,7 @@ describe("the watching host dropped during the race is kept until its end (#876 
     const a = await join("usr_a", "player");
     const c = await join("usr_c", "player");
     await until(() => a.seen.roster?.length === 2, WAIT_MS, "two typists");
-    const ack = await host.client.timeout(2_000).emitWithAck("host:start", { v: PROTOCOL_VERSION });
+    const ack = await hostStart(host.client);
     expect(ack).toMatchObject({ ok: true });
     const t0 = b.clock.now() + 3_000;
     if (go) await reachGo(b, lobby, t0);

@@ -7,7 +7,10 @@ import {
   LoadingCard,
   PHONE_QUERY,
   RaceNotice,
+  selectReadyLine,
+  selectSceneGate,
   selectSceneView,
+  useRaceDispatch,
   useRaceStore,
   type RaceNoticeLabels,
   type SceneLabels,
@@ -36,8 +39,12 @@ export type SeatSceneProps = {
  * #695 C9), until the scene's preset is settled; a browser without WebGL2, or a scene that falls back
  * (benchmark below Low, a lost context, or a running scene that blows its frame budget, #695: `RaceScene`
  * puts every telemetry second through race-3d's `frameBudget`), unmounts the scene, frame and all, and
- * keeps the paper backdrop with the `no-scene` notice, once. Phones never load it (they watch, #292). It
- * reads the store through `selectSceneView` only and never dispatches.
+ * keeps the paper backdrop with the `no-scene` notice, once. Phones never load it (they watch, #292).
+ * The readiness barrier (#926): it tells the store once that its scene is settled (first frame, or
+ * paper), so the seat reports `ready`; while the room loads every device shows the loading card with
+ * its READY row (a paper device in place of its notice); a typist whose scene is not up when the room
+ * counts down or runs drops to paper for that race (`selectSceneGate`), and the scene waits for the
+ * room's phase before it mounts, so a reload mid-race never loads it. The watching host is exempt.
  */
 export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
   const [mode, setMode] = useState<Mode>("off");
@@ -45,6 +52,9 @@ export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
   const [tip, setTip] = useState<string | null>(null);
   const [scene, setScene] = useState<string | null>(null);
   const view = useRaceStore(selectSceneView);
+  const gate = useRaceStore(selectSceneGate);
+  const ready = useRaceStore(selectReadyLine);
+  const dispatch = useRaceDispatch();
   // decided once per mount: a re-render with new `tips` must never bring a fallen-back scene back (#695 C2)
   const decided = useRef(false);
 
@@ -59,19 +69,31 @@ export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
     setMode(hasWebGL2() ? "loading" : "fallback");
   }, [tips]);
 
+  // #926 C4: a typist's scene still loading when its room counts down or runs drops to paper for
+  // that race (the frame unmounts; a later race may load it again)
+  const shown: Mode = mode === "loading" && gate === "paper" ? "fallback" : mode;
+
+  // #926 C3: the scene is settled (its first frame, or paper): the seat may report ready
+  useEffect(() => {
+    if (shown === "ready" || shown === "fallback") dispatch({ type: "scene-settled" });
+  }, [shown, dispatch]);
+
+  const card = <LoadingCard labels={labels} tip={tip} ready={ready} />;
   if (mode === "off") return null;
-  if (mode === "fallback") return <RaceNotice kind="no-scene" labels={notice} />;
+  if (shown === "fallback") return ready ? card : <RaceNotice kind="no-scene" labels={notice} />;
   return (
     <>
-      {mode === "loading" ? <LoadingCard labels={labels} tip={tip} /> : null}
-      <RaceScene
-        view={view}
-        preset={preset}
-        scene={scene}
-        title={labels.title}
-        onReady={() => setMode("ready")}
-        onFallback={() => setMode("fallback")}
-      />
+      {shown === "loading" || ready ? card : null}
+      {gate === "wait" ? null : (
+        <RaceScene
+          view={view}
+          preset={preset}
+          scene={scene}
+          title={labels.title}
+          onReady={() => setMode("ready")}
+          onFallback={() => setMode("fallback")}
+        />
+      )}
     </>
   );
 }

@@ -28,6 +28,7 @@ import { createLifecycle, type Lifecycle, type RaceEnded } from "./rooms/lifecyc
 import { createOwnerLease } from "./rooms/owner";
 import {
   createRoomRegistry,
+  raceOn,
   RECONCILE_MS,
   type NewHost,
   type RoomRegistry,
@@ -345,6 +346,8 @@ export function createRaceServer({
     leavePending: (lobbyId) => lastLeave.pending(lobbyId),
     // A start delivers the room's host transfer first (#897): the web checks the host it recorded.
     syncHost: (lobbyId) => outbox.flush(lobbyHostOutboxId(lobbyId)),
+    // The readiness barrier awaits the desks whose user has a socket open here (#926).
+    connected: (lobbyId, desk) => presence.isConnected(lobbyId, desk),
   });
   const secret = env.RACE_TOKEN_SECRET;
   let draining = false;
@@ -371,7 +374,7 @@ export function createRaceServer({
   };
 
   // Drain (#704): a room this process no longer serves stops counting, so the drain ends after the
-  // last live race. Live = a race in countdown/running, or a socket of the room on this process.
+  // last live race. Live = a race on (loading, countdown, running, #926), or a socket of the room on this process.
   let drainTimer: TimerHandle | null = null;
   const hasSockets = (lobbyId: string) =>
     [lobbyRoom(lobbyId), spectatorRoom(lobbyId)].some(
@@ -382,7 +385,7 @@ export function createRaceServer({
       if (hasSockets(lobbyId)) continue;
       const room = await registry.room(lobbyId).catch(() => undefined);
       if (room === undefined) continue;
-      if (room && (room.phase === "countdown" || room.phase === "running")) continue;
+      if (room && raceOn(room.phase)) continue;
       registry.release(lobbyId);
     }
   };

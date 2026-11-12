@@ -537,6 +537,8 @@ export const en = {
       loading: "LOADING THE RING ROOM",
       title: "The ring room, from your desk",
       didYouKnow: "DID YOU KNOW?",
+      /** #926: the loading card's row while the room loads, `01 / 02` desks ready. */
+      ready: "READY",
     },
     /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
     didYouKnow: [] as string[],

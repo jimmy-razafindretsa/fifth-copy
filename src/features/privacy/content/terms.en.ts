@@ -37,7 +37,7 @@ export const termsEn: readonly PrivacySection[] = [
     id: "avatars",
     heading: "Profile pictures",
     paragraphs: [
-      "Your picture is only shown to the players in your lobby. It must be fine for a classroom.",
+      "Only you and the players who share a lobby or a race with you see your picture, for 24 hours after the race. It must be fine for a classroom.",
       "A filter checks every new picture. Some pictures are held for review, and everyone sees the default portrait until a person checks them.",
       "A refused picture is deleted and your previous picture stays. You will see why, and how to ask for another look.",
     ],

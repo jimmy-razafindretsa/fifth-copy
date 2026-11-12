@@ -34,7 +34,7 @@ export const termsFr: readonly PrivacySection[] = [
     id: "avatars",
     heading: "Photos de profil",
     paragraphs: [
-      "Ton image est montrée seulement aux joueurs de ton salon. Elle doit convenir à une classe.",
+      "Ton image est montrée seulement à toi et aux joueurs qui partagent un salon ou une course avec toi, pendant 24 heures après la course. Elle doit convenir à une classe.",
       "Un filtre vérifie chaque nouvelle image. Certaines images sont mises en attente, et tout le monde voit le portrait par défaut jusqu'à ce qu'une personne les vérifie.",
       "Une image refusée est supprimée et ton image précédente reste. Tu verras pourquoi, et comment demander qu'on la revoie.",
     ],

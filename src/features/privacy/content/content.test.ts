@@ -5,6 +5,8 @@ import { privacyContentFor } from "./index";
 import { allText, LEGALESE, sentences, words } from "./plain-language";
 import { privacyEn } from "./privacy.en";
 import { privacyFr } from "./privacy.fr";
+import { termsEn } from "./terms.en";
+import { termsFr } from "./terms.fr";
 import { PRIVACY_UPDATED, type PrivacySection } from "./types";
 
 // Card #76 C1-C3. The privacy page text (/privacy), French first, for players aged 12 to 17. Every fact comes
@@ -219,5 +221,37 @@ describe("privacy page: facts match docs/privacy (C3)", () => {
       for (const name of ["fc_guest", "locale", "theme"]) expect(text, name).toContain(name);
       expect(text).toMatch(/session/i);
     }
+  });
+
+  // Card #924 C2: the one script-readable cookie (the merge flash, src/features/identity/merge/flash.ts) is
+  // named with its purpose and lifetime, so "no script can read these cookies" stays true for the rest.
+  it("names fc_merged as the one script-readable cookie, with MERGED_COOKIE_MAX_AGE", () => {
+    const code = doc("src/features/identity/merge/flash-cookie.ts");
+    const seconds = /MERGED_COOKIE_MAX_AGE = (\d+);/.exec(code)?.[1];
+    expect(seconds).toBeDefined();
+    expect(code).toContain('MERGED_COOKIE = "fc_merged"');
+    expect(doc("src/features/identity/merge/flash.ts")).toMatch(/httpOnly: false/);
+    expect(section(privacyFr, "cookies")).toMatch(/sauf fc_merged/);
+    expect(section(privacyEn, "cookies")).toMatch(/except fc_merged/);
+    expect(section(privacyFr, "cookies")).toContain(`fc_merged : `);
+    expect(section(privacyFr, "cookies")).toContain(`${seconds} secondes`);
+    expect(section(privacyEn, "cookies")).toContain(`${seconds} seconds`);
+  });
+
+  // Card #924 C1: the conduct rules shown under /privacy#rules give the same picture audience as the privacy
+  // page and ADR 0022 (owner, lobby and race mates, 24 h after the race), never "lobby players only".
+  it("the conduct rules give the picture audience of the privacy page (ADR 0022)", () => {
+    const rules = (terms: typeof termsFr | typeof termsEn) =>
+      terms.find((s) => s.id === "avatars")!.paragraphs.join(" ");
+    expect(rules(termsFr)).toMatch(
+      /toi et aux joueurs qui partagent un salon ou une course.*24 heures/,
+    );
+    expect(rules(termsEn)).toMatch(/you and the players who share a lobby or a race.*24 hours/);
+    expect(section(privacyFr, "avatars")).toMatch(/salon ou une course.*24 heures/);
+    expect(section(privacyEn, "avatars")).toMatch(/lobby or a race.*24 hours/);
+    for (const text of [rules(termsFr), rules(termsEn)])
+      expect(text).not.toMatch(
+        /seulement aux joueurs de ton salon|only shown to the players in your lobby/,
+      );
   });
 });

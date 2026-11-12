@@ -254,6 +254,23 @@ export const en = {
       stageHint: "THE MAJOR · HE'S WATCHING YOUR CURSOR",
     },
   },
+  privacy: {
+    title: "PRIVACY",
+    kicker: "MINISTRY OF TYPING · PRIVACY FILE",
+    heading: "WHAT WE KEEP ON FILE",
+    intro:
+      "This page tells you what Fifth Copy knows about you, why, and for how long. It also tells you how to have it deleted.",
+    rows: [
+      ["FORM", "LAW 25"],
+      ["UPDATED", "{date}"],
+      ["QUESTIONS", "ASK YOUR TEACHER"],
+    ],
+    tocLabel: "On this page",
+    tocTag: "CONTENTS",
+    deleteLink: "MY SETTINGS →",
+    rulesUpdated: "RULES UPDATED · {date}",
+    backToTop: "BACK TO THE TOP ↑",
+  },
   /** `/invite/[token]` (#809, bible 14.3): the invitation screen and the refusal screen. */
   invite: {
     kicker: "MINISTRY OF TYPING · INVITATION",

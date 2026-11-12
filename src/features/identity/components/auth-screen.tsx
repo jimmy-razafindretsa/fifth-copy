@@ -13,13 +13,14 @@ import { ProviderButtons } from "./provider-buttons";
 export type AuthMode = "sign-in" | "sign-up";
 
 /**
- * The routes of the form screens (ARCHITECTURE 8.1). The privacy page is post-v1 (#76): a link appears
- * when its route ships (bible 14.3, #875), so `privacy` comes back here once its `page.tsx` exists.
+ * The routes of the form screens (ARCHITECTURE 8.1). A link appears when its route ships (bible 14.3,
+ * #875); the privacy page shipped with #76. `privacy` stays optional so a held-back page can drop out.
  */
 export const AUTH_LINKS: { signIn: string; signUp: string; recover: string; privacy?: string } = {
   signIn: "/sign-in",
   signUp: "/sign-up",
   recover: "/recover",
+  privacy: "/privacy",
 };
 
 type Messages = Awaited<ReturnType<typeof getT>>;

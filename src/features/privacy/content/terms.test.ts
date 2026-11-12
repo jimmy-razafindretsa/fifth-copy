@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { termsEn } from "./terms.en";
 import { termsFr } from "./terms.fr";
-import { TERMS_UPDATED, type PrivacySection } from "./types";
+import { allText, LEGALESE, sentences, words } from "./plain-language";
+import { TERMS_UPDATED } from "./types";
 
 // Card #91 C2. Conduct rules shown on /privacy#rules (rendering: #80). Bible 2: short declarative sentences,
 // 1-3 sentences per paragraph, "tu" form in French. Plain language is checked mechanically below.
@@ -11,31 +12,6 @@ const MAX_SENTENCES_PER_PARAGRAPH = 3;
 const MAX_WORDS_PER_SENTENCE = 30;
 const MAX_WORDS_PER_LIST_ITEM = 20;
 const MAX_HEADING_CHARS = 48;
-
-const LEGALESE = [
-  /\bhereby\b/i,
-  /\bherein(after)?\b/i,
-  /\bthereof\b/i,
-  /\bwhereas\b/i,
-  /\bnotwithstanding\b/i,
-  /\baforementioned\b/i,
-  /\bpursuant\b/i,
-  /\bshall\b/i,
-  /\bci-après\b/i,
-  /\bnonobstant\b/i,
-  /\bsusmentionnée?s?\b/i,
-  /\battendu que\b/i,
-  /\bledit\b|\bladite\b|\blesdit(e)?s\b/i,
-];
-
-const sentences = (paragraph: string) =>
-  paragraph
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-const words = (text: string) => text.split(/\s+/).filter(Boolean);
-const allText = (sections: readonly PrivacySection[]) =>
-  sections.flatMap((s) => [s.heading, ...s.paragraphs, ...(s.list ?? [])]);
 
 const locales = [
   ["fr", termsFr],

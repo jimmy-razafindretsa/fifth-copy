@@ -1,16 +1,22 @@
 import type { Outfit } from "@/features/identity";
 
 /** The links whose route has shipped (ARCHITECTURE 8.1 route list): the landing always offers them. */
-type ShippedLinks = { home: string; play: string; how: string; guide: string; signIn: string };
+type ShippedLinks = {
+  home: string;
+  play: string;
+  how: string;
+  guide: string;
+  signIn: string;
+  privacy: string;
+};
 
 /**
  * Footer and personnel-file links the bible lists (14.1 items 5, 10) whose page is post-v1 (owner
- * decision 2026-11-10, #875): the locker, the teachers' page, the Personnel file (#311), about, privacy
- * (#76), terms and contact. A link appears when its route ships: add its path here once its `page.tsx`
- * exists and it comes back (links.test.ts walks src/app); the catalog keys stay.
+ * decision 2026-11-10, #875): the locker, the teachers' page, the Personnel file (#311), about, terms and
+ * contact. A link appears when its route ships: add its path here once its `page.tsx` exists and it comes
+ * back (links.test.ts walks src/app); the catalog keys stay. Privacy shipped with #76.
  */
-export type HeldBackLink =
-  "locker" | "teachers" | "profile" | "about" | "privacy" | "terms" | "contact";
+export type HeldBackLink = "locker" | "teachers" | "profile" | "about" | "terms" | "contact";
 
 /**
  * Where the landing's links go. The guide link anchors to the landing's "How a race runs" until the
@@ -24,6 +30,7 @@ export const LINKS: ShippedLinks & Partial<Record<HeldBackLink, string>> = {
   how: "#how",
   guide: "/#how",
   signIn: "/sign-in",
+  privacy: "/privacy",
 };
 
 export type SocialKey = "github" | "linkedin" | "discord" | "youtube";

@@ -6,7 +6,15 @@ import { HYDRATION_WAIT, scaled } from "./timeouts";
 // #875 C4: no dead links on the public screens. A link appears when its route ships (bible 14.1, 14.3):
 // every internal link answers below 400, and no outside link is a bare site home page.
 
-const PAGES = ["/", "/sign-in", "/sign-up", "/recover", "/settings", "/no-such-desk"] as const;
+const PAGES = [
+  "/",
+  "/sign-in",
+  "/sign-up",
+  "/recover",
+  "/settings",
+  "/privacy",
+  "/no-such-desk",
+] as const;
 
 /** The distinct internal hrefs on the page, anchors stripped (`/#play` is `/`). */
 async function internalHrefs(page: Page): Promise<string[]> {

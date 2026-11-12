@@ -61,7 +61,11 @@ export const raceMsSchema = z.int().min(0).max(MAX_RACE_MS);
 export const raceRoleSchema = z.enum(["host", "player", "spectator"]);
 export type RaceRole = z.infer<typeof raceRoleSchema>;
 
-export const phaseSchema = z.enum(["waiting", "countdown", "running", "ended"]);
+/**
+ * Room phase. `loading` (#926, ARCHITECTURE 7.1): the race exists and every seat loads its text and
+ * scene; GO is not scheduled yet (`race.t0` is then the latest possible GO, only `countdown`'s is GO).
+ */
+export const phaseSchema = z.enum(["waiting", "loading", "countdown", "running", "ended"]);
 export type Phase = z.infer<typeof phaseSchema>;
 
 /** Engine `PlayerStatus` in engine order; the index is the snapshot status code. */

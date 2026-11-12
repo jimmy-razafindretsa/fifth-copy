@@ -8,6 +8,7 @@ import {
   selectExit,
   selectVisibleStamp,
   sendAbandons,
+  sendReady,
   sendBonusPlays,
   watchBlurExpiry,
   watchRefusalExpiry,
@@ -304,9 +305,12 @@ export function RaceSeatLive({
         const stopPlays = sendBonusPlays(store, socket);
         // #233: one `abandon` per confirm the store took
         const stopAbandons = sendAbandons(store, socket);
+        // #926: one `ready` once the room loads, your desk is awaited and your scene is settled
+        const stopReady = sendReady(store, socket);
         return () => {
           stopPlays();
           stopAbandons();
+          stopReady();
           own.dispose();
           if (typing.current === own) typing.current = null;
         };

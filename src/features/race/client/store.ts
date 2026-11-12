@@ -624,8 +624,8 @@ function queueStamp(
   return { ...state, stamps, stampSeq: stamps.some((s) => s.id === id) ? id : state.stampSeq };
 }
 
-/** The phases whose seat view shows the NEW HOST notice (#868 C1): the race, before and after GO. */
-const NOTICE_PHASES: ReadonlySet<string> = new Set(["countdown", "running", "ended"]);
+/** The phases whose seat view shows the NEW HOST notice (#868 C1): the race, before and after GO (loading too, #926). */
+const NOTICE_PHASES: ReadonlySet<string> = new Set(["loading", "countdown", "running", "ended"]);
 
 /**
  * `event new-host { desk }` (#137 promotes, #868 shows it): the roster's host flag and your role follow
@@ -1174,11 +1174,14 @@ export function selectSceneGate(state: RaceState): "wait" | "load" | "paper" {
 }
 
 /**
- * The loading card's READY row (#926 C5): desks ready over desks in the race, bots included; `null`
- * outside the room's `loading`.
+ * The loading card's READY value (#926 C5, bible 7.4): desks ready over desks in the race, bots
+ * included, two digits each (`01 / 02`); `null` outside the room's `loading`. A string, so the leaf's
+ * `useRaceStore` reads a stable value.
  */
-export function selectReadyCount(state: RaceState): { ready: number; total: number } | null {
+export function selectReadyLine(state: RaceState): string | null {
   if (state.room?.phase !== "loading" || state.pending === null) return null;
   const total = state.members.length;
-  return { ready: Math.max(0, total - state.pending.length), total };
+  const ready = Math.max(0, total - state.pending.length);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(ready)} / ${two(total)}`;
 }

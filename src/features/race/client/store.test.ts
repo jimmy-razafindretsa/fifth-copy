@@ -40,7 +40,7 @@ const {
   sendAbandons,
   sendBonusPlays,
   sendReady,
-  selectReadyCount,
+  selectReadyLine,
   selectSceneGate,
   selectShouldReady,
   watchBlurExpiry,
@@ -2616,8 +2616,9 @@ describe("#926 the shared loading", () => {
 
   it("C5: the READY count is desks ready over desks in the race, while loading only", () => {
     // three members (bots count as members), desks 1, 3, 5 pending
-    expect(selectReadyCount(loaded())).toEqual({ ready: 0, total: 3 });
-    expect(selectReadyCount(loaded(readiness([5])))).toEqual({ ready: 2, total: 3 });
-    expect(selectReadyCount(run({ type: "welcome", payload: welcome() }))).toBeNull();
+    expect(selectReadyLine(loaded())).toBe("00 / 03");
+    expect(selectReadyLine(loaded(readiness([5])))).toBe("02 / 03");
+    expect(selectReadyLine(loaded(readiness([])))).toBe("03 / 03");
+    expect(selectReadyLine(run({ type: "welcome", payload: welcome() }))).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, stabilize, test } from "../fixtures";
+import { scaled } from "../timeouts";
 
 // Card #76 C5, C6, C7 (print), C8 (@visual) and C9: the privacy page, French first in the files, shown in the
 // viewer's language (`locale` cookie, ADR 0010).
@@ -130,7 +131,7 @@ test.describe("privacy page (#76)", () => {
       await page.goto("/privacy");
       await expect(page).toHaveScreenshot(`privacy-${scheme}.png`, {
         fullPage: true,
-        timeout: 45_000,
+        timeout: scaled(45_000),
       });
     });
   }

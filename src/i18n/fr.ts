@@ -295,6 +295,7 @@ export const fr = {
       bot: "B",
     },
     waitingForHost: "EN ATTENTE DE L'HÔTE",
+    hostWatching: "L'HÔTE REGARDE",
     autoStart: {
       status: "DÉPART DANS {n} S",
       notice: "DÉPART AUTOMATIQUE",
@@ -363,6 +364,7 @@ export const fr = {
         bonuses: "BONUS",
         bots: "BOTS",
         lobbyType: "SALLE",
+        hostWatches: "HÔTE",
       },
       language: { fr: "FRANÇAIS", en: "ANGLAIS" },
       textType: {
@@ -396,6 +398,7 @@ export const fr = {
         major: "MAJOR",
       },
       lobbyType: { public: "PUBLIQUE", private: "PRIVÉE" },
+      hostWatches: { types: "TAPE", watches: "REGARDE" },
       form: {
         labels: {
           wordLength: "LONGUEUR DES MOTS",
@@ -417,6 +420,7 @@ export const fr = {
           invalid: "La salle a refusé ce réglage.",
           "not-waiting": "Cette course est déjà commencée.",
           "no-room": "La salle n'est plus ouverte.",
+          "room-full": "Les 30 bureaux de cette salle sont occupés.",
           timeout: "La salle n'a pas répondu. Réessaie.",
         },
       },

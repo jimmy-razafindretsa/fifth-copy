@@ -54,6 +54,8 @@ function bots({ bots }: RaceSettings, labels: SettingsLabels): string {
  * one entry here plus its catalog words (the `SETTING_ROWS` test checks every field has a row).
  */
 export const SETTING_ROWS: ReadonlyArray<SettingRowSpec> = [
+  // whether the host holds a desk (#876): the form opens with it
+  { key: "hostWatches", value: (s, l) => l.hostWatches[s.hostWatches ? "watches" : "types"] },
   { key: "language", value: (s, l) => l.language[s.language] },
   { key: "textType", value: (s, l) => l.textType[s.textType] },
   { key: "wordCount", value: (s, l) => fill(l.wordCount, { n: s.wordCount }) },
@@ -92,7 +94,7 @@ export function settingRows(settings: RaceSettings, labels: SettingsLabels) {
 }
 
 /** Skeleton rows: the default race's row count (no accents row, the backspace row). */
-const SKELETON_ROWS = 14;
+const SKELETON_ROWS = 15;
 
 /**
  * The read-only `FORM 5-L · RACE SETTINGS` docket (#498, bible 7.4, spec 8): the values every member

@@ -59,6 +59,7 @@ function deps({
     onRoomClosed: vi.fn(),
     onLobbyClosed: vi.fn(),
     announce: vi.fn(),
+    announceSettings: vi.fn(),
     onNewHost: vi.fn(),
   } satisfies LeaveDeps;
   return d;

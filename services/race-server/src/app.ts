@@ -255,6 +255,8 @@ export function createRaceServer({
     onNewHost,
     announce: (lobbyId, members) =>
       void to(audience(lobbyId))?.emit("roster", { v: PROTOCOL_VERSION, members }),
+    announceSettings: (lobbyId, settings) =>
+      void to(audience(lobbyId))?.emit("settings", { v: PROTOCOL_VERSION, settings }),
   };
 
   const raceHooks = {

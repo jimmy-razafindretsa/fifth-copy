@@ -20,7 +20,8 @@ export type LastLeave = {
    * Whether `userId` hosts a `waiting` or `ended` room with another human seated (#137, #884): a
    * reload of the lobby page, or the Dawn report closing every member's socket, must not pass the
    * role on, so the host's leave waits out the same grace and promotes nobody if the host is back.
-   * Only a disconnect asks; an explicit leave (`leaveRoom`) promotes at once. Read in the room's queue.
+   * Only a disconnect asks; an explicit leave (`leaveRoom`) promotes at once. A watching host (#876)
+   * waits it out in every phase, others in the room or not. Read in the room's queue.
    */
   hostWithOthers(lobbyId: string, userId: string): Promise<boolean>;
   /**
@@ -70,7 +71,8 @@ export function createLastLeave({
     closes: (lobbyId, userId) =>
       registry.withRoom(lobbyId, async () => {
         const room = await registry.room(lobbyId);
-        if (room?.phase !== "waiting") return false;
+        // A watching host (#876) holds the room open: a seated human's leave never closes it.
+        if (room?.phase !== "waiting" || room.settings.hostWatches) return false;
         const humans = room.seated.filter((desk) => !desk.isBot);
         return humans.length === 1 && humans[0]!.userId === userId;
       }),
@@ -78,8 +80,11 @@ export function createLastLeave({
     hostWithOthers: (lobbyId, userId) =>
       registry.withRoom(lobbyId, async () => {
         const room = await registry.room(lobbyId);
-        if (room?.phase !== "waiting" && room?.phase !== "ended") return false;
-        if (room.hostUserId !== userId) return false;
+        if (room?.hostUserId !== userId) return false;
+        // The watching host (#876), in any phase: a reload of its lobby page, seat view or Dawn report
+        // passes the role on (or closes the room) only if it is still away after the same grace.
+        if (room.settings.hostWatches) return true;
+        if (room.phase !== "waiting" && room.phase !== "ended") return false;
         // The last human's leave closes the room (`closes`) or keeps it (#143): nobody to promote.
         return room.seated.some((desk) => !desk.isBot && desk.userId !== userId);
       }),

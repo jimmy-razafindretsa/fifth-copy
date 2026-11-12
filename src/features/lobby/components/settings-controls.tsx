@@ -331,6 +331,12 @@ export function hostForm({
   const d = settings.difficulty;
 
   const all: Record<Exclude<FormKey, BotKey>, () => ReactNode> = {
+    // #876: TYPES | WATCHES, as words (the patch is a boolean)
+    hostWatches: () =>
+      seg("hostWatches", settings.hostWatches ? "watches" : "types", [
+        { value: "types", label: labels.hostWatches.types },
+        { value: "watches", label: labels.hostWatches.watches },
+      ]),
     language: () =>
       seg(
         "language",

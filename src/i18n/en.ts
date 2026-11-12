@@ -295,6 +295,8 @@ export const en = {
     },
     /** A non-host's 7.4 notice row at the top of the roll (#105). */
     waitingForHost: "WAITING FOR THE HOST",
+    /** The 7.4 notice row at the top of the roll while the host follows the race without a desk (#876). */
+    hostWatching: "THE HOST IS WATCHING",
     /**
      * A public room's automatic start (#814, bible 14.3): the room docket's `STATUS` value with the
      * seconds left, a non-host's still notice row, and the two polite announcements.
@@ -378,6 +380,7 @@ export const en = {
         bonuses: "BONUSES",
         bots: "BOTS",
         lobbyType: "LOBBY",
+        hostWatches: "HOST",
       },
       language: { fr: "FRENCH", en: "ENGLISH" },
       textType: {
@@ -406,6 +409,8 @@ export const en = {
         major: "MAJOR",
       },
       lobbyType: { public: "PUBLIC", private: "PRIVATE" },
+      /** Whether the host holds a desk (#876): `TYPES` (the default) or `WATCHES`. */
+      hostWatches: { types: "TYPES", watches: "WATCHES" },
       /**
        * The host's controls in the rows (#110, bible 14.3): the custom recipe's own rows, short segment
        * words, the timer unit and the refusals (inline error lines after `RETURNED ·`; never the typed
@@ -433,6 +438,7 @@ export const en = {
           invalid: "The room refused that setting.",
           "not-waiting": "This race has already started.",
           "no-room": "The room is no longer open.",
+          "room-full": "All 30 desks in this room are taken.",
           timeout: "The room did not answer. Try again.",
         },
       },

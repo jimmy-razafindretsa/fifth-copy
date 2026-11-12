@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { envelopeSchema, PROTOCOL_VERSION } from "./index";
 
 describe("version", () => {
-  it("is 18 (#730: `Member.avatar`, the race token's `avatar` claim)", () => {
-    expect(PROTOCOL_VERSION).toBe(18);
+  it("is 19 (#876: `settings.hostWatches`, the `room-full` settings ack)", () => {
+    expect(PROTOCOL_VERSION).toBe(19);
   });
 
   it.each([

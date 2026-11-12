@@ -1,4 +1,4 @@
-import type { Member } from "@fifth-copy/protocol";
+import type { Member, RaceSettings } from "@fifth-copy/protocol";
 import type { NewHost, RoomRegistry } from "../rooms/registry";
 import type { Presence } from "./presence";
 
@@ -15,6 +15,8 @@ export type LeaveDeps = {
   onLobbyClosed: (lobbyId: string) => void;
   /** Sends the room's new roster to its members and spectators. */
   announce: (lobbyId: string, members: Member[]) => void;
+  /** Sends the room's settings after a leave turned `hostWatches` off (#876), before the roster. */
+  announceSettings: (lobbyId: string, settings: RaceSettings) => void;
   /**
    * The leave passed the host role on (#137): `event new-host { desk }` to the room and the web's
    * `Lobby.hostUserId` through the outbox. Called after the roster went out; never awaited.
@@ -33,10 +35,11 @@ export async function leaveRoom(
   lobbyId: string,
   userId: string,
 ): Promise<{ members: Member[]; closed: boolean; kept: boolean }> {
-  const { members, closed, kept, newHost } = await deps.registry.leave(lobbyId, userId);
+  const { members, closed, kept, newHost, settings } = await deps.registry.leave(lobbyId, userId);
   if (closed || kept) deps.onRoomClosed(lobbyId);
   if (closed) deps.onLobbyClosed(lobbyId);
   else await deps.presence.left(lobbyId, userId);
+  if (settings) deps.announceSettings(lobbyId, settings);
   if (!closed) deps.announce(lobbyId, members);
   if (newHost) deps.onNewHost(lobbyId, newHost);
   return { members, closed, kept };

@@ -405,6 +405,9 @@ Watch paths (ADR 0019, amended #917): web watches an allow-list (`src/**`, `pack
 ### 11.3 Versioning
 Semver tags `vX.Y.Z` with a changelog (card #417); `PROTOCOL_VERSION` and `ENGINE_VERSION` are independent integers/semvers bumped by the card that changes them.
 
+### 11.4 Backups and restore
+Postgres's volume and the web's `avatars` volume carry a Railway **Daily** volume backup schedule (kept 6 days, inside the 14-day window; no weekly, monthly or point-in-time copies). Copies stay in the same Railway project, environment and region, encrypted at rest. A restore is in place on the same service, then `npx prisma migrate status` must be clean. Decision: ADR 0019 "Backups" (#705). Steps and restore drill: [`docs/ops/backup-restore.md`](../ops/backup-restore.md). Privacy side: [`docs/privacy/backup-retention.md`](../privacy/backup-retention.md).
+
 ## 12. Build order and board mapping
 
 What exists on `main` today: the Foundations epic (#2) and this architecture's skeleton: workspaces, `packages/engine`, `packages/protocol`, `services/race-server` (health endpoint, env, build, tests), Redis in compose, boundary and lint rules, ADRs 0005-0013 (proposed).

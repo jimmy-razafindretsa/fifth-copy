@@ -100,13 +100,14 @@ export const privacyEn: readonly PrivacySection[] = [
     heading: "Cookies",
     paragraphs: [
       "A cookie is a small file your browser keeps for our site. Fifth Copy uses only its own cookies, never advertising cookies.",
-      "No script on the page can read these cookies.",
+      "No script on the page can read these cookies, except fc_merged.",
     ],
     list: [
       "fc_guest: your signed guest number, to recognise you without a password. It lasts 1 year at most.",
       "locale: the language you pick. It lasts 1 year.",
       "theme: the light theme or night shift. It lasts 1 year.",
       "Session cookie: it keeps you signed in to your account until you sign out, 30 days at most.",
+      "fc_merged: after you sign in, the number of guest races added to your account. The page reads it to show you once. It lasts 60 seconds.",
       "Sign-in cookies: a few short-lived cookies protect the sign-in itself. They last a few minutes, or until you close your browser.",
     ],
   },

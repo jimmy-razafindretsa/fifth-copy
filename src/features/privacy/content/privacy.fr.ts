@@ -101,13 +101,14 @@ export const privacyFr: readonly PrivacySection[] = [
     heading: "Témoins (cookies)",
     paragraphs: [
       "Un témoin est un petit fichier que ton navigateur garde pour notre site. Fifth Copy utilise seulement ses propres témoins, jamais de témoins de publicité.",
-      "Aucun script de la page ne peut lire ces témoins.",
+      "Aucun script de la page ne peut lire ces témoins, sauf fc_merged.",
     ],
     list: [
       "fc_guest : ton numéro d'invité signé, pour te reconnaître sans mot de passe. Il dure 1 an au plus.",
       "locale : la langue que tu choisis. Il dure 1 an.",
       "theme : le thème clair ou le quart de nuit. Il dure 1 an.",
       "Témoin de session : il te garde connecté à ton compte jusqu'à ta déconnexion, 30 jours au plus.",
+      "fc_merged : après ta connexion, le nombre de courses d'invité ajoutées à ton compte. La page le lit pour te l'afficher une fois. Il dure 60 secondes.",
       "Témoins de connexion : quelques témoins de courte durée protègent la connexion elle-même. Ils durent quelques minutes, ou jusqu'à la fermeture de ton navigateur.",
     ],
   },

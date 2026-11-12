@@ -436,7 +436,9 @@ An outfit is a config object `{hair, glasses, hat, clothes, face, hairCol}`. Sen
 - **Wall slots** (10 positions): portrait frame (brass frame, dark painting) at slot 0 · **4 red flags with gold emblem** at slots 2, 3, 7, 8 · filing-cabinet pairs at 1, 4, 6, 9 · samovar side table at 5.
 - **Centre platform:** radius 1.5–1.6, height 0.3, brass rim, dark top, brass footplate where the Major stands. Props: small round side table (bottle, glasses, ashtray), CRT on a crate (beige with a green MeshBasic screen `#3FA66B`, the only glow besides the bulb), document box.
 - **Bulb:** cord from the ceiling, green enamel shade `#2F5A40` (light interior), a warm bulb sphere. **Hums** (±1.5–2% flicker) and **stutters off at random every 5–14s**, pattern `0, 1, 0, 0.6, 0, 1` over 0.5s.
-- 31+ players: add raised tiers behind the ring (amphitheatre). Small lobbies: pull desks in.
+- ~~31+ players: add raised tiers behind the ring (amphitheatre).~~ Superseded by spec 5.2 and 7.1: a room has 30 desks.
+- **One desk per player (#927).** An empty desk is never drawn (no desk, chair, typewriter, carriage, paper or clerk). From 14 players the real ring is used: chair radius 6.9, the desks evenly spaced (`2π / n`) in cyclic desk order from yours (30 players: 12° apart, as above).
+- **Small lobbies: pull desks in (#927; Art Direction slide 05).** Up to 13 players the ring shrinks to radius **4.35** (the reference's 2.9 of 4.6, scaled to 6.9) and grows only as far as the right side's desks need to stand without overlap inside the 100° view (seat POV, 11.3), at most 6.9. A desk and its gap take `pitch(R) = 2 · atan(0.63 / (R − 0.9))` (12° on the full ring). Extension of the reference (it only covers its own smaller room), derived from it.
 
 ### 11.2 Lighting & atmosphere (lighter, readable)
 - Hemisphere `#D8DEE0 / #8A8270` intensity **4.2** · Ambient `#E4E0D4` **1.0** · Directional fill `#EEF2F4` **2.2** · Bulb point light `#FFD08A` **70**, distance 20, decay 1.4 at y 3.2.
@@ -447,7 +449,11 @@ An outfit is a config object `{hair, glasses, hat, clothes, face, hairCol}`. Sen
 
 ### 11.3 Cameras
 - **Overview / free view (projector):** slow orbit, radius 8.6, height 4.6, 0.05 rad/s, looking at (0, 0.6, 0), FOV 55.
+  - **Overview tells the truth (#927; Art Direction slide 05).** The desks stand evenly spaced (`2π / n`; **2 players: 90° apart**), on radius 4.35 up to 13 players and 6.9 above. The orbit starts offset from your desk by **π/4** (2 players), **π/n** (n even) or **π/(2n)** (n odd), so the azimuth straight behind the Major holds no desk (the odd-count offset extends the reference, whose π/n put a desk behind him). Under reduced motion the orbit stays at its start.
 - **Seat POV (first person):** eye at (0, 1.02, R−0.05) looking at the centre, **FOV 62°**. Hide your own clerk and your own paper (the player's sheet is the HTML layer). FOV widens to 100° until all rivals fit (≤13 players; see spec §7.2).
+  - **Each seat is staged for its owner (#927; Art Direction slide 05, reference `archive/3d/Fifth Copy 3D v6 lobby2.html` `povLayout`).** Up to **13 players** every client re-seats its rivals across the room: in cyclic desk order they alternate right, left, right… (`ceil((n−1)/2)` right, `floor((n−1)/2)` left), each at an **offset of at least 28°** from the point opposite you (never behind the Major), with a **7° margin** to the view's side edge. The vertical FOV is the one whose horizontal half-angle is `(28° + kR · pitch) / 2 + 7°` (one rival: `(28° + 0.6 · pitch) / 2 + 7°`), clamped to **62°..100°**; a side's rivals spread over the span the FOV leaves, at `(j + 0.5) / k` of it (one rival: `28° + 0.4 · pitch`). The FOV follows the window's aspect.
+  - **From 14 players** the real ring (11.1) is used and the FOV opens toward 84°: `min(84, 62 + 0.8 · (n − 2))` (71.6° at 14, 84° at 30). 13 to 14 players jumps from the staged room to the ring, as in the reference.
+  - The layout snaps (no tween) on every roster, view or window change; a desk number stays an identity (race card, placards), never a position.
 - **Auto (landing):** overview 22s → POV 10s, loop.
 
 ---

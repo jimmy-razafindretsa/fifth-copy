@@ -81,6 +81,14 @@ describe("waitingRoomView (#937)", () => {
     expect(v.steps.map((s) => s.state)).toEqual(["done", "done", "done", "done", "current"]);
   });
 
+  it("C3 a page without a desk counts DESK and COPY done while its scene still loads", () => {
+    const v = waitingRoomView(input({ you: null, sceneSettled: false }), []);
+    expect(v.steps.map((s) => s.state)).toEqual(["done", "done", "current", "done", "todo"]);
+    expect(v.current).toBe("machines");
+    // (3 own steps + 1/3 desks ready) / 5
+    expect(v.percent).toBe(67);
+  });
+
   it("C4 arrivals: the members no longer awaited, in the given order, with two-digit desks", () => {
     const v = waitingRoomView(input({ pending: [1] }), [2, 5]);
     expect(v.arrivals).toEqual([

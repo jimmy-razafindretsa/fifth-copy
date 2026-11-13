@@ -78,12 +78,14 @@ export function waitingRoomView(
   const total = input.members.length;
   const readyCount = Math.max(0, total - pending.length);
   const share = total === 0 ? 0 : readyCount / total;
+  // a page without a desk (the watching host) counts DESK and COPY done (C3)
+  const deskless = input.you === null;
   const own: Record<Exclude<WaitingStep, "major">, boolean> = {
     papers: input.raceIn,
-    desk: input.raceIn,
+    desk: deskless || input.raceIn,
     machines: input.raceIn && input.sceneSettled,
     copy:
-      input.raceIn && input.sceneSettled && (input.you === null || !pending.includes(input.you)),
+      input.you === null || (input.raceIn && input.sceneSettled && !pending.includes(input.you)),
   };
   const done = (id: WaitingStep) => (id === "major" ? pending.length === 0 && own.copy : own[id]);
   const current = WAITING_STEPS.find((id) => !done(id)) ?? null;

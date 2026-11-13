@@ -289,24 +289,19 @@
   color: var(--color-fg-muted);
 }
 
-/*
- * 7.4 multi-cell grid: paper cells ruled 2px in ink. The rules are drawn by the cells (left and top on
- * the grid, right and bottom on each cell) rather than by an ink ground through 2px gaps, so a short last
- * row leaves paper, not an ink block, where the reference's ground would show.
- */
+/* 7.4 multi-cell grid: paper cells on a 2px ink ground (gap 2px on ink, never per-cell borders) */
 .grid {
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  border-top: 2px solid var(--color-fg);
-  border-left: 2px solid var(--color-fg);
+  gap: 2px;
+  background: var(--color-fg);
+  border: 2px solid var(--color-fg);
 }
 
 .cell {
   container-type: inline-size;
   background: var(--color-bg);
-  border-right: 2px solid var(--color-fg);
-  border-bottom: 2px solid var(--color-fg);
   padding: 20px 22px;
   display: flex;
   flex-direction: column;

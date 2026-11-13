@@ -1079,6 +1079,26 @@ export const fr = {
       firstPlace: "1RE PLACE",
       top3: "TOP 3",
     },
+    curve: {
+      kicker: "COURBE DE RENDEMENT",
+      title: "Vitesse au fil des courses",
+      intro: "Tes {count} dernières courses.",
+      introTrend: "La ligne pointillée donne la tendance générale.",
+      smoothing: "LISSAGE",
+      legend: {
+        speed: "vitesse (MPM, gauche)",
+        accuracy: "précision (%, droite)",
+        trend: "tendance",
+      },
+      units: { speed: "MPM", accuracy: "%" },
+      summary:
+        "{count} courses : vitesse de {speedFrom} à {speedTo} MPM, précision de {accuracyFrom} à {accuracyTo} %{trend}.",
+      trend: {
+        up: ", tendance à la hausse",
+        down: ", tendance à la baisse",
+        flat: ", tendance stable",
+      },
+    },
     blank: {
       stamp: ["DONNÉES", "INSUFFISANTES"],
       kicker: "DOSSIER VIERGE",

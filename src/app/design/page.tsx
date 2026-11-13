@@ -336,7 +336,7 @@ function HudSpecimen({
   );
 }
 
-/** The Personnel file's states (#932 C11, bible 14.3): three files, each for a guest and an account. */
+/** The Personnel file's states (#932 C11, #933 C7, bible 14.3): four files, each for a guest and an account. */
 const PROFILE_STATES: { id: ProfileFixture; title: string; caption: string }[] = [
   {
     id: "brand-new",
@@ -349,9 +349,14 @@ const PROFILE_STATES: { id: ProfileFixture; title: string; caption: string }[] =
     caption: "A single win: the figures, almost nothing on you.",
   },
   {
+    id: "early",
+    title: "Three races",
+    caption: "The output curve at its first draw: three dots a series, no trend line yet.",
+  },
+  {
     id: "two-weeks",
     title: "Two weeks",
-    caption: "Both languages, wins and podiums: no blank block.",
+    caption: "Both languages, wins and podiums, the output curve with its trend: no blank block.",
   },
 ];
 const PROFILE_VIEWERS = [
@@ -1347,8 +1352,8 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
         </h2>
         <p className="type-body max-w-prose text-fg">
           The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
-          four tubes, the ink band, the folder tabs, the service record and, under three races, the
-          blank block.
+          four tubes, the ink band, the folder tabs, the service record, from three races the output
+          curve and, under three races, the blank block.
         </p>
         {PROFILE_STATES.flatMap((state) =>
           PROFILE_VIEWERS.map((who) => (

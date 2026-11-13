@@ -1116,6 +1116,22 @@ export const en = {
       firstPlace: "1ST PLACE",
       top3: "TOP 3",
     },
+    curve: {
+      kicker: "OUTPUT CURVE",
+      title: "Speed race after race",
+      intro: "Your last {count} races.",
+      introTrend: "The dashed line shows the overall trend.",
+      smoothing: "SMOOTHING",
+      legend: {
+        speed: "speed (WPM, left)",
+        accuracy: "accuracy (%, right)",
+        trend: "trend",
+      },
+      units: { speed: "WPM", accuracy: "%" },
+      summary:
+        "{count} races: speed from {speedFrom} to {speedTo} WPM, accuracy from {accuracyFrom} to {accuracyTo}%{trend}.",
+      trend: { up: ", trending up", down: ", trending down", flat: ", holding steady" },
+    },
     blank: {
       stamp: ["NOT ENOUGH", "DATA"],
       kicker: "BLANK FILE",

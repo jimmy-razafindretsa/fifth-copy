@@ -38,7 +38,7 @@ async function loadingRoom(page: Page, players: SimulatedPlayer[], locale?: "fr"
 }
 
 test.describe("#937 the waiting room", () => {
-  let players: SimulatedPlayer[] = [];
+  const players: SimulatedPlayer[] = [];
   test.afterEach(() => {
     for (const p of players.splice(0)) p.close();
   });

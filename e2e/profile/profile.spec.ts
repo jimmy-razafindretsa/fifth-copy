@@ -54,7 +54,9 @@ test.describe("Personnel file at /profile (#932)", () => {
     await expect(page).toHaveURL(/\/sign-in\?callbackUrl=(%2F|\/)profile$/);
   });
 
-  test("C2 a fresh guest sees the blank file: dashes, -- tubes, the blank block", async ({ page }) => {
+  test("C2 a fresh guest sees the blank file: dashes, -- tubes, the blank block", async ({
+    page,
+  }) => {
     await seedLobby(page);
     await openFile(page);
     await expect(screen(page)).toHaveAttribute("data-profile-state", /.+/);
@@ -97,7 +99,9 @@ test.describe("Personnel file at /profile (#932)", () => {
     }
   });
 
-  test("C9 header: MY FILE / the docket links to the file, 44px, no sideways scroll", async ({ page }) => {
+  test("C9 header: MY FILE / the docket links to the file, 44px, no sideways scroll", async ({
+    page,
+  }) => {
     await seedLobby(page);
     await openFile(page);
     const docket = page.locator("a[data-docket-link]");

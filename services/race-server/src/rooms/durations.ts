@@ -5,7 +5,8 @@ import type { RaceServerEnv } from "../env";
  * table: `GRACE_MS` is the reconnection grace of a line-cut desk (#178); `IDLE_WARN_MS` and
  * `IDLE_KICK_MS` the silence before a connected typing desk is warned and put to sleep (#183, spec
  * 4.5); `AUTO_START_MS` the wait before a public room starts its first race by itself (#814);
- * `LOAD_LIMIT_MS` the longest a started room waits for its seats to load before its countdown (#926).
+ * `LOAD_LIMIT_MS` the longest a started room waits for its seats to load before its countdown (#926);
+ * `LOAD_RETRY_MS` the wait before a failed release of that barrier (a Redis error) is tried again.
  * `RACE_FAST_CLOCK=1` (e2e only, ADR 0012) divides each by 10; `RACE_GRACE_MS` (e2e only, #868) sets
  * `GRACE_MS` alone, after the fast clock.
  * Wire caps such as `MAX_RACE_MS` are not durations and are never scaled.
@@ -17,6 +18,7 @@ const BASE = {
   IDLE_KICK_MS: 60_000,
   AUTO_START_MS: 45_000,
   LOAD_LIMIT_MS: 30_000,
+  LOAD_RETRY_MS: 1_000,
 } as const;
 
 export type Durations = { readonly [K in keyof typeof BASE]: number };

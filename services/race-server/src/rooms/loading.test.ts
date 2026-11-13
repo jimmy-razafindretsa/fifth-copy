@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   countdownSchema,
   DEFAULT_RACE_SETTINGS,
@@ -34,8 +34,10 @@ import { membersKey, roomKey } from "./keys";
 const v = PROTOCOL_VERSION;
 const LIMIT = 30_000;
 const COUNTDOWN = 3_000;
+const RETRY = 1_000;
 let t: Booted | undefined;
 afterEach(async () => {
+  vi.restoreAllMocks();
   await t?.stop();
   t = undefined;
 });
@@ -388,5 +390,113 @@ describe("readiness barrier: the ready edge (#926 C8)", () => {
     expect(r.host.seen.readiness).toHaveLength(1);
     expect(r.host.seen.countdown).toHaveLength(0);
     expect(r.host.client.connected).toBe(true);
+  });
+});
+
+// A release that fails (Redis) is tried again every `LOAD_RETRY_MS`: the barrier's marks and timers
+// are process state, so a room left in `loading` without them would wait for its TTL.
+describe("readiness barrier: a failed release is tried again (#926)", () => {
+  it("a release whose write fails leaves the room loading, then counts down on the next try", async () => {
+    const r = await room({ players: 1 });
+    const ack = await r.start();
+    const raceId = (ack as { raceId: string }).raceId;
+    await until(() => r.host.seen.loading.length === 1, WAIT_MS, "loading");
+    const release = vi
+      .spyOn(r.booted.server.registry, "releaseRace")
+      .mockRejectedValueOnce(new Error("redis down"));
+    r.ready(r.host, raceId);
+    r.ready(r.guests[0]!, raceId);
+    await until(() => release.mock.calls.length === 1, WAIT_MS, "the failed release");
+    await settle();
+    expect(r.host.seen.countdown).toHaveLength(0);
+    expect((await hash(r.lobby)).fields.phase).toBe("loading");
+
+    r.booted.clock.advance(RETRY);
+    const at = r.booted.clock.now();
+    for (const seen of [r.host.seen, r.guests[0]!.seen]) {
+      await until(() => seen.countdown.length === 1, WAIT_MS, "countdown on the next try");
+      expect(seen.countdown[0]!.race.t0).toBe(at + COUNTDOWN);
+    }
+    expect(release).toHaveBeenCalledTimes(2);
+    r.booted.clock.advance(COUNTDOWN);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO");
+    // One countdown only: no try is left armed.
+    r.booted.clock.advance(RETRY);
+    await settle();
+    expect(r.host.seen.countdown).toHaveLength(1);
+  });
+
+  it("the limit's release failing is tried again: the room never waits for a desk that is not there", async () => {
+    const r = await room({ players: 1 });
+    await r.start();
+    await until(() => r.host.seen.loading.length === 1, WAIT_MS, "loading");
+    const release = vi
+      .spyOn(r.booted.server.registry, "releaseRace")
+      .mockRejectedValueOnce(new Error("redis down"));
+    r.booted.clock.advance(LIMIT);
+    await until(() => release.mock.calls.length === 1, WAIT_MS, "the failed release");
+    await settle();
+    expect(r.host.seen.countdown).toHaveLength(0);
+
+    // Nobody reported: the next try still releases, the limit has passed.
+    r.booted.clock.advance(RETRY);
+    const at = r.booted.clock.now();
+    await until(
+      () => r.guests[0]!.seen.countdown.length === 1,
+      WAIT_MS,
+      "countdown after the limit",
+    );
+    expect(r.guests[0]!.seen.countdown[0]!.race.t0).toBe(at + COUNTDOWN);
+    r.booted.clock.advance(COUNTDOWN);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO");
+  });
+
+  it("a failed read at the limit is tried again too", async () => {
+    const r = await room({ players: 1 });
+    await r.start();
+    await until(() => r.host.seen.loading.length === 1, WAIT_MS, "loading");
+    r.booted.clock.advance(LIMIT - 1);
+    await settle();
+    const read = vi
+      .spyOn(r.booted.server.registry, "room")
+      .mockRejectedValueOnce(new Error("redis down"));
+    r.booted.clock.advance(1);
+    await until(() => read.mock.calls.length >= 1, WAIT_MS, "the failed read");
+    await settle();
+    expect(r.host.seen.countdown).toHaveLength(0);
+    r.booted.clock.advance(RETRY);
+    await until(() => r.host.seen.countdown.length === 1, WAIT_MS, "countdown after the limit");
+  });
+
+  it("a release that landed before it failed is finished with the stored GO, not decided twice", async () => {
+    const r = await room({ players: 1 });
+    const ack = await r.start();
+    const raceId = (ack as { raceId: string }).raceId;
+    await until(() => r.host.seen.loading.length === 1, WAIT_MS, "loading");
+    const { registry } = r.booted.server;
+    const write = registry.releaseRace.bind(registry);
+    const release = vi.spyOn(registry, "releaseRace").mockImplementationOnce(async (...args) => {
+      await write(...args);
+      throw new Error("reply lost");
+    });
+    const decidedAt = r.booted.clock.now();
+    r.ready(r.host, raceId);
+    r.ready(r.guests[0]!, raceId);
+    await until(() => release.mock.calls.length === 1, WAIT_MS, "the release");
+    await eventually(
+      async () => (await hash(r.lobby)).fields.phase === "countdown",
+      "the release written",
+    );
+    await settle();
+    expect(r.host.seen.countdown).toHaveLength(0);
+
+    r.booted.clock.advance(RETRY);
+    for (const seen of [r.host.seen, r.guests[0]!.seen]) {
+      await until(() => seen.countdown.length === 1, WAIT_MS, "countdown on the next try");
+      expect(seen.countdown[0]!.race.t0).toBe(decidedAt + COUNTDOWN);
+    }
+    expect(release).toHaveBeenCalledTimes(1);
+    r.booted.clock.advance(COUNTDOWN - RETRY);
+    await until(() => r.booted.server.desks.get(r.lobby)?.phase === "running", WAIT_MS, "GO");
   });
 });

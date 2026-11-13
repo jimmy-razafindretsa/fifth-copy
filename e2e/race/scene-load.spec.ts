@@ -159,7 +159,10 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
         const { opacity, visibility } = getComputedStyle(layer);
         if (opacity !== "1" || visibility !== "visible")
           s.hidden.push(`opacity ${opacity}, visibility ${visibility}`);
-        const card = document.querySelector<HTMLElement>("[data-loading-card]");
+        // the scene's card, or the waiting room while the room loads (#937)
+        const card = document.querySelector<HTMLElement>(
+          "[data-loading-card], [data-waiting-room]",
+        );
         const box = card?.getBoundingClientRect();
         if (!card || !box || box.width === 0 || box.height === 0) s.hidden.push("no loading card");
       };

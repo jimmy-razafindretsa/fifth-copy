@@ -14,7 +14,7 @@ import {
 } from "./helpers";
 
 // Contract of #926 (ARCHITECTURE 7.1 "Loading", bible 7.4 "Scene loading card"): after START the room
-// loads before it counts down. Every seat page shows the shared loading card with its READY row while
+// loads before it counts down. Every seat page shows the waiting room (#937) with its READY row while
 // it loads its text and its scene and reports ready; the 3-2-1 starts for everyone at one instant once
 // every connected typist is ready, or at the load limit; a typist whose scene is not up by then races on
 // paper. Real web app and race server (playwright.config.ts).
@@ -45,9 +45,10 @@ const phasesOf = (page: Page) =>
   page.evaluate(() => (window as unknown as { __phases: Phases }).__phases);
 const firstAt = (phases: Phases, phase: string) => phases.find(([p]) => p === phase)?.[1] ?? null;
 
-const loadingCard = (page: Page) =>
-  page.locator("[data-loading-card]").filter({ hasText: "LOADING THE RING ROOM" });
-const readyRow = (page: Page) => page.locator("[data-loading-card] [data-ready]");
+/** The waiting room (#937) took the loading card's place while the room loads. */
+const loadingCard = (page: Page) => page.locator("[data-waiting-room]");
+const statusDocket = (page: Page) => page.locator('[data-waiting-room] [role="status"]');
+const readyRow = (page: Page) => page.locator("[data-waiting-room] [data-ready]");
 const noScene = (page: Page) => page.locator('[data-notice="no-scene"]');
 
 test.describe("#926 the shared pre-race loading", () => {
@@ -58,7 +59,7 @@ test.describe("#926 the shared pre-race loading", () => {
     for (const context of opened.splice(0)) await context.close();
   });
 
-  test("C5 one loading card with its READY row while the room loads, axe clean in light and Night shift; gone at the countdown", async ({
+  test("C5 one waiting room with its READY row while the room loads, axe clean in light and Night shift; gone at the countdown", async ({
     page,
   }, info) => {
     const width = info.project.use.viewport?.width ?? 1280;
@@ -79,10 +80,10 @@ test.describe("#926 the shared pre-race loading", () => {
     });
     const card = loadingCard(page);
     await expect(card).toHaveCount(1);
-    await expect(card).toHaveAttribute("role", "status");
-    await expect(card).toHaveAttribute("aria-busy", "true");
+    await expect(page.locator("[data-loading-card]")).toHaveCount(0);
+    await expect(statusDocket(page)).toHaveAttribute("aria-busy", "true");
     // this page (paper) reported; the simulated typist did not: 01 of 02 desks ready
-    await expect(readyRow(page)).toHaveText(/^READY\s*01 \/ 02$/, { timeout: scaled(10_000) });
+    await expect(readyRow(page)).toHaveText("01 / 02", { timeout: scaled(10_000) });
     // the paper device shows the card in place of its no-scene notice; no 3-2-1 digit while it is up
     await expect(noScene(page)).toHaveCount(0);
     await expect(page.locator("[data-countdown]")).toHaveCount(0);

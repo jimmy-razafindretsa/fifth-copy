@@ -29,11 +29,18 @@ async function loadingRoom(page: Page, players: SimulatedPlayer[], locale?: "fr"
   players.push(...(await simulatedPlayers(1, lobbyId, { names: ["Roy"], ready: false })));
   await expect(startButton(page)).toBeEnabled({ timeout: scaled(20_000) });
   await warmRace(page, lobbyId);
-  // the lobby page is already drawn in English; the seat page is rendered in the cookie's language
-  if (locale) await page.context().addCookies([{ name: "locale", value: locale, url: page.url() }]);
   await startButton(page).click();
   await expect(page).toHaveURL(/\/race\/[0-9a-f-]{36}$/, { timeout: HYDRATION_WAIT });
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "loading", { timeout: HYDRATION_WAIT });
+  if (locale) {
+    // the seat page came from the client router in English: file the language, reload mid-loading
+    // (a reload's welcome lands in the same `loading`, #926)
+    await page.context().addCookies([{ name: "locale", value: locale, url: page.url() }]);
+    await page.reload();
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "loading", {
+      timeout: HYDRATION_WAIT,
+    });
+  }
   return code;
 }
 
@@ -68,7 +75,10 @@ test.describe("#937 the waiting room", () => {
     ).toBe(true);
 
     // C2: the rows; this page (paper) and Ada reported, Roy did not: 02 of 03 desks ready
-    await expect(screen.locator("[data-desk] dd")).toHaveText("01");
+    const kicker = await page.getByRole("heading", { level: 1 }).textContent();
+    const desk = /DESK (\d{2})/.exec(kicker ?? "")?.[1];
+    expect(desk, "the seat kicker names this page's desk").toBeTruthy();
+    await expect(screen.locator("[data-desk] dd")).toHaveText(desk!);
     await expect(screen.locator("[data-ready]")).toHaveText("02 / 03", { timeout: scaled(10_000) });
 
     // C3: this device is settled and filed; the Major (the others) is the current step
@@ -89,8 +99,11 @@ test.describe("#937 the waiting room", () => {
     // C5: a polite busy status, axe clean in both themes
     const status = screen.getByRole("status");
     await expect(status).toHaveAttribute("aria-busy", "true");
+    // UI evidence (the HANDOFF's eyes): the screen in both themes, in the test's output folder
+    await page.screenshot({ path: info.outputPath("waiting-room-light.png") });
     await expectNoA11yViolations(page);
     await page.emulateMedia({ colorScheme: "dark" });
+    await page.screenshot({ path: info.outputPath("waiting-room-night.png") });
     await expectNoA11yViolations(page);
 
     // C4: under reduced motion nothing rolls

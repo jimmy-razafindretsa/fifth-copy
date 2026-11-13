@@ -16,6 +16,7 @@
 
 /* ---- hero: two cells, a 2px ink rule between and under ---- */
 .hero {
+  container: profile-hero / inline-size;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
   border-bottom: 2px solid var(--color-fg);
@@ -31,8 +32,8 @@
   border-right: 2px solid var(--color-fg);
 }
 
-/* stacked (one column): the rule between the cells runs under the stage instead */
-@media (max-width: 919px) {
+/* stacked (one column, under two 440px cells): the rule between the cells runs under the stage */
+@container profile-hero (max-width: 879px) {
   .stage {
     border-right: 0;
     border-bottom: 2px solid var(--color-fg);
@@ -288,18 +289,24 @@
   color: var(--color-fg-muted);
 }
 
-/* 7.4 multi-cell grid: paper cells on a 2px ink ground */
+/*
+ * 7.4 multi-cell grid: paper cells ruled 2px in ink. The rules are drawn by the cells (left and top on
+ * the grid, right and bottom on each cell) rather than by an ink ground through 2px gaps, so a short last
+ * row leaves paper, not an ink block, where the reference's ground would show.
+ */
 .grid {
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 2px;
-  background: var(--color-fg);
-  border: 2px solid var(--color-fg);
+  border-top: 2px solid var(--color-fg);
+  border-left: 2px solid var(--color-fg);
 }
 
 .cell {
+  container-type: inline-size;
   background: var(--color-bg);
+  border-right: 2px solid var(--color-fg);
+  border-bottom: 2px solid var(--color-fg);
   padding: 20px 22px;
   display: flex;
   flex-direction: column;
@@ -318,10 +325,10 @@
   margin: 0;
   @apply type-typing;
   font-weight: 500;
-  font-size: 34px;
+  /* 34px; a narrow cell scales it so `hh:mm:ss` (4.8em of Plex Mono) stays on one line */
+  font-size: min(34px, 20cqi);
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
 }
 
 /* the one red figure: the best speed (link role, night-ink on Night shift) */
@@ -336,6 +343,7 @@
 
 /* ---- the blank block (fewer than three races) ---- */
 .blank {
+  container: profile-blank / inline-size;
   position: relative;
   overflow: hidden;
   border: 2px solid var(--color-fg);
@@ -353,8 +361,8 @@
   right: 6%;
 }
 
-/* phones: the stamp stands above the text, never over it */
-@media (max-width: 767px) {
+/* narrower blocks: the stamp stands above the text, never over it */
+@container profile-blank (max-width: 1099px) {
   .blankStamp {
     position: static;
     align-self: flex-end;

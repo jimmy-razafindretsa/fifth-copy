@@ -17,7 +17,13 @@ import {
   Star,
   Wordmark,
 } from "@/components/ui";
-import { AuthStates, RecoverStates, ResetStates, SettingsStates } from "@/features/identity";
+import {
+  AuthStates,
+  DefaultPortrait,
+  RecoverStates,
+  ResetStates,
+  SettingsStates,
+} from "@/features/identity";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -60,7 +66,13 @@ import {
   ReportActions,
   reportActions,
 } from "@/features/results";
-import { getT } from "@/i18n";
+import {
+  type ProfileFixture,
+  profileFixtures,
+  ProfileScreen,
+  profileLabels,
+} from "@/features/stats";
+import { getLocale, getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
 import { ExitSpecimen } from "./exit-demo";
 import { AvatarSpecimens, DesignDialogs } from "./identity-demo";
@@ -324,6 +336,31 @@ function HudSpecimen({
   );
 }
 
+/** The Personnel file's states (#932 C11, bible 14.3): three files, each for a guest and an account. */
+const PROFILE_STATES: { id: ProfileFixture; title: string; caption: string }[] = [
+  {
+    id: "brand-new",
+    title: "Blank file",
+    caption: "No race on file: dashes, -- tubes, the blank block.",
+  },
+  {
+    id: "one-race",
+    title: "One race",
+    caption: "A single win: the figures, almost nothing on you.",
+  },
+  {
+    id: "two-weeks",
+    title: "Two weeks",
+    caption: "Both languages, wins and podiums: no blank block.",
+  },
+];
+const PROFILE_VIEWERS = [
+  { key: "guest", title: "guest", viewer: { name: "GUEST-4417", isGuest: true } },
+  { key: "account", title: "account", viewer: { name: "DOCKET-829", isGuest: false } },
+] as const;
+/** The specimens' opening day: a fixed date, so the service line is stable. */
+const PROFILE_SINCE = new Date("2023-05-24T16:00:00Z");
+
 /** The personal stats card's states (#864 C4, bible 14.4): one specimen each, at the slot's width. */
 const PERSONAL_STATES: { id: PersonalFixture; title: string; caption: string }[] = [
   {
@@ -454,7 +491,12 @@ const PODIUM_STATES: { id: DawnReportFixture; title: string; caption: string; re
 
 /** Living inventory of src/components/ui (see docs/design/components.md). Used by e2e + visual tests. */
 export default async function DesignPage({ searchParams }: PageProps<"/design">) {
-  const [t, theme, query] = await Promise.all([getT(), getTheme(), searchParams]);
+  const [t, theme, query, locale] = await Promise.all([
+    getT(),
+    getTheme(),
+    searchParams,
+    getLocale(),
+  ]);
   const dialog = typeof query.dialog === "string" ? query.dialog : undefined;
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-4 py-10 md:px-8">
@@ -1297,6 +1339,45 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
             <FilingNoticeView {...filingLabels(t.results, "KGB-4821")} late />
           </HudSpecimen>
         </div>
+      </section>
+
+      <section id="profile" aria-labelledby="profile-heading" className="flex flex-col gap-6">
+        <h2 id="profile-heading" className="type-display-md">
+          Personnel file
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
+          four tubes, the ink band, the folder tabs, the service record and, under three races, the
+          blank block.
+        </p>
+        {PROFILE_STATES.flatMap((state) =>
+          PROFILE_VIEWERS.map((who) => (
+            <HudSpecimen
+              key={`${state.id}-${who.key}`}
+              id={`profile-${state.id}-${who.key}`}
+              title={`${state.title}, ${who.title}`}
+              caption={state.caption}
+            >
+              <div className="-mx-4 flex flex-col border-2 border-fg md:mx-0">
+                <ProfileScreen
+                  profile={profileFixtures[state.id]}
+                  viewer={who.viewer}
+                  since={PROFILE_SINCE}
+                  stage={{
+                    clerkSrc: null,
+                    picture: <DefaultPortrait seed={who.viewer.name} size={128} />,
+                    still: true,
+                  }}
+                  labels={profileLabels(t)}
+                  locale={locale}
+                  links={{ play: "/#play", settings: "/settings", signUp: "/sign-up" }}
+                  level={3}
+                  idPrefix={`profile-${state.id}-${who.key}`}
+                />
+              </div>
+            </HudSpecimen>
+          )),
+        )}
       </section>
     </main>
   );

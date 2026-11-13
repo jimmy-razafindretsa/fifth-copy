@@ -54,6 +54,8 @@ export type ProfileScreenProps = {
   links: ProfileLinks;
   /** The name's heading level: 1 on the page, lower in a `/design` specimen; sections are one below. */
   level?: 1 | 2 | 3;
+  /** Prefix of the heading ids (`profile`): `/design` shows several files on one page. */
+  idPrefix?: string;
 };
 
 type Heading = "h1" | "h2" | "h3" | "h4";
@@ -73,7 +75,13 @@ export function ProfileScreen({
   locale,
   links,
   level = 1,
+  idPrefix = "profile",
 }: ProfileScreenProps) {
+  const ids = {
+    name: `${idPrefix}-name`,
+    service: `${idPrefix}-service`,
+    blank: `${idPrefix}-blank`,
+  };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
   const number = fileNumber(viewer?.name);
@@ -90,7 +98,7 @@ export function ProfileScreen({
 
   return (
     <div className={styles.screen} data-profile-state={state}>
-      <section className={styles.hero} aria-labelledby="profile-name">
+      <section className={styles.hero} aria-labelledby={ids.name}>
         <div className={styles.stage}>
           <p className={styles.stageLabel}>{labels.stage.label}</p>
           <Star size={46} tone="red" rotate={12} at={{ top: 40, right: 42, zIndex: 2 }} />
@@ -124,7 +132,7 @@ export function ProfileScreen({
             <p className={styles.kicker}>
               {number ? fill(labels.kickerNumbered, { number }) : labels.kicker}
             </p>
-            <Title id="profile-name" className={styles.name}>
+            <Title id={ids.name} className={styles.name}>
               {`${name}.`}
             </Title>
             {serviceLine ? <p className={styles.serviceLine}>{serviceLine}</p> : null}
@@ -172,7 +180,11 @@ export function ProfileScreen({
 
       <div className={styles.column}>
         <nav aria-label={labels.tabs.label} className={styles.tabs}>
-          <a href="#profile-name" aria-current="page" className={cn(styles.tab, styles.tabCurrent)}>
+          <a
+            href={`#${ids.name}`}
+            aria-current="page"
+            className={cn(styles.tab, styles.tabCurrent)}
+          >
             {labels.tabs.stats}
           </a>
           <a href={links.settings} className={styles.tab}>
@@ -181,11 +193,11 @@ export function ProfileScreen({
         </nav>
 
         <div className={styles.sections}>
-          <section aria-labelledby="profile-service">
+          <section aria-labelledby={ids.service}>
             <div className={styles.head}>
               <div>
                 <p className={styles.kicker}>{labels.service.kicker}</p>
-                <Section id="profile-service" className={styles.h2}>
+                <Section id={ids.service} className={styles.h2}>
                   {labels.service.title}
                 </Section>
               </div>
@@ -199,7 +211,7 @@ export function ProfileScreen({
           </section>
 
           {races < BLANK_BELOW ? (
-            <section className={styles.blank} aria-labelledby="profile-blank" data-blank="">
+            <section className={styles.blank} aria-labelledby={ids.blank} data-blank="">
               <Stamp
                 still
                 role={null}
@@ -210,7 +222,7 @@ export function ProfileScreen({
                 className={styles.blankStamp}
               />
               <p className={styles.kicker}>{labels.blank.kicker}</p>
-              <Section id="profile-blank" className={cn(styles.h2, styles.blankTitle)}>
+              <Section id={ids.blank} className={cn(styles.h2, styles.blankTitle)}>
                 {races === 0 ? labels.blank.nothing : labels.blank.almostNothing}
               </Section>
               <p className={styles.blankBody}>{labels.blank.body}</p>

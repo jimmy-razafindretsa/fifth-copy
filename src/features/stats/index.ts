@@ -16,3 +16,11 @@ export {
   type SeriesPoint,
 } from "./view/profile";
 export { PROFILE_FIXTURE_NOW, type ProfileFixture, profileFixtures } from "./view/profile-fixtures";
+// The Personnel file screen (#932): the route and `/design#profile` compose it.
+export {
+  ProfileScreen,
+  profileLabels,
+  type ProfileLabels,
+  type ProfileLinks,
+  type ProfileScreenProps,
+} from "./components/profile-screen";

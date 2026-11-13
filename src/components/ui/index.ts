@@ -5,6 +5,7 @@ export { Wordmark, type WordmarkProps, type WordmarkVariant } from "./brand/word
 export { Button, type ButtonProps } from "./button";
 export { Card } from "./card";
 export { DEVICE_TONES, Device, type DeviceProps, type DeviceTone } from "./device";
+export { DeviceTube, type DeviceTubeProps } from "./device-tube";
 export { EmbedFrame } from "./embed-frame";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { Field, type FieldProps } from "./field";

@@ -32,6 +32,8 @@ export {
   type SaveClerkOutfitResult,
 } from "./actions/save-clerk-outfit";
 export { getClerkOutfit } from "./queries/clerk-outfit";
+// The Personnel file's "In service since" (#932): the day the viewer's row was created.
+export { getServiceStart } from "./queries/service-start";
 // The guest merge (ADR 0009, #56): one transaction, then the guest row is deleted. Features that
 // store per-user rows register a step; merge/coverage.test.ts fails when one is missing.
 export { mergeGuestInto, type MergeCounts } from "./merge/merge-guest";

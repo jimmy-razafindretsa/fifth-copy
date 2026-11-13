@@ -8,15 +8,16 @@ type ShippedLinks = {
   guide: string;
   signIn: string;
   privacy: string;
+  profile: string;
 };
 
 /**
  * Footer and personnel-file links the bible lists (14.1 items 5, 10) whose page is post-v1 (owner
- * decision 2026-11-10, #875): the locker, the teachers' page, the Personnel file (#311), about, terms and
- * contact. A link appears when its route ships: add its path here once its `page.tsx` exists and it comes
- * back (links.test.ts walks src/app); the catalog keys stay. Privacy shipped with #76.
+ * decision 2026-11-10, #875): the locker, the teachers' page, about, terms and contact. A link appears
+ * when its route ships: add its path here once its `page.tsx` exists and it comes back (links.test.ts
+ * walks src/app); the catalog keys stay. Privacy shipped with #76, the Personnel file with #932.
  */
-export type HeldBackLink = "locker" | "teachers" | "profile" | "about" | "terms" | "contact";
+export type HeldBackLink = "locker" | "teachers" | "about" | "terms" | "contact";
 
 /**
  * Where the landing's links go. The guide link anchors to the landing's "How a race runs" until the
@@ -31,6 +32,7 @@ export const LINKS: ShippedLinks & Partial<Record<HeldBackLink, string>> = {
   guide: "/#how",
   signIn: "/sign-in",
   privacy: "/privacy",
+  profile: "/profile",
 };
 
 export type SocialKey = "github" | "linkedin" | "discord" | "youtube";

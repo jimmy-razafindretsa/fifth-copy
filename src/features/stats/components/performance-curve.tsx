@@ -151,8 +151,8 @@ function Ticks({
   swatch,
 }: {
   labels: string[];
-  className: string;
-  swatch: string;
+  className: string | undefined;
+  swatch: string | undefined;
 }) {
   return (
     <div className={cn(styles.ticks, className)} aria-hidden="true">

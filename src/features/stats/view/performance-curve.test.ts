@@ -63,7 +63,7 @@ describe("speedScale (C1)", () => {
       const { ticks, low, high } = speedScale(values);
       expect(ticks).toHaveLength(5);
       ticks.forEach((t) => expect(Number.isInteger(t)).toBe(true));
-      const steps = ticks.slice(1).map((t, i) => ticks[i] - t);
+      const steps = ticks.slice(1).map((t, i) => ticks[i]! - t);
       expect(new Set(steps).size).toBe(1);
       expect(low).toBeLessThanOrEqual(Math.min(...values));
       expect(high).toBeGreaterThanOrEqual(Math.max(...values));

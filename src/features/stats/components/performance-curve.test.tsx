@@ -98,10 +98,10 @@ describe("section head and order (C2)", () => {
     expect(xs).toHaveLength(12);
     expect(xs[0]).toBe(20);
     expect(xs[11]).toBe(980);
-    xs.slice(1).forEach((x, i) => expect(x).toBeGreaterThan(xs[i]));
+    xs.slice(1).forEach((x, i) => expect(x).toBeGreaterThan(xs[i]!));
     // k = 0: the smoothed line goes through the points, oldest first (31 WPM is the first race)
     const points = pointsOf(12);
-    expect(points[0].cleanWpm).toBeLessThan(points[11].cleanWpm);
+    expect(points[0]!.cleanWpm).toBeLessThan(points[11]!.cleanWpm);
   });
 
   it("sits after the service record, from three races; under three the blank block stands in", () => {
@@ -143,8 +143,8 @@ describe("the plot (C3)", () => {
     expect(order[2]).toMatch(/speedDots/);
     expect(order[3]).toMatch(/speedLine/);
     expect(order[4]).toMatch(/trend/);
-    expect(allPaths(html)[0].match(/h0/g)).toHaveLength(40);
-    expect(allPaths(html)[2].match(/h0/g)).toHaveLength(40);
+    expect(allPaths(html)[0]!.match(/h0/g)).toHaveLength(40);
+    expect(allPaths(html)[2]!.match(/h0/g)).toHaveLength(40);
   });
 
   it("strokes as the reference, kept when the plot stretches; no animation", () => {

@@ -98,7 +98,7 @@ export function speedScale(values: Series): Scale {
   const fits = (step: number) => Math.floor(min / step) * step + 4 * step >= max;
   let step: number = NICE_STEPS.find(fits) ?? 0;
   if (!step) {
-    step = NICE_STEPS[NICE_STEPS.length - 1];
+    step = 100; // past the last round step: the smallest whole step that fits
     while (!fits(step)) step += 1;
   }
   return five(Math.floor(min / step) * step, step);
@@ -174,13 +174,15 @@ export type CurvePoint = { cleanWpm: number; accuracy: number };
 function series(values: number[], k: number, scale: Scale): CurveSeries {
   const smooth = movingAverage(values, k) as number[];
   const lastIndex = values.length - 1;
+  const first = smooth[0] ?? 0;
+  const last = smooth[lastIndex] ?? 0;
   return {
     scale,
     dots: dotsPath(values, scale),
     line: linePath(smooth, scale),
-    first: smooth[0],
-    last: smooth[lastIndex],
-    end: { x: xAt(lastIndex, values.length), y: yAt(smooth[lastIndex], scale) },
+    first,
+    last,
+    end: { x: xAt(lastIndex, values.length), y: yAt(last, scale) },
   };
 }
 

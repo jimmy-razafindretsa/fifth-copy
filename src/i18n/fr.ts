@@ -1062,7 +1062,11 @@ export const fr = {
       units: { speed: "MPM", accuracy: "%" },
       summary:
         "{count} courses : vitesse de {speedFrom} à {speedTo} MPM, précision de {accuracyFrom} à {accuracyTo} %{trend}.",
-      trend: { up: ", tendance à la hausse", down: ", tendance à la baisse", flat: ", tendance stable" },
+      trend: {
+        up: ", tendance à la hausse",
+        down: ", tendance à la baisse",
+        flat: ", tendance stable",
+      },
     },
     blank: {
       stamp: ["DONNÉES", "INSUFFISANTES"],

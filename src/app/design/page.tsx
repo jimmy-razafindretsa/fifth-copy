@@ -351,7 +351,7 @@ const PROFILE_STATES: { id: ProfileFixture; title: string; caption: string }[] =
   {
     id: "early",
     title: "Three races",
-    caption: "The output curve's first draw (#933): three dots a series, no trend line yet.",
+    caption: "The output curve at its first draw: three dots a series, no trend line yet.",
   },
   {
     id: "two-weeks",

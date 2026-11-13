@@ -8,6 +8,9 @@ import { createPrismaClient } from "@/server/db-client";
 import { emptyProfile } from "../view/profile";
 import { getProfile } from "./get-profile";
 
+// The results index pulls in auth, which validates env at import; CI has no AUTH_SECRET (like route.test.ts).
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
+
 // #931 C3, C4: getProfile reads the viewer's own counted results only, in a constant number of queries.
 const NOW = new Date("2026-11-13T17:00:00Z");
 const VIEWER = { id: "viewer-1" };

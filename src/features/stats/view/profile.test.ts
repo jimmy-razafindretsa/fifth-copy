@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildProfile, emptyProfile, type ResultRow, SERIES_LIMIT } from "./profile";
+import {
+  buildProfile,
+  EMPTY_SERVICE,
+  emptyProfile,
+  type ResultRow,
+  SERIES_LIMIT,
+  serviceOf,
+} from "./profile";
 
 // #931 C2: the Personnel file view model, from the viewer's counted results and an injected now.
 const NOW = new Date("2026-11-13T17:00:00Z"); // 12:00 in Toronto, Friday 2026-11-13.
@@ -10,7 +17,16 @@ const row = (
   language: "FR" | "EN" = "FR",
   accuracy = 0.9,
   time = "17:00:00",
-): ResultRow => ({ createdAt: new Date(`${day}T${time}Z`), cleanWpm, accuracy, language });
+  place = 2,
+  durationMs = 60_000,
+): ResultRow => ({
+  createdAt: new Date(`${day}T${time}Z`),
+  cleanWpm,
+  accuracy,
+  language,
+  durationMs,
+  place,
+});
 const LAST_7 = [
   "2026-11-07",
   "2026-11-08",
@@ -162,9 +178,35 @@ describe("buildProfile", () => {
         FR: { races: 400, bestWpm: 90, meanWpm: 45 },
         EN: { races: 12, bestWpm: 60, meanWpm: 41 },
       },
+      service: { ...EMPTY_SERVICE, races: 412, wins: 7, podiums: 20 },
     });
+    expect(p.service.wins).toBe(7);
     expect(p.total).toBe(412);
     expect(p.progress.gain).toBe(30);
     expect(p.languages.FR.bestWpm).toBe(90);
+  });
+});
+
+// #932 C3: the service record (whole file: time on duty, races, best/mean speed and accuracy, wins, podiums).
+describe("serviceOf", () => {
+  it("no rows: every figure blank, zero races", () => {
+    expect(serviceOf([])).toEqual(EMPTY_SERVICE);
+    expect(emptyProfile(NOW).service).toEqual(EMPTY_SERVICE);
+  });
+
+  it("sums durations, counts first places as wins and places 1 to 3 as podiums", () => {
+    const s = serviceOf([
+      row("2026-11-10", 40, "FR", 0.9, "17:00:00", 1, 30_000),
+      row("2026-11-11", 50, "EN", 0.95, "17:00:00", 3, 45_000),
+      row("2026-11-12", 30, "FR", 0.8, "17:00:00", 4, 60_000),
+    ]);
+    expect(s.totalMs).toBe(135_000);
+    expect(s.races).toBe(3);
+    expect(s.bestWpm).toBe(50);
+    expect(s.meanWpm).toBe(40);
+    expect(s.bestAccuracy).toBe(0.95);
+    expect(s.meanAccuracy).toBeCloseTo(0.8833, 4);
+    expect(s.wins).toBe(1);
+    expect(s.podiums).toBe(2);
   });
 });

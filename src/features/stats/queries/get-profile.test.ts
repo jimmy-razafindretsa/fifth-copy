@@ -19,13 +19,22 @@ type Call = { op: string; args: Record<string, unknown> };
 
 /** A stand-in client that records every call and answers with `rows` (honouring `take`). */
 function fakeDb(
-  rows: { createdAt: Date; cleanWpm: number; accuracy: number; lang: "FR" | "EN" }[],
+  rows: {
+    createdAt: Date;
+    cleanWpm: number;
+    accuracy: number;
+    lang: "FR" | "EN";
+    place?: number;
+    durationMs?: number;
+  }[],
 ) {
   const calls: Call[] = [];
   const selected = rows.map((r) => ({
     createdAt: r.createdAt,
     cleanWpm: r.cleanWpm,
     accuracy: r.accuracy,
+    durationMs: r.durationMs ?? 60_000,
+    place: r.place ?? 2,
     race: { textLanguage: r.lang },
   }));
   const raceResult = {
@@ -36,16 +45,30 @@ function fakeDb(
         .sort((a, b) => dir * (a.createdAt.getTime() - b.createdAt.getTime()))
         .slice(0, args.take);
     }),
-    aggregate: vi.fn(async (args: { where: { race: { textLanguage: string } } }) => {
+    aggregate: vi.fn(async (args: { where: { race: { textLanguage?: string } } }) => {
       calls.push({ op: "aggregate", args });
-      const wpm = rows
-        .filter((r) => r.lang === args.where.race.textLanguage)
-        .map((r) => r.cleanWpm);
+      const lang = args.where.race.textLanguage;
+      const mine = selected.filter((r) => !lang || r.race.textLanguage === lang);
+      const wpm = mine.map((r) => r.cleanWpm);
+      const acc = mine.map((r) => r.accuracy);
+      const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
       return {
-        _count: { _all: wpm.length },
-        _max: { cleanWpm: wpm.length ? Math.max(...wpm) : null },
-        _avg: { cleanWpm: wpm.length ? wpm.reduce((a, b) => a + b, 0) / wpm.length : null },
+        _count: { _all: mine.length },
+        _sum: { durationMs: mine.length ? mine.reduce((a, r) => a + r.durationMs, 0) : null },
+        _max: {
+          cleanWpm: wpm.length ? Math.max(...wpm) : null,
+          accuracy: acc.length ? Math.max(...acc) : null,
+        },
+        _avg: { cleanWpm: mean(wpm), accuracy: mean(acc) },
       };
+    }),
+    groupBy: vi.fn(async (args: { where: { place: { in: number[] } } }) => {
+      calls.push({ op: "groupBy", args });
+      const counts = new Map<number, number>();
+      for (const r of selected)
+        if (args.where.place.in.includes(r.place))
+          counts.set(r.place, (counts.get(r.place) ?? 0) + 1);
+      return [...counts].map(([place, n]) => ({ place, _count: { _all: n } }));
     }),
   };
   return { db: { raceResult } as never, calls };
@@ -73,8 +96,10 @@ describe("getProfile (stand-in client)", () => {
     expect(calls.map((c) => c.op).sort()).toEqual([
       "aggregate",
       "aggregate",
+      "aggregate",
       "findMany",
       "findMany",
+      "groupBy",
     ]);
     for (const { args } of calls) {
       const where = args.where as Record<string, unknown> & { race: Record<string, unknown> };
@@ -84,8 +109,8 @@ describe("getProfile (stand-in client)", () => {
     }
     const languages = calls
       .filter((c) => c.op === "aggregate")
-      .map((c) => (c.args.where as { race: { textLanguage: string } }).race.textLanguage);
-    expect(languages.sort()).toEqual(["EN", "FR"]);
+      .map((c) => (c.args.where as { race: { textLanguage?: string } }).race.textLanguage ?? "ALL");
+    expect(languages.sort()).toEqual(["ALL", "EN", "FR"]);
   });
 
   it("selects cleanWpm and never wpm, rawWpm or adjustedWpm, nor the keystrokes", async () => {
@@ -100,15 +125,39 @@ describe("getProfile (stand-in client)", () => {
           createdAt: true,
           cleanWpm: true,
           accuracy: true,
+          durationMs: true,
+          place: true,
           race: { select: { textLanguage: true } },
         });
-      } else {
+      } else if (op === "aggregate") {
         expect(args).toMatchObject({ _max: { cleanWpm: true }, _avg: { cleanWpm: true } });
+      } else {
+        expect(args).toMatchObject({ by: ["place"], _count: { _all: true } });
       }
     }
   });
 
-  it("C4: 250 stored results give 200 points in 4 queries, the latest ones, oldest first", async () => {
+  it("#932 C3: the service record counts wins (place 1) and podiums (places 1 to 3) over the whole file", async () => {
+    const at = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
+    const { db } = fakeDb([
+      { createdAt: at(1), cleanWpm: 40, accuracy: 0.9, lang: "FR", place: 1, durationMs: 30_000 },
+      { createdAt: at(2), cleanWpm: 50, accuracy: 0.96, lang: "EN", place: 3, durationMs: 45_000 },
+      { createdAt: at(3), cleanWpm: 30, accuracy: 0.84, lang: "FR", place: 5, durationMs: 60_000 },
+    ]);
+    const p = await getProfile(VIEWER, { db, now: NOW });
+    expect(p.service).toEqual({
+      totalMs: 135_000,
+      races: 3,
+      bestWpm: 50,
+      meanWpm: 40,
+      bestAccuracy: 0.96,
+      meanAccuracy: expect.closeTo(0.9, 6),
+      wins: 1,
+      podiums: 2,
+    });
+  });
+
+  it("C4: 250 stored results give 200 points in 6 queries, the latest ones, oldest first", async () => {
     const rows = Array.from({ length: 250 }, (_, i) => ({
       createdAt: new Date(NOW.getTime() - (250 - i) * 60_000),
       cleanWpm: i,
@@ -117,7 +166,7 @@ describe("getProfile (stand-in client)", () => {
     }));
     const { db, calls } = fakeDb(rows);
     const p = await getProfile(VIEWER, { db, now: NOW });
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(6);
     expect(p.progress.series).toHaveLength(200);
     expect(p.progress.series[0]?.cleanWpm).toBe(50);
     expect(p.progress.series[199]?.cleanWpm).toBe(249);
@@ -259,6 +308,9 @@ describe.skipIf(!testDatabaseUrl)(
       expect(p.progress.series.map((s) => s.cleanWpm)).toEqual([50, 40]);
       expect(p.languages.FR).toEqual({ races: 1, bestWpm: 40, meanWpm: 40 });
       expect(p.languages.EN).toEqual({ races: 1, bestWpm: 50, meanWpm: 50 });
+      // #932: the service record counts the same two rows (both at desk 0, so place 1).
+      expect(p.service).toMatchObject({ races: 2, totalMs: 60_000, wins: 2, podiums: 2 });
+      expect(p.service.bestWpm).toBe(50);
       // The other typist sees only their own row.
       const theirs = await getProfile({ id: other }, { db, now: NOW });
       expect(theirs.progress.series.map((s) => s.cleanWpm)).toEqual([90]);
@@ -274,7 +326,7 @@ describe.skipIf(!testDatabaseUrl)(
       queries = 0;
       const p = await getProfile({ id: me }, { db, now: NOW });
       expect(queries).toBe(forOne);
-      expect(queries).toBe(4);
+      expect(queries).toBe(6);
       expect(p.total).toBe(250);
       expect(p.progress.series).toHaveLength(200);
       // The latest 200 are the races 0.2 h .. 20.1 h ago (wpm 2..201), oldest first.

@@ -391,7 +391,7 @@ Base colours: skin `#F0C6A2` · eye white `#F6F1E6` · black `#161616` · shirt 
 
 An outfit is a config object `{hair, glasses, hat, clothes, face, hairCol}`. Send **only this config** over the network, never meshes.
 
-**Budgets:** LOD0 1,922–2,958 tris (default 2,650), ≤ 2,400 verts. LOD1 ≈ 850 tris (half segments, details < 9 cm dropped). New items: ≤ 300 tris each; the heaviest outfit stays ≤ 4,000.
+**Budgets:** LOD0 1,922–2,958 tris (default 2,650), ≤ 2,400 verts. LOD1 ≈ 850 tris (half segments, details < 9 cm dropped, except the pupils: a far clerk keeps its pupils, without glints, following the head with no glance or blink, so it never stares blank; #938). New items: ≤ 300 tris each; the heaviest outfit stays ≤ 4,000.
 
 **Flat portrait** (extension, #60): where a player has no approved picture (the header docket, 32px; settings, 64px; lists up to 128px) the clerk is drawn flat as an ID-photo stamp, one inline SVG on a 64 unit grid: a 2px ink frame, the head sunk into the shoulders (no neck), dot eyes and nose, a smile, an open collar, and one of four caps from the catalogue (`kepka`, `ushanka`, `eyeshade`, `beret`). The variant and its plate (surface, band, paper or muted surface, each with its own text role) come from a hash of the user id, so a player keeps the same portrait everywhere; colour roles only, so Night shift applies. An approved picture replaces it in the same square; in the header docket the 32px square sits first, flush left, behind a 2px ink rule.
 

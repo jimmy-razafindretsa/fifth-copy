@@ -177,8 +177,12 @@ describe("getProfile (stand-in client)", () => {
   });
 
   it("COUNTED_RACE is imported from the results feature, not copied", () => {
+    // #943: the counted filter moved to counted-where.ts, shared with getMissions
     const source = readFileSync(path.join(__dirname, "get-profile.ts"), "utf8");
-    expect(source).toMatch(/import \{ COUNTED_RACE \} from "@\/features\/results";/);
+    const filter = readFileSync(path.join(__dirname, "counted-where.ts"), "utf8");
+    expect(source).toMatch(/import \{ countedWhere \} from "\.\/counted-where";/);
+    expect(filter).toMatch(/import \{ COUNTED_RACE \} from "@\/features\/results";/);
+    expect(filter).not.toMatch(/ALL_FINISHED|"TIMER"|VOID/);
     expect(source).not.toMatch(/ALL_FINISHED|"TIMER"|VOID/);
     expect(source).not.toMatch(/raceKeystrokes|adjustedWpm: true|rawWpm: true/);
   });

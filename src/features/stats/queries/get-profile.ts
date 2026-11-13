@@ -1,6 +1,5 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import { COUNTED_RACE } from "@/features/results";
 import type { db as appDb } from "@/server/db";
 import {
   buildProfile,
@@ -14,25 +13,12 @@ import {
   type ResultRow,
   SERIES_LIMIT,
 } from "../view/profile";
+import { countedWhere } from "./counted-where";
 
 /** Who is looking: only the id matters (ADR 0009); guests have a file too. */
 type ProfileViewer = { id: string } | null;
 
 type Db = { raceResult: Pick<typeof appDb.raceResult, "findMany" | "aggregate" | "groupBy"> };
-
-/** The statuses a counted result has (#931): a desk that finished or ran out of time. */
-const COUNTED_STATUSES = ["FINISHED", "TIMED_OUT"] as const;
-
-/** A counted result of `userId` (#931 definitions, ADR 0008): never a bot's, a flagged or a voided race's. */
-function countedWhere(userId: string, language?: Language): Prisma.RaceResultWhereInput {
-  return {
-    userId,
-    isBot: false,
-    suspicious: false,
-    status: { in: [...COUNTED_STATUSES] },
-    race: language ? { ...COUNTED_RACE, textLanguage: language } : COUNTED_RACE,
-  };
-}
 
 /** Only what the view reads: `cleanWpm` (ADR 0016), never `wpm`, `rawWpm` or `adjustedWpm`. */
 const ROW_SELECT = {

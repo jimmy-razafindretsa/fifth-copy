@@ -23,6 +23,11 @@
   pointer-events: none;
 }
 
+/* still (#932): printed at its tilt (set inline), no spin */
+.still {
+  animation: none;
+}
+
 .red {
   background: var(--color-primary);
 }

@@ -376,11 +376,12 @@ test.describe("landing page (#497)", () => {
     await expect(page.getByRole("button", { name: QUICK })).toHaveCount(2);
 
     const footer = page.locator("footer");
-    // #875: a link appears when its route ships (AEGIS CORP. holds privacy, #76); no social profiles yet
+    // #875: a link appears when its route ships (AEGIS CORP. holds privacy, #76; LEARN the file, #932);
+    // no social profiles yet
     for (const name of ["PLAY", "LEARN", "AEGIS CORP."]) {
       await expect(footer.getByRole("navigation", { name })).toBeVisible();
     }
-    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(5);
+    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(6);
     await expect(footer.getByRole("list")).toHaveCount(0);
     await expect(footer.getByText("BUILT BYAEGIS CORP.")).toBeVisible();
     await expect(
@@ -400,7 +401,10 @@ test.describe("landing page (#497)", () => {
     await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
     const docket = page.locator("header").getByText("GUEST", { exact: true });
     await expect(docket).toBeVisible();
-    await expect(docket.locator("xpath=..")).toContainText(/^Comrade [A-Za-zÀ-ÿ]+-\d{3,4}GUEST$/);
+    // #932: the docket links to the file; its name starts with the sr-only "My file, "
+    await expect(docket.locator("xpath=..")).toContainText(
+      /^My file, Comrade [A-Za-zÀ-ÿ]+-\d{3,4}GUEST$/,
+    );
   });
 
   test("C11 reduced motion stops marquee, stars, bob and the caret blink", async ({ page }) => {

@@ -54,9 +54,23 @@
   text-decoration: underline;
 }
 
-/* guest docket: mono name plus the ink GUEST tag (bible 7.4) */
+/* MY FILE (#932, reference Profil.dc.html header): on its own page, red with a 3px red rule under it */
+.myFile[aria-current="page"] {
+  color: var(--color-link);
+  border-bottom: 3px solid var(--color-primary);
+  padding-bottom: 2px;
+}
+
+.myFile[aria-current="page"]:hover {
+  text-decoration: none;
+}
+
+/* guest docket: mono name plus the ink GUEST tag (bible 7.4); a link to the viewer's file (#932) */
 .docket {
   display: flex;
+  min-height: 44px;
+  color: var(--color-fg);
+  text-decoration: none;
   align-items: center;
   gap: 8px;
   background: var(--color-surface);
@@ -72,6 +86,14 @@
   flex: none;
   margin: -5px 0 -5px -10px;
   border-right: 2px solid var(--color-fg);
+}
+
+/* the docket is a 44px target (#932, bible 18): the picture stretches with it, still square and flush */
+.docket .avatar {
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  aspect-ratio: 1;
 }
 
 .tag {
@@ -99,6 +121,10 @@ button.signIn {
   line-height: inherit;
   letter-spacing: inherit;
   cursor: pointer;
+}
+
+a.docket:hover .docketName {
+  text-decoration: underline;
 }
 
 /* bible 18: hit targets >= 44px on touch */
@@ -152,6 +178,11 @@ button.signIn {
   .nav {
     display: contents;
     white-space: nowrap;
+  }
+
+  /* MY FILE gives way on phones: the docket is the link to the file there (#932) */
+  .myFile {
+    display: none;
   }
 
   /* row 1: EN/FR, then NIGHT SHIFT (its form is `display: contents`, the button is the item) */

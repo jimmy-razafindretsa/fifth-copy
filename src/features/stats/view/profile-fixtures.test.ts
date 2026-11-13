@@ -9,6 +9,31 @@ describe("profileFixtures", () => {
     expect(p.progress.series).toEqual([]);
     expect(p.progress.gain).toBeNull();
     expect(p.activity.streak).toBe(0);
+    expect(p.service).toEqual({
+      totalMs: null,
+      races: 0,
+      bestWpm: null,
+      meanWpm: null,
+      bestAccuracy: null,
+      meanAccuracy: null,
+      wins: null,
+      podiums: null,
+    });
+  });
+
+  it("one-race (#932): a single win on file", () => {
+    const p = profileFixtures["one-race"];
+    expect(p.total).toBe(1);
+    expect(p.service).toEqual({
+      totalMs: 47_200,
+      races: 1,
+      bestWpm: 42.3,
+      meanWpm: 42.3,
+      bestAccuracy: 0.947,
+      meanAccuracy: 0.947,
+      wins: 1,
+      podiums: 1,
+    });
   });
 
   it("early: three races, bests per language, no gain yet", () => {
@@ -30,5 +55,9 @@ describe("profileFixtures", () => {
     expect(p.progress.current7.wpm).not.toBeNull();
     expect(p.activity.streak).toBe(9);
     expect(p.activity.last7Days.every((d) => d.races > 0)).toBe(true);
+    expect(p.service.races).toBe(p.total);
+    expect(p.service.wins).toBeGreaterThan(0);
+    expect(p.service.podiums).toBeGreaterThan(p.service.wins ?? 0);
+    expect(p.service.podiums).toBeLessThan(p.total);
   });
 });

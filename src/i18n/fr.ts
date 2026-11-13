@@ -31,6 +31,9 @@ export const fr = {
     languageLabel: "Langue",
     nightShift: "QUART DE NUIT",
     honorific: "Camarade {name}",
+    /** #932 : l'entrée Dossier du personnel du bandeau (visiteurs connus) et le préfixe lu du docket. */
+    myFile: "MON DOSSIER",
+    myFileName: "Mon dossier",
   },
   landing: {
     kicker: "MINISTÈRE DE LA DACTYLO · BUREAU 05 · 1978",
@@ -1022,6 +1025,67 @@ export const fr = {
         other: "{n} courses et tes statistiques ont été versées à ton dossier du personnel.",
       },
       dismiss: "FERMER",
+    },
+  },
+  /** Le Dossier du personnel sur /profile (#932, bible 14.3, référence Profil.dc.html). */
+  profile: {
+    stage: {
+      label: "PHOTO D'IDENTITÉ",
+      clerkTitle: "Ton commis en uniforme",
+    },
+    kicker: "DOSSIER DU PERSONNEL",
+    kickerNumbered: "DOSSIER DU PERSONNEL · N° {number}",
+    since: "En service depuis le {date}.",
+    languages: {
+      both: "Tape en français et en anglais, accents compris.",
+      FR: "Tape en français, accents compris.",
+      EN: "Tape en anglais.",
+    },
+    verified: ["DOSSIER", "VÉRIFIÉ"],
+    tubes: {
+      label: "Tes chiffres",
+      avgWpm: "MPM MOY.",
+      best: "RECORD",
+      accuracy: "PRÉCISION",
+      medals: "MÉDAILLES",
+      none: "aucun",
+    },
+    band: {
+      confidential: "CONFIDENTIEL",
+      file: "DOSSIER",
+      fileNumbered: "DOSSIER N° {number}",
+      filed: "CHAQUE FRAPPE EST ARCHIVÉE",
+      notes: "LE MAJOR A PRIS DES NOTES",
+    },
+    tabs: {
+      label: "Sections du dossier",
+      stats: "01 · STATISTIQUES",
+      settings: "02 · RÉGLAGES DU DOSSIER",
+    },
+    service: {
+      kicker: "RAPPORT GÉNÉRAL · TOUT",
+      title: "État de service",
+      intro:
+        "Les chiffres officiels. Vitesse en mots par minute (MPM), précision en pourcentage de frappes justes.",
+      totalTime: "TEMPS TOTAL",
+      races: "COURSES",
+      bestSpeed: "MEILLEURE VITESSE",
+      averageSpeed: "VITESSE MOYENNE",
+      bestAccuracy: "PRÉCISION MAX",
+      averageAccuracy: "PRÉCISION MOYENNE",
+      wins: "VICTOIRES",
+      podiums: "PODIUMS",
+      wpm: "MPM",
+      firstPlace: "1RE PLACE",
+      top3: "TOP 3",
+    },
+    blank: {
+      stamp: ["DONNÉES", "INSUFFISANTES"],
+      kicker: "DOSSIER VIERGE",
+      nothing: "Le Ministère n'a rien sur toi.",
+      almostNothing: "Le Ministère n'a presque rien sur toi.",
+      body: "Termine trois courses et les graphiques apparaîtront ici : vitesse et précision.",
+      cta: "COURSE RAPIDE",
     },
   },
 } satisfies Messages;

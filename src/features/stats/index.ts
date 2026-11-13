@@ -3,6 +3,7 @@
 // (getProfile): never import this index from a client component; client code imports types only.
 export { getProfile } from "./queries/get-profile";
 export {
+  EMPTY_SERVICE,
   emptyProfile,
   LANGUAGES,
   SERIES_LIMIT,
@@ -11,6 +12,15 @@ export {
   type Profile,
   type ProfileActivity,
   type ProfileProgress,
+  type ProfileService,
   type SeriesPoint,
 } from "./view/profile";
 export { PROFILE_FIXTURE_NOW, type ProfileFixture, profileFixtures } from "./view/profile-fixtures";
+// The Personnel file screen (#932): the route and `/design#profile` compose it.
+export {
+  ProfileScreen,
+  profileLabels,
+  type ProfileLabels,
+  type ProfileLinks,
+  type ProfileScreenProps,
+} from "./components/profile-screen";

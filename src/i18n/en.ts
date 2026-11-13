@@ -30,6 +30,9 @@ export const en = {
     languageLabel: "Language",
     nightShift: "NIGHT SHIFT",
     honorific: "Comrade {name}",
+    /** #932: the header's Personnel file item (viewers only) and the docket link's spoken prefix. */
+    myFile: "MY FILE",
+    myFileName: "My file",
   },
   landing: {
     kicker: "MINISTRY OF TYPING · DESK 05 · 1978",
@@ -1059,6 +1062,67 @@ export const en = {
         other: "{n} races and your stats were carried into your Personnel file.",
       },
       dismiss: "DISMISS",
+    },
+  },
+  /** The Personnel file at /profile (#932, bible 14.3 "Personnel file", reference Profil.dc.html). */
+  profile: {
+    stage: {
+      label: "ID PICTURE",
+      clerkTitle: "Your clerk in uniform",
+    },
+    kicker: "PERSONNEL FILE",
+    kickerNumbered: "PERSONNEL FILE · № {number}",
+    since: "In service since {date}.",
+    languages: {
+      both: "Types in French and English, accents included.",
+      FR: "Types in French, accents included.",
+      EN: "Types in English.",
+    },
+    verified: ["FILE", "VERIFIED"],
+    tubes: {
+      label: "Your figures",
+      avgWpm: "AVG WPM",
+      best: "BEST",
+      accuracy: "ACCURACY",
+      medals: "MEDALS",
+      none: "none",
+    },
+    band: {
+      confidential: "CONFIDENTIAL",
+      file: "FILE",
+      fileNumbered: "FILE № {number}",
+      filed: "EVERY KEYSTROKE IS FILED",
+      notes: "THE MAJOR TOOK NOTES",
+    },
+    tabs: {
+      label: "File sections",
+      stats: "01 · STATISTICS",
+      settings: "02 · FILE SETTINGS",
+    },
+    service: {
+      kicker: "GENERAL REPORT · ALL TIME",
+      title: "Service record",
+      intro:
+        "The official figures. Speed in words per minute (WPM), accuracy as the share of correct keystrokes.",
+      totalTime: "TOTAL TIME",
+      races: "RACES",
+      bestSpeed: "BEST SPEED",
+      averageSpeed: "AVERAGE SPEED",
+      bestAccuracy: "BEST ACCURACY",
+      averageAccuracy: "AVERAGE ACCURACY",
+      wins: "WINS",
+      podiums: "PODIUMS",
+      wpm: "WPM",
+      firstPlace: "1ST PLACE",
+      top3: "TOP 3",
+    },
+    blank: {
+      stamp: ["NOT ENOUGH", "DATA"],
+      kicker: "BLANK FILE",
+      nothing: "The Ministry has nothing on you.",
+      almostNothing: "The Ministry has almost nothing on you.",
+      body: "Finish three races and the graphs will appear here: speed and accuracy.",
+      cta: "QUICK RACE",
     },
   },
 };

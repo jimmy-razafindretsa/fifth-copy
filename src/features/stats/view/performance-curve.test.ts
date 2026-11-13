@@ -57,30 +57,42 @@ describe("speedScale (C1)", () => {
     expect(scale.high).toBeGreaterThanOrEqual(47.6);
   });
 
-  it.each([
-    [[61.4, 40.2, 52.5]],
-    [[42, 42, 42]],
-    [[0.5, 3]],
-    [[110, 260]],
-    [[33.3, 33.9]],
-  ])("holds for %j", (values) => {
-    const { ticks, low, high } = speedScale(values);
-    expect(ticks).toHaveLength(5);
-    ticks.forEach((t) => expect(Number.isInteger(t)).toBe(true));
-    const steps = ticks.slice(1).map((t, i) => ticks[i] - t);
-    expect(new Set(steps).size).toBe(1);
-    expect(low).toBeLessThanOrEqual(Math.min(...values));
-    expect(high).toBeGreaterThanOrEqual(Math.max(...values));
-  });
+  it.each([[[61.4, 40.2, 52.5]], [[42, 42, 42]], [[0.5, 3]], [[110, 260]], [[33.3, 33.9]]])(
+    "holds for %j",
+    (values) => {
+      const { ticks, low, high } = speedScale(values);
+      expect(ticks).toHaveLength(5);
+      ticks.forEach((t) => expect(Number.isInteger(t)).toBe(true));
+      const steps = ticks.slice(1).map((t, i) => ticks[i] - t);
+      expect(new Set(steps).size).toBe(1);
+      expect(low).toBeLessThanOrEqual(Math.min(...values));
+      expect(high).toBeGreaterThanOrEqual(Math.max(...values));
+    },
+  );
 });
 
 describe("accuracyScale (C1)", () => {
   it.each([
-    [[94.6, 99.2], [100, 97.5, 95, 92.5, 90]],
-    [[90, 100], [100, 97.5, 95, 92.5, 90]],
-    [[89.9, 97], [100, 95, 90, 85, 80]],
-    [[71, 97], [100, 90, 80, 70, 60]],
-    [[42, 97], [100, 75, 50, 25, 0]],
+    [
+      [94.6, 99.2],
+      [100, 97.5, 95, 92.5, 90],
+    ],
+    [
+      [90, 100],
+      [100, 97.5, 95, 92.5, 90],
+    ],
+    [
+      [89.9, 97],
+      [100, 95, 90, 85, 80],
+    ],
+    [
+      [71, 97],
+      [100, 90, 80, 70, 60],
+    ],
+    [
+      [42, 97],
+      [100, 75, 50, 25, 0],
+    ],
   ])("lowest %j -> %j", (values, ticks) => {
     expect(accuracyScale(values).ticks).toEqual(ticks);
   });

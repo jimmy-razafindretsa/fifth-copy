@@ -116,7 +116,7 @@ export function CurveFrame({
             className={styles.slider}
             data-curve-smoothing=""
           />
-          <span className={styles.value} aria-hidden="true">
+          <span className={styles.value} aria-hidden="true" data-curve-value="">
             {smoothing}
           </span>
         </div>
@@ -145,7 +145,15 @@ export function CurveFrame({
  * A tick column: five values spread top to bottom, the series' swatch beside the top one (violet and red
  * are marks, not text, bible 3.3); the SVG's name carries the figures.
  */
-function Ticks({ labels, className, swatch }: { labels: string[]; className: string; swatch: string }) {
+function Ticks({
+  labels,
+  className,
+  swatch,
+}: {
+  labels: string[];
+  className: string;
+  swatch: string;
+}) {
   return (
     <div className={cn(styles.ticks, className)} aria-hidden="true">
       {labels.map((label, i) => (

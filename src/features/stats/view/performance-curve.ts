@@ -21,7 +21,14 @@ export const TREND_MIN_POINTS = 6;
 export const SMOOTHING = { min: 0, max: 8, initial: 3 } as const;
 
 /** The plot's viewBox and inner box: x from 20 to 980, values from y 280 (lowest tick) to y 20 (highest). */
-export const PLOT = { width: 1000, height: 300, left: 20, right: 980, top: 20, bottom: 280 } as const;
+export const PLOT = {
+  width: 1000,
+  height: 300,
+  left: 20,
+  right: 980,
+  top: 20,
+  bottom: 280,
+} as const;
 /** The four dashed grid lines. */
 export const GRID_LINES = [20, 85, 150, 215] as const;
 

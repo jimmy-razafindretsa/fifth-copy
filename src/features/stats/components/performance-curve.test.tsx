@@ -122,7 +122,9 @@ describe("the plot (C3)", () => {
     expect(html.match(/<line /g)).toHaveLength(4);
     for (const y of [20, 85, 150, 215]) expect(html).toContain(`y1="${y}" y2="${y}"`);
     expect(css).toMatch(/\.grid \{[^}]*stroke-dasharray: 3 5/);
-    expect(css).toMatch(/\.plot \{[^}]*border-left: 2px solid var\(--color-fg\);[^}]*border-bottom: 2px solid var\(--color-fg\)/);
+    expect(css).toMatch(
+      /\.plot \{[^}]*border-left: 2px solid var\(--color-fg\);[^}]*border-bottom: 2px solid var\(--color-fg\)/,
+    );
   });
 
   it("ticks: speed whole numbers left, accuracy right with the locale's decimal", () => {
@@ -161,7 +163,9 @@ describe("the plot (C3)", () => {
     const pkg = JSON.parse(read("package.json")) as { dependencies: Record<string, string> };
     const charts = /chart|d3|recharts|visx|nivo|victory|plotly|echarts|apexcharts/i;
     expect(Object.keys(pkg.dependencies).filter((d) => charts.test(d))).toEqual([]);
-    expect(read("src/features/stats/components/performance-curve.tsx")).not.toMatch(/<canvas|getContext/);
+    expect(read("src/features/stats/components/performance-curve.tsx")).not.toMatch(
+      /<canvas|getContext/,
+    );
   });
 });
 

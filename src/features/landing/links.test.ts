@@ -57,12 +57,14 @@ describe("public links (#875 C1)", () => {
       "/recover",
       "/settings",
       "/privacy",
+      "/profile",
       "/lobby/KGB-4821",
     ]) {
       expect(served(ok), ok).toBe(true);
     }
-    // six of the seven paths main offered before #875 have no page yet (/privacy shipped with #76)
-    for (const dead of ["/locker", "/teachers", "/profile", "/about", "/terms", "/contact"]) {
+    // five of the seven paths main offered before #875 have no page yet (/privacy shipped with #76,
+    // /profile with #932)
+    for (const dead of ["/locker", "/teachers", "/about", "/terms", "/contact"]) {
       expect(served(dead), dead).toBe(false);
     }
   });

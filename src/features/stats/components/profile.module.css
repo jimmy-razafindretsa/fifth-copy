@@ -1,0 +1,403 @@
+/*
+ * The Personnel file (#932, bible 14.3 "Personnel file", reference docs/design/bible/Profil.dc.html):
+ * ported 1:1 in layout, type scale and copy; colours through roles (the reference is light only, Night
+ * shift comes from the theme tokens). Deviations are listed in the bible entry.
+ */
+
+@reference "../../../app/globals.css";
+
+/* ground: paper with the 6 halftone dots, on the screen's root block (never the page body) */
+.screen {
+  flex: 1;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  @apply paper-grain;
+}
+
+/* ---- hero: two cells, a 2px ink rule between and under ---- */
+.hero {
+  container: profile-hero / inline-size;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+  border-bottom: 2px solid var(--color-fg);
+}
+
+/* the stage: sun rays behind the character (bible 6), three still stars, the ID picture label */
+.stage {
+  position: relative;
+  min-height: 460px;
+  overflow: hidden;
+  background-color: var(--color-surface);
+  @apply sun-rays;
+  border-right: 2px solid var(--color-fg);
+}
+
+/* stacked (one column, under two 440px cells): the rule between the cells runs under the stage */
+@container profile-hero (max-width: 879px) {
+  .stage {
+    border-right: 0;
+    border-bottom: 2px solid var(--color-fg);
+  }
+}
+
+.stageLabel {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  z-index: 2;
+  margin: 0;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.22em;
+  color: var(--color-fg-muted);
+}
+
+/* the clerk's box: inset 12% left and right, 60px top, 40px bottom */
+.slot {
+  position: absolute;
+  inset: 60px 12% 40px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* decorative: no focus (EmbedFrame), no pointer */
+.clerkFrame {
+  pointer-events: none;
+}
+
+/* the viewer's own picture, pasted on like an ID photo */
+.picture {
+  width: min(240px, 70%);
+  aspect-ratio: 1;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  box-shadow: 6px 6px 0 var(--color-fg);
+  transform: rotate(-2deg);
+}
+
+.picture > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* the file side: newsprint, 22px gaps */
+.file {
+  position: relative;
+  min-width: 0;
+  background: var(--color-surface);
+  padding: clamp(24px, 4vw, 56px);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* the stamp and the guest tag sit top right; on phones they take their own line above the kicker */
+.verified,
+.guestTag {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+}
+
+.guestTag {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background: var(--color-band);
+  color: var(--color-band-fg);
+  padding: 3px 8px;
+}
+
+@media (max-width: 639px) {
+  .verified,
+  .guestTag {
+    position: static;
+    align-self: flex-end;
+  }
+}
+
+.kicker {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.28em;
+  color: var(--color-link);
+}
+
+.name {
+  margin: 10px 0 0;
+  @apply type-display-lg;
+  font-size: clamp(40px, 5.6vw, 76px);
+  line-height: 0.92;
+  letter-spacing: 0.02em;
+  max-width: 12ch;
+  overflow-wrap: anywhere;
+}
+
+.serviceLine {
+  margin: 14px 0 0;
+  @apply type-body;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* the guest's prompt: the Dawn report's docket row (#863), on paper over the newsprint */
+.prompt {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 2px solid var(--color-fg);
+  color: var(--color-fg);
+  text-decoration: none;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.secondary:hover {
+  background: var(--color-surface);
+}
+
+/* four tubes, each in its own bezel */
+.tubes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
+}
+
+/* ---- the band: static, clipped, -1.4 degrees, bleeding 40px past both edges ---- */
+.bandBox {
+  overflow: hidden;
+  padding: 26px 0 18px;
+}
+
+.band {
+  margin: 0 -40px;
+  transform: rotate(-1.4deg);
+  background: var(--color-band);
+  color: var(--color-band-fg);
+  border-top: 7px solid var(--color-primary);
+  padding: 12px 0;
+  white-space: nowrap;
+  @apply type-display-md;
+  font-size: clamp(22px, 2.6vw, 34px);
+  line-height: 1.1;
+  letter-spacing: 0.05em;
+}
+
+.bandStar {
+  color: var(--color-primary);
+}
+
+/* ---- the column under the band ---- */
+.column {
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  padding: 24px clamp(16px, 3vw, 40px) 80px;
+}
+
+/* folder tabs on a 2px ink rule: the current one paper and open, the other newsprint and closed */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: -2px;
+  padding: 14px 24px;
+  border: 2px solid var(--color-fg);
+  border-bottom: 0;
+  background: var(--color-surface);
+  color: var(--color-fg);
+  box-shadow: inset 0 -2px 0 var(--color-fg);
+  text-decoration: none;
+  @apply type-label;
+  font-size: 15px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+}
+
+.tab:hover {
+  text-decoration: underline;
+}
+
+.tabCurrent {
+  background: var(--color-bg);
+  box-shadow: inset 0 -2px 0 var(--color-bg);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+  padding-top: 32px;
+}
+
+/* section heads: kicker and title, the intro to the right, wrapping under when narrow */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px 40px;
+  margin-bottom: 22px;
+}
+
+.h2 {
+  margin: 8px 0 0;
+  @apply type-display-md;
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+}
+
+.intro {
+  margin: 0;
+  max-width: 460px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-fg-muted);
+}
+
+/* 7.4 multi-cell grid: paper cells on a 2px ink ground (gap 2px on ink, never per-cell borders) */
+.grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 2px;
+  background: var(--color-fg);
+  border: 2px solid var(--color-fg);
+}
+
+.cell {
+  container-type: inline-size;
+  background: var(--color-bg);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cellLabel {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.figure {
+  margin: 0;
+  @apply type-typing;
+  font-weight: 500;
+  /* 34px; a narrow cell scales it so `hh:mm:ss` (4.8em of Plex Mono) stays on one line */
+  font-size: min(34px, 20cqi);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the one red figure: the best speed (link role, night-ink on Night shift) */
+.figureRed {
+  color: var(--color-link);
+}
+
+.unit {
+  font-size: 15px;
+  color: var(--color-fg-muted);
+}
+
+/* ---- the blank block (fewer than three races) ---- */
+.blank {
+  container: profile-blank / inline-size;
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 64px clamp(20px, 5vw, 72px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.blankStamp {
+  position: absolute;
+  top: 40px;
+  right: 6%;
+}
+
+/* narrower blocks: the stamp stands above the text, never over it */
+@container profile-blank (max-width: 1099px) {
+  .blankStamp {
+    position: static;
+    align-self: flex-end;
+  }
+}
+
+.blankTitle {
+  margin: 0;
+  max-width: 14ch;
+}
+
+.blankBody {
+  margin: 0;
+  max-width: 520px;
+  @apply type-body;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* bible 7.1 primary stamp button as a link (the Dawn report's RACE AGAIN recipe) */
+.stampLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-display-md;
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 3px solid var(--color-fg);
+  padding: 14px 30px;
+  box-shadow: 6px 6px 0 var(--color-fg);
+  text-decoration: none;
+}
+
+.stampLink:hover {
+  background: var(--color-primary-hover);
+}
+
+.stampLink:active {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0 var(--color-fg);
+}

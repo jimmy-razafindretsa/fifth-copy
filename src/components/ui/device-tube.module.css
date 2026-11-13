@@ -1,0 +1,40 @@
+/*
+ * Device tube (#932, design bible 7.11 "Personnel file tubes", reference Profil.dc.html hero): one nixie
+ * tube in its own device bezel with a 4px print offset and its tag under the glass. The device colours
+ * (glass rim, inner glow) are set in device-tube.tsx, the one place the colour guard lets them live; this
+ * module holds the shape. Devices are objects: the same in both themes (bible 3.2).
+ */
+
+@reference "../../app/globals.css";
+
+.bezel {
+  min-width: 0;
+  padding: 10px;
+  border: 2px solid var(--color-room);
+  box-shadow: 4px 4px 0 var(--color-room);
+}
+
+/* the 7.11 glass envelope: a rounded top over a flat base, the numerals centred */
+.tube {
+  display: block;
+  padding: 4px 8px;
+  border: 1px solid;
+  border-radius: 16px 16px 5px 5px;
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* the tag: paper-side label text on the bezel, no glow (night-muted on press-ink 9.03:1, as the HUD's) */
+.tag {
+  display: block;
+  margin-top: 8px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0.2em;
+  text-align: center;
+  color: var(--color-band-muted);
+}

@@ -66,6 +66,11 @@
   padding: 12px 20px;
 }
 
+/* still (#932): a stamp already printed on a static page (the Personnel file), no slam */
+.still {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stamp {
     animation: none;

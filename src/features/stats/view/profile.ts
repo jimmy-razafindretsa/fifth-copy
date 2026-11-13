@@ -26,6 +26,28 @@ export type ResultRow = {
   /** 0..1. */
   accuracy: number;
   language: Language;
+  /** The race's duration in ms (`RaceResult.durationMs`). */
+  durationMs: number;
+  /** 1 = won (`RaceResult.place`). */
+  place: number;
+};
+
+/**
+ * The service record (#932, spec 13.2): whole-file figures over every counted result. Every field is
+ * `null` with no race (`races` is 0 then). Speeds are clean WPM (ADR 0016); accuracies are 0..1.
+ */
+export type ProfileService = {
+  /** Sum of `durationMs`. */
+  totalMs: number | null;
+  races: number;
+  bestWpm: number | null;
+  meanWpm: number | null;
+  bestAccuracy: number | null;
+  meanAccuracy: number | null;
+  /** Results at place 1. */
+  wins: number | null;
+  /** Results at places 1 to 3. */
+  podiums: number | null;
 };
 
 export type SeriesPoint = {
@@ -68,6 +90,7 @@ export type Profile = {
   progress: ProfileProgress;
   languages: Record<Language, LanguageStats>;
   activity: ProfileActivity;
+  service: ProfileService;
 };
 
 /**
@@ -78,12 +101,43 @@ export type ProfileTotals = {
   /** The earliest counted results (at least `GAIN_SAMPLE` when the file has that many). */
   earliest: ResultRow[];
   languages: Record<Language, LanguageStats>;
+  /** The whole file's service record (one aggregate and one count by place, #932). */
+  service: ProfileService;
 };
 
 const mean = (values: number[]): number | null =>
   values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length;
 
 const byTime = (a: ResultRow, b: ResultRow) => a.createdAt.getTime() - b.createdAt.getTime();
+
+/** No race on file: every figure `null`, `races` 0. */
+export const EMPTY_SERVICE: ProfileService = {
+  totalMs: null,
+  races: 0,
+  bestWpm: null,
+  meanWpm: null,
+  bestAccuracy: null,
+  meanAccuracy: null,
+  wins: null,
+  podiums: null,
+};
+
+/** The service record of `rows` (the whole file when they are all of it). */
+export function serviceOf(rows: ResultRow[]): ProfileService {
+  if (rows.length === 0) return EMPTY_SERVICE;
+  const wpm = rows.map((r) => r.cleanWpm);
+  const accuracy = rows.map((r) => r.accuracy);
+  return {
+    totalMs: rows.reduce((sum, r) => sum + r.durationMs, 0),
+    races: rows.length,
+    bestWpm: Math.max(...wpm),
+    meanWpm: mean(wpm),
+    bestAccuracy: Math.max(...accuracy),
+    meanAccuracy: mean(accuracy),
+    wins: rows.filter((r) => r.place === 1).length,
+    podiums: rows.filter((r) => r.place >= 1 && r.place <= 3).length,
+  };
+}
 
 function languageStats(rows: ResultRow[]): Record<Language, LanguageStats> {
   const stats = {} as Record<Language, LanguageStats>;
@@ -116,8 +170,9 @@ function streakOf(days: Set<DayKey>, today: DayKey): number {
 
 /**
  * The `Profile` of a viewer from their counted results (any order) at `now`. The series, the 7-day
- * figures and the streak read the latest `SERIES_LIMIT` results; totals, per-language figures and the
- * gain's earliest five read `totals` when given (the whole file), else the same rows.
+ * figures and the streak read the latest `SERIES_LIMIT` results; totals, per-language figures, the
+ * service record and the gain's earliest five read `totals` when given (the whole file), else the same
+ * rows.
  */
 export function buildProfile(rows: ResultRow[], now: Date, totals?: ProfileTotals): Profile {
   const sorted = [...rows].sort(byTime);
@@ -161,6 +216,7 @@ export function buildProfile(rows: ResultRow[], now: Date, totals?: ProfileTotal
     },
     languages,
     activity: { streak: streakOf(days, today), last7Days },
+    service: totals?.service ?? serviceOf(sorted),
   };
 }
 

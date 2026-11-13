@@ -46,7 +46,10 @@ export type WaitingRoomView = {
 const two = (n: number) => String(n).padStart(2, "0");
 
 /** The members whose desk the room no longer awaits, by desk. */
-export function arrivedDesks(members: readonly Member[], pending: readonly number[] | null): number[] {
+export function arrivedDesks(
+  members: readonly Member[],
+  pending: readonly number[] | null,
+): number[] {
   if (pending === null) return [];
   return members.filter((m) => !pending.includes(m.desk)).map((m) => m.desk);
 }
@@ -56,7 +59,10 @@ export function arrivedDesks(members: readonly Member[], pending: readonly numbe
  * number), earlier arrivals keep their order after them, desks no longer arrived drop out. Returns
  * `prev` itself when nothing changed, so a leaf's state stays put.
  */
-export function arrivalOrder(prev: readonly number[], arrived: readonly number[]): readonly number[] {
+export function arrivalOrder(
+  prev: readonly number[],
+  arrived: readonly number[],
+): readonly number[] {
   const now = new Set(arrived);
   const kept = prev.filter((d) => now.has(d));
   const fresh = arrived.filter((d) => !prev.includes(d)).sort((a, b) => a - b);
@@ -64,7 +70,10 @@ export function arrivalOrder(prev: readonly number[], arrived: readonly number[]
   return [...fresh, ...kept];
 }
 
-export function waitingRoomView(input: WaitingRoomInput, order: readonly number[]): WaitingRoomView {
+export function waitingRoomView(
+  input: WaitingRoomInput,
+  order: readonly number[],
+): WaitingRoomView {
   const pending = input.pending ?? [];
   const total = input.members.length;
   const readyCount = Math.max(0, total - pending.length);
@@ -73,7 +82,8 @@ export function waitingRoomView(input: WaitingRoomInput, order: readonly number[
     papers: input.raceIn,
     desk: input.raceIn,
     machines: input.raceIn && input.sceneSettled,
-    copy: input.raceIn && input.sceneSettled && (input.you === null || !pending.includes(input.you)),
+    copy:
+      input.raceIn && input.sceneSettled && (input.you === null || !pending.includes(input.you)),
   };
   const done = (id: WaitingStep) => (id === "major" ? pending.length === 0 && own.copy : own[id]);
   const current = WAITING_STEPS.find((id) => !done(id)) ?? null;

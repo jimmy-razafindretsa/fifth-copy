@@ -537,8 +537,32 @@ export const en = {
       loading: "LOADING THE RING ROOM",
       title: "The ring room, from your desk",
       didYouKnow: "DID YOU KNOW?",
-      /** #926: the loading card's row while the room loads, `01 / 02` desks ready. */
-      ready: "READY",
+    },
+    /** The waiting room while the room loads (#937, bible 7.4 "Waiting room"): replaces the #926 card. */
+    waiting: {
+      kicker: "SUMMONS · ROOM {code}",
+      heading: "LOADING.",
+      form: "MISSION ORDER",
+      tag: "FORM 7-D",
+      rows: { room: "ROOM", text: "TEXT", language: "LANGUAGE", desk: "DESK", ready: "READY" },
+      textType: {
+        sentences: "Real sentences",
+        words: "Random words",
+        "special-characters": "Special characters",
+      },
+      language: { fr: "French", en: "English" },
+      steps: { papers: "PAPERS", desk: "DESK", machines: "MACHINES", copy: "COPY", major: "MAJOR" },
+      phrases: {
+        papers: "Sorting the papers…",
+        desk: "Dusting the desk…",
+        machines: "Oiling the machines…",
+        copy: "Filing your copy…",
+        major: "Waiting for the Major…",
+      },
+      progress: "LOADING PROGRESS",
+      arrivals: "ARRIVALS",
+      desk: "desk {n}",
+      majorSays: "THE MAJOR SAYS:",
     },
     /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
     didYouKnow: [] as string[],

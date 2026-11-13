@@ -64,6 +64,8 @@ const STORE_READERS: Record<string, string> = {
   [path.join(components, "sabotage-tray-live.tsx")]: "../client/use-race-store",
   // #242 C2: the race announcer reads primitives of the store (its selectors live in view/announcements)
   [path.join(components, "race-announcer.tsx")]: "../client/use-race-store",
+  // #937: the waiting room reads slices of the store (its view model lives in view/waiting-room-view)
+  [path.join(components, "waiting-room-live.tsx")]: "../client/use-race-store",
 };
 
 /**

@@ -95,4 +95,6 @@ export { selectSceneView } from "./view/scene-view";
 export type { SceneDesk, ScenePhase, SceneView } from "./view/scene-view";
 /** The scene's loading card (#563 C2) and the phone query the scene leaf skips (phones watch, #292). */
 export { LoadingCard, type LoadingCardProps, type SceneLabels } from "./components/loading-card";
+export { WaitingRoom, type WaitingRoomLabels } from "./components/waiting-room";
+export { WaitingRoomLive } from "./components/waiting-room-live";
 export { PHONE_QUERY } from "./seat/seat-view";

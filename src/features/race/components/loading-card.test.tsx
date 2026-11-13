@@ -32,23 +32,4 @@ describe("LoadingCard (#563 C2)", () => {
     expect(en.race.didYouKnow).toEqual([]);
     expect(fr.race.didYouKnow).toEqual([]);
   });
-
-  it("#926 C5: while the room loads, the READY row sits between the stamp and the tip", () => {
-    const html = renderToStaticMarkup(
-      <LoadingCard labels={en.race.scene} tip="A line." ready="01 / 02" />,
-    );
-    expect(html).toContain("data-ready");
-    expect(html).toContain(">READY<");
-    expect(html).toContain(">01 / 02<");
-    expect(html.indexOf("LOADING THE RING ROOM<")).toBeLessThan(html.indexOf("data-ready"));
-    expect(html.indexOf("data-ready")).toBeLessThan(html.indexOf("data-did-you-know"));
-    const fr926 = renderToStaticMarkup(
-      <LoadingCard labels={fr.race.scene} tip={null} ready="00 / 03" />,
-    );
-    expect(fr926).toContain(">PRÊTS<");
-    expect(fr926).toContain(">00 / 03<");
-    expect(renderToStaticMarkup(<LoadingCard labels={en.race.scene} tip={null} />)).not.toContain(
-      "data-ready",
-    );
-  });
 });

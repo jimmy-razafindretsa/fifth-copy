@@ -1,0 +1,289 @@
+/*
+ * The waiting room (#937, design bible 7.4 "Waiting room", reference docs/design/waiting-room/): a full
+ * viewport paper ground with the bible's halftone dots, one centred column: the summons kicker (label
+ * role, red text role), the display heading, the mission-order docket (7.4: 2px ink rule, 7.1 print
+ * offset), the ARRIVALS ink band (red label cell, rows scrolling up in a loop, still under reduced
+ * motion) and the Major's line. Colours are roles only (components.md "Colour usage rules").
+ */
+
+@reference "../../../app/globals.css";
+
+.room {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background-color: var(--color-bg);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-fg) 13%, transparent) 1.3px,
+    transparent 1.7px
+  );
+  background-size: 10px 10px;
+  color: var(--color-fg);
+}
+
+.column {
+  width: min(920px, 100% - 32px);
+  margin: 0 auto;
+  padding: 64px 0 48px;
+}
+
+.kicker {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0.3em;
+  color: var(--color-link);
+}
+
+.heading {
+  margin: 0 0 24px;
+  @apply type-display-lg;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  line-height: 1;
+}
+
+/* 7.4 docket with the 7.1 print offset */
+.docket {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  box-shadow: 6px 6px 0 var(--color-fg);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.form {
+  @apply type-display-sm;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.rows {
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 12px;
+  padding: 10px 20px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.value {
+  margin: 0;
+  @apply type-typing;
+  font-size: 17px;
+  line-height: normal;
+  overflow-wrap: anywhere;
+}
+
+/* your desk: red stays you (3.1), as text the link role (3.3: night-ink on Night shift) */
+.you {
+  color: var(--color-link);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
+.progress {
+  padding: 16px 20px 18px;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  @apply type-typing;
+  font-size: 17px;
+  line-height: normal;
+}
+
+.percent {
+  @apply type-display-sm;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--color-link);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bar {
+  height: 20px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--color-link);
+  transition: width var(--motion-duration-base) var(--motion-ease-out);
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.step[data-step-state="done"] {
+  color: var(--color-fg);
+}
+
+.step[data-step-state="current"] {
+  color: var(--color-link);
+}
+
+/* ARRIVALS: an ink band (paper text), the label in a red cell (primary pair) */
+.band {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  margin-top: 24px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-band);
+  color: var(--color-band-fg);
+}
+
+.bandLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 8px;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.viewport {
+  height: 120px;
+  overflow-y: auto;
+  mask-image: linear-gradient(transparent, var(--color-fg) 18%, var(--color-fg) 82%, transparent);
+}
+
+.viewport:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arrival {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 40px;
+  padding: 0 20px;
+  @apply type-typing;
+  font-size: 17px;
+  line-height: normal;
+}
+
+.who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.where {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the roll: the list and its aria-hidden copy rise one list height, linear, 2.4 s a row (bible 8),
+   paused while pointed at or focused (WCAG 2.2.2) */
+@keyframes wrRoll {
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+.viewport:has(.track[data-rolling]) {
+  overflow-y: hidden;
+}
+
+.track {
+  --_arrivals: 1;
+}
+
+.track[data-rolling] {
+  animation: wrRoll calc(var(--_arrivals) * 4 * var(--motion-duration-slow)) linear infinite;
+}
+
+.viewport:hover .track,
+.viewport:focus-within .track {
+  animation-play-state: paused;
+}
+
+.major {
+  margin: 20px 0 0;
+  @apply type-typing;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-fg-muted);
+}
+
+.majorLabel {
+  @apply type-label;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--color-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track[data-rolling] {
+    animation: none;
+  }
+  .loop {
+    display: none;
+  }
+  .viewport:has(.track[data-rolling]) {
+    overflow-y: auto;
+  }
+}
+
+[data-motion="reduce"] .track[data-rolling] {
+  animation: none;
+}
+
+[data-motion="reduce"] .loop {
+  display: none;
+}
+
+[data-motion="reduce"] .viewport:has(.track[data-rolling]) {
+  overflow-y: auto;
+}

@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=Oswald:wght@500;600;700&family=Stardos+Stencil:wght@400;700&display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>
+body{margin:0;background:#F2E8D6;color:#2A2420}
+*{box-sizing:border-box}
+a{color:#B81C24;text-decoration:none}
+a:hover{color:#2A2420}
+input[type=range]{accent-color:#B81C24}
+button{font:inherit}
+</style>
+</helmet>
+<div style="min-height:100vh;background-color:#F2E8D6;background-image:radial-gradient(rgba(42,36,32,.09) 1px, transparent 1.3px);background-size:14px 14px;font-family:'Courier Prime',monospace;color:#2A2420;overflow-x:hidden">
+
+<header style="display:flex;align-items:center;gap:20px 28px;padding:16px clamp(16px,3vw,40px);border-bottom:2px solid #2A2420;background:#F2E8D6;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="width:40px;height:40px;background:#B81C24;color:#F2E8D6;font-family:'Stardos Stencil',serif;font-weight:700;font-size:19px;display:flex;align-items:center;justify-content:center;border-radius:6px;box-shadow:3px 3px 0 #2A2420">FC</div>
+    <div style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:24px;letter-spacing:.04em">FIFTH COPY</div>
+  </div>
+  <nav style="display:flex;gap:24px;margin-left:auto;flex-wrap:wrap;align-items:center;font-family:Oswald,sans-serif;font-weight:600;font-size:14px;letter-spacing:.18em">
+    <a href="#" style="color:#2A2420">COURSE RAPIDE</a>
+    <a href="#" style="color:#2A2420">CLASSEMENT</a>
+    <a href="Vestiaire v2.dc.html" style="color:#2A2420">VESTIAIRE</a>
+    <span style="color:#B81C24;border-bottom:3px solid #B81C24;padding-bottom:2px">MON DOSSIER</span>
+  </nav>
+  <div style="display:flex;gap:2px;background:#2A2420;border:2px solid #2A2420;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.14em">
+    <span style="padding:7px 12px;background:#F2E8D6">EN</span>
+    <span style="padding:7px 12px;background:#2A2420;color:#F2E8D6">FR</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;border:2px solid #2A2420;padding:4px 6px 4px 4px">
+    <div style="width:30px;height:30px;background:#E5D6B8;border:2px solid #2A2420;display:flex;align-items:center;justify-content:center;font-family:'Stardos Stencil',serif;font-size:14px">D</div>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;letter-spacing:.08em">{{ s.disp }}</span>
+    <span style="background:#2A2420;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;padding:3px 7px">{{ gradeName }}</span>
+  </div>
+</header>
+
+<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));border-bottom:2px solid #2A2420">
+  <div style="position:relative;min-height:460px;background:repeating-conic-gradient(from 0deg at 50% 78%, #E6C9AE 0deg 6deg, #EEE0C6 6deg 12deg);border-right:2px solid #2A2420;overflow:hidden">
+    <div style="position:absolute;top:18px;left:20px;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.22em;color:#5A5048;z-index:2">PHOTO D'IDENTITÉ · BUREAU 05</div>
+    <div style="position:absolute;top:40px;right:42px;font-size:46px;color:#B81C24;transform:rotate(12deg);z-index:2;line-height:1">★</div>
+    <div style="position:absolute;top:96px;right:92px;font-size:24px;color:#E0B030;transform:rotate(-8deg);z-index:2;line-height:1">★</div>
+    <div style="position:absolute;bottom:26px;left:30px;font-size:52px;color:rgba(42,36,32,.14);transform:rotate(-14deg);z-index:2;line-height:1">★</div>
+    <div style="position:absolute;left:12%;right:12%;top:60px;bottom:40px">
+      <image-slot id="commis-hero" shape="rect" fit="contain" placeholder="Rendu 3D de ton commis (PNG transparent)"></image-slot>
+    </div>
+  </div>
+  <div style="position:relative;background:#E5D6B8;padding:clamp(24px,4vw,56px);display:flex;flex-direction:column;gap:22px">
+    <div style="position:absolute;top:28px;right:28px;transform:rotate(8deg);border:3px double #B81C24;color:#B81C24;font-family:'Stardos Stencil',serif;font-weight:700;font-size:18px;letter-spacing:.06em;padding:6px 12px;line-height:1.05;text-align:center">DOSSIER<br>VÉRIFIÉ</div>
+    <div>
+      <p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">DOSSIER DU PERSONNEL · N° 829</p>
+      <h1 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(40px,5.6vw,76px);line-height:.92;margin:10px 0 0;text-transform:uppercase;max-width:12ch">{{ s.disp }}.</h1>
+      <p style="font-family:'Courier Prime',monospace;font-size:16px;line-height:1.6;margin:14px 0 0;color:#2A2420">En service depuis le 24 mai 2023. Bureau 05, salle 225. Tape en français et en anglais, accents compris.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px">
+      <sc-for list="{{ nixies }}" as="n" hint-placeholder-count="4">
+        <div style="background:#1E1A17;border:2px solid #2A2420;padding:10px;box-shadow:4px 4px 0 #2A2420">
+          <div style="background:#2B1E15;border:1px solid #5A3A20;border-radius:6px;padding:4px 8px;font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:34px;color:#FF9B3D;text-shadow:0 0 10px rgba(255,140,40,.55);text-align:center;letter-spacing:.04em">{{ n.v }}</div>
+          <div style="font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.2em;color:#D8CCB6;text-align:center;margin-top:8px">{{ n.l }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.2em;color:#5A5048;margin-bottom:10px">
+        <span>ÉCHELLE DES GRADES · SELON TA MOYENNE</span>
+        <span style="color:#2A2420">{{ gradeNext }}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <sc-for list="{{ ladder }}" as="g" hint-placeholder-count="5">
+          <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.12em;padding:6px 11px;border:2px solid {{ g.bd }};background:{{ g.bg }};color:{{ g.fg }}">{{ g.n }}</span>
+        </sc-for>
+      </div>
+      <div style="height:12px;border:2px solid #2A2420;background:#F2E8D6;margin-top:12px;position:relative">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:{{ gradePct }};background:#B81C24"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div style="overflow:hidden;padding:26px 0 18px">
+  <div style="transform:rotate(-1.4deg);margin:0 -40px;background:#2A2420;border-top:7px solid #B81C24;padding:12px 0;white-space:nowrap;font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(22px,2.6vw,34px);color:#F2E8D6;letter-spacing:.05em">
+    CONFIDENTIEL <span style="color:#B81C24">★</span> DOSSIER N° 829 <span style="color:#B81C24">★</span> CHAQUE FRAPPE EST ARCHIVÉE <span style="color:#B81C24">★</span> LE MAJOR A PRIS DES NOTES <span style="color:#B81C24">★</span> CONFIDENTIEL <span style="color:#B81C24">★</span> DOSSIER N° 829
+  </div>
+</div>
+
+<main style="max-width:1320px;margin:0 auto;padding:24px clamp(16px,3vw,40px) 80px">
+  <div style="display:flex;gap:6px;align-items:flex-end;border-bottom:2px solid #2A2420;flex-wrap:wrap">
+    <button onClick="{{ goStats }}" style="cursor:pointer;font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.2em;padding:14px 24px;border:2px solid #2A2420;border-bottom:0;margin-bottom:-2px;background:{{ tabA.bg }};color:#2A2420;box-shadow:inset 0 -2px 0 {{ tabA.line }}">01 · STATISTIQUES</button>
+    <button onClick="{{ goSettings }}" style="cursor:pointer;font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.2em;padding:14px 24px;border:2px solid #2A2420;border-bottom:0;margin-bottom:-2px;background:{{ tabB.bg }};color:#2A2420;box-shadow:inset 0 -2px 0 {{ tabB.line }}">02 · RÉGLAGES DU DOSSIER</button>
+  </div>
+
+  <sc-if value="{{ isStats }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;flex-direction:column;gap:64px;padding-top:32px">
+
+    <div style="display:flex;flex-wrap:wrap;gap:14px 28px;align-items:center;border:2px solid #2A2420;background:#E5D6B8;padding:16px 20px">
+      <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.22em">AFFICHER LE DOSSIER POUR :</span>
+      <sc-for list="{{ filters }}" as="fg" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-family:Oswald,sans-serif;font-weight:500;font-size:12px;letter-spacing:.18em;color:#5A5048">{{ fg.label }}</span>
+          <div style="display:flex;gap:2px;background:#2A2420;border:2px solid #2A2420">
+            <sc-for list="{{ fg.opts }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.pick }}" style="cursor:pointer;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;padding:7px 11px;border:0;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">RAPPORT GÉNÉRAL · {{ periodLabel }}</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">État de service</h2></div>
+        <p style="font-family:'Courier Prime',monospace;font-size:15px;line-height:1.6;color:#5A5048;margin:0;max-width:460px;text-wrap:pretty">Les chiffres officiels. Vitesse en mots par minute (MPM), précision en pourcentage de frappes justes.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:2px;background:#2A2420;border:2px solid #2A2420">
+        <sc-for list="{{ cards }}" as="c" hint-placeholder-count="8">
+          <div style="background:#F2E8D6;padding:20px 22px;display:flex;flex-direction:column;gap:10px">
+            <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.2em;color:#5A5048">{{ c.l }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:34px;line-height:1;color:{{ c.col }}">{{ c.v }}<span style="font-size:15px;margin-left:6px;color:#5A5048">{{ c.u }}</span></span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <sc-if value="{{ noData }}" hint-placeholder-val="{{ false }}">
+      <section style="position:relative;border:2px solid #2A2420;background:#E5D6B8;padding:64px clamp(20px,5vw,72px);display:flex;flex-direction:column;align-items:flex-start;gap:20px;overflow:hidden">
+        <div style="position:absolute;right:6%;top:40px;transform:rotate(-9deg);border:4px double #B81C24;color:#B81C24;font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(28px,4vw,52px);padding:10px 20px;line-height:1">DONNÉES<br>INSUFFISANTES</div>
+        <p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">DOSSIER VIERGE</p>
+        <h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:0;text-transform:uppercase;max-width:14ch">Le Ministère n'a rien sur toi.</h2>
+        <p style="font-family:'Courier Prime',monospace;font-size:16px;line-height:1.6;margin:0;max-width:520px">Termine trois courses et les graphiques apparaîtront ici : vitesse, précision, touches faibles, registre de présence.</p>
+        <button style="cursor:pointer;font-family:'Stardos Stencil',serif;font-weight:700;font-size:26px;letter-spacing:.04em;padding:14px 30px;background:#B81C24;color:#F2E8D6;border:3px solid #2A2420;box-shadow:6px 6px 0 #2A2420">COURSE RAPIDE</button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ hasData }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;gap:64px">
+
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr));gap:28px">
+      <div style="border:2px solid #2A2420;background:#F2E8D6">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;border-bottom:2px solid #2A2420">
+          <span style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:24px">SÉRIES SANS FAUTE</span>
+          <span style="background:#2A2420;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;padding:3px 8px">COURSES D'AFFILÉE</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;padding:12px 22px;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;color:#5A5048;border-bottom:1px dashed #9C8E78">
+          <span>SEUIL</span><span>RECORD</span><span>MPM DURANT</span><span>EN COURS</span>
+        </div>
+        <sc-for list="{{ streaks }}" as="r" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;padding:14px 22px;border-bottom:1px dashed #9C8E78;font-family:'IBM Plex Mono',monospace;font-size:16px;align-items:center">
+            <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:14px;letter-spacing:.1em">≥ {{ r.t }}</span><span style="font-weight:600">{{ r.best }}</span><span>{{ r.m }}</span><span style="color:{{ r.curCol }}">{{ r.cur }}</span>
+          </div>
+        </sc-for>
+        <p style="font-family:'Courier Prime',monospace;font-size:14px;line-height:1.55;color:#5A5048;margin:0;padding:16px 22px">La plus longue suite de courses terminées au-dessus de chaque seuil de précision. Plus la suite est longue, plus le Major est content.</p>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;border-bottom:2px solid #2A2420">
+          <span style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:24px">COMBINAISONS SUSPECTES</span>
+          <span style="background:#B81C24;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;padding:3px 8px">À SURVEILLER</span>
+        </div>
+        <sc-for list="{{ bigrams }}" as="b" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:72px minmax(0,1fr) 70px 80px;gap:14px;padding:12px 22px;border-bottom:1px dashed #9C8E78;align-items:center">
+            <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:20px;color:#3B3F82">{{ b.p }}</span>
+            <div style="height:10px;background:#E5D6B8;border:1px solid #2A2420;position:relative"><div style="position:absolute;inset:0 auto 0 0;width:{{ b.w }};background:#B81C24"></div></div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;text-align:right">{{ b.miss }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;text-align:right;color:#5A5048">{{ b.m }} MPM</span>
+          </div>
+        </sc-for>
+        <p style="font-family:'Courier Prime',monospace;font-size:14px;line-height:1.55;color:#5A5048;margin:0;padding:16px 22px">Les enchaînements où tes doigts trébuchent le plus souvent : taux de fautes et vitesse sur la paire.</p>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">RECENSEMENT DES DACTYLOS</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Ta place au Ministère</h2></div>
+        <div style="display:flex;gap:6px;align-items:flex-end">
+          <sc-for list="{{ relTabs }}" as="t" hint-placeholder-count="2">
+            <button onClick="{{ t.pick }}" style="cursor:pointer;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em;padding:10px 16px;border:2px solid #2A2420;background:{{ t.bg }};color:{{ t.fg }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6;padding:clamp(18px,2.5vw,32px)">
+        <p style="font-family:'Courier Prime',monospace;font-size:clamp(18px,1.8vw,22px);line-height:1.5;margin:0 0 30px;text-wrap:pretty">Ta {{ rel.what }} dépasse celle de <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;background:#B81C24;color:#F2E8D6;padding:1px 8px">{{ rel.pct }}</span> des camarades du Ministère.</p>
+        <div style="position:relative;height:260px;border-left:2px solid #2A2420;border-bottom:2px solid #2A2420;margin-top:10px">
+          <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:1px">
+            <sc-for list="{{ rel.bars }}" as="b" hint-placeholder-count="60"><div style="flex:1;height:{{ b.h }};background:{{ b.c }}"></div></sc-for>
+          </div>
+          <svg viewBox="0 0 600 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible"><path d="{{ rel.cdf }}" fill="none" stroke="#3B3F82" strokeWidth="2.5" vectorEffect="non-scaling-stroke"></path></svg>
+          <div style="position:absolute;top:-14px;bottom:0;left:{{ rel.left }};width:3px;background:#B81C24">
+            <div style="position:absolute;top:0;left:{{ rel.tagL }};right:{{ rel.tagR }};white-space:nowrap;background:#B81C24;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;padding:4px 9px">TOI · {{ rel.val }}</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5A5048;margin-top:8px">
+          <sc-for list="{{ rel.ticks }}" as="t" hint-placeholder-count="5"><span>{{ t }}</span></sc-for>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px;margin-top:24px;padding-top:18px;border-top:1px dashed #9C8E78">
+          <div style="display:flex;gap:2px;background:#2A2420;border:2px solid #2A2420">
+            <sc-for list="{{ relMetrics }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.pick }}" style="cursor:pointer;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;padding:8px 13px;border:0;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-family:'Courier Prime',monospace;font-size:14px;color:#5A5048">
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:14px;height:14px;background:#2A2420;display:inline-block"></i>camarades que tu dépasses</span>
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:14px;height:14px;background:#CDB78F;display:inline-block"></i>ceux devant toi</span>
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:18px;height:3px;background:#3B3F82;display:inline-block"></i>part cumulée</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">RAPPORT D'APPRENTISSAGE</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Progression par touche</h2></div>
+        <p style="font-family:'Courier Prime',monospace;font-size:15px;line-height:1.6;color:#5A5048;margin:0;max-width:460px;text-wrap:pretty">Une ligne par touche, une case par course. Les touches jamais rencontrées restent vides.</p>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6;padding:clamp(18px,2.5vw,32px)">
+        <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 72px;gap:10px;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;color:#5A5048;margin-bottom:8px"><span></span><span>COURSE 1 → 40</span><span style="text-align:right">MOY. MPM</span></div>
+        <div style="display:grid;gap:3px">
+          <sc-for list="{{ heatRows }}" as="row" hint-placeholder-count="30">
+            <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 72px;align-items:center;gap:10px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px">{{ row.k }}</span>
+              <div style="display:grid;grid-template-columns:repeat(40,minmax(0,1fr));gap:1px;height:14px">
+                <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="40"><div style="background:{{ c }}"></div></sc-for>
+              </div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5A5048;text-align:right">{{ row.avg }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:22px;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em">
+          <span>LENTE</span><div style="width:220px;max-width:40%;height:12px;border:1px solid #2A2420;background:linear-gradient(90deg,#B81C24,#D8C29A,{{ heatEnd }})"></div><span>RAPIDE</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">COURBE DE RENDEMENT</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Vitesse au fil des courses</h2></div>
+        <p style="font-family:'Courier Prime',monospace;font-size:15px;line-height:1.6;color:#5A5048;margin:0;max-width:460px;text-wrap:pretty">Tes 40 dernières courses. La ligne pointillée donne la tendance générale.</p>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6;padding:clamp(18px,2.5vw,32px)">
+        <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:stretch">
+          <div style="display:flex;flex-direction:column;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#3B3F82;text-align:right"><span>48</span><span>42</span><span>36</span><span>30</span><span>24</span></div>
+          <svg viewBox="0 0 1000 300" style="width:100%;height:auto;display:block;border-left:2px solid #2A2420;border-bottom:2px solid #2A2420">
+            <g stroke="#9C8E78" strokeWidth="1" strokeDasharray="3 5"><line x1="0" x2="1000" y1="20" y2="20"></line><line x1="0" x2="1000" y1="85" y2="85"></line><line x1="0" x2="1000" y1="150" y2="150"></line><line x1="0" x2="1000" y1="215" y2="215"></line></g>
+            <path d="{{ spd.dotsA }}" stroke="#B81C24" strokeWidth="9" strokeLinecap="round" fill="none" opacity="0.3"></path>
+            <path d="{{ spd.lineA }}" stroke="#B81C24" strokeWidth="3" fill="none"></path>
+            <path d="{{ spd.dotsM }}" stroke="#3B3F82" strokeWidth="10" strokeLinecap="round" fill="none" opacity="0.35"></path>
+            <path d="{{ spd.lineM }}" stroke="#3B3F82" strokeWidth="3.5" fill="none"></path>
+            <path d="{{ spd.trend }}" stroke="#2A2420" strokeWidth="2" strokeDasharray="10 7" fill="none"></path>
+          </svg>
+          <div style="display:flex;flex-direction:column;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#B81C24"><span>100 %</span><span>97,5</span><span>95</span><span>92,5</span><span>90 %</span></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px;margin-top:24px;padding-top:18px;border-top:1px dashed #9C8E78">
+          <label style="display:flex;align-items:center;gap:12px;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.18em">LISSAGE <input type="range" min="0" max="8" value="{{ smooth }}" onChange="{{ setSmooth }}" style="width:180px"> <span style="font-family:'IBM Plex Mono',monospace">{{ smooth }}</span></label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-family:'Courier Prime',monospace;font-size:14px;color:#5A5048">
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:14px;height:14px;background:#3B3F82;display:inline-block"></i>vitesse (MPM, gauche)</span>
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:14px;height:14px;background:#B81C24;display:inline-block"></i>précision (%, droite)</span>
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:18px;height:0;border-top:2px dashed #2A2420;display:inline-block"></i>tendance</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">INTERROGATOIRE INDIVIDUEL</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Fiche par touche</h2></div>
+        <p style="font-family:'Courier Prime',monospace;font-size:15px;line-height:1.6;color:#5A5048;margin:0;max-width:460px;text-wrap:pretty">Choisis une touche. Marine : objectif de 35 MPM atteint. Rouge : à retravailler.</p>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6;padding:clamp(18px,2.5vw,32px)">
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <sc-for list="{{ keyChips }}" as="k" hint-placeholder-count="30">
+            <button onClick="{{ k.pick }}" style="cursor:pointer;width:38px;height:38px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;border:2px solid {{ k.bd }};background:{{ k.bg }};color:{{ k.fg }};box-shadow:{{ k.sh }}">{{ k.k }}</button>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:2px;background:#2A2420;border:2px solid #2A2420;margin:24px 0">
+          <sc-for list="{{ keyStats }}" as="c" hint-placeholder-count="5">
+            <div style="background:#E5D6B8;padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+              <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.2em;color:#5A5048">{{ c.l }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:22px">{{ c.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:stretch">
+          <div style="display:flex;flex-direction:column;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5A5048;text-align:right"><span>60</span><span>45</span><span>30</span><span>15</span><span>0</span></div>
+          <svg viewBox="0 0 1000 300" style="width:100%;height:auto;display:block;border-left:2px solid #2A2420;border-bottom:2px solid #2A2420">
+            <g stroke="#9C8E78" strokeWidth="1" strokeDasharray="3 5"><line x1="0" x2="1000" y1="20" y2="20"></line><line x1="0" x2="1000" y1="85" y2="85"></line><line x1="0" x2="1000" y1="150" y2="150"></line><line x1="0" x2="1000" y1="215" y2="215"></line></g>
+            <path d="{{ keyChart.target }}" stroke="#B81C24" strokeWidth="2.5" strokeDasharray="12 8" fill="none"></path>
+            <path d="{{ keyChart.dots }}" stroke="#3B3F82" strokeWidth="10" strokeLinecap="round" fill="none" opacity="0.35"></path>
+            <path d="{{ keyChart.line }}" stroke="#3B3F82" strokeWidth="3.5" fill="none"></path>
+          </svg>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-family:'Courier Prime',monospace;font-size:14px;color:#5A5048;margin-top:18px">
+          <span style="display:flex;align-items:center;gap:8px"><i style="width:14px;height:14px;background:#3B3F82;display:inline-block"></i>vitesse sur la touche {{ keySel }}</span>
+          <span style="display:flex;align-items:center;gap:8px"><i style="width:18px;height:0;border-top:2px dashed #B81C24;display:inline-block"></i>objectif 35 MPM</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">INVENTAIRE DES TOUCHES</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Vitesse, frappes et fautes</h2></div>
+        <p style="font-family:'Courier Prime',monospace;font-size:15px;line-height:1.6;color:#5A5048;margin:0;max-width:460px;text-wrap:pretty">Vitesse moyenne par touche, puis combien de fois tu l'as frappée, ratée, et la proportion de ratés.</p>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6;padding:clamp(18px,2.5vw,32px);display:flex;flex-direction:column;gap:14px">
+        <sc-for list="{{ invRows }}" as="ir" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:14px;align-items:end">
+            <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em;padding-bottom:4px">{{ ir.label }}</span>
+            <div style="height:{{ ir.h }};display:flex;align-items:flex-end;gap:3px;border-bottom:2px solid #2A2420;position:relative">
+              <sc-for list="{{ ir.bars }}" as="b" hint-placeholder-count="30"><div style="flex:1;height:{{ b.h }};background:{{ b.c }}"></div></sc-for>
+              <div style="position:absolute;left:0;right:0;bottom:{{ ir.line }};border-top:2px dashed {{ ir.lineCol }};pointer-events:none"></div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:14px">
+          <span></span>
+          <div style="display:flex;gap:3px">
+            <sc-for list="{{ rowKeys }}" as="k" hint-placeholder-count="30"><span style="flex:1;text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px">{{ k }}</span></sc-for>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">PLAN DE LA MACHINE · {{ kb.name }}</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Carte du clavier</h2></div>
+        <div style="display:flex;gap:2px;background:#2A2420;border:2px solid #2A2420">
+          <sc-for list="{{ kbOpts }}" as="o" hint-placeholder-count="2">
+            <button onClick="{{ o.pick }}" style="cursor:pointer;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;padding:8px 13px;border:0;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border:2px solid #2A2420;background:#E5D6B8;padding:clamp(18px,2.5vw,32px)">
+        <div style="max-width:980px;margin:0 auto;background:#F2E8D6;border:3px solid #2A2420;box-shadow:8px 8px 0 #2A2420;padding:clamp(10px,2vw,22px);display:grid;gap:4px">
+          <sc-for list="{{ kb.rows }}" as="row" hint-placeholder-count="4">
+            <div style="display:flex;gap:4px">
+              <sc-if value="{{ row.hasPad }}" hint-placeholder-val="{{ true }}"><div style="width:{{ row.padW }};border:2px solid #2A2420;background:#E5D6B8;font-family:Oswald,sans-serif;font-weight:600;font-size:clamp(8px,1vw,11px);letter-spacing:.12em;padding:5px;display:flex;align-items:flex-end">{{ row.lab }}</div></sc-if>
+              <sc-for list="{{ row.keys }}" as="key" hint-placeholder-count="12">
+                <div style="position:relative;width:{{ key.w }};aspect-ratio:1;border:2px solid #2A2420;background:{{ key.bg }}">
+                  <span style="position:absolute;top:3px;left:5px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:clamp(9px,1.3vw,15px);z-index:2">{{ key.k }}</span>
+                  <div style="position:absolute;left:50%;top:55%;width:{{ key.c }};aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:rgba(59,63,130,.5);display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1">
+                    <div style="width:{{ key.m }};aspect-ratio:1;border-radius:50%;background:#B81C24"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+          <div style="margin-left:24%;width:50%;height:clamp(22px,3vw,40px);border:2px solid #2A2420;background:#E5D6B8"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:18px;margin-top:30px">
+          <div style="display:flex;flex-wrap:wrap;gap:2px;background:#2A2420;border:2px solid #2A2420">
+            <sc-for list="{{ kb.share }}" as="r" hint-placeholder-count="4">
+              <div style="background:#F2E8D6;padding:10px 16px;display:flex;flex-direction:column;gap:4px">
+                <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;color:#5A5048">{{ r.l }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:20px">{{ r.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-family:'Courier Prime',monospace;font-size:14px;color:#2A2420;justify-content:center">
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:16px;height:16px;border-radius:50%;background:rgba(59,63,130,.5);display:inline-block"></i>taille du cercle : fréquence de frappe</span>
+            <span style="display:flex;align-items:center;gap:8px"><i style="width:16px;height:16px;border-radius:50%;background:#B81C24;display:inline-block"></i>cœur rouge : part des fautes</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">FEUILLE DE POINTAGE</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Registre de présence</h2></div>
+        <div style="display:flex;gap:2px;background:#2A2420;border:2px solid #2A2420">
+          <sc-for list="{{ calStats }}" as="c" hint-placeholder-count="3">
+            <div style="background:#F2E8D6;padding:10px 16px;display:flex;flex-direction:column;gap:4px">
+              <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;color:#5A5048">{{ c.l }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:20px">{{ c.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6;padding:clamp(18px,2.5vw,32px)">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:28px">
+          <sc-for list="{{ cal }}" as="mo" hint-placeholder-count="3">
+            <div>
+              <div style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:20px;border-bottom:2px solid #2A2420;padding-bottom:6px;margin-bottom:8px">{{ mo.name }}</div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.1em;color:#5A5048;text-align:center;margin-bottom:4px"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">
+                <sc-for list="{{ mo.cells }}" as="d" hint-placeholder-count="35">
+                  <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;background:{{ d.bg }};color:{{ d.fg }};outline:{{ d.ol }};outline-offset:-2px">{{ d.d }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:26px;padding-top:18px;border-top:1px dashed #9C8E78">
+          <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.18em;margin-right:6px">OBJECTIF QUOTIDIEN ({{ s.goal }} MIN)</span>
+          <sc-for list="{{ calLegend }}" as="g" hint-placeholder-count="5">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:5px 10px;background:{{ g.bg }};color:{{ g.fg }}">{{ g.l }}</span>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 40px;margin-bottom:22px">
+        <div><p style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24;margin:0">ARCHIVES · 8 DERNIÈRES ENTRÉES</p><h2 style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:clamp(30px,3.6vw,46px);line-height:.95;margin:8px 0 0;text-transform:uppercase">Archives des courses</h2></div>
+      </div>
+      <div style="border:2px solid #2A2420;background:#F2E8D6;overflow-x:auto">
+        <div style="min-width:720px">
+          <div style="display:grid;grid-template-columns:1.3fr .8fr 1fr .8fr .8fr .9fr 1fr;gap:10px;padding:14px 22px;border-bottom:2px solid #2A2420;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.18em;color:#5A5048">
+            <span>DATE</span><span>SALLE</span><span>MODE</span><span>RANG</span><span>MPM</span><span>PRÉCISION</span><span></span>
+          </div>
+          <sc-for list="{{ history }}" as="h" hint-placeholder-count="8">
+            <div style="display:grid;grid-template-columns:1.3fr .8fr 1fr .8fr .8fr .9fr 1fr;gap:10px;padding:13px 22px;border-bottom:1px dashed #9C8E78;font-family:'IBM Plex Mono',monospace;font-size:15px;align-items:center">
+              <span>{{ h.date }}</span><span>{{ h.salle }}</span><span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.12em">{{ h.mode }}</span><span style="font-weight:600">{{ h.rang }}</span><span>{{ h.m }}</span><span>{{ h.a }}</span>
+              <span><sc-if value="{{ h.hasTag }}" hint-placeholder-val="{{ false }}"><span style="font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;padding:3px 8px;background:{{ h.tagBg }};color:{{ h.tagFg }}">{{ h.tag }}</span></sc-if></span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    </div>
+    </sc-if>
+
+    <section style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;border-top:2px solid #2A2420;padding-top:28px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+        <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.2em">PARTAGER TON DOSSIER</span>
+        <div style="display:flex;border:2px solid #2A2420">
+          <span style="padding:10px 14px;background:#E5D6B8;font-family:'IBM Plex Mono',monospace;font-size:14px">fifthcopy.app/dossier/docket829</span>
+          <button onClick="{{ copy }}" style="cursor:pointer;border:0;border-left:2px solid #2A2420;background:#2A2420;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em;padding:10px 16px">{{ copyLabel }}</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <button style="cursor:pointer;border:2px solid #2A2420;background:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em;padding:11px 16px">TÉLÉCHARGER (CSV)</button>
+        <button style="cursor:pointer;border:2px solid #B81C24;background:transparent;color:#B81C24;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em;padding:11px 16px">REMETTRE À ZÉRO</button>
+      </div>
+    </section>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:40px;padding-top:32px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:28px;align-items:start">
+
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <div style="border:2px solid #2A2420;background:#F2E8D6">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;border-bottom:2px solid #2A2420">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:18px;letter-spacing:.06em">FORMULAIRE 2-B · IDENTITÉ</span>
+            <span style="background:#2A2420;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;padding:3px 8px">BUREAU 05</span>
+          </div>
+          <div style="padding:22px;display:flex;flex-direction:column;gap:18px">
+            <label style="display:flex;flex-direction:column;gap:8px"><span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em">NOM D'UTILISATEUR</span><input value="{{ s.user }}" onChange="{{ setUser }}" style="font-family:'IBM Plex Mono',monospace;font-size:17px;padding:13px 14px;border:2px solid #2A2420;background:#EDE2CC;color:#2A2420;outline:none"></label>
+            <label style="display:flex;flex-direction:column;gap:8px"><span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em">NOM AFFICHÉ EN SALLE</span><input value="{{ s.disp }}" onChange="{{ setDisp }}" style="font-family:'IBM Plex Mono',monospace;font-size:17px;padding:13px 14px;border:2px solid #2A2420;background:#EDE2CC;color:#2A2420;outline:none"></label>
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px dashed #9C8E78">
+                <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em">MOT DE PASSE</span><span style="font-family:'IBM Plex Mono',monospace;font-size:15px">••••••••••••</span></div>
+                <button style="cursor:pointer;border:2px solid #2A2420;background:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em;padding:8px 13px">CHANGER</button>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px dashed #9C8E78;border-bottom:1px dashed #9C8E78">
+                <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em">CODE DE RÉCUPÉRATION</span><span style="font-family:'IBM Plex Mono',monospace;font-size:15px">{{ recovery }}</span></div>
+                <button onClick="{{ toggleCode }}" style="cursor:pointer;border:2px solid #2A2420;background:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em;padding:8px 13px">{{ codeBtn }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border:2px solid #2A2420;background:#F2E8D6">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;border-bottom:2px solid #2A2420">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:18px;letter-spacing:.06em">FORMULAIRE 2-C · UNIFORME</span>
+            <span style="background:#2A2420;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;padding:3px 8px">GRADE : {{ gradeName }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+            <div style="position:relative;min-height:280px;background:repeating-conic-gradient(from 0deg at 50% 80%, #E6C9AE 0deg 6deg, #EEE0C6 6deg 12deg);border-bottom:2px solid #2A2420">
+              <div style="position:absolute;inset:16px"><image-slot id="commis-uniforme" shape="rect" fit="contain" placeholder="Aperçu 3D de l'uniforme"></image-slot></div>
+            </div>
+            <div style="display:flex;flex-direction:column">
+              <sc-for list="{{ uniRows }}" as="u" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:8px;align-items:center;padding:11px 16px;border-bottom:1px dashed #9C8E78">
+                  <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em">{{ u.l }}</span>
+                  <span style="font-family:'Courier Prime',monospace;font-size:15px">{{ u.v }}</span>
+                  <div style="display:flex;gap:4px">
+                    <button onClick="{{ u.prev }}" style="cursor:pointer;width:30px;height:30px;border:2px solid #2A2420;background:#F2E8D6;font-family:'IBM Plex Mono',monospace;font-weight:600">‹</button>
+                    <button onClick="{{ u.next }}" style="cursor:pointer;width:30px;height:30px;border:2px solid #2A2420;background:#F2E8D6;font-family:'IBM Plex Mono',monospace;font-weight:600">›</button>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="padding:16px"><button onClick="{{ randomUni }}" style="cursor:pointer;border:0;background:#2A2420;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:14px;letter-spacing:.2em;padding:12px 20px">NOUVEL UNIFORME</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border:2px solid #2A2420;background:#F2E8D6">
+          <div style="padding:16px 22px;border-bottom:2px solid #2A2420;font-family:'IBM Plex Mono',monospace;font-size:18px;letter-spacing:.06em">COMPTES LIÉS</div>
+          <sc-for list="{{ linked }}" as="a" hint-placeholder-count="2">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px dashed #9C8E78">
+              <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:Oswald,sans-serif;font-weight:600;font-size:14px;letter-spacing:.18em">{{ a.n }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#5A5048">{{ a.st }}</span></div>
+              <button onClick="{{ a.toggle }}" style="cursor:pointer;border:2px solid #2A2420;background:{{ a.bg }};color:{{ a.fg }};font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em;padding:8px 13px">{{ a.btn }}</button>
+            </div>
+          </sc-for>
+          <p style="font-family:'Courier Prime',monospace;font-size:14px;line-height:1.55;color:#5A5048;margin:0;padding:14px 22px">Discord et Google sont réservés aux 13 ans et plus. Moins de 13 ans ? Garde ton nom d'utilisateur et ton code de récupération.</p>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <sc-for list="{{ prefGroups }}" as="grp" hint-placeholder-count="2">
+          <div style="border:2px solid #2A2420;background:#F2E8D6">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;border-bottom:2px solid #2A2420">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:18px;letter-spacing:.06em">{{ grp.title }}</span>
+              <span style="background:#2A2420;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;padding:3px 8px">{{ grp.tag }}</span>
+            </div>
+            <sc-for list="{{ grp.rows }}" as="r" hint-placeholder-count="5">
+              <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 18px;padding:14px 22px;border-bottom:1px dashed #9C8E78">
+                <div style="display:flex;flex-direction:column;gap:4px;flex:1 1 220px">
+                  <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em">{{ r.l }}</span>
+                  <span style="font-family:'Courier Prime',monospace;font-size:14px;line-height:1.45;color:#5A5048;text-wrap:pretty">{{ r.h }}</span>
+                </div>
+                <div style="display:flex;gap:2px;background:#2A2420;border:2px solid #2A2420">
+                  <sc-for list="{{ r.opts }}" as="o" hint-placeholder-count="2">
+                    <button onClick="{{ o.pick }}" style="cursor:pointer;font-family:Oswald,sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;padding:8px 12px;border:0;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+
+        <div style="border:2px solid #2A2420;background:#F2E8D6;padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+            <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.18em">OBJECTIF QUOTIDIEN</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:22px;color:#B81C24">{{ s.goal }} MIN / JOUR</span>
+          </div>
+          <input type="range" min="5" max="60" step="5" value="{{ s.goal }}" onChange="{{ setGoal }}" style="width:100%">
+          <span style="font-family:'Courier Prime',monospace;font-size:14px;color:#5A5048">Sert au registre de présence. Le Major ne pardonne pas les absences, mais il les note poliment.</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="position:relative;border:3px solid #B81C24;background:#F2E8D6;padding:24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:18px;overflow:hidden">
+      <div style="display:flex;flex-direction:column;gap:6px;max-width:620px">
+        <span style="font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.28em;color:#B81C24">ZONE DE DÉCHIQUETAGE</span>
+        <span style="font-family:'Stardos Stencil',serif;font-weight:700;font-size:28px">DÉTRUIRE LE DOSSIER</span>
+        <span style="font-family:'Courier Prime',monospace;font-size:15px;line-height:1.55">Courses, médailles et statistiques partent à la déchiqueteuse. Aucune copie carbone. Conforme à la Loi 25.</span>
+      </div>
+      <sc-if value="{{ notConfirm }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ askDel }}" style="cursor:pointer;border:2px solid #B81C24;background:transparent;color:#B81C24;font-family:Oswald,sans-serif;font-weight:600;font-size:14px;letter-spacing:.18em;padding:12px 18px">DÉTRUIRE…</button>
+      </sc-if>
+      <sc-if value="{{ confirmDel }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-family:'Courier Prime',monospace;font-size:15px;font-weight:700">Tu es sûr, camarade ?</span>
+          <button onClick="{{ cancelDel }}" style="cursor:pointer;border:2px solid #2A2420;background:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.16em;padding:10px 14px">ANNULER</button>
+          <button onClick="{{ cancelDel }}" style="cursor:pointer;border:2px solid #B81C24;background:#B81C24;color:#F2E8D6;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;letter-spacing:.16em;padding:10px 14px">OUI, DÉTRUIRE</button>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:24px">
+      <button onClick="{{ save }}" style="cursor:pointer;font-family:'Stardos Stencil',serif;font-weight:700;font-size:28px;letter-spacing:.04em;padding:14px 34px;background:#B81C24;color:#F2E8D6;border:3px solid #2A2420;box-shadow:7px 7px 0 #2A2420">ENREGISTRER LE DOSSIER</button>
+      <sc-if value="{{ saved }}" hint-placeholder-val="{{ false }}">
+        <div style="transform:rotate(-6deg);border:3px double #B81C24;color:#B81C24;font-family:'Stardos Stencil',serif;font-weight:700;font-size:24px;padding:6px 14px;line-height:1">APPROUVÉ<br><span style="font-size:13px;font-family:'IBM Plex Mono',monospace;font-weight:500">12.11.2026 · BUREAU 05</span></div>
+      </sc-if>
+    </div>
+  </div>
+  </sc-if>
+</main>
+
+<footer style="background:#2A2420;color:#F2E8D6;border-top:8px solid #B81C24;padding:22px clamp(16px,3vw,40px);display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:14px">
+  <span>© 2026 Fifth Copy · Conçu par Aegis Corp. · Fait au Québec</span>
+  <span>Pas de clavardage. Ta frappe t'appartient.</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;initialTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;stats&quot;,&quot;reglages&quot;],&quot;default&quot;:&quot;stats&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;emptyState&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;heatPalette&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Rouge → Marine&quot;,&quot;Rouge → Encre&quot;],&quot;default&quot;:&quot;Rouge → Marine&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const UNI = [
+  ['CHEVEUX', ['Banane', 'Raie de côté', 'Rasé', 'Frisé', 'Chignon']],
+  ['LUNETTES', ['Verres fumés', 'Rondes', 'Aucune', 'Monocle']],
+  ['CHAPEAU', ['Visière', 'Chapka', 'Béret', 'Casquette d\'officier']],
+  ['VÊTEMENTS', ['Gilet tricoté', 'Veston', 'Cardigan', 'Chemise et bretelles']],
+  ['VISAGE', ['Moustache', 'Rasé de près', 'Favoris', 'Barbe']]
+];
+const GRADES = [['RECRUE', 0], ['COMMIS', 20], ['OFFICIER', 35], ['COMMISSAIRE', 45], ['HÉROS DE LA PAPERASSE', 60]];
+const FREQ = { E: 14.7, A: 7.6, S: 7.9, I: 7.5, T: 7.2, N: 7.1, R: 6.6, U: 6.3, L: 5.5, O: 5.8, D: 3.7, C: 3.3, M: 3.0, P: 3.0, 'É': 1.9, V: 1.6, Q: 1.4, F: 1.1, B: 0.9, G: 0.9, H: 0.7, J: 0.5, 'À': 0.5, X: 0.4, 'È': 0.3, Y: 0.3, '^': 0.2, 'Ç': 0.15, Z: 0.12, 'Ù': 0.05, W: 0.05, K: 0.05 };
+const ROWS = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z É È À Ç'.split(' ');
+const KB = {
+  qwerty: { name: 'QWERTY CA-FR', rows: [['', 0, '# 1 2 3 4 5 6 7 8 9 0 - ='], ['TAB', 1.5, 'Q W E R T Y U I O P ^ Ç'], ['VERR.', 1.8, 'A S D F G H J K L ; È À'], ['MAJ', 1.3, 'Ù Z X C V B N M , . É']] },
+  azerty: { name: 'AZERTY', rows: [['', 0, '² & É " \' ( - È _ Ç À ) ='], ['TAB', 1.5, 'A Z E R T Y U I O P ^ $'], ['VERR.', 1.8, 'Q S D F G H J K L M Ù *'], ['MAJ', 1.3, '< W X C V B N , ; : !']] }
+};
+const N = 40, INK = '#2A2420', CREAM = '#F2E8D6', RED = '#B81C24', NAVY = '#3B3F82';
+const f1 = v => v.toFixed(1).replace('.', ',');
+const mix = (c1, c2, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const a = p(c1), b = p(c2); return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+const ma = (arr, k) => arr.map((v, i) => { if (v == null) return null; let s = 0, n = 0; for (let j = i - k; j <= i + k; j++) if (j >= 0 && j < arr.length && arr[j] != null) { s += arr[j]; n++; } return s / n; });
+const X = i => 20 + i * 960 / (N - 1);
+const line = (arr, Y) => { let d = '', pen = false; arr.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); pen = true; }); return d; };
+const dots = (arr, Y) => arr.map((v, i) => v == null ? '' : `M${X(i).toFixed(1)} ${Y(v).toFixed(1)}h0`).join('');
+const slope = vals => { const n = vals.length; if (n < 6) return null; const mx = (n - 1) / 2, my = vals.reduce((a, b) => a + b, 0) / n; let num = 0, den = 0; vals.forEach((v, i) => { num += (i - mx) * (v - my); den += (i - mx) ** 2; }); return num / den; };
+
+class Component extends DCLogic {
+  state = {
+    tab: null, relMode: 'speed', relMetric: 'avg', smooth: 3, keySel: 'E', kb: 'qwerty', period: 'TOUT', lang: 'LES DEUX', mode: 'TOUTES',
+    saved: false, confirmDel: false, copied: false, showCode: false, discord: true, google: false,
+    s: { user: 'docket829', disp: 'Camarade Docket-829', textLang: 'LES DEUX', layout: 'QWERTY CA-FR', accents: true, caps: true, sound: true, night: false, size: 'MOYENNE', caret: 'BLOC', goal: 15, pub: true, board: true, ghost: false },
+    uni: [0, 0, 0, 0, 0]
+  };
+
+  gen() {
+    if (this._d) return this._d;
+    let seed = 829; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+    const races = [];
+    for (let i = 0; i < N; i++) races.push({ m: 31 + i * 0.3 + Math.sin(i / 3.2) * 1.8 + (rnd() - .5) * 6, a: Math.min(99.8, 94.6 + i * 0.045 + Math.cos(i / 5) * .8 + (rnd() - .5) * 2.2) });
+    const keys = {};
+    Object.keys(FREQ).forEach(k => {
+      const f = FREQ[k], acc = 'ÉÈÀÇÙ^'.includes(k);
+      const start = f > 3 ? 0 : f > 1 ? 4 + Math.floor(rnd() * 10) : f > .2 ? 14 + Math.floor(rnd() * 16) : f > .1 ? 30 + Math.floor(rnd() * 6) : N;
+      const base = 20 + Math.min(f, 8) * 1.3 + rnd() * 6 - (acc ? 5 : 0);
+      const series = []; for (let i = 0; i < N; i++) series.push(i < start ? null : Math.max(8, base + (i - start) * .38 + (rnd() - .5) * 9));
+      const vals = series.filter(v => v != null);
+      keys[k] = { f, series, vals, avg: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, miss: .015 + rnd() * .04 + (acc ? .05 : 0) };
+    });
+    const ms = races.map(r => r.m), as = races.map(r => r.a);
+    const cal = [8, 9, 10].map(mo => {
+      const off = (new Date(2026, mo, 1).getDay() + 6) % 7, days = new Date(2026, mo + 1, 0).getDate();
+      const cells = []; for (let i = 0; i < off; i++) cells.push({ d: '', lvl: -1 });
+      for (let d = 1; d <= days; d++) {
+        let lvl; if (mo === 10 && d > 12) lvl = -2; else if (mo === 10 && d >= 7) lvl = 2 + Math.floor(rnd() * 3); else { const r = rnd(); lvl = r < .3 ? 0 : r < .45 ? 1 : r < .6 ? 2 : r < .78 ? 3 : 4; }
+        cells.push({ d, lvl, today: mo === 10 && d === 12 });
+      }
+      return { name: ['SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE'][mo - 8] + ' 2026', cells };
+    });
+    return this._d = { races, keys, cal, avgM: ms.reduce((a, b) => a + b, 0) / N, bestM: Math.max(...ms), avgA: as.reduce((a, b) => a + b, 0) / N, bestA: Math.max(...as) };
+  }
+
+  renderVals() {
+    const st = this.state, s = st.s, D = this.gen(), P = this.props;
+    const set = o => this.setState(o);
+    const setS = (k, v) => this.setState(x => ({ s: { ...x.s, [k]: v }, saved: false }));
+    const seg = (cur, opts, fn) => opts.map(o => { const v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o, on = cur === v; return { label: l, bg: on ? INK : CREAM, fg: on ? CREAM : INK, pick: () => fn(v) }; });
+    const yn = k => seg(s[k], [[false, 'NON'], [true, 'OUI']], v => setS(k, v));
+    const tab = st.tab ?? P.initialTab ?? 'stats';
+    const hasData = !P.emptyState;
+    const heatEnd = P.heatPalette === 'Rouge → Encre' ? INK : NAVY;
+    const heat = v => { const t = Math.max(0, Math.min(1, (v - 18) / 30)); return t < .5 ? mix(RED, '#D8C29A', t * 2) : mix('#D8C29A', heatEnd, (t - .5) * 2); };
+
+    // grade
+    const gi = GRADES.reduce((a, g, i) => D.avgM >= g[1] ? i : a, 0);
+    const next = GRADES[gi + 1];
+    const gradePct = next ? Math.round((D.avgM - GRADES[gi][1]) / (next[1] - GRADES[gi][1]) * 100) + '%' : '100%';
+    const ladder = GRADES.map((g, i) => { const last = i === GRADES.length - 1; return i < gi ? { n: g[0], bd: INK, bg: INK, fg: CREAM } : i === gi ? { n: g[0], bd: RED, bg: RED, fg: CREAM } : { n: g[0], bd: last ? '#E0B030' : INK, bg: 'transparent', fg: last ? '#7A5A10' : INK }; });
+
+    // cards
+    const sub = { 'TOUT': [0, N, '14:32:08', 212, 23, 61], '30 JOURS': [N - 15, N, '03:10:44', 48, 6, 17], "AUJOURD'HUI": [N - 4, N, '00:24:10', 6, 1, 3] }[st.period];
+    const rs = D.races.slice(sub[0], sub[1]);
+    const off = (st.lang === 'EN' ? 2.4 : st.lang === 'LES DEUX' ? 1.1 : 0) + (st.mode === 'BOTS' ? 1.6 : st.mode === 'COURSES' ? -.4 : 0);
+    const sc = (st.lang === 'FR' ? .62 : st.lang === 'EN' ? .38 : 1) * (st.mode === 'COURSES' ? .66 : st.mode === 'BOTS' ? .34 : 1);
+    const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+    const dash = '—';
+    const cards = [
+      ['TEMPS TOTAL', sub[2], ''], ['COURSES', String(Math.max(1, Math.round(sub[3] * sc))), ''],
+      ['MEILLEURE VITESSE', f1(Math.max(...rs.map(r => r.m)) + off), 'MPM'], ['VITESSE MOYENNE', f1(mean(rs.map(r => r.m)) + off), 'MPM'],
+      ['PRÉCISION MAX', f1(Math.max(...rs.map(r => r.a))), '%'], ['PRÉCISION MOYENNE', f1(mean(rs.map(r => r.a))), '%'],
+      ['VICTOIRES', String(Math.round(sub[4] * sc)), '1RE PLACE'], ['PODIUMS', String(Math.round(sub[5] * sc)), 'TOP 3']
+    ].map((c, i) => ({ l: c[0], v: hasData ? c[1] : dash, u: hasData ? c[2] : '', col: i === 2 ? RED : INK }));
+
+    // relative
+    const sp = st.relMode === 'speed', lo = sp ? 0 : 80, hi = sp ? 150 : 100, nb = 60, w = (hi - lo) / nb;
+    const fd = x => sp ? Math.pow(x, 4) * Math.exp(-x / 11) : Math.exp(-Math.pow(x - 96, 2) / (2 * Math.pow(x < 96 ? 2.1 : 1.3, 2)));
+    const raw = [...Array(nb)].map((_, i) => fd(lo + (i + .5) * w)); const mx = Math.max(...raw), tot = raw.reduce((a, b) => a + b, 0);
+    const rv = sp ? (st.relMetric === 'avg' ? D.avgM : D.bestM) : (st.relMetric === 'avg' ? D.avgA : D.bestA);
+    let cum = 0; const cdf = raw.map((r, i) => { cum += r; return `${i ? 'L' : 'M'}${((i + 1) / nb * 600).toFixed(1)} ${(100 - cum / tot * 100).toFixed(1)}`; }).join('');
+    const pct = raw.reduce((a, r, i) => a + ((lo + (i + .5) * w) < rv ? r : 0), 0) / tot * 100;
+    const leftN = (rv - lo) / (hi - lo) * 100;
+    const rel = {
+      what: (st.relMetric === 'avg' ? (sp ? 'vitesse moyenne' : 'précision moyenne') : (sp ? 'meilleure vitesse' : 'meilleure précision')),
+      pct: f1(pct) + ' %', cdf, left: leftN.toFixed(2) + '%', tagL: leftN > 70 ? 'auto' : '8px', tagR: leftN > 70 ? '8px' : 'auto',
+      val: sp ? f1(rv) + ' MPM' : f1(rv) + ' %',
+      bars: raw.map((r, i) => ({ h: (r / mx * 100).toFixed(1) + '%', c: (lo + (i + .5) * w) < rv ? INK : '#CDB78F' })),
+      ticks: sp ? ['0', '37,5', '75', '112,5', '150 MPM'] : ['80 %', '85 %', '90 %', '95 %', '100 %']
+    };
+    const relTabs = [['speed', 'VITESSE'], ['acc', 'PRÉCISION']].map(([v, l]) => ({ label: l, bg: st.relMode === v ? INK : '#E5D6B8', fg: st.relMode === v ? CREAM : INK, pick: () => set({ relMode: v }) }));
+    const relMetrics = seg(st.relMetric, [['avg', 'MOYENNE'], ['best', 'MEILLEURE']], v => set({ relMetric: v }));
+
+    // speed chart
+    const k = st.smooth;
+    const yM = v => 280 - (v - 24) / 24 * 260, yA = v => 280 - (v - 90) / 10 * 260;
+    const ms = D.races.map(r => r.m), as = D.races.map(r => r.a);
+    const b = slope(ms), m0 = mean(ms) - b * (N - 1) / 2;
+    const spd = { dotsM: dots(ms, yM), lineM: line(ma(ms, k), yM), dotsA: dots(as, yA), lineA: line(ma(as, k), yA), trend: `M${X(0)} ${yM(m0).toFixed(1)}L${X(N - 1)} ${yM(m0 + b * (N - 1)).toFixed(1)}` };
+
+    // heatmap
+    const heatRows = ROWS.map(key => { const K = D.keys[key]; return { k: key, avg: K.avg ? f1(K.avg) : '—', cells: K.series.map(v => v == null ? '#EBE0C9' : heat(v)) }; });
+
+    // key fiche
+    const sel = D.keys[st.keySel];
+    const keyChips = ROWS.map(key => { const K = D.keys[key], on = key === st.keySel, none = K.avg == null, good = K.avg >= 35;
+      return { k: key, pick: () => !none && set({ keySel: key }), bd: none ? '#B7A988' : on ? INK : good ? NAVY : RED, bg: on ? INK : none ? 'transparent' : good ? NAVY : CREAM, fg: on || (good && !none) ? CREAM : none ? '#9C8E78' : RED, sh: on ? '3px 3px 0 ' + RED : 'none' }; });
+    const lr = slope(sel.vals.slice(-15));
+    const keyStats = [['DERNIÈRE VITESSE', sel.vals.length ? f1(sel.vals[sel.vals.length - 1]) + ' MPM' : '—'], ['RECORD', sel.vals.length ? f1(Math.max(...sel.vals)) + ' MPM' : '—'], ['MOYENNE', sel.avg ? f1(sel.avg) + ' MPM' : '—'], ["RYTHME D'APPRENTISSAGE", lr == null ? 'INCERTAIN' : (lr >= 0 ? '+' : '') + lr.toFixed(2).replace('.', ',') + ' / COURSE'], ['TAUX DE FAUTES', f1(sel.miss * 100) + ' %']].map(([l, v]) => ({ l, v }));
+    const yK = v => 280 - v / 60 * 260;
+    const keyChart = { dots: dots(sel.series, yK), line: line(ma(sel.series, k), yK), target: `M0 ${yK(35).toFixed(1)}H1000` };
+
+    // inventory
+    const maxF = Math.max(...ROWS.map(x => D.keys[x].f)), maxMiss = Math.max(...ROWS.map(x => D.keys[x].f * D.keys[x].miss)), maxR = Math.max(...ROWS.map(x => D.keys[x].avg ? D.keys[x].miss : 0));
+    const invRows = [
+      { label: 'VITESSE MOY.', h: '150px', line: (35 / 60 * 100) + '%', lineCol: RED, bars: ROWS.map(x => { const K = D.keys[x]; return { h: K.avg ? (K.avg / 60 * 100).toFixed(1) + '%' : '0%', c: K.avg >= 35 ? NAVY : RED }; }) },
+      { label: 'FRAPPES', h: '80px', line: '-10px', lineCol: 'transparent', bars: ROWS.map(x => { const K = D.keys[x]; return { h: K.avg ? (K.f / maxF * 100).toFixed(1) + '%' : '0%', c: INK }; }) },
+      { label: 'FAUTES', h: '80px', line: '-10px', lineCol: 'transparent', bars: ROWS.map(x => { const K = D.keys[x]; return { h: K.avg ? (K.f * K.miss / maxMiss * 100).toFixed(1) + '%' : '0%', c: RED }; }) },
+      { label: 'RATIO FAUTES', h: '80px', line: '-10px', lineCol: 'transparent', bars: ROWS.map(x => { const K = D.keys[x]; return { h: K.avg ? (K.miss / maxR * 100).toFixed(1) + '%' : '0%', c: '#E0B030' }; }) }
+    ];
+
+    // keyboard
+    const L = KB[st.kb], u = 100 / 14;
+    let totF = 0; const rowF = L.rows.map(r => { const sum = r[2].split(' ').reduce((a, key) => a + (FREQ[key] || 0), 0); totF += sum; return sum; });
+    const kb = {
+      name: L.name,
+      rows: L.rows.map(r => ({ lab: r[0], hasPad: r[1] > 0, padW: `calc(${(r[1] * u).toFixed(2)}% - 4px)`, keys: r[2].split(' ').map(key => { const K = D.keys[key], typed = K && K.avg != null;
+        return { k: key, w: `calc(${u.toFixed(2)}% - 4px)`, bg: typed ? CREAM : '#E5D6B8', c: typed ? (Math.sqrt(K.f / 14.7) * 140).toFixed(0) + '%' : '0%', m: typed ? Math.min(100, Math.sqrt(K.miss / .12) * 100).toFixed(0) + '%' : '0%' }; }) })),
+      share: ['RANGÉE DES CHIFFRES', 'RANGÉE DU HAUT', 'RANGÉE DE REPOS', 'RANGÉE DU BAS'].map((l, i) => ({ l, v: Math.round(rowF[i] / totF * 100) + ' %' }))
+    };
+    const kbOpts = seg(st.kb, [['qwerty', 'QWERTY CA-FR'], ['azerty', 'AZERTY']], v => set({ kb: v }));
+
+    // calendar
+    const LV = [['#EADFC8', INK], ['#E8C2B0', INK], ['#D98A80', INK], ['#C8474C', CREAM], [RED, CREAM]];
+    const cal = D.cal.map(mo => ({ name: mo.name, cells: mo.cells.map(c => c.lvl === -1 ? { d: '', bg: 'transparent', fg: INK, ol: 'none' } : c.lvl === -2 ? { d: c.d, bg: 'transparent', fg: '#9C8E78', ol: '1px dashed #B7A988' } : { d: c.d, bg: LV[c.lvl][0], fg: LV[c.lvl][1], ol: c.today ? '2px solid ' + INK : 'none' }) }));
+    const active = D.cal.reduce((a, mo) => a + mo.cells.filter(c => c.lvl > 0).length, 0);
+    const calStats = [['SÉRIE ACTUELLE', '6 JOURS'], ['RECORD', '19 JOURS'], ['JOURS ACTIFS', active + ' / 73']].map(([l, v]) => ({ l, v }));
+    const calLegend = ['0 %', '25 %', '50 %', '75 %', '100 %'].map((l, i) => ({ l, bg: LV[i][0], fg: LV[i][1] }));
+
+    // history
+    const meta = [['12 NOV · 10:42', '225', 'COURSE', 1], ['12 NOV · 10:31', '225', 'COURSE', 4], ['11 NOV · 19:05', '118', 'PRIVÉE', 2], ['11 NOV · 18:50', '—', 'BOTS', 1], ['10 NOV · 16:12', '302', 'COURSE', 7], ['09 NOV · 15:40', '225', 'COURSE', 3], ['08 NOV · 20:18', '047', 'PRIVÉE', 12], ['07 NOV · 17:02', '190', 'COURSE', 5]];
+    const history = meta.map((h, i) => { const r = D.races[N - 1 - i], tag = h[3] === 1 ? 'MÉDAILLE' : h[3] <= 3 ? 'PODIUM' : '';
+      return { date: h[0], salle: h[1], mode: h[2], rang: h[3] + ' / ' + (h[2] === 'PRIVÉE' ? 24 : 30), m: f1(r.m), a: f1(r.a) + ' %', hasTag: !!tag, tag, tagBg: tag === 'MÉDAILLE' ? '#E0B030' : INK, tagFg: tag === 'MÉDAILLE' ? INK : CREAM }; });
+
+    // settings
+    const uniRows = UNI.map(([l, opts], i) => ({ l, v: opts[st.uni[i] % opts.length], prev: () => this.setState(x => { const n = [...x.uni]; n[i] = (n[i] - 1 + opts.length) % opts.length; return { uni: n, saved: false }; }), next: () => this.setState(x => { const n = [...x.uni]; n[i] = (n[i] + 1) % opts.length; return { uni: n, saved: false }; }) }));
+    const prefGroups = [
+      { title: 'FORMULAIRE 3-A · FRAPPE', tag: 'MACHINE', rows: [
+        { l: 'LANGUE DES TEXTES', h: 'Les deux : le Major alterne d\'une course à l\'autre.', opts: seg(s.textLang, ['FR', 'EN', 'LES DEUX'], v => setS('textLang', v)) },
+        { l: 'DISPOSITION DU CLAVIER', h: 'Pour afficher la bonne carte du clavier.', opts: seg(s.layout, ['QWERTY CA-FR', 'AZERTY', 'QWERTY US'], v => setS('layout', v)) },
+        { l: 'ACCENTS STRICTS', h: '« e » ne remplace pas « é ». Comme au ministère.', opts: yn('accents') },
+        { l: 'MAJUSCULES STRICTES', h: 'Une majuscule oubliée compte comme une faute.', opts: yn('caps') },
+        { l: 'TAILLE DU TEXTE', h: 'Taille de la copie en cours de course.', opts: seg(s.size, ['PETITE', 'MOYENNE', 'GRANDE'], v => setS('size', v)) },
+        { l: 'CURSEUR', h: 'Forme du curseur rouge sur la copie.', opts: seg(s.caret, ['BLOC', 'TRAIT', 'SOULIGNÉ'], v => setS('caret', v)) },
+        { l: 'SON DE LA MACHINE', h: 'Cliquetis, timbre de fin de ligne, retour chariot.', opts: yn('sound') },
+        { l: 'QUART DE NUIT', h: 'Thème sombre pour les dactylos nocturnes.', opts: yn('night') }
+      ] },
+      { title: 'FORMULAIRE 3-B · CONFIDENTIALITÉ', tag: 'LOI 25', rows: [
+        { l: 'DOSSIER PUBLIC', h: 'Les autres camarades peuvent consulter tes statistiques.', opts: yn('pub') },
+        { l: 'CLASSEMENT GÉNÉRAL', h: 'Ton nom apparaît au tableau d\'honneur du Ministère.', opts: yn('board') },
+        { l: 'FANTÔME DE TON RECORD', h: 'Ton meilleur temps court à côté de toi à l\'entraînement.', opts: yn('ghost') }
+      ] }
+    ];
+    const linked = [
+      { n: 'DISCORD', st: st.discord ? 'Lié · docket#0829' : 'Non lié', btn: st.discord ? 'DÉLIER' : 'LIER', bg: st.discord ? CREAM : INK, fg: st.discord ? INK : CREAM, toggle: () => set({ discord: !st.discord }) },
+      { n: 'GOOGLE', st: st.google ? 'Lié · docket829@…' : 'Non lié', btn: st.google ? 'DÉLIER' : 'LIER', bg: st.google ? CREAM : INK, fg: st.google ? INK : CREAM, toggle: () => set({ google: !st.google }) }
+    ];
+    const filters = [
+      { label: 'LANGUE', opts: seg(st.lang, ['FR', 'EN', 'LES DEUX'], v => set({ lang: v })) },
+      { label: 'MODE', opts: seg(st.mode, ['TOUTES', 'COURSES', 'BOTS'], v => set({ mode: v })) },
+      { label: 'PÉRIODE', opts: seg(st.period, ['TOUT', '30 JOURS', "AUJOURD'HUI"], v => set({ period: v })) }
+    ];
+
+    return {
+      s, gradeName: GRADES[gi][0], ladder, gradePct, gradeNext: next ? `${f1(D.avgM)} / ${next[1]} MPM → ${next[0]}` : 'GRADE MAXIMAL',
+      nixies: [['MPM MOY.', hasData ? Math.round(D.avgM) : '--'], ['RECORD', hasData ? Math.round(D.bestM) : '--'], ['PRÉCISION', hasData ? f1(D.avgA) : '--'], ['MÉDAILLES', hasData ? '23' : '00']].map(([l, v]) => ({ l, v: String(v) })),
+      isStats: tab === 'stats', isSettings: tab !== 'stats',
+      tabA: tab === 'stats' ? { bg: CREAM, line: CREAM } : { bg: '#E5D6B8', line: INK }, tabB: tab !== 'stats' ? { bg: CREAM, line: CREAM } : { bg: '#E5D6B8', line: INK },
+      goStats: () => set({ tab: 'stats' }), goSettings: () => set({ tab: 'reglages' }),
+      filters, periodLabel: st.period, cards, hasData, noData: !hasData,
+      streaks: [['100 %', 4, '38,2', 0], ['98 %', 9, '37,4', 2], ['95 %', 23, '36,8', 6], ['90 %', 61, '36,1', 14]].map(r => ({ t: r[0], best: r[1], m: r[2], cur: r[3], curCol: r[3] ? INK : '#9C8E78' })),
+      bigrams: [['QU', 7.8, '29,4'], ['É·E', 6.9, '24,1'], ['ÇA', 6.1, '21,7'], ['ENT', 4.4, '33,0'], ['OI', 3.9, '35,2'], ['TH', 3.1, '31,8']].map(r => ({ p: r[0], miss: f1(r[1]) + ' %', w: (r[1] / 8 * 100) + '%', m: r[2] })),
+      rel, relTabs, relMetrics, spd, smooth: k, setSmooth: e => set({ smooth: +e.target.value }),
+      heatRows, heatEnd, keyChips, keyStats, keyChart, keySel: st.keySel, invRows, rowKeys: ROWS, kb, kbOpts,
+      cal, calStats, calLegend, history,
+      copy: () => { try { navigator.clipboard.writeText('https://fifthcopy.app/dossier/docket829'); } catch (e) {} set({ copied: true }); },
+      copyLabel: st.copied ? 'COPIÉ ✓' : 'COPIER',
+      setUser: e => setS('user', e.target.value), setDisp: e => setS('disp', e.target.value), setGoal: e => setS('goal', +e.target.value),
+      recovery: st.showCode ? 'KGB-4821-7730-0829' : 'KGB-••••-••••-••••', codeBtn: st.showCode ? 'MASQUER' : 'AFFICHER', toggleCode: () => set({ showCode: !st.showCode }),
+      uniRows, randomUni: () => set({ uni: UNI.map(([, o]) => Math.floor(Math.random() * o.length)), saved: false }),
+      prefGroups, linked,
+      notConfirm: !st.confirmDel, confirmDel: st.confirmDel, askDel: () => set({ confirmDel: true }), cancelDel: () => set({ confirmDel: false }),
+      saved: st.saved, save: () => set({ saved: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

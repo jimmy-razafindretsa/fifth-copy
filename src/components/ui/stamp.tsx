@@ -73,6 +73,8 @@ export type StampProps = {
   seed?: string | number;
   /** Live region role: `status` (default), `alert`, or `null` for a static badge. */
   role?: "status" | "alert" | null;
+  /** A stamp already on the page (#932, a static page): printed at its angle, no slam. */
+  still?: boolean;
   /** Fires once per mount when the slam has landed (at once under reduced motion). */
   onSettled?: () => void;
   className?: string;
@@ -90,6 +92,7 @@ export function Stamp({
   rotation = STAMP_ANGLE.fallback,
   seed,
   role = "status",
+  still = false,
   onSettled,
   className,
 }: StampProps) {
@@ -134,7 +137,8 @@ export function Stamp({
       data-stamp-tone={tone}
       data-stamp-size={size}
       data-stamp-angle={angle}
-      className={cn(styles.stamp, TONE[tone], SIZE[size].box, className)}
+      data-stamp-still={still ? "" : undefined}
+      className={cn(styles.stamp, TONE[tone], SIZE[size].box, still && styles.still, className)}
       style={{ "--stamp-angle": `${angle}deg` } as CSSProperties}
       onAnimationEnd={(e: AnimationEvent<HTMLSpanElement>) => {
         if (e.target === e.currentTarget) settle();

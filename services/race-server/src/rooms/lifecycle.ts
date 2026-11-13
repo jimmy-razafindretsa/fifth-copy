@@ -214,22 +214,26 @@ export function createLifecycle({
   const autoTimers = new Map<string, TimerHandle>();
   /**
    * The readiness barrier of each loading room (#926), process state like the timers: the race,
-   * its human desks by user, the desks that reported, the limit timer and the last `pending` sent.
+   * its human desks by user, the desks that reported, the limit (its instant and its timer), the
+   * next try of a decision that failed, and the last `pending` sent.
    */
-  const loads = new Map<
-    string,
-    {
-      raceId: string;
-      humans: Map<string, number>;
-      ready: Set<number>;
-      timer: TimerHandle;
-      sent: string;
-    }
-  >();
+  type Load = {
+    raceId: string;
+    humans: Map<string, number>;
+    ready: Set<number>;
+    limitAt: number;
+    timer: TimerHandle;
+    retry: TimerHandle | null;
+    sent: string;
+  };
+  const loads = new Map<string, Load>();
 
   function clearLoad(lobbyId: string) {
     const load = loads.get(lobbyId);
-    if (load) scheduler.clear(load.timer);
+    if (load) {
+      scheduler.clear(load.timer);
+      if (load.retry) scheduler.clear(load.retry);
+    }
     loads.delete(lobbyId);
   }
 
@@ -400,26 +404,41 @@ export function createLifecycle({
       onGo(lobbyId, { race: room.race, settings: room.settings, desks, bots });
     });
 
-  /**
-   * The barrier's decision (#926), inside the room's queue. `limit`: the limit timer fired, the
-   * room goes whatever is pending.
-   */
-  async function decide(lobbyId: string, limit: boolean) {
-    const load = loads.get(lobbyId);
-    if (!load) return;
+  /** The released room counts down: the barrier is over, GO and the end are armed, the room told. */
+  function countDown(
+    lobbyId: string,
+    race: RaceInfo,
+    endAt: number,
+    outcome: string,
+    late: number,
+  ) {
+    clearLoad(lobbyId);
+    at(lobbyId, race.t0, () => goRunning(lobbyId, race.raceId));
+    at(lobbyId, endAt, () => lifecycle.endRace(lobbyId, "timer"));
+    emit(lobbyId, "countdown", { v: PROTOCOL_VERSION, race });
+    log("countdown", { lobby: lobbyId, outcome, late });
+  }
+
+  /** One try of the barrier's decision. The barrier is kept until the release is written. */
+  async function settle(lobbyId: string, load: Load, limit: boolean) {
     const room = await registry.room(lobbyId);
     // Lost while loading (#204): the clients must not wait for a countdown that never comes.
     if (room === null) return lose(lobbyId, load.raceId);
-    if (room.phase !== "loading" || room.race?.raceId !== load.raceId) return clearLoad(lobbyId);
+    if (room.race?.raceId !== load.raceId) return clearLoad(lobbyId);
+    // An earlier try's release was written before it failed: its GO stands, nothing is decided twice.
+    if (room.phase === "countdown" && room.endAt !== null)
+      return countDown(lobbyId, room.race, room.endAt, "resumed", 0);
+    if (room.phase !== "loading") return clearLoad(lobbyId);
     const pending = pendingOf(lobbyId) ?? [];
-    if (!limit && pending.length > 0) {
+    // The limit timer fires once: a try after the limit goes like it, whoever is pending.
+    const due = limit || clock.now() >= load.limitAt;
+    if (!due && pending.length > 0) {
       const sent = pending.join(",");
       if (sent === load.sent) return;
       load.sent = sent;
       emit(lobbyId, "readiness", { v: PROTOCOL_VERSION, raceId: load.raceId, pending });
       return;
     }
-    clearLoad(lobbyId);
     // The GO instant is decided now, the same for every socket of the room (ADR 0006).
     const t0 = clock.now() + durations.COUNTDOWN_MS;
     const { timerS } = room.settings;
@@ -427,10 +446,32 @@ export function createLifecycle({
     const endAt = t0 + (timerS === null ? MAX_RACE_MS : timerS * 1000);
     const race: RaceInfo = { ...room.race, t0 };
     await registry.releaseRace(lobbyId, { race, endAt });
-    at(lobbyId, t0, () => goRunning(lobbyId, race.raceId));
-    at(lobbyId, endAt, () => lifecycle.endRace(lobbyId, "timer"));
-    emit(lobbyId, "countdown", { v: PROTOCOL_VERSION, race });
-    log("countdown", { lobby: lobbyId, outcome: limit ? "limit" : "ready", late: pending.length });
+    countDown(lobbyId, race, endAt, due ? "limit" : "ready", pending.length);
+  }
+
+  /**
+   * The barrier's decision (#926), inside the room's queue. `limit`: the limit timer fired, the
+   * room goes whatever is pending. Never rejects while the room loads here: a try that fails (a
+   * Redis read or write) is made again every `LOAD_RETRY_MS`, because the marks and the limit
+   * timer are process state and a room left in `loading` without them would wait for its TTL.
+   */
+  async function decide(lobbyId: string, limit: boolean) {
+    const load = loads.get(lobbyId);
+    if (!load) return;
+    try {
+      await settle(lobbyId, load, limit);
+    } catch (err) {
+      if (loads.get(lobbyId) !== load) throw err;
+      log("loading", { lobby: lobbyId, outcome: "retry", err: String(err) });
+      if (load.retry) scheduler.clear(load.retry);
+      load.retry = scheduler.setTimeout(
+        () =>
+          void registry
+            .withRoom(lobbyId, () => decide(lobbyId, false))
+            .catch((e: unknown) => log("loading retry failed", { lobby: lobbyId, err: String(e) })),
+        durations.LOAD_RETRY_MS,
+      );
+    }
   }
 
   /**
@@ -512,6 +553,8 @@ export function createLifecycle({
       humans,
       ready: new Set(),
       sent: "",
+      limitAt: loadingAt + durations.LOAD_LIMIT_MS,
+      retry: null,
       timer: scheduler.setTimeout(
         () =>
           void registry

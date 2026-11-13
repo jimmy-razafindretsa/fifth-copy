@@ -31,7 +31,14 @@ export default async function RacePage({ params }: PageProps<"/race/[raceId]">) 
         skin={machineSkin}
         sound={sound}
         saveSound={updatePreferences}
-        scene={<SeatScene labels={t.race.scene} notice={t.race.notice} tips={t.race.didYouKnow} />}
+        scene={
+          <SeatScene
+            labels={t.race.scene}
+            notice={t.race.notice}
+            tips={t.race.didYouKnow}
+            waiting={t.race.waiting}
+          />
+        }
       />
     </main>
   );

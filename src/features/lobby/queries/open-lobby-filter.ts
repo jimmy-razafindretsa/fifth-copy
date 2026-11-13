@@ -5,14 +5,18 @@ import { ROOM_TTL_MS } from "../room-ttl";
 export const OPEN_LOBBY_MAX_AGE_MS = ROOM_TTL_MS;
 
 /**
+ * A lobby that can still have a live room, of any type (#943): not CLOSED (#734) and younger than the
+ * room TTL. The players-online count asks the race server about these.
+ */
+export function liveLobbyWhere(nowMs: number): Prisma.LobbyWhereInput {
+  return { status: "WAITING", createdAt: { gte: new Date(nowMs - OPEN_LOBBY_MAX_AGE_MS) } };
+}
+
+/**
  * The Postgres half of "joinable" (#806): a PUBLIC lobby that is not CLOSED (#734: the race server's
  * close call and the `lobby.expire` job write CLOSED) and young enough to still have a room. The
  * race server's room status is the other half (`listOpenLobbies`).
  */
 export function openLobbyWhere(nowMs: number): Prisma.LobbyWhereInput {
-  return {
-    type: "PUBLIC",
-    status: "WAITING",
-    createdAt: { gte: new Date(nowMs - OPEN_LOBBY_MAX_AGE_MS) },
-  };
+  return { type: "PUBLIC", ...liveLobbyWhere(nowMs) };
 }

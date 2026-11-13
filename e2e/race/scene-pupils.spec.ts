@@ -40,10 +40,10 @@ async function pupils(page: Page): Promise<[number, number] | null> {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
-async function open(page: Page, preset: string, n: number) {
+async function open(page: Page, preset: string, n: number, motion = "full") {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto(`/3d/seat.html?preset=${preset}`);
-  await post(page, { type: "fc-race-init", view: room(n), preset, motion: "full" });
+  await post(page, { type: "fc-race-init", view: room(n), preset, motion });
   await expect(html(page)).toHaveAttribute("data-room", "ready", { timeout: SCENE_WAIT });
   await expect(html(page)).toHaveAttribute("data-seats", String(n), { timeout: SCENE_WAIT });
 }
@@ -94,7 +94,10 @@ test.describe("#938 every clerk keeps its pupils on every preset", { tag: "@scen
       await expect.poll(calls, { timeout: SCENE_WAIT }).toBeGreaterThan(0);
       return calls();
     };
-    await open(page, "low", 6);
+    // reduced motion: the Major stands still, so no random smoke puff, pour or glass liquid adds a draw call
+    // of its own between two readings (bible 8); only the clerks' share can differ between the two rooms
+    await open(page, "low", 6, "reduce");
+    await expect(html(page)).toHaveAttribute("data-motion", "reduce");
     await expectAllPupils(page, 5);
     const six = await fresh();
     await post(page, { type: "fc-race-state", view: room(30) });

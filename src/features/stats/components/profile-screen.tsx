@@ -4,6 +4,7 @@ import type { Messages } from "@/i18n";
 import { fill } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
+import { CURVE_MIN_RACES, CURVE_RACES, TREND_MIN_POINTS } from "../view/performance-curve";
 import type { Profile } from "../view/profile";
 import {
   BLANK_BELOW,
@@ -16,6 +17,7 @@ import {
   serviceDate,
   tubes,
 } from "../view/profile-figures";
+import { PerformanceCurve } from "./performance-curve";
 import { ProfileStage } from "./profile-stage";
 import styles from "./profile.module.css";
 
@@ -63,7 +65,8 @@ type Heading = "h1" | "h2" | "h3" | "h4";
 /**
  * The Personnel file (#932, bible 14.3 "Personnel file", reference `Profil.dc.html`): one screen that
  * draws a `Profile` and the viewer's identity as an ordered list of sections, the hero (stage, file side,
- * four tubes), the ink band, the folder tabs, the service record and, under three races, the blank block.
+ * four tubes), the ink band, the folder tabs, the service record, from three races the output curve
+ * (#933) and, under three races, the blank block.
  * Later cards add a section each. Server-rendered; the stage is the one client leaf.
  */
 export function ProfileScreen({
@@ -81,6 +84,7 @@ export function ProfileScreen({
     name: `${idPrefix}-name`,
     service: `${idPrefix}-service`,
     blank: `${idPrefix}-blank`,
+    curve: `${idPrefix}-curve`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -88,6 +92,10 @@ export function ProfileScreen({
   const name = viewer ? fill(labels.honorific, { name: viewer.name }) : labels.unassigned;
   const languages = racedLanguages(profile);
   const races = profile.service.races;
+  // the curve's points: the latest 40, only what the client leaf draws
+  const curvePoints = profile.progress.series
+    .slice(-CURVE_RACES)
+    .map((p) => ({ cleanWpm: p.cleanWpm, accuracy: p.accuracy }));
   const state = races === 0 ? "blank" : races < BLANK_BELOW ? "almost" : "populated";
   const serviceLine = [
     since ? fill(labels.since, { date: serviceDate(since, locale) }) : null,
@@ -209,6 +217,24 @@ export function ProfileScreen({
               ))}
             </dl>
           </section>
+
+          {curvePoints.length >= CURVE_MIN_RACES ? (
+            <section aria-labelledby={ids.curve} data-section="curve">
+              <div className={styles.head}>
+                <div>
+                  <p className={styles.kicker}>{labels.curve.kicker}</p>
+                  <Section id={ids.curve} className={styles.h2}>
+                    {labels.curve.title}
+                  </Section>
+                </div>
+                <p className={styles.intro}>
+                  {fill(labels.curve.intro, { count: curvePoints.length })}
+                  {curvePoints.length >= TREND_MIN_POINTS ? ` ${labels.curve.introTrend}` : null}
+                </p>
+              </div>
+              <PerformanceCurve points={curvePoints} labels={labels.curve} locale={locale} />
+            </section>
+          ) : null}
 
           {races < BLANK_BELOW ? (
             <section className={styles.blank} aria-labelledby={ids.blank} data-blank="">

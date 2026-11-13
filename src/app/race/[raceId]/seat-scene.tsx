@@ -85,7 +85,8 @@ export function SeatScene({ labels, notice, tips, waiting }: SeatSceneProps) {
 
   const room = <WaitingRoomLive labels={waiting} reconnecting={notice.reconnecting} tip={tip} />;
   if (mode === "off") return null;
-  if (shown === "fallback") return loadingRoom ? room : <RaceNotice kind="no-scene" labels={notice} />;
+  if (shown === "fallback")
+    return loadingRoom ? room : <RaceNotice kind="no-scene" labels={notice} />;
   return (
     <>
       {loadingRoom ? room : shown === "loading" ? <LoadingCard labels={labels} tip={tip} /> : null}

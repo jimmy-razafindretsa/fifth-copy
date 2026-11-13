@@ -12,8 +12,10 @@ import {
   selectSceneView,
   useRaceDispatch,
   useRaceStore,
+  WaitingRoomLive,
   type RaceNoticeLabels,
   type SceneLabels,
+  type WaitingRoomLabels,
 } from "@/features/race";
 
 // ADR 0013, 0017: race-3d (and through its embed, three.js) loads only here, lazily, in the browser.
@@ -30,6 +32,8 @@ export type SeatSceneProps = {
   notice: RaceNoticeLabels;
   /** `race.didYouKnow` (#383); one line shows under the stamp, none when empty. */
   tips: readonly string[];
+  /** `race.waiting` (#937): the waiting room shown while the room loads. */
+  waiting: WaitingRoomLabels;
 };
 
 /**
@@ -41,19 +45,20 @@ export type SeatSceneProps = {
  * puts every telemetry second through race-3d's `frameBudget`), unmounts the scene, frame and all, and
  * keeps the paper backdrop with the `no-scene` notice, once. Phones never load it (they watch, #292).
  * The readiness barrier (#926): it tells the store once that its scene is settled (first frame, or
- * paper), so the seat reports `ready`; while the room loads every device shows the loading card with
- * its READY row (a paper device in place of its notice); a typist whose scene is not up when the room
+ * paper), so the seat reports `ready`; while the room loads every device shows the waiting room (#937)
+ * over the seat view (a paper device in place of its notice; the scene keeps loading behind it); a typist whose scene is not up when the room
  * counts down or runs drops to paper for that race (`selectSceneGate`), and the scene waits for the
  * room's phase before it mounts, so a reload mid-race never loads it. The watching host is exempt.
  */
-export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
+export function SeatScene({ labels, notice, tips, waiting }: SeatSceneProps) {
   const [mode, setMode] = useState<Mode>("off");
   const [preset, setPreset] = useState<string | null>(null);
   const [tip, setTip] = useState<string | null>(null);
   const [scene, setScene] = useState<string | null>(null);
   const view = useRaceStore(selectSceneView);
   const gate = useRaceStore(selectSceneGate);
-  const ready = useRaceStore(selectReadyLine);
+  // non-null while the room loads (#926): the waiting room (#937) is up
+  const loadingRoom = useRaceStore(selectReadyLine) !== null;
   const dispatch = useRaceDispatch();
   // decided once per mount: a re-render with new `tips` must never bring a fallen-back scene back (#695 C2)
   const decided = useRef(false);
@@ -78,12 +83,13 @@ export function SeatScene({ labels, notice, tips }: SeatSceneProps) {
     if (shown === "ready" || shown === "fallback") dispatch({ type: "scene-settled" });
   }, [shown, dispatch]);
 
-  const card = <LoadingCard labels={labels} tip={tip} ready={ready} />;
+  const room = <WaitingRoomLive labels={waiting} reconnecting={notice.reconnecting} tip={tip} />;
   if (mode === "off") return null;
-  if (shown === "fallback") return ready ? card : <RaceNotice kind="no-scene" labels={notice} />;
+  if (shown === "fallback")
+    return loadingRoom ? room : <RaceNotice kind="no-scene" labels={notice} />;
   return (
     <>
-      {shown === "loading" || ready ? card : null}
+      {loadingRoom ? room : shown === "loading" ? <LoadingCard labels={labels} tip={tip} /> : null}
       {gate === "wait" ? null : (
         <RaceScene
           view={view}

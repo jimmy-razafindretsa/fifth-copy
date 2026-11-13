@@ -55,6 +55,6 @@ describe("race-3d public face (#563 C1)", () => {
     expect(leaf).toMatch(
       /useEffect\(\(\) => \{[\s\S]*?setMode\(hasWebGL2\(\) \? "loading" : "fallback"\)/,
     );
-    expect(read("src/app/race/[raceId]/page.tsx")).toContain("scene={<SeatScene");
+    expect(read("src/app/race/[raceId]/page.tsx")).toMatch(/scene=\{\s*<SeatScene/);
   });
 });

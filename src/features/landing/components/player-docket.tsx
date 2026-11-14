@@ -1,13 +1,22 @@
 import { type ReactNode, Suspense } from "react";
 import { Star } from "@/components/ui";
-import { rankFor, rankIndex, type RankStep } from "@/features/stats";
 import { fill } from "@/i18n/format";
 import type { Messages } from "@/i18n/en";
 import styles from "./home.module.css";
 
-export type PlayerDocketLabels = Messages["home"]["docket"] & {
-  /** The catalogs' rank list, in `BOT_LEVELS` order (the last is HERO OF PAPERWORK). */
-  ranks: readonly string[];
+export type PlayerDocketLabels = Messages["home"]["docket"];
+
+/**
+ * The viewer's rank as the route resolves it from the stats feature's `rankFor` (names already in the
+ * viewer's language; the landing never imports the stats index, ADR 0021): the rank, and the way to the
+ * next one (`null` at the top).
+ */
+export type DocketRank = {
+  /** `BOT_LEVELS` id, for `data-rank`. */
+  level: string;
+  name: string;
+  meanWpm: number;
+  next: { name: string; at: number; progress: number } | null;
 };
 
 export type DocketPlayer = {
@@ -30,8 +39,8 @@ type Props = {
  * rank (`rankFor` of the mean clean WPM, ADR 0016), then the star cell. A guest shows the GUEST tag and
  * no progress. An account's docket streams in its own `Suspense` boundary; a failing read renders none.
  */
-export function PlayerDocket({ load, ...props }: Props & { load: () => Promise<number | null> }) {
-  if (props.player.guest) return <PlayerDocketView {...props} step={null} meanWpm={null} />;
+export function PlayerDocket({ load, ...props }: Props & { load: () => Promise<DocketRank> }) {
+  if (props.player.guest) return <PlayerDocketView {...props} rank={null} />;
   return (
     <Suspense fallback={null}>
       <PlayerDocketLoaded load={load} {...props} />
@@ -42,14 +51,14 @@ export function PlayerDocket({ load, ...props }: Props & { load: () => Promise<n
 export async function PlayerDocketLoaded({
   load,
   ...props
-}: Props & { load: () => Promise<number | null> }) {
-  let meanWpm: number | null;
+}: Props & { load: () => Promise<DocketRank> }) {
+  let rank: DocketRank;
   try {
-    meanWpm = await load();
+    rank = await load();
   } catch {
     return null;
   }
-  return <PlayerDocketView {...props} step={rankFor(meanWpm)} meanWpm={meanWpm} />;
+  return <PlayerDocketView {...props} rank={rank} />;
 }
 
 export function PlayerDocketView({
@@ -57,10 +66,8 @@ export function PlayerDocketView({
   href,
   labels,
   stars,
-  step,
-  meanWpm,
-}: Props & { step: RankStep | null; meanWpm: number | null }) {
-  const rankName = (level: RankStep["rank"]) => labels.ranks[rankIndex(level)] ?? level;
+  rank,
+}: Props & { rank: DocketRank | null }) {
   return (
     <div className={styles.docket} data-player-docket={player.guest ? "guest" : "account"}>
       <a
@@ -74,27 +81,30 @@ export function PlayerDocketView({
         <span className={styles.docketBody}>
           <span className={styles.docketTop}>
             <span className={styles.docketName}>{player.name}</span>
-            <span className={styles.rankTag} data-rank={step?.rank ?? "guest"}>
-              {step ? rankName(step.rank) : labels.guest}
+            <span className={styles.rankTag} data-rank={rank?.level ?? "guest"}>
+              {rank ? rank.name : labels.guest}
             </span>
           </span>
-          {step && step.nextRank !== null && step.nextAt !== null ? (
+          {rank?.next ? (
             <>
               <span
                 className={styles.rankBar}
                 role="progressbar"
-                aria-label={fill(labels.progressName, { rank: rankName(step.nextRank) })}
+                aria-label={fill(labels.progressName, { rank: rank.next.name })}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuenow={Math.round(step.progress * 100)}
+                aria-valuenow={Math.round(rank.next.progress * 100)}
               >
-                <span className={styles.rankFill} style={{ width: `${step.progress * 100}%` }} />
+                <span
+                  className={styles.rankFill}
+                  style={{ width: `${rank.next.progress * 100}%` }}
+                />
               </span>
               <span className={styles.rankLine} data-rank-line>
                 {fill(labels.line, {
-                  wpm: Math.round(meanWpm ?? 0),
-                  next: step.nextAt,
-                  rank: rankName(step.nextRank),
+                  wpm: Math.round(rank.meanWpm),
+                  next: rank.next.at,
+                  rank: rank.next.name,
                 })}
               </span>
             </>
@@ -136,7 +146,7 @@ export function StarCellView({ stars, labels }: { stars: number; labels: StarLab
       aria-label={fill(stars === 1 ? labels.one : labels.other, { n: stars })}
       data-stars={stars}
     >
-      <Star size={16} tone="gold" rotate={-8} />
+      <Star size={16} tone="gold" rotate={-8} className={styles.inlineStar} />
       <span aria-hidden="true">{stars}</span>
     </span>
   );

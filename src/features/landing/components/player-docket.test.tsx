@@ -1,35 +1,46 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
-import { rankFor } from "@/features/stats";
+import { describe, expect, it } from "vitest";
 import { en } from "@/i18n/en";
-import { PlayerDocketLoaded, PlayerDocketView, StarCellLoaded, StarCellView } from "./player-docket";
-
-// The stats index reaches src/env.ts through its queries; the view needs no secrets.
-vi.mock("@/env", () => ({ env: { NODE_ENV: "test" } }));
+import {
+  type DocketRank,
+  PlayerDocketLoaded,
+  PlayerDocketView,
+  StarCellLoaded,
+  StarCellView,
+} from "./player-docket";
 
 // #945 C3, C5, C9 and #943 C19: the player docket and its star cell.
-const labels = { ...en.home.docket, ranks: en.landing.clerk.ranks };
+const labels = en.home.docket;
+const RANKS: Record<string, DocketRank> = {
+  officer: {
+    level: "officer",
+    name: "OFFICER",
+    meanWpm: 51.4,
+    next: { name: "COMMISSAR", at: 70, progress: 1.4 / 20 },
+  },
+  low: {
+    level: "clerk",
+    name: "CLERK",
+    meanWpm: 40,
+    next: { name: "OFFICER", at: 50, progress: 1 / 3 },
+  },
+  hero: { level: "major", name: "HERO OF PAPERWORK", meanWpm: 95, next: null },
+};
 const player = { name: "Lynx-785", picture: <svg />, guest: false };
-const view = (meanWpm: number | null, guest = false) =>
+const view = (rank: DocketRank | null, guest = false) =>
   renderToStaticMarkup(
-    <PlayerDocketView
-      player={{ ...player, guest }}
-      href="/profile"
-      labels={labels}
-      step={guest ? null : rankFor(meanWpm)}
-      meanWpm={meanWpm}
-    />,
+    <PlayerDocketView player={{ ...player, guest }} href="/profile" labels={labels} rank={rank} />,
   );
 
 describe("PlayerDocketView", () => {
   it("#945 C2 an officer at 51.4 reads OFFICER and 51 / 70 WPM → COMMISSAR", () => {
-    const html = view(51.4);
+    const html = view(RANKS.officer!);
     expect(html).toContain(">OFFICER<");
     expect(html).toContain(">51 / 70 WPM → COMMISSAR<");
   });
 
   it("#945 C3 the top rank reads HERO OF PAPERWORK with no bar and no arrow line", () => {
-    const html = view(95);
+    const html = view(RANKS.hero!);
     expect(html).toContain(">HERO OF PAPERWORK<");
     expect(html).not.toContain("progressbar");
     expect(html).not.toContain("→");
@@ -43,7 +54,7 @@ describe("PlayerDocketView", () => {
   });
 
   it("#945 C5 the bar is a named progressbar; the portrait is decorative; the link names the player", () => {
-    const html = view(40);
+    const html = view(RANKS.low!);
     expect(html).toMatch(
       /role="progressbar" aria-label="Progress to OFFICER" aria-valuemin="0" aria-valuemax="100" aria-valuenow="33"/,
     );
@@ -75,7 +86,10 @@ describe("StarCell (#943 C19)", () => {
 
   it("a rejected read renders nothing", async () => {
     expect(
-      await StarCellLoaded({ load: () => Promise.reject(new Error("x")), labels: en.home.docket.stars }),
+      await StarCellLoaded({
+        load: () => Promise.reject(new Error("x")),
+        labels: en.home.docket.stars,
+      }),
     ).toBeNull();
   });
 });

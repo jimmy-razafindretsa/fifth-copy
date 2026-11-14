@@ -14,6 +14,7 @@ import {
   sessionCookie,
   signOutButton,
   signUpThroughForm,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #46 C2, C5: the one-time recovery code revealed once after sign-up, then redeemed on /recover: the
@@ -104,6 +105,7 @@ test.describe("one-time recovery code (#46)", () => {
     expect(await sessionCookie(context)).toBeUndefined();
     await fill(page, username, NEW_PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
+    await landSignedIn(page, ACTION_WAIT);
     await expect(header(page)).toContainText(username, { timeout: ACTION_WAIT });
   });
 

@@ -181,9 +181,12 @@ test.describe("design system page", () => {
   test("#24 C6 Brand: wordmarks on their grounds, tagline, monogram ladder, clear-space outline", async ({
     page,
   }) => {
+    // /design is long (every specimen family, #943 added two): one load, the scheme switched live
+    // (no theme cookie, so the tokens follow prefers-color-scheme), and a full-page axe per scheme
+    test.setTimeout(scaled(90_000));
+    await page.goto("/design");
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
-      await page.goto("/design");
       const section = page.getByRole("region", { name: "Brand" });
       await expect(section.getByRole("heading", { level: 2, name: "Brand" })).toBeVisible();
       for (const [ground, role, mark] of [

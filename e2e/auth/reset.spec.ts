@@ -14,6 +14,7 @@ import {
   openForm,
   seedAccount,
   sessionCookie,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #789 C5, C7: the /reset screen in both languages, its /design states, and a teacher reset redeemed
@@ -160,6 +161,7 @@ test.describe("teacher password reset, redeemed (#789)", () => {
     await openForm(page, "/sign-in");
     await fill(page, username, PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
+    await landSignedIn(page, ACTION_WAIT);
     await expect(header(page)).toContainText(username, { timeout: ACTION_WAIT });
     const oldCookie = await sessionCookie(context);
     expect(oldCookie).toBeDefined();
@@ -196,6 +198,7 @@ test.describe("teacher password reset, redeemed (#789)", () => {
     ).toBeVisible({ timeout: ACTION_WAIT });
     await fill(fp, username, NEW_PASSWORD);
     await authForm(fp).getByRole("button", { name: "SIGN IN", exact: true }).click();
+    await landSignedIn(fp, ACTION_WAIT);
     await expect(header(fp)).toContainText(username, { timeout: ACTION_WAIT });
     await fresh.close();
 

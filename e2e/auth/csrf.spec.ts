@@ -12,6 +12,7 @@ import {
   seedAccount,
   sessionCookie,
   signOutButton,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #87 C2 (ADR 0009 "CSRF through Auth.js and server actions' origin check"): a server action POST whose
@@ -84,7 +85,7 @@ test.describe("CSRF (#87 C2)", () => {
     const realPage = await real.newPage();
     await forgeOrigin(realPage, new URL(baseURL!).origin);
     expect((await signInThroughForm(realPage, username)).status()).toBeLessThan(400);
-    await expect(signOutButton(realPage)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(realPage);
     expect(await sessionUser(real)).toBe(username);
     await real.close();
   });
@@ -95,7 +96,7 @@ test.describe("CSRF (#87 C2)", () => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await signInThroughForm(page, username);
-    await expect(signOutButton(page)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(page);
 
     await forgeOrigin(page, FOREIGN);
     const action = page.waitForResponse(

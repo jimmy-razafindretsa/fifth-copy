@@ -12,6 +12,7 @@ import {
   seedAccount,
   sessionCookie,
   signOutButton,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #36 C12, C14, C15: the header account control in its three states, a session that survives a reload
@@ -101,7 +102,7 @@ test.describe("sign-in, session and sign-out (#36)", () => {
     await openForm(page, "/sign-in");
     await fill(page, account, PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
-    await expect(signOutButton(page)).toBeVisible({ timeout: ACTION_WAIT });
+    await landSignedIn(page, ACTION_WAIT);
 
     await signOutButton(page).click();
     await expect(header(page).getByRole("link", { name: "SIGN IN", exact: true })).toBeVisible({

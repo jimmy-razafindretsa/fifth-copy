@@ -14,6 +14,7 @@ import {
   sessionCookie,
   signOutButton,
   signUpThroughForm,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #87 C1 (cookie flags) and C8 (sign-out revokes every device), ADR 0009 amended.
@@ -75,7 +76,7 @@ test.describe("account cookies and revocation (#87)", () => {
     await openForm(page, "/sign-in");
     await fill(page, username, PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
-    await expect(signOutButton(page)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(page);
     const session = await sessionCookie(page.context());
     expect(session?.name).toBe(
       PRODUCTION ? "__Secure-authjs.session-token" : "authjs.session-token",
@@ -97,7 +98,7 @@ test.describe("account cookies and revocation (#87)", () => {
     await openForm(otherPage, "/sign-in");
     await fill(otherPage, username, PASSWORD);
     await authForm(otherPage).getByRole("button", { name: "SIGN IN", exact: true }).click();
-    await expect(signOutButton(otherPage)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(otherPage);
     const captured = await sessionCookie(other);
     expect(captured).toBeDefined();
 

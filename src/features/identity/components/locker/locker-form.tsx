@@ -58,6 +58,9 @@ export type LockerFormProps = {
   markSeen?: () => Promise<void>;
   /** `/design` specimens: a fixed state, no embed, no side effects. */
   specimen?: Partial<LockerState>;
+  /** `/design` specimens: unique ids and an h2 under the page's h1. */
+  idPrefix?: string;
+  headingLevel?: 1 | 2;
 };
 
 const CODES: Record<OutfitCategory, string> = {
@@ -85,7 +88,10 @@ export function LockerForm({
   save,
   markSeen,
   specimen,
+  idPrefix = "locker",
+  headingLevel = 1,
 }: LockerFormProps) {
+  const Heading = headingLevel === 1 ? "h1" : "h2";
   const [state, dispatch] = useReducer(lockerReducer, saved, (s) => ({
     ...initialLockerState(s),
     ...specimen,
@@ -100,8 +106,12 @@ export function LockerForm({
   const cards = useRef<(HTMLButtonElement | null)[]>([]);
   const dirty = isDirty(state);
 
+  // once per visit: the action's cookie write re-renders the route with a new action reference
+  const marked = useRef(false);
   useEffect(() => {
-    if (!specimen) void markSeen?.().catch(() => undefined);
+    if (specimen || marked.current) return;
+    marked.current = true;
+    void markSeen?.().catch(() => undefined);
   }, [markSeen, specimen]);
 
   // the clerk wears what the form shows: on every change, and when the frame (re)loads
@@ -273,12 +283,12 @@ export function LockerForm({
         ) : null}
       </section>
 
-      <section className={styles.form} aria-labelledby="locker-title">
+      <section className={styles.form} aria-labelledby={`${idPrefix}-title`}>
         <div className={styles.formHead}>
           <span className={styles.kicker}>{labels.kicker}</span>
-          <h1 id="locker-title" className={styles.title}>
+          <Heading id={`${idPrefix}-title`} className={styles.title}>
             {labels.title}
-          </h1>
+          </Heading>
         </div>
         <div
           role="tablist"
@@ -296,9 +306,9 @@ export function LockerForm({
                 }}
                 type="button"
                 role="tab"
-                id={`locker-tab-${category}`}
+                id={`${idPrefix}-tab-${category}`}
                 aria-selected={active}
-                aria-controls="locker-panel"
+                aria-controls={`${idPrefix}-panel`}
                 tabIndex={active ? 0 : -1}
                 className={styles.tab}
                 onClick={() => dispatch({ type: "tab", tab: category })}
@@ -311,8 +321,8 @@ export function LockerForm({
         </div>
         <div
           role="tabpanel"
-          id="locker-panel"
-          aria-labelledby={`locker-tab-${state.tab}`}
+          id={`${idPrefix}-panel`}
+          aria-labelledby={`${idPrefix}-tab-${state.tab}`}
           className={styles.panel}
         >
           <div
@@ -357,12 +367,12 @@ export function LockerForm({
           </div>
           {state.tab === "hair" || state.tab === "face" ? (
             <div className={styles.colours}>
-              <span id="locker-colours" className={styles.colourLabel}>
+              <span id={`${idPrefix}-colours`} className={styles.colourLabel}>
                 {labels.colourLabel}
               </span>
               <div
                 role="radiogroup"
-                aria-labelledby="locker-colours"
+                aria-labelledby={`${idPrefix}-colours`}
                 className={styles.swatches}
                 onKeyDown={onSwatchKey}
               >

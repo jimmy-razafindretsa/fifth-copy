@@ -20,12 +20,19 @@ describe("online figure (C22)", () => {
   });
 
   it("an answer that is not ok, or a rejected read, renders nothing (no separator, no placeholder)", async () => {
-    expect(await OnlineCountLoaded({ load: async () => ({ ok: false }), labels: en.home })).toBeNull();
-    expect(await OnlineCountLoaded({ load: () => Promise.reject(new Error("x")), labels: en.home })).toBeNull();
+    expect(
+      await OnlineCountLoaded({ load: async () => ({ ok: false }), labels: en.home }),
+    ).toBeNull();
+    expect(
+      await OnlineCountLoaded({ load: () => Promise.reject(new Error("x")), labels: en.home }),
+    ).toBeNull();
   });
 
   it("an ok answer renders the figure only", async () => {
-    const node = await OnlineCountLoaded({ load: async () => ({ ok: true, online: 7 }), labels: en.home });
+    const node = await OnlineCountLoaded({
+      load: async () => ({ ok: true, online: 7 }),
+      labels: en.home,
+    });
     expect(renderToStaticMarkup(node!)).toContain(">7 ONLINE<");
   });
 });

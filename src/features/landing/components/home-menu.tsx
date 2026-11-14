@@ -8,6 +8,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   useTransition,
 } from "react";
 import { Star } from "@/components/ui";
@@ -59,6 +60,7 @@ export type HomeMenuProps = {
 };
 
 const WIDE = "(min-width: 768px)";
+const noSubscribe = () => () => {};
 
 /**
  * Runs PLAY or PRACTICE: the room to land on, or the error line to show (the entry is enabled again).
@@ -71,7 +73,9 @@ export async function runEntryAction(
   try {
     const result = await action();
     if (result.ok) return { href: `/lobby/${result.code}` };
-    return { error: result.error === "race-server-unavailable" ? errors.unavailable : errors.generic };
+    return {
+      error: result.error === "race-server-unavailable" ? errors.unavailable : errors.generic,
+    };
   } catch {
     return { error: errors.generic };
   }
@@ -100,6 +104,12 @@ export function HomeMenu({
   const [, startTransition] = useTransition();
   const items = useRef<(HTMLAnchorElement | HTMLButtonElement | null)[]>([]);
   const signOutForm = useRef<HTMLFormElement>(null);
+  // false in the server HTML, true once the keys are wired (e2e waits on it)
+  const hydrated = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
 
   useEffect(() => {
     if (specimen) return;
@@ -152,7 +162,12 @@ export function HomeMenu({
 
   return (
     <>
-      <nav aria-label={labels.menuLabel} className={styles.menu} data-home-menu>
+      <nav
+        aria-label={labels.menuLabel}
+        className={styles.menu}
+        data-home-menu
+        data-hydrated={hydrated ? "true" : "false"}
+      >
         <ul className={styles.entries} onKeyDown={onKeyDown}>
           {entries.map((entry, i) => {
             const isSelected = i === selected;
@@ -166,7 +181,12 @@ export function HomeMenu({
               "data-selected": isSelected ? "true" : "false",
               "data-entry": entry.id,
               onFocus: () => setSelected(i),
-              onMouseEnter: () => setSelected(i),
+              // hover selects; while the focus is in the menu it follows, so Tab still leaves the group
+              onMouseEnter: () => {
+                setSelected(i);
+                const list = items.current[i]?.closest("ul");
+                if (list?.contains(document.activeElement)) items.current[i]?.focus();
+              },
             };
             const body = (
               <>

@@ -46,25 +46,37 @@ describe("HomeMenu markup", () => {
 
   it("C10 the French entries read as the catalog says", () => {
     const html = render(props(fr as typeof en));
-    for (const label of ["JOUER", "ENTRAÎNEMENT", "SALLES OUVERTES", "MON DOSSIER", "MON COMMIS", "RÉGLAGES"]) {
+    for (const label of [
+      "JOUER",
+      "ENTRAÎNEMENT",
+      "SALLES OUVERTES",
+      "MON DOSSIER",
+      "MON COMMIS",
+      "RÉGLAGES",
+    ]) {
       expect(html).toContain(`>${label}<`);
     }
   });
 
   it("C4 the description line is a polite live region holding the selected entry's line", () => {
     const html = render(props(en));
-    expect(html).toMatch(new RegExp(`aria-live="polite"[^>]*>${en.home.entries.play.description}<`));
+    expect(html).toMatch(
+      new RegExp(`aria-live="polite"[^>]*>${en.home.entries.play.description}<`),
+    );
   });
 
   it("C4 descriptions are static: no digits (no queue or player counts) in either language", () => {
-    for (const t of [en, fr]) for (const e of Object.values(t.home.entries)) expect(e.description).not.toMatch(/\d/);
+    for (const t of [en, fr])
+      for (const e of Object.values(t.home.entries)) expect(e.description).not.toMatch(/\d/);
   });
 
   it("C2 an entry pending reads its pending label, busy; an error shows the 7.4 inline error line", () => {
     const html = render(props(en, { specimen: { pending: "play", error: errors.unavailable } }));
     expect(html).toContain(`>${en.home.pending.play}<`);
     expect(html).toMatch(/aria-busy="true"[^>]*data-pending="true"/);
-    expect(html).toMatch(new RegExp(`role="alert"[^>]*><span[^>]*>${errors.prefix}</span> ${errors.unavailable}`));
+    expect(html).toMatch(
+      new RegExp(`role="alert"[^>]*><span[^>]*>${errors.prefix}</span> ${errors.unavailable}`),
+    );
   });
 
   it("C29 the MY CLERK tag sits inside the entry (its accessible name) and nowhere else", () => {
@@ -87,7 +99,12 @@ describe("HomeMenu markup", () => {
   it("C13 the leaf is the only client module of the screen", () => {
     const read = (f: string) => readFileSync(path.join(__dirname, f), "utf8");
     expect(read("home-menu.tsx")).toMatch(/^"use client";/);
-    for (const f of ["home-screen.tsx", "mission-docket.tsx", "online-count.tsx", "player-docket.tsx"]) {
+    for (const f of [
+      "home-screen.tsx",
+      "mission-docket.tsx",
+      "online-count.tsx",
+      "player-docket.tsx",
+    ]) {
       expect(read(f), f).not.toContain('"use client"');
     }
   });
@@ -95,7 +112,9 @@ describe("HomeMenu markup", () => {
 
 describe("runEntryAction (C2)", () => {
   it("a seat lands on /lobby/<code>", async () => {
-    await expect(runEntryAction(async () => ({ ok: true, code: "KGB-4821" }), errors)).resolves.toEqual({
+    await expect(
+      runEntryAction(async () => ({ ok: true, code: "KGB-4821" }), errors),
+    ).resolves.toEqual({
       href: "/lobby/KGB-4821",
     });
   });
@@ -105,7 +124,9 @@ describe("runEntryAction (C2)", () => {
     ["rate-limited", errors.generic],
     ["invalid-settings", errors.generic],
   ])("%s shows its error line", async (error, line) => {
-    await expect(runEntryAction(async () => ({ ok: false, error }), errors)).resolves.toEqual({ error: line });
+    await expect(runEntryAction(async () => ({ ok: false, error }), errors)).resolves.toEqual({
+      error: line,
+    });
   });
 
   it("a thrown action shows the generic line", async () => {

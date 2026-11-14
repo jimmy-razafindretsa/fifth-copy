@@ -105,7 +105,8 @@ describe("the landing's two QUICK RACE buttons (#128 C4)", () => {
   const source = (file: string) => readFileSync(path.resolve(__dirname, file), "utf8");
 
   it("hero and final call both render QuickRaceButton, whose action runs quickRace", () => {
-    const page = source("../../../app/page.tsx");
+    // #943: `/` composes the landing through LandingView (shared with /welcome)
+    const page = source("../../../app/_components/landing-view.tsx");
     expect(page.match(/<QuickRaceButton\b/g)).toHaveLength(2);
     expect(page).toMatch(/primary=\{<QuickRaceButton\b/);
     expect(page).toMatch(/finalAction=\{<QuickRaceButton\b/);
@@ -113,7 +114,7 @@ describe("the landing's two QUICK RACE buttons (#128 C4)", () => {
   });
 
   it("PRACTISE VS BOTS stays in the hero's entries beside it (the bots fallback, R64)", () => {
-    expect(source("../../../app/page.tsx")).toMatch(/entries=\{<LobbyEntries \/>\}/);
+    expect(source("../../../app/_components/landing-view.tsx")).toMatch(/entries=\{<LobbyEntries \/>\}/);
     expect(source("./lobby-entries.tsx")).toMatch(/<PracticeButton\b/);
     expect(en.landing.entries.practise).toBe("PRACTISE VS BOTS");
   });

@@ -99,5 +99,5 @@ export { LOCKER_SEEN_COOKIE, NEW_ITEMS, type NewItemId } from "./clerk/new-items
 export { getLockerSeen, getLockerUnseen } from "./queries/locker-seen";
 // The locker (#943 part D): the screen, the seen-cookie action and its labels type.
 export { LockerScreen } from "./components/locker/locker-screen";
-export type { LockerLabels } from "./components/locker/locker-form";
+export { LockerForm, type LockerLabels } from "./components/locker/locker-form";
 export { markLockerSeen } from "./actions/mark-locker-seen";

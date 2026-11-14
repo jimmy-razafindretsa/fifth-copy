@@ -75,6 +75,7 @@ import {
 import { getLocale, getT } from "@/i18n";
 import { AbandonDemo, AbandonSpecimen } from "./abandon-demo";
 import { ExitSpecimen } from "./exit-demo";
+import { HomeSpecimens, LockerSpecimens } from "./home-demo";
 import { AvatarSpecimens, DesignDialogs } from "./identity-demo";
 import demo from "./motion-demo.module.css";
 import { fileSpecimenPreference } from "./settings-demo-action";
@@ -1383,6 +1384,28 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
             </HudSpecimen>
           )),
         )}
+      </section>
+
+      <section id="home-menu" aria-labelledby="home-menu-heading" className="flex flex-col gap-6">
+        <h2 id="home-menu-heading" className="type-display-md">
+          Home menu
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The game menu at / for a viewer: the entries, the description line and the key-hint bar,
+          an entry pending and with its error line, MY CLERK with and without its tag, the mission
+          docket, the player docket and the clerk stage as a still.
+        </p>
+        <HomeSpecimens t={t} />
+      </section>
+
+      <section id="locker" aria-labelledby="locker-heading" className="flex flex-col gap-6">
+        <h2 id="locker-heading" className="type-display-md">
+          Locker
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The locker at /locker: the item cards (equipped, owned, new) and the form clean and dirty.
+        </p>
+        <LockerSpecimens t={t} />
       </section>
     </main>
   );

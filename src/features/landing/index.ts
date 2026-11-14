@@ -7,6 +7,7 @@ export { LINKS } from "./links";
 export { clerkEmbedSrc } from "./links";
 // The Home menu (#943, #945, #946): the screen and its streamed parts, composed by `/` and `/design`.
 export { HomeScreen } from "./components/home-screen";
+export { HomeMenu } from "./components/home-menu";
 export type { EntryResult, HomeEntry, HomeMenuLabels, HomeMenuProps } from "./components/home-menu";
 export { MissionDocket, MissionDocketView } from "./components/mission-docket";
 export { OnlineCount, OnlineFigure } from "./components/online-count";
@@ -16,5 +17,6 @@ export {
   StarCell,
   StarCellView,
   type DocketPlayer,
+  type DocketRank,
 } from "./components/player-docket";
 export { HomeStage } from "./components/home-stage";

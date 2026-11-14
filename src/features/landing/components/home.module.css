@@ -225,7 +225,9 @@
   background: transparent;
   border: 0;
   color: var(--color-band-fg);
-  font: inherit;
+  @apply type-label;
+  font-size: inherit;
+  line-height: inherit;
   letter-spacing: inherit;
   text-decoration: none;
   cursor: pointer;
@@ -448,10 +450,11 @@
   pointer-events: none;
 }
 
+/* the podium stands clear of the key-hint bar (24px margin + its 44px+ row + a gap) */
 .podium {
   position: absolute;
   left: 50%;
-  bottom: 9%;
+  bottom: var(--podium-bottom);
   width: min(78%, 540px);
   aspect-ratio: 5 / 1;
   transform: translateX(-50%);
@@ -464,7 +467,7 @@
 .clerk {
   position: absolute;
   left: 50%;
-  bottom: calc(9% + min(78%, 540px) / 10);
+  bottom: calc(var(--podium-bottom) + min(78%, 540px) / 10);
   width: min(62%, 440px);
   height: 74%;
   transform: translateX(-50%);
@@ -481,7 +484,7 @@
 .picture {
   position: absolute;
   left: 50%;
-  bottom: calc(9% + min(78%, 540px) / 10 + 8px);
+  bottom: calc(var(--podium-bottom) + min(78%, 540px) / 10 + 8px);
   width: 200px;
   height: 200px;
   transform: translateX(-50%);
@@ -518,6 +521,7 @@
   }
 
   .stage {
+    --podium-bottom: 168px;
     display: block;
     grid-column: 2;
     grid-row: 1;
@@ -565,4 +569,23 @@
 
 :root[data-motion="reduce"] .entry {
   transition: none;
+}
+
+/* inline stars (the star cell, the DONE tag): in the flow, not scattered */
+.starCell .inlineStar,
+.missionDone .inlineStar {
+  position: relative;
+  flex: none;
+}
+
+/* `/design` stage specimens: shown at every width, at a fixed height */
+.stage.stageStill {
+  --podium-bottom: 40px;
+  display: block;
+  position: relative;
+  height: 420px;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--color-primary);
+  @apply paper-grain-red;
 }

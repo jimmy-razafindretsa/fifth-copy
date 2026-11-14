@@ -66,19 +66,28 @@ describe("locker state (C25)", () => {
 
   it("fc-setcfg carries the whole outfit (bible 15)", () => {
     expect(setCfgMessage(SAVED)).toEqual({ type: "fc-setcfg", cfg: SAVED });
-    expect(Object.keys(setCfgMessage(SAVED).cfg).sort()).toEqual([...OUTFIT_CATEGORIES, "hairCol"].sort());
+    expect(Object.keys(setCfgMessage(SAVED).cfg).sort()).toEqual(
+      [...OUTFIT_CATEGORIES, "hairCol"].sort(),
+    );
   });
 });
 
 describe("saveClerkOutfit refuses an invalid outfit (C25)", () => {
   it("an id outside the catalogue saves nothing", async () => {
     update.mockReset();
-    await expect(saveClerkOutfit({ ...SAVED, hat: "crown" })).resolves.toEqual({ saved: false, reason: "invalid" });
+    await expect(saveClerkOutfit({ ...SAVED, hat: "crown" })).resolves.toEqual({
+      saved: false,
+      reason: "invalid",
+    });
     expect(update).not.toHaveBeenCalled();
   });
 });
 
-const labels = { ...en.locker, categories: en.landing.clerk.categories, items: en.landing.clerk.items };
+const labels = {
+  ...en.locker,
+  categories: en.landing.clerk.categories,
+  items: en.landing.clerk.items,
+};
 const props = (over: Partial<LockerFormProps> = {}): LockerFormProps => ({
   labels,
   name: "Lynx-785",
@@ -125,12 +134,18 @@ describe("LockerForm markup (C24, C26, C28)", () => {
     );
     expect(glasses).toMatch(/data-item="glasses:square"[^>]*data-new="true"/);
     expect(glasses.match(/>NEW</g)).toHaveLength(1);
-    const seen = renderToStaticMarkup(<LockerForm {...props({ unseen: [], specimen: { tab: "glasses" } })} />);
+    const seen = renderToStaticMarkup(
+      <LockerForm {...props({ unseen: [], specimen: { tab: "glasses" } })} />,
+    );
     expect(seen).not.toContain(">NEW<");
   });
 
   it("a refused save shows the 7.4 inline error line", () => {
-    const html = renderToStaticMarkup(<LockerForm {...props({ specimen: { status: "refused" } })} />);
-    expect(html).toMatch(/role="alert"[^>]*><span[^>]*>RETURNED ·<\/span> That uniform was not filed/);
+    const html = renderToStaticMarkup(
+      <LockerForm {...props({ specimen: { status: "refused" } })} />,
+    );
+    expect(html).toMatch(
+      /role="alert"[^>]*><span[^>]*>RETURNED ·<\/span> That uniform was not filed/,
+    );
   });
 });

@@ -329,8 +329,11 @@ test.describe("landing page (#497)", () => {
     expect(values.every((v) => v.length > 1 && v !== "…")).toBe(true);
     await expect(page.getByText("UNASSIGNED", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "REISSUE UNIFORM" })).toBeVisible();
-    // #875: the locker is post-v1, so the personnel file offers no OPEN THE LOCKER button
-    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveCount(0);
+    // #943 C23: the locker shipped, so the personnel file offers OPEN THE LOCKER again (#875 held it)
+    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveAttribute(
+      "href",
+      "/locker",
+    );
     await expect(page.locator("[aria-labelledby='clerk-title'] ol li")).toHaveText([
       "RECRUIT",
       "CLERK",
@@ -381,7 +384,8 @@ test.describe("landing page (#497)", () => {
     for (const name of ["PLAY", "LEARN", "AEGIS CORP."]) {
       await expect(footer.getByRole("navigation", { name })).toBeVisible();
     }
-    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(6);
+    // #943: the locker is back in PLAY
+    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(7);
     await expect(footer.getByRole("list")).toHaveCount(0);
     await expect(footer.getByText("BUILT BYAEGIS CORP.")).toBeVisible();
     await expect(

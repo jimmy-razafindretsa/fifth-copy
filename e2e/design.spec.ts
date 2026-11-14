@@ -898,3 +898,40 @@ test.describe("#777 exit dockets and the idle row on /design#race-hud", () => {
     });
   }
 });
+
+// #943 C12, #945 C8, #946 C9: the Home menu and the locker as still specimens.
+test.describe("Home menu and locker specimens (#943, #945, #946)", () => {
+  test("home-menu: account, guest, pending, error, tag on and off, four missions, three dockets, two stages", async ({
+    page,
+  }) => {
+    await page.goto("/design#home-menu");
+    const section = page.locator("section#home-menu");
+    await expect(section).toBeVisible();
+    for (const id of ["account", "guest", "pending", "error", "no-tag"]) {
+      await expect(section.locator(`[data-home-specimen="${id}"] [data-home-menu]`)).toHaveCount(1);
+    }
+    await expect(section.locator('[data-home-specimen="pending"] [data-pending="true"]')).toHaveCount(1);
+    await expect(section.locator('[data-home-specimen="error"] [role="alert"]')).toContainText("RETURNED");
+    await expect(section.locator('[data-home-specimen="account"] [data-entry="clerk"]')).toContainText("2 NEW");
+    await expect(section.locator('[data-home-specimen="no-tag"] [data-entry="clerk"]')).not.toContainText("NEW");
+    await expect(section.locator('[data-home-specimen="guest"] [data-sign-in]')).toBeVisible();
+    await expect(section.locator("[data-mission-docket]")).toHaveCount(4);
+    await expect(section.locator('[data-mission-docket][data-complete="true"]')).toHaveCount(1);
+    await expect(section.locator("[data-player-docket]")).toHaveCount(3);
+    await expect(section.locator("[data-home-stage]")).toHaveCount(2);
+    await expect(section.locator('[data-home-stage][data-stage-view="picture"]')).toHaveCount(2);
+    await expectNoA11yViolations(page);
+  });
+
+  test("locker: the item cards (equipped, owned, new) and the form clean and dirty", async ({ page }) => {
+    await page.goto("/design#locker");
+    const section = page.locator("section#locker");
+    await expect(section.locator("[data-locker]")).toHaveCount(2);
+    await expect(section.locator('[data-locker][data-dirty="false"]')).toHaveCount(1);
+    await expect(section.locator('[data-locker][data-dirty="true"]')).toHaveCount(1);
+    await expect(section.locator('[data-state="equipped"]').first()).toBeVisible();
+    await expect(section.locator('[data-state="owned"]').first()).toBeVisible();
+    await expect(section.locator('[data-new="true"]').first()).toBeVisible();
+    await expectNoA11yViolations(page);
+  });
+});

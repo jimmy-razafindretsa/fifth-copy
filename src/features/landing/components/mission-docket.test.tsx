@@ -1,9 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { MissionId, Missions } from "@/features/stats";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
-import { MissionDocketLoaded, MissionDocketView } from "./mission-docket";
+import {
+  MissionDocketLoaded,
+  MissionDocketView,
+  type MissionProgress,
+  type Missions,
+} from "./mission-docket";
+
+type MissionId = MissionProgress["id"];
 
 // #943 C18, C20: the mission docket's three templates, both languages, the complete state, a failed read.
 const TARGET: Record<MissionId, number> = { "accuracy-95": 3, "finish-3": 3, "accuracy-98": 1 };
@@ -32,7 +38,9 @@ describe("MissionDocketView (C18)", () => {
 
   it("the bar has target segments, progress of them done", () => {
     const html = view("finish-3", 1);
-    expect(html).toMatch(/role="progressbar"[^>]*aria-valuemin="0" aria-valuemax="3" aria-valuenow="1"/);
+    expect(html).toMatch(
+      /role="progressbar"[^>]*aria-valuemin="0" aria-valuemax="3" aria-valuenow="1"/,
+    );
     expect(html.match(/data-done="true"/g)).toHaveLength(1);
     expect(html.match(/data-done="false"/g)).toHaveLength(2);
     expect(html).toContain('data-complete="false"');
@@ -51,13 +59,18 @@ describe("MissionDocketView (C18)", () => {
 describe("MissionDocketLoaded (C20)", () => {
   const labels = en.home.mission;
   it("a rejected read renders nothing", async () => {
-    const node = await MissionDocketLoaded({ load: () => Promise.reject(new Error("db down")), labels });
+    const node = await MissionDocketLoaded({
+      load: () => Promise.reject(new Error("db down")),
+      labels,
+    });
     expect(node).toBeNull();
   });
 
   it("no viewer renders nothing; a read renders the docket", async () => {
     expect(await MissionDocketLoaded({ load: async () => null, labels })).toBeNull();
-    const missions: Missions = { today: { id: "finish-3", target: 3, progress: 2, complete: false }, stars: 0 };
+    const missions: Missions = {
+      today: { id: "finish-3", target: 3, progress: 2, complete: false },
+    };
     const node = await MissionDocketLoaded({ load: async () => missions, labels });
     expect(renderToStaticMarkup(node!)).toContain(">2 / 3<");
   });

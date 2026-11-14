@@ -23,6 +23,7 @@ import { countTypistsOnline } from "@/features/lobby/server";
 import { getMissions, getProfile } from "@/features/stats";
 import { fill, getT } from "@/i18n";
 import pkg from "../../../package.json";
+import { docketRank } from "./docket-rank";
 
 /** One read of the viewer's missions per request: the mission docket and the star cell share it. */
 const missionsOf = cache((id: string) => getMissions({ id }));
@@ -78,8 +79,10 @@ export async function HomeView({ viewer }: { viewer: Viewer }) {
             picture: <Avatar user={avatar} size={64} decorative />,
           }}
           href={LINKS.profile}
-          labels={{ ...h.docket, ranks: t.landing.clerk.ranks }}
-          load={async () => (await getProfile(viewer)).service.meanWpm}
+          labels={h.docket}
+          load={async () =>
+            docketRank((await getProfile(viewer)).service.meanWpm, t.landing.clerk.ranks)
+          }
           stars={
             <StarCell
               load={async () => (await missions())?.stars ?? null}

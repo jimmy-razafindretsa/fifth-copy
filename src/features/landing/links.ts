@@ -41,6 +41,8 @@ export const LINKS: ShippedLinks & Partial<Record<HeldBackLink, string>> = {
   profile: "/profile",
   landing: "/welcome",
   rooms: "/welcome#rooms",
+  // the locker shipped with #943 (bible 14.2): `OPEN THE LOCKER →` is back on the landing (#875)
+  locker: "/locker",
 };
 
 export type SocialKey = "github" | "linkedin" | "discord" | "youtube";
@@ -65,8 +67,11 @@ export const EMBEDS = {
  * The clerk embed's URL: with the viewer's saved outfit as `?cfg=` (bible 15, #687) so the first frame
  * already wears it, or the plain page (a random issue) when nothing is saved.
  */
-export function clerkEmbedSrc(outfit: Outfit | null): string {
-  return outfit
-    ? `${EMBEDS.clerk}?cfg=${encodeURIComponent(JSON.stringify(outfit))}`
-    : EMBEDS.clerk;
+export function clerkEmbedSrc(outfit: Outfit | null, { locker = false } = {}): string {
+  // the locker flag (bible 15): starts in the default outfit, a click waves; the saved one goes in cfg
+  const params = [
+    ...(locker ? ["locker=1"] : []),
+    ...(outfit ? [`cfg=${encodeURIComponent(JSON.stringify(outfit))}`] : []),
+  ];
+  return params.length > 0 ? `${EMBEDS.clerk}?${params.join("&")}` : EMBEDS.clerk;
 }

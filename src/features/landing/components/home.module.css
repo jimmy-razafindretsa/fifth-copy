@@ -1,0 +1,568 @@
+/*
+ * The Home menu (#943, #945, #946; bible "Home menu (extension, #943)", reference
+ * docs/design/bible/screenshots/home-menu-play.png): the menu column on the theme ground, the clerk
+ * stage (red ground, sun rays, ink podium with a gold rim) on the right half, the player docket top
+ * right, the mission docket bottom left and the key-hint bar bottom right. Phones: one column, no stage.
+ * Colours through roles only; motion through the --motion-* tokens.
+ */
+
+@reference "../../../app/globals.css";
+
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 100dvh;
+  padding: 16px;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  overflow-x: clip;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.wordmark {
+  @apply type-display-lg ink-misregister;
+  margin: 0;
+  font-size: clamp(44px, 6.4vw, 92px);
+  letter-spacing: 0.04em;
+  line-height: 0.95;
+  text-shadow:
+    1px 1px 0 var(--color-primary),
+    3px 3px 0 var(--color-primary);
+}
+
+/* the kicker band (bible 4 kicker, 5.1 brand angle): paper on red, tilted 4° (big skewed pieces) */
+.band {
+  @apply type-label;
+  display: inline-block;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  background-color: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 2px solid var(--color-primary-fg);
+  outline: 2px solid var(--color-primary);
+  padding: 6px 14px;
+  transform: rotate(-4deg);
+  transform-origin: 0 50%;
+  margin-left: 4px;
+}
+
+/* ---- the menu ---- */
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.entry {
+  @apply type-display-md;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 4px 18px 4px 44px;
+  font-size: clamp(30px, 4vw, 52px);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: left;
+  color: var(--color-fg-muted);
+  background: transparent;
+  border: 3px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-out),
+    color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.entry:hover {
+  text-decoration: none;
+}
+
+/* selected: the 7.1 stamp plate (red, paper text, ink rule and hard ink offset) with the gold star */
+.entry[data-selected="true"] {
+  background-color: var(--color-primary);
+  color: var(--color-primary-fg);
+  border-color: var(--color-band);
+  box-shadow: 6px 6px 0 var(--color-band);
+}
+
+.entry[data-selected="true"]:active {
+  background-color: var(--color-pressed);
+  box-shadow: 2px 2px 0 var(--color-band);
+}
+
+.entry[data-pending="true"],
+.entry[aria-disabled="true"] {
+  cursor: progress;
+}
+
+.entry:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+.entryStar {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  margin-top: -11px;
+}
+
+.entryLabel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* the entry tag (#943 part E): gold ground, ink label (bible 7.6 tag on the landing) */
+.tag {
+  @apply type-label;
+  flex: none;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background-color: var(--color-reward);
+  color: var(--color-band);
+  padding: 2px 8px;
+}
+
+/* the 7.4 inline error line */
+.errorLine {
+  margin: 0;
+  max-width: 46ch;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+
+/* the description line: a short red rule, then one mono line */
+.description {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  margin: 4px 0 0;
+  max-width: 46ch;
+  @apply type-typing;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--color-fg);
+}
+
+.description::before {
+  content: "";
+  flex: none;
+  width: 28px;
+  height: 2px;
+  background-color: var(--color-primary);
+  transform: translateY(-4px);
+}
+
+/* ---- the key-hint bar: an ink band with paper labels ---- */
+.hintBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 6px 14px;
+  background-color: var(--color-band);
+  color: var(--color-band-fg);
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+}
+
+.hint,
+.hintControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hintForm {
+  display: contents;
+}
+
+.hintControl {
+  min-height: 44px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  color: var(--color-band-fg);
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.hintControl:hover {
+  color: var(--color-reward);
+  text-decoration: none;
+}
+
+.hintControl:focus-visible {
+  outline: 2px solid var(--color-band-fg);
+  outline-offset: 2px;
+}
+
+.cap {
+  display: none;
+  border: 2px solid var(--color-band-fg);
+  padding: 2px 8px;
+}
+
+.meta {
+  @apply type-typing;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--color-band-muted);
+  white-space: nowrap;
+}
+
+/* ---- the mission docket (7.4 docket, paper card with the ink print offset) ---- */
+.mission {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, 100%);
+  padding: 12px 14px;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  box-shadow: 6px 6px 0 var(--color-band);
+}
+
+.missionHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.missionTitle {
+  @apply type-label;
+  margin: 0;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-link);
+}
+
+.missionCount {
+  @apply type-typing;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.missionLine {
+  @apply type-typing;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.segments {
+  display: flex;
+  gap: 4px;
+}
+
+.segment {
+  flex: 1;
+  height: 6px;
+  background-color: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+}
+
+.segment[data-done="true"] {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.missionDone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background-color: var(--color-band);
+  color: var(--color-band-fg);
+  padding: 2px 8px;
+}
+
+.missionPlus {
+  color: var(--color-reward);
+}
+
+/* ---- the player docket (#945; bible 7.4: paper card, 2px ink rule, hard ink offset) ---- */
+.docket {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  box-shadow: 6px 6px 0 var(--color-band);
+}
+
+.docketLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.docketLink:hover {
+  text-decoration: none;
+}
+
+.docketLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.docketPicture {
+  flex: none;
+  line-height: 0;
+}
+
+.docketBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.docketTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.docketName {
+  @apply type-typing;
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.rankTag {
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background-color: var(--color-band);
+  color: var(--color-band-fg);
+  padding: 2px 6px;
+}
+
+.rankBar {
+  height: 8px;
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-fg);
+}
+
+.rankFill {
+  height: 100%;
+  background-color: var(--color-primary);
+}
+
+.rankLine {
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  color: var(--color-fg-muted);
+}
+
+.starCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 1px dashed var(--color-border);
+  @apply type-typing;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ---- the clerk stage (#946): red ground, red halftone, sun rays, the podium ---- */
+.stage {
+  display: none;
+}
+
+.rays {
+  position: absolute;
+  inset: 0;
+  /* the sun-ray recipe printed in ink on the red ground (bible 6, "Home menu" stage) */
+  --color-primary: var(--color-band);
+  @apply sun-rays;
+  pointer-events: none;
+}
+
+.podium {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  width: min(78%, 540px);
+  aspect-ratio: 5 / 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background-color: var(--color-band);
+  border-top: 6px solid var(--color-reward);
+  box-shadow: 0 12px 0 var(--color-band);
+}
+
+.clerk {
+  position: absolute;
+  left: 50%;
+  bottom: calc(9% + min(78%, 540px) / 10);
+  width: min(62%, 440px);
+  height: 74%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.clerkFrame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.picture {
+  position: absolute;
+  left: 50%;
+  bottom: calc(9% + min(78%, 540px) / 10 + 8px);
+  width: 200px;
+  height: 200px;
+  transform: translateX(-50%);
+  line-height: 0;
+}
+
+.picture :is(img, svg) {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- tablet and desktop: the menu column on the left, the stage on the right half ---- */
+@media (min-width: 768px) {
+  .screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+  }
+
+  .column {
+    grid-column: 1;
+    grid-row: 1;
+    padding: 32px 32px 32px 40px;
+    gap: 28px;
+  }
+
+  .menu {
+    margin-top: auto;
+  }
+
+  .mission {
+    margin-top: auto;
+  }
+
+  .stage {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    position: relative;
+    min-height: 100dvh;
+    overflow: hidden;
+    pointer-events: none;
+    background-color: var(--color-primary);
+    @apply paper-grain-red;
+  }
+
+  .docketSlot {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 2;
+    width: min(380px, calc(50% - 48px));
+  }
+
+  .hintBar {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    z-index: 2;
+    max-width: calc(50% - 48px);
+  }
+
+  .cap {
+    display: inline-block;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .rays {
+    background-image: none;
+  }
+}
+
+/* reduced motion: the selection changes without any transition (tokens are 0ms; stated for clarity) */
+@media (prefers-reduced-motion: reduce) {
+  .entry {
+    transition: none;
+  }
+}
+
+:root[data-motion="reduce"] .entry {
+  transition: none;
+}

@@ -6,7 +6,7 @@ import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { buildProfile, type Profile } from "../view/profile";
 import { profileFixtures, PROFILE_FIXTURE_NOW } from "../view/profile-fixtures";
-import { stageView } from "./profile-stage";
+import { stageView } from "@/components/ui";
 import { ProfileScreen, profileLabels, type ProfileScreenProps } from "./profile-screen";
 
 // #932 C4-C8: the Personnel file screen, drawn from a Profile and the viewer's identity.

@@ -9,6 +9,10 @@ type ShippedLinks = {
   signIn: string;
   privacy: string;
   profile: string;
+  /** The landing at a stable URL for a viewer, whose `/` is the Home menu (#943 C5). */
+  landing: string;
+  /** The landing's open-rooms docket (OPEN ROOMS on the Home menu, #943 C5). */
+  rooms: string;
 };
 
 /**
@@ -23,16 +27,22 @@ export type HeldBackLink = "locker" | "teachers" | "about" | "terms" | "contact"
  * Where the landing's links go. The guide link anchors to the landing's "How a race runs" until the
  * special-characters guide (card 388) exists, as the reference does. It is the one guide href: the site
  * header and the Dawn report's tip (`REPORT_LINKS` of the results feature, #899) both read it, from any
- * page, so it names the landing (`/#how`); pointing the guide at its own route is this one line.
+ * page, so it names the landing at its stable URL (`/welcome#how`, #943: `/` is the Home menu for a
+ * viewer); on the landing itself the header keeps the in-page anchor (`how`). Pointing the guide at its
+ * own route is this one line.
  */
 export const LINKS: ShippedLinks & Partial<Record<HeldBackLink, string>> = {
   home: "/",
   play: "#play",
   how: "#how",
-  guide: "/#how",
+  guide: "/welcome#how",
   signIn: "/sign-in",
   privacy: "/privacy",
   profile: "/profile",
+  landing: "/welcome",
+  rooms: "/welcome#rooms",
+  // the locker shipped with #943 (bible 14.2): `OPEN THE LOCKER →` is back on the landing (#875)
+  locker: "/locker",
 };
 
 export type SocialKey = "github" | "linkedin" | "discord" | "youtube";
@@ -57,8 +67,11 @@ export const EMBEDS = {
  * The clerk embed's URL: with the viewer's saved outfit as `?cfg=` (bible 15, #687) so the first frame
  * already wears it, or the plain page (a random issue) when nothing is saved.
  */
-export function clerkEmbedSrc(outfit: Outfit | null): string {
-  return outfit
-    ? `${EMBEDS.clerk}?cfg=${encodeURIComponent(JSON.stringify(outfit))}`
-    : EMBEDS.clerk;
+export function clerkEmbedSrc(outfit: Outfit | null, { locker = false } = {}): string {
+  // the locker flag (bible 15): starts in the default outfit, a click waves; the saved one goes in cfg
+  const params = [
+    ...(locker ? ["locker=1"] : []),
+    ...(outfit ? [`cfg=${encodeURIComponent(JSON.stringify(outfit))}`] : []),
+  ];
+  return params.length > 0 ? `${EMBEDS.clerk}?${params.join("&")}` : EMBEDS.clerk;
 }

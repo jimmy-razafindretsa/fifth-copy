@@ -14,7 +14,7 @@ import {
   type RaceSettingsPatch,
   type Welcome,
 } from "@fifth-copy/protocol";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import { scaled } from "../timeouts";
 
 // Room helpers shared by the lobby and race specs (#561 C10; first written for #107 in e2e/lobby.spec.ts).
@@ -24,7 +24,7 @@ export const LOBBY_PATH = /^\/lobby\/([A-HJ-NP-Z]{3}-[0-9]{4})$/;
 
 /** Creates a private race from the landing and returns its code; the page stays in the waiting room. */
 export async function createLobby(page: Page): Promise<string> {
-  await page.goto("/");
+  await page.goto(LANDING);
   await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
   await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
   return LOBBY_PATH.exec(new URL(page.url()).pathname)![1]!;
@@ -42,7 +42,7 @@ export async function joinAsGuest(
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
   const page = await context.newPage();
   await before?.(page);
-  await page.goto("/");
+  await page.goto(LANDING);
   const form = page.getByRole("form", { name: "Join with code" });
   await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);
   await form.getByRole("button", { name: "JOIN →", exact: true }).click();

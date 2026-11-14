@@ -1,5 +1,5 @@
 import { ACTION_WAIT, HYDRATION_WAIT } from "../timeouts";
-import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 import {
   PASSWORD,
   authForm,
@@ -12,6 +12,7 @@ import {
   seedAccount,
   sessionCookie,
   signOutButton,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #36 C12, C14, C15: the header account control in its three states, a session that survives a reload
@@ -23,7 +24,7 @@ test.describe("sign-in, session and sign-out (#36)", () => {
   test.afterAll(async () => deleteUsers(PREFIX));
 
   test("C12 header: signed out, guest, account", async ({ page, context }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     const signInLink = header(page).getByRole("link", { name: "SIGN IN", exact: true });
     await expect(signInLink).toHaveAttribute("href", "/sign-in");
     await expect(signOutButton(page)).toHaveCount(0);
@@ -43,6 +44,8 @@ test.describe("sign-in, session and sign-out (#36)", () => {
     await fill(page, account, PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
     await expect(page).toHaveURL(/\/$/, { timeout: ACTION_WAIT });
+    // `/` is the Home menu for a viewer (#943): the site header lives on the landing
+    await page.goto(LANDING);
     await expect(header(page)).toContainText(account);
     await expect(signOutButton(page)).toBeVisible();
     await expect(header(page).getByRole("link", { name: "SIGN IN", exact: true })).toHaveCount(0);
@@ -77,14 +80,14 @@ test.describe("sign-in, session and sign-out (#36)", () => {
     expect(lifetime).toBeGreaterThan(2_592_000 - 3600);
     expect(lifetime).toBeLessThanOrEqual(2_592_000 + 60);
 
-    await page.goto("/");
+    await page.goto(LANDING);
     await page.reload();
     await expect(header(page)).toContainText(account);
     await expect(signOutButton(page)).toBeVisible();
 
     const fresh = await browser.newContext({ storageState: await context.storageState() });
     const freshPage = await fresh.newPage();
-    await freshPage.goto("/");
+    await freshPage.goto(LANDING);
     await expect(header(freshPage)).toContainText(account, { timeout: HYDRATION_WAIT });
     await expect(signOutButton(freshPage)).toBeVisible();
     await fresh.close();
@@ -99,7 +102,7 @@ test.describe("sign-in, session and sign-out (#36)", () => {
     await openForm(page, "/sign-in");
     await fill(page, account, PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
-    await expect(signOutButton(page)).toBeVisible({ timeout: ACTION_WAIT });
+    await landSignedIn(page, ACTION_WAIT);
 
     await signOutButton(page).click();
     await expect(header(page).getByRole("link", { name: "SIGN IN", exact: true })).toBeVisible({

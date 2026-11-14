@@ -35,7 +35,7 @@ export async function LandingPage({ primary, entries, rooms, finalAction }: Prop
   const savedOutfit = viewer ? await getClerkOutfit(viewer.id) : null;
   return (
     <div className={styles.page} data-default-theme="light">
-      <LandingHeader />
+      <LandingHeader current="landing" />
       <main className="flex flex-1 flex-col">
         <LandingHero primary={primary} entries={entries} rooms={rooms} />
         <TickerBand />

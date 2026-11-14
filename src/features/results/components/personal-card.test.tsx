@@ -190,7 +190,7 @@ describe("PersonalCard errors by key and tip (#867 C3)", () => {
     expect(html).toMatch(/data-tip="special"/);
     expect(html).toContain("The é key slipped 5 times: the guide shows how to type it.");
     const link = html.match(/<a [^>]*data-guide[^>]*>([^<]*)<\/a>/)!;
-    expect(link[0]).toContain('href="/#how"');
+    expect(link[0]).toContain('href="/welcome#how"');
     expect(link[1]).toBe("HOW TO TYPE É Ç « »");
   });
 

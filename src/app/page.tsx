@@ -1,18 +1,12 @@
-import { LandingPage, OpenRooms } from "@/features/landing";
-import { LobbyEntries, QuickRaceButton } from "@/features/lobby";
-import { listOpenLobbies } from "@/features/lobby/server";
-import { getT } from "@/i18n";
+import { getViewer } from "@/features/identity";
+import { HomeView } from "./_components/home-view";
+import { LandingView } from "./_components/landing-view";
 
+/**
+ * `/` (#943 C1, ADR 0009): a viewer (an account, or a guest whose cookie resolves) gets the Home menu;
+ * a first-time visitor, and a stale cookie that resolves to nobody, the landing. Reading creates nothing.
+ */
 export default async function Home() {
-  const t = await getT();
-  const errors = t.landing.errors;
-  return (
-    <LandingPage
-      primary={<QuickRaceButton labels={t.landing.quick} errors={errors} />}
-      entries={<LobbyEntries />}
-      // the public rooms joinable now (#807); streams in its own Suspense boundary
-      rooms={<OpenRooms load={() => listOpenLobbies()} labels={t.landing.rooms} errors={errors} />}
-      finalAction={<QuickRaceButton variant="inverted" labels={t.landing.quick} errors={errors} />}
-    />
-  );
+  const viewer = await getViewer();
+  return viewer ? <HomeView viewer={viewer} /> : <LandingView />;
 }

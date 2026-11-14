@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import { HYDRATION_WAIT } from "../timeouts";
 import {
   authForm,
@@ -12,6 +12,7 @@ import {
   seedAccount,
   sessionCookie,
   signOutButton,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #87 C2 (ADR 0009 "CSRF through Auth.js and server actions' origin check"): a server action POST whose
@@ -84,7 +85,7 @@ test.describe("CSRF (#87 C2)", () => {
     const realPage = await real.newPage();
     await forgeOrigin(realPage, new URL(baseURL!).origin);
     expect((await signInThroughForm(realPage, username)).status()).toBeLessThan(400);
-    await expect(signOutButton(realPage)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(realPage);
     expect(await sessionUser(real)).toBe(username);
     await real.close();
   });
@@ -95,7 +96,7 @@ test.describe("CSRF (#87 C2)", () => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await signInThroughForm(page, username);
-    await expect(signOutButton(page)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(page);
 
     await forgeOrigin(page, FOREIGN);
     const action = page.waitForResponse(
@@ -107,7 +108,7 @@ test.describe("CSRF (#87 C2)", () => {
 
     // still signed in, and the cookie still resolves (no tokenVersion bump)
     expect(await sessionUser(context)).toBe(username);
-    await page.goto("/");
+    await page.goto(LANDING);
     await expect(signOutButton(page)).toBeVisible({ timeout: HYDRATION_WAIT });
     await expect(header(page).getByRole("link", { name: "SIGN IN", exact: true })).toHaveCount(0);
     await context.close();

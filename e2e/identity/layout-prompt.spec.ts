@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 import { HYDRATION_WAIT } from "../timeouts";
 
 // #70 C1, C2: the first-race keyboard prompt on a lobby page. Tagged @layout-prompt: every other spec
@@ -12,7 +12,7 @@ const prompt = (page: Page) => page.getByRole("dialog", { name: TITLE });
 
 /** A fresh guest creates a private race and lands in its lobby (no layout on file yet). */
 async function openLobby(page: Page): Promise<string> {
-  await page.goto("/");
+  await page.goto(LANDING);
   await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
   await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
   return new URL(page.url()).pathname;

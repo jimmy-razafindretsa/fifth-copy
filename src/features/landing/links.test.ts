@@ -58,13 +58,15 @@ describe("public links (#875 C1)", () => {
       "/settings",
       "/privacy",
       "/profile",
+      "/welcome",
+      "/locker",
       "/lobby/KGB-4821",
     ]) {
       expect(served(ok), ok).toBe(true);
     }
-    // five of the seven paths main offered before #875 have no page yet (/privacy shipped with #76,
-    // /profile with #932)
-    for (const dead of ["/locker", "/teachers", "/about", "/terms", "/contact"]) {
+    // four of the seven paths main offered before #875 have no page yet (/privacy shipped with #76,
+    // /profile with #932, /locker with #943)
+    for (const dead of ["/teachers", "/about", "/terms", "/contact"]) {
       expect(served(dead), dead).toBe(false);
     }
   });
@@ -125,5 +127,27 @@ describe("Dawn report links (#899)", () => {
       if (file.endsWith(path.join("view", "links.ts"))) continue;
       expect(readFileSync(file, "utf8"), path.relative(root, file)).not.toMatch(literal);
     }
+  });
+});
+
+describe("Home menu links (#943 C5)", () => {
+  it("the landing has one stable URL for a viewer, with its rooms docket and guide section", () => {
+    expect(LINKS.landing).toBe("/welcome");
+    expect(LINKS.rooms).toBe(`${LINKS.landing}#rooms`);
+    expect(LINKS.guide).toBe(`${LINKS.landing}#how`);
+    expect(LINKS.how).toBe("#how");
+    expect(served(LINKS.landing)).toBe(true);
+  });
+
+  it("the open-rooms docket carries the rooms anchor", () => {
+    const docket = readFileSync(path.resolve(__dirname, "components/open-rooms.tsx"), "utf8");
+    expect(docket).toMatch(/id="rooms"/);
+  });
+});
+
+describe("the locker link (#943 C23)", () => {
+  it("LINKS.locker is /locker, served, so OPEN THE LOCKER → is back", () => {
+    expect(LINKS.locker).toBe("/locker");
+    expect(served(LINKS.locker!)).toBe(true);
   });
 });

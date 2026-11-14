@@ -11,9 +11,10 @@ import styles from "./header.module.css";
  * the guide link, EN/FR, NIGHT SHIFT, then the account control (#36): the viewer's docket and SIGN IN or
  * SIGN OUT. The docket only shows a viewer that exists: reads never create guests (ADR 0009).
  * A viewer also gets MY FILE (#932, from 481px up; red and ruled on `/profile`, `current="profile"`), and
- * the docket links to their Personnel file at every width.
+ * the docket links to their Personnel file at every width. On the landing (`current="landing"`, `/` and
+ * `/welcome`) the guide link is the in-page `#how` anchor.
  */
-export async function LandingHeader({ current }: { current?: "profile" } = {}) {
+export async function LandingHeader({ current }: { current?: "profile" | "landing" } = {}) {
   const [t, locale, theme, viewer] = await Promise.all([
     getT(),
     getLocale(),
@@ -35,7 +36,8 @@ export async function LandingHeader({ current }: { current?: "profile" } = {}) {
         <span className={styles.brandName}>{t.brand.name}</span>
       </a>
       <nav aria-label={t.header.navLabel} className={styles.nav}>
-        <a href={LINKS.guide} className={styles.navLink}>
+        {/* on the landing itself the guide stays the in-page anchor (#943 C5) */}
+        <a href={current === "landing" ? LINKS.how : LINKS.guide} className={styles.navLink}>
           {t.header.guide}
         </a>
         {viewer ? (

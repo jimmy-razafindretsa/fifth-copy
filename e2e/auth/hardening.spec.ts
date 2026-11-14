@@ -1,5 +1,5 @@
 import type { Cookie, Page } from "@playwright/test";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import { createLobby } from "../race/helpers";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
 import {
@@ -14,6 +14,7 @@ import {
   sessionCookie,
   signOutButton,
   signUpThroughForm,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #87 C1 (cookie flags) and C8 (sign-out revokes every device), ADR 0009 amended.
@@ -53,7 +54,7 @@ test.describe("account cookies and revocation (#87)", () => {
     expectPolicy(await cookieNamed(page, "fc_guest"), "fc_guest");
 
     // locale and theme: the landing header's toggles (server actions)
-    await page.goto("/");
+    await page.goto(LANDING);
     const language = page.getByRole("group", { name: "Language" });
     await expect(async () => {
       await language.getByRole("button", { name: "FR", exact: true }).click();
@@ -75,7 +76,7 @@ test.describe("account cookies and revocation (#87)", () => {
     await openForm(page, "/sign-in");
     await fill(page, username, PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
-    await expect(signOutButton(page)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(page);
     const session = await sessionCookie(page.context());
     expect(session?.name).toBe(
       PRODUCTION ? "__Secure-authjs.session-token" : "authjs.session-token",
@@ -97,19 +98,19 @@ test.describe("account cookies and revocation (#87)", () => {
     await openForm(otherPage, "/sign-in");
     await fill(otherPage, username, PASSWORD);
     await authForm(otherPage).getByRole("button", { name: "SIGN IN", exact: true }).click();
-    await expect(signOutButton(otherPage)).toBeVisible({ timeout: HYDRATION_WAIT });
+    await landSignedIn(otherPage);
     const captured = await sessionCookie(other);
     expect(captured).toBeDefined();
 
     // sign out on the first device
-    await page.goto("/");
+    await page.goto(LANDING);
     await signOutButton(page).click();
     await expect(header(page).getByRole("link", { name: "SIGN IN", exact: true })).toBeVisible({
       timeout: HYDRATION_WAIT,
     });
 
     // the other device's cookie no longer resolves: signed out on the page and at /api/auth/session
-    await otherPage.goto("/");
+    await otherPage.goto(LANDING);
     await expect(header(otherPage).getByRole("link", { name: "SIGN IN", exact: true })).toBeVisible(
       { timeout: HYDRATION_WAIT },
     );

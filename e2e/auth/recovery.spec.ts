@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { ACTION_WAIT, HYDRATION_WAIT } from "../timeouts";
-import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 import {
   PASSWORD,
   SESSION_COOKIE,
@@ -14,6 +14,7 @@ import {
   sessionCookie,
   signOutButton,
   signUpThroughForm,
+  landSignedIn,
 } from "./auth-helpers";
 
 // #46 C2, C5: the one-time recovery code revealed once after sign-up, then redeemed on /recover: the
@@ -89,7 +90,7 @@ test.describe("one-time recovery code (#46)", () => {
     const stale = await browser.newContext();
     await stale.addCookies([{ ...before!, name: before!.name || SESSION_COOKIE }]);
     const stalePage = await stale.newPage();
-    await stalePage.goto("/");
+    await stalePage.goto(LANDING);
     await expect(header(stalePage).getByRole("link", { name: "SIGN IN", exact: true })).toBeVisible(
       { timeout: HYDRATION_WAIT },
     );
@@ -104,6 +105,7 @@ test.describe("one-time recovery code (#46)", () => {
     expect(await sessionCookie(context)).toBeUndefined();
     await fill(page, username, NEW_PASSWORD);
     await authForm(page).getByRole("button", { name: "SIGN IN", exact: true }).click();
+    await landSignedIn(page, ACTION_WAIT);
     await expect(header(page)).toContainText(username, { timeout: ACTION_WAIT });
   });
 

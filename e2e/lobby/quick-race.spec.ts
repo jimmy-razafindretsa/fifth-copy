@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import {
   LOBBY_PATH,
   closeOpenPublicLobbies,
@@ -32,7 +32,7 @@ const ended = (page: Page) => page.locator('[data-seat-status] [data-finished="e
 
 /** A visitor on the hydrated landing presses the hero's QUICK RACE; returns the room code it lands in. */
 async function quickRace(page: Page): Promise<string> {
-  await page.goto("/");
+  await page.goto(LANDING);
   await expect(page.locator("section#play video[aria-hidden='true']")).toHaveAttribute(
     "data-feed",
     /^(armed|near)$/,

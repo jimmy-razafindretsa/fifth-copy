@@ -27,3 +27,5 @@ export {
 export { useEmbedBridge } from "./use-embed-bridge";
 export { hasWebGL2, type WebGLCanvas } from "./webgl";
 export { NEAR_VIEWPORT, useInViewport, useNearViewport } from "./use-near-viewport";
+export { stageView } from "./stage-view";
+export { useWebGL2 } from "./use-webgl2";

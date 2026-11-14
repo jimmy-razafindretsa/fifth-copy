@@ -2,7 +2,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { Client } from "pg";
 import { OUTFIT_CATALOGUE, OUTFIT_CATEGORIES } from "../src/features/identity/clerk/outfit";
 import { en } from "../src/i18n/en";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "./fixtures";
 import { createLobby } from "./race/helpers";
 import { postResults, seedLobby, six, startRace, withoutWebGL } from "./results/helpers";
 import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "./timeouts";
@@ -79,7 +79,7 @@ const feedVideo = (page: Page) => hero(page).locator("video[aria-hidden='true']"
  * client, so `armed` or `near` means the tree is interactive (controlled inputs keep what is typed).
  */
 async function ready(page: Page) {
-  await page.goto("/");
+  await page.goto(LANDING);
   await hydrated(page);
 }
 
@@ -95,7 +95,7 @@ test.describe("landing page (#497)", () => {
   test.beforeEach(() => test.slow());
 
   test("C1 the bible's sections in order, one h1 and the section headings", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     await expect(page).toHaveTitle("FIFTH COPY · TYPE FAST · TYPE FIRST");
     const order = await page.evaluate(() =>
       [...document.querySelectorAll("header, main > section, footer")].map(
@@ -138,14 +138,14 @@ test.describe("landing page (#497)", () => {
   test("C2 header: brand link, guide link, EN/FR, NIGHT SHIFT, SIGN IN; no docket before a guest exists", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     const header = page.locator("header");
     await expect(header.getByRole("link", { name: "FIFTH COPY" })).toHaveAttribute("href", "/");
     const nav = header.getByRole("navigation", { name: "Site" });
-    // the one guide href (#899): it names the landing, so it also works from every other page
+    // on the landing the guide is the in-page anchor; elsewhere it names `/welcome#how` (#899, #943)
     await expect(nav.getByRole("link", { name: "HOW TO TYPE É Ç « »" })).toHaveAttribute(
       "href",
-      "/#how",
+      "#how",
     );
     const language = nav.getByRole("group", { name: "Language" });
     await expect(language.getByRole("button", { name: "EN", exact: true })).toHaveAttribute(
@@ -329,8 +329,11 @@ test.describe("landing page (#497)", () => {
     expect(values.every((v) => v.length > 1 && v !== "…")).toBe(true);
     await expect(page.getByText("UNASSIGNED", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "REISSUE UNIFORM" })).toBeVisible();
-    // #875: the locker is post-v1, so the personnel file offers no OPEN THE LOCKER button
-    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveCount(0);
+    // #943 C23: the locker shipped, so the personnel file offers OPEN THE LOCKER again (#875 held it)
+    await expect(page.getByRole("link", { name: "OPEN THE LOCKER →" })).toHaveAttribute(
+      "href",
+      "/locker",
+    );
     await expect(page.locator("[aria-labelledby='clerk-title'] ol li")).toHaveText([
       "RECRUIT",
       "CLERK",
@@ -343,7 +346,7 @@ test.describe("landing page (#497)", () => {
   test("C9 ticker, history, how, final call and footer carry the bible's copy and recipes", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     const primary = await role(page, "--color-primary");
     const ticker = page.locator("main > section[aria-hidden='true']");
     const words = await ticker.locator("span > span").allTextContents();
@@ -381,7 +384,8 @@ test.describe("landing page (#497)", () => {
     for (const name of ["PLAY", "LEARN", "AEGIS CORP."]) {
       await expect(footer.getByRole("navigation", { name })).toBeVisible();
     }
-    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(6);
+    // #943: the locker is back in PLAY
+    await expect(footer.getByRole("navigation").getByRole("link")).toHaveCount(7);
     await expect(footer.getByRole("list")).toHaveCount(0);
     await expect(footer.getByText("BUILT BYAEGIS CORP.")).toBeVisible();
     await expect(
@@ -409,7 +413,7 @@ test.describe("landing page (#497)", () => {
 
   test("C11 reduced motion stops marquee, stars, bob and the caret blink", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/");
+    await page.goto(LANDING);
     const animated = await page.evaluate(() =>
       [...document.querySelectorAll("main *")]
         .map((el) => getComputedStyle(el))
@@ -483,7 +487,7 @@ test.describe("landing always starts light (#651)", () => {
       javaScriptEnabled: false,
     });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto(LANDING);
     expect(await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)).toBe(
       true,
     );
@@ -714,7 +718,7 @@ test.describe("landing lobby entries (#99)", () => {
   test("C1 create and join forms are siblings in the wrapping row after the pitch", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     await expect(createButton(page)).toBeVisible();
     await expect(codeField(page)).toBeVisible();
     await expect(joinButton(page)).toBeVisible();
@@ -757,7 +761,7 @@ test.describe("landing lobby entries (#99)", () => {
   });
 
   test("C2 the code field masks as you type and uses the code face", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     const field = codeField(page);
     await field.pressSequentially("kgb4821");
     await expect(field).toHaveValue("KGB-4821");
@@ -775,7 +779,7 @@ test.describe("landing lobby entries (#99)", () => {
   });
 
   test("C3 a malformed code is rejected inline with no request", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     const posts: string[] = [];
     page.on("request", (r) => r.method() === "POST" && posts.push(r.url()));
     const field = codeField(page);
@@ -794,7 +798,7 @@ test.describe("landing lobby entries (#99)", () => {
   test("C4 a server error renders the docket error line and the form stays usable", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     const primary = await role(page, "--color-primary");
     const fg = await role(page, "--color-fg");
     const surface = await role(page, "--color-surface");
@@ -822,7 +826,7 @@ test.describe("landing lobby entries (#99)", () => {
   });
 
   test("C6 controls follow the bible recipe through tokens", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(LANDING);
     const fg = await role(page, "--color-fg");
     const bg = await role(page, "--color-bg");
     const surface = await role(page, "--color-surface");
@@ -878,7 +882,7 @@ test.describe("landing lobby entries (#99)", () => {
       context,
     }) => {
       await useScheme(page, context, scheme);
-      await page.goto("/");
+      await page.goto(LANDING);
       await codeField(page).pressSequentially("KG");
       await joinButton(page).click();
       await expect(

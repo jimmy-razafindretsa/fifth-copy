@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import {
   LOBBY_PATH,
   joinAsGuest,
@@ -31,7 +31,7 @@ const ended = (page: Page) => page.locator('[data-seat-status] [data-finished="e
 
 /** A fresh visitor on the landing, hydrated (the live feed leaves `idle` only on the client), clicks the entry. */
 async function practise(page: Page): Promise<string> {
-  await page.goto("/");
+  await page.goto(LANDING);
   await expect(page.locator("section#play video[aria-hidden='true']")).toHaveAttribute(
     "data-feed",
     /^(armed|near)$/,

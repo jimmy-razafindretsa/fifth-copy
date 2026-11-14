@@ -1,5 +1,5 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 import { createLobby, makePublic } from "../race/helpers";
 import { ACTION_WAIT, scaled } from "../timeouts";
 
@@ -27,7 +27,7 @@ const overflow = (page: Page) =>
 
 /** Loads the landing and waits for the docket to leave its skeleton (the query answered). */
 async function landing(page: Page) {
-  await page.goto("/");
+  await page.goto(LANDING);
   await expect(docket(page)).toBeVisible();
   await expect(docket(page).locator("[aria-busy='true']")).toHaveCount(0, {
     timeout: ACTION_WAIT,

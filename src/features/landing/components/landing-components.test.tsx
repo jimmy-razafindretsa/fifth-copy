@@ -59,10 +59,10 @@ describe("ClerkSection", () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('aria-current="step">RECRUIT<');
     expect(html).toContain("HERO OF PAPERWORK");
-    // #875 C2: the locker is post-v1, so the file carries no OPEN THE LOCKER button
+    // #943 C23: the locker shipped, so OPEN THE LOCKER is back (#875 held it while it was post-v1)
     expect(html).toContain("REISSUE UNIFORM");
-    expect(html).not.toContain(en.landing.clerk.locker);
-    expect(html).not.toContain('href="/locker"');
+    expect(html).toContain(en.landing.clerk.locker);
+    expect(html).toContain('href="/locker"');
   });
 
   it("offers OPEN THE LOCKER once the locker's route ships (#875)", () => {
@@ -95,7 +95,8 @@ describe("ClerkSection", () => {
 
 // #875 C2: a link appears when its route ships; the footer offers only those (/privacy shipped, #76;
 // the Personnel file, #932).
-const HELD_BACK = ["/locker", "/teachers", "/about", "/terms", "/contact"];
+// /locker shipped with #943
+const HELD_BACK = ["/teachers", "/about", "/terms", "/contact"];
 
 describe("FooterView (#875)", () => {
   for (const [locale, t] of [
@@ -113,8 +114,8 @@ describe("FooterView (#875)", () => {
       expect(html).toContain(f.about);
       expect(html).toContain(`${f.builtBy}<br/>${f.builtByName}`);
       expect(html).toContain(f.copyright);
-      // three columns: PLAY (three race entries), LEARN (the guide and the Personnel file, #932) and
-      // AEGIS CORP. (privacy, #76)
+      // three columns: PLAY (three race entries and the locker, #943), LEARN (the guide and the
+      // Personnel file, #932) and AEGIS CORP. (privacy, #76)
       const navs = [...html.matchAll(/<nav[^>]*aria-label="([^"]+)"[^>]*>(.*?)<\/nav>/g)];
       expect(navs.map((n) => n[1])).toEqual([f.play, f.learn, f.aegis]);
       expect([...html.matchAll(/<h3[^>]*>([^<]*)<\/h3>/g)].map((h) => h[1])).toEqual([
@@ -122,13 +123,14 @@ describe("FooterView (#875)", () => {
         f.learn,
         f.aegis,
       ]);
-      expect(navs[0]![2]!.match(/<a /g)).toHaveLength(3);
-      expect(navs[1]![2]).toContain(`href="/#how"`);
+      expect(navs[0]![2]!.match(/<a /g)).toHaveLength(4);
+      expect(navs[0]![2]).toContain(`href="/locker"`);
+      expect(navs[1]![2]).toContain(`href="#how"`);
       expect(navs[1]![2]!.match(/<a /g)).toHaveLength(2);
       expect(navs[1]![2]).toContain(`href="/profile"`);
       expect(navs[2]![2]!.match(/<a /g)).toHaveLength(1);
       expect(navs[2]![2]).toContain(`href="/privacy"`);
-      for (const held of [f.links.locker, f.links.teachers, f.links.about]) {
+      for (const held of [f.links.teachers, f.links.about]) {
         expect(html).not.toContain(`>${held}<`);
       }
     });

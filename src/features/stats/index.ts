@@ -24,3 +24,13 @@ export {
   type ProfileLinks,
   type ProfileScreenProps,
 } from "./components/profile-screen";
+// The Home menu (#943, #945): today's mission and the stars, and the rank scale of the player docket.
+export { getMissions } from "./queries/get-missions";
+export {
+  MISSION_TEMPLATES,
+  missionFor,
+  type MissionId,
+  type MissionProgress,
+  type Missions,
+} from "./view/missions";
+export { rankFor, rankIndex, type RankStep } from "./view/rank";

@@ -3,7 +3,7 @@ import { hash } from "@node-rs/argon2";
 import type { BrowserContext, Page } from "@playwright/test";
 import { Client } from "pg";
 import { HYDRATION_WAIT } from "../timeouts";
-import { expect, test } from "../fixtures";
+import { expect, LANDING, test } from "../fixtures";
 
 // Shared steps of the #36 auth specs: the username form as a person fills it.
 
@@ -41,6 +41,17 @@ export async function sessionCookie(context: BrowserContext) {
 export const header = (page: Page) => page.getByRole("banner");
 export const signOutButton = (page: Page) =>
   header(page).getByRole("button", { name: "SIGN OUT", exact: true });
+
+/**
+ * After a sign-in the browser lands on `/`, the Home menu for an account (#943): its key-hint bar offers
+ * ESC SIGN OUT. Then loads the landing (`LANDING`), where the site header and its account control live.
+ */
+export async function landSignedIn(page: Page, timeout = HYDRATION_WAIT) {
+  await expect(page).toHaveURL(/\/$/, { timeout });
+  await expect(page.locator("[data-key-hints] [data-sign-out]")).toBeVisible({ timeout });
+  await page.goto(LANDING);
+  await expect(signOutButton(page)).toBeVisible({ timeout: HYDRATION_WAIT });
+}
 
 /** Signs up through the form and waits for the recovery code reveal (#46) with the name in the header. */
 export async function signUpThroughForm(page: Page, username: string, password: string) {

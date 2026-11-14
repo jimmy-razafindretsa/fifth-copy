@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { withoutWebGL } from "../results/helpers";
-import { ACTION_WAIT, HYDRATION_WAIT } from "../timeouts";
+import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "../timeouts";
 import { OUTFIT_CATALOGUE, OUTFIT_CATEGORIES } from "../../src/features/identity/clerk/outfit";
 import { guest, locale, plantGuestCookie, withDb } from "../landing/home-helpers";
 
@@ -195,7 +195,7 @@ test.describe("dressing (C25)", () => {
     // a random issue differs from the default within a few draws
     await expect(async () => {
       await page.locator("[data-random]").click();
-      await expect(locker(page)).toHaveAttribute("data-dirty", "true", { timeout: 500 });
+      await expect(locker(page)).toHaveAttribute("data-dirty", "true", { timeout: scaled(500) });
     }).toPass({ timeout: ACTION_WAIT });
     for (const category of OUTFIT_CATEGORIES) {
       await tab(page, category.toUpperCase()).click();

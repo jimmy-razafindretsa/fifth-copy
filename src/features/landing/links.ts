@@ -9,6 +9,10 @@ type ShippedLinks = {
   signIn: string;
   privacy: string;
   profile: string;
+  /** The landing at a stable URL for a viewer, whose `/` is the Home menu (#943 C5). */
+  landing: string;
+  /** The landing's open-rooms docket (OPEN ROOMS on the Home menu, #943 C5). */
+  rooms: string;
 };
 
 /**
@@ -23,16 +27,20 @@ export type HeldBackLink = "locker" | "teachers" | "about" | "terms" | "contact"
  * Where the landing's links go. The guide link anchors to the landing's "How a race runs" until the
  * special-characters guide (card 388) exists, as the reference does. It is the one guide href: the site
  * header and the Dawn report's tip (`REPORT_LINKS` of the results feature, #899) both read it, from any
- * page, so it names the landing (`/#how`); pointing the guide at its own route is this one line.
+ * page, so it names the landing at its stable URL (`/welcome#how`, #943: `/` is the Home menu for a
+ * viewer); on the landing itself the header keeps the in-page anchor (`how`). Pointing the guide at its
+ * own route is this one line.
  */
 export const LINKS: ShippedLinks & Partial<Record<HeldBackLink, string>> = {
   home: "/",
   play: "#play",
   how: "#how",
-  guide: "/#how",
+  guide: "/welcome#how",
   signIn: "/sign-in",
   privacy: "/privacy",
   profile: "/profile",
+  landing: "/welcome",
+  rooms: "/welcome#rooms",
 };
 
 export type SocialKey = "github" | "linkedin" | "discord" | "youtube";

@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "./fixtures";
 import {
   createLobby,
   hostRoom,
@@ -78,14 +78,14 @@ test.describe("lobby waiting room (#107)", () => {
   test("C3 an unknown code is a 404 and the landing says so", async ({ page, request }) => {
     expect((await request.get("/lobby/ZZZ-0000")).status()).toBe(404);
     expect((await request.get("/lobby/not-a-code")).status()).toBe(404);
-    await page.goto("/");
+    await page.goto(LANDING);
     const form = page.getByRole("form", { name: "Join with code" });
     await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially("ZZZ0000");
     await form.getByRole("button", { name: "JOIN →", exact: true }).click();
     await expect(
       form.getByRole("alert").filter({ hasText: "No race with that code" }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/welcome$/);
   });
 
   test("#734 C5 the host closes the tab: the lobby row reads CLOSED within 10 s, a join gets the closed line", async ({
@@ -104,14 +104,14 @@ test.describe("lobby waiting room (#107)", () => {
     const visitor = await browser.newContext({ baseURL: test.info().project.use.baseURL });
     try {
       const other = await visitor.newPage();
-      await other.goto("/");
+      await other.goto(LANDING);
       const form = other.getByRole("form", { name: "Join with code" });
       await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);
       await form.getByRole("button", { name: "JOIN →", exact: true }).click();
       await expect(
         form.getByRole("alert").filter({ hasText: "That race has already started or closed" }),
       ).toBeVisible();
-      await expect(other).toHaveURL(/\/$/);
+      await expect(other).toHaveURL(/\/welcome$/);
     } finally {
       await visitor.close();
     }
@@ -401,7 +401,7 @@ test.describe("lobby roll: BOT tag, non-host notice, kicker (#105)", () => {
     await createLobby(page);
     await expect(kicker(page)).toHaveText("WAITING ROOM · PRIVATE RACE");
 
-    await page.goto("/");
+    await page.goto(LANDING);
     // the QUICK RACE form is a client action: wait for the landing to hydrate (landing.spec.ts `ready`)
     await expect(page.locator("section#play video[aria-hidden='true']")).toHaveAttribute(
       "data-feed",

@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { ACTION_WAIT, HYDRATION_WAIT } from "../timeouts";
-import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 
 // Contract of #57 (design bible 7.3 ink tone, 7.4 docket): right after a merge the next render shows the
 // ink FILED stamp and "N races and your stats were carried into your Personnel file", read from the
@@ -26,7 +26,7 @@ const docket = (page: Page, name = "FILED") => page.getByRole("region", { name, 
 test.describe("merge confirmation stamp (#57)", () => {
   test("C1 shows the carried races once, then the cookie is cleared", async ({ page, context }) => {
     await plant(context, "3");
-    await page.goto("/");
+    await page.goto(LANDING);
     const stamp = docket(page);
     await expect(stamp).toBeVisible({ timeout: HYDRATION_WAIT });
     await expect(stamp).toContainText(
@@ -46,7 +46,7 @@ test.describe("merge confirmation stamp (#57)", () => {
   ] as const) {
     test(`C1 plural form for ${n}`, async ({ page, context }) => {
       await plant(context, n);
-      await page.goto("/");
+      await page.goto(LANDING);
       await expect(docket(page)).toContainText(sentence, { timeout: HYDRATION_WAIT });
       await expect.poll(() => flashCookie(context), { timeout: HYDRATION_WAIT }).toBeUndefined();
     });
@@ -54,7 +54,7 @@ test.describe("merge confirmation stamp (#57)", () => {
 
   test("C1 the French catalog", async ({ page, context }) => {
     await plant(context, "4", "fr");
-    await page.goto("/");
+    await page.goto(LANDING);
     const fr = docket(page, "CLASSÉ");
     await expect(fr).toContainText(
       "4 courses et tes statistiques ont été versées à ton dossier du personnel.",
@@ -66,7 +66,7 @@ test.describe("merge confirmation stamp (#57)", () => {
 
   test("C1 DISMISS closes the docket by keyboard", async ({ page, context }) => {
     await plant(context, "2");
-    await page.goto("/");
+    await page.goto(LANDING);
     const stamp = docket(page);
     await expect(stamp).toBeVisible({ timeout: HYDRATION_WAIT });
     await expect.poll(() => flashCookie(context), { timeout: HYDRATION_WAIT }).toBeUndefined();
@@ -81,7 +81,7 @@ test.describe("merge confirmation stamp (#57)", () => {
     context,
   }) => {
     await plant(context, "5");
-    await page.goto("/");
+    await page.goto(LANDING);
     const stamp = docket(page).locator("[data-stamp-tone]");
     await expect(stamp).toHaveAttribute("data-stamp-tone", "ink", { timeout: HYDRATION_WAIT });
     const angle = Number(await stamp.getAttribute("data-stamp-angle"));
@@ -92,7 +92,7 @@ test.describe("merge confirmation stamp (#57)", () => {
 
     await page.emulateMedia({ reducedMotion: "reduce" });
     await plant(context, "5");
-    await page.goto("/");
+    await page.goto(LANDING);
     const still = docket(page).locator("[data-stamp-tone]");
     await expect(still).toBeVisible({ timeout: HYDRATION_WAIT });
     expect(await still.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");

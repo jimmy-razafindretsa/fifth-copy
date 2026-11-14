@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import { LOBBY_PATH, closeOpenPublicLobbies, createLobby, joinAsGuest } from "../race/helpers";
 import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "../timeouts";
 
@@ -19,7 +19,7 @@ const segment = (page: Page, row: string, name: string) =>
 
 /** A visitor on the hydrated landing presses the hero's QUICK RACE; returns the room code. */
 async function quickRace(page: Page): Promise<string> {
-  await page.goto("/");
+  await page.goto(LANDING);
   await expect(page.locator("section#play video[aria-hidden='true']")).toHaveAttribute(
     "data-feed",
     /^(armed|near)$/,

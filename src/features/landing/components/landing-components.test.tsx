@@ -123,7 +123,7 @@ describe("FooterView (#875)", () => {
         f.aegis,
       ]);
       expect(navs[0]![2]!.match(/<a /g)).toHaveLength(3);
-      expect(navs[1]![2]).toContain(`href="/#how"`);
+      expect(navs[1]![2]).toContain(`href="#how"`);
       expect(navs[1]![2]!.match(/<a /g)).toHaveLength(2);
       expect(navs[1]![2]).toContain(`href="/profile"`);
       expect(navs[2]![2]!.match(/<a /g)).toHaveLength(1);

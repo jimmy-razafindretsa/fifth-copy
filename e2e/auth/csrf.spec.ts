@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import { HYDRATION_WAIT } from "../timeouts";
 import {
   authForm,
@@ -107,7 +107,7 @@ test.describe("CSRF (#87 C2)", () => {
 
     // still signed in, and the cookie still resolves (no tokenVersion bump)
     expect(await sessionUser(context)).toBe(username);
-    await page.goto("/");
+    await page.goto(LANDING);
     await expect(signOutButton(page)).toBeVisible({ timeout: HYDRATION_WAIT });
     await expect(header(page).getByRole("link", { name: "SIGN IN", exact: true })).toHaveCount(0);
     await context.close();

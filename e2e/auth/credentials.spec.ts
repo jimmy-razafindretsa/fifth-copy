@@ -1,5 +1,5 @@
 import { ACTION_WAIT, HYDRATION_WAIT } from "../timeouts";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 import {
   PASSWORD,
   authForm,
@@ -40,6 +40,8 @@ test.describe("username credentials end to end (#36)", () => {
     await fill(freshPage, username, PASSWORD);
     await authForm(freshPage).getByRole("button", { name: "SIGN IN", exact: true }).click();
     await expect(freshPage).toHaveURL(/\/$/, { timeout: ACTION_WAIT });
+    // `/` is the Home menu for a viewer (#943): the site header lives on the landing
+    await freshPage.goto(LANDING);
     await expect(header(freshPage)).toContainText(username, { timeout: HYDRATION_WAIT });
 
     await freshPage.reload();

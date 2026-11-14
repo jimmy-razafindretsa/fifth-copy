@@ -51,7 +51,7 @@ export async function OpenRoomsLoaded({
 
 function Docket({ labels, children }: { labels: OpenRoomsLabels; children: React.ReactNode }) {
   return (
-    <section className={styles.docket} aria-labelledby={HEADING_ID} data-open-rooms>
+    <section id="rooms" className={styles.docket} aria-labelledby={HEADING_ID} data-open-rooms>
       <div className={styles.head}>
         <h2 id={HEADING_ID} className={styles.title}>
           {labels.title}

@@ -127,3 +127,18 @@ describe("Dawn report links (#899)", () => {
     }
   });
 });
+
+describe("Home menu links (#943 C5)", () => {
+  it("the landing has one stable URL for a viewer, with its rooms docket and guide section", () => {
+    expect(LINKS.landing).toBe("/welcome");
+    expect(LINKS.rooms).toBe(`${LINKS.landing}#rooms`);
+    expect(LINKS.guide).toBe(`${LINKS.landing}#how`);
+    expect(LINKS.how).toBe("#how");
+    expect(served(LINKS.landing)).toBe(true);
+  });
+
+  it("the open-rooms docket carries the rooms anchor", () => {
+    const docket = readFileSync(path.resolve(__dirname, "components/open-rooms.tsx"), "utf8");
+    expect(docket).toMatch(/id="rooms"/);
+  });
+});

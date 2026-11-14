@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { hash } from "@node-rs/argon2";
 import { Client } from "pg";
-import { expect, test } from "../fixtures";
+import { LANDING, expect, test } from "../fixtures";
 
 // Contract C4 of #787: the whole session chain over the real web server. An account signs in with the
 // credentials callback form POST (there is no sign-in screen yet, #36); /api/auth/session and the landing
@@ -73,7 +73,7 @@ test.describe("Session viewer resolver (#787)", () => {
     await context.addCookies([{ name: "fc_guest", value: guestCookie(guest.id), url: baseURL! }]);
 
     // Guest only: the docket names the guest.
-    await page.goto("/");
+    await page.goto(LANDING);
     const header = page.locator("header");
     await expect(header).toContainText(guest.typistName);
     await expect(header.getByText("GUEST", { exact: true })).toBeVisible();
@@ -99,7 +99,7 @@ test.describe("Session viewer resolver (#787)", () => {
     );
 
     // Session and fc_guest together: the account wins, no GUEST tag.
-    await page.goto("/");
+    await page.goto(LANDING);
     await expect(header).toContainText(`Comrade ${account.typistName}`);
     await expect(header).not.toContainText(guest.typistName);
     await expect(header.getByText("GUEST", { exact: true })).toHaveCount(0);
@@ -125,7 +125,7 @@ test.describe("Session viewer resolver (#787)", () => {
     // The page with the same (stale) session cookie back next to fc_guest: the guest path again.
     await context.addCookies([session!]);
     expect((await context.cookies()).some((c) => c.name === session!.name)).toBe(true);
-    await page.goto("/");
+    await page.goto(LANDING);
     await expect(header).toContainText(guest.typistName);
     await expect(header.getByText("GUEST", { exact: true })).toBeVisible();
     await expect(header).not.toContainText(account.typistName);

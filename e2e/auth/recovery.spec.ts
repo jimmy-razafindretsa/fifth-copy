@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { ACTION_WAIT, HYDRATION_WAIT } from "../timeouts";
-import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 import {
   PASSWORD,
   SESSION_COOKIE,
@@ -89,7 +89,7 @@ test.describe("one-time recovery code (#46)", () => {
     const stale = await browser.newContext();
     await stale.addCookies([{ ...before!, name: before!.name || SESSION_COOKIE }]);
     const stalePage = await stale.newPage();
-    await stalePage.goto("/");
+    await stalePage.goto(LANDING);
     await expect(header(stalePage).getByRole("link", { name: "SIGN IN", exact: true })).toBeVisible(
       { timeout: HYDRATION_WAIT },
     );

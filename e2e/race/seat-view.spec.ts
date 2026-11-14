@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
 import { hostRoom, phaseOf, SEAT_HUD, withoutWebGL } from "./helpers";
 
@@ -30,7 +30,7 @@ async function expectWaitingHud(page: Page) {
 
 /** The page under test joins the host's room from the landing, as a guest typing the code (#107 flow). */
 async function joinFromLanding(page: Page, code: string) {
-  await page.goto("/");
+  await page.goto(LANDING);
   const form = page.getByRole("form", { name: "Join with code" });
   await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);
   await form.getByRole("button", { name: "JOIN →", exact: true }).click();

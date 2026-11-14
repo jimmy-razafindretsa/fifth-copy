@@ -265,3 +265,9 @@ export async function stabilize(page: Page, isoTime = "2026-01-01T12:00:00Z") {
       "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}",
   });
 }
+
+/**
+ * The landing at its stable URL (#943 C5): `/` is the Home menu for a viewer (an account, or a guest
+ * with a file), so a spec that needs the landing's controls with an identity loads this.
+ */
+export const LANDING = "/welcome";

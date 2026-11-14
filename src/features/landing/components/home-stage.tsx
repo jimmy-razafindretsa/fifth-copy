@@ -2,6 +2,7 @@
 
 import { type ReactNode, useSyncExternalStore } from "react";
 import { EmbedFrame, stageView, useReducedMotion, useWebGL2 } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import styles from "./home.module.css";
 
 const WIDE = "(min-width: 768px)";
@@ -36,7 +37,12 @@ export function HomeStage({ clerkSrc, title, picture, still = false }: HomeStage
   const view = stageView({ clerkSrc, still, webgl, reducedMotion });
   const mountClerk = view === "clerk" && wide && clerkSrc !== null;
   return (
-    <div className={styles.stage} aria-hidden="true" data-home-stage data-stage-view={view}>
+    <div
+      className={cn(styles.stage, still && styles.stageStill)}
+      aria-hidden="true"
+      data-home-stage
+      data-stage-view={view}
+    >
       <div className={styles.rays} />
       <div className={styles.podium} />
       {mountClerk ? (

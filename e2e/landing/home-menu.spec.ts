@@ -30,6 +30,11 @@ test.beforeEach(async ({ page, context }) => {
   await locale(context, "en");
   // the stage's 3D frame is #946's spec; the picture keeps software GL out of the way here
   await withoutWebGL(page);
+  // withoutWebGL reaches every frame: the landing's clerk and medal embeds (at /welcome and a visitor's
+  // /) would throw "Error creating WebGL context" when they scroll into view; they are landing.spec's
+  await page.route("**/3d/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<!doctype html><title>embed</title>" }),
+  );
 });
 
 test.describe("routing (C1)", () => {

@@ -31,7 +31,9 @@ describe("rankFor (#945 C1)", () => {
     expect(src).not.toMatch(/\b(35|50|70|90)\b/);
     // and no landing source restates them
     const landing = path.resolve(__dirname, "../../landing/components");
-    for (const f of readdirSync(landing).filter((n) => /docket.*\.tsx$/.test(n) && !n.includes(".test."))) {
+    for (const f of readdirSync(landing).filter(
+      (n) => /docket.*\.tsx$/.test(n) && !n.includes(".test."),
+    )) {
       expect(readFileSync(path.join(landing, f), "utf8"), f).not.toMatch(/\b(35|50|70|90)\b/);
     }
   });

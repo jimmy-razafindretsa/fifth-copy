@@ -126,10 +126,13 @@ describe("countTypistsOnline (#943 C21)", () => {
     expect(client.calls).toHaveLength(0);
   });
 
-  it.each(["fail", "throw"] as const)("a race server that does not answer (%s) gives { ok: false }", async (mode) => {
-    seed("1", 1);
-    await expect(
-      countTypistsOnline({ client: stubClient({}, mode), now: () => NOW }),
-    ).resolves.toEqual({ ok: false });
-  });
+  it.each(["fail", "throw"] as const)(
+    "a race server that does not answer (%s) gives { ok: false }",
+    async (mode) => {
+      seed("1", 1);
+      await expect(
+        countTypistsOnline({ client: stubClient({}, mode), now: () => NOW }),
+      ).resolves.toEqual({ ok: false });
+    },
+  );
 });

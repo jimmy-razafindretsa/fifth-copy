@@ -113,7 +113,15 @@ describe("missionProgress and starTotal (C16)", () => {
     ["5 qualifying results on one day give one", [1, 1, 1, 1, 1].map((x) => at(f3, x)), 1],
     [
       "three completed days give 3",
-      [at(a95, 0.96), at(a95, 0.97), at(a95, 0.99), at(f3, 0.1), at(f3, 0.2), at(f3, 0.3), at(a98, 1)],
+      [
+        at(a95, 0.96),
+        at(a95, 0.97),
+        at(a95, 0.99),
+        at(f3, 0.1),
+        at(f3, 0.2),
+        at(f3, 0.3),
+        at(a98, 1),
+      ],
       3,
     ],
     ["a day of 0.949 results gives none", [0.949, 0.949, 0.949].map((x) => at(a95, x)), 0],

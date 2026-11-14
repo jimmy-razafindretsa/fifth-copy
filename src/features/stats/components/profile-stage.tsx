@@ -1,25 +1,8 @@
 "use client";
 
-import { type ReactNode, useSyncExternalStore } from "react";
-import { EmbedFrame, hasWebGL2 } from "@/components/ui";
+import type { ReactNode } from "react";
+import { EmbedFrame, stageView, useWebGL2 } from "@/components/ui";
 import styles from "./profile.module.css";
-
-/** What the stage shows: the clerk embed, or the viewer's own picture (no outfit, no WebGL2, still). */
-export function stageView({
-  clerkSrc,
-  still,
-  webgl,
-}: {
-  clerkSrc: string | null;
-  still: boolean;
-  webgl: boolean | null;
-}): "clerk" | "picture" {
-  return clerkSrc === null || still || webgl !== true ? "picture" : "clerk";
-}
-
-let probed: boolean | undefined;
-const probe = () => (probed ??= hasWebGL2());
-const noSubscribe = () => () => {};
 
 export type ProfileStageProps = {
   /** The clerk embed in the viewer's saved uniform, or null when nothing is saved. */
@@ -38,8 +21,9 @@ export type ProfileStageProps = {
  * without WebGL2 show the viewer's picture instead, so the page never depends on WebGL.
  */
 export function ProfileStage({ clerkSrc, title, picture, still = false }: ProfileStageProps) {
-  // null on the server and while hydrating (the picture shows then), the probe's answer after
-  const webgl = useSyncExternalStore(noSubscribe, probe, () => null);
+  // null on the server and while hydrating (the picture shows then), the probe's answer after; the
+  // Personnel file keeps its #932 behaviour under reduced motion (no reducedMotion input)
+  const webgl = useWebGL2();
   const view = stageView({ clerkSrc, still, webgl });
   return (
     <div className={styles.slot} data-stage-view={view}>

@@ -94,3 +94,10 @@ export type { MachineSpecimens } from "./components/settings/machine-picker";
 // The first-race keyboard prompt (#70): the lobby mounts it; `/design?dialog=layout` shows it open.
 export { FirstRaceLayoutPrompt } from "./components/first-race-layout-prompt";
 export { LayoutPrompt, LAYOUT_PROMPT_KEY } from "./components/layout-prompt";
+// The locker's NEW items (#943 part E): the list, the seen cookie read (the MY CLERK tag).
+export { LOCKER_SEEN_COOKIE, NEW_ITEMS, type NewItemId } from "./clerk/new-items";
+export { getLockerSeen, getLockerUnseen } from "./queries/locker-seen";
+// The locker (#943 part D): the screen, the seen-cookie action and its labels type.
+export { LockerScreen } from "./components/locker/locker-screen";
+export type { LockerLabels } from "./components/locker/locker-form";
+export { markLockerSeen } from "./actions/mark-locker-seen";

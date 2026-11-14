@@ -1,0 +1,587 @@
+/*
+ * The locker (#943 part D; bible 14.2, "Locker in the app (extension, #943)"; reference
+ * docs/design/bible/Fifth Copy Locker.dc.html), ported 1:1 in layout, type and copy, colours through
+ * roles. v1 renders no locked card, no fitting room and no collection counter (no locks before #333).
+ */
+
+@reference "../../../../app/globals.css";
+
+@keyframes lkSlam {
+  0% {
+    transform: scale(2.2) rotate(-14deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(0.9) rotate(-7deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-8deg);
+  }
+}
+
+@keyframes lkPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.locker {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* ---- left: the steel door on halftone ---- */
+.doorSide {
+  flex: 1 1 460px;
+  min-width: 0;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  @apply paper-grain;
+}
+
+.door {
+  position: relative;
+  flex: 1;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+  background-color: var(--color-room);
+  border: 3px solid var(--color-band);
+  box-shadow:
+    inset 0 0 0 10px color-mix(in srgb, var(--color-room) 85%, var(--color-band-fg)),
+    inset 0 0 0 12px var(--color-band),
+    8px 8px 0 var(--color-band);
+}
+
+.doorTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 8px 0;
+}
+
+.vents {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vent {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: color-mix(in srgb, var(--color-room) 55%, var(--color-band));
+}
+
+.nameTag {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 12px;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-band);
+  box-shadow: 2px 2px 0 var(--color-band);
+  transform: rotate(1.5deg);
+}
+
+.nameTagLabel {
+  @apply type-label;
+  font-size: 9px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.nameTagName {
+  @apply type-typing;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the interior: newsprint with the reserved sun rays behind the clerk (bible 6) */
+.interior {
+  position: relative;
+  flex: 1;
+  min-height: 360px;
+  margin: 14px 0;
+  overflow: hidden;
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-band);
+  @apply sun-rays;
+}
+
+.clerkFrame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.picture {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  width: 200px;
+  height: 200px;
+  transform: translateX(-50%);
+  line-height: 0;
+}
+
+.picture :is(img, svg) {
+  width: 100%;
+  height: 100%;
+}
+
+.rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12px;
+  height: 8px;
+  background-color: color-mix(in srgb, var(--color-room) 70%, var(--color-band-fg));
+  box-shadow: 0 2px 0 var(--color-band);
+  pointer-events: none;
+}
+
+.hook {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  width: 4px;
+  height: 26px;
+  margin-left: -2px;
+  background-color: var(--color-band);
+  pointer-events: none;
+}
+
+.filed {
+  position: absolute;
+  right: 22px;
+  top: 46%;
+  pointer-events: none;
+}
+
+.doorFoot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 0 8px 4px;
+}
+
+.dial {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--color-room) 60%, var(--color-band-fg));
+  border: 2px solid var(--color-band);
+}
+
+/* on an ink chip: paper on the steel door would fall under 4.5:1 */
+.doorHint {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  padding: 3px 8px;
+  background-color: var(--color-band);
+  color: var(--color-band-fg);
+}
+
+/* ---- the three door buttons (7.1 secondary, the stamp-ish SIGN & FILE) ---- */
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.secondary {
+  @apply type-label;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background: transparent;
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  cursor: pointer;
+}
+
+.secondary:hover {
+  background-color: var(--color-surface);
+}
+
+.sign {
+  @apply type-display-sm;
+  flex: 1;
+  min-width: 200px;
+  min-height: 44px;
+  padding: 12px 18px;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  background-color: var(--color-room);
+  color: var(--color-band-fg);
+  border: 3px solid var(--color-band);
+  box-shadow: 5px 5px 0 var(--color-band);
+  cursor: default;
+}
+
+.signDirty {
+  background-color: var(--color-primary);
+  color: var(--color-primary-fg);
+  cursor: pointer;
+}
+
+.signDirty:active {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 var(--color-band);
+}
+
+.secondary:focus-visible,
+.sign:focus-visible,
+.tab:focus-visible,
+.card:focus-visible,
+.swatch:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.errorLine {
+  margin: 0;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  color: var(--color-link);
+}
+
+.errorPrefix {
+  @apply type-label;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+
+/* ---- right: FORM 5-C on newsprint ---- */
+.form {
+  flex: 1 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--color-fg);
+  background-color: var(--color-surface);
+}
+
+.formHead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 26px 32px 18px;
+  border-bottom: 3px double var(--color-fg);
+}
+
+.kicker {
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.22em;
+  color: var(--color-link);
+}
+
+.title {
+  @apply type-display-md;
+  margin: 0;
+  font-size: clamp(30px, 3.6vw, 48px);
+  letter-spacing: 0.03em;
+}
+
+.tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.tab {
+  @apply type-display-sm;
+  flex: 1;
+  min-width: 96px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 13px 6px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  background: transparent;
+  color: var(--color-fg);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  background-color: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.newDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 22px 32px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: 12px;
+}
+
+/* the 7.6 item card: owned, and equipped (the item on file) */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 118px;
+  padding: 14px 14px 12px;
+  text-align: left;
+  background-color: color-mix(in srgb, var(--color-bg) 60%, transparent);
+  color: var(--color-fg);
+  border: 2px solid color-mix(in srgb, var(--color-fg) 35%, transparent);
+  cursor: pointer;
+  transition:
+    transform var(--motion-duration-fast) var(--motion-ease-out),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--color-fg);
+}
+
+.card[data-state="equipped"] {
+  background-color: var(--color-bg);
+  border: 3px solid var(--color-fg);
+}
+
+/* chosen, not yet filed: the equipped rule without the ISSUED stamp */
+.card[aria-checked="true"] {
+  border: 3px solid var(--color-fg);
+  background-color: var(--color-bg);
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.code {
+  @apply type-typing;
+  font-size: 11px;
+  color: var(--color-fg-muted);
+}
+
+.newTag {
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background-color: var(--color-primary);
+  color: var(--color-primary-fg);
+  padding: 1px 6px;
+}
+
+.cardName {
+  @apply type-body;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.sub {
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.issued {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  @apply type-display-sm;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  padding: 3px 6px;
+  color: var(--color-link);
+  border: 2px solid var(--color-primary);
+  transform: rotate(-8deg);
+  animation: lkSlam 0.3s ease-out both;
+}
+
+.colours {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.colourLabel {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.swatches {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  padding: 0;
+  border: 2px solid var(--color-fg);
+  cursor: pointer;
+}
+
+.swatch[aria-checked="true"] {
+  box-shadow:
+    0 0 0 3px var(--color-surface),
+    0 0 0 5px var(--color-fg);
+}
+
+.foot {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.keys {
+  @apply type-typing;
+  font-size: 11px;
+  padding: 2px 6px;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-fg);
+}
+
+.dirtyBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 32px;
+  background-color: var(--color-band);
+  color: var(--color-band-fg);
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+}
+
+.dirtyDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  animation: lkPulse 1.2s infinite;
+}
+
+.dice {
+  display: inline-block;
+}
+
+@media (max-width: 600px) {
+  .doorSide {
+    padding: 16px;
+  }
+
+  .door {
+    min-height: 440px;
+  }
+
+  .vent {
+    width: 72px;
+  }
+
+  .form {
+    border-left: 0;
+    border-top: 2px solid var(--color-fg);
+  }
+
+  .formHead,
+  .panel {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .dirtyBar {
+    padding: 10px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card:hover {
+    transform: none;
+    transition: none;
+  }
+
+  .issued,
+  .dirtyDot {
+    animation: none;
+  }
+}
+
+:root[data-motion="reduce"] .card,
+:root[data-motion="reduce"] .card:hover {
+  transform: none;
+  transition: none;
+}
+
+:root[data-motion="reduce"] .issued,
+:root[data-motion="reduce"] .dirtyDot {
+  animation: none;
+}

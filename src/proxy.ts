@@ -12,9 +12,9 @@ const SESSION_COOKIES = [
 const GUEST_COOKIE = "fc_guest";
 
 /**
- * Optimistic redirects only (ADR 0009, Next 16 proxy): a request for `/settings` or `/profile` without a
- * session cookie goes to `/sign-in?callbackUrl=<path>`; both also let a guest through (#66: a guest keeps
- * settings too; #932: a guest has a Personnel file). Nothing is decoded or trusted here: a present cookie
+ * Optimistic redirects only (ADR 0009, Next 16 proxy): a request for `/settings`, `/profile` or `/locker`
+ * without a session cookie goes to `/sign-in?callbackUrl=<path>`; all three also let a guest through (#66:
+ * a guest keeps settings too; #932: a guest has a Personnel file; #943: and a locker). Nothing is decoded or trusted here: a present cookie
  * lets the request through, and the page and its actions still authorize (`requireViewer`, `getViewer`).
  */
 export function proxy(request: NextRequest) {
@@ -26,4 +26,4 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-export const config = { matcher: ["/settings/:path*", "/profile/:path*"] };
+export const config = { matcher: ["/settings/:path*", "/profile/:path*", "/locker/:path*"] };

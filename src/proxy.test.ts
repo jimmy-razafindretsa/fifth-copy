@@ -11,11 +11,11 @@ const request = (path: string, cookie?: string) =>
 const passes = (res: Response) => res.headers.get("x-middleware-next") === "1";
 
 describe("proxy", () => {
-  it("matches only /settings and /profile", () => {
-    expect(config.matcher).toEqual(["/settings/:path*", "/profile/:path*"]);
+  it("matches only /settings, /profile and /locker (#943)", () => {
+    expect(config.matcher).toEqual(["/settings/:path*", "/profile/:path*", "/locker/:path*"]);
   });
 
-  for (const path of ["/settings", "/profile"]) {
+  for (const path of ["/settings", "/profile", "/locker"]) {
     it(`${path}: a session cookie passes`, () => {
       expect(passes(proxy(request(path, "authjs.session-token=x")))).toBe(true);
       expect(passes(proxy(request(path, "__Secure-authjs.session-token.0=x")))).toBe(true);

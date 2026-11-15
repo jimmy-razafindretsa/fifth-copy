@@ -17,11 +17,16 @@ const css = readFileSync(
 /** The `data-tube` elements: their name, attributes and text (inner tags stripped). */
 function tubes(markup: string) {
   return [
-    ...markup.matchAll(/<span([^>]*)data-tube="(\w+)"([^>]*)>((?:[^<]|<span[^>]*>[^<]*<\/span>)*)<\/span>/g),
+    ...markup.matchAll(
+      /<span([^>]*)data-tube="(\w+)"([^>]*)>((?:[^<]|<span[^>]*>[^<]*<\/span>)*)<\/span>/g,
+    ),
   ].map((m) => ({
     name: m[2],
     attrs: `${m[1]}${m[3]}`,
-    text: m[4]!.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+    text: m[4]!
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
   }));
 }
 

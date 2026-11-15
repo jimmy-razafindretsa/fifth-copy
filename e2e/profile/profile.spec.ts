@@ -101,9 +101,7 @@ test.describe("Personnel file at /profile (#932)", () => {
     }
   });
 
-  test("C9 header: the docket links to the file, 44px, no sideways scroll", async ({
-    page,
-  }) => {
+  test("C9 header: the docket links to the file, 44px, no sideways scroll", async ({ page }) => {
     await seedLobby(page);
     await openFile(page);
     const docket = page.locator("a[data-docket-link]");

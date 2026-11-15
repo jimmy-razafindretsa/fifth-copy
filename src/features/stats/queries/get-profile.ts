@@ -74,7 +74,13 @@ export async function getProfile(
     client.raceResult.aggregate({
       where,
       _count: { _all: true },
-      _sum: { durationMs: true, correct: true, errors: true, bonusesSent: true, bonusesReceived: true },
+      _sum: {
+        durationMs: true,
+        correct: true,
+        errors: true,
+        bonusesSent: true,
+        bonusesReceived: true,
+      },
       _max: { cleanWpm: true, accuracy: true },
       _avg: { cleanWpm: true, accuracy: true },
     }),

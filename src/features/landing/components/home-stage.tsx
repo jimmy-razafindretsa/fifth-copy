@@ -1,7 +1,13 @@
 "use client";
 
 import { type ReactNode, useSyncExternalStore } from "react";
-import { EmbedFrame, stageView, useEmbedBridge, useReducedMotion, useWebGL2 } from "@/components/ui";
+import {
+  EmbedFrame,
+  stageView,
+  useEmbedBridge,
+  useReducedMotion,
+  useWebGL2,
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
 import styles from "./home.module.css";
 import { useClerkLook } from "./use-clerk-look";
@@ -50,7 +56,13 @@ export function HomeStage({ clerkSrc, title, picture, still = false }: HomeStage
       <div className={styles.podium} />
       {mountClerk ? (
         <div className={styles.clerk}>
-          <EmbedFrame ref={ref} src={clerkSrc} title={title} decorative className={styles.clerkFrame} />
+          <EmbedFrame
+            ref={ref}
+            src={clerkSrc}
+            title={title}
+            decorative
+            className={styles.clerkFrame}
+          />
         </div>
       ) : (
         <div className={styles.picture}>{picture}</div>

@@ -20,11 +20,7 @@ export function DeviceTube({ value, tag, spoken, className }: DeviceTubeProps) {
   return (
     <div data-device="plate" className={cn(styles.bezel, className)}>
       <span className="sr-only">{spoken}</span>
-      <span
-        aria-hidden="true"
-        data-tube=""
-        className={styles.tube}
-      >
+      <span aria-hidden="true" data-tube="" className={styles.tube}>
         {value}
       </span>
       <span aria-hidden="true" className={styles.tag}>

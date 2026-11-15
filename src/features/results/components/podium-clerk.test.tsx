@@ -85,7 +85,9 @@ describe("PodiumClerk (#688 C3)", () => {
     expect(source).toContain('frame.addEventListener("load", send)');
     // #951: the first fc-clerk also lifts the loading plate, then calls onReady
     expect(source).toContain("useEmbedBridge(parseClerkReady, onDrawn)");
-    expect(source).toMatch(/onDrawn = useCallback\(\(\) => \{\s*setDrawn\(true\);\s*onReady\?\.\(\);/);
+    expect(source).toMatch(
+      /onDrawn = useCallback\(\(\) => \{\s*setDrawn\(true\);\s*onReady\?\.\(\);/,
+    );
     // the stamp needs no boot: the next plinth may mount at once
     expect(source).toContain('if (view === "stamp") onReady?.();');
   });

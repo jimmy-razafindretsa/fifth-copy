@@ -37,13 +37,7 @@ function Cap({ variant, ink, ground }: { variant: PortraitVariant; ink: string; 
     case 0: // kepka: a flat cap with a long peak to the right
       return <path d="M17 24C17 10 46 9 47 20L56 24L17 26Z" fill={ink} {...rule} />;
     case 1: // ushanka: a fur dome with ear flaps
-      return (
-        <path
-          d="M18 23C18 9 46 9 46 23H49V36H43V27H21V36H15V23Z"
-          fill={ink}
-          {...rule}
-        />
-      );
+      return <path d="M18 23C18 9 46 9 46 23H49V36H43V27H21V36H15V23Z" fill={ink} {...rule} />;
     case 2: // eyeshade: a band and a wide visor
       return <path d="M20 16H44V21H52L45 27H19L12 21H20Z" fill={ink} {...rule} />;
     default: // beret: a wide tilted disc with its nub

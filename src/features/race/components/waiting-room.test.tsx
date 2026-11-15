@@ -35,7 +35,11 @@ const render = (
   props: Partial<Parameters<typeof WaitingRoom>[0]> = {},
 ) =>
   renderToStaticMarkup(
-    <WaitingRoom labels={{ ...en.race.waiting, cards: en.race.sabotageTray.cards }} view={waitingRoomView(input(n), order)} {...props} />,
+    <WaitingRoom
+      labels={{ ...en.race.waiting, cards: en.race.sabotageTray.cards }}
+      view={waitingRoomView(input(n), order)}
+      {...props}
+    />,
   );
 
 describe("WaitingRoom (#937)", () => {
@@ -118,7 +122,10 @@ describe("WaitingRoom (#937)", () => {
 
   it("no desk: no DESK row; no tip: no Major line", () => {
     const html = renderToStaticMarkup(
-      <WaitingRoom labels={{ ...en.race.waiting, cards: en.race.sabotageTray.cards }} view={waitingRoomView(input(2, { you: null }), [])} />,
+      <WaitingRoom
+        labels={{ ...en.race.waiting, cards: en.race.sabotageTray.cards }}
+        view={waitingRoomView(input(2, { you: null }), [])}
+      />,
     );
     expect(html).not.toContain("data-desk");
     expect(html).not.toContain("data-major");

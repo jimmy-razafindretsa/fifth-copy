@@ -45,7 +45,9 @@ export function stampText(
   otherName: string | null = null,
 ): string {
   if (stamp.kind === "overtake" || stamp.kind === "passed") {
-    return fill(labels.overtakeLine[stamp.kind], { name: otherName ?? labels.overtakeLine.someone });
+    return fill(labels.overtakeLine[stamp.kind], {
+      name: otherName ?? labels.overtakeLine.someone,
+    });
   }
   return finishText(stamp, wpm, labels);
 }

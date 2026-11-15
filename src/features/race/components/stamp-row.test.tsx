@@ -19,8 +19,7 @@ describe("StampRow (#232 C2)", () => {
     stamp: Parameters<typeof StampRow>[0]["stamp"],
     otherName: string | null,
     labels = en.race.stamps,
-  ) =>
-    renderToStaticMarkup(<StampRow stamp={stamp} labels={labels} otherName={otherName} />);
+  ) => renderToStaticMarkup(<StampRow stamp={stamp} labels={labels} otherName={otherName} />);
 
   it("an overtake reads one plain line, red for you, hidden from assistive tech, no Russian", () => {
     const out = line({ id: 7, kind: "overtake", errors: 0 }, "Bennett");

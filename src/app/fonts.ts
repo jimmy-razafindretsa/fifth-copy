@@ -52,6 +52,8 @@ export const Oswald_latin_ext = localFont({
     { path: "../../public/fonts/oswald-600-700-latin-ext.woff2", weight: "600", style: "normal" },
     { path: "../../public/fonts/oswald-600-700-latin-ext.woff2", weight: "700", style: "normal" },
   ],
+  // #951 (Lighthouse): only the Latin subsets are preloaded; this one loads when its characters show
+  preload: false,
   display: "swap",
   declarations: [
     { prop: "font-family", value: "Oswald" },
@@ -69,6 +71,8 @@ export const Oswald_cyrillic = localFont({
     { path: "../../public/fonts/oswald-600-700-cyrillic.woff2", weight: "600", style: "normal" },
     { path: "../../public/fonts/oswald-600-700-cyrillic.woff2", weight: "700", style: "normal" },
   ],
+  // #951 (Lighthouse): only the Latin subsets are preloaded; this one loads when its characters show
+  preload: false,
   display: "swap",
   declarations: [
     { prop: "font-family", value: "Oswald" },
@@ -106,6 +110,8 @@ export const IBM_Plex_Mono_latin_ext = localFont({
       style: "normal",
     },
   ],
+  // #951 (Lighthouse): only the Latin subsets are preloaded; this one loads when its characters show
+  preload: false,
   display: "swap",
   declarations: [
     { prop: "font-family", value: "IBM_Plex_Mono" },
@@ -123,6 +129,8 @@ export const IBM_Plex_Mono_cyrillic = localFont({
     { path: "../../public/fonts/ibm-plex-mono-400-cyrillic.woff2", weight: "400", style: "normal" },
     { path: "../../public/fonts/ibm-plex-mono-700-cyrillic.woff2", weight: "700", style: "normal" },
   ],
+  // #951 (Lighthouse): only the Latin subsets are preloaded; this one loads when its characters show
+  preload: false,
   display: "swap",
   declarations: [
     { prop: "font-family", value: "IBM_Plex_Mono" },
@@ -198,6 +206,8 @@ export const Courier_Prime_latin_ext = localFont({
       style: "normal",
     },
   ],
+  // #951 (Lighthouse): only the Latin subsets are preloaded; this one loads when its characters show
+  preload: false,
   display: "swap",
   declarations: [
     { prop: "font-family", value: "Courier_Prime" },

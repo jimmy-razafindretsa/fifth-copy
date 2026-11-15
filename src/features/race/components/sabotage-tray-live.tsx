@@ -2,7 +2,9 @@
 
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
+import { fill } from "@/i18n/format";
 import type { SabotageTrayLabels } from "../view/hud-labels";
+import { useShortcutLabel } from "../view/play-shortcut";
 import { createSampler, type Sampler, type SamplerTimer } from "./nixie-counters-live";
 import { SabotageTray } from "./sabotage-tray";
 
@@ -63,6 +65,7 @@ export function SabotageTrayLive({
   const seconds = useSyncExternalStore(sampler.subscribe, sampler.read, serverSeconds);
   const off = useRaceStore(trayHidden);
   const card = useRaceStore((s) => s.bonus.card);
+  const shortcut = useShortcutLabel(useRaceStore((s) => s.bonus.playKey));
   const refused = useRaceStore((s) => s.bonus.refused);
   const play = useCallback(() => store.dispatch({ type: "bonus-play", at: now() }), [store, now]);
   if (off) return null;
@@ -70,7 +73,7 @@ export function SabotageTrayLive({
     <SabotageTray
       card={card}
       cooldownS={seconds}
-      hint={labels.hint}
+      hint={shortcut ? fill(labels.hint, { key: shortcut }) : null}
       labels={labels}
       refused={refused}
       onPlay={play}

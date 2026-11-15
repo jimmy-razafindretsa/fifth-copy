@@ -108,30 +108,31 @@ describe("RaceInput live attributes (#220 C6)", () => {
 
 // #236 C1: a bare Enter plays the Sabotage card and types nothing; Space and printable keys stay keys,
 // and a modified or composing Enter does nothing (the handler itself runs in e2e/race/bonus.spec.ts).
-describe("RaceInput play key (#236 C1)", () => {
+describe("RaceInput play key (#951: Option/Alt + the card's letter)", () => {
   const press = (
+    code: string,
     key: string,
     mods: Partial<
       Record<"ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing", boolean>
     > = {},
-  ) => ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+  ) => ({ code, key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
 
-  it("a bare Enter is the play key and never a keystroke", () => {
-    expect(isPlayKey(press("Enter"))).toBe(true);
-    expect(keyOf(press("Enter"))).toBeNull();
+  it("Option/Alt + the card's letter plays it, matched on the physical key (Option's ˚ included)", () => {
+    expect(isPlayKey(press("KeyK", "˚", { altKey: true }), "K")).toBe(true);
+    expect(isPlayKey(press("KeyK", "k", { altKey: true }), "K")).toBe(true);
   });
 
-  it("a modified or composing Enter is not", () => {
-    for (const mod of ["ctrlKey", "metaKey", "altKey", "shiftKey", "isComposing"] as const) {
-      expect(isPlayKey(press("Enter", { [mod]: true })), mod).toBe(false);
+  it("another letter, no card, or Cmd/Ctrl/Shift/AltGr/composition: never", () => {
+    expect(isPlayKey(press("KeyJ", "j", { altKey: true }), "K")).toBe(false);
+    expect(isPlayKey(press("KeyK", "k", { altKey: true }), null)).toBe(false);
+    expect(isPlayKey(press("KeyK", "k"), "K")).toBe(false);
+    for (const mod of ["ctrlKey", "metaKey", "shiftKey", "isComposing"] as const) {
+      expect(isPlayKey(press("KeyK", "k", { altKey: true, [mod]: true }), "K"), mod).toBe(false);
     }
   });
 
-  it("Space, letters, Backspace and Tab are never the play key; the typed ones stay keystrokes", () => {
-    for (const key of [" ", "a", "É", "Backspace", "Tab", "NumpadEnter"]) {
-      expect(isPlayKey(press(key)), key).toBe(false);
-    }
-    expect(keyOf(press(" "))).toBe(" ");
-    expect(keyOf(press("a"))).toBe("a");
+  it("Enter no longer plays and types nothing", () => {
+    expect(isPlayKey(press("Enter", "Enter"), "K")).toBe(false);
+    expect(keyOf(press("Enter", "Enter"))).toBeNull();
   });
 });

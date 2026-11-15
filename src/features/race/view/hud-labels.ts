@@ -54,8 +54,10 @@ export type SabotageTrayLabels = {
   play: string;
   cooldown: string;
   seconds: string;
-  /** How to play a ready card (#236): `ENTER TO PLAY`, the `PLAY` row's value. */
+  /** How to play a ready card (#951): `{key} TO PLAY`, the `PLAY` row's value. */
   hint: string;
+  /** #951: the alert over the race when a card is dealt: `SABOTAGE AVAILABLE · {key}`. */
+  alert: string;
   /** The pointer path's ink button (#236): `PLAY CARD`. */
   playButton: string;
   /** The refused play's row (#236; the server's `no-bonus` while a card is held): `IMMUNE`. */
@@ -164,7 +166,8 @@ export const hudLabelFixtures = {
       play: "PLAY",
       cooldown: "COOLDOWN",
       seconds: "{n} S",
-      hint: "ENTER TO PLAY",
+      hint: "{key} TO PLAY",
+      alert: "SABOTAGE AVAILABLE · {key}",
       playButton: "PLAY CARD",
       immune: "IMMUNE",
     },
@@ -229,7 +232,8 @@ export const hudLabelFixtures = {
       play: "JOUER",
       cooldown: "RECHARGE",
       seconds: "{n} S",
-      hint: "ENTRÉE POUR JOUER",
+      hint: "{key} POUR JOUER",
+      alert: "SABOTAGE DISPONIBLE · {key}",
       playButton: "JOUER LA CARTE",
       immune: "IMMUNISÉ",
     },

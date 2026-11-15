@@ -35,6 +35,9 @@ import { nixieNumber } from "../components/nixie-counters";
 import { RaceNotice } from "../components/race-notice";
 import { RaceAnnouncer } from "../components/race-announcer";
 import { StampRow } from "../components/stamp-row";
+import stampStyles from "../components/stamp-row.module.css";
+import { fill } from "@/i18n/format";
+import { useShortcutLabel } from "../view/play-shortcut";
 import { selectAccuracy, selectFinishWpm, selectPlace } from "../view/counters";
 import type { ExitLabels } from "../view/hud-labels";
 import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view/standings";
@@ -47,6 +50,8 @@ export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "erro
 export type SeatLiveLabels = SeatStatusLabels &
   Pick<RaceSeatLabels, "countdown"> & {
     input: string;
+    /** #951: `SABOTAGE AVAILABLE · {key}`, over the race when a card is dealt. */
+    sabotageAlert?: string;
   };
 
 const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "back">> = {
@@ -289,6 +294,11 @@ export function RaceSeatLive({
   const press = useCallback((key: string) => typing.current?.press(key), []);
   // #236: Enter plays your card; the store gates it and `sendBonusPlays` sends it
   const play = useCallback(() => store.dispatch({ type: "bonus-play", at: Date.now() }), [store]);
+  // #951: this card's letter (Option/Alt + it plays the card), and the alert that says so
+  const playKey = useRaceStore((s) => s.bonus.playKey);
+  const shortcut = useShortcutLabel(playKey);
+  const trayOn = useRaceStore((s) => s.settings?.bonuses ?? false);
+  const hasCard = useRaceStore((s) => s.bonus.card !== null);
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
   // guest cookie, and a cookie set in an action re-renders the page): read the latest one, never reconnect
   // for it.
@@ -337,6 +347,11 @@ export function RaceSeatLive({
       {/* bible 8: one stamp at a time; the countdown and GO first, then the overtake stamps (#232) */}
       {step !== null ? (
         <Countdown step={step} labels={labels.countdown} />
+      ) : stamp === null && shortcut && trayOn && hasCard && canType && labels.sabotageAlert ? (
+        // #951: the card is dealt: the alert names its shortcut, so the typist looks up to read it
+        <div data-sabotage-alert="" aria-hidden="true" className={stampStyles.row}>
+          <p className={stampStyles.alert}>{fill(labels.sabotageAlert, { key: shortcut })}</p>
+        </div>
       ) : (
         <StampRow stamp={stamp} wpm={finishWpm} labels={labels.stamps} otherName={otherName} />
       )}
@@ -344,6 +359,7 @@ export function RaceSeatLive({
         disabled={!canType}
         onKey={press}
         onPlay={play}
+        playKey={playKey}
         label={labels.input}
         mode={mode}
         backspace={backspace}

@@ -10,6 +10,8 @@ export const TYPING_SURFACE = "[data-telex], [data-sheet], [data-machine]";
 export type KeydownLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey"> & {
   isComposing?: boolean;
   shiftKey?: boolean;
+  /** The physical key (`KeyK`): the play shortcut is matched on it (#951). */
+  code?: string;
 };
 
 /**
@@ -26,12 +28,19 @@ export function keyOf(e: KeydownLike): string | null {
 }
 
 /**
- * A bare `Enter` (#236): no modifier, no composition. It plays your Sabotage card; it types nothing
- * (`keyOf` is `null` for it), so no keystroke is ever taken from the race.
+ * The play shortcut (#951, was a bare Enter in #236): Option (macOS) or Alt (Windows, Linux) plus this
+ * card's letter (`playKey`, a new one per card), matched on the physical key (`code`), so Option's
+ * special characters and AltGr (Ctrl+Alt) never count. It types nothing: the caller stops the event.
  */
-export function isPlayKey(e: KeydownLike): boolean {
+export function isPlayKey(e: KeydownLike, playKey: string | null): boolean {
   return (
-    e.key === "Enter" && !e.isComposing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+    playKey !== null &&
+    e.code === `Key${playKey}` &&
+    e.altKey &&
+    !e.isComposing &&
+    !e.ctrlKey &&
+    !e.metaKey &&
+    !e.shiftKey
   );
 }
 
@@ -53,8 +62,10 @@ export type RaceInputProps = {
   backspace?: boolean;
   /** Your desk's errors as the engine counted them (#220), as `data-errors`; absent without a desk. */
   errors?: number;
-  /** A bare Enter (#236, `isPlayKey`): play your Sabotage card. Absent: Enter does nothing. */
+  /** The play shortcut (#951, `isPlayKey`): play your Sabotage card. Absent: no shortcut. */
   onPlay?: () => void;
+  /** This card's letter (`PLAY_KEYS`), with Option/Alt; `null` without a card. */
+  playKey?: string | null;
 };
 
 /**
@@ -76,6 +87,7 @@ export function RaceInput({
   backspace,
   errors,
   onPlay,
+  playKey = null,
 }: RaceInputProps) {
   const input = useRef<HTMLInputElement>(null);
   const sink = useRef(onKey);
@@ -163,8 +175,9 @@ export function RaceInput({
       altKey: e.altKey,
       shiftKey: e.shiftKey,
       isComposing: e.nativeEvent.isComposing,
+      code: e.code,
     };
-    if (onPlay && isPlayKey(like)) {
+    if (onPlay && isPlayKey(like, playKey)) {
       e.preventDefault();
       onPlay();
       return;

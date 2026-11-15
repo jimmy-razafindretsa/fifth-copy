@@ -729,7 +729,9 @@ export const en = {
       play: "PLAY",
       cooldown: "COOLDOWN",
       seconds: "{n} S",
-      hint: "ENTER TO PLAY",
+      /** #951: the card's own shortcut, a new letter per card (`{key}`: `⌥ K` / `Alt+K`). */
+      hint: "{key} TO PLAY",
+      alert: "SABOTAGE AVAILABLE · {key}",
       playButton: "PLAY CARD",
       immune: "IMMUNE",
     },

@@ -30,3 +30,11 @@
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* #951: a short viewport (an on-screen keyboard, a landscape tablet) keeps its height for the typing
+   surface: the reason line gives way there; the notice row stays */
+@media (max-height: 600px) {
+  .detail {
+    display: none;
+  }
+}

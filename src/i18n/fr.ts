@@ -750,6 +750,7 @@ export const fr = {
       tied: "EX AEQUO",
       underReview: "EN VÉRIFICATION",
       medal: "HÉROS DE LA PAPERASSE",
+      loading: "ON CONVOQUE LE COMMIS…",
       medalTitle: {
         gold: "Un commis, en 3D, portant la médaille d'or",
         silver: "Un commis, en 3D, portant la médaille d'argent",

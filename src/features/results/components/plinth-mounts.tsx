@@ -95,6 +95,7 @@ type PlinthClerkProps = {
   outfit: Outfit;
   title: string;
   fallback: string;
+  loading: string;
   still: boolean;
 };
 

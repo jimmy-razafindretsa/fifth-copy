@@ -787,6 +787,7 @@ export const en = {
       tied: "TIED",
       underReview: "UNDER REVIEW",
       medal: "HERO OF PAPERWORK",
+      loading: "SUMMONING THE CLERK…",
       medalTitle: {
         gold: "A clerk, in 3D, wearing the gold medal",
         silver: "A clerk, in 3D, wearing the silver medal",

@@ -123,6 +123,8 @@ export type PodiumLabels = {
   underReview: string;
   /** The medal: `HERO OF PAPERWORK` (the fallback stamp, bible 13). */
   medal: string;
+  /** #951: the plate over a plinth while its 3D clerk loads. */
+  loading: string;
   /** The embed's title, per variant. */
   medalTitle: Record<MedalVariant, string>;
   status: Record<ReportStatus, string>;

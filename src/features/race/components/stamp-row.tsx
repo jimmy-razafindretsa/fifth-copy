@@ -14,6 +14,8 @@ export type StampRowKind = "overtake" | "passed" | "accepted" | "returned" | "ne
  * bible 2 and 7.7 (`ACCEPTED · {wpm} WPM`, `RETURNED · {n} ERRORS`, singular for one error).
  */
 export type StampRowLabels = Record<"overtake" | "passed", { ru: string; text: string }> & {
+  /** #951: the plain overtake line, `{name} overtook you` / `You overtook {name}`. */
+  overtakeLine: { overtake: string; passed: string; someone: string };
   accepted: string;
   returned: string;
   returnedOne: string;
@@ -36,10 +38,14 @@ function finishText(
 }
 
 /** The stamp's line in words, as it reads (the seat announcer says it; the stamp itself is hidden). */
-export function stampText(stamp: StampOf, wpm: number, labels: StampRowLabels): string {
+export function stampText(
+  stamp: StampOf,
+  wpm: number,
+  labels: StampRowLabels,
+  otherName: string | null = null,
+): string {
   if (stamp.kind === "overtake" || stamp.kind === "passed") {
-    const { ru, text } = labels[stamp.kind];
-    return `${ru} · ${text}`;
+    return fill(labels.overtakeLine[stamp.kind], { name: otherName ?? labels.overtakeLine.someone });
   }
   return finishText(stamp, wpm, labels);
 }
@@ -69,20 +75,26 @@ export function StampRow({
   stamp,
   wpm = 0,
   labels,
+  otherName = null,
 }: {
   stamp: ({ id: number } & StampOf) | null;
   wpm?: number;
   labels: StampRowLabels;
+  /** The other typist of an overtake (#951), from the roster; `null` reads "someone". */
+  otherName?: string | null;
 }) {
   if (!stamp) return null;
-  const line =
-    stamp.kind === "overtake" || stamp.kind === "passed" ? (
-      <>
-        <span lang="ru">{labels[stamp.kind].ru}</span> · {labels[stamp.kind].text}
-      </>
-    ) : (
-      finishText(stamp, wpm, labels)
+  // #951 (owner): an overtake is one quiet line, not the big dual stamp
+  if (stamp.kind === "overtake" || stamp.kind === "passed") {
+    return (
+      <div data-stamps={stamp.kind} aria-hidden="true" className={styles.row}>
+        <p key={stamp.id} className={styles.line} data-tone={TONE[stamp.kind]}>
+          {stampText(stamp, wpm, labels, otherName)}
+        </p>
+      </div>
     );
+  }
+  const line = finishText(stamp, wpm, labels);
   return (
     <div data-stamps={stamp.kind} aria-hidden="true" className={styles.row}>
       <Stamp

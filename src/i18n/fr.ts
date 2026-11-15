@@ -490,6 +490,11 @@ export const fr = {
     stamps: {
       overtake: { ru: "ОБГОН!", text: "DÉPASSEMENT +1" },
       passed: { ru: "ОБОГНАЛИ", text: "DÉPASSÉ −1" },
+      overtakeLine: {
+        overtake: "Tu as dépassé {name}",
+        passed: "{name} t'a dépassé",
+        someone: "Un dactylo",
+      },
       accepted: "ACCEPTÉ · {wpm} MPM",
       returned: "RETOURNÉ · {n} FAUTES",
       returnedOne: "RETOURNÉ · 1 FAUTE",

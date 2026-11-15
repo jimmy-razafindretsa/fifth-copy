@@ -520,6 +520,12 @@ export const en = {
     stamps: {
       overtake: { ru: "ОБГОН!", text: "OVERTAKE +1" },
       passed: { ru: "ОБОГНАЛИ", text: "PASSED −1" },
+      /** #951: the plain line that replaced the dual overtake stamp on the seat view. */
+      overtakeLine: {
+        overtake: "You overtook {name}",
+        passed: "{name} overtook you",
+        someone: "A typist",
+      },
       /** Your finish (#240, bible 2, 7.7): zero errors, otherwise the error count (singular for one). */
       accepted: "ACCEPTED · {wpm} WPM",
       returned: "RETURNED · {n} ERRORS",

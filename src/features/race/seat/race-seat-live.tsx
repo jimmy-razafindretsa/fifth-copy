@@ -273,6 +273,11 @@ export function RaceSeatLive({
   const lost = useRaceStore((s) => s.lost);
   const step = useCountdownStep();
   const stamp = useRaceStore(selectVisibleStamp);
+  // #951: an overtake names the other typist (`Bennett overtook you`), read from the roster
+  const otherName = useRaceStore((s) => {
+    const other = selectVisibleStamp(s)?.other;
+    return other === undefined ? null : (s.members.find((m) => m.desk === other)?.name ?? null);
+  });
   const canType = useRaceStore(selectCanType);
   const mode = useRaceStore((s) => s.settings?.errorMode);
   const backspace = useRaceStore((s) => s.settings?.backspace);
@@ -333,7 +338,7 @@ export function RaceSeatLive({
       {step !== null ? (
         <Countdown step={step} labels={labels.countdown} />
       ) : (
-        <StampRow stamp={stamp} wpm={finishWpm} labels={labels.stamps} />
+        <StampRow stamp={stamp} wpm={finishWpm} labels={labels.stamps} otherName={otherName} />
       )}
       <RaceInput
         disabled={!canType}

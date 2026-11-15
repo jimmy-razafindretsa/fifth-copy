@@ -90,7 +90,7 @@ export function StampRow({
   if (stamp.kind === "overtake" || stamp.kind === "passed") {
     return (
       <div data-stamps={stamp.kind} aria-hidden="true" className={styles.row}>
-        <p key={stamp.id} className={styles.line} data-tone={TONE[stamp.kind]}>
+        <p key={stamp.id} className={styles.line} data-stamp-tone={TONE[stamp.kind]}>
           {stampText(stamp, wpm, labels, otherName)}
         </p>
       </div>

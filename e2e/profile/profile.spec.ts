@@ -135,17 +135,18 @@ test.describe("Personnel file at /profile (#932)", () => {
     const dots = curve(page).locator("path").nth(2);
     const before = { line: await speed.getAttribute("d"), dots: await dots.getAttribute("d") };
     const slider = page.getByRole("slider", { name: "SMOOTHING" });
-    await expect(slider).toHaveValue("3");
+    // #951: no smoothing by default
+    await expect(slider).toHaveValue("0");
     expect((await slider.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    // Home is idempotent: repeat it until the hydrated slider has taken it
+    // End is idempotent: repeat it until the hydrated slider has taken it
     await expect(async () => {
       await slider.focus();
-      await page.keyboard.press("Home");
-      await expect(curve(page).locator("[data-curve-value]")).toHaveText("0", {
+      await page.keyboard.press("End");
+      await expect(curve(page).locator("[data-curve-value]")).toHaveText("8", {
         timeout: scaled(1_000),
       });
     }).toPass({ timeout: HYDRATION_WAIT });
-    await expect(slider).toHaveValue("0");
+    await expect(slider).toHaveValue("8");
     expect(await speed.getAttribute("d")).not.toBe(before.line);
     expect(await dots.getAttribute("d")).toBe(before.dots);
   });

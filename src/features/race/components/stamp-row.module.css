@@ -29,7 +29,7 @@
   border: 2px solid var(--color-fg);
 }
 
-.line[data-tone="red"] {
+.line[data-stamp-tone="red"] {
   color: var(--color-link);
   border-color: var(--color-primary);
 }

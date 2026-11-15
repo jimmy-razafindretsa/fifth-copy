@@ -116,7 +116,7 @@ test.describe("#561 seat view shell", () => {
     await expect(
       page.getByRole("group", { name: "Words per minute 0, 2 typists, no place yet" }),
     ).toBeVisible();
-    await expect(page.locator("[data-tube]")).toHaveText(["00", "00 / 02"]);
+    await expect(page.locator("[data-tube]")).toHaveText(["00", "– / 2"]);
     const card = page.getByRole("region", { name: "RACE CARD" });
     await expect(card).toContainText("2 TYPISTS");
     await expect(card.locator("[data-tick]")).toHaveCount(2);

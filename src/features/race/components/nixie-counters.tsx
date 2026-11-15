@@ -67,8 +67,7 @@ export function NixieCounters({
       </span>
       <span className={styles.counter} aria-hidden="true">
         <span data-tube="place" className={styles.tube}>
-          {place === null ? "–" : String(place)}
-          <span className={styles.of}>{`/ ${total}`}</span>
+          {place === null ? "–" : String(place)} <span className={styles.of}>{`/ ${total}`}</span>
         </span>
         <span className={styles.tag}>{labels.place}</span>
       </span>

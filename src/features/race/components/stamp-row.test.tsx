@@ -25,7 +25,7 @@ describe("StampRow (#232 C2)", () => {
     const out = line({ id: 7, kind: "overtake", errors: 0 }, "Bennett");
     expect(out).toContain('data-stamps="overtake"');
     expect(out).toContain('aria-hidden="true"');
-    expect(out).toContain('data-tone="red"');
+    expect(out).toContain('data-stamp-tone="red"');
     expect(out).toContain(">You overtook Bennett<");
     expect(out).not.toContain('lang="ru"');
     expect(out).not.toContain("data-stamp-size");
@@ -33,7 +33,7 @@ describe("StampRow (#232 C2)", () => {
 
   it("passed: `{name} overtook you` in ink; an unknown desk reads a typist", () => {
     const out = line({ id: 8, kind: "passed", errors: 0 }, "Carter");
-    expect(out).toContain('data-tone="ink"');
+    expect(out).toContain('data-stamp-tone="ink"');
     expect(out).toContain(">Carter overtook you<");
     expect(line({ id: 8, kind: "passed", errors: 0 }, null)).toContain(">A typist overtook you<");
   });

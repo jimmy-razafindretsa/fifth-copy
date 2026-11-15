@@ -1,9 +1,10 @@
 "use client";
 
 import { type ReactNode, useSyncExternalStore } from "react";
-import { EmbedFrame, stageView, useReducedMotion, useWebGL2 } from "@/components/ui";
+import { EmbedFrame, stageView, useEmbedBridge, useReducedMotion, useWebGL2 } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import styles from "./home.module.css";
+import { useClerkLook } from "./use-clerk-look";
 
 const WIDE = "(min-width: 768px)";
 const subscribeWide = (onChange: () => void) => {
@@ -27,7 +28,7 @@ export type HomeStageProps = {
  * The clerk stage (#946; bible "Home menu", 6, 10.1, 15; ADR 0013): the right half of the menu, red
  * ground, sun rays, an ink podium with a gold rim, and the viewer's clerk in 3D, mounted only after
  * hydration, at 768px and wider, with WebGL2 and without reduced motion (`stageView`, shared with the
- * Personnel file). Otherwise the portrait stands on the podium. Decorative: hidden from assistive tech,
+ * Personnel file); its head follows the cursor (`fc-look`). Otherwise the portrait stands on the podium. Decorative: hidden from assistive tech,
  * no focus, no pointer.
  */
 export function HomeStage({ clerkSrc, title, picture, still = false }: HomeStageProps) {
@@ -36,6 +37,8 @@ export function HomeStage({ clerkSrc, title, picture, still = false }: HomeStage
   const wide = useSyncExternalStore(subscribeWide, readWide, () => false);
   const view = stageView({ clerkSrc, still, webgl, reducedMotion });
   const mountClerk = view === "clerk" && wide && clerkSrc !== null;
+  const { ref, post } = useEmbedBridge();
+  useClerkLook(ref, post, mountClerk);
   return (
     <div
       className={cn(styles.stage, still && styles.stageStill)}
@@ -47,7 +50,7 @@ export function HomeStage({ clerkSrc, title, picture, still = false }: HomeStage
       <div className={styles.podium} />
       {mountClerk ? (
         <div className={styles.clerk}>
-          <EmbedFrame src={clerkSrc} title={title} decorative className={styles.clerkFrame} />
+          <EmbedFrame ref={ref} src={clerkSrc} title={title} decorative className={styles.clerkFrame} />
         </div>
       ) : (
         <div className={styles.picture}>{picture}</div>

@@ -17,7 +17,7 @@ export type RaceNoticeProps = {
  * under reduced motion. Which notice shows is the caller's (#561, #233, #235, #563).
  */
 export function RaceNotice({ kind, labels, detail = null }: RaceNoticeProps) {
-  return (
+  const row = (
     <p
       role="status"
       data-notice={kind}
@@ -25,11 +25,17 @@ export function RaceNotice({ kind, labels, detail = null }: RaceNoticeProps) {
       className={cn(docket.notice, docket.pulse, styles.notice)}
     >
       {labels[kind]}
-      {detail ? (
-        <span data-notice-detail="" className={styles.detail}>
-          {detail}
-        </span>
-      ) : null}
     </p>
+  );
+  // #951: why, on its own line under the notice row (the row keeps its exact words)
+  return detail ? (
+    <>
+      {row}
+      <p data-notice-detail="" className={styles.detail}>
+        {detail}
+      </p>
+    </>
+  ) : (
+    row
   );
 }

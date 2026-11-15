@@ -151,7 +151,7 @@ test.describe("#560 race HUD on /design", () => {
     }
     await expect(state(page, "tray-empty").getByText("NO CARD", { exact: true })).toBeVisible();
     await expect(state(page, "tray-smoke-break").locator("[data-row=play]")).toContainText(
-      "ENTER TO PLAY",
+      "⌥ K TO PLAY",
     );
     const cooling = state(page, "tray-cooling");
     await expect(cooling.locator("[data-row]")).toHaveCount(1);
@@ -209,7 +209,7 @@ test.describe("#560 race HUD on /design", () => {
     expect(s.color).toBe(await roleColour(page, "fg"));
     // the card is kept and still ready
     await expect(tray.locator("[data-slot]")).toContainText("EXTRA PAPERWORK");
-    await expect(tray.locator("[data-row=play] dd")).toHaveText("ENTER TO PLAY");
+    await expect(tray.locator("[data-row=play] dd")).toHaveText("⌥ K TO PLAY");
     // every other tray has an empty status region
     for (const id of ["tray-empty", "tray-smoke-break", "tray-cooling", "tray-held-cooling"]) {
       await expect(state(page, id).locator("[data-refusal]"), id).toBeEmpty();

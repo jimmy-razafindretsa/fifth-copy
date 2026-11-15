@@ -50,12 +50,15 @@
   animation: alertPulse var(--motion-duration-slow) var(--motion-ease-out) infinite alternate;
 }
 
+/* the plate rises and settles on its print offset; never a fade (text contrast stays full) */
 @keyframes alertPulse {
   from {
-    opacity: 1;
+    box-shadow: 4px 4px 0 var(--color-band);
+    translate: 0 0;
   }
   to {
-    opacity: 0.7;
+    box-shadow: 1px 1px 0 var(--color-band);
+    translate: 3px 3px;
   }
 }
 

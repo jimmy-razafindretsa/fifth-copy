@@ -1099,7 +1099,7 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
               <SabotageTray
                 card="extra-paperwork"
                 cooldownS={0}
-                hint={HUD.sabotageTray.hint}
+                hint="⌥ K TO PLAY"
                 labels={HUD.sabotageTray}
                 refused
               />

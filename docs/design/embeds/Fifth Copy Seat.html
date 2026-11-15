@@ -179,10 +179,13 @@ function probe() {
     requestAnimationFrame(frame);
   });
 }
+// #951: the stress test runs only on a preset the probe chose; a forced one (URL or page) is kept as is
+let PROBED = false;
 if (!FORCED) {
   const init = await initMessage;
   if (PRESETS[init.preset]) PRESET = init.preset; // the page forced one: no probe
   else {
+    PROBED = true;
     const fps = Math.round(await probe());
     ROOT.dataset.bench = 'probe:' + fps;
     if (LOST) await new Promise(() => {});
@@ -1119,7 +1122,7 @@ function loop(now) {
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over' && !reduced()) { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
-  if (pendingReady) { pendingReady = false; STRESS = true; stressAt = -1; }
+  if (pendingReady) { pendingReady = false; if (PROBED) { STRESS = true; stressAt = -1; } else ready(); }
   if (STRESS) {
     if (stressAt < 0) { stressAt = now; stressFrames = 0; }
     else {

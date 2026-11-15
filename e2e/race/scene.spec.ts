@@ -2,7 +2,6 @@ import type { BrowserContext, Frame, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
 import {
-  disjoint,
   hostRoom,
   phaseOf,
   simulatedPlayers,
@@ -106,7 +105,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
     test.skip(!webgl, "no WebGL2 in this browser (fallback.spec.ts covers that path)");
   });
 
-  test("C2 the stamped loading card shows until the scene is ready, never over the typing strip", async ({
+  test("C2 (#951) no stamped loading card: the scene loads behind the paper seat, then is ready", async ({
     page,
     browser,
   }) => {
@@ -120,19 +119,10 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
     });
     await page.goto(`/race/${room.lobbyId}?scene=pin`);
 
+    // #951: the waiting room is the one loading screen; the scene's own card is gone
     const card = loadingCard(page);
-    await expect(card).toBeVisible({ timeout: scaled(20_000) });
-    await expect(card).toHaveAttribute("aria-busy", "true");
-    await expect(card).toHaveAttribute("role", "status");
-    await expect(card.locator("[data-stamp-tone]")).toHaveText("LOADING THE RING ROOM");
-    // #951: `race.didYouKnow` ships tips: one tip row
-    await expect(card.locator("[data-did-you-know]")).toHaveCount(1);
-    await expect(scene(page)).toHaveAttribute("data-scene", "loading");
-    const cardBox = (await card.boundingBox())!;
-    for (const part of ["[data-telex]", "[data-sheet]", "[data-machine]"]) {
-      const b = (await page.locator(part).boundingBox())!;
-      expect(disjoint(cardBox, b), `loading card vs ${part}`).toBe(true);
-    }
+    await expect(scene(page)).toHaveAttribute("data-scene", "loading", { timeout: scaled(20_000) });
+    await expect(card).toHaveCount(0);
     await expectNoA11yViolations(page);
 
     release();

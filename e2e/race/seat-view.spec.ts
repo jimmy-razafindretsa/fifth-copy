@@ -69,10 +69,12 @@ test.describe("#210 C1 a guest from the lobby into the seat view", () => {
       await page.goto(`/race/${room.lobbyId}?scene=pin`);
 
       await expectWaitingHud(page);
+      // #951: no stamped loading card; the scene loads behind the paper seat
       const card = page.locator("[data-loading-card]");
-      await expect(card).toBeVisible({ timeout: scaled(20_000) });
-      await expect(card).toHaveAttribute("role", "status");
-      await expect(page.locator("[data-scene]")).toHaveAttribute("data-scene", "loading");
+      await expect(page.locator("[data-scene]")).toHaveAttribute("data-scene", "loading", {
+        timeout: scaled(20_000),
+      });
+      await expect(card).toHaveCount(0);
 
       release();
       const scene = page.locator("[data-scene]");

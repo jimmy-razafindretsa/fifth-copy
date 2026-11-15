@@ -33,3 +33,41 @@
   color: var(--color-link);
   border-color: var(--color-primary);
 }
+
+/* #951: the sabotage alert, a red plate with paper text (7.1 primary), big enough to read from the keys;
+   it pulses (bible 8 lkPulse) and stands still under reduced motion */
+.alert {
+  margin: 0;
+  padding: 10px 18px;
+  @apply type-label;
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 2px solid var(--color-band);
+  box-shadow: 4px 4px 0 var(--color-band);
+  animation: alertPulse var(--motion-duration-slow) var(--motion-ease-out) infinite alternate;
+}
+
+/* the plate rises and settles on its print offset; never a fade (text contrast stays full) */
+@keyframes alertPulse {
+  from {
+    box-shadow: 4px 4px 0 var(--color-band);
+    translate: 0 0;
+  }
+  to {
+    box-shadow: 1px 1px 0 var(--color-band);
+    translate: 3px 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alert {
+    animation: none;
+  }
+}
+
+:root[data-motion="reduce"] .alert {
+  animation: none;
+}

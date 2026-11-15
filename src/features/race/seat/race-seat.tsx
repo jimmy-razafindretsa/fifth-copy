@@ -69,6 +69,7 @@ export function RaceSeat({
               errors: labels.errors,
               presence: labels.presence,
               countdown: labels.countdown,
+              sabotageAlert: labels.sabotageTray.alert,
               stamps: labels.stamps,
               announce: labels.announce,
               finish: labels.finish,

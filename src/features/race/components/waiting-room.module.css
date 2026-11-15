@@ -8,6 +8,13 @@
 
 @reference "../../../app/globals.css";
 
+/* phones never take a desk (bible 18): no cover there */
+@media (max-width: 480px) {
+  .room {
+    display: none;
+  }
+}
+
 .room {
   position: fixed;
   inset: 0;

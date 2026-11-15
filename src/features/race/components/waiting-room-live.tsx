@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+
+const noSubscribe = () => () => {};
 import { createPortal } from "react-dom";
 import { useRaceStore } from "../client/use-race-store";
 import { arrivalOrder, arrivedDesks, waitingRoomView } from "../view/waiting-room-view";
@@ -30,7 +32,10 @@ export function WaitingRoomLive({ labels, reconnecting, tip }: WaitingRoomLivePr
   const raceIn = useRaceStore((s) => s.race !== null);
   const sceneSettled = useRaceStore((s) => s.sceneSettled);
 
-  const shown = roomPhase === "loading" && pending !== null && phase !== "lost";
+  // #951: also while the page connects (from the server's first paint), so no other loading screen
+  // shows before it
+  const shown =
+    phase === "connecting" || (roomPhase === "loading" && pending !== null && phase !== "lost");
   const arrived = useMemo(() => arrivedDesks(members, pending), [members, pending]);
   const [order, setOrder] = useState<readonly number[]>([]);
   // the arrival order follows each readiness report; reset when the room leaves `loading`
@@ -61,14 +66,50 @@ export function WaitingRoomLive({ labels, reconnecting, tip }: WaitingRoomLivePr
     return () => seat?.removeAttribute("inert");
   }, [shown]);
 
-  if (!shown || typeof document === "undefined") return null;
-  return createPortal(
+  const percent = useSmoothPercent(view.percent, shown, view.current === null);
+  // false on the server and while hydrating, true after: the cover renders inline until then
+  const mounted = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
+
+  if (!shown) return null;
+  const screen = (
     <WaitingRoom
       labels={labels}
-      view={view}
+      view={{ ...view, percent }}
       notice={phase === "reconnecting" ? reconnecting : null}
       tip={tip}
-    />,
-    document.body,
+    />
   );
+  // before hydration the cover is inline (fixed, over the seat); after, portalled beside the inert seat
+  return mounted ? createPortal(screen, document.body) : screen;
+}
+
+/** How often the shown percent moves toward its target (a number change, not an animation). */
+const TICK_MS = 150;
+
+/**
+ * The progress the bar shows (#951): it never goes back, catches up quickly with the real percent
+ * (`target`), then keeps creeping toward the next step's share (20 points ahead, never past 97) while
+ * the device waits, ever slower, so a long load still moves. Done reads 100 at once.
+ */
+export function nextPercent(shownNow: number, target: number, done: boolean): number {
+  if (done) return 100;
+  if (shownNow < target)
+    return Math.min(target, shownNow + Math.max(1, (target - shownNow) * 0.25));
+  const ceiling = Math.min(97, target + 19);
+  if (shownNow >= ceiling) return shownNow;
+  return Math.min(ceiling, shownNow + Math.max(0.05, (ceiling - shownNow) * 0.03));
+}
+
+function useSmoothPercent(target: number, active: boolean, done: boolean): number {
+  const [shownNow, setShown] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setShown((now) => nextPercent(now, target, done)), TICK_MS);
+    return () => window.clearInterval(id);
+  }, [active, target, done]);
+  return Math.round(shownNow);
 }

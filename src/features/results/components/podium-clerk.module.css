@@ -20,7 +20,7 @@
   line-height: 1.1;
 }
 
-/* #951: the plate over the slot until the clerk is first drawn; its line pulses (bible 8 lkPulse),
+/* #951: the plate over the slot until the clerk is first drawn; its rule pulses (bible 8),
    still under reduced motion */
 .loading {
   position: absolute;
@@ -38,12 +38,13 @@
   animation: clerkLoading var(--motion-duration-slow) var(--motion-ease-out) infinite alternate;
 }
 
+/* the plate's rule pulses between ink and red; never a fade (text contrast stays full) */
 @keyframes clerkLoading {
   from {
-    opacity: 1;
+    box-shadow: 0 0 0 2px var(--color-band-fg);
   }
   to {
-    opacity: 0.55;
+    box-shadow: 0 0 0 2px var(--color-primary);
   }
 }
 

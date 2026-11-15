@@ -130,6 +130,7 @@ describe("reduceRace (#561 C2)", () => {
       // #236: your card, cooldown, blur and refusal
       bonus: {
         card: null,
+        playKey: null,
         cooldownUntil: null,
         blurUntil: null,
         refused: false,
@@ -1661,6 +1662,7 @@ describe("#236 bonus state", () => {
     const s = racing();
     expect(selectBonus(s)).toEqual({
       card: null,
+      playKey: null,
       cooldownUntil: null,
       overlay: null,
       blurUntil: null,

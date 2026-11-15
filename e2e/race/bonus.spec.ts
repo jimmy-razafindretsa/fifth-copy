@@ -1,6 +1,19 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
+
+/** The last play shortcut the tray showed (#951: Option/Alt + a new letter per card). */
+let lastPlayKey = "K";
+
+/** Presses the shortcut the tray shows (Alt + the letter, by its physical key); the last one while cooling. */
+async function playCard(page: Page) {
+  const hint = page.locator("[data-sabotage-tray] [data-row=play] dd");
+  if ((await hint.count()) > 0) {
+    const m = /([GJKLP]) TO PLAY$/.exec((await hint.textContent()) ?? "");
+    if (m) lastPlayKey = m[1]!;
+  }
+  await page.keyboard.press(`Alt+Key${lastPlayKey}`);
+}
 import {
   hostRoom,
   phaseOf,
@@ -17,7 +30,7 @@ import {
 // sockets that never type) fill the other desks before or after it, so the guest's rank picks its card:
 // 2nd of 3 -> Extra Paperwork on the leader, 3rd of 3 -> Smoke Break on everyone ahead, 6th of 8 ->
 // Exemption on itself (`rankPct` 5/7 = 0.71: the smallest field inside Exemption's [0.67, 0.75) band;
-// 3rd of 4 is 0.667, Extra Paperwork). The guest plays with a bare Enter (or the tray's button); the server answers
+// 3rd of 4 is 0.667, Extra Paperwork). The guest plays with Option/Alt + the card's letter (#951) (or the tray's button); the server answers
 // with `bonus-sent` and `bonus-hit`, a refusal with `rejected { no-bonus }`. The cooldown is the engine's
 // 15 s (not scaled by the fast clock), so each test budgets for it. Every test drives its own
 // viewport, so only the desktop project runs.
@@ -88,7 +101,7 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
     return { room, sent };
   }
 
-  test("C4 Extra Paperwork: the guest plays it with Enter, the leader's strip gains words; the same card on the same target reads IMMUNE", async ({
+  test("C4 Extra Paperwork: the guest plays it with its shortcut (#951), the leader's strip gains words; the same card on the same target reads IMMUNE", async ({
     page,
     browser,
   }) => {
@@ -99,14 +112,16 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
     await expect(tray(page)).toHaveAttribute("data-card", "extra-paperwork", {
       timeout: scaled(5_000),
     });
-    await expect(tray(page).locator("[data-row=play] dd")).toHaveText("ENTER TO PLAY");
+    await expect(tray(page).locator("[data-row=play] dd")).toHaveText(
+      /^(⌥ |Alt\+)[GJKLP] TO PLAY$/,
+    );
     await expect(tray(page).getByRole("button", { name: "PLAY CARD" })).toBeVisible();
     await expectNoA11yViolations(page);
 
     const before = await chars(room.host).count();
     const guestBefore = await chars(page).count();
-    await page.keyboard.press("Enter");
-    // Enter types nothing on the guest's own strip
+    await playCard(page);
+    // the shortcut types nothing on the guest's own strip
     await expect(tray(page)).toHaveAttribute("data-cooling", "true", { timeout: scaled(5_000) });
     expect(await chars(page).count()).toBe(guestBefore);
     await expect(page.locator("[data-telex] [data-state=done]")).toHaveCount(0);
@@ -121,12 +136,12 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
       "remaining",
     );
 
-    // the cooldown counts down once a second; Enter while cooling sends nothing
+    // the cooldown counts down once a second; the shortcut while cooling sends nothing
     const cooldown = tray(page).locator("[data-row=cooldown] dd");
     await expect(cooldown).toHaveText(/^1[0-5] S$/);
     const first = Number(/\d+/.exec((await cooldown.textContent())!)![0]);
     await expect(cooldown).toHaveText(`${first - 1} S`, { timeout: scaled(2_500) });
-    await page.keyboard.press("Enter");
+    await playCard(page);
     await page.waitForTimeout(300);
     expect(sent).toHaveLength(1);
 
@@ -134,7 +149,7 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
     await expect(tray(page).locator("[data-row=play]")).toBeVisible({ timeout: scaled(20_000) });
     await expect(tray(page)).toHaveAttribute("data-card", "extra-paperwork");
     const hostNow = await chars(room.host).count();
-    await page.keyboard.press("Enter");
+    await playCard(page);
     const refused = tray(page).locator("[data-row=refused]");
     await expect(refused).toHaveText("IMMUNE", { timeout: scaled(5_000) });
     await expect(tray(page).locator("[role=status][data-refusal]")).toContainText("IMMUNE");
@@ -158,7 +173,7 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
     await expect(tray(page)).toHaveAttribute("data-card", "smoke-break", {
       timeout: scaled(5_000),
     });
-    await page.keyboard.press("Enter");
+    await playCard(page);
     const strip = room.host.locator("[data-telex]");
     await expect(strip).toHaveAttribute("data-blur", "true", { timeout: scaled(5_000) });
     await expect(room.host.locator("[data-sheet]")).toHaveAttribute("data-blur", "true");
@@ -223,12 +238,14 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
     await expect(tray(page)).toHaveAttribute("data-card", "extra-paperwork", {
       timeout: scaled(5_000),
     });
-    await expect(tray(page).locator("[data-row=play] dd")).toHaveText("ENTER TO PLAY");
+    await expect(tray(page).locator("[data-row=play] dd")).toHaveText(
+      /^(⌥ |Alt\+)[GJKLP] TO PLAY$/,
+    );
 
     // the held card still plays after the reload
     const before = await chars(room.host).count();
     await expect(input(page)).toBeFocused();
-    await page.keyboard.press("Enter");
+    await playCard(page);
     await expect(tray(page)).toHaveAttribute("data-cooling", "true", { timeout: scaled(5_000) });
     await expect
       .poll(() => chars(room.host).count(), { timeout: scaled(5_000) })

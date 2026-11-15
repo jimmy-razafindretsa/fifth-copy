@@ -155,3 +155,19 @@ describe("WaitingRoom briefing (#951)", () => {
     expect(fr.race.didYouKnow.length).toBe(en.race.didYouKnow.length);
   });
 });
+
+describe("nextPercent (#951): a progressive bar", () => {
+  it("catches up with the real percent, never goes back, creeps toward the next step, 100 when done", async () => {
+    const { nextPercent } = await import("./waiting-room-live");
+    let p = 0;
+    for (let i = 0; i < 20; i++) p = nextPercent(p, 53, false);
+    expect(p).toBeGreaterThanOrEqual(53);
+    const before = p;
+    for (let i = 0; i < 400; i++) p = nextPercent(p, 53, false);
+    expect(p).toBeGreaterThan(before);
+    expect(p).toBeLessThanOrEqual(72);
+    expect(nextPercent(70, 40, false)).toBe(70);
+    expect(nextPercent(90, 95, false)).toBeLessThanOrEqual(97);
+    expect(nextPercent(30, 80, true)).toBe(100);
+  });
+});

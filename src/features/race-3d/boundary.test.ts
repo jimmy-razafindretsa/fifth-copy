@@ -48,13 +48,11 @@ describe("race-3d public face (#563 C1)", () => {
     expect(mentions).toEqual(["seat-scene.tsx"]);
   });
 
-  it("the leaf renders nothing until an effect has run after mount (HUD first)", () => {
+  it("the leaf mounts no scene until an effect has run after mount (HUD first; #951: only the waiting room)", () => {
     const leaf = read(LEAF);
     expect(leaf).toContain('useState<Mode>("off")');
-    expect(leaf).toContain('if (mode === "off") return null;');
-    expect(leaf).toMatch(
-      /useEffect\(\(\) => \{[\s\S]*?setMode\(hasWebGL2\(\) \? "loading" : "fallback"\)/,
-    );
+    expect(leaf).toContain('if (mode === "off") return room;');
+    expect(leaf).toMatch(/useEffect\(\(\) => \{[\s\S]*?setMode\(webgl \? "loading" : "fallback"\)/);
     expect(read("src/app/race/[raceId]/page.tsx")).toMatch(/scene=\{\s*<SeatScene/);
   });
 });

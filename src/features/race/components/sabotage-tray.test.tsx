@@ -8,7 +8,7 @@ import { SabotageTray } from "./sabotage-tray";
 // Contract of #560 C4 (markup; the docket look is checked in e2e/race/hud.spec.ts).
 const EN = hudLabelFixtures.en.sabotageTray;
 const FR = hudLabelFixtures.fr.sabotageTray;
-const HINT = "ENTER TO PLAY";
+const HINT = "⌥ K TO PLAY";
 const html = (el: React.ReactElement) =>
   renderToStaticMarkup(el)
     .replace(/&#x27;/g, "'")
@@ -137,10 +137,16 @@ describe("SabotageTray play and refusal (#236 C3)", () => {
     );
     expect(rows(ready)).toEqual([{ row: "play", label: "PLAY", value: HINT }]);
     const fr = html(
-      <SabotageTray card="smoke-break" cooldownS={0} hint={FR.hint} labels={FR} onPlay={play} />,
+      <SabotageTray
+        card="smoke-break"
+        cooldownS={0}
+        hint={FR.hint.replace("{key}", "Alt+K")}
+        labels={FR}
+        onPlay={play}
+      />,
     );
     expect(fr).toContain(">JOUER LA CARTE<");
-    expect(rows(fr)).toEqual([{ row: "play", label: "JOUER", value: "ENTRÉE POUR JOUER" }]);
+    expect(rows(fr)).toEqual([{ row: "play", label: "JOUER", value: "Alt+K POUR JOUER" }]);
     for (const el of [
       <SabotageTray
         key="c"
@@ -157,9 +163,11 @@ describe("SabotageTray play and refusal (#236 C3)", () => {
     }
   });
 
-  it("the copy is in both catalogs: ENTER TO PLAY / ENTRÉE POUR JOUER", () => {
-    expect(EN.hint).toBe("ENTER TO PLAY");
-    expect(FR.hint).toBe("ENTRÉE POUR JOUER");
+  it("the copy is in both catalogs: {key} TO PLAY / {key} POUR JOUER (#951)", () => {
+    expect(EN.hint).toBe("{key} TO PLAY");
+    expect(FR.hint).toBe("{key} POUR JOUER");
+    expect(EN.alert).toBe("SABOTAGE AVAILABLE · {key}");
+    expect(FR.alert).toBe("SABOTAGE DISPONIBLE · {key}");
     expect([EN.immune, FR.immune]).toEqual(["IMMUNE", "IMMUNISÉ"]);
   });
 });

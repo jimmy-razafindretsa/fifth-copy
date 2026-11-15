@@ -563,7 +563,7 @@ export const fr = {
         ],
         sabotageTitle: "SABOTAGES",
         sabotageIntro:
-          "Plus tu es loin derrière, plus tu reçois de cartes. Le premier n'en reçoit jamais. Appuie sur Entrée pour jouer.",
+          "Plus tu es loin derrière, plus tu reçois de cartes. Le premier n'en reçoit jamais. Pour jouer, fais le raccourci que l'alerte affiche : Option ou Alt plus une lettre qui change à chaque carte.",
         unlocks: {
           "extra-paperwork": "moitié du bas",
           exemption: "tiers du bas",
@@ -584,6 +584,18 @@ export const fr = {
       "Tes meilleures vitesses et ta moyenne sont classées dans ton dossier après chaque course.",
       "Soixante secondes sans toucher une touche et le Major te renvoie chez toi.",
     ],
+    sceneDrop: {
+      "no-webgl2": "Ce navigateur n'a pas WebGL2 : la salle en 3D ne peut pas tourner ici.",
+      "benchmark-low":
+        "Ton ordinateur a dessiné {fps} images par seconde au test de la salle, trop peu même en qualité minimale.",
+      "benchmark-low-unknown":
+        "Ton ordinateur a été trop lent au test de la salle, même en qualité minimale.",
+      "context-lost":
+        "La carte graphique a cessé de dessiner la salle (contexte WebGL perdu) : mémoire ou pilote à bout.",
+      "frame-budget":
+        "La salle est tombée à {fps} images par seconde en qualité minimale pendant la course (18 nécessaires) : elle est coupée pour garder ta frappe fluide.",
+      "late-load": "La salle n'était pas prête au départ (30 s) : tu cours sur papier.",
+    },
     notice: {
       "waiting-for-host": "EN ATTENTE DE L'HÔTE",
       reconnecting: "LIGNE COUPÉE · RECONNEXION",
@@ -686,7 +698,8 @@ export const fr = {
       play: "JOUER",
       cooldown: "RECHARGE",
       seconds: "{n} S",
-      hint: "ENTRÉE POUR JOUER",
+      hint: "{key} POUR JOUER",
+      alert: "SABOTAGE DISPONIBLE · {key}",
       playButton: "JOUER LA CARTE",
       immune: "IMMUNISÉ",
     },

@@ -66,6 +66,11 @@ export type BonusState = {
   /** The card `bonus-earned` dealt you; `null` once `bonus-sent` says you played it. */
   card: BonusKind | null;
   /**
+   * #951: the letter that plays this card with Option/Alt (`PLAY_KEYS`), a new one for every card dealt,
+   * so a typist has to look up to read it; `null` without a card.
+   */
+  playKey: PlayKey | null;
+  /**
    * When you may play again: set when you play (`COOLDOWN_MS`, the engine's constant, so a second
    * Enter sends nothing while the first is in flight), confirmed by `bonus-sent`, rolled back by a
    * refusal. The client never sends while it runs.
@@ -83,8 +88,23 @@ export type BonusState = {
   plays: number;
 };
 
+/**
+ * #951: the letters a card is played with, with Option (macOS) or Alt (Windows, Linux): each sits on the
+ * same key in QWERTY, AZERTY and QWERTZ, none is a dead key under Option, and no browser binds Option/Alt
+ * plus one of them (never a destructive shortcut such as Cmd/Ctrl+W, Q, T or N). Matched on `KeyboardEvent.code`.
+ */
+export const PLAY_KEYS = ["G", "J", "K", "L", "P"] as const;
+export type PlayKey = (typeof PLAY_KEYS)[number];
+
+/** A play key for a new card: picked from the deal's time, never the previous card's. Pure. */
+export function nextPlayKey(previous: PlayKey | null, at: number): PlayKey {
+  const pool = PLAY_KEYS.filter((k) => k !== previous);
+  return pool[Math.abs(Math.floor(at)) % pool.length]!;
+}
+
 const NO_BONUS = {
   card: null,
+  playKey: null,
   cooldownUntil: null,
   blurUntil: null,
   refused: false,
@@ -369,6 +389,8 @@ function bonusFromWelcome(w: Welcome, offset: number, plays: number): BonusState
   return {
     ...NO_BONUS,
     card: bonus.card,
+    // #951: a card held across a reconnect gets a key too
+    playKey: bonus.card ? nextPlayKey(null, race.t0 + offset) : null,
     cooldownUntil: device(bonus.cooldownUntil),
     blurUntil: device(bonus.blurUntil),
     plays,
@@ -668,12 +690,21 @@ function reduceBonusEvent(
   switch (payload.kind) {
     case "bonus-earned":
       if (payload.desk !== you || bonus.card === payload.bonus) return state;
-      return { ...state, bonus: { ...bonus, card: payload.bonus } };
+      return {
+        ...state,
+        bonus: { ...bonus, card: payload.bonus, playKey: nextPlayKey(bonus.playKey, at) },
+      };
     case "bonus-sent":
       if (payload.from !== you) return state;
       return {
         ...state,
-        bonus: { ...bonus, card: null, cooldownUntil: at + COOLDOWN_MS, pending: null },
+        bonus: {
+          ...bonus,
+          card: null,
+          playKey: null,
+          cooldownUntil: at + COOLDOWN_MS,
+          pending: null,
+        },
       };
     case "bonus-hit": {
       if (payload.desk !== you || !state.race) return state;
@@ -758,6 +789,7 @@ export function selectExit(state: RaceState): ExitKind | null {
 /** What the tray and the typing surface show of your bonus (#236 C1): stable between changes. */
 export type BonusView = {
   card: BonusKind | null;
+  playKey: PlayKey | null;
   cooldownUntil: number | null;
   overlay: RaceState["overlay"];
   blurUntil: number | null;
@@ -771,8 +803,8 @@ export function selectBonus(state: RaceState): BonusView {
   const { bonus, overlay } = state;
   const hit = bonusViews.get(bonus);
   if (hit && hit.overlay === overlay) return hit.view;
-  const { card, cooldownUntil, blurUntil, refused } = bonus;
-  const view = { card, cooldownUntil, overlay, blurUntil, refused };
+  const { card, playKey, cooldownUntil, blurUntil, refused } = bonus;
+  const view = { card, playKey, cooldownUntil, overlay, blurUntil, refused };
   bonusViews.set(bonus, { overlay, view });
   return view;
 }

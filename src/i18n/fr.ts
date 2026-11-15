@@ -32,7 +32,6 @@ export const fr = {
     nightShift: "QUART DE NUIT",
     honorific: "Camarade {name}",
     /** #932 : l'entrée Dossier du personnel du bandeau (visiteurs connus) et le préfixe lu du docket. */
-    myFile: "MON DOSSIER",
     myFileName: "Mon dossier",
   },
   landing: {

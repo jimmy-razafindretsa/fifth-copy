@@ -31,7 +31,6 @@ export const en = {
     nightShift: "NIGHT SHIFT",
     honorific: "Comrade {name}",
     /** #932: the header's Personnel file item (viewers only) and the docket link's spoken prefix. */
-    myFile: "MY FILE",
     myFileName: "My file",
   },
   landing: {

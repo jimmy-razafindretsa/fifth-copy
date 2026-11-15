@@ -34,6 +34,8 @@
 }
 
 .nav {
+  /* every boxed control in the header (EN/FR, NIGHT SHIFT, the docket) shares one height (#951) */
+  --header-control-h: 44px;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -45,6 +47,9 @@
 }
 
 .navLink {
+  display: inline-flex;
+  align-items: center;
+  height: var(--header-control-h, 44px);
   color: var(--color-fg);
   text-decoration: none;
 }
@@ -54,21 +59,10 @@
   text-decoration: underline;
 }
 
-/* MY FILE (#932, reference Profil.dc.html header): on its own page, red with a 3px red rule under it */
-.myFile[aria-current="page"] {
-  color: var(--color-link);
-  border-bottom: 3px solid var(--color-primary);
-  padding-bottom: 2px;
-}
-
-.myFile[aria-current="page"]:hover {
-  text-decoration: none;
-}
-
 /* guest docket: mono name plus the ink GUEST tag (bible 7.4); a link to the viewer's file (#932) */
 .docket {
   display: flex;
-  min-height: 44px;
+  height: var(--header-control-h, 44px);
   color: var(--color-fg);
   text-decoration: none;
   align-items: center;
@@ -107,6 +101,9 @@
 }
 
 .signIn {
+  display: inline-flex;
+  align-items: center;
+  height: var(--header-control-h, 44px);
   color: var(--color-link);
   text-decoration: none;
 }
@@ -125,16 +122,6 @@ button.signIn {
 
 a.docket:hover .docketName {
   text-decoration: underline;
-}
-
-/* bible 18: hit targets >= 44px on touch */
-@media (max-width: 768px) {
-  .navLink,
-  .signIn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-  }
 }
 
 /*
@@ -178,11 +165,6 @@ a.docket:hover .docketName {
   .nav {
     display: contents;
     white-space: nowrap;
-  }
-
-  /* MY FILE gives way on phones: the docket is the link to the file there (#932) */
-  .myFile {
-    display: none;
   }
 
   /* row 1: EN/FR, then NIGHT SHIFT (its form is `display: contents`, the button is the item) */

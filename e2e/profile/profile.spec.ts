@@ -101,7 +101,7 @@ test.describe("Personnel file at /profile (#932)", () => {
     }
   });
 
-  test("C9 header: MY FILE / the docket links to the file, 44px, no sideways scroll", async ({
+  test("C9 header: the docket links to the file, 44px, no sideways scroll", async ({
     page,
   }) => {
     await seedLobby(page);
@@ -109,10 +109,8 @@ test.describe("Personnel file at /profile (#932)", () => {
     const docket = page.locator("a[data-docket-link]");
     await expect(docket).toHaveAttribute("href", "/profile");
     expect((await docket.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    const myFile = page.getByRole("link", { name: "MY FILE", exact: true });
-    if (page.viewportSize()!.width > 480) {
-      await expect(myFile).toHaveAttribute("aria-current", "page");
-    }
+    // #951: the separate MY FILE link is gone, the docket is the one link to the file
+    await expect(page.getByRole("link", { name: "MY FILE", exact: true })).toHaveCount(0);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );

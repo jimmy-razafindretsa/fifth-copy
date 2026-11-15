@@ -5,8 +5,10 @@
 
 @reference "../../../app/globals.css";
 
+/* one height for every header control (#951): the header sets --header-control-h, 44px by default (bible 18 targets) */
 .segmented {
   display: flex;
+  height: var(--header-control-h, 44px);
   border: 2px solid var(--color-fg);
 }
 
@@ -15,7 +17,8 @@
   font-size: 12px;
   line-height: normal;
   letter-spacing: 0.14em;
-  padding: 5px 10px;
+  min-width: 44px;
+  padding: 0 10px;
   border: 0;
   cursor: pointer;
   background: transparent;
@@ -35,7 +38,8 @@
   font-size: 12px;
   line-height: normal;
   letter-spacing: 0.14em;
-  padding: 7px 12px;
+  height: var(--header-control-h, 44px);
+  padding: 0 12px;
   border: 2px solid var(--color-fg);
   background: transparent;
   color: var(--color-fg);
@@ -53,12 +57,4 @@
 
 .night[aria-pressed="true"] .dot {
   background: var(--color-reward);
-}
-
-/* bible 18: hit targets >= 44px on touch (the reference measures 26px and 30px) */
-@media (max-width: 768px) {
-  .segment,
-  .night {
-    min-height: 44px;
-  }
 }

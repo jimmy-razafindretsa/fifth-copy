@@ -2,7 +2,6 @@ import Image from "next/image";
 import { AccountControl, getAvatarUser, getViewer } from "@/features/identity";
 import { getTheme, LocaleToggle, ThemeToggle } from "@/features/preferences";
 import { getLocale, getT } from "@/i18n";
-import { cn } from "@/lib/cn";
 import { LINKS } from "../links";
 import styles from "./header.module.css";
 
@@ -10,8 +9,8 @@ import styles from "./header.module.css";
  * Landing header (bible 14.1 item 1, reference `Fifth Copy Landing.dc.html`): FC icon + FIFTH COPY,
  * the guide link, EN/FR, NIGHT SHIFT, then the account control (#36): the viewer's docket and SIGN IN or
  * SIGN OUT. The docket only shows a viewer that exists: reads never create guests (ADR 0009).
- * A viewer also gets MY FILE (#932, from 481px up; red and ruled on `/profile`, `current="profile"`), and
- * the docket links to their Personnel file at every width. On the landing (`current="landing"`, `/` and
+ * The docket is the one link to the viewer's Personnel file (#932; the separate MY FILE link went in #951:
+ * both did the same thing). On the landing (`current="landing"`, `/` and
  * `/welcome`) the guide link is the in-page `#how` anchor.
  */
 export async function LandingHeader({ current }: { current?: "profile" | "landing" } = {}) {
@@ -40,15 +39,6 @@ export async function LandingHeader({ current }: { current?: "profile" | "landin
         <a href={current === "landing" ? LINKS.how : LINKS.guide} className={styles.navLink}>
           {t.header.guide}
         </a>
-        {viewer ? (
-          <a
-            href={LINKS.profile}
-            className={cn(styles.navLink, styles.myFile)}
-            aria-current={current === "profile" ? "page" : undefined}
-          >
-            {t.header.myFile}
-          </a>
-        ) : null}
         <LocaleToggle locale={locale} label={t.header.languageLabel} />
         {/* no cookie = paper here, whatever the OS (bible 3.2, #651) */}
         <ThemeToggle theme={theme ?? "light"} label={t.header.nightShift} />

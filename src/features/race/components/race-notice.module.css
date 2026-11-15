@@ -15,3 +15,26 @@
 .notice[data-tone="urgent"] {
   background: var(--color-danger-surface);
 }
+
+/* #951: why the 3D room went away, under the notice, in body type (no letter-spacing caps) */
+.detail {
+  display: block;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  @apply type-body;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* #951: a short viewport (an on-screen keyboard, a landscape tablet) keeps its height for the typing
+   surface: the reason line gives way there; the notice row stays */
+@media (max-height: 600px) {
+  .detail {
+    display: none;
+  }
+}

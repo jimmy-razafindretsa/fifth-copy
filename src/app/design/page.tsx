@@ -1074,7 +1074,7 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
                 <SabotageTray
                   card={card}
                   cooldownS={0}
-                  hint="ENTER TO PLAY"
+                  hint="⌥ K TO PLAY"
                   labels={HUD.sabotageTray}
                 />
               </div>
@@ -1085,7 +1085,7 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
               <SabotageTray
                 card={null}
                 cooldownS={12}
-                hint="ENTER TO PLAY"
+                hint="⌥ K TO PLAY"
                 labels={HUD.sabotageTray}
               />
             </div>
@@ -1099,7 +1099,7 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
               <SabotageTray
                 card="extra-paperwork"
                 cooldownS={0}
-                hint={HUD.sabotageTray.hint}
+                hint="⌥ K TO PLAY"
                 labels={HUD.sabotageTray}
                 refused
               />
@@ -1114,7 +1114,7 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
               <SabotageTray
                 card="exemption"
                 cooldownS={9}
-                hint="ENTER TO PLAY"
+                hint="⌥ K TO PLAY"
                 labels={HUD.sabotageTray}
               />
             </div>

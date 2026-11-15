@@ -179,14 +179,17 @@ function probe() {
     requestAnimationFrame(frame);
   });
 }
+// #951: the stress test runs only on a preset the probe chose; a forced one (URL or page) is kept as is
+let PROBED = false;
 if (!FORCED) {
   const init = await initMessage;
   if (PRESETS[init.preset]) PRESET = init.preset; // the page forced one: no probe
   else {
+    PROBED = true;
     const fps = Math.round(await probe());
     ROOT.dataset.bench = 'probe:' + fps;
     if (LOST) await new Promise(() => {});
-    if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' }); await new Promise(() => {}); }
+    if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low', fps: Math.round(fps) }); await new Promise(() => {}); }
     PRESET = CAPPED ? 'medium' : fps >= PROBE_HIGH_FPS ? 'high' : fps >= PROBE_MEDIUM_FPS ? 'medium' : 'low';
     ROOT.dataset.bench += ' ' + PRESET;
   }
@@ -1086,6 +1089,13 @@ removeEventListener('message', toInbox); addEventListener('message', onMessage);
 // before the page's `fc-race-init`: the first room frame is the settled (or forced) preset's.
 const SLOW_FRAME_MS = 1000 / 18;
 let fr = 0, ft = 0, drawnAt = -1, rest = 0;
+// #951 stress test: before `fc-scene-ready` the built room runs for STRESS_S at the settled preset; under
+// its floor the preset steps down (high, medium, low) and runs again; LOW under STRESS_LOW_FPS falls back
+// now (`benchmark-low` with the fps), so a scene that passes has headroom for the race and never drops in
+// the middle of it. Loading may take longer; the race does not. `<html data-stress>` records each run.
+const STRESS_S = 2.5, STRESS_FPS = 30, STRESS_LOW_FPS = 24;
+const LOWER = { high: 'medium', medium: 'low', low: null };
+let STRESS = false, stressAt = -1, stressFrames = 0;
 function loop(now) {
   if (LOST) return;
   requestAnimationFrame(loop);
@@ -1112,8 +1122,23 @@ function loop(now) {
   Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over' && !reduced()) { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
-  if (pendingReady) { pendingReady = false; ready(); }
+  if (pendingReady) { pendingReady = false; if (PROBED) { STRESS = true; stressAt = -1; } else ready(); }
+  if (STRESS) {
+    if (stressAt < 0) { stressAt = now; stressFrames = 0; }
+    else {
+      stressFrames++;
+      const s = (now - stressAt) / 1000;
+      if (s >= STRESS_S) {
+        const fps = stressFrames / s, floor = PRESET === 'low' ? STRESS_LOW_FPS : STRESS_FPS;
+        ROOT.dataset.stress = (ROOT.dataset.stress ? ROOT.dataset.stress + ' ' : '') + PRESET + ':' + Math.round(fps);
+        if (fps >= floor) { STRESS = false; ready(); }
+        else if (LOWER[PRESET]) { applyPreset(LOWER[PRESET]); stressAt = -1; }
+        else { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low', fps: Math.round(fps) }); return; }
+      }
+    }
+  }
   fr++; ft += wall;
+  if (!READY) { if (ft >= 1) { fr = 0; ft = 0; } return; }
   if (ft >= 1) { const i = renderer.info.render; ROOT.dataset.calls = i.calls; send({ type: 'fc-scene-telemetry', fps: Math.round(fr / ft), calls: i.calls, triangles: i.triangles, preset: PRESET, capped: CAPPED }); fr = 0; ft = 0; }
 }
 // #695: the first frame does none of the setup on a slow CPU: each part of the room has its shader programs

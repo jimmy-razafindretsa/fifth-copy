@@ -81,6 +81,8 @@ export type SceneFallbackMessage = {
   type: "fc-scene-fallback";
   v: number;
   reason: SceneFallbackReason;
+  /** #951: the frame rate the scene measured when it gave up (`benchmark-low`), when it has one. */
+  fps?: number;
 };
 export type SceneMessage =
   SceneHelloMessage | SceneReadyMessage | SceneTelemetryMessage | SceneFallbackMessage;
@@ -119,7 +121,7 @@ export function parseSceneMessage(data: unknown): SceneMessage | null {
         : null;
     case "fc-scene-fallback":
       return oneOf(SCENE_FALLBACKS, data.reason)
-        ? { type: data.type, v, reason: data.reason }
+        ? { type: data.type, v, reason: data.reason, ...(count(data.fps) ? { fps: data.fps } : {}) }
         : null;
     default:
       return null;

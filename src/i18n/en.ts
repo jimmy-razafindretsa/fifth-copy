@@ -612,6 +612,18 @@ export const en = {
       "Your best and average speeds are filed in your Personnel file after each race.",
       "Sixty seconds without a key and the Major sends you home.",
     ] as string[],
+    /** #951: why the 3D room went away (under the no-scene notice); `{fps}` = frames a second measured. */
+    sceneDrop: {
+      "no-webgl2": "This browser has no WebGL2, so the 3D room cannot run here.",
+      "benchmark-low":
+        "Your computer drew {fps} images a second in the room test, too few even at the lowest quality.",
+      "benchmark-low-unknown": "Your computer was too slow in the room test, even at the lowest quality.",
+      "context-lost":
+        "The graphics card stopped drawing the room (WebGL context lost): memory or the driver gave up.",
+      "frame-budget":
+        "The room fell to {fps} images a second at the lowest quality during the race (18 needed), so it was turned off to keep your typing smooth.",
+      "late-load": "The room was not ready when the race started (30 s), so you race on paper.",
+    },
     notice: {
       "waiting-for-host": "WAITING FOR THE HOST",
       reconnecting: "LINE CUT · RECONNECTING",

@@ -584,6 +584,18 @@ export const fr = {
       "Tes meilleures vitesses et ta moyenne sont classées dans ton dossier après chaque course.",
       "Soixante secondes sans toucher une touche et le Major te renvoie chez toi.",
     ],
+    sceneDrop: {
+      "no-webgl2": "Ce navigateur n'a pas WebGL2 : la salle en 3D ne peut pas tourner ici.",
+      "benchmark-low":
+        "Ton ordinateur a dessiné {fps} images par seconde au test de la salle, trop peu même en qualité minimale.",
+      "benchmark-low-unknown":
+        "Ton ordinateur a été trop lent au test de la salle, même en qualité minimale.",
+      "context-lost":
+        "La carte graphique a cessé de dessiner la salle (contexte WebGL perdu) : mémoire ou pilote à bout.",
+      "frame-budget":
+        "La salle est tombée à {fps} images par seconde en qualité minimale pendant la course (18 nécessaires) : elle est coupée pour garder ta frappe fluide.",
+      "late-load": "La salle n'était pas prête au départ (30 s) : tu cours sur papier.",
+    },
     notice: {
       "waiting-for-host": "EN ATTENTE DE L'HÔTE",
       reconnecting: "LIGNE COUPÉE · RECONNEXION",

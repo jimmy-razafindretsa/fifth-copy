@@ -9,6 +9,7 @@ import {
   parseSceneMessage,
   raceInitMessage,
   raceMotionMessage,
+  racePresetMessage,
   raceStateMessage,
   sceneSettings,
   seatEmbedSrc,
@@ -37,9 +38,16 @@ export type RaceSceneProps = {
    * The scene cannot run, or (`frame-budget`, #695) can no longer hold its frame budget: the page drops
    * it for paper with the `no-scene` notice (C3). Called at most once for a blown budget.
    */
-  onFallback?: (reason: RaceSceneFallback) => void;
+  onFallback?: (reason: RaceSceneFallback, fps?: number) => void;
   /** Every second while rendering (ADR 0013 budgets, #275). */
   onTelemetry?: (telemetry: SceneTelemetry) => void;
+};
+
+/** #951: the preset a blown frame budget steps down to before the scene drops to paper. */
+const LOWER_PRESET: Record<ScenePreset, ScenePreset | null> = {
+  high: "medium",
+  medium: "low",
+  low: null,
 };
 
 /** The scene's own fallbacks (`fc-scene-fallback`) and the page-side frame budget's (#695). */
@@ -103,11 +111,19 @@ export function RaceScene({
           now.onTelemetry?.(telemetry);
           if (budget === "off" || health.current.verdict === "fallback") return;
           health.current = frameBudget(health.current, telemetry);
-          if (health.current.verdict === "fallback") now.onFallback?.("frame-budget");
+          if (health.current.verdict !== "fallback") return;
+          // #951: a blown budget steps the preset down first; only LOW under the floor drops to paper
+          const lower = LOWER_PRESET[drawn];
+          if (lower) {
+            post(racePresetMessage(lower));
+            health.current = FRAME_BUDGET_START;
+            return;
+          }
+          now.onFallback?.("frame-budget", fps);
           return;
         }
         case "fc-scene-fallback":
-          now.onFallback?.(message.reason);
+          now.onFallback?.(message.reason, message.fps);
           return;
       }
     },

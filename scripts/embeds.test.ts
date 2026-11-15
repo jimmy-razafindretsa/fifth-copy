@@ -181,7 +181,7 @@ describe("seat page (#563)", () => {
       expect(probe.PROBE_WINDOW).toBe(0.5);
       expect(probe.PROBE_SPAN).toBe(1.5);
       expect(seat).toContain(
-        "if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low' });",
+        "if (fps < PROBE_MIN_FPS) { LOST = true; send({ type: 'fc-scene-fallback', reason: 'benchmark-low', fps: Math.round(fps) });",
       );
     });
 

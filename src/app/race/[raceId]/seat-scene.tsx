@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { hasWebGL2 } from "@/components/ui";
 import {
-  LoadingCard,
   PHONE_QUERY,
   RaceNotice,
   selectReadyLine,
@@ -34,7 +33,29 @@ export type SeatSceneProps = {
   tips: readonly string[];
   /** `race.waiting` (#937): the waiting room shown while the room loads. */
   waiting: WaitingRoomLabels;
+  /** `race.sceneDrop` (#951): why the 3D room went away, under the no-scene notice. */
+  drop: Record<DropReason, string>;
 };
+
+type DropReason =
+  | "no-webgl2"
+  | "benchmark-low"
+  | "benchmark-low-unknown"
+  | "context-lost"
+  | "frame-budget"
+  | "late-load";
+
+/** The sentence for a drop (#951), `{fps}` filled when the scene measured one. */
+function dropText(
+  drop: { reason: string; fps?: number } | null,
+  labels: Record<DropReason, string>,
+): string | null {
+  if (!drop) return null;
+  if (drop.reason === "benchmark-low" && drop.fps === undefined)
+    return labels["benchmark-low-unknown"];
+  const text = (labels as Record<string, string>)[drop.reason];
+  return text ? text.replace("{fps}", String(drop.fps ?? "?")) : null;
+}
 
 /**
  * The race route's scene leaf (#563 C1-C3, ADR 0013 HUD first, ADR 0017): renders nothing on the server
@@ -50,8 +71,9 @@ export type SeatSceneProps = {
  * counts down or runs drops to paper for that race (`selectSceneGate`), and the scene waits for the
  * room's phase before it mounts, so a reload mid-race never loads it. The watching host is exempt.
  */
-export function SeatScene({ labels, notice, tips, waiting }: SeatSceneProps) {
+export function SeatScene({ labels, notice, tips, waiting, drop: dropLabels }: SeatSceneProps) {
   const [mode, setMode] = useState<Mode>("off");
+  const [drop, setDrop] = useState<{ reason: string; fps?: number } | null>(null);
   const [preset, setPreset] = useState<string | null>(null);
   const [tip, setTip] = useState<string | null>(null);
   const [scene, setScene] = useState<string | null>(null);
@@ -71,7 +93,9 @@ export function SeatScene({ labels, notice, tips, waiting }: SeatSceneProps) {
     setPreset(search.get("preset"));
     setScene(search.get("scene"));
     setTip(tips.length ? tips[Math.floor(Math.random() * tips.length)]! : null);
-    setMode(hasWebGL2() ? "loading" : "fallback");
+    const webgl = hasWebGL2();
+    if (!webgl) setDrop({ reason: "no-webgl2" });
+    setMode(webgl ? "loading" : "fallback");
   }, [tips]);
 
   // #951: a new random tip every 7 s while the room loads (a text swap, no motion)
@@ -96,12 +120,28 @@ export function SeatScene({ labels, notice, tips, waiting }: SeatSceneProps) {
   }, [shown, dispatch]);
 
   const room = <WaitingRoomLive labels={waiting} reconnecting={notice.reconnecting} tip={tip} />;
-  if (mode === "off") return null;
+  // #951: the waiting room is the one loading screen, from the server's first paint (no LoadingCard
+  // flash before it); it renders nothing once the room no longer loads
+  if (mode === "off") return room;
   if (shown === "fallback")
-    return loadingRoom ? room : <RaceNotice kind="no-scene" labels={notice} />;
+    return (
+      <>
+        {room}
+        {loadingRoom ? null : (
+          <RaceNotice
+            kind="no-scene"
+            labels={notice}
+            detail={dropText(
+              drop ?? (mode === "loading" ? { reason: "late-load" } : null),
+              dropLabels,
+            )}
+          />
+        )}
+      </>
+    );
   return (
     <>
-      {loadingRoom ? room : shown === "loading" ? <LoadingCard labels={labels} tip={tip} /> : null}
+      {room}
       {gate === "wait" ? null : (
         <RaceScene
           view={view}
@@ -109,7 +149,10 @@ export function SeatScene({ labels, notice, tips, waiting }: SeatSceneProps) {
           scene={scene}
           title={labels.title}
           onReady={() => setMode("ready")}
-          onFallback={() => setMode("fallback")}
+          onFallback={(reason, fps) => {
+            setDrop((d) => d ?? { reason, fps });
+            setMode("fallback");
+          }}
         />
       )}
     </>

@@ -15,3 +15,14 @@
 .notice[data-tone="urgent"] {
   background: var(--color-danger-surface);
 }
+
+/* #951: why the 3D room went away, under the notice, in body type (no letter-spacing caps) */
+.detail {
+  display: block;
+  margin-top: 4px;
+  @apply type-body;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}

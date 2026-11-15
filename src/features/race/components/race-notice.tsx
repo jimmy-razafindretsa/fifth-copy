@@ -6,6 +6,8 @@ import styles from "./race-notice.module.css";
 export type RaceNoticeProps = {
   kind: RaceNoticeKind;
   labels: RaceNoticeLabels;
+  /** #951: a second line saying why (the 3D room's exact cause of a drop). */
+  detail?: string | null;
 };
 
 /**
@@ -14,7 +16,7 @@ export type RaceNoticeProps = {
  * its 3D picture, as a one-row docket. A polite `status` region; it pulses with `lkPulse` and holds still
  * under reduced motion. Which notice shows is the caller's (#561, #233, #235, #563).
  */
-export function RaceNotice({ kind, labels }: RaceNoticeProps) {
+export function RaceNotice({ kind, labels, detail = null }: RaceNoticeProps) {
   return (
     <p
       role="status"
@@ -23,6 +25,11 @@ export function RaceNotice({ kind, labels }: RaceNoticeProps) {
       className={cn(docket.notice, docket.pulse, styles.notice)}
     >
       {labels[kind]}
+      {detail ? (
+        <span data-notice-detail="" className={styles.detail}>
+          {detail}
+        </span>
+      ) : null}
     </p>
   );
 }

@@ -207,7 +207,7 @@ describe("ProfileScreen band and tabs (C6)", () => {
 });
 
 describe("ProfileScreen service record (C7)", () => {
-  it("eight cells in order, each equal to its service field, best speed the one red figure", () => {
+  it("twelve cells in order (#951: four more fill the grid), each equal to its service field, best speed the one red figure", () => {
     const html = render(one, { lang: "fr" });
     const keys = [...html.matchAll(/data-figure="(\w+)"/g)].map((m) => m[1]);
     expect(keys).toEqual([
@@ -219,6 +219,10 @@ describe("ProfileScreen service record (C7)", () => {
       "averageAccuracy",
       "wins",
       "podiums",
+      "keystrokes",
+      "errors",
+      "sabotagesSent",
+      "sabotagesReceived",
     ]);
     expect(cell(html, "totalTime")).toBe("TEMPS TOTAL00:00:47");
     expect(cell(html, "races")).toBe("COURSES1");

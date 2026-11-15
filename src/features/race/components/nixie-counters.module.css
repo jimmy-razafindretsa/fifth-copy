@@ -1,71 +1,66 @@
 /*
- * Nixie counters (#560, design bible 7.11): a device bezel (bible 6 device glow: a backroom-grey 2px frame,
- * a press-ink interior; the `Device` primitive's recipe without its root glow) holding two glass tubes. A
- * tube is the art-direction print page's nixie (38 x 52 per digit, VT323 at 42px, a rounded glass top
- * `16px 16px 5px 5px`): the HUD's one rounded shape, a glass envelope, not a card. The numerals glow
- * through the scoped `device-nixie` utility (tokens.css: nixie colour, `0 0 6px currentColor`); the tube
- * adds its glass rim and inner glow in `device-nixie-glow`. Nothing else in the bezel glows. Devices are
- * objects: the same in both themes (3.2).
+ * Race counters (#951, replaces the #560 nixie tubes; bible 7.11 "Counter plates"): one ink plate (the
+ * band ground, paper numerals) holding WPM, place and the timer as big display figures with their tags
+ * under a rule. No glass, no glow. The place reads `3` large with `/ 6` small. The plate is a printed
+ * object: the same in both themes (3.2). Selectors keep the `data-device`/`data-tube` hooks of #560.
  */
 
 @reference "../../../app/globals.css";
 
 .bezel {
   display: inline-flex;
-  align-items: flex-end;
-  gap: 12px;
-  padding: 8px 10px 6px;
-  border: 2px solid var(--color-room);
-  border-radius: 0;
-  background: var(--color-device-bezel);
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  background: var(--color-band);
+  color: var(--color-band-fg);
+  border: 2px solid var(--color-band-fg);
+  box-shadow: 4px 4px 0 var(--color-primary);
 }
 
 .counter {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 10px 16px 8px;
+}
+
+.counter + .counter {
+  border-left: 2px solid var(--color-band-fg);
 }
 
 .tube {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 52px;
-  padding: 6px 8px 4px;
-  border: 2px solid var(--color-device-nixie-glow);
-  border-radius: 16px 16px 5px 5px;
-  background: var(--color-device-bezel);
-  box-shadow: inset 0 0 12px var(--color-device-nixie-glow);
-  font-size: 42px;
-  line-height: 1;
+  align-items: baseline;
+  gap: 6px;
+  @apply type-display-md;
+  font-size: 64px;
+  line-height: 0.95;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-/* the tags under the tubes: paper-side label text on the bezel, no glow (night-muted on press-ink 9.03:1) */
+/* the field size after the place: `/ 6`, small */
+.of {
+  font-size: 0.45em;
+  color: var(--color-band-muted);
+}
+
 .tag {
   @apply type-label;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.2;
   letter-spacing: 0.2em;
   color: var(--color-band-muted);
 }
 
-/*
- * Three tubes (the timer, #240; bible 7.11 "Timer tube"): the bezel must fit the 1024+ right gutter
- * (clamp(208px, 22vw, 300px)), where three tubes at 42px measure about 344px. Its chrome tightens (gap 8,
- * padding 6, tube padding 4, WPM min-width 36) and the numerals take the slot's width: VT323 advances
- * 0.4em, so the bezel is about 92px + 4.8em wide (14 glyphs), and the size is the largest that fits,
- * between 22px and 42px (about 27px at 1024, 39px at 1280, 42px in the tablet row). The slot is the
- * inline-size container (seat-layout.module.css); two tubes keep the sizes above.
- */
-.bezel[data-timer] {
-  gap: 8px;
-  padding: 6px 6px 4px;
+/* Three counters (the timer, #240): they share the 1024+ right gutter, so the figures size to the slot. */
+.bezel[data-timer] .counter {
+  padding: 8px 10px 6px;
 }
 
 .bezel[data-timer] .tube {
-  min-width: 36px;
-  padding: 4px 4px 3px;
-  font-size: clamp(22px, calc((100cqi - 92px) / 4.8), 42px);
+  font-size: clamp(28px, calc((100cqi - 80px) / 4.2), 56px);
 }

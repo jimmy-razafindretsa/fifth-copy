@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { hudLabelFixtures } from "../view/hud-labels";
 import { NIXIE_WPM_MAX, NixieCounters, nixieClock, nixieNumber } from "./nixie-counters";
 
-// Contract of #560 C1 (markup and CSS; the computed glow is checked in e2e/race/hud.spec.ts).
+// Contract of #560 C1, restyled by #951: an ink counter plate (no tubes, no glow), the place `4 / 30`.
 const EN = hudLabelFixtures.en.nixie;
 const FR = hudLabelFixtures.fr.nixie;
 const html = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -14,12 +14,14 @@ const css = readFileSync(
   "utf8",
 ).replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** The `data-tube` elements (flat text): their name, attributes and numerals. */
+/** The `data-tube` elements: their name, attributes and text (inner tags stripped). */
 function tubes(markup: string) {
-  return [...markup.matchAll(/<span([^>]*)data-tube="(\w+)"([^>]*)>([^<]*)<\/span>/g)].map((m) => ({
+  return [
+    ...markup.matchAll(/<span([^>]*)data-tube="(\w+)"([^>]*)>((?:[^<]|<span[^>]*>[^<]*<\/span>)*)<\/span>/g),
+  ].map((m) => ({
     name: m[2],
     attrs: `${m[1]}${m[3]}`,
-    text: m[4]!,
+    text: m[4]!.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
   }));
 }
 
@@ -30,18 +32,18 @@ const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
 }));
 
 describe("NixieCounters (#560 C1)", () => {
-  it("renders two tubes, WPM and place, with the numerals zero-padded to two digits", () => {
+  it("renders two counters, WPM zero-padded and the place as `4 / 30`", () => {
     const out = tubes(html(<NixieCounters wpm={42} place={4} total={30} labels={EN} />));
     expect(out.map((t) => t.name)).toEqual(["wpm", "place"]);
     expect(out[0]!.text).toBe("42");
-    expect(out[1]!.text).toBe("04 / 30");
+    expect(out[1]!.text).toBe("4 / 30");
     const early = tubes(html(<NixieCounters wpm={7} place={1} total={6} labels={EN} />));
-    expect(early.map((t) => t.text)).toEqual(["07", "01 / 06"]);
+    expect(early.map((t) => t.text)).toEqual(["07", "1 / 6"]);
   });
 
-  it("before the start the place reads 00 / total", () => {
+  it("before the start the place reads – / total", () => {
     const out = tubes(html(<NixieCounters wpm={0} place={null} total={30} labels={EN} />));
-    expect(out.map((t) => t.text)).toEqual(["00", "00 / 30"]);
+    expect(out.map((t) => t.text)).toEqual(["00", "– / 30"]);
   });
 
   it("caps WPM at 999 and keeps three-digit numbers whole", () => {
@@ -52,13 +54,14 @@ describe("NixieCounters (#560 C1)", () => {
     expect(nixieNumber(-3, NIXIE_WPM_MAX)).toBe("00");
     expect(nixieNumber(Number.NaN, NIXIE_WPM_MAX)).toBe("00");
     const out = tubes(html(<NixieCounters wpm={1500} place={2} total={100} labels={EN} />));
-    expect(out.map((t) => t.text)).toEqual(["999", "02 / 100"]);
+    expect(out.map((t) => t.text)).toEqual(["999", "2 / 100"]);
   });
 
-  it("numerals are the type-device role (VT323) inside the tubes", () => {
+  it("numerals are the display type of the plate, not the VT323 device role (#951)", () => {
     for (const t of tubes(html(<NixieCounters wpm={42} place={4} total={30} labels={EN} />))) {
-      expect(t.attrs, t.name).toContain("type-device");
+      expect(t.attrs, t.name).not.toContain("type-device");
     }
+    expect(rules.find((r) => r.selector === ".tube")?.body).toMatch(/@apply type-display-md/);
   });
 
   it("names the counters in words, in the label language; the glyphs are hidden", () => {
@@ -75,22 +78,13 @@ describe("NixieCounters (#560 C1)", () => {
     expect(before).toContain('aria-label="Words per minute 0, 30 typists, no place yet"');
   });
 
-  it("is a device bezel: data-device on the root, the nixie glow class only on the tubes", () => {
+  it("is one plate: data-device on the root, no glow anywhere (#951)", () => {
     const out = html(<NixieCounters wpm={42} place={4} total={30} labels={EN} />);
     expect(out).toMatch(/^<div[^>]*data-device="nixie"/);
-    const glowing = [...out.matchAll(/<[a-z]+[^>]*class="[^"]*\bdevice-nixie\b[^"]*"[^>]*>/g)];
-    expect(glowing).toHaveLength(2);
-    for (const m of glowing) expect(m[0]).toContain("data-tube");
+    expect(out).not.toContain("device-nixie ");
     expect(out).not.toContain("device-phosphor");
-  });
-
-  it("the glow (text-shadow, box-shadow) is declared only on the tube rule", () => {
-    const glow = rules.filter((r) => /(text|box)-shadow\s*:/.test(r.body));
-    expect(glow.map((r) => r.selector)).toEqual([".tube"]);
-    const tube = glow[0]!.body;
-    expect(tube).toMatch(/box-shadow:\s*inset 0 0 \d+px var\(--color-device-nixie-glow\)/);
-    // the numerals' own glow is the scoped device-nixie utility (tokens.css), never a second recipe
-    expect(tube).not.toMatch(/text-shadow/);
+    expect(css).not.toContain("--color-device-");
+    expect(css).not.toMatch(/text-shadow/);
   });
 });
 
@@ -119,21 +113,17 @@ describe("NixieCounters timer tube (#240 C1)", () => {
     }
   });
 
-  it("with a timer: a third tube in mm:ss, type-device and the nixie glow, tagged TIME / TEMPS", () => {
+  it("with a timer: a third counter in mm:ss, tagged TIME / TEMPS", () => {
     const out = html(<NixieCounters wpm={42} place={4} total={30} remainingS={59} labels={EN} />);
     const t = tubes(out);
     expect(t.map((x) => x.name)).toEqual(["wpm", "place", "timer"]);
     expect(t[2]!.text).toBe("00:59");
-    expect(t[2]!.attrs).toContain("type-device");
-    expect(t[2]!.attrs).toContain("device-nixie");
     expect(out).toContain(">TIME<");
     expect(out).toContain('aria-label="Words per minute 42, place 4 of 30, 00:59 left"');
-    // three tubes go compact to fit the desktop gutter: numerals sized to the nixie slot (container)
+    // three counters go compact to fit the desktop gutter: figures sized to the slot (container)
     expect(out).toMatch(/^<div[^>]*data-timer=""/);
     const compact = rules.find((r) => r.selector === ".bezel[data-timer] .tube");
-    expect(compact?.body).toMatch(
-      /font-size:\s*clamp\(22px, calc\(\(100cqi - 92px\) \/ 4\.8\), 42px\)/,
-    );
+    expect(compact?.body).toMatch(/font-size:\s*clamp\([^)]*100cqi/);
     const fr = html(<NixieCounters wpm={0} place={null} total={2} remainingS={60} labels={FR} />);
     expect(fr).toContain(">TEMPS<");
     expect(fr).toContain(

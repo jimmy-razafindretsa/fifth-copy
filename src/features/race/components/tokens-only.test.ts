@@ -168,21 +168,19 @@ describe("seat view HUD modules use tokens only (#560 C8)", () => {
     for (const f of HUD_COMPONENTS) expect(COMPONENTS, f).toContain(f);
   });
 
-  it("glow (a blurred shadow or a device glow role) appears only in the nixie tubes", () => {
+  it("glow (a blurred shadow or a device glow role) appears nowhere (#951: the counters are a plate, the nixie glow went)", () => {
     for (const file of HUD_MODULES) {
       const css = strip(read(file));
       const blurred = [...css.matchAll(/(?:text|box)-shadow\s*:\s*([^;]+);/g)]
         .map((m) => m[1]!)
         .filter((v) => /\b0 0 [1-9]\d*px\b/.test(v) || /device-nixie-glow/.test(v));
-      if (file === "nixie-counters.module.css") expect(blurred.length, file).toBeGreaterThan(0);
-      else expect(blurred, file).toEqual([]);
-      if (file !== "nixie-counters.module.css") expect(css, file).not.toContain("--color-device-");
+      expect(blurred, file).toEqual([]);
+      expect(css, file).not.toContain("--color-device-");
     }
   });
 
-  it("type comes from the roles: VT323 only through type-device, in the nixie counters", () => {
-    const others = [...HUD_MODULES, ...HUD_COMPONENTS].filter((f) => !f.startsWith("nixie-"));
-    for (const file of others) expect(strip(read(file)), file).not.toContain("type-device");
-    expect(read("nixie-counters.tsx")).toMatch(/["\s]type-device[\s"]/);
+  it("type comes from the roles: no VT323 device type in the HUD (#951)", () => {
+    for (const file of [...HUD_MODULES, ...HUD_COMPONENTS])
+      expect(strip(read(file)), file).not.toContain("type-device");
   });
 });

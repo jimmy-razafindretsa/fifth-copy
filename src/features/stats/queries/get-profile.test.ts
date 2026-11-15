@@ -154,6 +154,10 @@ describe("getProfile (stand-in client)", () => {
       meanAccuracy: expect.closeTo(0.9, 6),
       wins: 1,
       podiums: 2,
+      keystrokes: 0,
+      errors: 0,
+      sabotagesSent: 0,
+      sabotagesReceived: 0,
     });
   });
 

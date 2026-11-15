@@ -170,7 +170,7 @@ describe("the plot (C3)", () => {
 });
 
 describe("controls (C4)", () => {
-  it("LISSAGE: a native range 0..8, step 1, at 3 on the server render, its value beside it", () => {
+  it("LISSAGE: a native range 0..8, step 1, at 0 (no smoothing, #951) on the server render, its value beside it", () => {
     const html = renderToStaticMarkup(
       <PerformanceCurve points={pointsOf(40)} labels={fr.profile.curve} locale="fr" />,
     );
@@ -179,10 +179,10 @@ describe("controls (C4)", () => {
     expect(input).toContain('min="0"');
     expect(input).toContain('max="8"');
     expect(input).toContain('step="1"');
-    expect(input).toContain('value="3"');
+    expect(input).toContain('value="0"');
     const id = input.match(/id="([^"]+)"/)![1];
     expect(html).toContain(`<label for="${id}">LISSAGE</label>`);
-    expect(text(html)).toContain("LISSAGE 3");
+    expect(text(html)).toContain("LISSAGE 0");
     expect(css).toMatch(/\.slider \{[^}]*width: 180px;[^}]*min-height: 44px/);
     expect(text(frame(40, 3))).toContain("SMOOTHING 3");
   });

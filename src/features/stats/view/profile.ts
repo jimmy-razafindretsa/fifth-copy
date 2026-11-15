@@ -30,6 +30,11 @@ export type ResultRow = {
   durationMs: number;
   /** 1 = won (`RaceResult.place`). */
   place: number;
+  /** Correct and wrong keystrokes, sabotages sent and received (#951); absent in older fixtures = 0. */
+  correct?: number;
+  errors?: number;
+  bonusesSent?: number;
+  bonusesReceived?: number;
 };
 
 /**
@@ -48,6 +53,11 @@ export type ProfileService = {
   wins: number | null;
   /** Results at places 1 to 3. */
   podiums: number | null;
+  /** Sums over the file (#951): correct keystrokes, wrong keystrokes, sabotages sent and received. */
+  keystrokes: number | null;
+  errors: number | null;
+  sabotagesSent: number | null;
+  sabotagesReceived: number | null;
 };
 
 export type SeriesPoint = {
@@ -120,6 +130,10 @@ export const EMPTY_SERVICE: ProfileService = {
   meanAccuracy: null,
   wins: null,
   podiums: null,
+  keystrokes: null,
+  errors: null,
+  sabotagesSent: null,
+  sabotagesReceived: null,
 };
 
 /** The service record of `rows` (the whole file when they are all of it). */
@@ -136,6 +150,10 @@ export function serviceOf(rows: ResultRow[]): ProfileService {
     meanAccuracy: mean(accuracy),
     wins: rows.filter((r) => r.place === 1).length,
     podiums: rows.filter((r) => r.place >= 1 && r.place <= 3).length,
+    keystrokes: rows.reduce((sum, r) => sum + (r.correct ?? 0), 0),
+    errors: rows.reduce((sum, r) => sum + (r.errors ?? 0), 0),
+    sabotagesSent: rows.reduce((sum, r) => sum + (r.bonusesSent ?? 0), 0),
+    sabotagesReceived: rows.reduce((sum, r) => sum + (r.bonusesReceived ?? 0), 0),
   };
 }
 

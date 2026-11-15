@@ -92,11 +92,18 @@ export type FigureKey =
   | "bestAccuracy"
   | "averageAccuracy"
   | "wins"
-  | "podiums";
+  | "podiums"
+  | "keystrokes"
+  | "errors"
+  | "sabotagesSent"
+  | "sabotagesReceived";
 export type FigureUnit = "wpm" | "percent" | "firstPlace" | "top3" | null;
 export type Figure = { key: FigureKey; value: string; unit: FigureUnit; red?: boolean };
 
-/** The eight service-record cells (C7), in the reference's order; `—` and no unit with no race. */
+/**
+ * The twelve service-record cells (C7, #951 added the last four so the grid has no empty ink cells), in
+ * the reference's order; `—` and no unit with no race.
+ */
 export function figures(service: ProfileService, locale: Locale): Figure[] {
   const blank = service.races === 0;
   const cell = (
@@ -110,6 +117,7 @@ export function figures(service: ProfileService, locale: Locale): Figure[] {
       ? { key, value: BLANK_FIGURE, unit: null, red }
       : { key, value: show(value), unit, red };
   const count = (n: number) => String(n);
+  const grouped = (n: number) => new Intl.NumberFormat(tag(locale)).format(n);
   const wpm = (n: number) => oneDecimal(n, locale);
   const pct = (n: number) => percent(n, locale);
   return [
@@ -121,5 +129,9 @@ export function figures(service: ProfileService, locale: Locale): Figure[] {
     cell("averageAccuracy", service.meanAccuracy, pct, "percent"),
     cell("wins", service.wins, count, "firstPlace"),
     cell("podiums", service.podiums, count, "top3"),
+    cell("keystrokes", service.keystrokes, grouped, null),
+    cell("errors", service.errors, grouped, null),
+    cell("sabotagesSent", service.sabotagesSent, count, null),
+    cell("sabotagesReceived", service.sabotagesReceived, count, null),
   ];
 }

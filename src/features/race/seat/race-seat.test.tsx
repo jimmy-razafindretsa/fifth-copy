@@ -68,7 +68,7 @@ describe("the seat shell on the server (#561 C4)", () => {
       " ",
     ]);
     expect(html).toContain('data-device="nixie"');
-    expect(html).toContain("00 / 00");
+    expect(html).toContain("–<span class=\"_of_");
     expect(html).toContain("data-race-card");
     expect(html).toContain("0 TYPISTS");
     expect(html).toMatch(/data-sabotage-tray="[^"]*" data-card="none"/);

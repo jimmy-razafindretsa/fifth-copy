@@ -287,11 +287,11 @@ describe("NixieCountersLive (#225 C2)", () => {
     return { html, calls };
   }
 
-  it("renders the before-start counters on the server: 00 and 00 / n, no place yet", () => {
+  it("renders the before-start counters on the server: 00 and – / n, no place yet", () => {
     const { html, calls } = render(createRaceStore());
     expect(html).toContain('aria-label="Words per minute 0, 0 typists, no place yet"');
     expect(html).toContain(">00<");
-    expect(html).toContain("00 / 00");
+    expect(html).toContain("–<span class=\"_of_");
     // the WPM and the timer (#240) from their samplers, the place and the total from the race store;
     // server snapshots read 0, the timer's null (no tube on the server)
     expect(calls).toHaveLength(4);

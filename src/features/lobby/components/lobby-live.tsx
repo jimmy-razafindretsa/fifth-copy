@@ -232,9 +232,6 @@ export function LobbyLiveView({
             }
           />
         </RoomCodeDocket>
-        {state.phase === "error" ? null : (
-          <SettingsDocket settings={state.settings} labels={labels.settings} {...edits} />
-        )}
         {reset}
         {canStart && !start.hidden ? (
           <StartControl
@@ -328,6 +325,12 @@ export function LobbyLiveView({
           ) : null}
         </div>
       </div>
+      {/* #951: the settings span the room's width under the dockets and the ring, in sections */}
+      {state.phase === "error" ? null : (
+        <div className={styles.settingsSlot}>
+          <SettingsDocket settings={state.settings} labels={labels.settings} {...edits} />
+        </div>
+      )}
     </div>
   );
 }

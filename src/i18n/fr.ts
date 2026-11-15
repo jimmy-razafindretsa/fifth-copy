@@ -364,6 +364,7 @@ export const fr = {
     settings: {
       name: "FORMULAIRE 5-L",
       tag: "RÉGLAGES DE LA COURSE",
+      sections: { room: "LA SALLE", text: "LE TEXTE", rules: "LES RÈGLES", bots: "LES BOTS" },
       loading: "Lecture des réglages de la course…",
       on: "OUI",
       off: "NON",

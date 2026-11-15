@@ -266,7 +266,7 @@ describe("SettingsDocket host form (#110 C1)", () => {
   it("C2, C4: a refusal is one inline error line under the rows, never the typed text", () => {
     const html = host(S(), { status: "error", key: "wordCount", error: "words" });
     expect(html).toMatch(
-      /<\/dl><div[^>]*><p id="lobby-settings-error" role="alert"[^>]*><span[^>]*>RETURNED ·<\/span> Words take a whole number from 10 to 500.<\/p>/,
+      /<\/dl><\/section><\/div><div[^>]*><p id="lobby-settings-error" role="alert"[^>]*><span[^>]*>RETURNED ·<\/span> Words take a whole number from 10 to 500.<\/p>/,
     );
     expect(rowsOf(html).wordCount).toContain('aria-describedby="lobby-settings-error"');
     // only the minutes input under the pressed NO TIMER is disabled: nothing is on its way
@@ -305,7 +305,8 @@ describe("SettingsDocket host form (#110 C1)", () => {
     const html = host(S({ bots: [{ level: "clerk" }, { level: "major" }, { level: "recruit" }] }));
     const order = [...html.matchAll(/data-setting="([^"]+)"/g)].map((m) => m[1]);
     const at = order.indexOf("bots");
-    expect(order.slice(at)).toEqual(["bots", "bots.1", "bots.2", "bots.3", "lobbyType"]);
+    // #951: BOTS is the form's last section
+    expect(order.slice(at)).toEqual(["bots", "bots.1", "bots.2", "bots.3"]);
     const rows = rowsOf(html);
     expect(rows["bots.2"]).toContain('<dt id="lobby-setting-bots-2"');
     expect(rows["bots.2"]).toContain(">BOT 2</dt>");

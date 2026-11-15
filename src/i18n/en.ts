@@ -381,6 +381,8 @@ export const en = {
     settings: {
       name: "FORM 5-L",
       tag: "RACE SETTINGS",
+      /** #951: the form's sections. */
+      sections: { room: "THE ROOM", text: "THE TEXT", rules: "THE RULES", bots: "THE BOTS" },
       loading: "Reading the race settings…",
       on: "ON",
       off: "OFF",

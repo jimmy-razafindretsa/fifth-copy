@@ -145,6 +145,37 @@
   margin: 0;
 }
 
+/* #951: the settings slot takes the room's whole width */
+.settingsSlot {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* #951: the form's sections side by side, each a ruled card with its ink head; bots its own card */
+.sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 2px;
+  background: var(--color-fg);
+  align-items: stretch;
+}
+
+.section {
+  min-width: 0;
+  background: var(--color-surface);
+}
+
+.sectionHead {
+  margin: 0;
+  padding: 8px 12px;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  background: var(--color-band);
+  color: var(--color-band-fg);
+}
+
 /* docket rows: grid 120px | 1fr, dashed separators (bible 7.4) */
 .row {
   display: grid;
@@ -655,7 +686,22 @@
   .room {
     display: grid;
     grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
-    grid-template-areas: "dockets side";
+    grid-template-areas:
+      "dockets side"
+      "settings settings";
+  }
+
+  .settingsSlot {
+    grid-area: settings;
+  }
+}
+
+/* #951: from 1280px the ring and the roll stand side by side, so the room is shorter */
+@media (min-width: 1280px) {
+  .side {
+    display: grid;
+    grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+    align-items: start;
   }
 
   .dockets {
@@ -688,6 +734,7 @@
   }
 
   .settings,
+  .settingsSlot,
   .invite,
   .reset {
     display: none;

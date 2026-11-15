@@ -87,7 +87,8 @@ describe("LobbyLiveView states", () => {
   it("populated with two rows: YOU follows the viewer's desk, HOST the host", () => {
     const html = view(live([member(1, true), member(2)], 2));
     expect(rows(html)).toBe(2);
-    const [first, second] = html.split("<li").slice(1);
+    const list = html.slice(0, html.indexOf("</ul>"));
+    const [first, second] = list.split("<li").slice(1);
     expect(first).toContain(labels.host);
     expect(first).not.toContain(`>${labels.you}<`);
     expect(second).toContain(`>${labels.you}<`);
@@ -386,14 +387,14 @@ describe("lobby layout (#498)", () => {
   const guest = member(2);
   const at = (html: string, needle: string) => html.indexOf(needle);
 
-  it("the host: room docket, invite row, settings docket, START, then the roll", () => {
+  it("the host: room docket, invite row, START, the roll, then the settings across the room (#951)", () => {
     const html = view(live([host, guest], 1));
     const order = [
       labels.codeTag,
       `>${labels.invite.copy}<`,
-      labels.settings.tag,
       `>${labels.start.button}<`,
       `aria-label="${labels.listName}"`,
+      labels.settings.tag,
     ].map((s) => at(html, s));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -440,8 +441,8 @@ describe("lobby layout (#498)", () => {
 describe("host settings form (#110)", () => {
   const host = member(1, true);
   const guest = member(2);
-  const settingsOf = (html: string) =>
-    html.slice(html.indexOf(labels.settings.tag), html.indexOf("data-start"));
+  // #951: the settings docket is the room's last block
+  const settingsOf = (html: string) => html.slice(html.indexOf(labels.settings.tag));
   const controls = (html: string) => settingsOf(html).match(/<(button|input)[ >]/g)?.length ?? 0;
   const hostView = (
     form: FormState,
@@ -544,7 +545,8 @@ describe("the host watches (#876 C5)", () => {
     expect(html).toContain("data-start");
     expect(html).toMatch(/aria-pressed="true"[^>]*>WATCHES<\/button>/);
     expect(html).toContain(">ADD A BOT</button>");
-    expect(html.slice(html.indexOf(labels.listName))).not.toContain(`>${labels.host}<`);
+    const list = html.slice(html.indexOf(labels.listName));
+    expect(list.slice(0, list.indexOf("</ul>"))).not.toContain(`>${labels.host}<`);
     expect(rows(html)).toBe(2);
     expect(html).toMatch(
       new RegExp(`role="status" class="${styles.notice}">${labels.hostWatching}</p>`),

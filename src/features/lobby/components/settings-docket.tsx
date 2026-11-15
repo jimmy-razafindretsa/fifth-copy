@@ -93,6 +93,29 @@ export function settingRows(settings: RaceSettings, labels: SettingsLabels) {
   }));
 }
 
+/** The form's sections (#951), in order; every `SETTING_ROWS` key belongs to exactly one. */
+export type SettingSection = "room" | "text" | "rules" | "bots";
+export const SETTING_SECTIONS: ReadonlyArray<{ id: SettingSection; keys: readonly SettingKey[] }> =
+  [
+    { id: "room", keys: ["hostWatches", "lobbyType"] },
+    {
+      id: "text",
+      keys: [
+        "language",
+        "textType",
+        "wordCount",
+        "accentEveryWord",
+        "difficulty",
+        "practiceLetters",
+        "includeNumbers",
+        "includeSymbols",
+        "includePunctuation",
+      ],
+    },
+    { id: "rules", keys: ["timerS", "errorMode", "backspace", "bonuses"] },
+    { id: "bots", keys: ["bots"] },
+  ];
+
 /** Skeleton rows: the default race's row count (no accents row, the backspace row). */
 const SKELETON_ROWS = 15;
 
@@ -127,30 +150,52 @@ export function SettingsDocket({
       </div>
       {settings ? (
         <>
-          <dl className={styles.facts}>
-            {settingRows(settings, labels)
-              .flatMap((row) => [
-                {
-                  key: row.key as string,
-                  label: row.label,
-                  content: controls?.[row.key] ?? row.value,
-                },
-                ...(after?.[row.key] ?? []).map((sub) => ({ ...sub, content: sub.control })),
-              ])
-              .map((row) => (
-                <div
-                  key={row.key}
-                  className={styles.row}
-                  data-setting={row.key}
-                  aria-busy={busy === row.key || undefined}
+          <div className={styles.sections}>
+            {SETTING_SECTIONS.map((section) => {
+              const rows = settingRows(settings, labels).filter((row) =>
+                section.keys.includes(row.key),
+              );
+              return (
+                <section
+                  key={section.id}
+                  className={styles.section}
+                  data-section={section.id}
+                  aria-labelledby={`lobby-section-${section.id}`}
                 >
-                  <dt id={settingLabelId(row.key)} className={styles.label}>
-                    {row.label}
-                  </dt>
-                  <dd className={styles.value}>{row.content}</dd>
-                </div>
-              ))}
-          </dl>
+                  <h3 id={`lobby-section-${section.id}`} className={styles.sectionHead}>
+                    {labels.sections[section.id]}
+                  </h3>
+                  <dl className={styles.facts}>
+                    {rows
+                      .flatMap((row) => [
+                        {
+                          key: row.key as string,
+                          label: row.label,
+                          content: controls?.[row.key] ?? row.value,
+                        },
+                        ...(after?.[row.key] ?? []).map((sub) => ({
+                          ...sub,
+                          content: sub.control,
+                        })),
+                      ])
+                      .map((row) => (
+                        <div
+                          key={row.key}
+                          className={styles.row}
+                          data-setting={row.key}
+                          aria-busy={busy === row.key || undefined}
+                        >
+                          <dt id={settingLabelId(row.key)} className={styles.label}>
+                            {row.label}
+                          </dt>
+                          <dd className={styles.value}>{row.content}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                </section>
+              );
+            })}
+          </div>
           {error}
         </>
       ) : (

@@ -32,6 +32,9 @@ export const en = {
     honorific: "Comrade {name}",
     /** #932: the header's Personnel file item (viewers only) and the docket link's spoken prefix. */
     myFileName: "My file",
+    /** #951: back to the Home menu, on every page under this header for a viewer. */
+    backToMenu: "← MENU",
+    backToMenuLabel: "Back to the menu",
   },
   landing: {
     kicker: "MINISTRY OF TYPING · DESK 05 · 1978",

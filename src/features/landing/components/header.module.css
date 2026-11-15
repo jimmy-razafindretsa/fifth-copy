@@ -20,6 +20,27 @@
   text-decoration: none;
 }
 
+/* ← MENU (#951): a boxed 44px control like the toggles, beside the brand */
+.back {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 14px;
+  margin-right: auto;
+  border: 2px solid var(--color-fg);
+  color: var(--color-fg);
+  text-decoration: none;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.back:hover {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
 .monogram {
   display: block;
   width: 40px;
@@ -149,6 +170,14 @@ a.docket:hover .docketName {
     margin-right: auto;
     min-height: 44px;
     gap: 8px;
+  }
+
+  /* ← MENU joins row 2, first */
+  .back {
+    order: 3;
+    margin-right: 0;
+    padding: 0 8px;
+    letter-spacing: 0.08em;
   }
 
   .monogram {

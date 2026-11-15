@@ -11,7 +11,8 @@ import styles from "./header.module.css";
  * SIGN OUT. The docket only shows a viewer that exists: reads never create guests (ADR 0009).
  * The docket is the one link to the viewer's Personnel file (#932; the separate MY FILE link went in #951:
  * both did the same thing). On the landing (`current="landing"`, `/` and
- * `/welcome`) the guide link is the in-page `#how` anchor.
+ * `/welcome`) the guide link is the in-page `#how` anchor. A viewer elsewhere gets `← MENU` beside the
+ * brand (#951), back to the Home menu.
  */
 export async function LandingHeader({ current }: { current?: "profile" | "landing" } = {}) {
   const [t, locale, theme, viewer] = await Promise.all([
@@ -34,6 +35,12 @@ export async function LandingHeader({ current }: { current?: "profile" | "landin
         />
         <span className={styles.brandName}>{t.brand.name}</span>
       </a>
+      {/* #951: a viewer's `/` is the Home menu; every other page offers the way back to it */}
+      {viewer && current !== "landing" ? (
+        <a href={LINKS.home} className={styles.back} aria-label={t.header.backToMenuLabel}>
+          {t.header.backToMenu}
+        </a>
+      ) : null}
       <nav aria-label={t.header.navLabel} className={styles.nav}>
         {/* on the landing itself the guide stays the in-page anchor (#943 C5) */}
         <a href={current === "landing" ? LINKS.how : LINKS.guide} className={styles.navLink}>

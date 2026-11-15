@@ -93,6 +93,7 @@ function Plinth({
                 outfit={wearer.outfit}
                 title={labels.medalTitle[variant]}
                 fallback={labels.medal}
+                loading={labels.loading}
                 still={still}
               />
             )}

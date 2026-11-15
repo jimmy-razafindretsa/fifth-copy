@@ -1,5 +1,4 @@
 import { fill } from "@/i18n/format";
-import { cn } from "@/lib/cn";
 import type { NixieLabels } from "../view/hud-labels";
 import styles from "./nixie-counters.module.css";
 
@@ -34,11 +33,9 @@ export type NixieCountersProps = {
 };
 
 /**
- * The nixie counters (#560, design bible 7.11, spec 6.1): a device bezel (6 device glow: backroom-grey
- * frame, press-ink interior) holding two glass tubes, WPM and place `04 / 30`, in VT323 nixie numerals,
- * and a third, the time left `mm:ss`, when the host set a timer (#240).
- * The glow lights only the tubes (the scoped `device-nixie` utility plus the tube's inner glow); the tags
- * are paper label text without glow. Read in words through the group's name; the glyphs are hidden.
+ * The race counters (#951 counter plate, was the #560 nixie tubes; bible 7.11, spec 6.1): one ink plate
+ * with WPM, the place `3 / 6` and, when the host set a timer (#240), the time left `mm:ss`, as big
+ * display figures. Read in words through the group's name; the glyphs are hidden.
  */
 export function NixieCounters({
   wpm,
@@ -63,20 +60,20 @@ export function NixieCounters({
       className={styles.bezel}
     >
       <span className={styles.counter} aria-hidden="true">
-        <span data-tube="wpm" className={cn(styles.tube, "type-device device-nixie")}>
+        <span data-tube="wpm" className={styles.tube}>
           {shownWpm}
         </span>
         <span className={styles.tag}>{labels.wpm}</span>
       </span>
       <span className={styles.counter} aria-hidden="true">
-        <span data-tube="place" className={cn(styles.tube, "type-device device-nixie")}>
-          {`${nixieNumber(place ?? 0)} / ${nixieNumber(total)}`}
+        <span data-tube="place" className={styles.tube}>
+          {place === null ? "–" : String(place)} <span className={styles.of}>{`/ ${total}`}</span>
         </span>
         <span className={styles.tag}>{labels.place}</span>
       </span>
       {time === null ? null : (
         <span className={styles.counter} aria-hidden="true">
-          <span data-tube="timer" className={cn(styles.tube, "type-device device-nixie")}>
+          <span data-tube="timer" className={styles.tube}>
             {time}
           </span>
           <span className={styles.tag}>{labels.time}</span>

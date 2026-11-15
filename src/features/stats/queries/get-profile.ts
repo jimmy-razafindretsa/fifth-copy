@@ -74,7 +74,13 @@ export async function getProfile(
     client.raceResult.aggregate({
       where,
       _count: { _all: true },
-      _sum: { durationMs: true },
+      _sum: {
+        durationMs: true,
+        correct: true,
+        errors: true,
+        bonusesSent: true,
+        bonusesReceived: true,
+      },
       _max: { cleanWpm: true, accuracy: true },
       _avg: { cleanWpm: true, accuracy: true },
     }),
@@ -117,6 +123,10 @@ export async function getProfile(
           meanAccuracy: whole._avg.accuracy,
           wins: placed([1]),
           podiums: placed(PODIUM_PLACES),
+          keystrokes: whole._sum.correct ?? 0,
+          errors: whole._sum.errors ?? 0,
+          sabotagesSent: whole._sum.bonusesSent ?? 0,
+          sabotagesReceived: whole._sum.bonusesReceived ?? 0,
         };
   return buildProfile(latest.map(toRow), now, {
     earliest: earliest.map(toRow),

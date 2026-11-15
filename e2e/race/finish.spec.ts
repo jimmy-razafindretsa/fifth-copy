@@ -103,7 +103,7 @@ test.describe("#240 race timer and finished waiting view", () => {
         /^(ACCEPTÉ · \d+ MPM|RETOURNÉ · 1 FAUTE|RETOURNÉ · \d+ FAUTES)$/,
       );
       await expect(page.getByRole("textbox", { name: "Texte à taper" })).toBeDisabled();
-      await expect(tube(page, "place")).toHaveText("01 / 02");
+      await expect(tube(page, "place")).toHaveText("1 / 2");
       const filed = docket(page, "finished");
       await expect(filed).toBeVisible();
       await expect(filed.locator("> div").first()).toHaveText(/^CLASSÉ\s*01 \/ 02$/);
@@ -118,7 +118,7 @@ test.describe("#240 race timer and finished waiting view", () => {
       await expect(row(filed, hostDesk)).not.toHaveText(hostBefore, { timeout: scaled(8_000) });
 
       // the timer keeps counting down while the guest waits; the host is still typing
-      await expect(tube(room.host, "place")).toHaveText("02 / 02");
+      await expect(tube(room.host, "place")).toHaveText("2 / 2");
       await expect(docket(room.host, "finished")).toHaveCount(0);
 
       // C3 C4: at the timer's end both pages show RACE OVER, the host unfinished and ranked second

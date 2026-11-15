@@ -31,8 +31,10 @@ export const en = {
     nightShift: "NIGHT SHIFT",
     honorific: "Comrade {name}",
     /** #932: the header's Personnel file item (viewers only) and the docket link's spoken prefix. */
-    myFile: "MY FILE",
     myFileName: "My file",
+    /** #951: back to the Home menu, on every page under this header for a viewer. */
+    backToMenu: "MENU",
+    backToMenuLabel: "Back to the menu",
   },
   landing: {
     kicker: "MINISTRY OF TYPING · DESK 05 · 1978",
@@ -379,6 +381,8 @@ export const en = {
     settings: {
       name: "FORM 5-L",
       tag: "RACE SETTINGS",
+      /** #951: the form's sections. */
+      sections: { room: "THE ROOM", text: "THE TEXT", rules: "THE RULES", bots: "THE BOTS" },
       loading: "Reading the race settings…",
       on: "ON",
       off: "OFF",
@@ -518,6 +522,12 @@ export const en = {
     stamps: {
       overtake: { ru: "ОБГОН!", text: "OVERTAKE +1" },
       passed: { ru: "ОБОГНАЛИ", text: "PASSED −1" },
+      /** #951: the plain line that replaced the dual overtake stamp on the seat view. */
+      overtakeLine: {
+        overtake: "You overtook {name}",
+        passed: "{name} overtook you",
+        someone: "A typist",
+      },
       /** Your finish (#240, bible 2, 7.7): zero errors, otherwise the error count (singular for one). */
       accepted: "ACCEPTED · {wpm} WPM",
       returned: "RETURNED · {n} ERRORS",
@@ -566,9 +576,42 @@ export const en = {
       arrivals: "ARRIVALS",
       desk: "desk {n}",
       majorSays: "THE MAJOR SAYS:",
+      /** #951: the briefing beside the mission order: the rules and the sabotage cards. */
+      briefing: {
+        form: "BRIEFING",
+        tag: "FORM 7-B",
+        rulesTitle: "THE RULES",
+        rules: [
+          "Everyone types the same text. The fastest clean copy wins.",
+          "Speed counts correct characters only: 5 characters = 1 word, per minute.",
+          "Accuracy is your correct keystrokes out of all keystrokes.",
+          "Errors: depending on the room, a wrong key is struck through, or it jams the machine until you press the right one.",
+          "The race ends when everyone has finished, or when the timer runs out.",
+          "No key for 60 seconds and you are sent home: asleep at your desk.",
+        ],
+        sabotageTitle: "SABOTAGES",
+        sabotageIntro:
+          "The further behind you are, the more cards you get. The leader never gets one. Press Enter to play.",
+        unlocks: {
+          "extra-paperwork": "bottom half",
+          exemption: "bottom third",
+          "smoke-break": "bottom quarter",
+        },
+      },
     },
     /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
-    didYouKnow: [] as string[],
+    didYouKnow: [
+      "Accuracy beats speed: every error costs you the time to notice it.",
+      "Keep your eyes on the text, not on your fingers.",
+      "Rest your fingers on the home row: A S D F and J K L ;.",
+      "A smoke break blurs the text: keep typing from memory, it lifts in a few seconds.",
+      "Save Exemption for a long word ahead: it removes words from your own text.",
+      "Extra Paperwork always hits the leader. Use it when the top desk pulls away.",
+      "Type in a steady rhythm. Bursts followed by stops are slower than they feel.",
+      "On a French keyboard, learn where É, È, À and Ç live before the race.",
+      "Your best and average speeds are filed in your Personnel file after each race.",
+      "Sixty seconds without a key and the Major sends you home.",
+    ] as string[],
     notice: {
       "waiting-for-host": "WAITING FOR THE HOST",
       reconnecting: "LINE CUT · RECONNECTING",
@@ -744,6 +787,7 @@ export const en = {
       tied: "TIED",
       underReview: "UNDER REVIEW",
       medal: "HERO OF PAPERWORK",
+      loading: "SUMMONING THE CLERK…",
       medalTitle: {
         gold: "A clerk, in 3D, wearing the gold medal",
         silver: "A clerk, in 3D, wearing the silver medal",
@@ -1112,6 +1156,10 @@ export const en = {
       averageAccuracy: "AVERAGE ACCURACY",
       wins: "WINS",
       podiums: "PODIUMS",
+      keystrokes: "CORRECT KEYSTROKES",
+      errors: "TYPOS",
+      sabotagesSent: "SABOTAGES SENT",
+      sabotagesReceived: "SABOTAGES TAKEN",
       wpm: "WPM",
       firstPlace: "1ST PLACE",
       top3: "TOP 3",

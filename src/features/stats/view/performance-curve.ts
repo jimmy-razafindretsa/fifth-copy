@@ -18,7 +18,7 @@ export const CURVE_MIN_RACES = 3;
 /** No trend line under this many points (the reference's `slope`). */
 export const TREND_MIN_POINTS = 6;
 /** The `LISSAGE` slider: width `k` of the centred moving average. */
-export const SMOOTHING = { min: 0, max: 8, initial: 3 } as const;
+export const SMOOTHING = { min: 0, max: 8, initial: 0 } as const;
 
 /** The plot's viewBox and inner box: x from 20 to 980, values from y 280 (lowest tick) to y 20 (highest). */
 export const PLOT = {

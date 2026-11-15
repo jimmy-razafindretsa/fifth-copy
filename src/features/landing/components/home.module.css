@@ -91,7 +91,7 @@
   letter-spacing: 0.04em;
   line-height: 1;
   text-align: left;
-  color: var(--color-fg-muted);
+  color: var(--color-fg);
   background: transparent;
   border: 3px solid transparent;
   text-decoration: none;
@@ -103,6 +103,7 @@
 
 .entry:hover {
   text-decoration: none;
+  color: var(--color-primary);
 }
 
 /* selected: the 7.1 stamp plate (red, paper text, ink rule and hard ink offset) with the gold star */
@@ -455,7 +456,7 @@
   position: absolute;
   left: 50%;
   bottom: var(--podium-bottom);
-  width: min(78%, 540px);
+  width: var(--podium-w);
   aspect-ratio: 5 / 1;
   transform: translateX(-50%);
   border-radius: 50%;
@@ -464,12 +465,15 @@
   box-shadow: 0 12px 0 var(--color-band);
 }
 
+/* The clerk embed frames the clerk at a 0.9 aspect with the feet 12% up from the frame's bottom (bible
+   "Your Clerk" camera): the frame keeps that aspect so the clerk fills it, and sits so the feet land on
+   the podium's centre line. */
 .clerk {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--podium-bottom) + min(78%, 540px) / 10);
-  width: min(62%, 440px);
-  height: 74%;
+  bottom: calc(var(--podium-bottom) + var(--podium-w) / 10 - var(--clerk-h) * 0.12);
+  height: var(--clerk-h);
+  aspect-ratio: 0.9;
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -484,7 +488,7 @@
 .picture {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--podium-bottom) + min(78%, 540px) / 10 + 8px);
+  bottom: calc(var(--podium-bottom) + var(--podium-w) / 10 + 8px);
   width: 200px;
   height: 200px;
   transform: translateX(-50%);
@@ -522,6 +526,9 @@
 
   .stage {
     --podium-bottom: 168px;
+    /* the stage is the right half of the viewport */
+    --podium-w: min(39vw, 540px);
+    --clerk-h: min(calc(100dvh - var(--podium-bottom) - 120px), 760px, 52vw);
     display: block;
     grid-column: 2;
     grid-row: 1;
@@ -581,6 +588,9 @@
 /* `/design` stage specimens: shown at every width, at a fixed height */
 .stage.stageStill {
   --podium-bottom: 40px;
+  --podium-w: min(78cqw, 540px);
+  --clerk-h: 340px;
+  container-type: inline-size;
   display: block;
   position: relative;
   height: 420px;

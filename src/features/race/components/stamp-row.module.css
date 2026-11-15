@@ -4,6 +4,8 @@
  * clips its slam, so it never paints over the telex strip or the typed sheet.
  */
 
+@reference "../../../app/globals.css";
+
 .row {
   flex: 1 1 auto;
   display: flex;
@@ -12,4 +14,22 @@
   min-height: 0;
   overflow: clip;
   pointer-events: none;
+}
+
+/* #951: an overtake is one plain line (7.4 notice row type), red when you passed, ink when passed */
+.line {
+  margin: 0;
+  padding: 8px 14px;
+  @apply type-label;
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+}
+
+.line[data-stamp-tone="red"] {
+  color: var(--color-link);
+  border-color: var(--color-primary);
 }

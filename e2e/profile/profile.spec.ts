@@ -101,18 +101,14 @@ test.describe("Personnel file at /profile (#932)", () => {
     }
   });
 
-  test("C9 header: MY FILE / the docket links to the file, 44px, no sideways scroll", async ({
-    page,
-  }) => {
+  test("C9 header: the docket links to the file, 44px, no sideways scroll", async ({ page }) => {
     await seedLobby(page);
     await openFile(page);
     const docket = page.locator("a[data-docket-link]");
     await expect(docket).toHaveAttribute("href", "/profile");
     expect((await docket.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    const myFile = page.getByRole("link", { name: "MY FILE", exact: true });
-    if (page.viewportSize()!.width > 480) {
-      await expect(myFile).toHaveAttribute("aria-current", "page");
-    }
+    // #951: the separate MY FILE link is gone, the docket is the one link to the file
+    await expect(page.getByRole("link", { name: "MY FILE", exact: true })).toHaveCount(0);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
@@ -139,17 +135,18 @@ test.describe("Personnel file at /profile (#932)", () => {
     const dots = curve(page).locator("path").nth(2);
     const before = { line: await speed.getAttribute("d"), dots: await dots.getAttribute("d") };
     const slider = page.getByRole("slider", { name: "SMOOTHING" });
-    await expect(slider).toHaveValue("3");
+    // #951: no smoothing by default
+    await expect(slider).toHaveValue("0");
     expect((await slider.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    // Home is idempotent: repeat it until the hydrated slider has taken it
+    // End is idempotent: repeat it until the hydrated slider has taken it
     await expect(async () => {
       await slider.focus();
-      await page.keyboard.press("Home");
-      await expect(curve(page).locator("[data-curve-value]")).toHaveText("0", {
+      await page.keyboard.press("End");
+      await expect(curve(page).locator("[data-curve-value]")).toHaveText("8", {
         timeout: scaled(1_000),
       });
     }).toPass({ timeout: HYDRATION_WAIT });
-    await expect(slider).toHaveValue("0");
+    await expect(slider).toHaveValue("8");
     expect(await speed.getAttribute("d")).not.toBe(before.line);
     expect(await dots.getAttribute("d")).toBe(before.dots);
   });

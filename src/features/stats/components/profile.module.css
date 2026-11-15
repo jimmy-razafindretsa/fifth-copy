@@ -289,11 +289,12 @@
   color: var(--color-fg-muted);
 }
 
-/* 7.4 multi-cell grid: paper cells on a 2px ink ground (gap 2px on ink, never per-cell borders) */
+/* 7.4 multi-cell grid: paper cells on a 2px ink ground (gap 2px on ink, never per-cell borders). Twelve
+   cells in 2, 3, 4 or 6 columns, so every row is full and no ink shows through (#951). */
 .grid {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(var(--figure-cols, 2), minmax(0, 1fr));
   gap: 2px;
   background: var(--color-fg);
   border: 2px solid var(--color-fg);
@@ -400,4 +401,22 @@
 .stampLink:active {
   transform: translate(4px, 4px);
   box-shadow: 2px 2px 0 var(--color-fg);
+}
+
+@media (min-width: 640px) {
+  .grid {
+    --figure-cols: 3;
+  }
+}
+
+@media (min-width: 960px) {
+  .grid {
+    --figure-cols: 4;
+  }
+}
+
+@media (min-width: 1360px) {
+  .grid {
+    --figure-cols: 6;
+  }
 }

@@ -20,6 +20,28 @@
   text-decoration: none;
 }
 
+/* ← MENU (#951): a boxed 44px control like the toggles, beside the brand */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px;
+  margin-right: auto;
+  border: 2px solid var(--color-fg);
+  color: var(--color-fg);
+  text-decoration: none;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.back:hover {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
 .monogram {
   display: block;
   width: 40px;
@@ -34,6 +56,8 @@
 }
 
 .nav {
+  /* every boxed control in the header (EN/FR, NIGHT SHIFT, the docket) shares one height (#951) */
+  --header-control-h: 44px;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -45,6 +69,9 @@
 }
 
 .navLink {
+  display: inline-flex;
+  align-items: center;
+  height: var(--header-control-h, 44px);
   color: var(--color-fg);
   text-decoration: none;
 }
@@ -54,21 +81,10 @@
   text-decoration: underline;
 }
 
-/* MY FILE (#932, reference Profil.dc.html header): on its own page, red with a 3px red rule under it */
-.myFile[aria-current="page"] {
-  color: var(--color-link);
-  border-bottom: 3px solid var(--color-primary);
-  padding-bottom: 2px;
-}
-
-.myFile[aria-current="page"]:hover {
-  text-decoration: none;
-}
-
 /* guest docket: mono name plus the ink GUEST tag (bible 7.4); a link to the viewer's file (#932) */
 .docket {
   display: flex;
-  min-height: 44px;
+  height: var(--header-control-h, 44px);
   color: var(--color-fg);
   text-decoration: none;
   align-items: center;
@@ -107,6 +123,9 @@
 }
 
 .signIn {
+  display: inline-flex;
+  align-items: center;
+  height: var(--header-control-h, 44px);
   color: var(--color-link);
   text-decoration: none;
 }
@@ -125,16 +144,6 @@ button.signIn {
 
 a.docket:hover .docketName {
   text-decoration: underline;
-}
-
-/* bible 18: hit targets >= 44px on touch */
-@media (max-width: 768px) {
-  .navLink,
-  .signIn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-  }
 }
 
 /*
@@ -164,6 +173,20 @@ a.docket:hover .docketName {
     gap: 8px;
   }
 
+  /* ← MENU joins row 2, first, as the arrow alone (a 44px square; its name stays "Back to the menu") */
+  .back {
+    order: 3;
+    flex: none;
+    justify-content: center;
+    width: 44px;
+    margin-right: 0;
+    padding: 0;
+  }
+
+  .backText {
+    display: none;
+  }
+
   .monogram {
     width: 28px;
     height: 28px;
@@ -178,11 +201,6 @@ a.docket:hover .docketName {
   .nav {
     display: contents;
     white-space: nowrap;
-  }
-
-  /* MY FILE gives way on phones: the docket is the link to the file there (#932) */
-  .myFile {
-    display: none;
   }
 
   /* row 1: EN/FR, then NIGHT SHIFT (its form is `display: contents`, the button is the item) */

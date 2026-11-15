@@ -4,13 +4,25 @@
    2px ink gap is its plate, the paper face inside; desks never touch, so nothing doubles. */
 @reference "../../../app/globals.css";
 
+/* #951: few desks draw bigger (only the taken desks are drawn) */
+.ring[data-count="few"] {
+  width: min(100%, 340px);
+  --cell: clamp(44px, 12cqi, 60px);
+  --ring-r: calc(38cqi - var(--cell) / 2);
+}
+
+.ring[data-count="some"] {
+  --cell: clamp(36px, 9cqi, 46px);
+  --ring-r: calc(44cqi - var(--cell) / 2);
+}
+
 .ring {
   /* 34px desks; under a 486px ring (481-520px screens) they shrink to stay apart (7cqi, min 30px) */
   --cell: clamp(30px, 7cqi, 34px);
   --ring-r: calc(50cqi - var(--cell) / 2 - 2px);
   position: relative;
   container-type: inline-size;
-  width: min(100%, 500px);
+  width: min(100%, 440px);
   aspect-ratio: 1;
   margin-inline: auto;
 }

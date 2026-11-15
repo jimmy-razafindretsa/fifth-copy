@@ -1,6 +1,6 @@
 // The default stamped portrait (#60, bible 10.1 "toy-sized bureaucracy", 3, 18): a rubber-stamp ID
-// picture in one ink on one ground. Big head sunk into the shoulders, an oversized cap from the 10.1
-// hat catalogue, a shirt collar. Pure: the variant (cap + ground) is hash(seed) mod 4, so a user keeps
+// picture in one ink on one ground: a flat silhouette (#951: no face, it read as a clown at 32 px), big
+// head, an oversized cap from the 10.1 hat catalogue, a collar notch. Pure: the variant (cap + ground) is hash(seed) mod 4, so a user keeps
 // the same portrait everywhere. Colours are token roles only (bible 3; scripts/check-colours.ts).
 
 /** FNV-1a 32-bit: small, stable across runtimes, good enough to spread ids over four variants. */
@@ -27,33 +27,24 @@ const PLATES: Record<PortraitVariant, { ground: string; ink: string }> = {
   3: { ground: "var(--color-surface-muted)", ink: "var(--color-fg)" },
 };
 
-/** The four caps of 10.1, drawn oversized: kepka, ushanka, eyeshade, beret. */
+/**
+ * The four caps of 10.1, drawn oversized over the head: kepka, ushanka, eyeshade, beret. Each is ruled
+ * off from the ink head by a ground-coloured outline, so the silhouette reads at 32 px (#951).
+ */
 function Cap({ variant, ink, ground }: { variant: PortraitVariant; ink: string; ground: string }) {
+  const rule = { stroke: ground, strokeWidth: 2.5, strokeLinejoin: "round" as const };
   switch (variant) {
     case 0: // kepka: a flat cap with a long peak to the right
-      return <path d="M14 27C14 11 48 10 50 22L57 26L14 28Z" fill={ink} />;
+      return <path d="M17 24C17 10 46 9 47 20L56 24L17 26Z" fill={ink} {...rule} />;
     case 1: // ushanka: a fur dome with ear flaps
-      return (
-        <g fill={ink}>
-          <path d="M15 25C15 8 49 8 49 25Z" />
-          <rect x="12" y="22" width="40" height="6" />
-          <rect x="12" y="26" width="7" height="13" />
-          <rect x="45" y="26" width="7" height="13" />
-        </g>
-      );
+      return <path d="M18 23C18 9 46 9 46 23H49V36H43V27H21V36H15V23Z" fill={ink} {...rule} />;
     case 2: // eyeshade: a band and a wide visor
-      return (
-        <g fill={ink}>
-          <rect x="17" y="17" width="30" height="6" />
-          <path d="M11 23H53L46 29H18Z" />
-        </g>
-      );
+      return <path d="M20 16H44V21H52L45 27H19L12 21H20Z" fill={ink} {...rule} />;
     default: // beret: a wide tilted disc with its nub
       return (
-        <g fill={ink}>
-          <ellipse cx="29" cy="20" rx="21" ry="8" transform="rotate(-8 29 20)" />
-          <rect x="27" y="9" width="3" height="5" />
-          <path d="M17 24H45" stroke={ground} strokeWidth="1.5" />
+        <g fill={ink} {...rule}>
+          <rect x="30" y="8" width="3" height="6" />
+          <ellipse cx="31" cy="20" rx="18" ry="7" transform="rotate(-8 31 20)" />
         </g>
       );
   }
@@ -93,27 +84,11 @@ export function DefaultPortrait({
         stroke="var(--color-fg)"
         strokeWidth="2"
       />
-      {/* shoulders and the open shirt collar */}
-      <path d="M8 63C8 50 19 44 32 44C45 44 56 50 56 63Z" fill={ink} />
-      <path
-        d="M24 44L32 55L40 44Z"
-        fill={ground}
-        stroke={ink}
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      {/* the big head, sunk into the shoulders */}
-      <circle cx="32" cy="31" r="15" fill={ground} stroke={ink} strokeWidth="2.5" />
-      <circle cx="26.5" cy="31" r="2" fill={ink} />
-      <circle cx="37.5" cy="31" r="2" fill={ink} />
-      <circle cx="32" cy="36" r="2.4" fill={ink} />
-      <path
-        d="M27 40.5Q32 43 37 40.5"
-        fill="none"
-        stroke={ink}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      {/* a clean stamped silhouette: shoulders with the collar notch, the neck, the big head */}
+      <path d="M9 63C9 51 19 45 32 45C45 45 55 51 55 63Z" fill={ink} />
+      <path d="M26 45L32 53L38 45Z" fill={ground} />
+      <rect x="28" y="38" width="8" height="8" fill={ink} />
+      <circle cx="32" cy="30" r="12" fill={ink} />
       <Cap variant={variant} ink={ink} ground={ground} />
     </svg>
   );

@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { SaveClerkOutfit } from "@/features/identity";
 import { cn } from "@/lib/cn";
 import { EmbedFrame, Star, useEmbedBridge } from "@/components/ui";
 import {
-  lookMessage,
   OUTFIT_CATEGORIES,
   parseClerkMessage,
   reissueMessage,
@@ -16,6 +15,7 @@ import { outfitSaver } from "../clerk-outfit-saver";
 import { clerkEmbedSrc } from "../links";
 import shared from "./landing.module.css";
 import styles from "./sections.module.css";
+import { useClerkLook } from "./use-clerk-look";
 
 export type ClerkLabels = {
   stageTitle: string;
@@ -45,8 +45,6 @@ type Props = {
   save: SaveClerkOutfit | null;
 };
 
-const clamp = (v: number) => Math.max(-1, Math.min(1, v));
-
 /**
  * Your clerk (bible 14.1 item 5, 10.2, 15): the clerk embed follows the cursor anywhere on the page
  * (`fc-look`, throttled with rAF), a click or REISSUE UNIFORM hops into a new uniform (`fc-reissue`),
@@ -65,30 +63,7 @@ export function ClerkSection({ labels, name, lockerHref, savedOutfit, save }: Pr
   );
   const { ref, post } = useEmbedBridge(parseClerkMessage, onMessage);
 
-  useEffect(() => {
-    let frame = 0;
-    const move = (event: MouseEvent) => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        const box = ref.current?.getBoundingClientRect();
-        if (!box) return;
-        const cx = box.left + box.width / 2;
-        const cy = box.top + box.height * 0.32;
-        post(
-          lookMessage(
-            clamp((event.clientX - cx) / (window.innerWidth / 2)),
-            clamp((event.clientY - cy) / (window.innerHeight / 2)),
-          ),
-        );
-      });
-    };
-    window.addEventListener("mousemove", move);
-    return () => {
-      window.removeEventListener("mousemove", move);
-      if (frame) cancelAnimationFrame(frame);
-    };
-  }, [post, ref]);
+  useClerkLook(ref, post);
 
   const itemName = (category: OutfitCategory) => {
     if (!outfit) return labels.pending;

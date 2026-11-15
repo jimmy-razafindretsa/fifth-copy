@@ -22,7 +22,22 @@ export type WaitingRoomLabels = {
   /** `desk {n}`. */
   desk: string;
   majorSays: string;
+  /** #951: the rules and the sabotage cards beside the mission order. */
+  briefing: {
+    form: string;
+    tag: string;
+    rulesTitle: string;
+    rules: readonly string[];
+    sabotageTitle: string;
+    sabotageIntro: string;
+    unlocks: Record<SabotageCardId, string>;
+  };
+  /** The sabotage cards' names and effects (`race.sabotageTray.cards`). */
+  cards: Record<SabotageCardId, { name: string; effect: string }>;
 };
+
+type SabotageCardId = "extra-paperwork" | "exemption" | "smoke-break";
+const CARD_ORDER: readonly SabotageCardId[] = ["extra-paperwork", "exemption", "smoke-break"];
 
 export type WaitingRoomProps = {
   labels: WaitingRoomLabels;
@@ -62,104 +77,152 @@ export function WaitingRoom({ labels, view, notice = null, tip = null }: Waiting
         <h2 id="waiting-room-heading" className={styles.heading}>
           {labels.heading}
         </h2>
-        <div role="status" aria-busy="true" aria-label={labels.form} className={styles.docket}>
-          {notice ? (
-            <p data-notice="reconnecting" className={`${docket.notice} ${docket.pulse}`}>
-              {notice}
-            </p>
-          ) : null}
-          <div className={styles.head}>
-            <span className={styles.form}>{labels.form}</span>
-            <span className={docket.tag}>{labels.tag}</span>
-          </div>
-          <dl className={styles.rows}>
-            <div className={styles.row}>
-              <dt className={docket.label}>{labels.rows.room}</dt>
-              <dd className={styles.value}>{view.code}</dd>
-            </div>
-            {view.textType ? (
-              <div className={styles.row}>
-                <dt className={docket.label}>{labels.rows.text}</dt>
-                <dd className={styles.value}>{labels.textType[view.textType]}</dd>
-              </div>
-            ) : null}
-            {view.language ? (
-              <div className={styles.row}>
-                <dt className={docket.label}>{labels.rows.language}</dt>
-                <dd className={styles.value}>{labels.language[view.language]}</dd>
-              </div>
-            ) : null}
-            {view.desk ? (
-              <div data-desk className={styles.row}>
-                <dt className={docket.label}>{labels.rows.desk}</dt>
-                <dd className={`${styles.value} ${styles.you}`}>{view.desk}</dd>
-              </div>
-            ) : null}
-            <div className={styles.row}>
-              <dt className={docket.label}>{labels.rows.ready}</dt>
-              <dd data-ready className={`${styles.value} ${styles.count}`}>
-                {view.ready}
-              </dd>
-            </div>
-          </dl>
-          <div className={styles.progress}>
-            <p className={styles.line}>
-              <span data-phrase>{phrase}</span>
-              <span data-percent className={styles.percent}>
-                {view.percent} %
-              </span>
-            </p>
-            <div
-              role="progressbar"
-              aria-label={labels.progress}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={view.percent}
-              className={styles.bar}
-            >
-              <span className={styles.fill} style={{ width: `${view.percent}%` }} />
-            </div>
-            <ol className={styles.steps}>
-              {view.steps.map((s) => (
-                <li key={s.id} data-step={s.id} data-step-state={s.state} className={styles.step}>
-                  {s.state === "done" ? <span aria-hidden="true">✓ </span> : null}
-                  {labels.steps[s.id]}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-        <div data-arrivals className={styles.band}>
-          <p id="waiting-room-arrivals" className={styles.bandLabel}>
-            {labels.arrivals}
-          </p>
-          <div
-            role="region"
-            aria-labelledby="waiting-room-arrivals"
-            tabIndex={0}
-            className={styles.viewport}
-          >
-            <div
-              data-rolling={rolling ? "" : undefined}
-              className={styles.track}
-              style={{ "--_arrivals": view.arrivals.length } as CSSProperties}
-            >
-              <ul aria-labelledby="waiting-room-arrivals" className={styles.list}>
-                {rows(false)}
-              </ul>
-              {rolling ? (
-                <ul aria-hidden="true" data-loop className={`${styles.list} ${styles.loop}`}>
-                  {rows(true)}
-                </ul>
+        <div className={styles.layout}>
+          <div className={styles.main}>
+            <div role="status" aria-busy="true" aria-label={labels.form} className={styles.docket}>
+              {notice ? (
+                <p data-notice="reconnecting" className={`${docket.notice} ${docket.pulse}`}>
+                  {notice}
+                </p>
               ) : null}
+              <div className={styles.head}>
+                <span className={styles.form}>{labels.form}</span>
+                <span className={docket.tag}>{labels.tag}</span>
+              </div>
+              <dl className={styles.rows}>
+                <div className={styles.row}>
+                  <dt className={docket.label}>{labels.rows.room}</dt>
+                  <dd className={styles.value}>{view.code}</dd>
+                </div>
+                {view.textType ? (
+                  <div className={styles.row}>
+                    <dt className={docket.label}>{labels.rows.text}</dt>
+                    <dd className={styles.value}>{labels.textType[view.textType]}</dd>
+                  </div>
+                ) : null}
+                {view.language ? (
+                  <div className={styles.row}>
+                    <dt className={docket.label}>{labels.rows.language}</dt>
+                    <dd className={styles.value}>{labels.language[view.language]}</dd>
+                  </div>
+                ) : null}
+                {view.desk ? (
+                  <div data-desk className={styles.row}>
+                    <dt className={docket.label}>{labels.rows.desk}</dt>
+                    <dd className={`${styles.value} ${styles.you}`}>{view.desk}</dd>
+                  </div>
+                ) : null}
+                <div className={styles.row}>
+                  <dt className={docket.label}>{labels.rows.ready}</dt>
+                  <dd data-ready className={`${styles.value} ${styles.count}`}>
+                    {view.ready}
+                  </dd>
+                </div>
+              </dl>
+              <div className={styles.progress}>
+                <p className={styles.line}>
+                  <span data-phrase>{phrase}</span>
+                  <span data-percent className={styles.percent}>
+                    {view.percent} %
+                  </span>
+                </p>
+                <div
+                  role="progressbar"
+                  aria-label={labels.progress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={view.percent}
+                  className={styles.bar}
+                >
+                  <span className={styles.fill} style={{ width: `${view.percent}%` }} />
+                </div>
+                <ol className={styles.steps}>
+                  {view.steps.map((s) => (
+                    <li
+                      key={s.id}
+                      data-step={s.id}
+                      data-step-state={s.state}
+                      className={styles.step}
+                    >
+                      {s.state === "done" ? <span aria-hidden="true">✓ </span> : null}
+                      {labels.steps[s.id]}
+                    </li>
+                  ))}
+                </ol>
+              </div>
             </div>
+            <div data-arrivals className={styles.band}>
+              <p id="waiting-room-arrivals" className={styles.bandLabel}>
+                {labels.arrivals}
+              </p>
+              <div
+                role="region"
+                aria-labelledby="waiting-room-arrivals"
+                tabIndex={0}
+                className={styles.viewport}
+              >
+                <div
+                  data-rolling={rolling ? "" : undefined}
+                  className={styles.track}
+                  style={{ "--_arrivals": view.arrivals.length } as CSSProperties}
+                >
+                  <ul aria-labelledby="waiting-room-arrivals" className={styles.list}>
+                    {rows(false)}
+                  </ul>
+                  {rolling ? (
+                    <ul aria-hidden="true" data-loop className={`${styles.list} ${styles.loop}`}>
+                      {rows(true)}
+                    </ul>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            {tip ? (
+              <p data-major className={styles.major}>
+                <span className={styles.majorLabel}>{labels.majorSays}</span> {tip}
+              </p>
+            ) : null}
           </div>
+          <Briefing labels={labels} />
         </div>
-        {tip ? (
-          <p data-major className={styles.major}>
-            <span className={styles.majorLabel}>{labels.majorSays}</span> {tip}
-          </p>
-        ) : null}
+      </div>
+    </section>
+  );
+}
+
+/** The briefing docket (#951): the rules of a race and the three sabotage cards with their unlocks. */
+function Briefing({ labels }: { labels: WaitingRoomLabels }) {
+  const b = labels.briefing;
+  return (
+    <section data-briefing aria-labelledby="waiting-room-briefing" className={styles.briefing}>
+      <div className={styles.head}>
+        <h3 id="waiting-room-briefing" className={styles.form}>
+          {b.form}
+        </h3>
+        <span className={docket.tag}>{b.tag}</span>
+      </div>
+      <div className={styles.briefingBody}>
+        <div className={styles.briefingPart}>
+          <h4 className={styles.partTitle}>{b.rulesTitle}</h4>
+          <ol className={styles.rules}>
+            {b.rules.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ol>
+        </div>
+        <div className={styles.briefingPart}>
+          <h4 className={styles.partTitle}>{b.sabotageTitle}</h4>
+          <p className={styles.partIntro}>{b.sabotageIntro}</p>
+          <ul className={styles.cards}>
+            {CARD_ORDER.map((id) => (
+              <li key={id} className={styles.card} data-card={id}>
+                <span className={styles.cardName}>{labels.cards[id].name}</span>
+                <span className={styles.cardEffect}>{labels.cards[id].effect}</span>
+                <span className={styles.cardUnlock}>{b.unlocks[id]}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </section>
   );

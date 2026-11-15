@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { EmbedFrame, hasWebGL2, Stamp, useEmbedBridge, useReducedMotion } from "@/components/ui";
 import {
   medalVariantMessage,
@@ -37,6 +37,8 @@ export type PodiumClerkProps = {
   title: string;
   /** The fallback stamp: `HERO OF PAPERWORK` / `HÉROS DE LA PAPERASSE`. */
   fallback: string;
+  /** #951: the plate over the slot until the clerk is first drawn (`SUMMONING THE CLERK…`). */
+  loading?: string;
   /** Render the stamp, never the frame (`/design`: a WebGL frame on rAF has no stable baseline). */
   still?: boolean;
   /** False holds the frame idle (no `src`) until the previous plinth is done (#688 C4). */
@@ -57,14 +59,21 @@ export function PodiumClerk({
   outfit,
   title,
   fallback,
+  loading,
   still = false,
   mount = true,
   onReady,
 }: PodiumClerkProps) {
+  // #951: the slot says the clerk is coming until its first `fc-clerk` (drawn)
+  const [drawn, setDrawn] = useState(false);
+  const onDrawn = useCallback(() => {
+    setDrawn(true);
+    onReady?.();
+  }, [onReady]);
   // null on the server and while hydrating (the frame stays idle then), the probe's answer after
   const webgl = useSyncExternalStore(noSubscribe, probe, () => null);
   const reduce = useReducedMotion();
-  const { ref, post } = useEmbedBridge(parseClerkReady, onReady);
+  const { ref, post } = useEmbedBridge(parseClerkReady, onDrawn);
   const view = clerkView({ still, webgl });
 
   useEffect(() => {
@@ -90,6 +99,11 @@ export function PodiumClerk({
   return (
     <div className={styles.medal} data-medal={variant} data-medal-view="frame">
       <EmbedFrame ref={ref} src={podiumClerkSrc(variant, outfit)} title={title} hold={!mount} />
+      {!drawn && loading ? (
+        <p className={styles.loading} data-clerk-loading="" aria-hidden="true">
+          {loading}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -138,11 +138,11 @@ test.describe("teacher password reset docket (#790)", () => {
     await expect(student(page)).toBeVisible();
     await expect(issueButton(page)).toBeVisible();
 
-    // the dockets column order: settings docket, this docket, START
-    const settings = page.getByRole("region", { name: "RACE SETTINGS" });
+    // the dockets column order (#951: the settings span the room under it): room docket, this docket, START
+    const room = page.getByText("ROOM CODE", { exact: true }).locator("..").locator("..");
     const start = page.getByRole("button", { name: "START", exact: true });
     const box = async (l: ReturnType<typeof docket>) => (await l.boundingBox())!;
-    const [s, r, st] = [await box(settings), await box(docket(page)), await box(start)];
+    const [s, r, st] = [await box(room), await box(docket(page)), await box(start)];
     expect(r.y).toBeGreaterThanOrEqual(s.y + s.height);
     expect(st.y).toBeGreaterThanOrEqual(r.y + r.height);
 

@@ -19,3 +19,40 @@
   font-size: 14px;
   line-height: 1.1;
 }
+
+/* #951: the plate over the slot until the clerk is first drawn; its line pulses (bible 8 lkPulse),
+   still under reduced motion */
+.loading {
+  position: absolute;
+  inset: auto 8px 50% 8px;
+  translate: 0 50%;
+  margin: 0;
+  padding: 6px 8px;
+  text-align: center;
+  @apply type-label;
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.16em;
+  background: var(--color-band);
+  color: var(--color-band-fg);
+  animation: clerkLoading var(--motion-duration-slow) var(--motion-ease-out) infinite alternate;
+}
+
+@keyframes clerkLoading {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading {
+    animation: none;
+  }
+}
+
+:root[data-motion="reduce"] .loading {
+  animation: none;
+}

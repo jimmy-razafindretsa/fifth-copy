@@ -36,7 +36,7 @@ export default async function RacePage({ params }: PageProps<"/race/[raceId]">) 
             labels={t.race.scene}
             notice={t.race.notice}
             tips={t.race.didYouKnow}
-            waiting={t.race.waiting}
+            waiting={{ ...t.race.waiting, cards: t.race.sabotageTray.cards }}
           />
         }
       />

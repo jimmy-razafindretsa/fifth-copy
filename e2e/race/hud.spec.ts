@@ -8,7 +8,6 @@ import { hostRoom, phaseOf, SEAT_HUD, simulatedPlayers, startButton, warmRace } 
  * control, notices and race stamps (C1-C7), computed in the browser. Runs in every viewport project.
  */
 const RED = "rgb(184, 29, 36)";
-const NIXIE = "rgb(255, 154, 60)";
 
 /** The computed colour a `--color-*` role resolves to on the page (theme applied), as `rgb(...)`. */
 async function roleColour(page: Page, role: string) {
@@ -48,7 +47,7 @@ async function open(page: Page) {
 }
 
 test.describe("#560 race HUD on /design", () => {
-  test("C1 nixie counters: VT323 numerals, glow only on the tubes, words for assistive tech", async ({
+  test("C1 counter plate (#951): display numerals, no glow, words for assistive tech", async ({
     page,
   }) => {
     await open(page);
@@ -56,25 +55,15 @@ test.describe("#560 race HUD on /design", () => {
     await expect(
       racing.getByRole("group", { name: "Words per minute 42, place 4 of 30" }),
     ).toBeVisible();
-    await expect(racing.locator("[data-tube]")).toHaveText(["42", "04 / 30"]);
+    await expect(racing.locator("[data-tube]")).toHaveText(["42", "4 / 30"]);
     await expect(state(page, "nixie-before-start").locator("[data-tube]")).toHaveText([
       "00",
-      "00 / 30",
+      "– / 30",
     ]);
     for (const tube of await racing.locator("[data-tube]").all()) {
       const s = await styleOf(tube);
-      expect(s.family).toMatch(/VT323/i);
-      expect(s.color).toBe(NIXIE);
-      expect(s.textShadow).not.toBe("none");
-      expect(s.boxShadow).toContain("inset");
-    }
-    const bezel = await styleOf(racing.locator("[data-device]"));
-    expect(bezel.textShadow).toBe("none");
-    expect(bezel.boxShadow).toBe("none");
-    for (const tag of await racing.locator("[data-device] > span > span:not([data-tube])").all()) {
-      const s = await styleOf(tag);
+      expect(s.family).not.toMatch(/VT323/i);
       expect(s.textShadow).toBe("none");
-      expect(s.boxShadow).toBe("none");
     }
   });
 

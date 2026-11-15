@@ -7,7 +7,7 @@ import { hostRoom, phaseOf, startButton, warmRace } from "./helpers";
 // playwright.config.ts. Host and one guest; the guest takes its desk from the seat view itself, so it
 // sits after the host and ranks behind it at the start (ties rank by desk). After GO the guest types
 // the first characters of the strip and passes the idle host: the guest sees the red
-// `ОБГОН! · OVERTAKE +1`, the host the ink `ОБОГНАЛИ · PASSED −1`. Each page records what it showed with
+// `You overtook <name>`, the host the ink `<name> overtook you` (#951: was the dual Russian stamp). Each page records what it showed with
 // a MutationObserver installed before it loads (times, computed styles and boxes are read where they
 // happen); the server's `event` frames are timed in Node on the same machine clock. Every test drives
 // its own viewports, so only the desktop project runs.
@@ -204,18 +204,15 @@ test.describe("#232 overtake stamps", () => {
 
     const mine = firstStamp(guest.log);
     expect(mine.stamp.kind).toBe("overtake");
-    expect(mine.stamp.text).toBe("ОБГОН! · OVERTAKE +1");
-    expect(mine.stamp.ru).toBe("ОБГОН!");
+    // #951 (owner): one plain line naming the other typist, no dual Russian stamp, no slam
+    expect(mine.stamp.text).toMatch(/^You overtook .+/);
+    expect(mine.stamp.ru).toBeNull();
     expect(mine.stamp.tone).toBe("red");
-    expect(mine.stamp.size).toBe("md");
-    expect(Math.abs(Number(mine.stamp.angle))).toBeGreaterThanOrEqual(2);
-    expect(Math.abs(Number(mine.stamp.angle))).toBeLessThanOrEqual(6);
-    expect(mine.stamp.anim).toMatch(/fcSlam$/);
     expectClearOfTheSurface(mine.stamp, "overtake");
 
     const theirs = firstStamp(host.log);
     expect(theirs.stamp.kind).toBe("passed");
-    expect(theirs.stamp.text).toBe("ОБОГНАЛИ · PASSED −1");
+    expect(theirs.stamp.text).toMatch(/.+ overtook you$/);
     expect(theirs.stamp.tone).toBe("ink");
     expectClearOfTheSurface(theirs.stamp, "passed");
 
@@ -265,7 +262,7 @@ test.describe("#232 overtake stamps", () => {
     }
   });
 
-  test("C2 tablet, Night shift, French guest: one language besides the Russian, clear of the strip and the sheet", async ({
+  test("C2 tablet, Night shift, French guest: the French line, clear of the strip and the sheet", async ({
     page,
     browser,
   }) => {
@@ -276,12 +273,12 @@ test.describe("#232 overtake stamps", () => {
       guestLocale: "fr",
     });
     const mine = firstStamp(guest.log);
-    expect(mine.stamp.text).toBe("ОБГОН! · DÉPASSEMENT +1");
+    expect(mine.stamp.text).toMatch(/^Tu as dépassé .+/);
     expect(mine.stamp.tone).toBe("red");
     expectClearOfTheSurface(mine.stamp, "overtake");
     expect(guest.log.said.map((e) => e.text)).toContain(`Tu as dépassé le bureau ${hostDesk}`);
     const theirs = firstStamp(host.log);
-    expect(theirs.stamp.text).toBe("ОБОГНАЛИ · PASSED −1");
+    expect(theirs.stamp.text).toMatch(/.+ overtook you$/);
     expectClearOfTheSurface(theirs.stamp, "passed");
     expect(host.log.said.map((e) => e.text)).toContain(`Desk ${guestDesk} passed you`);
   });

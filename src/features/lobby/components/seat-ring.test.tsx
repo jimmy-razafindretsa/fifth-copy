@@ -49,19 +49,19 @@ function cells(html: string): string[] {
 }
 
 describe("SeatRing layout (C1)", () => {
-  it("draws 30 cells numbered 01-30, each placed by rotate(i x 12deg) translate(r), counter-rotated", () => {
-    const html = render([]);
-    const all = cells(html);
-    expect(all).toHaveLength(30);
+  it("draws only the taken desks, evenly spaced: rotate(i x 360/n deg) translate(r), counter-rotated (#951)", () => {
+    expect(cells(render([]))).toHaveLength(0);
+    const all = cells(render([bot, host, guest]));
+    expect(all).toHaveLength(3);
     all.forEach((cell, i) => {
-      const n = String(i + 1).padStart(2, "0");
       expect(cell).toContain(`data-desk="${i + 1}"`);
-      expect(cell).toContain(`>${n}<`);
-      const a = i * 12;
+      expect(cell).toContain(`>${String(i + 1).padStart(2, "0")}<`);
+      const a = i * 120;
       expect(cell).toContain(
         `transform:rotate(${a}deg) translateY(calc(-1 * var(--ring-r))) rotate(${-a}deg)`,
       );
     });
+    expect(render([host, guest])).toContain('data-count="few"');
   });
 
   it("holds the ink tag THE MAJOR / LE MAJOR at the centre; no canvas, no three", () => {
@@ -96,14 +96,9 @@ describe("SeatRing cell states (C2)", () => {
   const html = render([host, guest, bot], 1);
   const all = cells(html);
 
-  it("empty desks are dashed 1px muted with a muted number and no initials", () => {
-    const empty = all[29]!;
-    expect(empty).toContain('data-state="empty"');
-    expect(empty).not.toMatch(/class="[^"]*initials/);
-    const e = rule('.cell[data-state="empty"]');
-    expect(e).toMatch(/border:\s*1px dashed var\(--color-fg-muted\)/);
-    expect(e).toMatch(/background:\s*var\(--color-bg\)/);
-    expect(rule('.cell[data-state="empty"] .num')).toMatch(/color:\s*var\(--color-fg-muted\)/);
+  it("an empty desk is never drawn (#951)", () => {
+    expect(all).toHaveLength(3);
+    expect(html).not.toContain('data-state="empty"');
   });
 
   it("taken desks show the initials of the first two words and a 4px rule in the desk's rival ink", () => {

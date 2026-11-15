@@ -590,7 +590,7 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
     await expect(button).toHaveText("COPY");
   });
 
-  test("C5 C6 the layout per width; START under the settings docket, unchanged", async ({
+  test("C5 C6 the layout per width (#951): START under the room docket, the settings across the room under it all", async ({
     page,
   }) => {
     await createLobby(page);
@@ -608,24 +608,19 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
       await expect(copyButton(page)).toBeHidden();
       expect(startBox.y).toBeGreaterThan(rollBox.y + rollBox.height);
     } else {
-      // the dockets column, START under the settings docket; then the side (seat ring #731, the roll
-      // under it): beside the column from 1024, wrapped under it below (bible 14.3: the ring needs 500px)
       await expect(settingsDocket(page)).toBeVisible();
       await expect(copyButton(page)).toBeVisible();
       const settingsBox = (await settingsDocket(page).boundingBox())!;
       const docketBox = (await roomCode(page).locator("..").boundingBox())!;
       const ringBox = (await page.locator("[data-seat-ring]").boundingBox())!;
-      expect(rollBox.y).toBeGreaterThanOrEqual(ringBox.y + ringBox.height);
+      // START under the room docket; the settings docket last, under START, the ring and the roll
+      expect(startBox.y).toBeGreaterThanOrEqual(docketBox.y + docketBox.height);
+      for (const box of [startBox, ringBox, rollBox])
+        expect(settingsBox.y).toBeGreaterThanOrEqual(box.y + box.height);
       if (test.info().project.name === "desktop") {
-        expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(rollBox.x);
-        // the column's first docket and the side (its ring) start on the same line
+        // the side (ring, then the roll beside it from 1280) starts on the column's first line
         expect(Math.abs(docketBox.y - ringBox.y)).toBeLessThanOrEqual(2);
-      } else {
-        expect(ringBox.y).toBeGreaterThanOrEqual(startBox.y + startBox.height);
       }
-      expect(settingsBox.y).toBeGreaterThanOrEqual(docketBox.y + docketBox.height);
-      expect(startBox.y).toBeGreaterThanOrEqual(settingsBox.y + settingsBox.height);
-      expect(Math.abs(startBox.x - settingsBox.x)).toBeLessThanOrEqual(2);
     }
     expect(await noSideScroll(page)).toBeLessThanOrEqual(0);
   });
@@ -679,7 +674,8 @@ test.describe("host settings form (#110)", () => {
       await expect(p.locator("html")).toHaveAttribute("lang", "en");
       await expect(p.getByRole("heading", { level: 1 })).toHaveText("REPORT TO YOUR DESK");
       // FORM 5-L opens with HOST since #876, then the race language
-      await expect(settingsDocket(p).locator("dt").nth(1)).toHaveText("LANGUAGE");
+      // #951: THE ROOM section comes first (HOST, LOBBY), then THE TEXT
+      await expect(settingsDocket(p).locator("dt").nth(2)).toHaveText("LANGUAGE");
       await expect(settingsDocket(p).getByText("ACCENTS", { exact: true })).toBeVisible();
     }
     await b.context.close();
@@ -1008,7 +1004,8 @@ test.describe("seat ring diagram (#731)", () => {
     const code = await createLobby(page);
     await expect(seatRing(page)).toHaveAccessibleName("Seat ring: 1 of 30 desks taken");
     await expect(ringCell(page, 1)).toHaveAttribute("data-state", "you");
-    await expect(page.locator("[data-seat-ring] [aria-hidden='true'][data-desk]")).toHaveCount(30);
+    // #951: only the taken desks are drawn
+    await expect(page.locator("[data-seat-ring] [aria-hidden='true'][data-desk]")).toHaveCount(1);
     expect(await seatRing(page).evaluate((el) => (el as HTMLElement).tabIndex)).toBe(-1);
 
     const b = await joinAsGuest(browser, code);

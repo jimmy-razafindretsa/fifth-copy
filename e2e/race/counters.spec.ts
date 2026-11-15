@@ -38,7 +38,7 @@ test.describe("#225 nixie counters", () => {
     await expect(
       page.getByRole("group", { name: "Mots par minute 0, 2 dactylos, pas encore de rang" }),
     ).toBeVisible();
-    await expect(page.locator("[data-tube]")).toHaveText(["00", "00 / 02"]);
+    await expect(page.locator("[data-tube]")).toHaveText(["00", "– / 2"]);
 
     await warmRace(room.host, room.lobbyId);
     await startButton(room.host).click();
@@ -65,8 +65,8 @@ test.describe("#225 nixie counters", () => {
     await expect(tube(page, "wpm")).not.toHaveText("00", { timeout: scaled(1_000) });
     expect(Number(await tube(page, "wpm").textContent())).toBeGreaterThan(0);
     // the guest leads, the idle host follows
-    await expect(tube(page, "place")).toHaveText("01 / 02");
-    await expect(tube(room.host, "place")).toHaveText("02 / 02");
+    await expect(tube(page, "place")).toHaveText("1 / 2");
+    await expect(tube(room.host, "place")).toHaveText("2 / 2");
     await expect(tube(room.host, "wpm")).toHaveText("00");
 
     // C4: the same numbers in words, in each page's UI language

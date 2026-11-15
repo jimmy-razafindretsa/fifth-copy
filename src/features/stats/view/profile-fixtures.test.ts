@@ -18,6 +18,10 @@ describe("profileFixtures", () => {
       meanAccuracy: null,
       wins: null,
       podiums: null,
+      keystrokes: null,
+      errors: null,
+      sabotagesSent: null,
+      sabotagesReceived: null,
     });
   });
 
@@ -33,6 +37,10 @@ describe("profileFixtures", () => {
       meanAccuracy: 0.947,
       wins: 1,
       podiums: 1,
+      keystrokes: 0,
+      errors: 0,
+      sabotagesSent: 0,
+      sabotagesReceived: 0,
     });
   });
 

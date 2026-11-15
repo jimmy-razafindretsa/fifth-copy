@@ -7,32 +7,28 @@ import { DeviceTube } from "./device-tube";
 
 const html = (el: React.ReactElement) => renderToStaticMarkup(el);
 
-// #932 C5: the Personnel file's nixie tube, a device primitive (the colour guard's `device` owner).
+// #932 C5, #951: the Personnel file's counter plate (was a nixie tube) (the colour guard's `device` owner).
 describe("DeviceTube", () => {
   it("is exported from the ui index", () => {
     expect(FromIndex).toBe(DeviceTube);
   });
 
-  it("is a nixie device bezel: the glass lit by device-nixie, the tag under it, glyphs hidden", () => {
+  it("is a counter plate (#951): display numerals, the tag under it, glyphs hidden, no glow", () => {
     const out = html(<DeviceTube value="42" tag="AVG WPM" spoken="Average WPM: 42" />);
-    expect(out).toMatch(/^<div[^>]*data-device="nixie"/);
-    expect(out).toContain("bg-device-bezel");
-    expect(out).toMatch(
-      /<span aria-hidden="true" data-tube=""[^>]*type-device device-nixie[^>]*>42</,
-    );
-    expect(out).toContain("var(--color-device-nixie-glow)");
+    expect(out).toMatch(/^<div[^>]*data-device="plate"/);
+    expect(out).toMatch(/<span aria-hidden="true" data-tube=""[^>]*>42</);
+    expect(out).not.toContain("device-nixie");
     expect(out).toMatch(/<span aria-hidden="true"[^>]*>AVG WPM</);
     expect(out).toContain('<span class="sr-only">Average WPM: 42</span>');
   });
 
-  it("the bezel prints a 4px offset and 10px padding (reference Profil.dc.html)", () => {
+  it("the plate prints a 2px ink rule and a 4px ink offset (7.1 plate recipe)", () => {
     const css = readFileSync(
       path.join(process.cwd(), "src/components/ui/device-tube.module.css"),
       "utf8",
     );
-    expect(css).toMatch(/box-shadow: 4px 4px 0 var\(--color-room\)/);
-    expect(css).toMatch(/padding: 10px;/);
-    expect(css).toMatch(/font-size: 34px;/);
+    expect(css).toMatch(/border: 2px solid var\(--color-fg\)/);
+    expect(css).toMatch(/box-shadow: 4px 4px 0 var\(--color-fg\)/);
   });
 });
 

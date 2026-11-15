@@ -28,8 +28,8 @@ describe("LoadingCard (#563 C2)", () => {
     expect(html).toContain("La première machine à écrire date de 1868.");
   });
 
-  it("the catalogs ship an empty tip list until #383", () => {
-    expect(en.race.didYouKnow).toEqual([]);
-    expect(fr.race.didYouKnow).toEqual([]);
+  it("the catalogs ship a tip list, the same length in both languages (#951)", () => {
+    expect(en.race.didYouKnow.length).toBeGreaterThan(0);
+    expect(fr.race.didYouKnow).toHaveLength(en.race.didYouKnow.length);
   });
 });

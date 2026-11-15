@@ -35,7 +35,7 @@ const render = (
   props: Partial<Parameters<typeof WaitingRoom>[0]> = {},
 ) =>
   renderToStaticMarkup(
-    <WaitingRoom labels={en.race.waiting} view={waitingRoomView(input(n), order)} {...props} />,
+    <WaitingRoom labels={{ ...en.race.waiting, cards: en.race.sabotageTray.cards }} view={waitingRoomView(input(n), order)} {...props} />,
   );
 
 describe("WaitingRoom (#937)", () => {
@@ -89,7 +89,7 @@ describe("WaitingRoom (#937)", () => {
   it("C6 the French page", () => {
     const html = renderToStaticMarkup(
       <WaitingRoom
-        labels={fr.race.waiting}
+        labels={{ ...fr.race.waiting, cards: fr.race.sabotageTray.cards }}
         view={waitingRoomView(input(2), [1])}
         tip="Tape juste."
       />,
@@ -118,9 +118,33 @@ describe("WaitingRoom (#937)", () => {
 
   it("no desk: no DESK row; no tip: no Major line", () => {
     const html = renderToStaticMarkup(
-      <WaitingRoom labels={en.race.waiting} view={waitingRoomView(input(2, { you: null }), [])} />,
+      <WaitingRoom labels={{ ...en.race.waiting, cards: en.race.sabotageTray.cards }} view={waitingRoomView(input(2, { you: null }), [])} />,
     );
     expect(html).not.toContain("data-desk");
     expect(html).not.toContain("data-major");
+  });
+});
+
+describe("WaitingRoom briefing (#951)", () => {
+  it("lists the rules and the three sabotage cards with their effects and unlocks", () => {
+    const html = renderToStaticMarkup(
+      <WaitingRoom
+        labels={{ ...en.race.waiting, cards: en.race.sabotageTray.cards }}
+        view={waitingRoomView(input(2), [1])}
+      />,
+    );
+    expect(html).toContain("data-briefing");
+    expect(html).toContain(">THE RULES<");
+    for (const rule of en.race.waiting.briefing.rules) expect(html).toContain(rule);
+    for (const id of ["extra-paperwork", "exemption", "smoke-break"] as const) {
+      expect(html).toContain(`data-card="${id}"`);
+      expect(html).toContain(en.race.sabotageTray.cards[id].name);
+      expect(html).toContain(en.race.waiting.briefing.unlocks[id]);
+    }
+  });
+
+  it("ships tips in both languages", () => {
+    expect(en.race.didYouKnow.length).toBeGreaterThanOrEqual(8);
+    expect(fr.race.didYouKnow.length).toBe(en.race.didYouKnow.length);
   });
 });

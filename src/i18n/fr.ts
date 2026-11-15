@@ -548,9 +548,41 @@ export const fr = {
       arrivals: "ARRIVÉES",
       desk: "bureau {n}",
       majorSays: "LE MAJOR DIT :",
+      briefing: {
+        form: "BREFFAGE",
+        tag: "FORMULAIRE 7-B",
+        rulesTitle: "LES RÈGLES",
+        rules: [
+          "Tout le monde tape le même texte. La copie propre la plus rapide gagne.",
+          "La vitesse ne compte que les caractères justes : 5 caractères = 1 mot, par minute.",
+          "La précision, c'est tes frappes justes sur toutes tes frappes.",
+          "Les fautes : selon la salle, une mauvaise touche est barrée, ou elle bloque la machine jusqu'à la bonne touche.",
+          "La course finit quand tout le monde a fini, ou quand le chrono tombe à zéro.",
+          "Aucune touche pendant 60 secondes et tu es renvoyé : endormi à ton bureau.",
+        ],
+        sabotageTitle: "SABOTAGES",
+        sabotageIntro:
+          "Plus tu es loin derrière, plus tu reçois de cartes. Le premier n'en reçoit jamais. Appuie sur Entrée pour jouer.",
+        unlocks: {
+          "extra-paperwork": "moitié du bas",
+          exemption: "tiers du bas",
+          "smoke-break": "quart du bas",
+        },
+      },
     },
     /** "Did you know?" lines under the loading stamp; filled by #383 (an empty list hides the row). */
-    didYouKnow: [],
+    didYouKnow: [
+      "La précision bat la vitesse : chaque faute te coûte le temps de la remarquer.",
+      "Garde les yeux sur le texte, pas sur tes doigts.",
+      "Pose tes doigts sur la rangée de repos : A S D F et J K L M.",
+      "Une Pause cigarette brouille le texte : continue de mémoire, ça part en quelques secondes.",
+      "Garde l'Exemption pour un long mot à venir : elle retire des mots de ton propre texte.",
+      "La Paperasse supplémentaire frappe toujours le premier. Sers-t'en quand il prend de l'avance.",
+      "Tape à un rythme régulier. Les rafales suivies d'arrêts sont plus lentes qu'elles en ont l'air.",
+      "Sur un clavier français, repère É, È, À et Ç avant la course.",
+      "Tes meilleures vitesses et ta moyenne sont classées dans ton dossier après chaque course.",
+      "Soixante secondes sans toucher une touche et le Major te renvoie chez toi.",
+    ],
     notice: {
       "waiting-for-host": "EN ATTENTE DE L'HÔTE",
       reconnecting: "LIGNE COUPÉE · RECONNEXION",

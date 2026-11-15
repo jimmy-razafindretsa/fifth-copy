@@ -74,6 +74,18 @@ export function SeatScene({ labels, notice, tips, waiting }: SeatSceneProps) {
     setMode(hasWebGL2() ? "loading" : "fallback");
   }, [tips]);
 
+  // #951: a new random tip every 7 s while the room loads (a text swap, no motion)
+  useEffect(() => {
+    if (!loadingRoom || tips.length < 2) return;
+    const id = window.setInterval(() => {
+      setTip((now) => {
+        const others = tips.filter((t) => t !== now);
+        return others[Math.floor(Math.random() * others.length)] ?? now;
+      });
+    }, 7_000);
+    return () => window.clearInterval(id);
+  }, [loadingRoom, tips]);
+
   // #926 C4: a typist's scene still loading when its room counts down or runs drops to paper for
   // that race (the frame unmounts; a later race may load it again)
   const shown: Mode = mode === "loading" && gate === "paper" ? "fallback" : mode;

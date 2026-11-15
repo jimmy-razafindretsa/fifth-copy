@@ -11,8 +11,16 @@ const request = (path: string, cookie?: string) =>
 const passes = (res: Response) => res.headers.get("x-middleware-next") === "1";
 
 describe("proxy", () => {
-  it("matches only /settings, /profile and /locker (#943)", () => {
-    expect(config.matcher).toEqual(["/settings/:path*", "/profile/:path*", "/locker/:path*"]);
+  it("runs on every route but the static files, /api/internal and /api/health (#951)", () => {
+    expect(config.matcher).toEqual([
+      "/((?!_next/static|_next/image|api/internal|api/health|favicon.ico).*)",
+    ]);
+  });
+
+  it("any other path passes without a cookie (#951: the proxy now sees every route)", () => {
+    expect(passes(proxy(request("/")))).toBe(true);
+    expect(passes(proxy(request("/lobby/KGB-4821")))).toBe(true);
+    expect(passes(proxy(request("/profiles")))).toBe(true);
   });
 
   for (const path of ["/settings", "/profile", "/locker"]) {

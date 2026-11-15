@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { env } from "@/env";
+import { apexRedirect, requestHost } from "@/lib/canonical-host";
 
 /** Auth.js's session cookie names (http, https) and the first chunk of a split cookie. */
 const SESSION_COOKIES = [
@@ -11,13 +13,27 @@ const SESSION_COOKIES = [
 /** The guest identity cookie (ADR 0009, `GUEST_COOKIE` in src/server/auth/guest-cookie.ts). */
 const GUEST_COOKIE = "fc_guest";
 
+/** The paths behind a session or a guest cookie (the optimistic redirect below). */
+const GUARDED = /^\/(settings|profile|locker)(\/|$)/;
+
 /**
- * Optimistic redirects only (ADR 0009, Next 16 proxy): a request for `/settings`, `/profile` or `/locker`
+ * Redirects only (Next 16 proxy). First the bare domain (#951): a request whose host is the canonical
+ * host (`NEXT_PUBLIC_APP_URL`) minus its `www.` gets a 308 to the same path and query on the canonical
+ * origin (the race server's CORS origin and the OAuth callbacks are www only). Then the optimistic
+ * redirects (ADR 0009): a request for `/settings`, `/profile` or `/locker`
  * without a session cookie goes to `/sign-in?callbackUrl=<path>`; all three also let a guest through (#66:
  * a guest keeps settings too; #932: a guest has a Personnel file; #943: and a locker). Nothing is decoded or trusted here: a present cookie
  * lets the request through, and the page and its actions still authorize (`requireViewer`, `getViewer`).
  */
 export function proxy(request: NextRequest) {
+  const host = requestHost(request.headers.get("x-forwarded-host"), request.headers.get("host"));
+  const canonical = apexRedirect(
+    host,
+    env.NEXT_PUBLIC_APP_URL,
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
+  if (canonical) return NextResponse.redirect(canonical, 308);
+  if (!GUARDED.test(request.nextUrl.pathname)) return NextResponse.next();
   if (SESSION_COOKIES.some((name) => request.cookies.has(name))) return NextResponse.next();
   if (request.cookies.has(GUEST_COOKIE)) return NextResponse.next();
   const url = request.nextUrl.clone();
@@ -26,4 +42,10 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-export const config = { matcher: ["/settings/:path*", "/profile/:path*", "/locker/:path*"] };
+/**
+ * Every route but the static files and the server-to-server routes (`/api/internal/*` is the race
+ * server's, `/api/health` the deploy check's: both reach the app by its own URL, never the bare domain).
+ */
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|api/internal|api/health|favicon.ico).*)"],
+};

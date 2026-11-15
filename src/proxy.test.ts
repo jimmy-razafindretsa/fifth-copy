@@ -1,5 +1,16 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// the proxy reads only NEXT_PUBLIC_APP_URL; the unit step runs without the app's secrets (CI)
+const app = vi.hoisted(() => ({ url: "http://localhost:3000" }));
+vi.mock("@/env", () => ({
+  env: {
+    get NEXT_PUBLIC_APP_URL() {
+      return app.url;
+    },
+  },
+}));
+
 import { config, proxy } from "./proxy";
 
 // #932 C2 (and #66): optimistic redirects only. A session or a guest cookie passes on /settings and
@@ -42,4 +53,22 @@ describe("proxy", () => {
       expect(to.searchParams.get("callbackUrl")).toBe(path);
     });
   }
+
+  it("#951 the bare domain gets a 308 to the canonical www origin, path and query kept", () => {
+    app.url = "https://www.fifthcopy.com";
+    try {
+      const apex = new NextRequest(new URL("/lobby/KGB-4821?x=1", "http://localhost:8080"), {
+        headers: { "x-forwarded-host": "fifthcopy.com" },
+      });
+      const res = proxy(apex);
+      expect(res.status).toBe(308);
+      expect(res.headers.get("location")).toBe("https://www.fifthcopy.com/lobby/KGB-4821?x=1");
+      const www = new NextRequest(new URL("/", "http://localhost:8080"), {
+        headers: { "x-forwarded-host": "www.fifthcopy.com" },
+      });
+      expect(passes(proxy(www))).toBe(true);
+    } finally {
+      app.url = "http://localhost:3000";
+    }
+  });
 });

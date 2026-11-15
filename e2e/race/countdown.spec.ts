@@ -249,9 +249,10 @@ test.describe("#214 countdown and GO stamp", () => {
     await expect(note).toBeVisible();
     await expect(button).toHaveAttribute("aria-describedby", (await note.getAttribute("id"))!);
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    // under the roll, the bible 7.1 stamp button
+    // the bible 7.1 stamp button: under the roll on phones; under the room docket in the dockets column (#951)
     const rollBox = (await roll(page).boundingBox())!;
-    expect((await button.boundingBox())!.y).toBeGreaterThan(rollBox.y + rollBox.height);
+    if (test.info().project.name === "mobile")
+      expect((await button.boundingBox())!.y).toBeGreaterThan(rollBox.y + rollBox.height);
     const looks = await button.evaluate((el) => {
       const s = getComputedStyle(el);
       return { font: s.fontFamily, border: s.borderTopWidth, shadow: s.boxShadow };

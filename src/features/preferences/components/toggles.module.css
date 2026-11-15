@@ -58,3 +58,21 @@
 .night[aria-pressed="true"] .dot {
   background: var(--color-reward);
 }
+
+/* phones (bible 14.1 phone rule, #696): the header's two rows must hold the toggles; no min width there */
+@media (max-width: 480px) {
+  .segment {
+    min-width: 0;
+  }
+}
+
+/* bible 18: every touch target >= 44px (the EN/FR segments inside the 2px rule too) */
+@media (max-width: 768px) {
+  .segmented {
+    height: auto;
+  }
+
+  .segment {
+    min-height: 44px;
+  }
+}

@@ -563,7 +563,7 @@ export const fr = {
         ],
         sabotageTitle: "SABOTAGES",
         sabotageIntro:
-          "Plus tu es loin derrière, plus tu reçois de cartes. Le premier n'en reçoit jamais. Appuie sur Entrée pour jouer.",
+          "Plus tu es loin derrière, plus tu reçois de cartes. Le premier n'en reçoit jamais. Pour jouer, fais le raccourci que l'alerte affiche : Option ou Alt plus une lettre qui change à chaque carte.",
         unlocks: {
           "extra-paperwork": "moitié du bas",
           exemption: "tiers du bas",

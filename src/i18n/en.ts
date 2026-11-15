@@ -591,7 +591,7 @@ export const en = {
         ],
         sabotageTitle: "SABOTAGES",
         sabotageIntro:
-          "The further behind you are, the more cards you get. The leader never gets one. Press Enter to play.",
+          "The further behind you are, the more cards you get. The leader never gets one. To play, press the shortcut the alert shows: Option or Alt plus a letter that changes with every card.",
         unlocks: {
           "extra-paperwork": "bottom half",
           exemption: "bottom third",

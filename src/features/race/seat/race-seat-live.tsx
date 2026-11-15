@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { connectSeat, type MintRaceToken } from "../client/connect-seat";
 import {
@@ -36,6 +36,7 @@ import { RaceNotice } from "../components/race-notice";
 import { RaceAnnouncer } from "../components/race-announcer";
 import { StampRow } from "../components/stamp-row";
 import stampStyles from "../components/stamp-row.module.css";
+import { createCooldownSampler } from "../components/sabotage-tray-live";
 import { fill } from "@/i18n/format";
 import { useShortcutLabel } from "../view/play-shortcut";
 import { selectAccuracy, selectFinishWpm, selectPlace } from "../view/counters";
@@ -299,6 +300,10 @@ export function RaceSeatLive({
   const shortcut = useShortcutLabel(playKey);
   const trayOn = useRaceStore((s) => s.settings?.bonuses ?? false);
   const hasCard = useRaceStore((s) => s.bonus.card !== null);
+  // the alert waits out the cooldown: a card dealt while cooling cannot be played yet
+  const [cooldownSampler] = useState(() => createCooldownSampler(store));
+  const cooling =
+    useSyncExternalStore(cooldownSampler.subscribe, cooldownSampler.read, () => 0) > 0;
   // The action reference changes on every refresh of the route's payload (the mint's first visit sets the
   // guest cookie, and a cookie set in an action re-renders the page): read the latest one, never reconnect
   // for it.
@@ -347,7 +352,13 @@ export function RaceSeatLive({
       {/* bible 8: one stamp at a time; the countdown and GO first, then the overtake stamps (#232) */}
       {step !== null ? (
         <Countdown step={step} labels={labels.countdown} />
-      ) : stamp === null && shortcut && trayOn && hasCard && canType && labels.sabotageAlert ? (
+      ) : stamp === null &&
+        shortcut &&
+        trayOn &&
+        hasCard &&
+        !cooling &&
+        canType &&
+        labels.sabotageAlert ? (
         // #951: the card is dealt: the alert names its shortcut, so the typist looks up to read it
         <div data-sabotage-alert="" aria-hidden="true" className={stampStyles.row}>
           <p className={stampStyles.alert}>{fill(labels.sabotageAlert, { key: shortcut })}</p>

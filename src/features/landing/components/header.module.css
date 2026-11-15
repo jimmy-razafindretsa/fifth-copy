@@ -24,6 +24,7 @@
 .back {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 44px;
   padding: 0 14px;
   margin-right: auto;
@@ -172,12 +173,18 @@ a.docket:hover .docketName {
     gap: 8px;
   }
 
-  /* ← MENU joins row 2, first */
+  /* ← MENU joins row 2, first, as the arrow alone (a 44px square; its name stays "Back to the menu") */
   .back {
     order: 3;
+    flex: none;
+    justify-content: center;
+    width: 44px;
     margin-right: 0;
-    padding: 0 8px;
-    letter-spacing: 0.08em;
+    padding: 0;
+  }
+
+  .backText {
+    display: none;
   }
 
   .monogram {

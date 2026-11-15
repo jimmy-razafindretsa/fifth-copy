@@ -42,6 +42,7 @@ docker run --rm "${NET_ARGS[@]}" \
   -e CI=1 -e PW_VISUAL=1 -e NEXT_TELEMETRY_DISABLED=1 \
   -e DATABASE_URL="postgresql://app:app@$DB_HOST:5432/app?schema=public" \
   -e TEST_DATABASE_URL="postgresql://app:app@$DB_HOST:5432/app?schema=public" \
+  -e DB_GUARD_ALLOWED_HOSTS="$DB_HOST" \
   -e RACE_TOKEN_SECRET=ci-only-race-token-secret-0123456789abcdef0123456789abcdef \
   -e AUTH_SECRET=ci-only-auth-secret-0123456789abcdef0123456789abcdef \
   -e REDIS_URL=redis://$REDIS_HOST:6379/0 -e RACE_SERVER_PORT=$RACE_PORT -e PW_PORT=$WEB_PORT -e WEB_ORIGIN=http://localhost:$WEB_PORT \

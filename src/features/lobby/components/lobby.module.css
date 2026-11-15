@@ -154,10 +154,23 @@
 /* #951: the form's sections side by side, each a ruled card with its ink head; bots its own card */
 .sections {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  /* 1, 2 or 4 columns: every row full, so no ink shows through (#951) */
+  grid-template-columns: repeat(var(--section-cols, 1), minmax(0, 1fr));
   gap: 2px;
   background: var(--color-fg);
   align-items: stretch;
+}
+
+@media (min-width: 640px) {
+  .sections {
+    --section-cols: 2;
+  }
+}
+
+@media (min-width: 1200px) {
+  .sections {
+    --section-cols: 4;
+  }
 }
 
 .section {

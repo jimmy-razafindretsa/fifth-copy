@@ -33,7 +33,7 @@ export const fr = {
     honorific: "Camarade {name}",
     /** #932 : l'entrée Dossier du personnel du bandeau (visiteurs connus) et le préfixe lu du docket. */
     myFileName: "Mon dossier",
-    backToMenu: "← MENU",
+    backToMenu: "MENU",
     backToMenuLabel: "Retour au menu",
   },
   landing: {

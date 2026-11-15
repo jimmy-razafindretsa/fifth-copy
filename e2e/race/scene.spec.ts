@@ -125,8 +125,8 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
     await expect(card).toHaveAttribute("aria-busy", "true");
     await expect(card).toHaveAttribute("role", "status");
     await expect(card.locator("[data-stamp-tone]")).toHaveText("LOADING THE RING ROOM");
-    // `race.didYouKnow` is empty until #383: no tip row
-    await expect(card.locator("[data-did-you-know]")).toHaveCount(0);
+    // #951: `race.didYouKnow` ships tips: one tip row
+    await expect(card.locator("[data-did-you-know]")).toHaveCount(1);
     await expect(scene(page)).toHaveAttribute("data-scene", "loading");
     const cardBox = (await card.boundingBox())!;
     for (const part of ["[data-telex]", "[data-sheet]", "[data-machine]"]) {

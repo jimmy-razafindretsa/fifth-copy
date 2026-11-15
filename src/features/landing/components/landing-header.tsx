@@ -38,7 +38,8 @@ export async function LandingHeader({ current }: { current?: "profile" | "landin
       {/* #951: a viewer's `/` is the Home menu; every other page offers the way back to it */}
       {viewer && current !== "landing" ? (
         <a href={LINKS.home} className={styles.back} aria-label={t.header.backToMenuLabel}>
-          {t.header.backToMenu}
+          <span aria-hidden="true">←</span>
+          <span className={styles.backText}>{t.header.backToMenu}</span>
         </a>
       ) : null}
       <nav aria-label={t.header.navLabel} className={styles.nav}>

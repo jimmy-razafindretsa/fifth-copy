@@ -1,5 +1,16 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// the proxy reads only NEXT_PUBLIC_APP_URL; the unit step runs without the app's secrets (CI)
+const app = vi.hoisted(() => ({ url: "http://localhost:3000" }));
+vi.mock("@/env", () => ({
+  env: {
+    get NEXT_PUBLIC_APP_URL() {
+      return app.url;
+    },
+  },
+}));
+
 import { config, proxy } from "./proxy";
 
 // #932 C2 (and #66): optimistic redirects only. A session or a guest cookie passes on /settings and
@@ -11,8 +22,16 @@ const request = (path: string, cookie?: string) =>
 const passes = (res: Response) => res.headers.get("x-middleware-next") === "1";
 
 describe("proxy", () => {
-  it("matches only /settings, /profile and /locker (#943)", () => {
-    expect(config.matcher).toEqual(["/settings/:path*", "/profile/:path*", "/locker/:path*"]);
+  it("runs on every route but the static files, /api/internal and /api/health (#951)", () => {
+    expect(config.matcher).toEqual([
+      "/((?!_next/static|_next/image|api/internal|api/health|favicon.ico).*)",
+    ]);
+  });
+
+  it("any other path passes without a cookie (#951: the proxy now sees every route)", () => {
+    expect(passes(proxy(request("/")))).toBe(true);
+    expect(passes(proxy(request("/lobby/KGB-4821")))).toBe(true);
+    expect(passes(proxy(request("/profiles")))).toBe(true);
   });
 
   for (const path of ["/settings", "/profile", "/locker"]) {
@@ -34,4 +53,22 @@ describe("proxy", () => {
       expect(to.searchParams.get("callbackUrl")).toBe(path);
     });
   }
+
+  it("#951 the bare domain gets a 308 to the canonical www origin, path and query kept", () => {
+    app.url = "https://www.fifthcopy.com";
+    try {
+      const apex = new NextRequest(new URL("/lobby/KGB-4821?x=1", "http://localhost:8080"), {
+        headers: { "x-forwarded-host": "fifthcopy.com" },
+      });
+      const res = proxy(apex);
+      expect(res.status).toBe(308);
+      expect(res.headers.get("location")).toBe("https://www.fifthcopy.com/lobby/KGB-4821?x=1");
+      const www = new NextRequest(new URL("/", "http://localhost:8080"), {
+        headers: { "x-forwarded-host": "www.fifthcopy.com" },
+      });
+      expect(passes(proxy(www))).toBe(true);
+    } finally {
+      app.url = "http://localhost:3000";
+    }
+  });
 });

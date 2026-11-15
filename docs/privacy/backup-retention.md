@@ -1,13 +1,20 @@
 # Backup retention
 
-Placeholder written by #71; #81 owns and completes this file.
+Placeholder written by #71, mechanism and location set by #705 (ADR 0019, "Backups"); #81 completes it (how a
+deletion is confirmed purged, restore drill cadence once agreed).
 
-Only the values already decided are stated here, so the privacy file's index ([README](README.md)) links a real file.
-Card #81 completes it (encryption at rest, rotation details, location, restore drill cadence, how a deletion is
-confirmed purged).
-
-- **What is backed up:** the Postgres database (nightly `pg_dump`) and the avatar volume (ADR 0012, ADR 0014).
-- **Where:** off the server, in a bucket; the provider and its location are not decided yet (#445).
-- **Window:** 14 days, the period in [retention.md](retention.md). A deleted account is gone from every backup once
-  the window has passed after its deletion.
-- **Purge:** backups are purged on the same schedule as deleted user data (ADR 0012, #403).
+- **What is backed up:** the Postgres database (its whole Railway volume) and the avatar volume (`avatars`, ADR 0014).
+  Redis holds no durable data and is not backed up (ADR 0008).
+- **Mechanism:** Railway volume backups, one **Daily** schedule per volume. Railway keeps each daily backup 6 days,
+  then deletes it. Weekly and monthly schedules, point-in-time recovery and backup locks stay off: each would keep
+  copies past the window below. A manual backup is deleted the same day, and so is the restore drill's temporary Postgres service with its volume
+  (a full copy that never leaves Railway).
+- **Where:** inside Railway, attached to each volume, in the same project, environment (`production`) and region
+  (`sfo`, US West) as the live data, not in a separate bucket or provider. Railway encrypts them at rest (AES-256,
+  Railway-held keys). Hosting outside Québec is assessed by the PIA card, not here.
+- **Window:** 14 days, the period in [retention.md](retention.md); the 6-day rotation sits inside it. A deleted
+  account is gone from every backup once the window has passed after its deletion.
+- **Restore:** in place, on the same service; the volume it replaces stays unmounted until the operator deletes it,
+  within the window. Steps: [docs/ops/backup-restore.md](../ops/backup-restore.md). A restore brings back accounts
+  deleted after the backup; the operator purges them again before reopening (#81).
+- **Purge:** backups are not edited one by one; they age out with the rotation above (ADR 0019, #403).

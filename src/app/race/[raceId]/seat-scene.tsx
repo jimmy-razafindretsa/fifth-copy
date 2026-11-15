@@ -94,7 +94,7 @@ export function SeatScene({ labels, notice, tips, waiting, drop: dropLabels }: S
     setScene(search.get("scene"));
     setTip(tips.length ? tips[Math.floor(Math.random() * tips.length)]! : null);
     const webgl = hasWebGL2();
-    if (!webgl) setDrop({ reason: "no-webgl2" });
+    setDrop(webgl ? null : { reason: "no-webgl2" });
     setMode(webgl ? "loading" : "fallback");
   }, [tips]);
 

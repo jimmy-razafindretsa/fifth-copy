@@ -617,7 +617,8 @@ export const en = {
       "no-webgl2": "This browser has no WebGL2, so the 3D room cannot run here.",
       "benchmark-low":
         "Your computer drew {fps} images a second in the room test, too few even at the lowest quality.",
-      "benchmark-low-unknown": "Your computer was too slow in the room test, even at the lowest quality.",
+      "benchmark-low-unknown":
+        "Your computer was too slow in the room test, even at the lowest quality.",
       "context-lost":
         "The graphics card stopped drawing the room (WebGL context lost): memory or the driver gave up.",
       "frame-budget":

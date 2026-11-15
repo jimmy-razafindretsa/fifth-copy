@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+
+const noSubscribe = () => () => {};
 import { createPortal } from "react-dom";
 import { useRaceStore } from "../client/use-race-store";
 import { arrivalOrder, arrivedDesks, waitingRoomView } from "../view/waiting-room-view";
@@ -65,8 +67,12 @@ export function WaitingRoomLive({ labels, reconnecting, tip }: WaitingRoomLivePr
   }, [shown]);
 
   const percent = useSmoothPercent(view.percent, shown, view.current === null);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // false on the server and while hydrating, true after: the cover renders inline until then
+  const mounted = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
 
   if (!shown) return null;
   const screen = (
@@ -91,7 +97,8 @@ const TICK_MS = 150;
  */
 export function nextPercent(shownNow: number, target: number, done: boolean): number {
   if (done) return 100;
-  if (shownNow < target) return Math.min(target, shownNow + Math.max(1, (target - shownNow) * 0.25));
+  if (shownNow < target)
+    return Math.min(target, shownNow + Math.max(1, (target - shownNow) * 0.25));
   const ceiling = Math.min(97, target + 19);
   if (shownNow >= ceiling) return shownNow;
   return Math.min(ceiling, shownNow + Math.max(0.05, (ceiling - shownNow) * 0.03));
@@ -101,10 +108,7 @@ function useSmoothPercent(target: number, active: boolean, done: boolean): numbe
   const [shownNow, setShown] = useState(0);
   useEffect(() => {
     if (!active) return;
-    const id = window.setInterval(
-      () => setShown((now) => nextPercent(now, target, done)),
-      TICK_MS,
-    );
+    const id = window.setInterval(() => setShown((now) => nextPercent(now, target, done)), TICK_MS);
     return () => window.clearInterval(id);
   }, [active, target, done]);
   return Math.round(shownNow);

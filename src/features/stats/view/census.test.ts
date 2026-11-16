@@ -30,7 +30,7 @@ function spread(n: number, from = 20, to = 100): CensusTypist[] {
   });
 }
 
-const viewerOf = (t: CensusTypist, races = 10): CensusViewer => ({ ...t, races });
+const viewerOf = (t: CensusTypist, races = 10): NonNullable<CensusViewer> => ({ ...t, races });
 
 const KINDS = ["averageSpeed", "bestSpeed", "averageAccuracy", "bestAccuracy"] as const;
 

@@ -188,6 +188,79 @@
   gap: 10px;
 }
 
+/* ---- the grade ladder (#337): head row, five chips, the progress bar; nothing moves ---- */
+.ladderHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.ladderLine {
+  color: var(--color-fg);
+}
+
+.grades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* a grade ahead: outlined in ink on the newsprint */
+.grade {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.12em;
+  padding: 6px 11px;
+  border: 2px solid var(--color-fg);
+  color: var(--color-fg);
+}
+
+/* a grade passed: paper on the ink ground in both themes */
+.gradePassed {
+  border-color: var(--color-band);
+  background: var(--color-band);
+  color: var(--color-band-fg);
+}
+
+/* the grade held: paper on red */
+.gradeCurrent {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+/* the top grade while ahead: the reference's gold rule becomes a 4px double ink rule (gold is not
+   legal on newsprint), the padding trimmed so the chip keeps its size */
+.gradeTop {
+  border: 4px double var(--color-fg);
+  padding: 4px 9px;
+}
+
+.gradeBar {
+  position: relative;
+  height: 12px;
+  margin-top: 12px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+}
+
+.gradeFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-primary);
+}
+
 /* ---- the band: static, clipped, -1.4 degrees, bleeding 40px past both edges ---- */
 .bandBox {
   overflow: hidden;

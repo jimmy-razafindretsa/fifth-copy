@@ -39,6 +39,16 @@ export {
 export { MAX_SERIES_POINTS, wpmSeries, type WpmPoint, type WpmSeriesInput } from "./scoring/series";
 // key errors (#867): which characters a trace missed (the personal card's errors by key and its tip)
 export { keyErrors, type KeyErrorsInput, type KeyTally } from "./scoring/key-errors";
+// key stats (#960): per character and letter pair, presses, errors and typing time (the daily rollup, #314)
+export {
+  KEY_PAUSE_MS,
+  keyStats,
+  type CharStat,
+  type KeyCounts,
+  type KeyStats,
+  type KeyStatsInput,
+  type PairStat,
+} from "./scoring/key-stats";
 
 // trace: the bound on one desk's stored keystrokes (race server ingest, web persistence)
 export { TRACE_ALLOWANCE, TRACE_KEYS_PER_CHAR, traceCapOf } from "./trace/cap";

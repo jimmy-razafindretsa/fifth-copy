@@ -41,7 +41,9 @@ describe("race-server Railway deploy config (#704 C2)", () => {
     expect(config.deploy.healthcheckPath).toBe("/health");
   });
 
-  it("sets only deploy settings, so the dashboard keeps the build, start and watch paths", () => {
+  // #781: the region (us-east4-eqdc4a) is set in the dashboard, not here (`multiRegionConfig`): Config as Code
+  // is deprecated, covers only this service and stops being read on 2026-12-01 (docs/ops/region-move.md).
+  it("sets only deploy settings, so the dashboard keeps the build, start, watch paths and region", () => {
     expect(Object.keys(config).sort()).toEqual(["$schema", "deploy"]);
     expect(Object.keys(config.deploy).sort()).toEqual([
       "drainingSeconds",

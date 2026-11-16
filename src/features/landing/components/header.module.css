@@ -160,13 +160,13 @@ button.signIn {
 }
 
 /*
- * #969 C5: from 481px, beside its grade tag an account's name ellipses past 200px, so the longest name (20
+ * #969 C5: from 481px, beside its grade tag an account's name ellipses past 160px, so the longest name (20
  * characters) with the longest grade still fits the 1280 row in French; the link's name stays whole.
  */
 @media (min-width: 481px) {
   .docket:has(.grade) .docketName {
     min-width: 0;
-    max-width: 200px;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

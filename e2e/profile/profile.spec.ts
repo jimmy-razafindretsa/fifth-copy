@@ -433,11 +433,22 @@ test.describe("site header grade tag (#969)", () => {
         const middle = (b: { y: number; height: number }) => Math.round(b.y + b.height / 2);
         expect(middle(tag), `tag line at ${width}`).toBe(middle(docket));
         expect(tag.x + tag.width).toBeLessThanOrEqual(docket.x + docket.width);
-        // no row added: the header is as tall as without the tag (one row at 1280)
-        if (width === 1280) expect(fit.height, "one row at 1280").toBeLessThan(80);
-        await page.addStyleTag({ content: "[data-docket-grade] { display: none !important; }" });
-        const without = await header.evaluate((h) => h.getBoundingClientRect().height);
-        expect(fit.height, `header height at ${width} ${locale}`).toBe(without);
+        // no row added: the header is no taller than today's (no tag, the name uncut); one row at 1280
+        if (width === 1280) {
+          expect(fit.height, "one row at 1280").toBeLessThan(80);
+          // with room to spare: CI's fonts set the row about 18px wider than a dev machine's
+          const spare = await page.addStyleTag({ content: "header nav { padding-right: 24px; }" });
+          const tight = await header.evaluate((h) => h.getBoundingClientRect().height);
+          await spare.evaluate((s) => s.remove());
+          expect(tight, `one row at 1280 ${locale} with 24px to spare`).toBeLessThan(80);
+        }
+        const style = await page.addStyleTag({
+          content:
+            '[data-docket-grade] { display: none !important; } a[href="/profile"] > span { max-width: none !important; }',
+        });
+        const today = await header.evaluate((h) => h.getBoundingClientRect().height);
+        await style.evaluate((s) => s.remove());
+        expect(fit.height, `header height at ${width} ${locale}`).toBeLessThanOrEqual(today);
       }
   });
 });

@@ -1,10 +1,10 @@
+import type { Messages } from "@/i18n";
 import { fill } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
 import { type ArchiveEntry, archiveDate, awardOf } from "../view/archive";
 import { NBSP, oneDecimal, percent } from "../view/profile-figures";
 import type { ProfileStreak } from "../view/streaks";
-import type { ProfileLabels } from "./profile-screen";
 import styles from "./profile.module.css";
 
 type Heading = "h1" | "h2" | "h3" | "h4";
@@ -23,7 +23,7 @@ export function StreaksDocket({
   heading: Heading,
 }: {
   streaks: ProfileStreak[];
-  labels: ProfileLabels["streaks"];
+  labels: Messages["profile"]["streaks"];
   locale: Locale;
   id: string;
   heading: Heading;
@@ -90,7 +90,7 @@ export function ArchiveSection({
   heading: Heading,
 }: {
   archive: ArchiveEntry[];
-  labels: ProfileLabels["archive"];
+  labels: Messages["profile"]["archive"];
   locale: Locale;
   id: string;
   heading: Heading;
@@ -126,7 +126,7 @@ export function ArchiveSection({
             <col className={styles.colNarrow} />
             <col className={styles.colNarrow} />
             <col className={styles.colAccuracy} />
-            <col className={styles.colMode} />
+            <col className={styles.colAward} />
           </colgroup>
           <thead>
             <tr>

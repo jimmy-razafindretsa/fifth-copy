@@ -433,6 +433,7 @@
 
 /* a 7.4 docket: paper, 2px ink rule */
 .docket {
+  container: profile-docket / inline-size;
   border: 2px solid var(--color-fg);
   background: var(--color-bg);
 }
@@ -511,6 +512,17 @@
   letter-spacing: 0.1em;
 }
 
+/* a phone-wide docket: the columns size to their content so THRESHOLD and `≥ 100 %` keep one line */
+@container profile-docket (max-width: 479px) {
+  .streaks {
+    table-layout: auto;
+  }
+}
+
+.streaks tbody th {
+  white-space: nowrap;
+}
+
 .streakBest {
   font-weight: 600;
 }
@@ -542,18 +554,22 @@
   min-width: 720px;
 }
 
-/* the reference's tracks 1.3fr .8fr 1fr .8fr .8fr .9fr 1fr */
+/* the reference's tracks 1.3fr .8fr 1fr .8fr .8fr .9fr 1fr between 22px gutters and 10px gaps, as
+   column widths that carry their share of the gutters and gaps (at 720px) */
 .colDate {
-  width: 19.7%;
+  width: 20.6%;
 }
 .colNarrow {
-  width: 12.1%;
+  width: 11.8%;
 }
 .colMode {
-  width: 15.2%;
+  width: 14.3%;
 }
 .colAccuracy {
-  width: 13.6%;
+  width: 13.1%;
+}
+.colAward {
+  width: 16.7%;
 }
 
 .archive th,

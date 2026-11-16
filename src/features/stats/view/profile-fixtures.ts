@@ -32,7 +32,7 @@ const result = (
 
 /** The archive's room, mode and lobby size for the fixtures' races (#936): synthetic room codes. */
 const PUBLIC_ROOM = { room: "KGB-4821", mode: "RACE", lobbySize: 30 } as const;
-const PRIVATE_ROOM = { room: "TASS-0118", mode: "PRIVATE", lobbySize: 24 } as const;
+const PRIVATE_ROOM = { room: "TAS-0118", mode: "PRIVATE", lobbySize: 24 } as const;
 const BOT_ROOM = { room: null, mode: "BOTS", lobbySize: 4 } as const;
 const ROOMS = [PUBLIC_ROOM, PRIVATE_ROOM, BOT_ROOM] as const;
 

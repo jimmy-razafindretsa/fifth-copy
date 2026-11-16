@@ -215,6 +215,23 @@ describe("privacy page: facts match docs/privacy (C3)", () => {
     expect(item(privacyEn, /^Session cookie/)).not.toMatch(/soon/i);
   });
 
+  // Card #966 C6: speed and accuracy also feed the typist census (ADR 0023), anonymous totals in which
+  // nobody can be singled out; one sentence per language, and the privacy docs name the same use.
+  it("says, in one sentence, that speed and accuracy feed anonymous totals of all typists (ADR 0023)", () => {
+    const one = (content: readonly PrivacySection[], pattern: RegExp) =>
+      content.find((s) => s.id === "why")!.list!.filter((i) => pattern.test(i));
+    const fr = one(privacyFr, /totaux anonymes/);
+    const en = one(privacyEn, /anonymous totals/);
+    expect(fr).toHaveLength(1);
+    expect(en).toHaveLength(1);
+    expect(sentences(fr[0]!)).toHaveLength(1);
+    expect(sentences(en[0]!)).toHaveLength(1);
+    expect(fr[0]).toMatch(/vitesse.*précision.*tous les dactylos.*personne/);
+    expect(en[0]).toMatch(/speed.*accuracy.*all typists.*nobody/);
+    expect(doc("docs/privacy/inventory.md")).toMatch(/typist census.*ADR 0023/);
+    expect(doc("docs/privacy/pia.md")).toMatch(/typist census.*ADR 0023/);
+  });
+
   it("names the four cookies", () => {
     for (const content of [privacyFr, privacyEn]) {
       const text = section(content, "cookies");

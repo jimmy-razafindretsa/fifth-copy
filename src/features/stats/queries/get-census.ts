@@ -71,7 +71,9 @@ export function createCensusReader({
     const typists = await population();
     if (typists.length < CENSUS_MIN_POPULATION) return null;
     if (!viewer) return censusOf(typists, null);
-    const own = await (await client()).raceResult.aggregate({
+    const own = await (
+      await client()
+    ).raceResult.aggregate({
       where: countedWhere(viewer.id),
       _count: { _all: true },
       _avg: { cleanWpm: true, accuracy: true },

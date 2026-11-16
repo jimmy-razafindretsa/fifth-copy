@@ -22,7 +22,9 @@ describe("censusFixtures (C7)", () => {
     expect(censusFixtures.middle).toEqual(
       censusOf(CENSUS_FIXTURE_POPULATION, CENSUS_FIXTURE_VIEWERS.middle),
     );
-    expect(censusFixtures.top).toEqual(censusOf(CENSUS_FIXTURE_POPULATION, CENSUS_FIXTURE_VIEWERS.top));
+    expect(censusFixtures.top).toEqual(
+      censusOf(CENSUS_FIXTURE_POPULATION, CENSUS_FIXTURE_VIEWERS.top),
+    );
     expect(censusFixtures.newcomer).toEqual(
       censusOf(CENSUS_FIXTURE_POPULATION, CENSUS_FIXTURE_VIEWERS.newcomer),
     );

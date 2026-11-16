@@ -51,7 +51,11 @@ describe("getCensus (stand-in client)", () => {
   });
 
   it("nothing but the reader and its memo length leaves the module (no population read export)", () => {
-    expect(Object.keys(module).sort()).toEqual(["CENSUS_MEMO_MS", "createCensusReader", "getCensus"]);
+    expect(Object.keys(module).sort()).toEqual([
+      "CENSUS_MEMO_MS",
+      "createCensusReader",
+      "getCensus",
+    ]);
   });
 
   it("each typist's figures feed censusOf: same shapes as the pure function on the same four numbers", async () => {

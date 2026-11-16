@@ -65,6 +65,14 @@ export {
   type AccountClasses,
   type AccountLabels,
 } from "./components/account-control";
+// The header docket's grade tag (#969): the route hands in the stats read (`GradeSource`).
+export {
+  GRADE_GRACE_MS,
+  gradeGrace,
+  gradeRead,
+  type GradeSource,
+  type GradeStep,
+} from "./components/docket-grade";
 export { safeCallbackUrl } from "./auth/callback-url";
 export { AuthStates } from "./components/auth-states";
 // The teacher reset, redeemed (#789): the action and the `/reset` screen and its `/design` states.

@@ -1,5 +1,5 @@
 import { RecoverScreen } from "@/features/identity";
-import { LandingHeader } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 
 /**
  * `/recover` (#46, ADR 0009): the site header and the recover screen, where a user who lost their
@@ -9,7 +9,7 @@ import { LandingHeader } from "@/features/landing";
 export default function RecoverPage() {
   return (
     <>
-      <LandingHeader />
+      <SiteHeader />
       <main className="flex flex-1 flex-col">
         <RecoverScreen />
       </main>

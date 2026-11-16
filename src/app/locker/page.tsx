@@ -10,7 +10,8 @@ import {
   markLockerSeen,
   saveClerkOutfit,
 } from "@/features/identity";
-import { clerkEmbedSrc, LandingHeader } from "@/features/landing";
+import { clerkEmbedSrc } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 import { getT } from "@/i18n";
 
 /**
@@ -27,7 +28,7 @@ export default async function LockerPage() {
     : [null, null, []];
   return (
     <>
-      <LandingHeader />
+      <SiteHeader />
       <LockerScreen
         form={
           viewer && avatar

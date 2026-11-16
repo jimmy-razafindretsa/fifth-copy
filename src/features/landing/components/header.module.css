@@ -122,6 +122,23 @@
   padding: 1px 6px;
 }
 
+/*
+ * An account's grade tag after the name (#969, reference `Profil.dc.html` line 43): the Home docket's ink
+ * rank tag (14.5) at the reference's size, ink in both themes like it (`band`, paper text). It never
+ * shrinks: the name ellipses first.
+ */
+.grade {
+  flex: none;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  background-color: var(--color-band);
+  color: var(--color-band-fg);
+  padding: 3px 7px;
+}
+
 .signIn {
   display: inline-flex;
   align-items: center;
@@ -140,6 +157,20 @@ button.signIn {
   line-height: inherit;
   letter-spacing: inherit;
   cursor: pointer;
+}
+
+/*
+ * #969 C5: from 481px, beside its grade tag an account's name ellipses past 200px, so the longest name (20
+ * characters) with the longest grade still fits the 1280 row in French; the link's name stays whole.
+ */
+@media (min-width: 481px) {
+  .docket:has(.grade) .docketName {
+    min-width: 0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 a.docket:hover .docketName {
@@ -257,5 +288,10 @@ a.docket:hover .docketName {
 
   .tag {
     flex: none;
+  }
+
+  /* #969 C5: no room for the grade beside a name already cut at 96px; the link's name still says it */
+  .grade {
+    display: none;
   }
 }

@@ -9,7 +9,7 @@ import {
   updatePreferences,
   uploadAvatar,
 } from "@/features/identity";
-import { LandingHeader } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 import { machineSkinIds, TypingMachine } from "@/features/race";
 
 /** The MACHINE section's specimens (#638): every registered skin, static, on the US QWERTY letter rows. */
@@ -36,7 +36,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   const open = env.NODE_ENV !== "production" && query.dialog === "avatar";
   return (
     <>
-      <LandingHeader />
+      <SiteHeader />
       <main className="flex flex-1 flex-col">
         <SettingsScreen
           viewer={viewer}

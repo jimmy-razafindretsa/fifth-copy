@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getViewer } from "@/features/identity";
 import { DawnReportScreen, getDawnReport, getPersonalReplay } from "@/features/results";
+import { headerGrade } from "@/app/_components/site-header";
 
 /**
  * `/results/[raceId]` (#300, ARCHITECTURE 8.1): the Dawn report of a race. Thin: the viewer (ADR 0009)
@@ -17,6 +18,11 @@ export default async function ResultsPage({ params }: PageProps<"/results/[raceI
   ]);
   if (!report) notFound();
   return (
-    <DawnReportScreen report={report} viewerIsGuest={viewer?.isGuest ?? false} replay={replay} />
+    <DawnReportScreen
+      report={report}
+      viewerIsGuest={viewer?.isGuest ?? false}
+      replay={replay}
+      grade={headerGrade}
+    />
   );
 }

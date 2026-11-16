@@ -2,6 +2,7 @@ import { LandingPage, OpenRooms } from "@/features/landing";
 import { LobbyEntries, QuickRaceButton } from "@/features/lobby";
 import { listOpenLobbies } from "@/features/lobby/server";
 import { getT } from "@/i18n";
+import { headerGrade } from "./site-header";
 
 /**
  * The landing as composed for `/` (a first-time visitor) and `/welcome` (anyone, #943 C5: a viewer's
@@ -17,6 +18,8 @@ export async function LandingView() {
       // the public rooms joinable now (#807); streams in its own Suspense boundary
       rooms={<OpenRooms load={() => listOpenLobbies()} labels={t.landing.rooms} errors={errors} />}
       finalAction={<QuickRaceButton variant="inverted" labels={t.landing.quick} errors={errors} />}
+      // the header's grade tag (#969)
+      grade={headerGrade}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { getClerkOutfit, getViewer, saveClerkOutfit } from "@/features/identity";
+import { getClerkOutfit, getViewer, type GradeSource, saveClerkOutfit } from "@/features/identity";
 import { fill, getT } from "@/i18n";
 import { LINKS } from "../links";
 import { ClerkSection } from "./clerk-section";
@@ -22,20 +22,22 @@ type Props = {
   rooms: React.ReactNode;
   /** The inverted QUICK RACE on the final-call band. */
   finalAction: React.ReactNode;
+  /** The header's grade read (#969), handed in by the route. */
+  grade?: GradeSource | undefined;
 };
 
 /**
  * The landing in the bible's order (14.1): header, hero, ticker, story, clerk, history, how, final, medal,
  * footer. It always opens on paper: `data-default-theme` makes tokens.css ignore a dark OS (bible 3.2, #651).
  */
-export async function LandingPage({ primary, entries, rooms, finalAction }: Props) {
+export async function LandingPage({ primary, entries, rooms, finalAction, grade }: Props) {
   const [t, viewer] = await Promise.all([getT(), getViewer()]);
   const name = viewer ? fill(t.header.honorific, { name: viewer.name }) : null;
   // The saved clerk outfit (#687): read and saved only for a viewer; an anonymous visitor gets neither.
   const savedOutfit = viewer ? await getClerkOutfit(viewer.id) : null;
   return (
     <div className={styles.page} data-default-theme="light">
-      <LandingHeader current="landing" />
+      <LandingHeader current="landing" grade={grade} />
       <main className="flex flex-1 flex-col">
         <LandingHero primary={primary} entries={entries} rooms={rooms} />
         <TickerBand />

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { GradeSource } from "@/features/identity";
 import { getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
@@ -69,17 +70,20 @@ export async function DawnReportScreen({
   report,
   viewerIsGuest = false,
   replay = null,
+  grade,
 }: {
   report: DawnReport;
   viewerIsGuest?: boolean;
   replay?: PersonalReplay | null;
+  /** The header's grade read (#969), handed in by the route (results never imports stats). */
+  grade?: GradeSource | undefined;
 }) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
   const [{ LandingHeader }, t] = await Promise.all([import("@/features/landing"), getT()]);
   const r = t.results;
   return (
     <>
-      <LandingHeader />
+      <LandingHeader grade={grade} />
       <main className="flex flex-1 flex-col">
         <DawnReportLayout
           kicker={r.kicker}

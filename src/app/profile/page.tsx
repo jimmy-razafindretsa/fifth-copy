@@ -7,7 +7,8 @@ import {
   getServiceStart,
   getViewer,
 } from "@/features/identity";
-import { clerkEmbedSrc, LandingHeader, LINKS } from "@/features/landing";
+import { clerkEmbedSrc, LINKS } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 import { getProfile, ProfileScreen, profileLabels } from "@/features/stats";
 import { getLocale, getT } from "@/i18n";
 
@@ -31,7 +32,7 @@ export default async function ProfilePage() {
   );
   return (
     <>
-      <LandingHeader current="profile" />
+      <SiteHeader current="profile" />
       <main className="flex flex-1 flex-col">
         <ProfileScreen
           profile={profile}

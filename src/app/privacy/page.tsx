@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LandingHeader } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 import { PrivacyScreen } from "@/features/privacy";
 import { getT } from "@/i18n";
 
@@ -10,5 +10,5 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** `/privacy` (card #76): the privacy page in the viewer's language (ADR 0010), French first in the files. */
 export default function PrivacyPage() {
-  return <PrivacyScreen header={<LandingHeader />} />;
+  return <PrivacyScreen header={<SiteHeader />} />;
 }

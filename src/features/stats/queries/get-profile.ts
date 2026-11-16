@@ -13,6 +13,8 @@ import {
   type ResultRow,
   SERIES_LIMIT,
 } from "../view/profile";
+import { ARCHIVE_LIMIT, modeOf } from "../view/archive";
+import { STREAK_SCAN_LIMIT } from "../view/streaks";
 import { countedWhere } from "./counted-where";
 
 /** Who is looking: only the id matters (ADR 0009); guests have a file too. */
@@ -41,6 +43,49 @@ const toRow = (r: Selected): ResultRow => ({
   place: r.place,
 });
 
+/** The streak scan (#936): only what a run needs, accuracy, clean WPM and date. */
+const STREAK_SELECT = {
+  createdAt: true,
+  cleanWpm: true,
+  accuracy: true,
+} satisfies Prisma.RaceResultSelect;
+
+/**
+ * The archive rows (#936): the result's own figures, the race's lobby size and room, and the number of
+ * other humans in it (a count: no other user's row or figure is read, ADR 0009).
+ */
+const archiveSelect = (viewerId: string) =>
+  ({
+    createdAt: true,
+    cleanWpm: true,
+    accuracy: true,
+    place: true,
+    race: {
+      select: {
+        textLanguage: true,
+        lobbySize: true,
+        lobby: { select: { code: true, type: true } },
+        _count: {
+          select: { results: { where: { isBot: false, NOT: { userId: viewerId } } } },
+        },
+      },
+    },
+  }) satisfies Prisma.RaceResultSelect;
+
+type ArchiveSelected = Prisma.RaceResultGetPayload<{ select: ReturnType<typeof archiveSelect> }>;
+
+const toArchiveRow = (r: ArchiveSelected): ResultRow => ({
+  createdAt: r.createdAt,
+  cleanWpm: r.cleanWpm,
+  accuracy: r.accuracy,
+  language: r.race.textLanguage,
+  durationMs: 0,
+  place: r.place,
+  room: r.race.lobby?.code ?? null,
+  mode: modeOf(r.race._count.results, r.race.lobby?.type ?? null),
+  lobbySize: r.race.lobbySize,
+});
+
 /** The podium places (1 to 3) the service record counts (#932: wins = place 1, podiums = 1 to 3). */
 const PODIUM_PLACES = [1, 2, 3] as const;
 
@@ -49,7 +94,7 @@ const PODIUM_PLACES = [1, 2, 3] as const;
  * read from `RaceResult` (never `RaceKeystrokes`). A constant number of queries whatever the file's size:
  * the latest `SERIES_LIMIT` results, the earliest `GAIN_SAMPLE`, one aggregate per language for the
  * whole-file totals and bests, and for the service record (#932) one whole-file aggregate and one count
- * per podium place. A `null` viewer gets the empty profile without a query.
+ * per podium place, and for #936 the capped streak scan and the archive's latest rows. A `null` viewer gets the empty profile without a query.
  */
 export async function getProfile(
   viewer: ProfileViewer,
@@ -58,7 +103,7 @@ export async function getProfile(
   if (!viewer) return buildProfile([], now);
   const client: Db = db ?? (await import("@/server/db")).db;
   const where = countedWhere(viewer.id);
-  const [latest, earliest, whole, byPlace, ...perLanguage] = await Promise.all([
+  const [latest, earliest, history, archive, whole, byPlace, ...perLanguage] = await Promise.all([
     client.raceResult.findMany({
       where,
       select: ROW_SELECT,
@@ -70,6 +115,18 @@ export async function getProfile(
       select: ROW_SELECT,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: GAIN_SAMPLE,
+    }),
+    client.raceResult.findMany({
+      where,
+      select: STREAK_SELECT,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: STREAK_SCAN_LIMIT,
+    }),
+    client.raceResult.findMany({
+      where,
+      select: archiveSelect(viewer.id),
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: ARCHIVE_LIMIT,
     }),
     client.raceResult.aggregate({
       where,
@@ -132,5 +189,7 @@ export async function getProfile(
     earliest: earliest.map(toRow),
     languages,
     service,
+    history,
+    archive: archive.map(toArchiveRow),
   });
 }

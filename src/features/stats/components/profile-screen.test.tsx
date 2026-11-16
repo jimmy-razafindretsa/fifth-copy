@@ -259,7 +259,7 @@ describe("ProfileScreen blank block (C8)", () => {
     expect(block).toContain("DOSSIER VIERGE");
     expect(text(block)).toContain("Le Ministère n'a rien sur toi.");
     expect(text(block)).toContain(
-      "Termine trois courses et les graphiques apparaîtront ici : vitesse et précision.",
+      "Termine trois courses et les graphiques apparaîtront ici : vitesse, précision, séries et archives.",
     );
     expect(block).toMatch(/<a href="\/#play"[^>]*>COURSE RAPIDE<\/a>/);
     expect(block).toMatch(/data-stamp-size="lg"[^>]*data-stamp-angle="-6"/);

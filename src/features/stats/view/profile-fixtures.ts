@@ -17,7 +17,9 @@ const result = (
   minutes = 0,
   place = 2,
   durationMs = 60_000,
+  archive: Pick<ResultRow, "room" | "mode" | "lobbySize"> = {},
 ): ResultRow => ({
+  ...archive,
   createdAt: new Date(
     PROFILE_FIXTURE_NOW.getTime() - daysAgo * DAY_MS - 3 * 3_600_000 + minutes * 60_000,
   ),
@@ -28,6 +30,12 @@ const result = (
   place,
 });
 
+/** The archive's room, mode and lobby size for the fixtures' races (#936): synthetic room codes. */
+const PUBLIC_ROOM = { room: "KGB-4821", mode: "RACE", lobbySize: 30 } as const;
+const PRIVATE_ROOM = { room: "TAS-0118", mode: "PRIVATE", lobbySize: 24 } as const;
+const BOT_ROOM = { room: null, mode: "BOTS", lobbySize: 4 } as const;
+const ROOMS = [PUBLIC_ROOM, PRIVATE_ROOM, BOT_ROOM] as const;
+
 /** Two weeks of a typist who races every day but one, in French and English, and speeds up. */
 function twoWeeks(): ResultRow[] {
   const rows: ResultRow[] = [];
@@ -36,9 +44,13 @@ function twoWeeks(): ResultRow[] {
     const step = 13 - daysAgo;
     // Wins every third day, a podium most days, a slower desk now and then.
     const place = step % 3 === 0 ? 1 : step % 4 === 0 ? 5 : 2 + (step % 2);
-    rows.push(result(daysAgo, 31 + step * 1.6, "FR", 0.9 + step * 0.004, 0, place, 58_000));
+    rows.push(
+      result(daysAgo, 31 + step * 1.6, "FR", 0.9 + step * 0.004, 0, place, 58_000, ROOMS[step % 3]),
+    );
     if (daysAgo % 2 === 0)
-      rows.push(result(daysAgo, 27 + step * 1.3, "EN", 0.88 + step * 0.004, 20, 4, 61_500));
+      rows.push(
+        result(daysAgo, 27 + step * 1.3, "EN", 0.88 + step * 0.004, 20, 4, 61_500, PUBLIC_ROOM),
+      );
   }
   return rows;
 }
@@ -50,7 +62,11 @@ export const profileFixtures = {
   "one-race": buildProfile([result(0, 42.3, "FR", 0.947, 0, 1, 47_200)], PROFILE_FIXTURE_NOW),
   /** Three races: a series and bests, no gain yet. */
   early: buildProfile(
-    [result(2, 28.4, "FR", 0.91), result(1, 33.1, "FR", 0.93), result(0, 30.6, "EN", 0.89)],
+    [
+      result(2, 28.4, "FR", 0.91, 0, 2, 60_000, BOT_ROOM),
+      result(1, 33.1, "FR", 0.93, 0, 1, 60_000, BOT_ROOM),
+      result(0, 30.6, "EN", 0.89, 0, 5, 60_000, PUBLIC_ROOM),
+    ],
     PROFILE_FIXTURE_NOW,
   ),
   /** Two weeks in both languages: gain, 7-day averages, a streak since the missed day. */

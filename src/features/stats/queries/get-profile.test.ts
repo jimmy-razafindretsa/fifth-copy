@@ -26,6 +26,9 @@ function fakeDb(
     lang: "FR" | "EN";
     place?: number;
     durationMs?: number;
+    lobby?: { code: string; type: "PRIVATE" | "PUBLIC" } | null;
+    lobbySize?: number | null;
+    otherHumans?: number;
   }[],
 ) {
   const calls: Call[] = [];
@@ -35,7 +38,12 @@ function fakeDb(
     accuracy: r.accuracy,
     durationMs: r.durationMs ?? 60_000,
     place: r.place ?? 2,
-    race: { textLanguage: r.lang },
+    race: {
+      textLanguage: r.lang,
+      lobbySize: r.lobbySize ?? null,
+      lobby: r.lobby ?? null,
+      _count: { results: r.otherHumans ?? 0 },
+    },
   }));
   const raceResult = {
     findMany: vi.fn(async (args: { take: number; orderBy: { createdAt: string }[] }) => {
@@ -81,6 +89,32 @@ const COUNTED_WHERE = {
   status: { in: ["FINISHED", "TIMED_OUT"] },
 };
 
+const ROW_SELECT = {
+  createdAt: true,
+  cleanWpm: true,
+  accuracy: true,
+  durationMs: true,
+  place: true,
+  race: { select: { textLanguage: true } },
+};
+// #936 C2: the streak read selects only accuracy, clean WPM and date
+const STREAK_SELECT = { createdAt: true, cleanWpm: true, accuracy: true };
+// #936 C2: the archive reads its own row, the room, and a count of the other humans (never their rows)
+const ARCHIVE_SELECT = {
+  createdAt: true,
+  cleanWpm: true,
+  accuracy: true,
+  place: true,
+  race: {
+    select: {
+      textLanguage: true,
+      lobbySize: true,
+      lobby: { select: { code: true, type: true } },
+      _count: { select: { results: { where: { isBot: false, NOT: { userId: VIEWER.id } } } } },
+    },
+  },
+};
+
 describe("getProfile (stand-in client)", () => {
   it("a null viewer gets the empty profile without a query", async () => {
     const { db, calls } = fakeDb([]);
@@ -97,6 +131,8 @@ describe("getProfile (stand-in client)", () => {
       "aggregate",
       "aggregate",
       "aggregate",
+      "findMany",
+      "findMany",
       "findMany",
       "findMany",
       "groupBy",
@@ -121,14 +157,7 @@ describe("getProfile (stand-in client)", () => {
       expect(sent).not.toMatch(/"(wpm|rawWpm|adjustedWpm|keystrokes)"/);
       expect(sent).not.toContain("RaceKeystrokes");
       if (op === "findMany") {
-        expect(args.select).toEqual({
-          createdAt: true,
-          cleanWpm: true,
-          accuracy: true,
-          durationMs: true,
-          place: true,
-          race: { select: { textLanguage: true } },
-        });
+        expect([ROW_SELECT, STREAK_SELECT, ARCHIVE_SELECT]).toContainEqual(args.select);
       } else if (op === "aggregate") {
         expect(args).toMatchObject({ _max: { cleanWpm: true }, _avg: { cleanWpm: true } });
       } else {
@@ -161,7 +190,65 @@ describe("getProfile (stand-in client)", () => {
     });
   });
 
-  it("C4: 250 stored results give 200 points in 6 queries, the latest ones, oldest first", async () => {
+  it("#936 C2: the archive holds the 8 latest, newest first, with room, mode, place and lobby size", async () => {
+    const at = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      createdAt: at(i + 1),
+      cleanWpm: 40 + i,
+      accuracy: 0.9,
+      lang: "FR" as const,
+      place: (i % 4) + 1,
+      lobbySize: 6,
+      lobby:
+        i === 1
+          ? null
+          : { code: `ROOM-${i}`, type: i % 2 ? ("PRIVATE" as const) : ("PUBLIC" as const) },
+      otherHumans: i === 0 ? 0 : 2,
+    }));
+    const { db, calls } = fakeDb(rows);
+    const p = await getProfile(VIEWER, { db, now: NOW });
+    const archiveCall = calls.find((c) => c.args.take === 8);
+    expect(archiveCall?.args).toMatchObject({
+      take: 8,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    expect(p.archive).toHaveLength(8);
+    expect(p.archive.map((e) => e.cleanWpm)).toEqual([40, 41, 42, 43, 44, 45, 46, 47]);
+    expect(p.archive[0]).toEqual({
+      at: at(1).toISOString(),
+      room: "ROOM-0",
+      mode: "BOTS",
+      place: 1,
+      lobbySize: 6,
+      cleanWpm: 40,
+      accuracy: 0.9,
+    });
+    expect(p.archive[1]).toMatchObject({ room: null, mode: "RACE", place: 2 });
+    expect(p.archive[2]).toMatchObject({ room: "ROOM-2", mode: "RACE" });
+    expect(p.archive[3]).toMatchObject({ room: "ROOM-3", mode: "PRIVATE" });
+  });
+
+  it("#936 C2: the streaks read the capped scan (5 000 latest), in race order", async () => {
+    const at = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
+    const { db, calls } = fakeDb(
+      [0.99, 0.91, 1, 1, 0.97].map((accuracy, i) => ({
+        createdAt: at(5 - i),
+        cleanWpm: 30 + i,
+        accuracy,
+        lang: "EN" as const,
+      })),
+    );
+    const p = await getProfile(VIEWER, { db, now: NOW });
+    expect(calls.some((c) => c.args.take === 5_000 && c.args.select !== undefined)).toBe(true);
+    expect(p.streaks.map((s) => [s.threshold, s.best, s.current])).toEqual([
+      [100, 2, 0],
+      [98, 2, 0],
+      [95, 3, 3],
+      [90, 5, 5],
+    ]);
+  });
+
+  it("C4: 250 stored results give 200 points in 8 queries, the latest ones, oldest first", async () => {
     const rows = Array.from({ length: 250 }, (_, i) => ({
       createdAt: new Date(NOW.getTime() - (250 - i) * 60_000),
       cleanWpm: i,
@@ -170,7 +257,7 @@ describe("getProfile (stand-in client)", () => {
     }));
     const { db, calls } = fakeDb(rows);
     const p = await getProfile(VIEWER, { db, now: NOW });
-    expect(calls).toHaveLength(6);
+    expect(calls).toHaveLength(8);
     expect(p.progress.series).toHaveLength(200);
     expect(p.progress.series[0]?.cleanWpm).toBe(50);
     expect(p.progress.series[199]?.cleanWpm).toBe(249);
@@ -324,6 +411,26 @@ describe.skipIf(!testDatabaseUrl)(
       expect(theirs.progress.series.map((s) => s.cleanWpm)).toEqual([90]);
     });
 
+    it("#936 C2: the archive names the mode from a count of the other humans and reads only my row", async () => {
+      const me = await user("archive-me");
+      const other = await user("archive-other");
+      await race(1, [
+        { userId: me, cleanWpm: 40 },
+        { userId: null, cleanWpm: 91 },
+      ]);
+      await race(2, [
+        { userId: other, cleanWpm: 90 },
+        { userId: me, cleanWpm: 50 },
+      ]);
+      const p = await getProfile({ id: me }, { db, now: NOW });
+      expect(p.archive).toEqual([
+        expect.objectContaining({ room: null, mode: "BOTS", place: 1, cleanWpm: 40 }),
+        expect.objectContaining({ room: null, mode: "RACE", place: 2, cleanWpm: 50 }),
+      ]);
+      // the other typist's figures never reach the archive
+      expect(p.archive.map((e) => e.cleanWpm)).toEqual([40, 50]);
+    });
+
     it("C4: 250 stored results give at most 200 points in the same number of queries as 1", async () => {
       const me = await user("busy");
       await race(100, [{ userId: me, cleanWpm: 1 }]);
@@ -334,7 +441,8 @@ describe.skipIf(!testDatabaseUrl)(
       queries = 0;
       const p = await getProfile({ id: me }, { db, now: NOW });
       expect(queries).toBe(forOne);
-      expect(queries).toBe(6);
+      // #932's six and #936's streak scan and archive
+      expect(queries).toBe(8);
       expect(p.total).toBe(250);
       expect(p.progress.series).toHaveLength(200);
       // The latest 200 are the races 0.2 h .. 20.1 h ago (wpm 2..201), oldest first.

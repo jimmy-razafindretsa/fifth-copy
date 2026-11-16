@@ -34,3 +34,12 @@ export {
   type Missions,
 } from "./view/missions";
 export { rankFor, rankIndex, type RankStep } from "./view/rank";
+// The typist census (#966, ADR 0023): population shapes as aggregates only. getCensus is server-only.
+export { getCensus } from "./queries/get-census";
+export {
+  CENSUS_MIN_POPULATION,
+  CENSUS_MIN_RACES,
+  type Census,
+  type CensusDistribution,
+} from "./view/census";
+export { type CensusFixture, censusFixtures } from "./view/census-fixtures";

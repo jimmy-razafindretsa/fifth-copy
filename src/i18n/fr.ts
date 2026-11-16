@@ -1082,6 +1082,14 @@ export const fr = {
   },
   /** Le Dossier du personnel sur /profile (#932, bible 14.3, référence Profil.dc.html). */
   profile: {
+    ladder: {
+      label: "ÉCHELLE DES GRADES · SELON TA MOYENNE",
+      next: "{wpm} / {next} MPM → {rank}",
+      top: "GRADE MAXIMAL",
+      current: "{rank}, grade actuel",
+      progressName: "Progression vers {rank}",
+      progressTop: "Grade maximal atteint",
+    },
     stage: {
       label: "PHOTO D'IDENTITÉ",
       clerkTitle: "Ton commis en uniforme",

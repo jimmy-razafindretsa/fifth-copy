@@ -17,6 +17,8 @@ import {
   serviceDate,
   tubes,
 } from "../view/profile-figures";
+import { rankFor } from "../view/rank";
+import { GradeLadder } from "./grade-ladder";
 import { PerformanceCurve } from "./performance-curve";
 import { ArchiveSection, StreaksDocket } from "./profile-records";
 import { ProfileStage } from "./profile-stage";
@@ -29,6 +31,8 @@ export type ProfileLabels = Messages["profile"] & {
   guestTag: string;
   prompt: string;
   signUp: string;
+  /** The catalogs' rank names (`landing.clerk.ranks`, #945), in `BOT_LEVELS` order. */
+  ranks: readonly string[];
 };
 
 /** Picks the screen's strings from a catalog. */
@@ -40,6 +44,7 @@ export function profileLabels(t: Messages): ProfileLabels {
     guestTag: t.auth.account.guestTag,
     prompt: t.results.actions.prompt,
     signUp: t.results.actions.signup,
+    ranks: t.landing.clerk.ranks,
   };
 }
 
@@ -66,7 +71,7 @@ type Heading = "h1" | "h2" | "h3" | "h4";
 /**
  * The Personnel file (#932, bible 14.3 "Personnel file", reference `Profil.dc.html`): one screen that
  * draws a `Profile` and the viewer's identity as an ordered list of sections, the hero (stage, file side,
- * four tubes), the ink band, the folder tabs, the service record, from three races the clean streaks
+ * four tubes, the grade ladder of #337), the ink band, the folder tabs, the service record, from three races the clean streaks
  * (#936), the output curve (#933) and the race archives (#936), under three races the blank block.
  * Later cards add a section each. Server-rendered; the stage is the one client leaf.
  */
@@ -88,6 +93,7 @@ export function ProfileScreen({
     curve: `${idPrefix}-curve`,
     streaks: `${idPrefix}-streaks`,
     archive: `${idPrefix}-archive`,
+    ladder: `${idPrefix}-ladder`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -168,6 +174,13 @@ export function ProfileScreen({
               />
             ))}
           </div>
+          <GradeLadder
+            step={rankFor(profile.service.meanWpm)}
+            meanWpm={profile.service.meanWpm}
+            labels={{ ...labels.ladder, ranks: labels.ranks }}
+            locale={locale}
+            id={ids.ladder}
+          />
         </div>
       </section>
 

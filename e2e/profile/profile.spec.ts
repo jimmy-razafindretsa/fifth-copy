@@ -12,12 +12,16 @@ import { HYDRATION_WAIT, scaled } from "../timeouts";
 // #936 C5, C6: from three races the clean streaks follow the service record and the race archives close
 // the page; three races against a bot only list newest first as BOTS, one MEDAL; phones scroll the
 // archive table inside its own region, never the page.
+// #337 C5: the grade ladder under the four figures: three races averaging 51.4 clean WPM hold Officer,
+// 70 WPM away from Commissar, in English and French; a guest with no race holds Recruit.
 
 const screen = (page: Page) => page.locator("[data-profile-state]");
 const figure = (page: Page, key: string) => page.locator(`[data-figure="${key}"] dd`);
 const tubes = (page: Page) => page.locator("[data-tube]");
 const blank = (page: Page) => page.locator("[data-blank]");
 const curve = (page: Page) => page.locator("[data-curve]");
+const currentGrade = (page: Page) => page.locator('[data-ladder] li[aria-current="true"]');
+const ladderLine = (page: Page) => page.locator("[data-ladder-line]");
 
 async function openFile(page: Page) {
   await page.goto("/profile");
@@ -78,6 +82,30 @@ test.describe("Personnel file at /profile (#932)", () => {
     expect(await tubes(page).allTextContents()).toEqual(["--", "--", "--", "00"]);
     await expect(blank(page)).toBeVisible();
     await expect(page.locator('[data-stage-view="picture"]')).toBeVisible();
+    // #337 C5: no race, Recruit
+    await expect(currentGrade(page)).toHaveAttribute("data-grade", "recruit");
+    await expect(currentGrade(page).locator("[aria-hidden]")).toHaveText("RECRUIT");
+    await expect(ladderLine(page)).toHaveText("0.0 / 35 WPM → CLERK");
+  });
+
+  test("C5 (#337) three races averaging 51.4: OFFICER current, 70 to COMMISSAR, in both languages", async ({
+    page,
+    request,
+    context,
+  }) => {
+    await threeRaces(request, await seedLobby(page));
+    await openFile(page);
+    await expect(currentGrade(page).locator("[aria-hidden]")).toHaveText("OFFICER");
+    await expect(currentGrade(page)).toContainText("Officer, current grade");
+    await expect(ladderLine(page)).toHaveText("51.4 / 70 WPM → COMMISSAR");
+    await expect(page.getByRole("progressbar", { name: "Progress to Commissar" })).toBeVisible();
+    await expect(page.getByRole("list", { name: "GRADE LADDER · BY YOUR AVERAGE" })).toBeVisible();
+
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(currentGrade(page).locator("[aria-hidden]")).toHaveText("OFFICIER");
+    await expect(ladderLine(page)).toHaveText("51,4 / 70 MPM → COMMISSAIRE");
   });
 
   test("C9 three races, one won: the record counts them; another browser never sees them", async ({

@@ -1125,6 +1125,14 @@ export const en = {
   },
   /** The Personnel file at /profile (#932, bible 14.3 "Personnel file", reference Profil.dc.html). */
   profile: {
+    ladder: {
+      label: "GRADE LADDER · BY YOUR AVERAGE",
+      next: "{wpm} / {next} WPM → {rank}",
+      top: "TOP GRADE",
+      current: "{rank}, current grade",
+      progressName: "Progress to {rank}",
+      progressTop: "Top grade reached",
+    },
     stage: {
       label: "ID PICTURE",
       clerkTitle: "Your clerk in uniform",

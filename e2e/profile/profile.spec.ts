@@ -439,7 +439,7 @@ test.describe("site header grade tag (#969)", () => {
           // with room to spare: CI's fonts set the row about 18px wider than a dev machine's
           const spare = await page.addStyleTag({ content: "header nav { padding-right: 24px; }" });
           const tight = await header.evaluate((h) => h.getBoundingClientRect().height);
-          await spare.evaluate((s) => s.remove());
+          await spare.evaluate((s) => (s as Element).remove());
           expect(tight, `one row at 1280 ${locale} with 24px to spare`).toBeLessThan(80);
         }
         const style = await page.addStyleTag({
@@ -447,7 +447,7 @@ test.describe("site header grade tag (#969)", () => {
             '[data-docket-grade] { display: none !important; } a[href="/profile"] > span { max-width: none !important; }',
         });
         const today = await header.evaluate((h) => h.getBoundingClientRect().height);
-        await style.evaluate((s) => s.remove());
+        await style.evaluate((s) => (s as Element).remove());
         expect(fit.height, `header height at ${width} ${locale}`).toBeLessThanOrEqual(today);
       }
   });

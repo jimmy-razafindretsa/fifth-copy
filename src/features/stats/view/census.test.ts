@@ -108,7 +108,10 @@ describe("censusOf: smoothing (C2)", () => {
   });
 
   it("a typist alone at 140 WPM raises at least 5 neighbouring bars", () => {
-    const typists = [...Array.from({ length: 30 }, () => typist(40, 0.95, 40)), typist(140, 0.95, 140)];
+    const typists = [
+      ...Array.from({ length: 30 }, () => typist(40, 0.95, 40)),
+      typist(140, 0.95, 140),
+    ];
     const census = censusOf(typists, null)!;
     for (const d of [census.averageSpeed, census.bestSpeed]) {
       const at140 = Math.floor((140 / 150) * CENSUS_BARS);
@@ -192,9 +195,14 @@ describe("censusOf: aggregates only (C3)", () => {
 
   it("holds no head count: two populations of different sizes and the same shape look alike", () => {
     const once = censusOf(spread(30, 20, 100), null)!;
-    const thrice = censusOf([...spread(30, 20, 100), ...spread(30, 20, 100), ...spread(30, 20, 100)], null)!;
+    const thrice = censusOf(
+      [...spread(30, 20, 100), ...spread(30, 20, 100), ...spread(30, 20, 100)],
+      null,
+    )!;
     expect(thrice).toEqual(once);
-    expect(JSON.stringify(once)).not.toMatch(/"(count|n|size|population|typists|races|id|name|userId)"/);
+    expect(JSON.stringify(once)).not.toMatch(
+      /"(count|n|size|population|typists|races|id|name|userId)"/,
+    );
   });
 
   it("holds only numbers, nulls and arrays of numbers under the allowed keys", () => {
@@ -202,7 +210,9 @@ describe("censusOf: aggregates only (C3)", () => {
     for (const d of distributions(census)) {
       for (const [key, v] of Object.entries(d)) {
         if (key === "bars" || key === "cumulative") {
-          expect((v as number[]).every((x) => typeof x === "number" && Number.isFinite(x))).toBe(true);
+          expect((v as number[]).every((x) => typeof x === "number" && Number.isFinite(x))).toBe(
+            true,
+          );
         } else {
           expect(v === null || (typeof v === "number" && Number.isFinite(v))).toBe(true);
         }

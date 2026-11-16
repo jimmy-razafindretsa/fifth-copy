@@ -27,7 +27,13 @@ export const CENSUS_FIXTURE_POPULATION: readonly CensusTypist[] = Array.from(
 
 /** The fixture viewers: one in the middle, one at the top, one under 3 counted races. */
 export const CENSUS_FIXTURE_VIEWERS = {
-  middle: { averageWpm: 54.2, bestWpm: 68.9, averageAccuracy: 0.934, bestAccuracy: 0.961, races: 42 },
+  middle: {
+    averageWpm: 54.2,
+    bestWpm: 68.9,
+    averageAccuracy: 0.934,
+    bestAccuracy: 0.961,
+    races: 42,
+  },
   top: { averageWpm: 118.4, bestWpm: 141.7, averageAccuracy: 0.991, bestAccuracy: 1, races: 310 },
   newcomer: { averageWpm: 31, bestWpm: 35, averageAccuracy: 0.88, bestAccuracy: 0.9, races: 2 },
 } as const satisfies Record<string, NonNullable<CensusViewer>>;

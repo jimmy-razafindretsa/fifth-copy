@@ -66,6 +66,7 @@ flowchart LR
 | Pages and actions | Browser -> Caddy -> web | Cookies (guest id or session), form input (username, password, settings), IP address | HTTPS, httpOnly SameSite cookies, input validated with zod | ADR 0009, ARCHITECTURE 10 |
 | Live race | Browser -> Caddy -> race-server | Race token, keystrokes and timings, typist name, desk | HTTPS/WSS, 5-minute signed race tokens, rate limits | ADR 0006, ADR 0009 |
 | Race results | race-server -> web | Results and compressed keystrokes per player | HMAC with timestamp and nonce, idempotency keys | ADR 0008 |
+| Typist census | Postgres -> web -> browser | None about others: speed and accuracy of every typist with 3 or more counted races are reduced on the server to smoothed shapes and the viewer's own percentile | Aggregates only, nothing under 30 typists, Gaussian smoothing, no count, id or other typist's figure in a response (typist census, ADR 0023) | ADR 0008, ADR 0023, #966 |
 | Storage | web, worker -> Postgres | Every row of the [inventory](inventory.md) | Only the web app and worker write; private compose network | ADR 0002, ADR 0008, ADR 0011 |
 | Live state | race-server -> Redis | Room members, progress, invites, rate-limit counters | Private network, every key has a TTL | ADR 0008 |
 | Avatar files | web -> avatar volume | Uploaded or imported pictures | Re-encoded, metadata stripped, served only to the owner, live room mates and race mates for 24 h after the race ends, then kept in each viewer's browser cache (and seen by the operator when held or reported, to check it) | ADR 0014, ADR 0022 |
@@ -105,6 +106,7 @@ a picture, or exposure of who they are.
 | 17 | A forged or replayed request reads or writes another student's race | Low | Medium | Signed race tokens, HMAC internal API with nonce, authorization inside every action | ADR 0006, ADR 0009, ARCHITECTURE 10 |
 | 18 | Cross-site scripting or request forgery leaks a student's data | Low | Medium | Strict CSP, no raw HTML rendering, server action origin checks, SameSite cookies | ARCHITECTURE 10, #87 |
 | 19 | The deployment pipeline (GitHub Actions, GHCR) is compromised and reaches the server | Low | High | Images built in CI hold no user data; secrets only in CI settings and the server env; deploy over SSH | ADR 0012, #408 |
+| 20 | Population statistics single out a student (a class is a small population; the fastest or slowest typist is guessable) | Medium | Low | Typist census only (ADR 0023): aggregates computed on the server, nothing under 30 typists with 3 or more counted races, every typist smoothed so no bar is one person, no head count, id or other typist's figure leaves the server | ADR 0023, #966 |
 
 ## Residual risk
 

@@ -375,6 +375,22 @@
       "supersededBy": [],
       "rule": "A web-side rule that depends on who is in a live room asks the race server through the signed POST /internal/rooms/shared (two user ids in, one boolean out) and treats no answer as \"not shared\"; the web app never reads room:* keys and keeps no copy of live membership; a refusal looks the same whether or not the lobby, the user or the resource exists.",
       "file": "docs/adr/0022-shared-room-lookup.md"
+    },
+    {
+      "id": "0023",
+      "title": "Population statistics are server-side aggregates of typists with 3 counted races, smoothed, shown only from 30 typists, with no count or identity",
+      "status": "proposed",
+      "category": "security",
+      "scope": [
+        "src/features/stats/queries/get-census.ts",
+        "src/features/stats/view/census.ts",
+        "src/features/stats/view/census-fixtures.ts",
+        "src/features/stats/queries/counted-where.ts"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "A statistic about other typists leaves the server only as the output of one pure function over the counted population (typists with at least 3 counted results, at least 30 of them, each smoothed by a fixed kernel); a response never holds a head count, a count per bar, an id, a name or another typist's figure.",
+      "file": "docs/adr/0023-typist-census-aggregates.md"
     }
   ]
 }

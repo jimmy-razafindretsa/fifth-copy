@@ -379,7 +379,7 @@
     {
       "id": "0023",
       "title": "Population statistics are server-side aggregates of typists with 3 counted races, smoothed, shown only from 30 typists, with no count or identity",
-      "status": "proposed",
+      "status": "accepted",
       "category": "security",
       "scope": [
         "src/features/stats/queries/get-census.ts",

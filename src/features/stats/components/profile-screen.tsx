@@ -18,6 +18,7 @@ import {
   tubes,
 } from "../view/profile-figures";
 import { PerformanceCurve } from "./performance-curve";
+import { ArchiveSection, StreaksDocket } from "./profile-records";
 import { ProfileStage } from "./profile-stage";
 import styles from "./profile.module.css";
 
@@ -65,8 +66,8 @@ type Heading = "h1" | "h2" | "h3" | "h4";
 /**
  * The Personnel file (#932, bible 14.3 "Personnel file", reference `Profil.dc.html`): one screen that
  * draws a `Profile` and the viewer's identity as an ordered list of sections, the hero (stage, file side,
- * four tubes), the ink band, the folder tabs, the service record, from three races the output curve
- * (#933) and, under three races, the blank block.
+ * four tubes), the ink band, the folder tabs, the service record, from three races the clean streaks
+ * (#936), the output curve (#933) and the race archives (#936), under three races the blank block.
  * Later cards add a section each. Server-rendered; the stage is the one client leaf.
  */
 export function ProfileScreen({
@@ -85,6 +86,8 @@ export function ProfileScreen({
     service: `${idPrefix}-service`,
     blank: `${idPrefix}-blank`,
     curve: `${idPrefix}-curve`,
+    streaks: `${idPrefix}-streaks`,
+    archive: `${idPrefix}-archive`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -218,6 +221,16 @@ export function ProfileScreen({
             </dl>
           </section>
 
+          {races >= BLANK_BELOW ? (
+            <StreaksDocket
+              streaks={profile.streaks}
+              labels={labels.streaks}
+              locale={locale}
+              id={ids.streaks}
+              heading={Section}
+            />
+          ) : null}
+
           {curvePoints.length >= CURVE_MIN_RACES ? (
             <section aria-labelledby={ids.curve} data-section="curve">
               <div className={styles.head}>
@@ -234,6 +247,16 @@ export function ProfileScreen({
               </div>
               <PerformanceCurve points={curvePoints} labels={labels.curve} locale={locale} />
             </section>
+          ) : null}
+
+          {races >= BLANK_BELOW && profile.archive.length > 0 ? (
+            <ArchiveSection
+              archive={profile.archive}
+              labels={labels.archive}
+              locale={locale}
+              id={ids.archive}
+              heading={Section}
+            />
           ) : null}
 
           {races < BLANK_BELOW ? (

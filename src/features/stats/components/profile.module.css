@@ -420,3 +420,197 @@
     --figure-cols: 6;
   }
 }
+
+/* ---- clean streaks and race archives (#936, reference "SÉRIES SANS FAUTE", "ARCHIVES") ---- */
+
+/* the reference's two-column grid; its second docket (Combinaisons suspectes) is left out until its
+   card, so the one docket spans the row (no placeholder) */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
+  gap: 28px;
+}
+
+/* a 7.4 docket: paper, 2px ink rule */
+.docket {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+}
+
+.docketHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.docketTitle {
+  margin: 0;
+  @apply type-display-md;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: normal;
+}
+
+/* the ink tag: paper on the band ground in both themes */
+.inkTag {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background: var(--color-band);
+  color: var(--color-band-fg);
+  padding: 3px 8px;
+}
+
+/* four equal columns, 8px between them, 22px gutters; dashed 7.4 separators */
+.streaks,
+.archive {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: left;
+}
+
+.streaks th,
+.streaks td {
+  padding: 14px 4px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  @apply type-typing;
+  font-size: 16px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.streaks thead th {
+  padding-block: 12px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.streaks :is(th, td):first-child {
+  padding-left: 22px;
+}
+
+.streaks :is(th, td):last-child {
+  padding-right: 22px;
+}
+
+.streaks .threshold {
+  @apply type-label;
+  font-size: 14px;
+  line-height: normal;
+  letter-spacing: 0.1em;
+}
+
+.streakBest {
+  font-weight: 600;
+}
+
+/* a current run of 0 */
+.streaks .muted {
+  color: var(--color-fg-muted);
+}
+
+.docketFoot {
+  margin: 0;
+  padding: 16px 22px;
+  @apply type-body;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-fg-muted);
+}
+
+/* the archive frame scrolls sideways inside itself on phones, never the page */
+.archiveFrame {
+  /* the containing block of the visually hidden caption, so it never escapes the scroll */
+  position: relative;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  overflow-x: auto;
+}
+
+.archive {
+  min-width: 720px;
+}
+
+/* the reference's tracks 1.3fr .8fr 1fr .8fr .8fr .9fr 1fr */
+.colDate {
+  width: 19.7%;
+}
+.colNarrow {
+  width: 12.1%;
+}
+.colMode {
+  width: 15.2%;
+}
+.colAccuracy {
+  width: 13.6%;
+}
+
+.archive th,
+.archive td {
+  padding: 13px 5px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+  @apply type-typing;
+  font-size: 15px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.archive thead th {
+  padding-block: 14px;
+  border-bottom: 2px solid var(--color-fg);
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+  color: var(--color-fg-muted);
+}
+
+.archive :is(th, td):first-child {
+  padding-left: 22px;
+}
+
+.archive :is(th, td):last-child {
+  padding-right: 22px;
+}
+
+.archive .mode {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.12em;
+}
+
+.archive .rank {
+  font-weight: 600;
+}
+
+.archiveTag,
+.goldTag {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  padding: 3px 8px;
+  background: var(--color-band);
+  color: var(--color-band-fg);
+}
+
+/* a first place: the gold of a reward as the ground, ink text in both themes (never gold text) */
+.goldTag {
+  background: var(--color-reward);
+  color: var(--color-band);
+}

@@ -8,7 +8,10 @@ import { HYDRATION_WAIT, scaled } from "../timeouts";
 // (one won) posted through the signed internal routes on the page's own lobby, the service record
 // counts them and the blank block is gone. Another browser never sees those figures. Without WebGL the
 // stage shows the ID picture. One h1, axe-clean in both themes; a visitor with no file goes to sign-in.
-// #933 C6: with three races the output curve shows after the service record and its slider works.
+// #933 C6: with three races the output curve shows after the clean streaks and its slider works.
+// #936 C5, C6: from three races the clean streaks follow the service record and the race archives close
+// the page; three races against a bot only list newest first as BOTS, one MEDAL; phones scroll the
+// archive table inside its own region, never the page.
 
 const screen = (page: Page) => page.locator("[data-profile-state]");
 const figure = (page: Page, key: string) => page.locator(`[data-figure="${key}"] dd`);
@@ -21,19 +24,24 @@ async function openFile(page: Page) {
   await expect(screen(page)).toBeVisible({ timeout: HYDRATION_WAIT });
 }
 
-/** Three finished races for the host, the second one won; best clean speed 61.4. */
+/**
+ * Three finished races for the host against one bot, the second one won; best clean speed 61.4.
+ * `accuracies` in race order (default 95 % each).
+ */
 async function threeRaces(
   request: Parameters<typeof startRace>[0],
   lobby: Awaited<ReturnType<typeof seedLobby>>,
+  accuracies: [number, number, number] = [0.95, 0.95, 0.95],
 ) {
   const runs: [number, number][] = [
     [2, 40.2],
     [1, 61.4],
     [3, 52.5],
   ];
-  for (const [place, wpm] of runs) {
+  for (const [i, [place, wpm]] of runs.entries()) {
+    const accuracy = accuracies[i];
     const desks: Desk[] = [
-      { desk: 1, name: "Host", place, wpm, accuracy: 0.95, userId: lobby.hostUserId },
+      { desk: 1, name: "Host", place, wpm, accuracy, userId: lobby.hostUserId },
       { desk: 2, name: "Typist Bot", place: place === 1 ? 2 : 1, wpm: 50, isBot: true },
     ];
     const raceId = await startRace(request, lobby, desks);
@@ -126,7 +134,9 @@ test.describe("Personnel file at /profile (#932)", () => {
     const order = await page
       .locator("[data-profile-state] section[aria-labelledby]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("aria-labelledby")));
-    expect(order.indexOf("profile-curve")).toBe(order.indexOf("profile-service") + 1);
+    // #936: the clean streaks sit between the service record and the curve (bible 14.3)
+    expect(order.indexOf("profile-streaks")).toBe(order.indexOf("profile-service") + 1);
+    expect(order.indexOf("profile-curve")).toBe(order.indexOf("profile-streaks") + 1);
     const plot = curve(page).getByRole("img");
     await expect(plot).toHaveAccessibleName(
       /^3 races: speed from [\d.]+ to [\d.]+ WPM, accuracy from /,
@@ -151,6 +161,71 @@ test.describe("Personnel file at /profile (#932)", () => {
     expect(await dots.getAttribute("d")).toBe(before.dots);
   });
 
+  test("C6 (#936) three races against a bot: archive rows newest first, BOTS, one MEDAL; the 90 % streak", async ({
+    page,
+    request,
+    browser,
+  }) => {
+    // in race order: 95 %, 97 %, 88 %: at 90 % the best run is 2 and the current run 0
+    await threeRaces(request, await seedLobby(page), [0.95, 0.97, 0.88]);
+    await openFile(page);
+    const archive = page.locator('[data-section="archive"]');
+    await expect(archive.getByRole("heading", { name: "Race archives" })).toBeVisible();
+    await expect(archive).toContainText("ARCHIVES · LAST 3 ENTRIES");
+    const rows = archive.locator("tbody tr");
+    await expect(rows).toHaveCount(3);
+    // newest first: the third race (place 3, 88 %), the won second, the first
+    await expect(rows.nth(0)).toContainText("3 / 2");
+    await expect(rows.nth(0)).toContainText("88.0 %");
+    await expect(rows.nth(1)).toContainText("1 / 2");
+    await expect(rows.nth(2)).toContainText("2 / 2");
+    for (let i = 0; i < 3; i += 1)
+      await expect(rows.nth(i).locator("td").nth(2)).toHaveText("BOTS");
+    await expect(archive.locator('[data-award="medal"]')).toHaveCount(1);
+    await expect(rows.nth(1).locator('[data-award="medal"]')).toHaveText("MEDAL");
+    await expect(archive.locator('[data-award="podium"]')).toHaveCount(2);
+    const at90 = page.locator('[data-streak="90"]');
+    await expect(at90.locator("[data-streak-best]")).toHaveText("2");
+    await expect(at90.locator("[data-streak-current]")).toHaveText("0");
+    await expect(at90.locator("[data-streak-wpm]")).toHaveText("50.8");
+    const order = await page
+      .locator("[data-profile-state] section[aria-labelledby]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("aria-labelledby")));
+    expect(order.at(-1)).toBe("profile-archive");
+
+    const other = await browser.newContext();
+    try {
+      const url = test.info().project.use.baseURL!;
+      await other.addCookies([{ name: "locale", value: "en", url }]);
+      const stranger = await other.newPage();
+      await withoutWebGL(stranger);
+      await seedLobby(stranger);
+      await openFile(stranger);
+      await expect(stranger.locator('[data-section="archive"]')).toHaveCount(0);
+      await expect(stranger.locator('[data-section="streaks"]')).toHaveCount(0);
+    } finally {
+      await other.close();
+    }
+  });
+
+  test("C5 (#936) on a phone the archive scrolls inside its own region, never the page", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await threeRaces(request, await seedLobby(page));
+    await openFile(page);
+    const region = page.getByRole("region", { name: "Race archives, scrolls sideways" });
+    await expect(region).toBeVisible();
+    await expect(region).toHaveAttribute("tabindex", "0");
+    const box = await region.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+    expect(box.scroll).toBeGreaterThan(box.client);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, "sideways scroll").toBe(false);
+  });
+
   for (const scheme of ["light", "dark"] as const) {
     test(`C9 axe-clean in ${scheme}, blank and filled`, async ({ page, request }) => {
       await page.emulateMedia({ colorScheme: scheme });
@@ -161,6 +236,7 @@ test.describe("Personnel file at /profile (#932)", () => {
       await openFile(page);
       await expect(figure(page, "races")).toHaveText("3");
       await expect(curve(page)).toBeVisible();
+      await expect(page.locator('[data-section="archive"]')).toBeVisible();
       await expectNoA11yViolations(page);
     });
   }

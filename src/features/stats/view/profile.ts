@@ -1,4 +1,6 @@
 import { addDays, type DayKey, dayKey } from "@/lib/time";
+import { type ArchiveEntry, type ArchiveMode, archiveOf } from "./archive";
+import { type ProfileStreak, type StreakRow, streaksOf } from "./streaks";
 
 /**
  * The Personnel file read model (#931, spec 13.2, ADR 0008, 0016). Pure: it takes the viewer's counted
@@ -35,6 +37,10 @@ export type ResultRow = {
   errors?: number;
   bonusesSent?: number;
   bonusesReceived?: number;
+  /** The archive's room, mode and lobby size (#936); absent in fixtures without them = none, `BOTS`. */
+  room?: string | null;
+  mode?: ArchiveMode;
+  lobbySize?: number | null;
 };
 
 /**
@@ -101,6 +107,10 @@ export type Profile = {
   languages: Record<Language, LanguageStats>;
   activity: ProfileActivity;
   service: ProfileService;
+  /** Clean streaks per accuracy threshold (#936), in `STREAK_THRESHOLDS` order. */
+  streaks: ProfileStreak[];
+  /** The latest counted results, newest first (#936, at most `ARCHIVE_LIMIT`). */
+  archive: ArchiveEntry[];
 };
 
 /**
@@ -113,6 +123,10 @@ export type ProfileTotals = {
   languages: Record<Language, LanguageStats>;
   /** The whole file's service record (one aggregate and one count by place, #932). */
   service: ProfileService;
+  /** The streak scan (#936): accuracy, clean WPM and date of the latest `STREAK_SCAN_LIMIT` results. */
+  history?: StreakRow[];
+  /** The `ARCHIVE_LIMIT` latest results with their room, mode and lobby size (#936). */
+  archive?: ResultRow[];
 };
 
 const mean = (values: number[]): number | null =>
@@ -189,8 +203,8 @@ function streakOf(days: Set<DayKey>, today: DayKey): number {
 /**
  * The `Profile` of a viewer from their counted results (any order) at `now`. The series, the 7-day
  * figures and the streak read the latest `SERIES_LIMIT` results; totals, per-language figures, the
- * service record and the gain's earliest five read `totals` when given (the whole file), else the same
- * rows.
+ * service record, the gain's earliest five, the streaks and the archive read `totals` when given (the
+ * whole file, or its capped scan), else the same rows.
  */
 export function buildProfile(rows: ResultRow[], now: Date, totals?: ProfileTotals): Profile {
   const sorted = [...rows].sort(byTime);
@@ -235,6 +249,8 @@ export function buildProfile(rows: ResultRow[], now: Date, totals?: ProfileTotal
     languages,
     activity: { streak: streakOf(days, today), last7Days },
     service: totals?.service ?? serviceOf(sorted),
+    streaks: streaksOf(totals?.history ?? sorted),
+    archive: archiveOf(totals?.archive ?? sorted),
   };
 }
 

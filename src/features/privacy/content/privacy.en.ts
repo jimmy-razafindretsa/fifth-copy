@@ -42,6 +42,7 @@ export const privacyEn: readonly PrivacySection[] = [
       "Your typist name helps players tell each other apart in a lobby.",
       "Your account lets you sign in and find your results on any computer.",
       "Your results feed your history, your stats and the rankings.",
+      "Your speed and accuracy also feed anonymous totals of all typists, in which nobody can be singled out.",
       "Your keys feed the per-key stats and help us spot cheating.",
       "Your IP address helps us find errors and abuse.",
       "Your clerk and your settings only show what you chose.",

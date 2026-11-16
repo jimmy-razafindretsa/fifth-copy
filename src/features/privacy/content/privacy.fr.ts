@@ -43,6 +43,7 @@ export const privacyFr: readonly PrivacySection[] = [
       "Ton nom de dactylo aide les joueurs à se reconnaître dans un salon.",
       "Ton compte te permet de te connecter et de retrouver tes résultats sur n'importe quel ordinateur.",
       "Tes résultats servent à ton historique, à tes statistiques et au classement.",
+      "Ta vitesse et ta précision servent aussi aux totaux anonymes de tous les dactylos, où personne ne peut être repéré.",
       "Tes touches servent aux statistiques par touche et à repérer la triche.",
       "Ton adresse IP sert à trouver les erreurs et les abus.",
       "Ton commis et tes réglages servent seulement à afficher ce que tu as choisi.",

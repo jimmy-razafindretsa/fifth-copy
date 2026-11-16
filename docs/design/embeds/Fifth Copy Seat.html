@@ -929,10 +929,15 @@ function animClerk(c, d, dt, i) {
 }
 
 let lodT = 0;
+// #940: only the clerks the scene draws are ranked (an empty desk or your own clerk hidden at POV takes no LOD0
+// place); `drawn` is the visibility update() applies this frame, so a clerk that just sat down is ranked at once
+const drawn = i => OCC[i] && !(i === 0 && HIDE0);
 function updateLod() {
-  const order = active.map((c, i) => [camera.position.distanceToSquared(L.desks[i]), i]).sort((a, b) => a[0] - b[0]);
+  const order = [];
+  active.forEach((c, i) => { if (drawn(i)) order.push([camera.position.distanceToSquared(L.desks[i]), i]); });
+  order.sort((a, b) => a[0] - b[0]);
   order.forEach(([, i], rank) => {
-    const c = active[i], lod = rank < P.near ? 0 : 1; if (lod === c.curLod || !SHOWN[i]) return; c.curLod = lod;
+    const c = active[i], lod = rank < P.near ? 0 : 1; if (lod === c.curLod) return; c.curLod = lod;
     ['body', 'head', 'armL', 'armR', 'eyes'].forEach(p => { if (BATCHED) bm.setGeometryIdAt(c.inst[p], c.ids[p][lod]); else c.mesh[p].geometry = lod ? c.geos[p].g1 : c.geos[p].g0; });
     setVis(c, 'lids', false);
   });
@@ -961,16 +966,22 @@ function reportPupils() {
   active.forEach((c, i) => { if (!SHOWN[i]) return; b++; if (bm.getVisibleAt(c.inst.eyes)) a++; });
   const v = a + '/' + b; if (ROOT.dataset.pupils !== v) ROOT.dataset.pupils = v;
 }
+// #940: `data-lod0` = drawn clerks at full detail (LOD0) / drawn clerks (tests read it, e2e/race/scene-lod.spec.ts)
+function reportLod0() {
+  let a = 0, b = 0;
+  active.forEach((c, i) => { if (!SHOWN[i]) return; b++; if (c.curLod === 0) a++; });
+  const v = a + '/' + b; if (ROOT.dataset.lod0 !== v) ROOT.dataset.lod0 = v;
+}
 function update(dt, hide0) {
   HIDE0 = hide0;
   let lod = false; lodT -= dt; if (lodT <= 0) { updateLod(); lodT = 0.25; lod = true; }
   active.forEach((c, i) => {
-    const show = OCC[i] && !(i === 0 && hide0);
+    const show = drawn(i);
     if (show !== SHOWN[i]) { SHOWN[i] = show; ['body', 'head', 'armL', 'armR', 'eyes'].forEach(p => bm.setVisibleAt(c.inst[p], show)); bm.setVisibleAt(c.inst.lids, false); }
     DM.copy(deskM[i]); animClerk(c, ZERO, OCC[i] && TYPING[i] ? dt : 0, i);
   });
   carrIM.instanceMatrix.needsUpdate = true; paperIM.instanceMatrix.needsUpdate = true;
-  if (lod) reportPupils();
+  if (lod) { reportPupils(); reportLod0(); }
   was0 = hide0;
 }
 /** slots[i] = { occ, typing } for the ring's 30 desks; `near` = the preset's LOD0 seats (12). */

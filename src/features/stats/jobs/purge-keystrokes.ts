@@ -46,7 +46,9 @@ export async function purgeExpiredStats(
 
   while (batches < PURGE_MAX_BATCHES) {
     batches += 1;
-    const [gone] = await db.$queryRaw<{ deleted: number; unrolled: number }[]>`
+    const [gone = { deleted: 0, unrolled: 0 }] = await db.$queryRaw<
+      { deleted: number; unrolled: number }[]
+    >`
       WITH gone AS (
         DELETE FROM "RaceKeystrokes" WHERE ("raceId", "desk") IN (
           SELECT "raceId", "desk" FROM "RaceKeystrokes"
@@ -64,7 +66,7 @@ export async function purgeExpiredStats(
 
   while (batches < PURGE_MAX_BATCHES) {
     batches += 1;
-    const [gone] = await db.$queryRaw<{ deleted: number }[]>`
+    const [gone = { deleted: 0 }] = await db.$queryRaw<{ deleted: number }[]>`
       WITH gone AS (
         DELETE FROM "BigramStatDaily" WHERE ("userId", "day", "pair") IN (
           SELECT "userId", "day", "pair" FROM "BigramStatDaily"

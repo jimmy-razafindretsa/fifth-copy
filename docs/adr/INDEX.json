@@ -412,7 +412,7 @@
     {
       "id": "0025",
       "title": "App modules are side-effect free unless listed in package.json sideEffects; the first-load budget runs on every route in CI",
-      "status": "proposed",
+      "status": "accepted",
       "category": "tooling",
       "scope": [
         "package.json",

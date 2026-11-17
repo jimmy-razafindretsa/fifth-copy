@@ -1,7 +1,7 @@
 ---
 id: "0025"
 title: App modules are side-effect free unless listed in package.json sideEffects; the first-load budget runs on every route in CI
-status: proposed
+status: accepted
 category: tooling
 scope: ["package.json", "src/**/index.ts", "src/**/merge-step.ts", "src/**/merge-steps.ts", "src/features/identity/merge/steps.ts", "src/lib/side-effects.test.ts", "scripts/bundle-budget.ts", ".github/workflows/ci.yml"]
 supersedes: []

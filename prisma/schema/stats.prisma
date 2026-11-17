@@ -1,0 +1,45 @@
+// Stats domain (ADR 0008, ADR 0024): per-key history as daily aggregates, owned by src/features/stats.
+// Written only by the daily rollup of RaceKeystrokes (#314), purged by #315, read by #961. No table
+// here holds a keystroke or a per-race key record: raw keys live only in race.prisma RaceKeystrokes.
+// `day` is the stats day of src/lib/time.ts (America/Toronto), stored as that calendar date
+// (`YYYY-MM-DD` at 00:00 UTC). Timing is kept as sums so rollups add up: mean ms = totalMs / timedHits.
+// Guest merge (ADR 0009): src/features/results/merge-steps.ts moves the rows, summing a clashing key.
+// Extension point: a later dimension (language, mode) is an additive column with a default.
+
+/// One typist's day for one expected character on one keyboard layout.
+model CharStatDaily {
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       DateTime       @db.Date
+  /// One NFC character, lower case (checked by the writer, #314).
+  char      String
+  layout    KeyboardLayout
+  /// Presses made while this character was expected.
+  hits      Int
+  /// Of those presses, the wrong ones.
+  errors    Int
+  /// Presses with a usable timing (the first of a race has none).
+  timedHits Int
+  /// Sum of the timings of the timed presses, in ms.
+  totalMs   Int
+
+  /// Unique key; its (userId, day) prefix is the read index by user and day.
+  @@id([userId, day, char, layout])
+}
+
+/// One typist's day for one expected letter pair (two lower-case letters).
+model BigramStatDaily {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  pair      String
+  hits      Int
+  errors    Int
+  timedHits Int
+  totalMs   Int
+
+  /// Unique key; its (userId, day) prefix is the read index by user and day.
+  @@id([userId, day, pair])
+  /// The 90-day purge (#315).
+  @@index([day])
+}

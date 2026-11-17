@@ -321,10 +321,10 @@ ADR 0009, ADR 0010. Theme: `data-theme` on `<html>` from the preference cookie, 
 ## 9. Data
 
 ### 9.1 Ownership
-See the table in ADR 0008. In one sentence: Postgres is the only system of record and only the web app writes it; Redis holds live state with TTLs; raw keystrokes live 30 days and are rolled up daily into `CharStatDaily`; the day boundary is America/Toronto.
+See the table in ADR 0008. In one sentence: Postgres is the only system of record and only the web app writes it; Redis holds live state with TTLs; raw keystrokes live 30 days and are rolled up daily into `CharStatDaily` and `BigramStatDaily` (ADR 0024); the day boundary is America/Toronto.
 
 ### 9.2 Schema files (`prisma/schema/`)
-`identity.prisma` (User, OAuthAccount, RecoveryCode, Preference) · `lobby.prisma` (Lobby, Invite) · `race.prisma` (Race with text snapshot and settings, RaceResult, RaceKeystrokes blob) · `texts.prisma` (Text with language, type, source, licence) · `stats.prisma` (CharStatDaily, PersonalBest, Achievement) · `jobs.prisma` (JobRun). Field lists live only there (`AGENTS.md`). The first `touches:prisma` card creates the initial migration; later cards are additive (expand, migrate, contract across cards for breaking changes).
+`identity.prisma` (User, OAuthAccount, RecoveryCode, Preference) · `lobby.prisma` (Lobby, Invite) · `race.prisma` (Race with text snapshot and settings, RaceResult, RaceKeystrokes blob) · `texts.prisma` (Text with language, type, source, licence) · `stats.prisma` (CharStatDaily, BigramStatDaily, PersonalBest, Achievement; per-key daily sums, [ADR 0024](../adr/0024-per-key-daily-aggregates.md)) · `jobs.prisma` (JobRun). Field lists live only there (`AGENTS.md`). The first `touches:prisma` card creates the initial migration; later cards are additive (expand, migrate, contract across cards for breaking changes).
 
 ### 9.3 Race end, persistence, statistics
 ```mermaid
@@ -342,7 +342,7 @@ sequenceDiagram
   W-->>S: 200 {persisted: desks}
   S->>R: LREM acknowledged
   W->>P: enqueue JobRun rollup(user, today)
-  J->>P: rollupCharStats -> CharStatDaily (upsert), purgeKeystrokes (> 30 d)
+  J->>P: rollup -> CharStatDaily, BigramStatDaily (upsert, sets rolledUpAt), purge keystrokes (> 30 d)
 ```
 
 ### 9.4 Privacy (Law 25)

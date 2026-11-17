@@ -391,6 +391,23 @@
       "supersededBy": [],
       "rule": "A statistic about other typists leaves the server only as the output of one pure function over the counted population (typists with at least 3 counted results, at least 30 of them, each smoothed by a fixed kernel); a response never holds a head count, a count per bar, an id, a name or another typist's figure.",
       "file": "docs/adr/0023-typist-census-aggregates.md"
+    },
+    {
+      "id": "0024",
+      "title": "Per-key history is daily character and letter-pair aggregates with summed timing, rolled up from a marker on RaceKeystrokes",
+      "status": "proposed",
+      "category": "data",
+      "scope": [
+        "prisma/schema/stats.prisma",
+        "prisma/schema/race.prisma",
+        "src/features/stats/jobs/**",
+        "src/features/results/merge-steps.ts",
+        "docs/privacy/retention.md"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Only RaceKeystrokes ever holds a keystroke or a per-race key record; per-key history lives in CharStatDaily and BigramStatDaily as daily sums (hits, errors, timedHits, totalMs) keyed by the America/Toronto stats day, rolled up once per RaceKeystrokes row (rolledUpAt), merged by summing; letter-pair rows are kept 90 days.",
+      "file": "docs/adr/0024-per-key-daily-aggregates.md"
     }
   ]
 }

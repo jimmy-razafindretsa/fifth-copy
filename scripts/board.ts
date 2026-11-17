@@ -17,6 +17,8 @@
  *                                              scripts/merge.sh resolves the branch through it
  *   create --title T --body-file F [--parent n] [--labels a,b] [--estimate N] [--priority 1-4] [--create-missing]
  *                                              same title under the same parent is reused, never duplicated; lands in Backlog
+ *   attach <n> [--estimate N] [--priority 1-4] put an issue created off the board on the project (Backlog if no
+ *                                              status) and set its estimate/priority
  *   relate <A> blocks <B>                      native "blocked by" dependency
  *   move <n> <status>                          Picker only. Backlog|Ready|In Progress|In Review|QA|Done; Done closes the
  *                                              issue, leaving Done reopens it; `Canceled` closes it as not planned
@@ -621,6 +623,60 @@ type CreateSpec = {
 };
 
 /** Creates (or reuses) one card. Returns its number and whether it already existed. */
+/** Estimate and Priority are optional project fields; without them the values live only in the card body. */
+async function setSizing(itemId: string, n: number, estimate?: number, priority?: number) {
+  const c = await ctx();
+  if (estimate !== undefined) {
+    const est = field(c, "Estimate");
+    if (est) await setField(itemId, est, { number: estimate }, `estimate ${cardId(n)}`);
+    else console.log(`note: no Estimate field (bootstrap --fields); estimate stays in the body`);
+  }
+  if (priority !== undefined) {
+    const pf = field(c, "Priority");
+    const opt = pf?.options?.find((o) => priorityRank(o.name) === priority);
+    if (pf && opt)
+      await setField(itemId, pf, { singleSelectOptionId: opt.id }, `priority ${cardId(n)}`);
+    else console.log(`note: no Priority field/option (bootstrap --fields); priority not set`);
+  }
+}
+
+/**
+ * The issue, made sure to be on the project. createIssue's projectV2Ids is not always honoured (#975, #986
+ * and #992 were created off the board), so add the item explicitly when it is missing. Idempotent:
+ * addProjectV2ItemById returns the existing item for an issue already on the project.
+ */
+async function attachToProject(n: number): Promise<FullIssue> {
+  const c = await ctx();
+  const i = await getIssue(n);
+  if (i.projectItems.nodes.some((p) => p.project.id === c.project.id)) return i;
+  await mutate(
+    `add ${cardId(n)} to project`,
+    `mutation($input: AddProjectV2ItemByIdInput!) { addProjectV2ItemById(input: $input) { item { id } } }`,
+    { input: { projectId: c.project.id, contentId: i.id } },
+  );
+  return getIssue(n);
+}
+
+/** `attach <n>`: put an existing issue on the project in Backlog (for issues created off the board). */
+async function opAttach(n: number) {
+  const i = await attachToProject(n);
+  if (DRY) return;
+  const it = await itemOf(i);
+  if (!it.status) await setStatus(it.itemId, "Backlog", `status ${cardId(n)} Backlog`);
+  const estimate = flag("estimate");
+  const priority = flag("priority");
+  if (estimate && Number(estimate) > 3)
+    throw new BoardError("estimate > 3: split the card (PROTOCOL section 3)");
+  await setSizing(
+    it.itemId,
+    n,
+    estimate ? Number(estimate) : undefined,
+    priority ? Number(priority) : undefined,
+  );
+  const again = await itemOf(await getIssue(n));
+  console.log(`attached: ${cardId(n)} (${again.status ?? "no status"})`);
+}
+
 async function createCard(s: CreateSpec): Promise<{ number: number; reused: boolean }> {
   if (s.labels.includes(PLAN_APPROVED))
     throw new BoardError(`${PLAN_APPROVED} is applied by a human only`);
@@ -651,21 +707,9 @@ async function createCard(s: CreateSpec): Promise<{ number: number; reused: bool
   );
   if (!r) return { number: 0, reused: false };
   const n = r.createIssue.issue.number;
-  const it = await itemOf(await getIssue(n));
+  const it = await itemOf(await attachToProject(n));
   await setStatus(it.itemId, "Backlog", `status ${cardId(n)} Backlog`);
-  // Estimate and Priority are optional project fields; without them the values live only in the card body.
-  const est = field(c, "Estimate");
-  if (s.estimate !== undefined) {
-    if (est) await setField(it.itemId, est, { number: s.estimate }, `estimate ${cardId(n)}`);
-    else console.log(`note: no Estimate field (bootstrap --fields); estimate stays in the body`);
-  }
-  if (s.priority !== undefined) {
-    const pf = field(c, "Priority");
-    const opt = pf?.options?.find((o) => priorityRank(o.name) === s.priority);
-    if (pf && opt)
-      await setField(it.itemId, pf, { singleSelectOptionId: opt.id }, `priority ${cardId(n)}`);
-    else console.log(`note: no Priority field/option (bootstrap --fields); priority not set`);
-  }
+  await setSizing(it.itemId, n, s.estimate, s.priority);
   const again = await itemOf(await getIssue(n));
   if (again.title !== s.title || again.parent !== s.parent || again.status !== "Backlog")
     throw new BoardError(`verify failed: ${cardId(n)} title/parent/status differ after create`);
@@ -1407,6 +1451,8 @@ async function main() {
       return opGet(cardArg(pos[0], "get <n>"));
     case "create":
       return opCreate();
+    case "attach":
+      return opAttach(cardArg(pos[0], "attach <n>"));
     case "relate":
       return opRelate(
         cardArg(pos[0], "relate <A> blocks <B>"),

@@ -1,0 +1,121 @@
+/*
+ * "Progression par touche" (#962, bible 14.3 "Personnel file", reference docs/design/bible/Profil.dc.html
+ * section RAPPORT D'APPRENTISSAGE): ported 1:1 in layout, type scale and copy. The section head (kicker,
+ * title, intro) comes from profile.module.css. Colours through roles: the scale runs red (`primary`)
+ * through the tan mid tone (`--heat-mid`, ink 10 % into newsprint) to violet as a mark (`rival`, the
+ * file's navy); the empty cell is the half paper, half newsprint ground of the attendance register. Night
+ * shift follows the theme tokens. Nothing moves.
+ */
+
+@reference "../../../app/globals.css";
+
+/* one frame: paper, 2px ink rule */
+.frame {
+  --heat-mid: color-mix(in srgb, var(--color-fg) 10%, var(--color-surface));
+  --heat-empty: color-mix(in srgb, var(--color-surface) 50%, var(--color-bg));
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  padding: clamp(18px, 2.5vw, 32px);
+}
+
+/* the table scrolls sideways inside itself on phones, never the page */
+.scroll {
+  overflow-x: auto;
+}
+
+/* the reference's grid `28px minmax(0,1fr) 72px`, 10px apart, rows 3px apart, as a real table: the
+   spacing sits outside the cells too, so the table widens by it and pulls back to the frame's edges */
+.grid {
+  width: calc(100% + 20px);
+  min-width: 520px;
+  margin: -3px -10px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 10px 3px;
+}
+
+.colKey {
+  width: 28px;
+}
+
+.colAverage {
+  width: 72px;
+}
+
+.grid th,
+.grid td {
+  padding: 0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+/* the head row: Oswald 600 11px .16em muted, 8px over the first row (5px + the 3px spacing) */
+.grid thead th {
+  padding-bottom: 5px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+/* the key cap */
+.cap {
+  @apply type-typing;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: normal;
+}
+
+/* one cell per day, 1px apart, 14px tall */
+.cells {
+  display: grid;
+  gap: 1px;
+  height: 14px;
+}
+
+.cell,
+.empty {
+  display: block;
+}
+
+.empty {
+  background: var(--heat-empty);
+}
+
+/* the key's average, right-aligned */
+.grid .average {
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-muted);
+  text-align: right;
+}
+
+.grid thead .average {
+  @apply type-label;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+
+/* the legend: LENTE, the gradient bar, RAPIDE */
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.bar {
+  width: 220px;
+  max-width: 40%;
+  height: 12px;
+  border: 1px solid var(--color-fg);
+  background: linear-gradient(90deg, var(--color-primary), var(--heat-mid), var(--color-rival));
+}

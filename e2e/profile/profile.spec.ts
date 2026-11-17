@@ -727,3 +727,142 @@ test.describe("attendance register (#330)", () => {
     await expect(section.locator("[data-today]")).toHaveCount(1);
   });
 });
+
+// Contract of #962 (C5, C6): the progress by key ("Progression par touche", bible 14.3). A guest with
+// three counted races and key rows on three days (CharStatDaily rows written straight into the test
+// database, as the rollup job of #314 would) sees the grid after the clean streaks and before the
+// output curve: `DAY 1 → 3`, E's sentence, K never met. Three races without key rows show no section.
+// At 375 the grid scrolls inside its own focusable region, never the page; axe-clean at 375 / 768 /
+// 1280 in both themes; `/design#profile` shows it for the two-week fixture.
+
+const keyProgress = (page: Page) => page.locator('[data-section="key-progress"]');
+
+/** Key rows for `userId`: on each of the 3 latest days, `e` at 30, 36 then 42 WPM, `a` at 40. */
+async function keyRows(userId: string) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    for (const [i, wpm] of [30, 36, 42].entries()) {
+      const day = new Date(Date.now() - (2 - i) * 86_400_000).toISOString().slice(0, 10);
+      for (const [char, speed] of [
+        ["e", wpm],
+        ["a", 40],
+      ] as const) {
+        await db.query(
+          `INSERT INTO "CharStatDaily" ("userId", day, char, layout, hits, errors, "timedHits", "totalMs")
+           VALUES ($1, $2::date, $3, 'FR_CA', 11, 0, 10, $4)`,
+          [userId, day, char, Math.round(120_000 / speed)],
+        );
+      }
+    }
+  } finally {
+    await db.end();
+  }
+}
+
+test.describe("progress by key (#962)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C5 three races and three days of keys: the grid between streaks and curve; absent without keys", async ({
+    page,
+    request,
+    context,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await openFile(page);
+    // three races, no key data yet: no section, no placeholder
+    await expect(curve(page)).toBeVisible();
+    await expect(keyProgress(page)).toHaveCount(0);
+
+    await keyRows(lobby.hostUserId);
+    await openFile(page);
+    const section = keyProgress(page);
+    await expect(section.getByRole("heading", { name: "Progress by key" })).toBeVisible();
+    await expect(section).toContainText("LEARNING REPORT");
+    await expect(section.locator("[data-key-days]")).toHaveText("DAY 1 → 3");
+    await expect(section.getByRole("rowheader")).toHaveCount(30);
+    const e = section.locator('tr[data-key="e"]');
+    await expect(e).toContainText("E: average 35.3 WPM, from 30.0 to 42.0 over 3 days");
+    await expect(e.locator('[style*="background"]')).toHaveCount(3);
+    await expect(section.locator('tr[data-key="k"]')).toContainText("K: never met");
+    await expect(section.locator('tr[data-key="k"] td').last()).toHaveText("—");
+    await expect(section.locator("[data-key-legend]")).toHaveText(/SLOW\s*FAST/);
+    const order = await page
+      .locator("[data-section]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")));
+    expect(order.indexOf("key-progress")).toBe(order.indexOf("curve") - 1);
+    expect(order.indexOf("key-progress")).toBeGreaterThan(order.indexOf("streaks"));
+
+    // French
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(keyProgress(page).locator("[data-key-days]")).toHaveText("JOUR 1 → 3");
+    await expect(keyProgress(page).locator('tr[data-key="e"]')).toContainText(
+      "E : moyenne 35,3 MPM, de 30,0 à 42,0 sur 3 jours",
+    );
+
+    // at 375 the grid scrolls inside its own focusable, labelled region, never the page
+    await page.setViewportSize({ width: 375, height: 800 });
+    const region = page.getByRole("region", {
+      name: "Progression par touche, défilement horizontal",
+    });
+    await expect(region).toHaveAttribute("tabindex", "0");
+    const sizes = await region.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+    expect(sizes[0]).toBeGreaterThan(sizes[1]!);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, "sideways scroll").toBe(false);
+  });
+
+  test("C6 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await keyRows(lobby.hostUserId);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of [375, 768, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openFile(page);
+        await expect(keyProgress(page)).toBeVisible();
+        const { violations } = await new AxeBuilder({ page })
+          .include('[data-section="key-progress"]')
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const bad = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+        expect(
+          bad.map((v) => v.id),
+          `axe ${scheme} ${width}`,
+        ).toEqual([]);
+        if (width === 375) {
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          );
+          expect(overflow, "sideways scroll").toBe(false);
+        }
+      }
+    }
+  });
+
+  test("C6 /design#profile shows the grid for the two-week fixture", async ({ page }) => {
+    await page.goto("/design#profile");
+    const section = page.locator(
+      'section[aria-labelledby="profile-two-weeks-guest-key-progress"][data-section="key-progress"]',
+    );
+    await expect(section).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(section.locator("[data-key-days]")).toHaveText("DAY 1 → 14");
+    await expect(section.getByRole("rowheader")).toHaveCount(30);
+    await expect(page.locator('[data-section="key-progress"]')).toHaveCount(2);
+  });
+});

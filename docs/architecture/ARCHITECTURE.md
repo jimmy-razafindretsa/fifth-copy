@@ -395,6 +395,7 @@ Watch paths (ADR 0019, amended #917): web watches an allow-list (`src/**`, `pack
 | `DATABASE_URL`, `TEST_DATABASE_URL` | web, worker | Postgres (ADR 0002, 0003) |
 | `REDIS_URL` | race-server, web, worker | live state; web (required in production, #716): shared rate limiter (fails open) and internal-request nonce store `web:internal:nonce:*` (fails closed) (ADR 0020) |
 | `WEB_RATE_LIMIT`, `PLAYWRIGHT_E2E` | web | `off` turns only the web rate limiter off; in production only with `PLAYWRIGHT_E2E=1` (set by `playwright.config.ts`); both unset on Railway (ADR 0020) |
+| `E2E_CENSUS_MEMO_MS` | web | the census memo (`CENSUS_MEMO_MS`, 10 min) in ms for the Playwright web server only, `0` there (#997); refused without `PLAYWRIGHT_E2E=1`; unset on Railway (ADR 0023) |
 | `RACE_SERVER_PORT` | race-server | listen port |
 | `RACE_DRAIN_CAP_S` | race-server | longest drain after SIGTERM, default 900 (#704, ADR 0019) |
 | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS`, `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` | race-server (Railway) | Railway's SIGTERM-to-SIGKILL time (930) and overlap (0); the race server warns at boot when the draining time is below its cap (#704) |

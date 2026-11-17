@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { keyboardLayoutIds, layouts, type KeyboardLayoutId } from "./layouts";
+import {
+  keyboardLayoutIds,
+  layouts,
+  localeLayouts,
+  numberRows,
+  type KeyboardLayoutId,
+} from "./layouts";
 
 // Contract of #224 C1 (and #66 C5, which verifies against this module): the four keyboard layouts a
 // student picks from (R179) as data, three rows of keys each, in the `rows` shape of the typing machine
@@ -52,7 +58,47 @@ describe("keyboard layouts (#224 C1)", () => {
     expect(source).not.toMatch(/^\s*import\s/m);
     expect(source).not.toMatch(/\bimport\s*\(/);
     const exported = [...source.matchAll(/^export\s+(?:const|type)\s+(\w+)/gm)].map((m) => m[1]);
-    expect(exported.sort()).toEqual(["KeyboardLayoutId", "keyboardLayoutIds", "layouts"]);
+    expect(exported.sort()).toEqual([
+      "KeyboardLayoutId",
+      "keyboardLayoutIds",
+      "layouts",
+      "localeLayouts",
+      "numberRows",
+    ]);
+  });
+});
+
+// Contract of #324 C1: each layout's number row, apart from its three letter rows (which stay as they were).
+const NUMBER_ROWS: Record<KeyboardLayoutId, string> = {
+  CSA: "/ 1 2 3 4 5 6 7 8 9 0 - =",
+  FR_CA: "# 1 2 3 4 5 6 7 8 9 0 - =",
+  US_QWERTY: "` 1 2 3 4 5 6 7 8 9 0 - =",
+  AZERTY: "² & é \" ' ( - è _ ç à ) =",
+};
+
+describe("number rows (#324 C1)", () => {
+  it("one per layout, nothing else", () => {
+    expect(Object.keys(numberRows).sort()).toEqual([...keyboardLayoutIds].sort());
+  });
+
+  for (const id of keyboardLayoutIds) {
+    it(`${id}: thirteen unshifted caps, single lower-case characters, none shared with its letter rows`, () => {
+      const row = numberRows[id];
+      expect(row.join(" ")).toBe(NUMBER_ROWS[id]);
+      expect(row).toHaveLength(13);
+      for (const key of row) {
+        expect(Array.from(key), JSON.stringify(key)).toHaveLength(1);
+        expect(key.toLowerCase(), key).toBe(key);
+        expect(key.trim(), "no space key").toBe(key);
+      }
+      const all = [...row, ...layouts[id].flat()];
+      expect(new Set(all).size, "unique across the four rows").toBe(all.length);
+      expect(layouts[id], "the letter rows stay three").toHaveLength(3);
+    });
+  }
+
+  it("the locale default: French CSA, English US QWERTY", () => {
+    expect(localeLayouts).toEqual({ fr: "CSA", en: "US_QWERTY" });
   });
 });
 
@@ -61,6 +107,14 @@ describe("the identity index exports the layouts (#224 C1)", () => {
     const index = readFileSync(path.join(__dirname, "../index.ts"), "utf8");
     expect(index).toMatch(
       /export\s*\{[^}]*\bkeyboardLayoutIds\b[^}]*\blayouts\b[^}]*\btype KeyboardLayoutId\b[^}]*\}\s*from\s*"\.\/keyboard\/layouts"/,
+    );
+  });
+
+  it("re-exports numberRows and localeLayouts (#324 C1)", () => {
+    const index = readFileSync(path.join(__dirname, "../index.ts"), "utf8");
+    expect(index).toMatch(/export\s*\{[^}]*\bnumberRows\b[^}]*\}\s*from\s*"\.\/keyboard\/layouts"/);
+    expect(index).toMatch(
+      /export\s*\{[^}]*\blocaleLayouts\b[^}]*\}\s*from\s*"\.\/keyboard\/layouts"/,
     );
   });
 });

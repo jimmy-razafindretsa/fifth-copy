@@ -1240,6 +1240,14 @@ export const en = {
       row: "≥ {threshold} %",
       foot: "Your longest run of finished races above each accuracy threshold. The longer the run, the happier the Major.",
     },
+    suspectPairs: {
+      title: "SUSPECT COMBINATIONS",
+      tag: "UNDER WATCH",
+      row: "{pair}: {rate} errors, {speed}",
+      wpm: "WPM",
+      noSpeed: "speed not measured",
+      foot: "The sequences where your fingers trip most often: error rate and speed on the pair.",
+    },
     keyProgress: {
       kicker: "LEARNING REPORT",
       title: "Progress by key",

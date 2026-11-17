@@ -11,8 +11,8 @@ type Heading = "h1" | "h2" | "h3" | "h4";
 
 /**
  * "Séries sans faute" (#936, bible 14.3, reference `Profil.dc.html`): a 7.4 docket in the first cell of
- * the reference's two-column grid; its second cell (`Combinaisons suspectes`) is left out until its card,
- * so the docket spans the row. Header (the section's heading) with the ink tag, a real table of the four
+ * the reference's two-column grid (the caller's `.pair`); its second cell is `Combinaisons suspectes`
+ * (#965), and without it the docket spans the row. Header (the section's heading) with the ink tag, a real table of the four
  * thresholds, the foot. Server-rendered, no motion.
  */
 export function StreaksDocket({
@@ -29,7 +29,7 @@ export function StreaksDocket({
   heading: Heading;
 }) {
   return (
-    <section aria-labelledby={id} data-section="streaks" className={styles.pair}>
+    <section aria-labelledby={id} data-section="streaks">
       <div className={styles.docket}>
         <div className={styles.docketHead}>
           <Heading id={id} className={styles.docketTitle}>

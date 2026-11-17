@@ -1430,9 +1430,9 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
         <p className="type-body max-w-prose text-fg">
           The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
           four tubes, the ink band, the folder tabs, the service record, from three races the clean
-          streaks, the typist census, the progress by key, the output curve, the key sheet, the key
-          inventory, the attendance register and the race archives and, under three races, the blank
-          block.
+          streaks beside the suspect letter pairs, the typist census, the progress by key, the
+          output curve, the key sheet, the key inventory, the attendance register and the race
+          archives and, under three races, the blank block.
         </p>
         {PROFILE_STATES.flatMap((state) =>
           PROFILE_VIEWERS.map((who) => (

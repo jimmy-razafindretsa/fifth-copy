@@ -1,0 +1,70 @@
+/*
+ * "Combinaisons suspectes" (#965, bible 14.3 "Personnel file", reference
+ * docs/design/bible/Profil.dc.html lines 162-176): ported 1:1 in layout, type scale and copy. The docket,
+ * its head, ink tag and foot come from profile.module.css (the clean streaks' pattern). Colours through
+ * roles: the bar's track is newsprint (`surface`) in a 1px ink rule, its fill red (`primary`); the file's
+ * navy pair text is ink (`fg`: violet text is reserved for text still to type, 3.1); the speed is muted
+ * ink. Night shift follows the theme tokens. Nothing moves.
+ */
+@reference "../../../app/globals.css";
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* the reference's `72px minmax(0,1fr) 70px 80px`, 14px apart, 22px gutters; dashed 7.4 separators */
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 70px 80px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 22px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.pair {
+  @apply type-typing;
+  font-size: 20px;
+  line-height: normal;
+  font-weight: 700;
+  color: var(--color-fg);
+}
+
+.track {
+  position: relative;
+  display: block;
+  height: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-fg);
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-primary);
+}
+
+.rate,
+.speed {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.speed {
+  color: var(--color-fg-muted);
+}
+
+/* a phone-wide docket: the pair and figure columns size to their content, so the bar keeps its room */
+@container profile-docket (max-width: 479px) {
+  .row {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 10px;
+  }
+}

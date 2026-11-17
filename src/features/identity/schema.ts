@@ -6,6 +6,15 @@ import { keyboardLayoutIds, type KeyboardLayoutId } from "./keyboard/layouts";
 import { OUTFIT_CATALOGUE, type OutfitCategory } from "./clerk/outfit";
 import { RESET_CODE_ALPHABET, RESET_CODE_LENGTH, normalizeResetCode } from "./password-reset/code";
 import { canonicalRecoveryCode } from "./recovery/generate";
+import {
+  DAILY_GOAL_MAX,
+  DAILY_GOAL_MIN,
+  DAILY_GOAL_STEP,
+  PREFERENCE_MACHINE_SKINS,
+  PREFERENCE_THEMES,
+  type PreferenceMachineSkin,
+  type PreferenceTheme,
+} from "./preferences/values";
 
 // Lives in src/lib so src/server/auth can use it without importing a feature (ADR 0001).
 export { normalizeUsername };
@@ -285,29 +294,22 @@ export function parseRecoverForm(form: FormData): ResetParse {
   };
 }
 
-/** The stored theme choice (`Preference.theme`); `SYSTEM` follows `prefers-color-scheme`. */
-export const PREFERENCE_THEMES = ["LIGHT", "DARK", "SYSTEM"] as const;
-export type PreferenceTheme = (typeof PREFERENCE_THEMES)[number];
+export {
+  DAILY_GOAL_MAX,
+  DAILY_GOAL_MIN,
+  DAILY_GOAL_STEP,
+  DEFAULT_DAILY_GOAL,
+  DEFAULT_MACHINE_SKIN,
+  PREFERENCE_MACHINE_SKINS,
+  PREFERENCE_THEMES,
+  type PreferenceMachineSkin,
+  type PreferenceTheme,
+} from "./preferences/values";
 
-/**
- * The seat-view machine skins a viewer may pick (#638, bible 7.7a): identity's own list, kept equal to the
- * race feature's `machineSkinIds` by `preferences.test.ts` (a new skin is registered there, then here).
- * `teleprinter` is the default and the column's default.
- */
-export const PREFERENCE_MACHINE_SKINS = ["teleprinter"] as const;
-export type PreferenceMachineSkin = (typeof PREFERENCE_MACHINE_SKINS)[number];
-export const DEFAULT_MACHINE_SKIN: PreferenceMachineSkin = "teleprinter";
 /** A stored or sent skin id; anything else is refused (the patch) or reads the default (the row). */
 export const machineSkinSchema = z.enum(PREFERENCE_MACHINE_SKINS);
 
-/**
- * The daily goal in minutes (#968, bible 14.3 "Settings"): the attendance register shades each day against
- * it. 5 to 60 in steps of 5; 15 is the column's default and the read of a viewer with no row.
- */
-export const DAILY_GOAL_MIN = 5;
-export const DAILY_GOAL_MAX = 60;
-export const DAILY_GOAL_STEP = 5;
-export const DEFAULT_DAILY_GOAL = 15;
+/** The daily goal in minutes (#968): 5 to 60 in steps of 5 (`./preferences/values`). */
 export const dailyGoalSchema = z
   .number()
   .int()

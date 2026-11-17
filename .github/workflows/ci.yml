@@ -266,6 +266,11 @@ jobs:
         timeout-minutes: 6
       - run: scripts/test-db.sh
       - run: npm run build
+      # ADR 0018 (#986): the first-load JS of every App Router route, from this build, at or under 300 kB
+      # gzip; one line per route, exit 1 above it. One shard is enough: every shard builds the same app.
+      - name: First-load JS budget, every route (ADR 0018)
+        if: matrix.suite == 'parallel' && matrix.shard == 1
+        run: npx tsx scripts/bundle-budget.ts --all
       - run: npm run build:race
       - run: npx playwright test ${{ matrix.filter }} --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
       - uses: actions/upload-artifact@v4

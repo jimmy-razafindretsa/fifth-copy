@@ -2,6 +2,15 @@
   "name": "untitled",
   "version": "0.1.0",
   "private": true,
+  "sideEffects": [
+    "*.css",
+    "./src/app/(auth)/merge-steps.ts",
+    "./src/features/identity/merge/steps.ts",
+    "./src/features/lobby/index.ts",
+    "./src/features/lobby/merge-step.ts",
+    "./src/features/results/index.ts",
+    "./src/features/results/merge-steps.ts"
+  ],
   "scripts": {
     "dev": "next dev",
     "dev:race": "npm run dev --workspace @fifth-copy/race-server",

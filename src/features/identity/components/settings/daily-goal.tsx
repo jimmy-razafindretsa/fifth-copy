@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { fill } from "@/i18n/format";
 import type { UpdatePreferences } from "../../actions/update-preferences";
-import { DAILY_GOAL_MAX, DAILY_GOAL_MIN, DAILY_GOAL_STEP } from "../../schema";
+import { DAILY_GOAL_MAX, DAILY_GOAL_MIN, DAILY_GOAL_STEP } from "../../preferences/values";
 import { SaveError, SaveState, type StatusLabels } from "./status-line";
 import { usePreferenceSave, type SaveStatus } from "./use-preference-save";
 import styles from "./settings.module.css";

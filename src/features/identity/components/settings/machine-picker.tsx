@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { UpdatePreferences } from "../../actions/update-preferences";
-import { PREFERENCE_MACHINE_SKINS, type PreferenceMachineSkin } from "../../schema";
+import { PREFERENCE_MACHINE_SKINS, type PreferenceMachineSkin } from "../../preferences/values";
 import { SegmentedSection } from "./segmented-choice";
 import type { StatusLabels } from "./status-line";
 import type { SaveStatus } from "./use-preference-save";

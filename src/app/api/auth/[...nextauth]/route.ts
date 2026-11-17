@@ -1,8 +1,8 @@
-import "@/features/identity";
 import { oauthSignInHooks, withCredentialsThrottle } from "@/features/identity/server";
 import { handlers, registerOAuthSignInHooks } from "@/server/auth";
-// The guest merge runs every registered step or refuses (#56): this route graph needs them too (#49),
-// identity's own steps with `@/features/identity`.
+// The guest merge runs every registered step or refuses (#56): this route graph needs them too (#49).
+// Identity's own steps come with the hooks' merge (`identity/merge/steps.ts`, a declared side effect in
+// package.json, #986); the other features' with this import.
 import "../../../(auth)/merge-steps";
 
 // Auth.js endpoints (#786, ADR 0009): session, csrf, providers, signin/signout and callbacks. OAuth

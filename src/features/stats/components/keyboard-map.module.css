@@ -56,17 +56,22 @@
   box-shadow: 8px 8px 0 var(--color-fg);
   padding: clamp(10px, 2vw, 22px);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
 }
 
+/* keys keep their square: the row's height is a key's, never a pad label's */
 .row {
   display: flex;
+  align-items: flex-start;
   gap: 4px;
 }
 
-/* TAB, VERR., MAJ */
+/* TAB, VERR., MAJ: as tall as the keys, the label at its bottom left */
 .pad {
   flex: none;
+  position: relative;
+  align-self: stretch;
   border: 2px solid var(--color-fg);
   background: var(--color-surface);
   color: var(--color-fg);
@@ -74,10 +79,14 @@
   font-size: clamp(8px, 1vw, 11px);
   line-height: normal;
   letter-spacing: 0.12em;
-  padding: 5px;
-  display: flex;
-  align-items: flex-end;
   overflow: hidden;
+}
+
+.padLabel {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  white-space: nowrap;
 }
 
 .key {

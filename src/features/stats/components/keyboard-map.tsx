@@ -107,7 +107,9 @@ export function KeyboardMapSection({
             <div key={row.id} className={styles.row} data-keyboard-row={row.id}>
               {row.pad > 0 ? (
                 <div className={styles.pad} style={{ width: width(row.pad) }} aria-hidden="true">
-                  {labels.pads[row.id as keyof KeyboardMapLabels["pads"]]}
+                  <span className={styles.padLabel}>
+                    {labels.pads[row.id as keyof KeyboardMapLabels["pads"]]}
+                  </span>
                 </div>
               ) : null}
               {row.keys.map((key) => (

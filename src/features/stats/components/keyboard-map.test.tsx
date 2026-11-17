@@ -118,15 +118,14 @@ describe("the board (#324 C4)", () => {
       expect(html).toContain(`data-keyboard-row="${row}"`);
     }
     const u = 100 / 14;
-    expect(html).toContain(
-      `style="width:calc(${(1.5 * u).toFixed(2)}% - 4px)" aria-hidden="true">TAB<`,
-    );
-    expect(html).toContain(
-      `style="width:calc(${(1.8 * u).toFixed(2)}% - 4px)" aria-hidden="true">VERR.<`,
-    );
-    expect(html).toContain(
-      `style="width:calc(${(1.3 * u).toFixed(2)}% - 4px)" aria-hidden="true">MAJ<`,
-    );
+    const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pad = (width: number, label: string) =>
+      new RegExp(
+        `${esc(`style="width:calc(${width.toFixed(2)}% - 4px)" aria-hidden="true">`)}<span[^>]*>${esc(label)}<`,
+      );
+    expect(html).toMatch(pad(1.5 * u, "TAB"));
+    expect(html).toMatch(pad(1.8 * u, "VERR."));
+    expect(html).toMatch(pad(1.3 * u, "MAJ"));
     expect(draw("CSA", "en")).toMatch(/>CAPS<[\s\S]*>SHIFT</);
     expect(keyTag(html, "e")).toContain(`width:calc(${u.toFixed(2)}% - 4px)`);
     expect(css).toMatch(/\.space \{[^}]*margin-left: 24%;[^}]*width: 50%/);

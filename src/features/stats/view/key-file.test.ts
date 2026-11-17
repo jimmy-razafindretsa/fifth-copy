@@ -179,7 +179,10 @@ describe("keyFileOf: days and the 30 reference keys (C1)", () => {
 
 describe("keyFileOf: goal, states and the most typed key (C2)", () => {
   it("goal 35; none, weak under the goal, good at or over it", () => {
-    const file = keyFileOf([row(0, "a", { wpm: 34 }), row(0, "s", { hits: 7, wpm: 35 }) /* 2400 ms: exactly 35 */], []);
+    const file = keyFileOf(
+      [row(0, "a", { wpm: 34 }), row(0, "s", { hits: 7, wpm: 35 }) /* 2400 ms: exactly 35 */],
+      [],
+    );
     expect(KEY_GOAL_WPM).toBe(35);
     expect(file.goal).toBe(35);
     expect(key(file, "a").state).toBe("weak");
@@ -188,12 +191,12 @@ describe("keyFileOf: goal, states and the most typed key (C2)", () => {
   });
 
   it("mostTyped: the most hits, the first in reference order when tied", () => {
-    expect(
-      keyFileOf([row(0, "t", { hits: 9 }), row(0, "é", { hits: 12 })], []).mostTyped,
-    ).toBe("é");
-    expect(
-      keyFileOf([row(0, "t", { hits: 12 }), row(0, "e", { hits: 12 })], []).mostTyped,
-    ).toBe("e");
+    expect(keyFileOf([row(0, "t", { hits: 9 }), row(0, "é", { hits: 12 })], []).mostTyped).toBe(
+      "é",
+    );
+    expect(keyFileOf([row(0, "t", { hits: 12 }), row(0, "e", { hits: 12 })], []).mostTyped).toBe(
+      "e",
+    );
     // a character outside the 30 never wins
     expect(keyFileOf([row(0, "'", { hits: 99 })], []).mostTyped).toBeNull();
   });

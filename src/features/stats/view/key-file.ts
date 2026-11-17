@@ -111,7 +111,7 @@ const wpmOf = ({ timedHits, totalMs }: Sums): number | null =>
 /** Slope of the last `LEARNING_WINDOW` present values, x = position in the file's days. */
 function learningRateOf(series: readonly (number | null)[]): number | null {
   let start = series.length;
-  for (let seen = 0; start > 0 && seen < LEARNING_WINDOW; ) {
+  for (let seen = 0; start > 0 && seen < LEARNING_WINDOW;) {
     start -= 1;
     if (series[start] !== null) seen += 1;
   }

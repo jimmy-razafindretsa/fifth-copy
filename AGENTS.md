@@ -107,6 +107,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - Race e2e: `e2e/fixtures.ts` keeps the `/race/*` 3D seat scene off (paper fallback) unless the test carries the `@scene` tag (`e2e/race/scene.spec.ts`); software WebGL in CI is slow (#690, #563).
 - `public/3d/*.html` is generated from the bible's reference 3D pages by `scripts/embeds.ts` (`npm run embeds`, drift-checked in unit tests); never edit it by hand. Landing e2e: gate interactions on hydration (`ready(page)` in `e2e/landing.spec.ts`).
 - Animations: UI transitions and micro-motion read `--motion-*` tokens (tokens.css), never literal durations; bible-8 keyframes keep their listed durations; every animation stops under `prefers-reduced-motion` and `[data-motion="reduce"]`, never `!important`.
+- Bundles (ADR 0025): app modules are side-effect free; a module run by a bare `import "./x";` (merge-step registrations) must be listed in package.json `sideEffects` (`src/lib/side-effects.test.ts`). Client components never import a zod `schema.ts`; CI runs `scripts/bundle-budget.ts --all` (300 kB, ADR 0018).
 - Colours: follow `docs/design/components.md` "Colour usage rules" (no raw hex, no `--brand-*`, ink grounds carry paper text, gold and device colours only where owned); `scripts/check-colours.ts` (check.sh `colours`) enforces them.
 
 ## Architecture map

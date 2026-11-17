@@ -36,9 +36,8 @@ describe.skipIf(!testDatabaseUrl)("per-key stats merge steps (needs TEST_DATABAS
     await cleanup();
     const tag = `${Date.now()}`;
     guestId = (await db.user.create({ data: { typistName: `${PREFIX}g${tag}` } })).id;
-    accountId = (
-      await db.user.create({ data: { typistName: `${PREFIX}a${tag}`, isGuest: false } })
-    ).id;
+    accountId = (await db.user.create({ data: { typistName: `${PREFIX}a${tag}`, isGuest: false } }))
+      .id;
   });
 
   afterAll(async () => {
@@ -133,7 +132,15 @@ describe.skipIf(!testDatabaseUrl)("per-key stats merge steps (needs TEST_DATABAS
         { userId: accountId, ...charKey, hits: 10, errors: 2, timedHits: 9, totalMs: 1_500 },
         { userId: guestId, ...charKey, hits: 4, errors: 1, timedHits: 3, totalMs: 600 },
         // same char, other layout: its own key, moves as is
-        { userId: guestId, ...charKey, layout: "CSA", hits: 1, errors: 0, timedHits: 1, totalMs: 90 },
+        {
+          userId: guestId,
+          ...charKey,
+          layout: "CSA",
+          hits: 1,
+          errors: 0,
+          timedHits: 1,
+          totalMs: 90,
+        },
       ],
     });
     await db.bigramStatDaily.createMany({

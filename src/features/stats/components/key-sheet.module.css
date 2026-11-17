@@ -1,0 +1,217 @@
+/*
+ * "Fiche par touche" (#963, bible 14.3 "Personnel file", reference docs/design/bible/Profil.dc.html
+ * section INTERROGATOIRE INDIVIDUEL): ported 1:1 in layout, type scale and copy. The section head comes
+ * from profile.module.css. Colours through roles: the file's navy is violet (`rival`) as a chip fill and
+ * as the plot's mark (the output curve's speed series), its red the `primary` rule and the `link` text
+ * and goal line; the cells' newsprint is `surface`. Night shift follows the theme tokens. Nothing moves.
+ */
+@reference "../../../app/globals.css";
+
+/* one frame: paper, 2px ink rule */
+.frame {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  padding: clamp(18px, 2.5vw, 32px);
+}
+
+/* ---- the chip row: 30 keys, wrapping, 5px apart ---- */
+.chips {
+  /* paper text on the violet chip in light; on Night shift the lighter violet mark carries press ink */
+  --chip-good-fg: var(--color-bg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .chips {
+    --chip-good-fg: var(--color-band);
+  }
+}
+
+:root[data-theme="dark"] .chips {
+  --chip-good-fg: var(--color-band);
+}
+
+/* the reference's 38px chip grown to the 44px target */
+.chip {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid;
+  @apply type-typing;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* goal reached: violet ground */
+.good {
+  border-color: var(--color-rival);
+  background: var(--color-rival);
+  color: var(--chip-good-fg);
+}
+
+/* needs work: red rule and red letter on paper */
+.weak {
+  border-color: var(--color-primary);
+  background: var(--color-bg);
+  color: var(--color-link);
+}
+
+/* never met: muted, disabled */
+.none {
+  border-color: color-mix(in srgb, var(--color-fg-muted) 45%, transparent);
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: default;
+}
+
+/* the selected key: the ink ground with the red offset */
+.chip.on {
+  border-color: var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  box-shadow: 3px 3px 0 var(--color-primary);
+}
+
+/* ---- five 7.4 cells: newsprint on a 2px ink ground; they wrap and grow, so no ink shows through ---- */
+.cells {
+  margin: 24px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+}
+
+.cell {
+  flex: 1 1 150px;
+  background: var(--color-surface);
+  color: var(--color-fg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cellLabel {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.cellValue {
+  margin: 0;
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 22px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- the plot: ticks | the SVG ---- */
+.plotRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.ticks {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.plot {
+  min-width: 0;
+  border-left: 2px solid var(--color-fg);
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* strokes keep their width when the plot stretches */
+.svg * {
+  vector-effect: non-scaling-stroke;
+}
+
+.grid {
+  stroke: color-mix(in srgb, var(--color-fg) 30%, transparent);
+  stroke-width: 1px;
+  stroke-dasharray: 3 5;
+}
+
+.goal {
+  fill: none;
+  stroke: var(--color-link);
+  stroke-width: 2.5px;
+  stroke-dasharray: 12 8;
+}
+
+.dots {
+  fill: none;
+  stroke: var(--color-rival);
+  stroke-width: 10px;
+  stroke-linecap: round;
+  opacity: 0.35;
+}
+
+.line {
+  fill: none;
+  stroke: var(--color-rival);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+
+/* ---- the legend ---- */
+.legend {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  @apply type-body;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+}
+
+.legend > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.speedSwatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: var(--color-rival);
+}
+
+.goalSwatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2px dashed var(--color-link);
+}

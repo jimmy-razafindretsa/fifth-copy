@@ -81,10 +81,7 @@ export async function rollupKeystrokes(
 
   const counted = await db.raceResult.findMany({
     where: {
-      AND: [
-        countedPopulationWhere(),
-        { OR: batch.map(({ raceId, desk }) => ({ raceId, desk })) },
-      ],
+      AND: [countedPopulationWhere(), { OR: batch.map(({ raceId, desk }) => ({ raceId, desk })) }],
     },
     select: {
       raceId: true,

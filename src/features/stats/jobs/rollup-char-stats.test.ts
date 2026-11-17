@@ -45,7 +45,9 @@ describe("rollupCharStats job (C1)", () => {
 
   it("C6 only the worker registry imports the job", () => {
     const registry = readFileSync(path.join(__dirname, "../../../worker/registry.ts"), "utf8");
-    expect(registry).toMatch(/import \{ rollupCharStats \} from "@\/features\/stats\/jobs\/rollup-char-stats";/);
+    expect(registry).toMatch(
+      /import \{ rollupCharStats \} from "@\/features\/stats\/jobs\/rollup-char-stats";/,
+    );
     const source = readFileSync(path.join(__dirname, "rollup-char-stats.ts"), "utf8");
     // trace decoding and effective text come from the results feature's public server entry
     expect(source).toMatch(/from "@\/features\/results\/server"/);
@@ -92,7 +94,7 @@ describe.skipIf(!testDatabaseUrl)(
       suspicious?: boolean;
       status?: "FINISHED" | "TIMED_OUT" | "ASLEEP";
       createdAt?: Date;
-      data?: Uint8Array;
+      data?: Uint8Array<ArrayBuffer>;
       keysAt?: Date;
     };
 
@@ -145,7 +147,7 @@ describe.skipIf(!testDatabaseUrl)(
             create: {
               desk: 1,
               userId: s.userId,
-              data: s.data ?? gzipSync(JSON.stringify(keys)),
+              data: s.data ?? new Uint8Array(gzipSync(JSON.stringify(keys))),
               count: keys.length,
               createdAt: s.keysAt ?? new Date("2026-11-17T03:00:01Z"),
             },
@@ -173,7 +175,10 @@ describe.skipIf(!testDatabaseUrl)(
         orderBy: [{ day: "asc" }, { char: "asc" }, { layout: "asc" }],
       });
     const pairs = (userId: string) =>
-      db.bigramStatDaily.findMany({ where: { userId }, orderBy: [{ day: "asc" }, { pair: "asc" }] });
+      db.bigramStatDaily.findMany({
+        where: { userId },
+        orderBy: [{ day: "asc" }, { pair: "asc" }],
+      });
     const marked = async (raceId: string) =>
       (await db.raceKeystrokes.findFirstOrThrow({ where: { raceId } })).rolledUpAt;
 
@@ -199,14 +204,16 @@ describe.skipIf(!testDatabaseUrl)(
         "2026-11-16",
         "2026-11-16",
       ]);
-      expect(rows.map(({ char, layout, hits, errors, timedHits, totalMs }) => ({
-        char,
-        layout,
-        hits,
-        errors,
-        timedHits,
-        totalMs,
-      }))).toEqual([
+      expect(
+        rows.map(({ char, layout, hits, errors, timedHits, totalMs }) => ({
+          char,
+          layout,
+          hits,
+          errors,
+          timedHits,
+          totalMs,
+        })),
+      ).toEqual([
         { char: " ", layout: "CSA", hits: 1, errors: 0, timedHits: 1, totalMs: 100 },
         { char: "e", layout: "CSA", hits: 2, errors: 0, timedHits: 2, totalMs: 200 },
         { char: "l", layout: "CSA", hits: 2, errors: 0, timedHits: 1, totalMs: 100 },
@@ -242,8 +249,9 @@ describe.skipIf(!testDatabaseUrl)(
       await stored({ userId: u, text: "Le le, 2a" });
       await run();
       const rows = await pairs(u);
-      expect(rows.map(({ pair, hits, timedHits, totalMs }) => ({ pair, hits, timedHits, totalMs })))
-        .toEqual([{ pair: "le", hits: 2, timedHits: 2, totalMs: 200 }]);
+      expect(
+        rows.map(({ pair, hits, timedHits, totalMs }) => ({ pair, hits, timedHits, totalMs })),
+      ).toEqual([{ pair: "le", hits: 2, timedHits: 2, totalMs: 200 }]);
     });
 
     it("C4 a second run adds nothing; two traces of one day add up", async () => {
@@ -290,7 +298,11 @@ describe.skipIf(!testDatabaseUrl)(
 
     it("C4 C5 a corrupt blob beside a good one: marked, skipped, no row; the good one rolls up", async () => {
       const u = await user();
-      const corrupt = await stored({ userId: u, text: "le", data: Buffer.from("not gzip") });
+      const corrupt = await stored({
+        userId: u,
+        text: "le",
+        data: new TextEncoder().encode("not gzip"),
+      });
       const ok = await stored({ userId: u, text: "ab", keysAt: new Date("2026-11-17T03:00:05Z") });
       const lines = await run();
       expect(await marked(corrupt)).toEqual(NOW);
@@ -307,7 +319,12 @@ describe.skipIf(!testDatabaseUrl)(
         await stored({ userId: u, text: "le", endReason: "VOID" }),
         await stored({ userId: u, text: "le", status: "ASLEEP" }),
       ];
-      const timedOut = await stored({ userId: u, text: "ab", status: "TIMED_OUT", endReason: "TIMER" });
+      const timedOut = await stored({
+        userId: u,
+        text: "ab",
+        status: "TIMED_OUT",
+        endReason: "TIMER",
+      });
       const lines = await run();
 
       for (const id of ids) expect(await marked(id)).toEqual(NOW);
@@ -323,9 +340,21 @@ describe.skipIf(!testDatabaseUrl)(
 
     it("C1 a run takes the oldest unrolled rows first, at most `limit`", async () => {
       const u = await user();
-      const newest = await stored({ userId: u, text: "cc", keysAt: new Date("2026-11-17T03:00:09Z") });
-      const oldest = await stored({ userId: u, text: "aa", keysAt: new Date("2026-11-17T03:00:01Z") });
-      const middle = await stored({ userId: u, text: "bb", keysAt: new Date("2026-11-17T03:00:05Z") });
+      const newest = await stored({
+        userId: u,
+        text: "cc",
+        keysAt: new Date("2026-11-17T03:00:09Z"),
+      });
+      const oldest = await stored({
+        userId: u,
+        text: "aa",
+        keysAt: new Date("2026-11-17T03:00:01Z"),
+      });
+      const middle = await stored({
+        userId: u,
+        text: "bb",
+        keysAt: new Date("2026-11-17T03:00:05Z"),
+      });
       await run(2);
       expect(await marked(oldest)).toEqual(NOW);
       expect(await marked(middle)).toEqual(NOW);

@@ -176,6 +176,9 @@ test.describe("#560 race HUD on /design", () => {
     await page.keyboard.press("Escape");
     await expect(confirm).toHaveCount(0);
 
+    // the installed clock still flows in real time: pause it so only `runFor` moves it and a loaded
+    // machine cannot spend the 200 ms margin between the clicks and the checks (#967 CI flake)
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
     await abandon.click();
     await expect(confirm).toBeVisible();
     await page.clock.runFor(4_800);

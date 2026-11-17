@@ -1,5 +1,11 @@
 import { addDays, type DayKey, dayKey } from "@/lib/time";
 import { type ArchiveEntry, type ArchiveMode, archiveOf } from "./archive";
+import {
+  type AttendanceRow,
+  attendanceOf,
+  DEFAULT_DAILY_GOAL_MIN,
+  type ProfileAttendance,
+} from "./attendance";
 import { type ProfileStreak, type StreakRow, streaksOf } from "./streaks";
 
 /**
@@ -111,6 +117,8 @@ export type Profile = {
   streaks: ProfileStreak[];
   /** The latest counted results, newest first (#936, at most `ARCHIVE_LIMIT`). */
   archive: ArchiveEntry[];
+  /** The attendance register (#330): three months of days against the daily goal. */
+  attendance: ProfileAttendance;
 };
 
 /**
@@ -127,6 +135,8 @@ export type ProfileTotals = {
   history?: StreakRow[];
   /** The `ARCHIVE_LIMIT` latest results with their room, mode and lobby size (#936). */
   archive?: ResultRow[];
+  /** The attendance scan (#330): date and duration of the latest `ATTENDANCE_SCAN_LIMIT` results. */
+  attendance?: AttendanceRow[];
 };
 
 const mean = (values: number[]): number | null =>
@@ -190,23 +200,20 @@ function inWindow<T extends { day: DayKey }>(items: T[], day: DayKey): T[] {
   return items.filter((i) => i.day >= first && i.day <= day);
 }
 
-function streakOf(days: Set<DayKey>, today: DayKey): number {
-  let day = days.has(today) ? today : addDays(today, -1);
-  let streak = 0;
-  while (days.has(day)) {
-    streak += 1;
-    day = addDays(day, -1);
-  }
-  return streak;
-}
-
 /**
  * The `Profile` of a viewer from their counted results (any order) at `now`. The series, the 7-day
  * figures and the streak read the latest `SERIES_LIMIT` results; totals, per-language figures, the
  * service record, the gain's earliest five, the streaks and the archive read `totals` when given (the
- * whole file, or its capped scan), else the same rows.
+ * whole file, or its capped scan), else the same rows. The attendance register and the current streak
+ * read `totals.attendance` (the date-and-duration scan) when given, else the same rows; `goalMin` is the
+ * viewer's daily goal (#330; the setting is #968).
  */
-export function buildProfile(rows: ResultRow[], now: Date, totals?: ProfileTotals): Profile {
+export function buildProfile(
+  rows: ResultRow[],
+  now: Date,
+  totals?: ProfileTotals,
+  { goalMin = DEFAULT_DAILY_GOAL_MIN }: { goalMin?: number } = {},
+): Profile {
   const sorted = [...rows].sort(byTime);
   const latest = sorted.slice(-SERIES_LIMIT).map((r) => ({ ...r, day: dayKey(r.createdAt) }));
   const today = dayKey(now);
@@ -230,7 +237,7 @@ export function buildProfile(rows: ResultRow[], now: Date, totals?: ProfileTotal
       : Math.round(latestMean - earliestMean) || 0;
 
   const week = inWindow(latest, today);
-  const days = new Set(latest.map((r) => r.day));
+  const attendance = attendanceOf(totals?.attendance ?? sorted, now, goalMin);
   const last7Days = Array.from({ length: WINDOW_DAYS }, (_, i) => {
     const day = addDays(today, i - (WINDOW_DAYS - 1));
     return { day, races: latest.filter((r) => r.day === day).length };
@@ -247,10 +254,12 @@ export function buildProfile(rows: ResultRow[], now: Date, totals?: ProfileTotal
       },
     },
     languages,
-    activity: { streak: streakOf(days, today), last7Days },
+    // one definition of the current streak (#330): the register's own is this one
+    activity: { streak: attendance.currentStreak, last7Days },
     service: totals?.service ?? serviceOf(sorted),
     streaks: streaksOf(totals?.history ?? sorted),
     archive: archiveOf(totals?.archive ?? sorted),
+    attendance,
   };
 }
 

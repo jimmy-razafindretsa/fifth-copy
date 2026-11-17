@@ -15,6 +15,7 @@ import {
 } from "../view/profile";
 import { ARCHIVE_LIMIT, modeOf } from "../view/archive";
 import { STREAK_SCAN_LIMIT } from "../view/streaks";
+import { ATTENDANCE_SCAN_LIMIT, DEFAULT_DAILY_GOAL_MIN } from "../view/attendance";
 import { countedWhere } from "./counted-where";
 
 /** Who is looking: only the id matters (ADR 0009); guests have a file too. */
@@ -48,6 +49,12 @@ const STREAK_SELECT = {
   createdAt: true,
   cleanWpm: true,
   accuracy: true,
+} satisfies Prisma.RaceResultSelect;
+
+/** The attendance scan (#330): only the date and the duration of each result. */
+const ATTENDANCE_SELECT = {
+  createdAt: true,
+  durationMs: true,
 } satisfies Prisma.RaceResultSelect;
 
 /**
@@ -94,68 +101,81 @@ const PODIUM_PLACES = [1, 2, 3] as const;
  * read from `RaceResult` (never `RaceKeystrokes`). A constant number of queries whatever the file's size:
  * the latest `SERIES_LIMIT` results, the earliest `GAIN_SAMPLE`, one aggregate per language for the
  * whole-file totals and bests, and for the service record (#932) one whole-file aggregate and one count
- * per podium place, and for #936 the capped streak scan and the archive's latest rows. A `null` viewer gets the empty profile without a query.
+ * per podium place, for #936 the capped streak scan and the archive's latest rows, and for #330 the
+ * capped attendance scan (date and duration). A `null` viewer gets the empty profile without a query.
+ * `goalMin` is the daily goal of the attendance register (`DEFAULT_DAILY_GOAL_MIN` until #968).
  */
 export async function getProfile(
   viewer: ProfileViewer,
-  { db, now = new Date() }: { db?: Db; now?: Date } = {},
+  {
+    db,
+    now = new Date(),
+    goalMin = DEFAULT_DAILY_GOAL_MIN,
+  }: { db?: Db; now?: Date; goalMin?: number } = {},
 ): Promise<Profile> {
-  if (!viewer) return buildProfile([], now);
+  if (!viewer) return buildProfile([], now, undefined, { goalMin });
   const client: Db = db ?? (await import("@/server/db")).db;
   const where = countedWhere(viewer.id);
-  const [latest, earliest, history, archive, whole, byPlace, ...perLanguage] = await Promise.all([
-    client.raceResult.findMany({
-      where,
-      select: ROW_SELECT,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: SERIES_LIMIT,
-    }),
-    client.raceResult.findMany({
-      where,
-      select: ROW_SELECT,
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      take: GAIN_SAMPLE,
-    }),
-    client.raceResult.findMany({
-      where,
-      select: STREAK_SELECT,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: STREAK_SCAN_LIMIT,
-    }),
-    client.raceResult.findMany({
-      where,
-      select: archiveSelect(viewer.id),
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: ARCHIVE_LIMIT,
-    }),
-    client.raceResult.aggregate({
-      where,
-      _count: { _all: true },
-      _sum: {
-        durationMs: true,
-        correct: true,
-        errors: true,
-        bonusesSent: true,
-        bonusesReceived: true,
-      },
-      _max: { cleanWpm: true, accuracy: true },
-      _avg: { cleanWpm: true, accuracy: true },
-    }),
-    client.raceResult.groupBy({
-      by: ["place"],
-      where: { ...where, place: { in: [...PODIUM_PLACES] } },
-      _count: { _all: true },
-      orderBy: { place: "asc" },
-    }),
-    ...LANGUAGES.map((language) =>
-      client.raceResult.aggregate({
-        where: countedWhere(viewer.id, language),
-        _count: { _all: true },
-        _max: { cleanWpm: true },
-        _avg: { cleanWpm: true },
+  const [latest, earliest, history, archive, attendance, whole, byPlace, ...perLanguage] =
+    await Promise.all([
+      client.raceResult.findMany({
+        where,
+        select: ROW_SELECT,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: SERIES_LIMIT,
       }),
-    ),
-  ]);
+      client.raceResult.findMany({
+        where,
+        select: ROW_SELECT,
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: GAIN_SAMPLE,
+      }),
+      client.raceResult.findMany({
+        where,
+        select: STREAK_SELECT,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: STREAK_SCAN_LIMIT,
+      }),
+      client.raceResult.findMany({
+        where,
+        select: archiveSelect(viewer.id),
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: ARCHIVE_LIMIT,
+      }),
+      client.raceResult.findMany({
+        where,
+        select: ATTENDANCE_SELECT,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: ATTENDANCE_SCAN_LIMIT,
+      }),
+      client.raceResult.aggregate({
+        where,
+        _count: { _all: true },
+        _sum: {
+          durationMs: true,
+          correct: true,
+          errors: true,
+          bonusesSent: true,
+          bonusesReceived: true,
+        },
+        _max: { cleanWpm: true, accuracy: true },
+        _avg: { cleanWpm: true, accuracy: true },
+      }),
+      client.raceResult.groupBy({
+        by: ["place"],
+        where: { ...where, place: { in: [...PODIUM_PLACES] } },
+        _count: { _all: true },
+        orderBy: { place: "asc" },
+      }),
+      ...LANGUAGES.map((language) =>
+        client.raceResult.aggregate({
+          where: countedWhere(viewer.id, language),
+          _count: { _all: true },
+          _max: { cleanWpm: true },
+          _avg: { cleanWpm: true },
+        }),
+      ),
+    ]);
   const languages = {} as Record<Language, LanguageStats>;
   LANGUAGES.forEach((language, i) => {
     const a = perLanguage[i];
@@ -185,11 +205,17 @@ export async function getProfile(
           sabotagesSent: whole._sum.bonusesSent ?? 0,
           sabotagesReceived: whole._sum.bonusesReceived ?? 0,
         };
-  return buildProfile(latest.map(toRow), now, {
-    earliest: earliest.map(toRow),
-    languages,
-    service,
-    history,
-    archive: archive.map(toArchiveRow),
-  });
+  return buildProfile(
+    latest.map(toRow),
+    now,
+    {
+      earliest: earliest.map(toRow),
+      languages,
+      service,
+      history,
+      archive: archive.map(toArchiveRow),
+      attendance,
+    },
+    { goalMin },
+  );
 }

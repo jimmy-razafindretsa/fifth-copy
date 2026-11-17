@@ -3,6 +3,7 @@ import { expect, test } from "../fixtures";
 import { type Desk, postResults, seedLobby, startRace, withoutWebGL } from "../results/helpers";
 import { scaled } from "../timeouts";
 import { missionFor } from "../../src/features/stats/view/missions";
+import { statsDayNoon } from "../../src/lib/time";
 import {
   hints,
   locale,
@@ -18,7 +19,6 @@ import {
 // viewer's counted results posted through the signed internal routes. Playwright runs in UTC while the
 // stats day is Toronto's, so the expected template comes from the same pure function.
 
-const DAY = 86_400_000;
 const stars = (page: Page) => playerDocket(page).locator("[data-stars]");
 const LINES: Record<string, string> = {
   "accuracy-95": "3 races at 95 % accuracy",
@@ -95,11 +95,9 @@ test.describe("mission of the day (#943 C18-C20)", () => {
   test("C19 two completed past days and not today read 2 stars", async ({ page, request }) => {
     test.skip(test.info().project.name !== "desktop", "desktop project only");
     const host = await races(page, request, 6);
-    // back-date: three results to noon Toronto (17:00Z) one day ago, three to two days ago
-    const noon = (daysAgo: number) => {
-      const d = new Date(Date.now() - daysAgo * DAY);
-      return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 17));
-    };
+    // back-date: three results to noon on Toronto's yesterday, three to the day before (the stats day
+    // is Toronto's, not UTC's: #975)
+    const now = new Date();
     await withDb(async (db) => {
       const { rows } = await db.query<{ id: string }>(
         `SELECT id FROM "RaceResult" WHERE "userId" = $1 ORDER BY "createdAt"`,
@@ -108,7 +106,7 @@ test.describe("mission of the day (#943 C18-C20)", () => {
       expect(rows).toHaveLength(6);
       for (const [i, row] of rows.entries()) {
         await db.query(`UPDATE "RaceResult" SET "createdAt" = $1 WHERE id = $2`, [
-          noon(i < 3 ? 1 : 2),
+          statsDayNoon(i < 3 ? 1 : 2, now),
           row.id,
         ]);
       }

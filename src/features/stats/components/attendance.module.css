@@ -1,0 +1,185 @@
+/*
+ * "Registre de présence" (#330, bible 14.3 "Personnel file", reference docs/design/bible/Profil.dc.html
+ * section FEUILLE DE POINTAGE): ported 1:1 in layout, type scale and copy. The section head (kicker,
+ * title) comes from profile.module.css. Colours through roles: the five level tones are agit-red
+ * (`primary`) mixed into the paper/newsprint ground, so they follow Night shift; every day number is
+ * 4.5:1 or more on its tone (levels 0 to 3 ink, level 4 paper on red). Nothing moves.
+ */
+
+@reference "../../../app/globals.css";
+
+/* the levels' grounds: 0, 20, 36, 52 and 100 % red into the half paper, half newsprint ground */
+.month,
+.legend {
+  --att-base: color-mix(in srgb, var(--color-surface) 50%, var(--color-bg));
+}
+
+.level0 {
+  background: var(--att-base);
+  color: var(--color-fg);
+}
+
+.level1 {
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--att-base));
+  color: var(--color-fg);
+}
+
+.level2 {
+  background: color-mix(in srgb, var(--color-primary) 36%, var(--att-base));
+  color: var(--color-fg);
+}
+
+.level3 {
+  background: color-mix(in srgb, var(--color-primary) 52%, var(--att-base));
+  color: var(--color-fg);
+}
+
+.level4 {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+/* three 7.4 cells: paper on a 2px ink ground (gap 2px on ink, never per-cell borders) */
+.stats {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+}
+
+.stat {
+  /* on a phone the cells wrap and grow, so every row is full and no ink shows through */
+  flex: 1 1 auto;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statLabel {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  color: var(--color-fg-muted);
+}
+
+.statValue {
+  margin: 0;
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 20px;
+  line-height: normal;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* one frame: paper, 2px ink rule */
+.frame {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  padding: clamp(18px, 2.5vw, 32px);
+}
+
+/* three months side by side, wrapping to one column */
+.months {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 28px;
+}
+
+/* a real table drawn as the reference's 7-column grid, 3px apart */
+.month {
+  /* 3px of spacing on every side of the cells: widen by 6px and pull back 3px, so the edges align */
+  width: calc(100% + 6px);
+  margin: 0 -3px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 3px;
+}
+
+.monthName {
+  /* the 3px of the table's spacing are inside the month: keep the rule on the cells' edges */
+  margin: 0 3px 5px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--color-fg);
+  @apply type-display-md;
+  font-size: 20px;
+  line-height: normal;
+  letter-spacing: normal;
+  text-align: left;
+}
+
+.weekday {
+  padding: 0 0 1px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.1em;
+  color: var(--color-fg-muted);
+  text-align: center;
+}
+
+.cell {
+  padding: 0;
+}
+
+/* the day: a square with its number on its level's ground */
+.day {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  @apply type-typing;
+  font-size: 12px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* today: a 2px ink rule inside the square */
+.today {
+  outline: 2px solid var(--color-fg);
+  outline-offset: -2px;
+}
+
+/* after today: no level, dashed and muted */
+.future {
+  background: transparent;
+  color: var(--color-fg-muted);
+  outline: 1px dashed color-mix(in srgb, var(--color-fg-muted) 60%, transparent);
+  outline-offset: -2px;
+}
+
+/* the legend row under a dashed 7.4 separator */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.goal {
+  margin-right: 6px;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+}
+
+.swatch {
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
+  padding: 5px 10px;
+  white-space: nowrap;
+}

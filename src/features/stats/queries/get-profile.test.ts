@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { COUNTED_RACE } from "@/features/results";
 import { createPrismaClient } from "@/server/db-client";
+import { ATTENDANCE_SCAN_LIMIT, DEFAULT_DAILY_GOAL_MIN } from "../view/attendance";
 import { emptyProfile } from "../view/profile";
 import { getProfile } from "./get-profile";
 
@@ -99,6 +100,8 @@ const ROW_SELECT = {
 };
 // #936 C2: the streak read selects only accuracy, clean WPM and date
 const STREAK_SELECT = { createdAt: true, cleanWpm: true, accuracy: true };
+// #330 C3: the attendance read selects only the date and the duration
+const ATTENDANCE_SELECT = { createdAt: true, durationMs: true };
 // #936 C2: the archive reads its own row, the room, and a count of the other humans (never their rows)
 const ARCHIVE_SELECT = {
   createdAt: true,
@@ -135,6 +138,7 @@ describe("getProfile (stand-in client)", () => {
       "findMany",
       "findMany",
       "findMany",
+      "findMany",
       "groupBy",
     ]);
     for (const { args } of calls) {
@@ -157,7 +161,9 @@ describe("getProfile (stand-in client)", () => {
       expect(sent).not.toMatch(/"(wpm|rawWpm|adjustedWpm|keystrokes)"/);
       expect(sent).not.toContain("RaceKeystrokes");
       if (op === "findMany") {
-        expect([ROW_SELECT, STREAK_SELECT, ARCHIVE_SELECT]).toContainEqual(args.select);
+        expect([ROW_SELECT, STREAK_SELECT, ARCHIVE_SELECT, ATTENDANCE_SELECT]).toContainEqual(
+          args.select,
+        );
       } else if (op === "aggregate") {
         expect(args).toMatchObject({ _max: { cleanWpm: true }, _avg: { cleanWpm: true } });
       } else {
@@ -248,7 +254,37 @@ describe("getProfile (stand-in client)", () => {
     ]);
   });
 
-  it("C4: 250 stored results give 200 points in 8 queries, the latest ones, oldest first", async () => {
+  it("#330 C3: one more query, the date-and-duration scan; the goal is DEFAULT_DAILY_GOAL_MIN", async () => {
+    const at = (daysAgo: number) => new Date(NOW.getTime() - daysAgo * 86_400_000);
+    const { db, calls } = fakeDb([
+      { createdAt: at(0), cleanWpm: 40, accuracy: 0.9, lang: "FR", durationMs: 9 * 60_000 },
+      { createdAt: at(0), cleanWpm: 40, accuracy: 0.9, lang: "FR", durationMs: 6 * 60_000 },
+      { createdAt: at(1), cleanWpm: 40, accuracy: 0.9, lang: "FR", durationMs: 8 * 60_000 },
+      { createdAt: at(3), cleanWpm: 40, accuracy: 0.9, lang: "EN", durationMs: 30_000 },
+    ]);
+    const p = await getProfile(VIEWER, { db, now: NOW });
+    const scan = calls.filter(
+      (c) => JSON.stringify(c.args.select) === JSON.stringify(ATTENDANCE_SELECT),
+    );
+    expect(scan).toHaveLength(1);
+    expect(scan[0]!.args).toMatchObject({
+      take: ATTENDANCE_SCAN_LIMIT,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    expect(DEFAULT_DAILY_GOAL_MIN).toBe(15);
+    expect(p.attendance.goalMin).toBe(15);
+    const nov = p.attendance.months.at(-1)!.days;
+    // Nov 13 (today): 15 min = 100 %; Nov 12: 8 min; Nov 10: 30 s
+    expect(nov[12]).toMatchObject({ today: true, minutes: 15, level: 4 });
+    expect(nov[11]).toMatchObject({ minutes: 8, level: 2 });
+    expect(nov[9]).toMatchObject({ minutes: 0.5, level: 1 });
+    expect(p.attendance).toMatchObject({ currentStreak: 2, bestStreak: 2, activeDays: 3 });
+    // a goal of the viewer's own (#968) is passed through
+    const own = await getProfile(VIEWER, { db, now: NOW, goalMin: 8 });
+    expect(own.attendance.months.at(-1)!.days[11]).toMatchObject({ level: 4 });
+  });
+
+  it("C4: 250 stored results give 200 points in 9 queries, the latest ones, oldest first", async () => {
     const rows = Array.from({ length: 250 }, (_, i) => ({
       createdAt: new Date(NOW.getTime() - (250 - i) * 60_000),
       cleanWpm: i,
@@ -257,7 +293,7 @@ describe("getProfile (stand-in client)", () => {
     }));
     const { db, calls } = fakeDb(rows);
     const p = await getProfile(VIEWER, { db, now: NOW });
-    expect(calls).toHaveLength(8);
+    expect(calls).toHaveLength(9);
     expect(p.progress.series).toHaveLength(200);
     expect(p.progress.series[0]?.cleanWpm).toBe(50);
     expect(p.progress.series[199]?.cleanWpm).toBe(249);
@@ -409,6 +445,11 @@ describe.skipIf(!testDatabaseUrl)(
       // The other typist sees only their own row.
       const theirs = await getProfile({ id: other }, { db, now: NOW });
       expect(theirs.progress.series.map((s) => s.cleanWpm)).toEqual([90]);
+      // #330 C3: the register sums only my two counted rows (30 s each) on today's cell
+      const today = (q: typeof p) => q.attendance.months.at(-1)!.days.find((d) => d.today)!;
+      expect(today(p)).toMatchObject({ minutes: 1, level: 1 });
+      expect(p.attendance.activeDays).toBe(1);
+      expect(today(theirs)).toMatchObject({ minutes: 0.5, level: 1 });
     });
 
     it("#936 C2: the archive names the mode from a count of the other humans and reads only my row", async () => {
@@ -441,8 +482,8 @@ describe.skipIf(!testDatabaseUrl)(
       queries = 0;
       const p = await getProfile({ id: me }, { db, now: NOW });
       expect(queries).toBe(forOne);
-      // #932's six and #936's streak scan and archive
-      expect(queries).toBe(8);
+      // #932's six, #936's streak scan and archive, #330's attendance scan
+      expect(queries).toBe(9);
       expect(p.total).toBe(250);
       expect(p.progress.series).toHaveLength(200);
       // The latest 200 are the races 0.2 h .. 20.1 h ago (wpm 2..201), oldest first.

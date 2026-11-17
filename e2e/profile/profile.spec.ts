@@ -569,3 +569,161 @@ test.describe("typist census (#967)", () => {
     expect(overflow, "sideways scroll").toBe(false);
   });
 });
+
+// Contract of #330 (C7, C8): the attendance register ("Registre de présence", bible 14.3). A guest with
+// counted races on three known days (today, yesterday, three days ago; results backdated in the
+// database after the signed routes stored them) reads a 2-day current streak and 3 active days over
+// the window from the first day of the month two months back to today; a second browser context sees
+// none of it. At 375 the three months stack. The section is axe-clean at 375 / 768 / 1280 in both
+// themes and never scrolls the page sideways; `/design#profile` shows it for the two-week fixture.
+
+const attendance = (page: Page) => page.locator('[data-section="attendance"]');
+
+/** Today's `YYYY-MM-DD` in the stats time zone and the register's window length in days. */
+function torontoWindow(): { today: string; windowDays: number } {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [y, m, d] = today.split("-").map(Number) as [number, number, number];
+  const first = Date.UTC(y, m - 3, 1);
+  return { today, windowDays: (Date.UTC(y, m - 1, d) - first) / 86_400_000 + 1 };
+}
+
+/** One counted race per entry of `daysAgo`, then its result moved back that many days. */
+async function racesOnDays(
+  request: Parameters<typeof startRace>[0],
+  lobby: Awaited<ReturnType<typeof seedLobby>>,
+  daysAgo: number[],
+) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    for (const days of daysAgo) {
+      const desks: Desk[] = [
+        { desk: 1, name: "Host", place: 1, wpm: 45, accuracy: 0.95, userId: lobby.hostUserId },
+        { desk: 2, name: "Typist Bot", place: 2, wpm: 40, isBot: true },
+      ];
+      const raceId = await startRace(request, lobby, desks);
+      await postResults(request, raceId, desks);
+      const at = new Date(Date.now() - days * 86_400_000).toISOString();
+      await db.query(
+        `UPDATE "RaceResult" SET "createdAt" = ($1::timestamptz AT TIME ZONE 'UTC') WHERE "raceId" = $2`,
+        [at, raceId],
+      );
+    }
+  } finally {
+    await db.end();
+  }
+}
+
+test.describe("attendance register (#330)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C7 three known days: streak and active days, today ringed; stacked at 375; another browser sees none", async ({
+    page,
+    request,
+    browser,
+    context,
+  }) => {
+    await racesOnDays(request, await seedLobby(page), [0, 1, 3]);
+    const { today, windowDays } = torontoWindow();
+    await openFile(page);
+    const section = attendance(page);
+    await expect(section).toBeVisible();
+    await expect(section.getByRole("heading", { name: "Attendance register" })).toBeVisible();
+    await expect(section.locator('[data-attendance="current"] dd')).toHaveText("2 DAYS");
+    await expect(section.locator('[data-attendance="best"] dd')).toHaveText("2 DAYS");
+    await expect(section.locator('[data-attendance="active"] dd')).toHaveText(`3 / ${windowDays}`);
+    const cell = section.locator(`[data-day="${today}"]`);
+    await expect(cell).toHaveAttribute("data-today", "");
+    await expect(cell).toHaveAttribute("data-level", "1");
+    await expect(cell).toContainText(/\(today\): 0 min, 5 % of the goal$/);
+    await expect(section.getByRole("table")).toHaveCount(3);
+    await expect(section).toContainText("DAILY GOAL (15 MIN)");
+    // the section sits before the race archives
+    const order = await page
+      .locator("[data-section]")
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-section")));
+    expect(order.indexOf("attendance")).toBe(order.indexOf("archive") - 1);
+
+    // French
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(attendance(page).locator('[data-attendance="current"] dt')).toHaveText(
+      "SÉRIE ACTUELLE",
+    );
+    await expect(attendance(page).locator('[data-attendance="current"] dd')).toHaveText("2 JOURS");
+    await expect(attendance(page)).toContainText("OBJECTIF QUOTIDIEN (15 MIN)");
+
+    // at 375 the months stack: one column
+    await page.setViewportSize({ width: 375, height: 800 });
+    const lefts = await attendance(page)
+      .locator("table")
+      .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+    expect(new Set(lefts).size).toBe(1);
+
+    const other = await browser.newContext();
+    try {
+      await other.addCookies([{ name: "locale", value: "en", url }]);
+      const stranger = await other.newPage();
+      await withoutWebGL(stranger);
+      await seedLobby(stranger);
+      await openFile(stranger);
+      await expect(blank(stranger)).toBeVisible();
+      await expect(attendance(stranger)).toHaveCount(0);
+    } finally {
+      await other.close();
+    }
+  });
+
+  test("C8 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
+    page,
+    request,
+  }) => {
+    await racesOnDays(request, await seedLobby(page), [0, 1, 2]);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of [375, 768, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openFile(page);
+        await expect(attendance(page)).toBeVisible();
+        const { violations } = await new AxeBuilder({ page })
+          .include('[data-section="attendance"]')
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const bad = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+        expect(
+          bad.map((v) => v.id),
+          `axe ${scheme} ${width}`,
+        ).toEqual([]);
+        if (width === 375) {
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          );
+          expect(overflow, "sideways scroll").toBe(false);
+        }
+      }
+    }
+  });
+
+  test("C8 /design#profile shows the register for the two-week fixture", async ({ page }) => {
+    await page.goto("/design#profile");
+    const section = page.locator(
+      'section[aria-labelledby="profile-two-weeks-guest-attendance"][data-section="attendance"]',
+    );
+    await expect(section).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(section.locator('[data-attendance="best"] dd')).toHaveText("9 DAYS");
+    await expect(section.locator('[data-attendance="active"] dd')).toHaveText("13 / 74");
+    await expect(section.locator("[data-today]")).toHaveCount(1);
+  });
+});

@@ -952,7 +952,7 @@ test.describe("key sheet (#963)", () => {
     page.on("request", (r) => requests.push(r.url()));
     await expect(async () => {
       await c.click();
-      await expect(c).toHaveAttribute("aria-pressed", "true", { timeout: 1000 });
+      await expect(c).toHaveAttribute("aria-pressed", "true", { timeout: scaled(1000) });
     }).toPass({ timeout: HYDRATION_WAIT });
     await expect(e).toHaveAttribute("aria-pressed", "false");
     await expect(keyStat(page, "latest")).toHaveText("20.0 WPM");

@@ -43,3 +43,21 @@ export {
   type CensusDistribution,
 } from "./view/census";
 export { type CensusFixture, censusFixtures } from "./view/census-fixtures";
+// The per-key sections of the Personnel file (#961, ADR 0008, 0024): the key file over the daily
+// aggregates. getKeyFile is server-only; the rest is pure and client-safe.
+export { getKeyFile } from "./queries/get-key-file";
+export {
+  emptyKeyFile,
+  KEY_FILE_DAYS,
+  KEY_GOAL_WPM,
+  keyFileOf,
+  REFERENCE_KEYS,
+  type CharCount,
+  type CharStatRow,
+  type KeyFile,
+  type KeyFileEntry,
+  type KeyFilePair,
+  type KeyState,
+  type PairStatRow,
+} from "./view/key-file";
+export { type KeyFileFixture, keyFileFixtures } from "./view/key-file-fixtures";

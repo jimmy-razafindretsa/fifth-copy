@@ -189,13 +189,14 @@ describe("ProfileScreen with streaks and archives (#936 C5)", () => {
       />,
     );
 
-  it("from three races: service, streaks, curve, archive in that order, the archive last", () => {
+  it("from three races: service, streaks, curve, attendance (#330), archive in that order, the archive last", () => {
     const html = render(profileFixtures.early);
     const order = [...html.matchAll(/<section aria-labelledby="([^"]+)"/g)].map((m) => m[1]);
-    expect(order.slice(-4)).toEqual([
+    expect(order.slice(-5)).toEqual([
       "profile-service",
       "profile-streaks",
       "profile-curve",
+      "profile-attendance",
       "profile-archive",
     ]);
     expect(html.match(/data-archive-row=""/g)).toHaveLength(3);

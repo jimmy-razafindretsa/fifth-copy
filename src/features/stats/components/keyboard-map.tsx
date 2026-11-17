@@ -1,0 +1,169 @@
+"use client";
+
+import { useState } from "react";
+import type { Messages } from "@/i18n";
+import { fill } from "@/i18n/format";
+import type { Locale } from "@/i18n/locale";
+import { cn } from "@/lib/cn";
+import {
+  circleSize,
+  coreSize,
+  type KeyboardMap as KeyboardMapData,
+  type KeyboardMapKey,
+  rowPercent,
+} from "../view/keyboard-map";
+import { NBSP, oneDecimal } from "../view/profile-figures";
+import styles from "./keyboard-map.module.css";
+import profile from "./profile.module.css";
+
+export type KeyboardMapLabels = Messages["profile"]["keyboardMap"];
+
+/** One layout of the switch: its id, its settings label and its map, already computed on the server. */
+export type KeyboardMapLayout = { id: string; name: string; map: KeyboardMapData };
+
+export type KeyboardMapProps = {
+  /** The product's layouts in the settings order, each mapped (`keyboardMapOf`). */
+  layouts: KeyboardMapLayout[];
+  /** The layout drawn first: the viewer's saved one, else the locale's default. */
+  initial: string;
+  labels: KeyboardMapLabels;
+  locale: Locale;
+  /** The heading's id (the section's name). */
+  id: string;
+  heading: "h2" | "h3" | "h4";
+};
+
+/** A key's accessible name (#324 C6): `E : 14,7 % des frappes, 2,1 % de fautes`, or untyped. */
+export function keyName(key: KeyboardMapKey, labels: KeyboardMapLabels, locale: Locale): string {
+  if (!key.typed || key.errorRate === null) return fill(labels.untyped, { key: key.cap });
+  return fill(labels.key, {
+    key: key.cap,
+    strokes: `${oneDecimal(key.ofStrokes * 100, locale)}${NBSP}%`,
+    errors: `${oneDecimal(key.errorRate * 100, locale)}${NBSP}%`,
+  });
+}
+
+/**
+ * "Carte du clavier" (#324, bible 14.3, `Profil.dc.html` `PLAN DE LA MACHINE`): the client leaf holds the
+ * chosen layout and draws its map from props; switching asks nothing of the server. The server render
+ * already draws `initial`, so the map reads without JavaScript.
+ */
+export function KeyboardMap(props: KeyboardMapProps) {
+  const [layout, setLayout] = useState(props.initial);
+  return <KeyboardMapSection {...props} layout={layout} onLayout={setLayout} />;
+}
+
+/** The section at a given layout: stateless, so the tests draw it as is. */
+export function KeyboardMapSection({
+  layouts,
+  initial,
+  labels,
+  locale,
+  id,
+  heading: Heading,
+  layout,
+  onLayout,
+}: KeyboardMapProps & { layout: string; onLayout?: (id: string) => void }) {
+  const shown = layouts.find((l) => l.id === layout) ?? layouts.find((l) => l.id === initial);
+  if (!shown) return null;
+  const { map } = shown;
+  const width = (units: number) => `calc(${(units * map.unit).toFixed(2)}% - 4px)`;
+
+  return (
+    <section aria-labelledby={id} data-section="keyboard-map" data-keyboard-layout={shown.id}>
+      <div className={profile.head}>
+        <div>
+          <p className={profile.kicker} data-keyboard-kicker="">
+            {fill(labels.kicker, { layout: shown.name })}
+          </p>
+          <Heading id={id} className={profile.h2}>
+            {labels.title}
+          </Heading>
+        </div>
+        <div role="group" aria-label={labels.layouts} className={styles.switch}>
+          {layouts.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              aria-pressed={l.id === shown.id}
+              className={styles.option}
+              onClick={() => onLayout?.(l.id)}
+              data-keyboard-option={l.id}
+            >
+              {l.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.frame}>
+        <div
+          role="group"
+          aria-label={fill(labels.board, { layout: shown.name })}
+          className={styles.board}
+          data-keyboard-board=""
+        >
+          {map.rows.map((row) => (
+            <div key={row.id} className={styles.row} data-keyboard-row={row.id}>
+              {row.pad > 0 ? (
+                <div className={styles.pad} style={{ width: width(row.pad) }} aria-hidden="true">
+                  {labels.pads[row.id as keyof KeyboardMapLabels["pads"]]}
+                </div>
+              ) : null}
+              {row.keys.map((key) => (
+                <div
+                  key={key.char}
+                  role="img"
+                  aria-label={keyName(key, labels, locale)}
+                  className={cn(styles.key, !key.typed && styles.untyped)}
+                  style={{ width: width(1) }}
+                  data-key={key.char}
+                  data-key-typed={key.typed ? "true" : "false"}
+                >
+                  <span className={styles.cap} data-key-cap="">
+                    {key.cap}
+                  </span>
+                  {key.typed ? (
+                    <span
+                      className={styles.circle}
+                      style={{ width: `${circleSize(key.share)}%` }}
+                      data-key-circle=""
+                    >
+                      <span
+                        className={styles.core}
+                        style={{ width: `${coreSize(key.errorRate)}%` }}
+                        data-key-core=""
+                      />
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ))}
+          <div className={styles.space} aria-hidden="true" />
+        </div>
+
+        <div className={styles.foot}>
+          <dl className={styles.shares} data-keyboard-shares="">
+            {map.rows.map((row) => (
+              <div key={row.id} className={styles.cell} data-row-share={row.id}>
+                <dt className={styles.cellLabel}>{labels.rows[row.id]}</dt>
+                <dd className={styles.cellValue}>{`${rowPercent(row.share)}${NBSP}%`}</dd>
+              </div>
+            ))}
+          </dl>
+          <ul className={styles.legend} data-keyboard-legend="">
+            <li>
+              <i className={styles.sizeSwatch} aria-hidden="true" />
+              {labels.legendSize}
+            </li>
+            <li>
+              <i className={styles.coreSwatch} aria-hidden="true" />
+              {labels.legendCore}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}

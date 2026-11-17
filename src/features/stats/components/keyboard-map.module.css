@@ -1,0 +1,223 @@
+/*
+ * "Carte du clavier" (#324, bible 14.3 "Personnel file", reference docs/design/bible/Profil.dc.html
+ * section PLAN DE LA MACHINE): ported 1:1 in layout, type scale and copy. The section head comes from
+ * profile.module.css. Colours through roles: the frame, pads, space bar and untyped keys are newsprint
+ * (`surface`), the board and typed keys paper (`bg`), rules and the board's offset ink (`fg`); the file's
+ * navy circle at 50 % is violet as a mark (`rival` at 50 %), its red core `primary`. Night shift follows
+ * the theme tokens. Nothing moves. Keys are fractions of the board's width (inline `calc(u% - 4px)`), so
+ * the board keeps its proportions at any width.
+ */
+@reference "../../../app/globals.css";
+
+/* the layout switch: the reference's segmented control, wrapping on phones; each option grows so no
+   ink shows at a line's end */
+.switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+}
+
+.option {
+  flex: 1 1 auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 13px;
+  border: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+
+.option[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the frame: newsprint, 2px ink rule */
+.frame {
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: clamp(18px, 2.5vw, 32px);
+}
+
+/* the board: paper, 3px ink rule, 8px ink offset, rows 4px apart */
+.board {
+  max-width: 980px;
+  margin: 0 auto;
+  background: var(--color-bg);
+  border: 3px solid var(--color-fg);
+  box-shadow: 8px 8px 0 var(--color-fg);
+  padding: clamp(10px, 2vw, 22px);
+  display: grid;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  gap: 4px;
+}
+
+/* TAB, VERR., MAJ */
+.pad {
+  flex: none;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  @apply type-label;
+  font-size: clamp(8px, 1vw, 11px);
+  line-height: normal;
+  letter-spacing: 0.12em;
+  padding: 5px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.key {
+  flex: none;
+  position: relative;
+  aspect-ratio: 1;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* a key with no stroke: newsprint, no circle */
+.key.untyped {
+  background: var(--color-surface);
+}
+
+.cap {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  z-index: 2;
+  @apply type-typing;
+  font-weight: 700;
+  font-size: clamp(9px, 1.3vw, 15px);
+  line-height: normal;
+}
+
+/* how often: the circle, violet at 50 %, centred a little low */
+.circle {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  z-index: 1;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-rival) 50%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* the share of errors: the red core */
+.core {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+/* the space bar strip */
+.space {
+  margin-left: 24%;
+  width: 50%;
+  height: clamp(22px, 3vw, 40px);
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+}
+
+/* under the board: the row shares and the legend, wrapping */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 30px;
+}
+
+/* four 7.4 cells, paper on a 2px ink ground; they wrap and grow so no ink shows through */
+.shares {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+}
+
+.cell {
+  flex: 1 1 auto;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cellLabel {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.cellValue {
+  margin: 0;
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 20px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  @apply type-body;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-fg);
+}
+
+.legend > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sizeSwatch,
+.coreSwatch {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.sizeSwatch {
+  background: color-mix(in srgb, var(--color-rival) 50%, transparent);
+}
+
+.coreSwatch {
+  background: var(--color-primary);
+}

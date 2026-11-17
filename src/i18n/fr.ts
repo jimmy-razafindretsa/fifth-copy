@@ -1279,6 +1279,23 @@ export const fr = {
       reached: "objectif atteint",
       under: "sous l'objectif",
     },
+    keyboardMap: {
+      kicker: "PLAN DE LA MACHINE · {layout}",
+      title: "Carte du clavier",
+      layouts: "Disposition du clavier",
+      board: "Carte du clavier, {layout}",
+      pads: { top: "TAB", home: "VERR.", bottom: "MAJ" },
+      rows: {
+        number: "RANGÉE DES CHIFFRES",
+        top: "RANGÉE DU HAUT",
+        home: "RANGÉE DE REPOS",
+        bottom: "RANGÉE DU BAS",
+      },
+      key: "{key} : {strokes} des frappes, {errors} de fautes",
+      untyped: "{key} : jamais frappée",
+      legendSize: "taille du cercle : fréquence de frappe",
+      legendCore: "cœur rouge : part des fautes",
+    },
     attendance: {
       kicker: "FEUILLE DE POINTAGE",
       title: "Registre de présence",

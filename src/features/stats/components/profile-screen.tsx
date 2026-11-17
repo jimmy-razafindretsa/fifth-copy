@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
 import type { Census } from "../view/census";
 import type { KeyFile } from "../view/key-file";
+import { type KeyboardLayoutKeys, keyboardMapOf } from "../view/keyboard-map";
 import { CURVE_MIN_RACES, CURVE_RACES, TREND_MIN_POINTS } from "../view/performance-curve";
 import type { Profile } from "../view/profile";
 import {
@@ -26,6 +27,7 @@ import { GradeLadder } from "./grade-ladder";
 import { KeyInventory } from "./key-inventory";
 import { KeyProgress } from "./key-progress";
 import { KeySheetSection } from "./key-sheet-section";
+import { KeyboardMap } from "./keyboard-map";
 import { PerformanceCurve } from "./performance-curve";
 import { ArchiveSection, StreaksDocket } from "./profile-records";
 import { ProfileStage } from "./profile-stage";
@@ -41,6 +43,8 @@ export type ProfileLabels = Messages["profile"] & {
   signUp: string;
   /** The catalogs' rank names (`landing.clerk.ranks`, #945), in `BOT_LEVELS` order. */
   ranks: readonly string[];
+  /** The keyboard layouts' settings labels (`settings.layout.names`), for the keyboard map (#324). */
+  layoutNames: Readonly<Record<string, string>>;
 };
 
 /** Picks the screen's strings from a catalog. */
@@ -53,10 +57,21 @@ export function profileLabels(t: Messages): ProfileLabels {
     prompt: t.results.actions.prompt,
     signUp: t.results.actions.signup,
     ranks: t.landing.clerk.ranks,
+    layoutNames: t.settings.layout.names,
   };
 }
 
 export type ProfileLinks = { play: string; settings: string; signUp: string };
+
+/**
+ * The keyboard layouts the keyboard map (#324) draws `KeyFile.byChar` on: identity's layout module as the
+ * route hands it in (ids in the settings order, each its number row and letter rows) and the one to
+ * start on (the viewer's saved layout, else the locale's default).
+ */
+export type ProfileKeyboard = {
+  initial: string;
+  layouts: readonly { id: string; keys: KeyboardLayoutKeys }[];
+};
 
 export type ProfileScreenProps = {
   profile: Profile;
@@ -84,6 +99,11 @@ export type ProfileScreenProps = {
    * clean streaks. Absent: no section.
    */
   keyFile?: KeyFile;
+  /**
+   * The keyboard layouts for "Carte du clavier" (#324): with the key file (3 counted races, one day of
+   * key data) the section draws after the key inventory. Absent: no section.
+   */
+  keyboard?: ProfileKeyboard;
 };
 
 type Heading = "h1" | "h2" | "h3" | "h4";
@@ -92,7 +112,7 @@ type Heading = "h1" | "h2" | "h3" | "h4";
  * The Personnel file (#932, bible 14.3 "Personnel file", reference `Profil.dc.html`): one screen that
  * draws a `Profile` and the viewer's identity as an ordered list of sections, the hero (stage, file side,
  * four tubes, the grade ladder of #337), the ink band, the folder tabs, the service record, from three races the clean streaks
- * (#936) beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the output curve (#933), the key sheet (#963), the key inventory (#964), the attendance register (#330) and the race archives (#936), under three races the blank block.
+ * (#936) beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the output curve (#933), the key sheet (#963), the key inventory (#964), the keyboard map (#324), the attendance register (#330) and the race archives (#936), under three races the blank block.
  * Later cards add a section each. Server-rendered; the stage is the one client leaf.
  */
 export function ProfileScreen({
@@ -107,6 +127,7 @@ export function ProfileScreen({
   idPrefix = "profile",
   census,
   keyFile,
+  keyboard,
 }: ProfileScreenProps) {
   const ids = {
     name: `${idPrefix}-name`,
@@ -122,6 +143,7 @@ export function ProfileScreen({
     keySheet: `${idPrefix}-key-sheet`,
     keyInventory: `${idPrefix}-key-inventory`,
     suspectPairs: `${idPrefix}-suspect-pairs`,
+    keyboardMap: `${idPrefix}-keyboard-map`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -339,6 +361,21 @@ export function ProfileScreen({
               labels={labels.keyInventory}
               locale={locale}
               id={ids.keyInventory}
+              heading={Section as "h2" | "h3" | "h4"}
+            />
+          ) : null}
+
+          {keyboard && keyFile && races >= BLANK_BELOW && keyFile.days.length > 0 ? (
+            <KeyboardMap
+              layouts={keyboard.layouts.map((l) => ({
+                id: l.id,
+                name: labels.layoutNames[l.id] ?? l.id,
+                map: keyboardMapOf(keyFile.byChar, l.keys),
+              }))}
+              initial={keyboard.initial}
+              labels={labels.keyboardMap}
+              locale={locale}
+              id={ids.keyboardMap}
               heading={Section as "h2" | "h3" | "h4"}
             />
           ) : null}

@@ -1,7 +1,7 @@
 ---
 id: "0024"
 title: Per-key history is daily character and letter-pair aggregates with summed timing, rolled up from a marker on RaceKeystrokes
-status: proposed
+status: accepted
 category: data
 scope: ["prisma/schema/stats.prisma", "prisma/schema/race.prisma", "src/features/stats/jobs/**", "src/features/results/merge-steps.ts", "docs/privacy/retention.md"]
 supersedes: []

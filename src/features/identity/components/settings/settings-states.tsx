@@ -17,6 +17,7 @@ const DEFAULTS: Preferences = {
   locale: "en",
   sound: true,
   machineSkin: "teleprinter",
+  dailyGoalMin: 15,
 };
 const CHOSEN: Preferences = {
   layout: "CSA",
@@ -24,6 +25,7 @@ const CHOSEN: Preferences = {
   locale: "en",
   sound: false,
   machineSkin: "teleprinter",
+  dailyGoalMin: 30,
 };
 
 /**
@@ -39,19 +41,19 @@ export function SettingsStates({ action }: { action: UpdatePreferences }) {
       id: "pending",
       viewer: GUEST,
       preferences: CHOSEN,
-      initialStatus: { layout: "pending", theme: "pending" },
+      initialStatus: { layout: "pending", theme: "pending", goal: "pending" },
     },
     {
       id: "saved",
       viewer: GUEST,
       preferences: CHOSEN,
-      initialStatus: { layout: "saved", sound: "saved" },
+      initialStatus: { layout: "saved", sound: "saved", goal: "saved" },
     },
     {
       id: "error",
       viewer: GUEST,
       preferences: CHOSEN,
-      initialStatus: { layout: "error", language: "error" },
+      initialStatus: { layout: "error", language: "error", goal: "error" },
     },
   ] as const;
   return (

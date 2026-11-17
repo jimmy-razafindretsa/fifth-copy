@@ -867,6 +867,13 @@ export const en = {
       hint: "The machine on your desk during a race.",
       skin: { teleprinter: "TELEPRINTER" },
     },
+    /** The daily goal (#968, bible 14.3): the minutes the attendance register shades each day against. */
+    goal: {
+      title: "DAILY GOAL",
+      value: "{n} MIN / DAY",
+      valueText: "{n} minutes a day",
+      hint: "Used by the attendance register. The Major does not forgive absences, but he notes them politely.",
+    },
     status: {
       pending: "FILING…",
       saved: "FILED",

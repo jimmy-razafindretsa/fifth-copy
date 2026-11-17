@@ -827,6 +827,13 @@ export const fr = {
       hint: "La machine sur ton bureau pendant une course.",
       skin: { teleprinter: "TÉLÉSCRIPTEUR" },
     },
+    /** L'objectif quotidien (#968, bible 14.3) : les minutes contre lesquelles le registre de présence ombre chaque jour. */
+    goal: {
+      title: "OBJECTIF QUOTIDIEN",
+      value: "{n} MIN / JOUR",
+      valueText: "{n} minutes par jour",
+      hint: "Sert au registre de présence. Le Major ne pardonne pas les absences, mais il les note poliment.",
+    },
     status: {
       pending: "CLASSEMENT…",
       saved: "CLASSÉ",

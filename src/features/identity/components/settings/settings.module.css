@@ -383,3 +383,45 @@
   max-width: 620px;
   margin-inline: auto;
 }
+
+/*
+ * The daily goal (#968, reference `Profil.dc.html` `OBJECTIF QUOTIDIEN`): the name and its save state left,
+ * the value right on the same baseline (IBM Plex Mono 22px at the loaded 700 (the file's 600), red as `link`: night-ink on Night shift),
+ * then the native range across the section (the output curve's LISSAGE range, #933: 44px, red accent).
+ */
+.goalHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.goalName {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.goalValue {
+  @apply type-typing;
+  font-size: 22px;
+  line-height: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-link);
+}
+
+.goalRange {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.goalRange:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

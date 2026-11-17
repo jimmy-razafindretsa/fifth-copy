@@ -721,11 +721,12 @@ test.describe("attendance register (#330)", () => {
     request,
   }) => {
     const lobby = await seedLobby(page);
-    await racesOnDays(request, lobby, [0]);
+    // the register shows from 3 counted races: three today, 5 minutes each
+    await racesOnDays(request, lobby, [0, 0, 0]);
     const db = new Client({ connectionString: process.env.DATABASE_URL });
     await db.connect();
     try {
-      await db.query(`UPDATE "RaceResult" SET "durationMs" = 900000 WHERE "userId" = $1`, [
+      await db.query(`UPDATE "RaceResult" SET "durationMs" = 300000 WHERE "userId" = $1`, [
         lobby.hostUserId,
       ]);
     } finally {
@@ -741,7 +742,7 @@ test.describe("attendance register (#330)", () => {
 
     await page.goto("/settings");
     const slider = page.getByRole("slider", { name: "DAILY GOAL" });
-    await expect(slider).toHaveAttribute("data-hydrated", "", { timeout: HYDRATION_WAIT });
+    await expect(slider).toHaveAttribute("data-hydrated", "true", { timeout: HYDRATION_WAIT });
     await slider.fill("30");
     await expect(page.locator('[data-setting="dailyGoalMin"]').getByRole("status")).toHaveText(
       "FILED",

@@ -31,7 +31,7 @@ async function storedGoals(name: string) {
 
 async function openGoal(page: Page) {
   await openSettings(page);
-  await expect(range(page)).toHaveAttribute("data-hydrated", "", { timeout: HYDRATION_WAIT });
+  await expect(range(page)).toHaveAttribute("data-hydrated", "true", { timeout: HYDRATION_WAIT });
 }
 
 test.describe("#968 daily goal on /settings", () => {

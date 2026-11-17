@@ -301,6 +301,21 @@ export const DEFAULT_MACHINE_SKIN: PreferenceMachineSkin = "teleprinter";
 export const machineSkinSchema = z.enum(PREFERENCE_MACHINE_SKINS);
 
 /**
+ * The daily goal in minutes (#968, bible 14.3 "Settings"): the attendance register shades each day against
+ * it. 5 to 60 in steps of 5; 15 is the column's default and the read of a viewer with no row.
+ */
+export const DAILY_GOAL_MIN = 5;
+export const DAILY_GOAL_MAX = 60;
+export const DAILY_GOAL_STEP = 5;
+export const DEFAULT_DAILY_GOAL = 15;
+export const dailyGoalSchema = z
+  .number()
+  .int()
+  .min(DAILY_GOAL_MIN)
+  .max(DAILY_GOAL_MAX)
+  .multipleOf(DAILY_GOAL_STEP);
+
+/**
  * `updatePreferences` input (#66 C1): the single list of preference keys. Every key is optional, a
  * `null` layout clears the choice, and unknown keys are refused (`strict`): the target is always the
  * viewer, never an id from the input. Adding a preference is one line here plus its column.
@@ -312,6 +327,7 @@ export const preferencesPatch = z
     locale: z.enum(LOCALES).optional(),
     sound: z.boolean().optional(),
     machineSkin: machineSkinSchema.optional(),
+    dailyGoalMin: dailyGoalSchema.optional(),
   })
   .strict();
 export type PreferencesPatch = z.infer<typeof preferencesPatch>;
@@ -323,4 +339,6 @@ export type Preferences = {
   locale: Locale;
   sound: boolean;
   machineSkin: PreferenceMachineSkin;
+  /** Minutes a day (#968), `DEFAULT_DAILY_GOAL` with no row. */
+  dailyGoalMin: number;
 };

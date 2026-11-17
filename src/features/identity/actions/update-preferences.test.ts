@@ -63,6 +63,7 @@ vi.mock("@/i18n", async () => {
 });
 
 const { updatePreferences } = await import("../index");
+const { preferencesPatch } = await import("../schema");
 const { refreshPreferenceCookies } = await import("../server");
 
 const YEAR = 60 * 60 * 24 * 365;
@@ -90,11 +91,54 @@ describe("updatePreferences validation (#66 C1)", () => {
     [{ sound: "yes" }],
     [{ volume: 3 }],
     [{ layout: "CSA", userId: "someone-else" }],
+    // #968 C3: the daily goal is an integer from 5 to 60, a multiple of 5, and only ever the viewer's
+    [{ dailyGoalMin: 0 }],
+    [{ dailyGoalMin: 7 }],
+    [{ dailyGoalMin: 65 }],
+    [{ dailyGoalMin: "30" }],
+    [{ dailyGoalMin: 12.5 }],
+    [{ dailyGoalMin: null }],
+    [{ dailyGoalMin: 30, userId: "someone-else" }],
     [null],
     ["CSA"],
   ])("refuses %j before touching the db or creating a guest", async (patch) => {
     await expect(updatePreferences(patch)).resolves.toEqual({ ok: false, reason: "invalid" });
     expect(state.jar.has(GUEST_COOKIE)).toBe(false);
+  });
+});
+
+describe("#968 C3 the daily goal patch", () => {
+  it.each([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60])("accepts %i minutes", (dailyGoalMin) => {
+    expect(preferencesPatch.parse({ dailyGoalMin })).toEqual({ dailyGoalMin });
+  });
+
+  it.each([0, 4, 7, 61, 65, 12.5, -5, Number.NaN, "30", null, true])(
+    "refuses %j",
+    (dailyGoalMin) => {
+      expect(preferencesPatch.safeParse({ dailyGoalMin }).success).toBe(false);
+    },
+  );
+
+  it("files only the viewer's own row, keyed by the viewer's id", async () => {
+    state.viewer = { id: "u-own", name: "Ada", isGuest: true, hasAvatar: false };
+    const upserts: unknown[] = [];
+    state.db = {
+      preference: {
+        upsert: async (args: unknown) => void upserts.push(args),
+        findUnique: async () => ({ dailyGoalMin: 30 }),
+      },
+    };
+    await expect(updatePreferences({ dailyGoalMin: 30 })).resolves.toMatchObject({
+      ok: true,
+      preferences: { dailyGoalMin: 30 },
+    });
+    expect(upserts).toEqual([
+      {
+        where: { userId: "u-own" },
+        create: { userId: "u-own", sound: false, dailyGoalMin: 30 },
+        update: { dailyGoalMin: 30 },
+      },
+    ]);
   });
 });
 
@@ -194,6 +238,39 @@ describe.skipIf(!testDatabaseUrl)(
       await updatePreferences({ layout: null });
       const row = await db.preference.findUnique({ where: { userId: state.viewer.id } });
       expect(row).toMatchObject({ layout: null, sound: true, theme: "SYSTEM" });
+    });
+
+    it("#968 C3 a guest files a goal on their own row; another user's row is untouched", async () => {
+      const other = await account();
+      await db.preference.create({ data: { userId: other.id, dailyGoalMin: 45 } });
+      const guest = await db.user.create({
+        data: { isGuest: true, typistName: `Pref-${Math.random().toString(36).slice(2, 10)}` },
+      });
+      created.push(guest.id);
+      state.viewer = { id: guest.id, name: guest.typistName, isGuest: true, hasAvatar: false };
+      await expect(updatePreferences({ dailyGoalMin: 30 })).resolves.toMatchObject({
+        ok: true,
+        preferences: { dailyGoalMin: 30 },
+      });
+      await expect(updatePreferences({ dailyGoalMin: 20, userId: other.id })).resolves.toEqual({
+        ok: false,
+        reason: "invalid",
+      });
+      const rows = await db.preference.findMany({
+        where: { userId: { in: [guest.id, other.id] } },
+        select: { userId: true, dailyGoalMin: true },
+      });
+      expect(Object.fromEntries(rows.map((r) => [r.userId, r.dailyGoalMin]))).toEqual({
+        [guest.id]: 30,
+        [other.id]: 45,
+      });
+    });
+
+    it("#968 C1 a row created without a goal reads 15", async () => {
+      state.viewer = await account();
+      await updatePreferences({ layout: "CSA" });
+      const row = await db.preference.findUnique({ where: { userId: state.viewer.id } });
+      expect(row?.dailyGoalMin).toBe(15);
     });
 
     it("C1 a visitor with no viewer gets a guest first, and the row is theirs", async () => {

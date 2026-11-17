@@ -29,6 +29,7 @@ import { KeySheetSection } from "./key-sheet-section";
 import { PerformanceCurve } from "./performance-curve";
 import { ArchiveSection, StreaksDocket } from "./profile-records";
 import { ProfileStage } from "./profile-stage";
+import { SuspectPairs } from "./suspect-pairs";
 import styles from "./profile.module.css";
 
 /** The catalog strings the screen draws (ADR 0010): the `profile` namespace and the few it borrows. */
@@ -79,8 +80,8 @@ export type ProfileScreenProps = {
   /**
    * The viewer's key file (#961, `getKeyFile`; a fixture on `/design`): from 3 counted races and one day
    * of key data it draws "Progression par touche" (#962), "Fiche par touche" (#963) and "Vitesse,
-   * frappes et fautes" (#964). Absent: no
-   * section.
+   * frappes et fautes" (#964); its letter pairs fill "Combinaisons suspectes" (#965) beside the
+   * clean streaks. Absent: no section.
    */
   keyFile?: KeyFile;
 };
@@ -91,7 +92,7 @@ type Heading = "h1" | "h2" | "h3" | "h4";
  * The Personnel file (#932, bible 14.3 "Personnel file", reference `Profil.dc.html`): one screen that
  * draws a `Profile` and the viewer's identity as an ordered list of sections, the hero (stage, file side,
  * four tubes, the grade ladder of #337), the ink band, the folder tabs, the service record, from three races the clean streaks
- * (#936), the typist census (#967), the progress by key (#962), the output curve (#933), the key sheet (#963), the key inventory (#964), the attendance register (#330) and the race archives (#936), under three races the blank block.
+ * (#936) beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the output curve (#933), the key sheet (#963), the key inventory (#964), the attendance register (#330) and the race archives (#936), under three races the blank block.
  * Later cards add a section each. Server-rendered; the stage is the one client leaf.
  */
 export function ProfileScreen({
@@ -120,6 +121,7 @@ export function ProfileScreen({
     keyProgress: `${idPrefix}-key-progress`,
     keySheet: `${idPrefix}-key-sheet`,
     keyInventory: `${idPrefix}-key-inventory`,
+    suspectPairs: `${idPrefix}-suspect-pairs`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -261,13 +263,24 @@ export function ProfileScreen({
           </section>
 
           {races >= BLANK_BELOW ? (
-            <StreaksDocket
-              streaks={profile.streaks}
-              labels={labels.streaks}
-              locale={locale}
-              id={ids.streaks}
-              heading={Section}
-            />
+            <div className={styles.pair} data-docket-pair="">
+              <StreaksDocket
+                streaks={profile.streaks}
+                labels={labels.streaks}
+                locale={locale}
+                id={ids.streaks}
+                heading={Section}
+              />
+              {keyFile && keyFile.pairs.length > 0 ? (
+                <SuspectPairs
+                  pairs={keyFile.pairs}
+                  labels={labels.suspectPairs}
+                  locale={locale}
+                  id={ids.suspectPairs}
+                  heading={Section as "h2" | "h3" | "h4"}
+                />
+              ) : null}
+            </div>
           ) : null}
 
           {census && races >= BLANK_BELOW ? (

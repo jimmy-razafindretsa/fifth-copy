@@ -496,8 +496,8 @@
 
 /* ---- clean streaks and race archives (#936, reference "SÉRIES SANS FAUTE", "ARCHIVES") ---- */
 
-/* the reference's two-column grid; its second docket (Combinaisons suspectes) is left out until its
-   card, so the one docket spans the row (no placeholder) */
+/* the reference's two-column grid: the clean streaks, then Combinaisons suspectes (#965); without
+   letter pairs the streak docket spans the row (no placeholder) */
 .pair {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));

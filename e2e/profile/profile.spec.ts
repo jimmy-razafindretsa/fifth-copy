@@ -1167,3 +1167,147 @@ test.describe("key inventory (#964)", () => {
     await expect(page.locator('[data-section="key-inventory"]')).toHaveCount(2);
   });
 });
+
+// Contract of #965 (C4, C5): the suspect letter pairs ("Combinaisons suspectes", bible 14.3). With three
+// counted races and key rows a guest without letter-pair rows sees the streak docket alone across the
+// row; with pair rows (`BigramStatDaily`, written straight into the test database as the rollup job of
+// #314 would) the docket sits in the grid's second cell, one row per pair weakest first, each read as a
+// sentence. Axe-clean at 375 / 768 / 1280 in both themes, no sideways scroll at 375; `/design#profile`
+// shows it for the two-week fixture.
+
+const suspectPairs = (page: Page) => page.locator('[data-section="suspect-pairs"]');
+
+/** Today's key rows for `userId` (`e` at 40 WPM) and three letter pairs: `on` 6.4 %, `qu` 4 %, `es` 0. */
+async function pairRows(userId: string, { pairs = true } = {}) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    await db.query(
+      `INSERT INTO "CharStatDaily" ("userId", day, char, layout, hits, errors, "timedHits", "totalMs")
+       VALUES ($1, $2::date, 'e', 'FR_CA', 11, 0, 10, 3000) ON CONFLICT DO NOTHING`,
+      [userId, day],
+    );
+    if (!pairs) return;
+    for (const [pair, hits, errors, wpm] of [
+      ["on", 125, 8, 31],
+      ["qu", 50, 2, 27],
+      ["es", 40, 0, 52],
+    ] as const) {
+      await db.query(
+        `INSERT INTO "BigramStatDaily" ("userId", day, pair, hits, errors, "timedHits", "totalMs")
+         VALUES ($1, $2::date, $3, $4, $5, $4, $6)`,
+        [userId, day, pair, hits, errors, Math.round((12_000 * hits) / wpm)],
+      );
+    }
+  } finally {
+    await db.end();
+  }
+}
+
+test.describe("suspect letter pairs (#965)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C4 without pair data the streak docket spans the row; with pairs the docket sits beside it", async ({
+    page,
+    request,
+    context,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await pairRows(lobby.hostUserId, { pairs: false });
+    await openFile(page);
+    const streaks = page.locator('[data-section="streaks"]');
+    await expect(streaks).toBeVisible();
+    await expect(suspectPairs(page)).toHaveCount(0);
+    const grid = page.locator("[data-docket-pair]");
+    const across = async () =>
+      ((await streaks.boundingBox())!.width / (await grid.boundingBox())!.width) * 100;
+    expect(await across()).toBeGreaterThan(99);
+
+    await pairRows(lobby.hostUserId);
+    await openFile(page);
+    const docket = suspectPairs(page);
+    await expect(docket.getByRole("heading", { name: "SUSPECT COMBINATIONS" })).toBeVisible();
+    await expect(docket).toContainText("UNDER WATCH");
+    // the grid's second cell: beside the streak docket, on the same row
+    const a = (await streaks.boundingBox())!;
+    const b = (await docket.boundingBox())!;
+    expect(b.x).toBeGreaterThan(a.x + a.width);
+    expect(Math.abs(b.y - a.y)).toBeLessThan(2);
+    const list = docket.getByRole("list", { name: "SUSPECT COMBINATIONS" });
+    await expect(list.getByRole("listitem")).toHaveText([
+      /ON: 6\.4\s%\serrors, 31\sWPM/,
+      /QU: 4\.0\s%\serrors, 27\sWPM/,
+      /ES: 0\.0\s%\serrors, 52\sWPM/,
+    ]);
+    await expect(docket.locator('[data-pair="on"] [data-pair-bar]')).toHaveAttribute(
+      "style",
+      /width:\s*100%/,
+    );
+    await expect(docket.locator('[data-pair="es"] [data-pair-bar]')).toHaveAttribute(
+      "style",
+      /width:\s*0%/,
+    );
+
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(
+      suspectPairs(page).getByRole("heading", { name: "COMBINAISONS SUSPECTES" }),
+    ).toBeVisible();
+    await expect(suspectPairs(page).getByRole("listitem").first()).toHaveText(
+      /ON : 6,4\s%\sde fautes, 31\sMPM/,
+    );
+  });
+
+  test("C5 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await pairRows(lobby.hostUserId);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of [375, 768, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openFile(page);
+        await expect(suspectPairs(page)).toBeVisible();
+        const { violations } = await new AxeBuilder({ page })
+          .include('[data-section="suspect-pairs"]')
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const bad = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+        expect(
+          bad.map((v) => v.id),
+          `axe ${scheme} ${width}`,
+        ).toEqual([]);
+        if (width === 375) {
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          );
+          expect(overflow, "sideways scroll").toBe(false);
+        }
+      }
+    }
+  });
+
+  test("C5 /design#profile shows the docket for the two-week fixture", async ({ page }) => {
+    await page.goto("/design#profile");
+    const section = page.locator(
+      'section[aria-labelledby="profile-two-weeks-guest-suspect-pairs"][data-section="suspect-pairs"]',
+    );
+    await expect(section).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(section.getByRole("listitem")).toHaveCount(6);
+    await expect(section.locator("[data-pair]").first()).toHaveAttribute("data-pair", "qu");
+    await expect(page.locator('[data-section="suspect-pairs"]')).toHaveCount(2);
+  });
+});

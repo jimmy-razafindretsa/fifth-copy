@@ -1201,6 +1201,14 @@ export const fr = {
       row: "≥ {threshold} %",
       foot: "La plus longue suite de courses terminées au-dessus de chaque seuil de précision. Plus la suite est longue, plus le Major est content.",
     },
+    suspectPairs: {
+      title: "COMBINAISONS SUSPECTES",
+      tag: "À SURVEILLER",
+      row: "{pair} : {rate} de fautes, {speed}",
+      wpm: "MPM",
+      noSpeed: "vitesse non mesurée",
+      foot: "Les enchaînements où tes doigts trébuchent le plus souvent : taux de fautes et vitesse sur la paire.",
+    },
     keyProgress: {
       kicker: "RAPPORT D'APPRENTISSAGE",
       title: "Progression par touche",

@@ -10,6 +10,7 @@ import {
 import { textOverlaySchema } from "@fifth-copy/protocol";
 import type { db as appDb } from "@/server/db";
 import { storedEffectiveText } from "../replay-text";
+import { storedEngineSettingsSchema } from "../stored-replay";
 import { decodeKeystrokes } from "../trace-codec";
 import { missedKeys, type MissedKey } from "../view/keys";
 import { parseBonusLog } from "../view/personal";
@@ -21,12 +22,6 @@ type SeriesViewer = { id: string } | null;
 type Db = Pick<typeof appDb, "race">;
 
 const raceIdSchema = z.uuid();
-
-/** The engine's subset of the stored `Race.settings` (the wire's `engineSettingsOf`). */
-const engineSettingsSchema = z.object({
-  errorMode: z.enum(["continue", "block"]),
-  backspace: z.boolean(),
-});
 
 /** What the personal card reads from the viewer's own trace (#865 graph, #867 keys and tip). */
 export type PersonalReplay = {
@@ -75,7 +70,7 @@ export async function getPersonalReplay(
   const mine = race.results[0];
   const trace = mine && race.keystrokes.find((k) => k.desk === mine.desk);
   if (!mine || !trace) return null;
-  const settings = engineSettingsSchema.safeParse(race.settings);
+  const settings = storedEngineSettingsSchema.safeParse(race.settings);
   const overlay = textOverlaySchema.nullable().safeParse(mine.overlay ?? null);
   const keystrokes = decodeKeystrokes(trace.data, trace.count);
   // an empty trace is no trace: the card reads NO TRACE ON FILE

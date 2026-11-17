@@ -1,13 +1,27 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { prerender } from "react-dom/static";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
+import { censusFixtures } from "../view/census-fixtures";
+import { keyFileFixtures } from "../view/key-file-fixtures";
 import { buildProfile, type Profile } from "../view/profile";
 import { profileFixtures, PROFILE_FIXTURE_NOW } from "../view/profile-fixtures";
 import { stageView } from "@/components/ui";
-import { ProfileScreen, profileLabels, type ProfileScreenProps } from "./profile-screen";
+import {
+  PROFILE_SECTIONS,
+  type ProfileKeyboard,
+  ProfileScreen,
+  profileLabels,
+  type ProfileScreenProps,
+} from "./profile-screen";
+
+// The keyboard layouts are identity's, read through its barrel (server-only at runtime: these mocks stand in).
+vi.mock("@/env", () => ({ env: { NODE_ENV: "test", AUTH_SECRET: "a".repeat(32) } }));
+vi.mock("@/server/db", () => ({ db: {} }));
+const { keyboardLayoutIds, layouts, numberRows } = await import("@/features/identity");
 
 // #932 C4-C8: the Personnel file screen, drawn from a Profile and the viewer's identity.
 const SINCE = new Date("2023-05-24T16:00:00Z");
@@ -259,7 +273,7 @@ describe("ProfileScreen blank block (C8)", () => {
     expect(block).toContain("DOSSIER VIERGE");
     expect(text(block)).toContain("Le Ministère n'a rien sur toi.");
     expect(text(block)).toContain(
-      "Termine trois courses et les graphiques apparaîtront ici : vitesse, précision, séries et archives.",
+      "Termine trois courses et les graphiques apparaîtront ici : vitesse, précision, touches faibles, registre de présence.",
     );
     expect(block).toMatch(/<a href="\/#play"[^>]*>COURSE RAPIDE<\/a>/);
     expect(block).toMatch(/data-stamp-size="lg"[^>]*data-stamp-angle="-6"/);
@@ -291,5 +305,161 @@ describe("profileLabels", () => {
           : [`${p}${k}`],
       );
     expect(keys(profileLabels(fr)).sort()).toEqual(keys(profileLabels(en)).sort());
+  });
+});
+
+// #970 C1, C2: the whole file in the reference's order (Profil.dc.html top to bottom, bible 14.3), its
+// heading levels, and the blank file's sentence (the reference's line 138).
+const KEYBOARD: ProfileKeyboard = {
+  initial: "CSA",
+  layouts: keyboardLayoutIds.map((id) => ({
+    id,
+    keys: { number: numberRows[id], letters: layouts[id] },
+  })),
+};
+
+/** The whole file, every section present: the census read awaited (it streams in its own boundary). */
+async function renderAll(
+  lang: "en" | "fr",
+  over: Partial<ProfileScreenProps> = {},
+): Promise<string> {
+  const { prelude } = await prerender(
+    <ProfileScreen
+      profile={full}
+      viewer={ACCOUNT}
+      since={SINCE}
+      stage={{ clerkSrc: null, picture: <svg data-picture="" /> }}
+      labels={profileLabels(lang === "en" ? en : fr)}
+      locale={lang}
+      links={LINKS}
+      census={async () => censusFixtures.middle!}
+      keyFile={keyFileFixtures.twoWeeks}
+      keyboard={KEYBOARD}
+      {...over}
+    />,
+    // the census boundary inline, where it streams in (a large boundary is otherwise outlined to the end)
+    { progressiveChunkSize: Number.POSITIVE_INFINITY },
+  );
+  let html = "";
+  const decoder = new TextDecoder();
+  const reader = prelude.getReader();
+  for (let r = await reader.read(); !r.done; r = await reader.read())
+    html += decoder.decode(r.value, { stream: true });
+  return html + decoder.decode();
+}
+
+const markers = (html: string) => [...html.matchAll(/data-section="([^"]+)"/g)].map((m) => m[1]);
+const headingLevels = (html: string) =>
+  [...html.matchAll(/<h([1-6])[\s>]/g)].map((m) => Number(m[1]));
+
+describe("ProfileScreen reference order (#970 C1)", () => {
+  it("the column's sections are one list, in the reference's order", () => {
+    expect(PROFILE_SECTIONS).toEqual([
+      "service",
+      "blank",
+      "dockets",
+      "census",
+      "keyProgress",
+      "curve",
+      "keySheet",
+      "keyInventory",
+      "keyboardMap",
+      "attendance",
+      "archive",
+    ]);
+  });
+
+  it("with every section present the file reads hero, band, tabs, service record, the docket row, then the reference's sections", async () => {
+    const html = await renderAll("fr");
+    expect(markers(html)).toEqual([
+      "hero",
+      "band",
+      "tabs",
+      "service",
+      "streaks",
+      "suspect-pairs",
+      "census",
+      "key-progress",
+      "curve",
+      "key-sheet",
+      "key-inventory",
+      "keyboard-map",
+      "attendance",
+      "archive",
+    ]);
+    // the grade ladder sits in the hero; the clean streaks and the suspect pairs share one row
+    const hero = html.slice(
+      html.indexOf('data-section="hero"'),
+      html.indexOf('data-section="band"'),
+    );
+    expect(hero).toContain("data-ladder");
+    const row = el(html, "data-docket-pair");
+    expect(markers(row)).toEqual(["streaks", "suspect-pairs"]);
+    // the headings the reader meets, in that order
+    const titles = [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/g)].map((m) =>
+      text(m[1]!).toUpperCase(),
+    );
+    expect(titles).toEqual([
+      "ÉTAT DE SERVICE",
+      "SÉRIES SANS FAUTE",
+      "COMBINAISONS SUSPECTES",
+      "TA PLACE AU MINISTÈRE",
+      "PROGRESSION PAR TOUCHE",
+      "VITESSE AU FIL DES COURSES",
+      "FICHE PAR TOUCHE",
+      "VITESSE, FRAPPES ET FAUTES",
+      "CARTE DU CLAVIER",
+      "REGISTRE DE PRÉSENCE",
+      "ARCHIVES DES COURSES",
+    ]);
+  });
+
+  it("one h1, and the heading levels never skip, on the page and as a /design specimen", async () => {
+    for (const lang of ["en", "fr"] as const) {
+      const page = headingLevels(await renderAll(lang));
+      expect(page.filter((l) => l === 1)).toHaveLength(1);
+      expect(page[0]).toBe(1);
+      for (let i = 1; i < page.length; i += 1)
+        expect(page[i]!, `heading ${i}`).toBeLessThanOrEqual(page[i - 1]! + 1);
+      const specimen = headingLevels(await renderAll(lang, { level: 3 }));
+      expect(specimen).not.toContain(1);
+      expect(specimen[0]).toBe(3);
+      for (let i = 1; i < specimen.length; i += 1)
+        expect(specimen[i]!).toBeLessThanOrEqual(specimen[i - 1]! + 1);
+    }
+  });
+
+  it("under three races: hero, band, tabs, the service record, then the blank block and nothing else", async () => {
+    for (const profile of [blank, one]) {
+      const html = await renderAll("en", { profile });
+      expect(markers(html)).toEqual(["hero", "band", "tabs", "service", "blank"]);
+    }
+  });
+});
+
+describe("ProfileScreen blank file sentence (#970 C2)", () => {
+  it("the reference's sentence, in French and English, at 0, 1 and 2 races", () => {
+    const sentence = (html: string) =>
+      text(el(html, "data-blank").match(/<p[^>]*blankBody[^>]*>(.*?)<\/p>/)![1]!);
+    const two = buildProfile(
+      [0, 1].map((i) => ({
+        createdAt: new Date(PROFILE_FIXTURE_NOW.getTime() - i * 3_600_000),
+        cleanWpm: 40,
+        accuracy: 0.95,
+        language: "FR" as const,
+        durationMs: 30_000,
+        place: 2,
+      })),
+      PROFILE_FIXTURE_NOW,
+    );
+    expect(two.service.races).toBe(2);
+    for (const profile of [blank, one, two]) {
+      expect(sentence(render(profile, { lang: "fr" }))).toBe(
+        "Termine trois courses et les graphiques apparaîtront ici : vitesse, précision, touches faibles, registre de présence.",
+      );
+      expect(sentence(render(profile))).toBe(
+        "Finish three races and the graphs will appear here: speed, accuracy, weak keys, attendance register.",
+      );
+    }
   });
 });

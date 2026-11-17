@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { Client } from "pg";
@@ -1483,5 +1484,248 @@ test.describe("keyboard map (#324)", () => {
       /width:\s*140%/,
     );
     await expect(page.locator('[data-section="keyboard-map"]')).toHaveCount(2);
+  });
+});
+
+// #970 C3, C4: the closing checks of epic #959, on the whole Personnel file. C3: a guest finishes three
+// races through the signed internal routes, each carrying its keystroke trace; the rollup of #314 runs
+// (the worker's own function, `rollup-once.ts`, scoped to that guest); /profile then shows every section
+// whose data exists, in the reference's order (the census only above its floor of 30 typists), and a
+// second browser context sees none of it. C4: a two-week file (a race on each of 14 days, key rows on
+// each day, letter pairs) is axe-clean at 375, 768 and 1280 in both themes, has one h1, names every
+// plot, keeps every control at 44px or more and never scrolls sideways at 375.
+
+/** The reference's order (`PROFILE_SECTIONS` of the screen, under the hero, band and tabs). */
+const FILE_ORDER = [
+  "hero",
+  "band",
+  "tabs",
+  "service",
+  "blank",
+  "streaks",
+  "suspect-pairs",
+  "census",
+  "key-progress",
+  "curve",
+  "key-sheet",
+  "key-inventory",
+  "keyboard-map",
+  "attendance",
+  "archive",
+];
+
+const sectionsOf = (page: Page) =>
+  page
+    .locator("[data-profile-state] [data-section]")
+    .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")!));
+
+/** The race's text as the web app picked it (`Race.textContent`). */
+async function raceText(raceId: string): Promise<string> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    const { rows } = await db.query<{ t: string }>(
+      `SELECT "textContent" AS t FROM "Race" WHERE id = $1`,
+      [raceId],
+    );
+    return rows[0]!.t;
+  } finally {
+    await db.end();
+  }
+}
+
+/** Three races for the guest host, each with the whole text typed at 180 ms a key as its trace. */
+async function threeTypedRaces(
+  request: Parameters<typeof startRace>[0],
+  lobby: Awaited<ReturnType<typeof seedLobby>>,
+) {
+  for (const [place, wpm] of [
+    [2, 40.2],
+    [1, 61.4],
+    [3, 52.5],
+  ] as const) {
+    const bot: Desk = {
+      desk: 2,
+      name: "Typist Bot",
+      place: place === 1 ? 2 : 1,
+      wpm: 50,
+      isBot: true,
+    };
+    const host: Desk = {
+      desk: 1,
+      name: "Host",
+      place,
+      wpm,
+      accuracy: 0.95,
+      userId: lobby.hostUserId,
+    };
+    const raceId = await startRace(request, lobby, [host, bot]);
+    const trace = [...(await raceText(raceId))].map((key, i) => ({ t: 1_000 + i * 180, key }));
+    await postResults(request, raceId, [{ ...host, trace }, bot]);
+  }
+}
+
+/** The worker's per-key rollup (#314), once, for this typist only. */
+function rollup(userId: string) {
+  execFileSync("npx", ["tsx", "--conditions=react-server", "e2e/profile/rollup-once.ts", userId], {
+    env: process.env,
+    stdio: "pipe",
+  });
+}
+
+/** Rows the rollup wrote for `userId`: key rows, and letter pairs the file shows (20 hits or more). */
+async function rolledUp(userId: string): Promise<{ chars: number; pairs: number }> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    const chars = await db.query(`SELECT 1 FROM "CharStatDaily" WHERE "userId" = $1`, [userId]);
+    const pairs = await db.query(
+      `SELECT pair FROM "BigramStatDaily" WHERE "userId" = $1 GROUP BY pair HAVING sum(hits) >= 20`,
+      [userId],
+    );
+    return { chars: chars.rowCount ?? 0, pairs: pairs.rowCount ?? 0 };
+  } finally {
+    await db.end();
+  }
+}
+
+/** Key rows on each of the last 14 days (every letter, a few errors) and today's three letter pairs. */
+async function twoWeeksOfKeys(userId: string) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    for (let d = 0; d < 14; d += 1) {
+      const day = new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
+      for (const [i, char] of [..."abcdefghijklmnopqrstuvwxyz"].entries()) {
+        const wpm = 25 + ((i * 7 + d * 3) % 40);
+        await db.query(
+          `INSERT INTO "CharStatDaily" ("userId", day, char, layout, hits, errors, "timedHits", "totalMs")
+           VALUES ($1, $2::date, $3, 'FR_CA', 30, $4, 28, $5)`,
+          [userId, day, char, (i + d) % 4, Math.round((12_000 * 28) / wpm)],
+        );
+      }
+    }
+  } finally {
+    await db.end();
+  }
+  await pairRows(userId);
+}
+
+test.describe("the whole Personnel file (#970)", () => {
+  test.setTimeout(scaled(240_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C3 three traced races, the rollup: every section with data, in order; another browser sees none", async ({
+    page,
+    request,
+    browser,
+  }) => {
+    const lobby = await seedLobby(page);
+    await openFile(page);
+    expect(await sectionsOf(page)).toEqual(["hero", "band", "tabs", "service", "blank"]);
+
+    await threeTypedRaces(request, lobby);
+    rollup(lobby.hostUserId);
+    const rows = await rolledUp(lobby.hostUserId);
+    expect(rows.chars, "the rollup wrote key rows").toBeGreaterThan(0);
+    const population = await censusPopulation();
+
+    await openFile(page);
+    await expect(figure(page, "races")).toHaveText("3");
+    await expect(page.locator('[data-section="keyboard-map"]')).toBeVisible();
+    const expected = FILE_ORDER.filter(
+      (s) =>
+        s !== "blank" &&
+        (s !== "suspect-pairs" || rows.pairs > 0) &&
+        (s !== "census" || population >= 30),
+    );
+    if (population >= 30) await expect(census(page)).toBeVisible();
+    expect(await sectionsOf(page)).toEqual(expected);
+    await expect(page.locator('[data-section="key-progress"] [data-key-days]')).toHaveText("DAY 1");
+    await expect(attendance(page).locator('[data-attendance="active"] dd')).toHaveText(/^1 \//);
+
+    const other = await browser.newContext();
+    try {
+      const url = test.info().project.use.baseURL!;
+      await other.addCookies([{ name: "locale", value: "en", url }]);
+      const stranger = await other.newPage();
+      await withoutWebGL(stranger);
+      await seedLobby(stranger);
+      await openFile(stranger);
+      await expect(blank(stranger)).toBeVisible();
+      expect(await sectionsOf(stranger)).toEqual(["hero", "band", "tabs", "service", "blank"]);
+      await expect(figure(stranger, "races")).toHaveText("—");
+      await expect(stranger.locator("[data-key], [data-day]")).toHaveCount(0);
+      await expect(tubes(stranger).first()).toHaveText("--");
+    } finally {
+      await other.close();
+    }
+  });
+
+  test("C4 a two-week file: axe-clean, one h1, named plots, 44px controls, no sideways scroll", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await racesOnDays(request, lobby, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    await twoWeeksOfKeys(lobby.hostUserId);
+    const population = await censusPopulation();
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of [375, 768, 1280]) {
+        const at = `${scheme} ${width}`;
+        await page.setViewportSize({ width, height: 900 });
+        await openFile(page);
+        await expect(page.locator('[data-section="keyboard-map"]'), at).toBeVisible();
+        expect(await sectionsOf(page), at).toEqual(
+          FILE_ORDER.filter((s) => s !== "blank" && (s !== "census" || population >= 30)),
+        );
+        await expectNoA11yViolations(page);
+        await expect(page.locator("h1"), at).toHaveCount(1);
+        const report = await page.locator("main").evaluate((main) => {
+          const shown = (el: Element) => {
+            const box = el.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && !el.closest('[aria-hidden="true"]');
+          };
+          const named = (el: Element) =>
+            !!(
+              el.getAttribute("aria-label")?.trim() ||
+              el.getAttribute("aria-labelledby")?.trim() ||
+              el.querySelector(":scope > title")?.textContent?.trim()
+            );
+          const plots = [...main.querySelectorAll("svg, canvas")].filter(shown);
+          const unnamed = plots
+            .filter((el) => !named(el))
+            .map((el) => el.closest("[data-section]")?.getAttribute("data-section") ?? "?");
+          const controls = [
+            ...main.querySelectorAll(
+              'a[href], button, input, select, textarea, [role="slider"], [role="tab"], [tabindex="0"]',
+            ),
+          ].filter(shown);
+          const small = controls
+            .map((el) => ({ el, box: el.getBoundingClientRect() }))
+            .filter(({ box }) => box.height < 43.5 || box.width < 43.5)
+            .map(
+              ({ el, box }) =>
+                `${el.closest("[data-section]")?.getAttribute("data-section") ?? "?"} ${el.tagName} ${Math.round(box.width)}x${Math.round(box.height)}`,
+            );
+          return { plots: plots.length, unnamed, controls: controls.length, small };
+        });
+        expect(report.plots, at).toBeGreaterThan(0);
+        expect(report.unnamed, `${at} plots without a text alternative`).toEqual([]);
+        expect(report.small, `${at} controls under 44px`).toEqual([]);
+        if (width === 375) {
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          );
+          expect(overflow, "sideways scroll").toBe(false);
+        }
+      }
+    }
   });
 });

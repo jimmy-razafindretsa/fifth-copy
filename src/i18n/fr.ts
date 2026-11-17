@@ -1342,7 +1342,7 @@ export const fr = {
       kicker: "DOSSIER VIERGE",
       nothing: "Le Ministère n'a rien sur toi.",
       almostNothing: "Le Ministère n'a presque rien sur toi.",
-      body: "Termine trois courses et les graphiques apparaîtront ici : vitesse, précision, séries et archives.",
+      body: "Termine trois courses et les graphiques apparaîtront ici : vitesse, précision, touches faibles, registre de présence.",
       cta: "COURSE RAPIDE",
     },
   },

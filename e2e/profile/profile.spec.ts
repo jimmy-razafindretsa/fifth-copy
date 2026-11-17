@@ -1032,3 +1032,138 @@ test.describe("key sheet (#963)", () => {
     await expect(page.locator('[data-section="key-sheet"]')).toHaveCount(2);
   });
 });
+
+// Contract of #964 (C4, C5): the key inventory ("Vitesse, frappes et fautes", bible 14.3). With three
+// counted races and the key sheet's rows (`keySheetRows`) a guest sees it right after the key sheet and
+// before the attendance register: four rows of 30 bars, E over the goal, Ç under it, K bare; the same
+// figures in a hidden table. At 375 the bars keep their 30 columns and scroll inside their own labelled
+// region, never the page. Axe-clean at 375 / 768 / 1280 in both themes; `/design#profile` shows it.
+
+const keyInventory = (page: Page) => page.locator('[data-section="key-inventory"]');
+
+test.describe("key inventory (#964)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C4 after the key sheet; four rows of 30 bars, the table; absent without keys; scrolls in its region at 375", async ({
+    page,
+    request,
+    context,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await openFile(page);
+    await expect(curve(page)).toBeVisible();
+    await expect(keyInventory(page)).toHaveCount(0);
+
+    await keySheetRows(lobby.hostUserId);
+    await openFile(page);
+    const section = keyInventory(page);
+    await expect(section.getByRole("heading", { name: "Speed, strokes and errors" })).toBeVisible();
+    await expect(section).toContainText("KEY INVENTORY");
+    const order = await page
+      .locator("[data-section]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")));
+    expect(order.indexOf("key-inventory")).toBe(order.indexOf("key-sheet") + 1);
+    expect(order.indexOf("key-inventory")).toBeLessThan(order.indexOf("attendance"));
+
+    for (const id of ["speed", "strokes", "errors", "ratio"]) {
+      await expect(section.locator(`[data-inventory-row="${id}"] [data-bar]`)).toHaveCount(30);
+    }
+    const speed = section.locator('[data-inventory-row="speed"]');
+    await expect(speed.locator('[data-bar="e"]')).toHaveAttribute("data-bar-look", "good");
+    await expect(speed.locator('[data-bar="ç"]')).toHaveAttribute("data-bar-look", "weak");
+    await expect(speed.locator('[data-bar="k"]')).toHaveAttribute("data-bar-look", "none");
+    await expect(speed.locator("[data-inventory-goal]")).toHaveCount(1);
+    // e is the most struck key: the tallest strokes bar fills the row
+    const strokes = section.locator('[data-inventory-row="strokes"]');
+    await expect(strokes.locator('[data-bar="e"]')).toHaveAttribute("style", /height:\s*100%/);
+
+    const table = section.getByRole("table", { name: "Speed, strokes and errors by key" });
+    await expect(table.getByRole("row")).toHaveCount(31);
+    const cells = (char: string) => table.locator(`tr[data-key="${char}"]`).locator("th, td");
+    await expect(cells("e")).toHaveText([
+      "E",
+      "35.3\u00a0WPM, goal reached",
+      "60",
+      "3",
+      "5.0\u00a0%",
+    ]);
+    await expect(cells("ç")).toHaveText([
+      "Ç",
+      "20.0\u00a0WPM, under the goal",
+      "30",
+      "6",
+      "20.0\u00a0%",
+    ]);
+
+    // French, and at 375 the rows scroll inside their own focusable, labelled region, never the page
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await page.setViewportSize({ width: 375, height: 800 });
+    await openFile(page);
+    await expect(keyInventory(page)).toContainText("INVENTAIRE DES TOUCHES");
+    const region = page.getByRole("region", {
+      name: "Vitesse, frappes et fautes, défilement horizontal",
+    });
+    await expect(region).toHaveAttribute("tabindex", "0");
+    const sizes = await region.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+    expect(sizes[0]).toBeGreaterThan(sizes[1]!);
+    await expect(region.locator('[data-inventory-row="speed"] [data-bar]')).toHaveCount(30);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, "sideways scroll").toBe(false);
+  });
+
+  test("C5 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await keySheetRows(lobby.hostUserId);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of [375, 768, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openFile(page);
+        await expect(keyInventory(page)).toBeVisible();
+        const { violations } = await new AxeBuilder({ page })
+          .include('[data-section="key-inventory"]')
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const bad = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+        expect(
+          bad.map((v) => v.id),
+          `axe ${scheme} ${width}`,
+        ).toEqual([]);
+        if (width === 375) {
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          );
+          expect(overflow, "sideways scroll").toBe(false);
+        }
+      }
+    }
+  });
+
+  test("C5 /design#profile shows the inventory for the two-week fixture", async ({ page }) => {
+    await page.goto("/design#profile");
+    const section = page.locator(
+      'section[aria-labelledby="profile-two-weeks-guest-key-inventory"][data-section="key-inventory"]',
+    );
+    await expect(section).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(section.locator('[data-inventory-row="speed"] [data-bar]')).toHaveCount(30);
+    await expect(section.locator('[data-inventory-row="speed"] [data-bar="q"]')).toHaveAttribute(
+      "data-bar-look",
+      "weak",
+    );
+    await expect(page.locator('[data-section="key-inventory"]')).toHaveCount(2);
+  });
+});

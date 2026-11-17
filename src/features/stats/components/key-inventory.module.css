@@ -1,0 +1,140 @@
+/*
+ * "Vitesse, frappes et fautes" (#964, bible 14.3 "Personnel file", reference
+ * docs/design/bible/Profil.dc.html section INVENTAIRE DES TOUCHES): ported 1:1 in layout, type scale and
+ * copy. The section head comes from profile.module.css. Colours through roles: the file's navy is violet
+ * as a mark (`rival`, the key sheet's goal-reached tone), its red the `primary` role and the `link` goal
+ * line, its ink bars `fg`; its gold error-ratio row (gold on paper, which 3.1 reserves for rewards) is
+ * muted ink (`fg-muted`). Night shift follows the theme tokens. Nothing moves.
+ */
+@reference "../../../app/globals.css";
+
+/* one frame: paper, 2px ink rule */
+.frame {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  padding: clamp(18px, 2.5vw, 32px);
+}
+
+/* the rows scroll sideways inside themselves on phones, never the page */
+.scroll {
+  position: relative;
+  overflow-x: auto;
+}
+
+/* four rows and the caps, 14px apart; under 520px the 30 caps would stop being legible */
+.chart {
+  min-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* the reference's `110px minmax(0,1fr)`, 14px apart */
+.row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.label {
+  padding-bottom: 4px;
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+/* the bars stand on a 2px ink rule, 3px apart */
+.bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.bar {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  height: 0;
+}
+
+/* speed at or over the goal: violet as a mark */
+.good {
+  background: var(--color-rival);
+}
+
+/* speed under the goal */
+.weak {
+  background: var(--color-primary);
+}
+
+/* strokes: ink bars (no text on them) */
+.ink {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* errors */
+.red {
+  background: var(--color-primary);
+}
+
+/* error ratio: the file's gold, which paper does not carry (3.1) */
+.muted {
+  background: var(--color-fg-muted);
+}
+
+/* the dashed goal line across the speed row */
+.goal {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed var(--color-link);
+  pointer-events: none;
+}
+
+/* the 30 key caps, one under each bar */
+.caps {
+  display: flex;
+  gap: 3px;
+}
+
+.caps > span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  @apply type-typing;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: normal;
+}
+
+/* ---- the legend: the goal line ---- */
+.legend {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  @apply type-body;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+}
+
+.legend > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goalSwatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2px dashed var(--color-link);
+}

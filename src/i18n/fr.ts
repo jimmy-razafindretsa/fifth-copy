@@ -1246,6 +1246,31 @@ export const fr = {
       legendSpeed: "vitesse sur la touche {key}",
       legendGoal: "objectif {goal} MPM",
     },
+    keyInventory: {
+      kicker: "INVENTAIRE DES TOUCHES",
+      title: "Vitesse, frappes et fautes",
+      intro:
+        "Vitesse moyenne par touche, puis combien de fois tu l'as frappée, ratée, et la proportion de ratés.",
+      region: "Vitesse, frappes et fautes, défilement horizontal",
+      rows: {
+        speed: "VITESSE MOY.",
+        strokes: "FRAPPES",
+        errors: "FAUTES",
+        ratio: "RATIO FAUTES",
+      },
+      legendGoal: "objectif {goal} MPM",
+      table: {
+        caption: "Vitesse, frappes et fautes par touche",
+        key: "Touche",
+        speed: "Vitesse moyenne",
+        strokes: "Frappes",
+        errors: "Fautes",
+        ratio: "Ratio de fautes",
+      },
+      wpm: "MPM",
+      reached: "objectif atteint",
+      under: "sous l'objectif",
+    },
     attendance: {
       kicker: "FEUILLE DE POINTAGE",
       title: "Registre de présence",

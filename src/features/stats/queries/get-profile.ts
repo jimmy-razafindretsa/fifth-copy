@@ -103,7 +103,9 @@ const PODIUM_PLACES = [1, 2, 3] as const;
  * whole-file totals and bests, and for the service record (#932) one whole-file aggregate and one count
  * per podium place, for #936 the capped streak scan and the archive's latest rows, and for #330 the
  * capped attendance scan (date and duration). A `null` viewer gets the empty profile without a query.
- * `goalMin` is the daily goal of the attendance register (`DEFAULT_DAILY_GOAL_MIN` until #968).
+ * `goalMin` is the daily goal of the attendance register: the viewer's own (#968, `preferences.dailyGoalMin`),
+ * passed in by the route, or `DEFAULT_DAILY_GOAL_MIN`. The route may pass it still pending (the preference
+ * read it already makes), so the file's queries never wait on it and their count stays the same.
  */
 export async function getProfile(
   viewer: ProfileViewer,
@@ -111,9 +113,9 @@ export async function getProfile(
     db,
     now = new Date(),
     goalMin = DEFAULT_DAILY_GOAL_MIN,
-  }: { db?: Db; now?: Date; goalMin?: number } = {},
+  }: { db?: Db; now?: Date; goalMin?: number | PromiseLike<number> } = {},
 ): Promise<Profile> {
-  if (!viewer) return buildProfile([], now, undefined, { goalMin });
+  if (!viewer) return buildProfile([], now, undefined, { goalMin: await goalMin });
   const client: Db = db ?? (await import("@/server/db")).db;
   const where = countedWhere(viewer.id);
   const [latest, earliest, history, archive, attendance, whole, byPlace, ...perLanguage] =
@@ -216,6 +218,6 @@ export async function getProfile(
       archive: archive.map(toArchiveRow),
       attendance,
     },
-    { goalMin },
+    { goalMin: await goalMin },
   );
 }

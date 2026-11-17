@@ -17,20 +17,28 @@ import {
 const START = "2026-09-01";
 const dayN = (i: number) => addDays(START, i);
 
-/** One character row; `ms` is the mean timing of a timed hit (60000 / (5 * wpm)). */
-const row = (
-  i: number,
-  char: string,
-  { hits = 10, errors = 0, timedHits = hits, wpm = 40, layout = "FR_CA" as const } = {},
-): CharStatRow => ({
-  day: dayN(i),
-  char,
-  layout,
-  hits,
-  errors,
-  timedHits,
-  totalMs: Math.round((12000 * timedHits) / wpm),
-});
+type RowOptions = {
+  hits?: number;
+  errors?: number;
+  timedHits?: number;
+  wpm?: number;
+  layout?: string;
+};
+
+/** One character row at `wpm` (totalMs = 12000 * timedHits / wpm, rounded to the stored ms). */
+const row = (i: number, char: string, options: RowOptions = {}): CharStatRow => {
+  const { hits = 10, errors = 0, wpm = 40, layout = "FR_CA" } = options;
+  const timedHits = options.timedHits ?? hits;
+  return {
+    day: dayN(i),
+    char,
+    layout,
+    hits,
+    errors,
+    timedHits,
+    totalMs: Math.round((12000 * timedHits) / wpm),
+  };
+};
 
 const pair = (p: string, hits: number, errors: number, wpm: number | null): PairStatRow => ({
   pair: p,
@@ -79,7 +87,7 @@ describe("keyFileOf: days and the 30 reference keys (C1)", () => {
     const file = keyFileOf(
       [
         row(0, "a", { hits: 10, errors: 1, wpm: 40 }),
-        row(0, "a", { hits: 10, errors: 3, wpm: 40, layout: "US_QWERTY" as never }),
+        row(0, "a", { hits: 10, errors: 3, wpm: 40, layout: "US_QWERTY" }),
         row(0, "é", { hits: 4, errors: 2, timedHits: 4, wpm: 30 }),
       ],
       [],
@@ -239,7 +247,7 @@ describe("keyFileOf: every stored character of the window (C4)", () => {
     const file = keyFileOf(
       [
         row(0, "'", { hits: 3, errors: 1 }),
-        row(1, "'", { hits: 2, errors: 0, layout: "CSA" as never }),
+        row(1, "'", { hits: 2, errors: 0, layout: "CSA" }),
         row(1, "a", { hits: 7, errors: 2 }),
         row(1, " ", { hits: 30, errors: 0 }),
       ],

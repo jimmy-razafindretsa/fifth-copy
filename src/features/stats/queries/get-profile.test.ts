@@ -272,7 +272,7 @@ describe("getProfile (stand-in client)", () => {
     const source = readFileSync(path.join(__dirname, "get-profile.ts"), "utf8");
     const filter = readFileSync(path.join(__dirname, "counted-where.ts"), "utf8");
     expect(source).toMatch(/import \{ countedWhere \} from "\.\/counted-where";/);
-    expect(filter).toMatch(/import \{ COUNTED_RACE \} from "@\/features\/results";/);
+    expect(filter).toMatch(/import \{ COUNTED_RACE \} from "@\/features\/results\/server";/);
     expect(filter).not.toMatch(/ALL_FINISHED|"TIMER"|VOID/);
     expect(source).not.toMatch(/ALL_FINISHED|"TIMER"|VOID/);
     expect(source).not.toMatch(/raceKeystrokes|adjustedWpm: true|rawWpm: true/);

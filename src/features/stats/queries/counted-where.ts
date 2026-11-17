@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { COUNTED_RACE } from "@/features/results";
+import { COUNTED_RACE } from "@/features/results/server";
 import type { Language } from "../view/profile";
 
 /** The statuses a counted result has (#931): a desk that finished or ran out of time. */

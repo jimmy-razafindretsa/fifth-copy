@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { type Desk, postResults, seedLobby, startRace, withoutWebGL } from "../results/helpers";
+import { signInAccount } from "../landing/home-helpers";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
 
 // Contract of #932 (C2, C9, C10): the Personnel file at /profile (bible 14.3, Profil.dc.html). A guest
@@ -14,6 +15,9 @@ import { HYDRATION_WAIT, scaled } from "../timeouts";
 // archive table inside its own region, never the page.
 // #337 C5: the grade ladder under the four figures: three races averaging 51.4 clean WPM hold Officer,
 // 70 WPM away from Commissar, in English and French; a guest with no race holds Recruit.
+// #969 C4, C5, C6: the site header's grade tag: an account averaging 51.4 reads OFFICER after its name on
+// the landing and on /profile, in both languages; it arrives with no layout shift; the longest grade name
+// fits at 768 and 1280 and hides at 375, where the docket link still says the grade.
 
 const screen = (page: Page) => page.locator("[data-profile-state]");
 const figure = (page: Page, key: string) => page.locator(`[data-figure="${key}"] dd`);
@@ -268,4 +272,183 @@ test.describe("Personnel file at /profile (#932)", () => {
       await expectNoA11yViolations(page);
     });
   }
+});
+
+/** Three counted races for the page's account, at these clean speeds. */
+async function accountRaces(
+  page: Page,
+  request: Parameters<typeof startRace>[0],
+  speeds: [number, number, number],
+) {
+  const lobby = await seedLobby(page);
+  for (const wpm of speeds) {
+    const desks: Desk[] = [
+      { desk: 1, name: "Host", place: 1, wpm, accuracy: 0.95, userId: lobby.hostUserId },
+      { desk: 2, name: "Typist Bot", place: 2, wpm: 30, isBot: true },
+    ];
+    await postResults(request, await startRace(request, lobby, desks), desks);
+  }
+}
+
+const gradeTag = (page: Page) => page.getByRole("banner").locator("[data-docket-grade]");
+const docketLink = (page: Page) => page.getByRole("banner").locator("a[data-docket-link]");
+
+/**
+ * The header's geometry: its height, and the box of every header item but the docket (brand, ← MENU,
+ * guide, toggles, SIGN OUT), rounded to the pixel.
+ */
+async function headerLayout(page: Page) {
+  return page.getByRole("banner").evaluate((header) => {
+    const items = [...header.querySelectorAll("a, button")].filter(
+      (el) => !el.closest("[data-docket-link]"),
+    );
+    const box = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return [Math.round(r.top), Math.round(r.bottom), Math.round(r.right)];
+    };
+    return { height: Math.round(header.getBoundingClientRect().height), items: items.map(box) };
+  });
+}
+
+test.describe("site header grade tag (#969)", () => {
+  test.setTimeout(scaled(120_000));
+
+  test.beforeEach(async ({ page }) => {
+    await withoutWebGL(page);
+  });
+
+  test("C6 an account averaging 51.4 reads OFFICER / OFFICIER in the header on the landing and /profile", async ({
+    page,
+    context,
+    request,
+  }) => {
+    test.skip(test.info().project.name !== "desktop", "desktop project only");
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    const { username } = await signInAccount(page, "grade");
+    await accountRaces(page, request, [40.2, 51.4, 62.6]);
+    // an account's `/` is the Home menu (no site header, bible 14.5): the landing lives at /welcome
+    for (const path of ["/welcome", "/profile"]) {
+      await page.goto(path);
+      await expect(gradeTag(page)).toHaveText("OFFICER");
+      await expect(gradeTag(page)).toHaveAttribute("data-docket-grade", "officer");
+      await expect(docketLink(page)).toHaveAccessibleName(
+        `My file, Comrade ${username}, grade: Officer`,
+      );
+    }
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    for (const path of ["/welcome", "/profile"]) {
+      await page.goto(path);
+      await expect(gradeTag(page)).toHaveText("OFFICIER");
+      await expect(docketLink(page)).toHaveAccessibleName(
+        `Mon dossier, Camarade ${username}, grade : Officier`,
+      );
+    }
+    // the Home menu at / keeps its own docket's rank tag (#945)
+    await page.goto("/");
+    await expect(page.locator("[data-player-docket] [data-rank]")).toHaveText("OFFICIER");
+  });
+
+  test("C4 the tag arrives with no layout shift in the header", async ({ page, request }) => {
+    test.skip(test.info().project.name !== "desktop", "desktop project only");
+    await signInAccount(page, "grade");
+    await accountRaces(page, request, [40.2, 51.4, 62.6]);
+    // the header as first painted: recorded the moment the parser has closed it, before any script runs
+    await page.addInitScript(() => {
+      const w = window as unknown as { __firstHeader?: unknown };
+      const record = () => {
+        const header = document.querySelector("header");
+        if (!header || w.__firstHeader) return;
+        const items = [...header.querySelectorAll("a, button")].filter(
+          (el) => !el.closest("[data-docket-link]"),
+        );
+        w.__firstHeader = {
+          height: Math.round(header.getBoundingClientRect().height),
+          items: items.map((el) => {
+            const r = el.getBoundingClientRect();
+            return [Math.round(r.top), Math.round(r.bottom), Math.round(r.right)];
+          }),
+        };
+      };
+      document.addEventListener("DOMContentLoaded", record);
+    });
+    await page.goto("/profile");
+    await expect(gradeTag(page)).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const first = await page.evaluate(
+      () => (window as unknown as { __firstHeader?: unknown }).__firstHeader,
+    );
+    expect(first).toBeTruthy();
+    expect(await headerLayout(page)).toEqual(first);
+  });
+
+  // C5 at the longest username (20 characters) with the longest grade name: the tag adds no row and no
+  // overflow at 1280 (one row) and 768 (the docket's own row, as today); at 375 it hides, still spoken.
+  test("C5 the longest grade name fits at 1280 and 768 and hides at 375, still spoken", async ({
+    page,
+    context,
+    request,
+  }) => {
+    test.skip(test.info().project.name !== "desktop", "desktop project only");
+    const { username } = await signInAccount(page, "gradewidest");
+    await accountRaces(page, request, [92, 95, 98]);
+    const url = test.info().project.use.baseURL!;
+    const LOCALES = [
+      {
+        locale: "fr",
+        named: `Mon dossier, Camarade ${username}, grade : Héros de la paperasse`,
+        tag: "HÉROS DE LA PAPERASSE",
+      },
+      {
+        locale: "en",
+        named: `My file, Comrade ${username}, grade: Hero of paperwork`,
+        tag: "HERO OF PAPERWORK",
+      },
+    ];
+    for (const { locale, named, tag: tagText } of LOCALES)
+      for (const width of [1280, 768, 375]) {
+        await context.addCookies([{ name: "locale", value: locale, url }]);
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto("/profile");
+        await expect(docketLink(page)).toHaveAccessibleName(named);
+        const header = page.getByRole("banner");
+        const fit = await header.evaluate((h) => ({
+          scroll: h.scrollWidth,
+          client: h.clientWidth,
+          page: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          height: h.getBoundingClientRect().height,
+        }));
+        expect(fit.scroll, `header overflow at ${width} ${locale}`).toBeLessThanOrEqual(fit.client);
+        expect(fit.page, `sideways scroll at ${width}`).toBe(false);
+        if (width === 375) {
+          await expect(gradeTag(page)).toBeHidden();
+          // the phone rule's two rows stay under 120px (bible 14.1 item 1)
+          expect(fit.height).toBeLessThan(120);
+          continue;
+        }
+        await expect(gradeTag(page)).toHaveText(tagText);
+        // the tag sits on the name's line, inside the docket
+        const docket = (await docketLink(page).boundingBox())!;
+        const tag = (await gradeTag(page).boundingBox())!;
+        const middle = (b: { y: number; height: number }) => Math.round(b.y + b.height / 2);
+        expect(middle(tag), `tag line at ${width}`).toBe(middle(docket));
+        expect(tag.x + tag.width).toBeLessThanOrEqual(docket.x + docket.width);
+        // no row added: the header is no taller than today's (no tag, the name uncut); one row at 1280
+        if (width === 1280) {
+          expect(fit.height, "one row at 1280").toBeLessThan(80);
+          // with room to spare: CI's fonts set the row about 18px wider than a dev machine's
+          const spare = await page.addStyleTag({ content: "header nav { padding-right: 24px; }" });
+          const tight = await header.evaluate((h) => h.getBoundingClientRect().height);
+          await spare.evaluate((s) => (s as Element).remove());
+          expect(tight, `one row at 1280 ${locale} with 24px to spare`).toBeLessThan(80);
+        }
+        const style = await page.addStyleTag({
+          content:
+            '[data-docket-grade] { display: none !important; } a[href="/profile"] > span { max-width: none !important; }',
+        });
+        const today = await header.evaluate((h) => h.getBoundingClientRect().height);
+        await style.evaluate((s) => (s as Element).remove());
+        expect(fit.height, `header height at ${width} ${locale}`).toBeLessThanOrEqual(today);
+      }
+  });
 });

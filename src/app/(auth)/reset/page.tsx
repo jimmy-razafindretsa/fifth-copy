@@ -1,5 +1,5 @@
 import { ResetScreen } from "@/features/identity";
-import { LandingHeader } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 
 /**
  * `/reset` (#789, ADR 0009): the site header and the reset screen, where a student redeems the code
@@ -8,7 +8,7 @@ import { LandingHeader } from "@/features/landing";
 export default function ResetPage() {
   return (
     <>
-      <LandingHeader />
+      <SiteHeader />
       <main className="flex flex-1 flex-col">
         <ResetScreen />
       </main>

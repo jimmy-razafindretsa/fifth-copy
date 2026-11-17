@@ -1,5 +1,5 @@
 import type { Messages } from "@/i18n";
-import { fill } from "@/i18n/format";
+import { fill, spokenRank } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
 import { BOT_LEVELS } from "@fifth-copy/engine";
@@ -11,12 +11,6 @@ export type GradeLadderLabels = Messages["profile"]["ladder"] & {
   /** The catalogs' rank names in `BOT_LEVELS` order (the one list, #945). */
   ranks: readonly string[];
 };
-
-/** `OFFICIER` -> `Officier`, `HERO OF PAPERWORK` -> `Hero of paperwork`: the spoken form of a rank name. */
-export function spokenRank(name: string, locale: Locale): string {
-  const lower = name.toLocaleLowerCase(locale);
-  return lower.charAt(0).toLocaleUpperCase(locale) + lower.slice(1);
-}
 
 /**
  * "Échelle des grades" (#337, bible 14.3 "Personnel file", reference `Profil.dc.html` lines 72-85): under

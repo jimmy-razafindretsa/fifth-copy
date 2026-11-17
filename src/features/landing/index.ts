@@ -1,4 +1,5 @@
-export { LandingHeader } from "./components/landing-header";
+// The site header (14.1 item 1); `HeaderBar` draws it from given reads (the `/design` specimens, #969).
+export { HeaderBar, LandingHeader } from "./components/landing-header";
 export { LandingPage } from "./components/landing-page";
 export { OpenRooms } from "./components/open-rooms";
 // The guarded link table (#875): other features offering a landing link read it here (#899).

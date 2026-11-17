@@ -7,7 +7,8 @@ import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { rankFor } from "../view/rank";
 import { profileFixtures } from "../view/profile-fixtures";
-import { GradeLadder, spokenRank } from "./grade-ladder";
+import { spokenRank } from "@/i18n/format";
+import { GradeLadder } from "./grade-ladder";
 import { ProfileScreen, profileLabels } from "./profile-screen";
 
 // #337 C1-C4: the grade ladder under the hero's four figures.

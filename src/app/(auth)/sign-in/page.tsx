@@ -1,5 +1,5 @@
 import { AuthScreen, safeCallbackUrl } from "@/features/identity";
-import { LandingHeader } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 import "../merge-steps";
 
 /**
@@ -12,7 +12,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
   const target = safeCallbackUrl(typeof callbackUrl === "string" ? callbackUrl : null);
   return (
     <>
-      <LandingHeader />
+      <SiteHeader />
       <main className="flex flex-1 flex-col">
         <AuthScreen
           mode="sign-in"

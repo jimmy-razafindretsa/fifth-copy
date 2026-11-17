@@ -23,7 +23,9 @@ import {
   RecoverStates,
   ResetStates,
   SettingsStates,
+  gradeRead,
 } from "@/features/identity";
+import { HeaderBar } from "@/features/landing";
 import { getTheme, ThemeToggle } from "@/features/preferences";
 import {
   hudLabelFixtures,
@@ -336,6 +338,34 @@ function HudSpecimen({
     </figure>
   );
 }
+
+/**
+ * The site header's account docket (#969 C7, bible 14.1 item 1): an account with its grade tag, the top
+ * grade (the longest name), and a guest (no tag). The grade is a settled read here; on a page it streams.
+ */
+const HEADER_STATES = [
+  {
+    key: "officer",
+    title: "Account, Officer",
+    caption: "Mean 51.4 WPM: the ink grade tag after the name.",
+    isGuest: false,
+    rank: "officer",
+  },
+  {
+    key: "top",
+    title: "Account, top grade",
+    caption: "The longest grade name; under 481px the tag hides and the link still says it.",
+    isGuest: false,
+    rank: "major",
+  },
+  {
+    key: "guest",
+    title: "Guest",
+    caption: "Unchanged: the GUEST tag, no grade.",
+    isGuest: true,
+    rank: null,
+  },
+] as const;
 
 /** The Personnel file's states (#932 C11, #933 C7, #936 C7, bible 14.3): four files, each for a guest and an account. */
 const PROFILE_STATES: { id: ProfileFixture; title: string; caption: string }[] = [
@@ -1347,6 +1377,48 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
             <FilingNoticeView {...filingLabels(t.results, "KGB-4821")} late />
           </HudSpecimen>
         </div>
+      </section>
+
+      <section
+        id="site-header"
+        aria-labelledby="site-header-heading"
+        className="flex flex-col gap-6"
+      >
+        <h2 id="site-header-heading" className="type-display-md">
+          Site header
+        </h2>
+        <p className="type-body max-w-prose text-fg">
+          The header every inner page shows: the account docket links to the Personnel file and ends
+          with the account&apos;s grade, as on the Home menu docket; a guest keeps its GUEST tag.
+        </p>
+        {HEADER_STATES.map((state) => (
+          <HudSpecimen
+            key={state.key}
+            id={`header-${state.key}`}
+            title={state.title}
+            caption={state.caption}
+          >
+            <div className="-mx-4 border-2 border-fg md:mx-0">
+              <HeaderBar
+                t={t}
+                locale={locale}
+                theme={theme ?? "light"}
+                viewer={{
+                  id: `header-${state.key}`,
+                  name: state.isGuest ? "GUEST-4417" : "DOCKET-829",
+                  isGuest: state.isGuest,
+                  hasAvatar: false,
+                }}
+                avatar={null}
+                grade={gradeRead(state.rank ? async () => ({ rank: state.rank }) : undefined, {
+                  id: state.key,
+                  isGuest: state.isGuest,
+                })}
+                navLabel={`${t.header.navLabel}, ${state.title}`}
+              />
+            </div>
+          </HudSpecimen>
+        ))}
       </section>
 
       <section id="profile" aria-labelledby="profile-heading" className="flex flex-col gap-6">

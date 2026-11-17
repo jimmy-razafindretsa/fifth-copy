@@ -2,6 +2,7 @@ import { fill } from "@/i18n/format";
 import type { Viewer } from "@/server/auth";
 import { signOut } from "../actions/sign-out";
 import { Avatar, type AvatarUser } from "../avatars/avatar";
+import { DocketGrade, type DocketGradeProps } from "./docket-grade";
 
 export type AccountLabels = {
   honorific: string;
@@ -20,6 +21,8 @@ export type AccountClasses = {
   signIn: string | undefined;
   /** The 32 px ID picture at the docket's left edge (#60). */
   avatar?: string | undefined;
+  /** The account's grade tag after the name (#969). */
+  grade?: string | undefined;
 };
 
 export const SIGN_IN_HREF = "/sign-in";
@@ -33,33 +36,50 @@ export const PROFILE_HREF = "/profile";
  * `signOut` action (works before hydration). Renders its items bare (no wrapper) so the header lays
  * them out; reused by the lobby and settings headers. The docket leads with the viewer's avatar (#60).
  * With `labels.myFile` the docket is a link to the viewer's Personnel file (#932), named "My file, <name>".
+ * With `grade` an account's docket link ends with its grade tag (#969), streamed in its own boundary; the
+ * link then reads "My file, <name>, grade: Officer". A guest never gets one and nothing is read for it.
  */
 export function AccountControl({
   viewer,
   labels,
   classes,
   avatar = null,
+  grade,
 }: {
   viewer: Viewer | null;
   /** The viewer's avatar (#60, `getAvatarUser`); shown in the docket, decorative beside the name. */
   avatar?: AvatarUser | null;
   labels: AccountLabels;
   classes: AccountClasses;
+  /** The account's grade read and its labels (#969); ignored for a guest. */
+  grade?: Omit<DocketGradeProps, "className"> | undefined;
 }) {
   return (
     <>
       {viewer
         ? (() => {
+            const name = fill(labels.honorific, { name: viewer.name });
+            // an account's grade (#969) speaks the link's whole name itself; only on the link
+            const graded = !viewer.isGuest && grade && labels.myFile ? grade : null;
             const content = (
               <>
                 {avatar ? (
                   <Avatar user={avatar} size={32} decorative className={classes.avatar} />
                 ) : null}
-                {labels.myFile ? <span className="sr-only">{`${labels.myFile}, `}</span> : null}
-                <span className={classes.docketName}>
-                  {fill(labels.honorific, { name: viewer.name })}
+                {labels.myFile && !graded ? (
+                  <span className="sr-only">{`${labels.myFile}, `}</span>
+                ) : null}
+                <span className={classes.docketName} aria-hidden={graded ? true : undefined}>
+                  {name}
                 </span>
                 {viewer.isGuest ? <span className={classes.tag}>{labels.guestTag}</span> : null}
+                {graded ? (
+                  <DocketGrade
+                    {...graded}
+                    named={`${labels.myFile}, ${name}`}
+                    className={classes.grade}
+                  />
+                ) : null}
               </>
             );
             return labels.myFile ? (

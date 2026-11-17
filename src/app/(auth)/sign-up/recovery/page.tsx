@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getViewer, RecoveryRevealScreen, takeRecoveryReveal } from "@/features/identity";
-import { LandingHeader } from "@/features/landing";
+import { SiteHeader } from "@/app/_components/site-header";
 
 /**
  * `/sign-up/recovery` (#46 C2, ADR 0009): right after a username sign-up, the one-time recovery code.
@@ -13,7 +13,7 @@ export default async function RecoveryRevealPage() {
   const words = await takeRecoveryReveal(viewer.id);
   return (
     <>
-      <LandingHeader />
+      <SiteHeader />
       <main className="flex flex-1 flex-col">
         <RecoveryRevealScreen words={words} />
       </main>

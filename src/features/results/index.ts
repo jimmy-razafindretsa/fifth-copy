@@ -1,7 +1,7 @@
 // Results feature (ADR 0008): owns the durable race rows of prisma/schema/race.prisma
 // (Race, RaceResult, RaceKeystrokes). Server-only exports: never import this index from a client
 // component.
-// Registers the RaceResult and RaceKeystrokes steps of the guest merge (#56).
+// Registers the guest-merge steps (#56): RaceResult, RaceKeystrokes and the per-key daily stats (#312).
 import "./merge-steps";
 export { startRace } from "./actions/start-race";
 export type { StartRaceResult } from "./actions/start-race";

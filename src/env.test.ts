@@ -120,6 +120,33 @@ describe("env", () => {
     }
   });
 
+  it("#997: E2E_CENSUS_MEMO_MS is unset by default and taken only under Playwright", async () => {
+    expect((await loadEnv({ E2E_CENSUS_MEMO_MS: undefined })).E2E_CENSUS_MEMO_MS).toBeUndefined();
+    expect((await loadEnv({ E2E_CENSUS_MEMO_MS: "" })).E2E_CENSUS_MEMO_MS).toBeUndefined();
+    const prod = await loadEnv({
+      NODE_ENV: "production",
+      REDIS_URL: "redis://redis:6379/0",
+      E2E_CENSUS_MEMO_MS: "0",
+      PLAYWRIGHT_E2E: "1",
+    });
+    expect(prod.E2E_CENSUS_MEMO_MS).toBe(0);
+    for (const NODE_ENV of ["production", "development", "test"]) {
+      await expect(
+        loadEnv({
+          NODE_ENV,
+          REDIS_URL: "redis://redis:6379/0",
+          E2E_CENSUS_MEMO_MS: "0",
+          PLAYWRIGHT_E2E: undefined,
+        }),
+      ).rejects.toThrow(/Invalid environment variables: E2E_CENSUS_MEMO_MS/);
+    }
+    for (const bad of ["-1", "1.5", "soon"]) {
+      await expect(loadEnv({ E2E_CENSUS_MEMO_MS: bad, PLAYWRIGHT_E2E: "1" })).rejects.toThrow(
+        /E2E_CENSUS_MEMO_MS/,
+      );
+    }
+  });
+
   it.each(["RACE_SERVER_INTERNAL_URL", "NEXT_PUBLIC_RACE_SERVER_URL"])(
     "rejects a non-url %s",
     async (name) => {

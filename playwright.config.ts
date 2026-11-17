@@ -107,6 +107,10 @@ export default defineConfig({
             AUTH_DISCORD_SECRET: "e2e-discord-placeholder",
             AUTH_GOOGLE_ID: "e2e-google-client",
             AUTH_GOOGLE_SECRET: "e2e-google-placeholder",
+            // The census memo is 0 here (#997, src/env.ts, Playwright only): a full run crosses the
+            // 30-typist floor partway through, and the #970 checks must see the census at once.
+            // A reused server takes the same variable, or keeps the 10-minute memo.
+            E2E_CENSUS_MEMO_MS: "0",
             // The colour-driven test moderator (ADR 0015, #60 C11): src/env.ts refuses it in production,
             // so only the local dev server takes it; CI's production build keeps the heuristic and the
             // moderation-verdict tests of e2e/identity/avatar.spec.ts skip there.

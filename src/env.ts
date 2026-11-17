@@ -57,6 +57,15 @@ const server = z.object({
   ),
   /** Set to `1` by playwright.config.ts only: the one run where a production build may take `WEB_RATE_LIMIT=off`. */
   PLAYWRIGHT_E2E: z.literal("1").optional(),
+  /**
+   * The census memo in milliseconds for the Playwright web server only (#997): `0` reads the population
+   * on every request, so a run that crosses the 30-typist floor sees it at once. Unset everywhere else,
+   * where `CENSUS_MEMO_MS` (src/features/stats/queries/get-census.ts) holds; refused without `PLAYWRIGHT_E2E=1`.
+   */
+  E2E_CENSUS_MEMO_MS: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.coerce.number().int().min(0).optional(),
+  ),
 });
 
 const client = z.object({
@@ -85,6 +94,14 @@ const schema = server.extend(client.shape).superRefine((value, ctx) => {
       message: "off is allowed in production only under Playwright",
     });
   }
+  // The census memo override is test-only (#997): only a Playwright run may shorten it.
+  if (value.E2E_CENSUS_MEMO_MS !== undefined && value.PLAYWRIGHT_E2E !== "1") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["E2E_CENSUS_MEMO_MS"],
+      message: "allowed only under Playwright",
+    });
+  }
   // The nonce store fails closed (ADR 0020 amendment, #716): a production web without Redis
   // refuses to boot rather than refusing every race server call.
   if (value.NODE_ENV === "production" && !value.REDIS_URL) {
@@ -104,6 +121,7 @@ function parse() {
     REDIS_URL: process.env.REDIS_URL,
     WEB_RATE_LIMIT: process.env.WEB_RATE_LIMIT,
     PLAYWRIGHT_E2E: process.env.PLAYWRIGHT_E2E,
+    E2E_CENSUS_MEMO_MS: process.env.E2E_CENSUS_MEMO_MS,
     RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA,
     AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
     AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,

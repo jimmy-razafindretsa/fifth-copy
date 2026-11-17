@@ -94,6 +94,16 @@ describe("getCensus (stand-in client)", () => {
     expect(CENSUS_MEMO_MS).toBe(600_000);
   });
 
+  it("#997: a zero memo (the Playwright server only) reads the population on every call", async () => {
+    const groups = Array.from({ length: 29 }, (_, i) => group(i));
+    const { db, groupBy } = standIn(groups);
+    const getCensus = createCensusReader({ db, clock: () => 0, memoMs: 0 });
+    expect(await getCensus({ id: "me" })).toBeNull();
+    groups.push(group(29));
+    expect(await getCensus({ id: "me" })).not.toBeNull();
+    expect(groupBy).toHaveBeenCalledTimes(2);
+  });
+
   it("under the floor: null, and the viewer is not read", async () => {
     const { db, aggregate } = standIn(Array.from({ length: 29 }, (_, i) => group(i)));
     const getCensus = createCensusReader({ db, clock: () => 0 });

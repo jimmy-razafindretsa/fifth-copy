@@ -1,4 +1,5 @@
 import "server-only";
+import { env } from "@/env";
 import type { db as appDb } from "@/server/db";
 import {
   CENSUS_MIN_POPULATION,
@@ -19,7 +20,7 @@ import { countedPopulationWhere, countedWhere } from "./counted-where";
  * behind the memo without touching the view.
  */
 
-/** How long the population read is kept in process. */
+/** How long the population read is kept in process (the Playwright web server alone may shorten it, #997). */
 export const CENSUS_MEMO_MS = 10 * 60_000;
 
 type Db = { raceResult: Pick<typeof appDb.raceResult, "groupBy" | "aggregate"> };
@@ -46,18 +47,21 @@ async function readPopulation(db: Db): Promise<CensusTypist[]> {
 
 /**
  * A census reader with its own in-process memo. `db` defaults to the app client (imported lazily),
- * `clock` to `Date.now`.
+ * `clock` to `Date.now`, `memoMs` to `CENSUS_MEMO_MS`.
  */
 export function createCensusReader({
   db,
   clock = Date.now,
-}: { db?: Db; clock?: () => number } = {}): (viewer: CensusViewerRef) => Promise<Census | null> {
+  memoMs = CENSUS_MEMO_MS,
+}: { db?: Db; clock?: () => number; memoMs?: number } = {}): (
+  viewer: CensusViewerRef,
+) => Promise<Census | null> {
   let memo: { at: number; population: Promise<CensusTypist[]> } | null = null;
   const client = async (): Promise<Db> => db ?? (await import("@/server/db")).db;
 
   const population = async (): Promise<CensusTypist[]> => {
     const now = clock();
-    if (!memo || now - memo.at >= CENSUS_MEMO_MS) {
+    if (!memo || now - memo.at >= memoMs) {
       const read = client().then(readPopulation);
       memo = { at: now, population: read };
       read.catch(() => {
@@ -90,4 +94,6 @@ export function createCensusReader({
 }
 
 /** The app's census reader: where `viewer` stands among all typists, or `null` under the floor. */
-export const getCensus = createCensusReader();
+export const getCensus = createCensusReader({
+  memoMs: env.E2E_CENSUS_MEMO_MS ?? CENSUS_MEMO_MS,
+});

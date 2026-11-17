@@ -53,7 +53,9 @@ export function createCensusReader({
   db,
   clock = Date.now,
   memoMs = CENSUS_MEMO_MS,
-}: { db?: Db; clock?: () => number; memoMs?: number } = {}): (viewer: CensusViewerRef) => Promise<Census | null> {
+}: { db?: Db; clock?: () => number; memoMs?: number } = {}): (
+  viewer: CensusViewerRef,
+) => Promise<Census | null> {
   let memo: { at: number; population: Promise<CensusTypist[]> } | null = null;
   const client = async (): Promise<Db> => db ?? (await import("@/server/db")).db;
 

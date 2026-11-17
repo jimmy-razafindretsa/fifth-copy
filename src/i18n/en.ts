@@ -1380,7 +1380,7 @@ export const en = {
       kicker: "BLANK FILE",
       nothing: "The Ministry has nothing on you.",
       almostNothing: "The Ministry has almost nothing on you.",
-      body: "Finish three races and the graphs will appear here: speed, accuracy, streaks and archives.",
+      body: "Finish three races and the graphs will appear here: speed, accuracy, weak keys, attendance register.",
       cta: "QUICK RACE",
     },
   },

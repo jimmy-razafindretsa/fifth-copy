@@ -1,4 +1,4 @@
-import { type ReactNode, Suspense } from "react";
+import { Fragment, type ReactNode, Suspense } from "react";
 import { DeviceTube, Stamp, Star } from "@/components/ui";
 import type { Messages } from "@/i18n";
 import { fill } from "@/i18n/format";
@@ -109,11 +109,37 @@ export type ProfileScreenProps = {
 type Heading = "h1" | "h2" | "h3" | "h4";
 
 /**
+ * The column's sections in the reference's order (`Profil.dc.html` top to bottom, bible 14.3; #970),
+ * under the hero, the band and the folder tabs: the one list that places a section. The blank block
+ * (under 3 counted races) takes the reference's place, right after the service record; the clean
+ * streaks share their row with the suspect pairs (`Séries sans faute` | `Combinaisons suspectes`).
+ * A section absent from a file (no data yet) leaves no placeholder.
+ */
+export const PROFILE_SECTIONS = [
+  "service",
+  "blank",
+  "dockets",
+  "census",
+  "keyProgress",
+  "curve",
+  "keySheet",
+  "keyInventory",
+  "keyboardMap",
+  "attendance",
+  "archive",
+] as const;
+
+export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
+
+/**
  * The Personnel file (#932, bible 14.3 "Personnel file", reference `Profil.dc.html`): one screen that
- * draws a `Profile` and the viewer's identity as an ordered list of sections, the hero (stage, file side,
- * four tubes, the grade ladder of #337), the ink band, the folder tabs, the service record, from three races the clean streaks
- * (#936) beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the output curve (#933), the key sheet (#963), the key inventory (#964), the keyboard map (#324), the attendance register (#330) and the race archives (#936), under three races the blank block.
- * Later cards add a section each. Server-rendered; the stage is the one client leaf.
+ * draws a `Profile` and the viewer's identity: the hero (stage, file side, four tubes, the grade ladder
+ * of #337), the ink band, the folder tabs, then the sections of `PROFILE_SECTIONS` in that order (#970):
+ * the service record, under three races the blank block, from three races the clean streaks (#936)
+ * beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the
+ * output curve (#933), the key sheet (#963), the key inventory (#964), the keyboard map (#324), the
+ * attendance register (#330) and the race archives (#936). Each section carries its `data-section`
+ * marker. Server-rendered; the stage and the interactive plots are client leaves.
  */
 export function ProfileScreen({
   profile,
@@ -162,10 +188,171 @@ export function ProfileScreen({
   ]
     .filter(Boolean)
     .join(" ");
+  const counted = races >= BLANK_BELOW;
+  const keyed = keyFile && counted && keyFile.days.length > 0 ? keyFile : null;
+
+  // every section of the column, by its place in PROFILE_SECTIONS; null = not on this file
+  const sections: Record<ProfileSection, ReactNode> = {
+    service: (
+      <section aria-labelledby={ids.service} data-section="service">
+        <div className={styles.head}>
+          <div>
+            <p className={styles.kicker}>{labels.service.kicker}</p>
+            <Section id={ids.service} className={styles.h2}>
+              {labels.service.title}
+            </Section>
+          </div>
+          <p className={styles.intro}>{labels.service.intro}</p>
+        </div>
+        <dl className={styles.grid}>
+          {figures(profile.service, locale).map((figure) => (
+            <FigureCell key={figure.key} figure={figure} labels={labels.service} />
+          ))}
+        </dl>
+      </section>
+    ),
+    blank: counted ? null : (
+      <section
+        className={styles.blank}
+        aria-labelledby={ids.blank}
+        data-section="blank"
+        data-blank=""
+      >
+        <Stamp
+          still
+          role={null}
+          tone="red"
+          size="lg"
+          rotation={-6}
+          lines={[labels.blank.stamp[0], labels.blank.stamp[1]]}
+          className={styles.blankStamp}
+        />
+        <p className={styles.kicker}>{labels.blank.kicker}</p>
+        <Section id={ids.blank} className={cn(styles.h2, styles.blankTitle)}>
+          {races === 0 ? labels.blank.nothing : labels.blank.almostNothing}
+        </Section>
+        <p className={styles.blankBody}>{labels.blank.body}</p>
+        <a href={links.play} className={styles.stampLink}>
+          {labels.blank.cta}
+        </a>
+      </section>
+    ),
+    dockets: counted ? (
+      <div className={styles.pair} data-docket-pair="">
+        <StreaksDocket
+          streaks={profile.streaks}
+          labels={labels.streaks}
+          locale={locale}
+          id={ids.streaks}
+          heading={Section}
+        />
+        {keyFile && keyFile.pairs.length > 0 ? (
+          <SuspectPairs
+            pairs={keyFile.pairs}
+            labels={labels.suspectPairs}
+            locale={locale}
+            id={ids.suspectPairs}
+            heading={Section as "h2" | "h3" | "h4"}
+          />
+        ) : null}
+      </div>
+    ) : null,
+    census:
+      census && counted ? (
+        <Suspense fallback={null}>
+          <CensusSlot
+            read={census}
+            labels={labels.census}
+            locale={locale}
+            id={ids.census}
+            heading={Section as "h2" | "h3" | "h4"}
+          />
+        </Suspense>
+      ) : null,
+    keyProgress: keyed ? (
+      <KeyProgress
+        keyFile={keyed}
+        labels={labels.keyProgress}
+        locale={locale}
+        id={ids.keyProgress}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
+    curve:
+      curvePoints.length >= CURVE_MIN_RACES ? (
+        <section aria-labelledby={ids.curve} data-section="curve">
+          <div className={styles.head}>
+            <div>
+              <p className={styles.kicker}>{labels.curve.kicker}</p>
+              <Section id={ids.curve} className={styles.h2}>
+                {labels.curve.title}
+              </Section>
+            </div>
+            <p className={styles.intro}>
+              {fill(labels.curve.intro, { count: curvePoints.length })}
+              {curvePoints.length >= TREND_MIN_POINTS ? ` ${labels.curve.introTrend}` : null}
+            </p>
+          </div>
+          <PerformanceCurve points={curvePoints} labels={labels.curve} locale={locale} />
+        </section>
+      ) : null,
+    keySheet: keyed ? (
+      <KeySheetSection
+        keyFile={keyed}
+        labels={labels.keySheet}
+        locale={locale}
+        id={ids.keySheet}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
+    keyInventory: keyed ? (
+      <KeyInventory
+        keyFile={keyed}
+        labels={labels.keyInventory}
+        locale={locale}
+        id={ids.keyInventory}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
+    keyboardMap:
+      keyed && keyboard ? (
+        <KeyboardMap
+          layouts={keyboard.layouts.map((l) => ({
+            id: l.id,
+            name: labels.layoutNames[l.id] ?? l.id,
+            map: keyboardMapOf(keyed.byChar, l.keys),
+          }))}
+          initial={keyboard.initial}
+          labels={labels.keyboardMap}
+          locale={locale}
+          id={ids.keyboardMap}
+          heading={Section as "h2" | "h3" | "h4"}
+        />
+      ) : null,
+    attendance: counted ? (
+      <AttendanceRegister
+        attendance={profile.attendance}
+        labels={labels.attendance}
+        locale={locale}
+        id={ids.attendance}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
+    archive:
+      counted && profile.archive.length > 0 ? (
+        <ArchiveSection
+          archive={profile.archive}
+          labels={labels.archive}
+          locale={locale}
+          id={ids.archive}
+          heading={Section}
+        />
+      ) : null,
+  };
 
   return (
     <div className={styles.screen} data-profile-state={state}>
-      <section className={styles.hero} aria-labelledby={ids.name}>
+      <section className={styles.hero} aria-labelledby={ids.name} data-section="hero">
         <div className={styles.stage}>
           <p className={styles.stageLabel}>{labels.stage.label}</p>
           <Star size={46} tone="red" rotate={12} at={{ top: 40, right: 42, zIndex: 2 }} />
@@ -234,7 +421,7 @@ export function ProfileScreen({
         </div>
       </section>
 
-      <div className={styles.bandBox} aria-hidden="true" data-band="">
+      <div className={styles.bandBox} aria-hidden="true" data-band="" data-section="band">
         <p className={styles.band}>
           {[
             labels.band.confidential,
@@ -253,7 +440,7 @@ export function ProfileScreen({
       </div>
 
       <div className={styles.column}>
-        <nav aria-label={labels.tabs.label} className={styles.tabs}>
+        <nav aria-label={labels.tabs.label} className={styles.tabs} data-section="tabs">
           <a
             href={`#${ids.name}`}
             aria-current="page"
@@ -267,160 +454,9 @@ export function ProfileScreen({
         </nav>
 
         <div className={styles.sections}>
-          <section aria-labelledby={ids.service}>
-            <div className={styles.head}>
-              <div>
-                <p className={styles.kicker}>{labels.service.kicker}</p>
-                <Section id={ids.service} className={styles.h2}>
-                  {labels.service.title}
-                </Section>
-              </div>
-              <p className={styles.intro}>{labels.service.intro}</p>
-            </div>
-            <dl className={styles.grid}>
-              {figures(profile.service, locale).map((figure) => (
-                <FigureCell key={figure.key} figure={figure} labels={labels.service} />
-              ))}
-            </dl>
-          </section>
-
-          {races >= BLANK_BELOW ? (
-            <div className={styles.pair} data-docket-pair="">
-              <StreaksDocket
-                streaks={profile.streaks}
-                labels={labels.streaks}
-                locale={locale}
-                id={ids.streaks}
-                heading={Section}
-              />
-              {keyFile && keyFile.pairs.length > 0 ? (
-                <SuspectPairs
-                  pairs={keyFile.pairs}
-                  labels={labels.suspectPairs}
-                  locale={locale}
-                  id={ids.suspectPairs}
-                  heading={Section as "h2" | "h3" | "h4"}
-                />
-              ) : null}
-            </div>
-          ) : null}
-
-          {census && races >= BLANK_BELOW ? (
-            <Suspense fallback={null}>
-              <CensusSlot
-                read={census}
-                labels={labels.census}
-                locale={locale}
-                id={ids.census}
-                heading={Section as "h2" | "h3" | "h4"}
-              />
-            </Suspense>
-          ) : null}
-
-          {keyFile && races >= BLANK_BELOW && keyFile.days.length > 0 ? (
-            <KeyProgress
-              keyFile={keyFile}
-              labels={labels.keyProgress}
-              locale={locale}
-              id={ids.keyProgress}
-              heading={Section as "h2" | "h3" | "h4"}
-            />
-          ) : null}
-
-          {curvePoints.length >= CURVE_MIN_RACES ? (
-            <section aria-labelledby={ids.curve} data-section="curve">
-              <div className={styles.head}>
-                <div>
-                  <p className={styles.kicker}>{labels.curve.kicker}</p>
-                  <Section id={ids.curve} className={styles.h2}>
-                    {labels.curve.title}
-                  </Section>
-                </div>
-                <p className={styles.intro}>
-                  {fill(labels.curve.intro, { count: curvePoints.length })}
-                  {curvePoints.length >= TREND_MIN_POINTS ? ` ${labels.curve.introTrend}` : null}
-                </p>
-              </div>
-              <PerformanceCurve points={curvePoints} labels={labels.curve} locale={locale} />
-            </section>
-          ) : null}
-
-          {keyFile && races >= BLANK_BELOW && keyFile.days.length > 0 ? (
-            <KeySheetSection
-              keyFile={keyFile}
-              labels={labels.keySheet}
-              locale={locale}
-              id={ids.keySheet}
-              heading={Section as "h2" | "h3" | "h4"}
-            />
-          ) : null}
-
-          {keyFile && races >= BLANK_BELOW && keyFile.days.length > 0 ? (
-            <KeyInventory
-              keyFile={keyFile}
-              labels={labels.keyInventory}
-              locale={locale}
-              id={ids.keyInventory}
-              heading={Section as "h2" | "h3" | "h4"}
-            />
-          ) : null}
-
-          {keyboard && keyFile && races >= BLANK_BELOW && keyFile.days.length > 0 ? (
-            <KeyboardMap
-              layouts={keyboard.layouts.map((l) => ({
-                id: l.id,
-                name: labels.layoutNames[l.id] ?? l.id,
-                map: keyboardMapOf(keyFile.byChar, l.keys),
-              }))}
-              initial={keyboard.initial}
-              labels={labels.keyboardMap}
-              locale={locale}
-              id={ids.keyboardMap}
-              heading={Section as "h2" | "h3" | "h4"}
-            />
-          ) : null}
-
-          {races >= BLANK_BELOW ? (
-            <AttendanceRegister
-              attendance={profile.attendance}
-              labels={labels.attendance}
-              locale={locale}
-              id={ids.attendance}
-              heading={Section as "h2" | "h3" | "h4"}
-            />
-          ) : null}
-
-          {races >= BLANK_BELOW && profile.archive.length > 0 ? (
-            <ArchiveSection
-              archive={profile.archive}
-              labels={labels.archive}
-              locale={locale}
-              id={ids.archive}
-              heading={Section}
-            />
-          ) : null}
-
-          {races < BLANK_BELOW ? (
-            <section className={styles.blank} aria-labelledby={ids.blank} data-blank="">
-              <Stamp
-                still
-                role={null}
-                tone="red"
-                size="lg"
-                rotation={-6}
-                lines={[labels.blank.stamp[0], labels.blank.stamp[1]]}
-                className={styles.blankStamp}
-              />
-              <p className={styles.kicker}>{labels.blank.kicker}</p>
-              <Section id={ids.blank} className={cn(styles.h2, styles.blankTitle)}>
-                {races === 0 ? labels.blank.nothing : labels.blank.almostNothing}
-              </Section>
-              <p className={styles.blankBody}>{labels.blank.body}</p>
-              <a href={links.play} className={styles.stampLink}>
-                {labels.blank.cta}
-              </a>
-            </section>
-          ) : null}
+          {PROFILE_SECTIONS.map((key) => (
+            <Fragment key={key}>{sections[key]}</Fragment>
+          ))}
         </div>
       </div>
     </div>

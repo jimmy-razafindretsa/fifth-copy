@@ -239,7 +239,16 @@ describe("placement on the Personnel file (C7)", () => {
   it("after the output curve, before the archives, from three counted races", () => {
     const html = screen();
     const order = [...html.matchAll(/data-section="([a-z]+)"/g)].map((m) => m[1]);
-    expect(order).toEqual(["streaks", "curve", "attendance", "archive"]);
+    expect(order).toEqual([
+      "hero",
+      "band",
+      "tabs",
+      "service",
+      "streaks",
+      "curve",
+      "attendance",
+      "archive",
+    ]);
     expect(html).toMatch(/<h2 id="profile-attendance"[^>]*>Registre de présence<\/h2>/);
     expect(screen(profileFixtures.early)).toContain('data-section="attendance"');
   });

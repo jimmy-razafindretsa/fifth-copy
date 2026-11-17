@@ -1205,6 +1205,30 @@ export const en = {
         "{count} races: speed from {speedFrom} to {speedTo} WPM, accuracy from {accuracyFrom} to {accuracyTo}%{trend}.",
       trend: { up: ", trending up", down: ", trending down", flat: ", holding steady" },
     },
+    /** #967, bible 14.3: the typist census section, `Ta place au Ministère` (ADR 0023: no head count). */
+    census: {
+      kicker: "TYPIST CENSUS",
+      title: "Your place at the Ministry",
+      modesLabel: "Measure",
+      modes: { speed: "SPEED", accuracy: "ACCURACY" },
+      metricsLabel: "Your figure",
+      metrics: { average: "AVERAGE", best: "BEST" },
+      subjects: {
+        averageSpeed: "average speed",
+        bestSpeed: "best speed",
+        averageAccuracy: "average accuracy",
+        bestAccuracy: "best accuracy",
+      },
+      sentence: "Your {subject} beats that of {percentile} of the Ministry's comrades.",
+      you: "YOU · {value}",
+      plot: "{sentence} You: {value}.",
+      units: { speed: "WPM", accuracy: "%" },
+      legend: {
+        beaten: "comrades you beat",
+        ahead: "those ahead of you",
+        cumulative: "cumulative share",
+      },
+    },
     streaks: {
       title: "CLEAN STREAKS",
       tag: "RACES IN A ROW",

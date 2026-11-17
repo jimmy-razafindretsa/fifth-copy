@@ -166,12 +166,20 @@ test.describe("Personnel file at /profile (#932)", () => {
     await threeRaces(request, await seedLobby(page));
     await openFile(page);
     await expect(curve(page)).toBeVisible();
+    // #936: the clean streaks sit between the service record and the curve (bible 14.3). Located by
+    // their `data-section` markers (#970), never by an absolute index: the census (#967) renders between
+    // them once the database holds 30 counted typists (#992).
     const order = await page
-      .locator("[data-profile-state] section[aria-labelledby]")
-      .evaluateAll((els) => els.map((el) => el.getAttribute("aria-labelledby")));
-    // #936: the clean streaks sit between the service record and the curve (bible 14.3)
-    expect(order.indexOf("profile-streaks")).toBe(order.indexOf("profile-service") + 1);
-    expect(order.indexOf("profile-curve")).toBe(order.indexOf("profile-streaks") + 1);
+      .locator("[data-profile-state] section[data-section]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")));
+    expect(order.indexOf("streaks")).toBe(order.indexOf("service") + 1);
+    const streaks = order.indexOf("streaks");
+    const at = order.indexOf("curve");
+    expect(at).toBeGreaterThan(streaks);
+    // only the sections PROFILE_SECTIONS places between the dockets and the curve may come between them
+    expect(order.slice(streaks + 1, at)).toEqual(
+      ["suspect-pairs", "census", "key-progress"].filter((s) => order.includes(s)),
+    );
     const plot = curve(page).getByRole("img");
     await expect(plot).toHaveAccessibleName(
       /^3 races: speed from [\d.]+ to [\d.]+ WPM, accuracy from /,

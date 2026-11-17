@@ -1,7 +1,7 @@
 // Race domain (ADR 0008): the durable record of a race, owned by src/features/results.
 // The race server is database-less; the web app writes these rows through /api/internal/* (#199, #189).
-// Extension points (additive migrations, later cards): stats.prisma (PersonalBest, Achievement,
-// CharStatDaily) relates to Race.id / User.id. texts.prisma (#346) holds the corpus with no relation
+// Extension points (additive migrations, later cards): stats.prisma (CharStatDaily, BigramStatDaily,
+// later PersonalBest, Achievement) relates to Race.id / User.id. texts.prisma (#346) holds the corpus with no relation
 // from Race: the race keeps its own text snapshot.
 
 enum RaceLanguage {
@@ -104,17 +104,21 @@ model RaceResult {
 
 /// Raw keystrokes of one human desk: gzip of the JSON Keystroke[] (@fifth-copy/engine), kept 30 days.
 model RaceKeystrokes {
-  raceId    String
-  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
-  desk      Int
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  data      Bytes
-  count     Int
-  /// Drives the 30-day purge (worker job, epic #311).
-  createdAt DateTime @default(now())
+  raceId     String
+  race       Race      @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  desk       Int
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data       Bytes
+  count      Int
+  /// Drives the 30-day purge (#315).
+  createdAt  DateTime  @default(now())
+  /// When the daily rollup (#314) added these keys to stats.prisma; null = still to roll up.
+  rolledUpAt DateTime?
 
   @@id([raceId, desk])
   @@index([createdAt])
+  /// Finds the rows still to roll up (`rolledUpAt IS NULL`), oldest first.
+  @@index([rolledUpAt, createdAt])
   @@index([userId])
 }

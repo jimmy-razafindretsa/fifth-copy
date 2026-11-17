@@ -866,3 +866,169 @@ test.describe("progress by key (#962)", () => {
     await expect(page.locator('[data-section="key-progress"]')).toHaveCount(2);
   });
 });
+
+// Contract of #963 (C5, C6, C7): the key sheet ("Fiche par touche", bible 14.3). A guest with three
+// counted races and key rows on three days (written straight into CharStatDaily, as the rollup of #314
+// would) sees the sheet after the output curve and before the attendance register, E (the most typed)
+// selected. Picking Ç (needs work) redraws its cells, plot sentence and legend with no request and no
+// layout shift, announced politely; without JavaScript E's sheet still reads. Axe-clean at 375 / 768 /
+// 1280 in both themes, no sideways scroll at 375; `/design#profile` shows it for the two-week fixture.
+
+const keySheet = (page: Page) => page.locator('[data-section="key-sheet"]');
+const keyStat = (page: Page, id: string) => keySheet(page).locator(`[data-key-stat="${id}"] dd`);
+
+/** Key rows for `userId` on the 3 latest days: `e` at 30, 36, 42 (most typed), `a` at 40, `ç` at 20. */
+async function keySheetRows(userId: string) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    for (const [i, wpm] of [30, 36, 42].entries()) {
+      const day = new Date(Date.now() - (2 - i) * 86_400_000).toISOString().slice(0, 10);
+      for (const [char, speed, hits, errors] of [
+        ["e", wpm, 20, 1],
+        ["a", 40, 11, 0],
+        ["ç", 20, 10, 2],
+      ] as const) {
+        await db.query(
+          `INSERT INTO "CharStatDaily" ("userId", day, char, layout, hits, errors, "timedHits", "totalMs")
+           VALUES ($1, $2::date, $3, 'FR_CA', $4, $5, 10, $6)`,
+          [userId, day, char, hits, errors, Math.round(120_000 / speed)],
+        );
+      }
+    }
+  } finally {
+    await db.end();
+  }
+}
+
+test.describe("key sheet (#963)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C5 C6 after the curve; picking a weak key redraws it with no request and no layout shift; reads without JS", async ({
+    page,
+    request,
+    browser,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await openFile(page);
+    await expect(curve(page)).toBeVisible();
+    await expect(keySheet(page)).toHaveCount(0);
+
+    await keySheetRows(lobby.hostUserId);
+    await openFile(page);
+    const section = keySheet(page);
+    await expect(section.getByRole("heading", { name: "Key sheet" })).toBeVisible();
+    await expect(section).toContainText("INDIVIDUAL QUESTIONING");
+    const order = await page
+      .locator("[data-section]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")));
+    expect(order.indexOf("key-sheet")).toBe(order.indexOf("curve") + 1);
+    expect(order.indexOf("key-sheet")).toBeLessThan(order.indexOf("attendance"));
+
+    const chips = section.getByRole("group", { name: "Keys" }).getByRole("button");
+    await expect(chips).toHaveCount(30);
+    const e = section.getByRole("button", { name: "E, goal reached" });
+    const c = section.getByRole("button", { name: "Ç, needs work" });
+    await expect(e).toHaveAttribute("aria-pressed", "true");
+    await expect(section.getByRole("button", { name: "K, never met" })).toBeDisabled();
+    await expect(keyStat(page, "latest")).toHaveText("42.0 WPM");
+    await expect(keyStat(page, "rate")).toHaveText("UNCERTAIN");
+
+    await page.waitForLoadState("networkidle");
+    const layout = () =>
+      section.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return [r.top + window.scrollY, r.height, r.width];
+      });
+    const box = await layout();
+    const requests: string[] = [];
+    page.on("request", (r) => requests.push(r.url()));
+    await expect(async () => {
+      await c.click();
+      await expect(c).toHaveAttribute("aria-pressed", "true", { timeout: 1000 });
+    }).toPass({ timeout: HYDRATION_WAIT });
+    await expect(e).toHaveAttribute("aria-pressed", "false");
+    await expect(keyStat(page, "latest")).toHaveText("20.0 WPM");
+    await expect(keyStat(page, "best")).toHaveText("20.0 WPM");
+    await expect(keyStat(page, "average")).toHaveText("20.0 WPM");
+    await expect(keyStat(page, "errors")).toHaveText("20.0 %");
+    await expect(section.getByRole("img")).toHaveAccessibleName(
+      "Key Ç: from 20.0 to 20.0 WPM over 3 days, 35 WPM goal not reached yet.",
+    );
+    await expect(section.locator("[data-key-legend]")).toContainText("speed on key Ç");
+    await expect(section.locator('[aria-live="polite"]')).toHaveText(
+      "Key Ç: from 20.0 to 20.0 WPM over 3 days, 35 WPM goal not reached yet.",
+    );
+    expect(requests, "no request during the pick").toEqual([]);
+    expect(await layout(), "no layout shift").toEqual(box);
+
+    // without JavaScript the sheet of the most typed key still reads
+    const state = await page.context().storageState();
+    const noJs = await browser.newContext({
+      javaScriptEnabled: false,
+      storageState: state,
+      viewport: { width: 1280, height: 900 },
+    });
+    const still = await noJs.newPage();
+    await still.goto("/profile");
+    await expect(keySheet(still).getByRole("button", { name: "E, goal reached" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(keyStat(still, "latest")).toHaveText("42.0 WPM");
+    await noJs.close();
+  });
+
+  test("C7 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await keySheetRows(lobby.hostUserId);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of [375, 768, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openFile(page);
+        await expect(keySheet(page)).toBeVisible();
+        const { violations } = await new AxeBuilder({ page })
+          .include('[data-section="key-sheet"]')
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const bad = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+        expect(
+          bad.map((v) => v.id),
+          `axe ${scheme} ${width}`,
+        ).toEqual([]);
+        if (width === 375) {
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          );
+          expect(overflow, "sideways scroll").toBe(false);
+        }
+      }
+    }
+  });
+
+  test("C7 /design#profile shows the sheet for the two-week fixture", async ({ page }) => {
+    await page.goto("/design#profile");
+    const section = page.locator(
+      'section[aria-labelledby="profile-two-weeks-guest-key-sheet"][data-section="key-sheet"]',
+    );
+    await expect(section).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(section.getByRole("button", { name: "E, goal reached" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(section.getByRole("button", { name: "Q, needs work" })).toBeVisible();
+    await expect(page.locator('[data-section="key-sheet"]')).toHaveCount(2);
+  });
+});

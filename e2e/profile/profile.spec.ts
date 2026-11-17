@@ -1,4 +1,6 @@
+import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
+import { Client } from "pg";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { type Desk, postResults, seedLobby, startRace, withoutWebGL } from "../results/helpers";
 import { signInAccount } from "../landing/home-helpers";
@@ -450,5 +452,120 @@ test.describe("site header grade tag (#969)", () => {
         await style.evaluate((s) => (s as Element).remove());
         expect(fit.height, `header height at ${width} ${locale}`).toBeLessThanOrEqual(today);
       }
+  });
+});
+
+// #967 C4, C6, C7: `Ta place au Ministère`, the typist census section (ADR 0023). On /profile it needs
+// 30 typists with 3 counted results each; the e2e database holds far fewer, so a viewer with 3 races sees
+// no section and no placeholder (C6). The drawing and the switches are checked on the /design specimen,
+// which draws the census fixtures of #966 (C4, C7).
+
+/** Typists with at least 3 counted results (the `countedPopulationWhere` rule of #966), as SQL. */
+async function censusPopulation(): Promise<number> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    const { rows } = await db.query<{ n: string }>(
+      `SELECT count(*) AS n FROM (
+         SELECT r."userId" FROM "RaceResult" r JOIN "Race" race ON race.id = r."raceId"
+         WHERE r."userId" IS NOT NULL AND r."isBot" = false AND r.suspicious = false
+           AND r.status IN ('FINISHED', 'TIMED_OUT') AND race."endReason" IN ('ALL_FINISHED', 'TIMER')
+         GROUP BY r."userId" HAVING count(*) >= 3) t`,
+    );
+    return Number(rows[0]!.n);
+  } finally {
+    await db.end();
+  }
+}
+
+const census = (page: Page) => page.locator('[data-section="census"]');
+
+test.describe("typist census (#967)", () => {
+  test.setTimeout(scaled(120_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C6 a viewer with 3 races in a small population sees no census section", async ({
+    page,
+    request,
+  }) => {
+    await threeRaces(request, await seedLobby(page));
+    const population = await censusPopulation();
+    test.skip(population >= 30, `the shared e2e database holds ${population} typists`);
+    await openFile(page);
+    await expect(figure(page, "races")).toHaveText("3");
+    await expect(page.locator("[data-section='streaks']")).toBeVisible();
+    await expect(census(page)).toHaveCount(0);
+    await expect(page.getByText("Your place at the Ministry")).toHaveCount(0);
+  });
+
+  test("C4 C7 /design: tabs and toggle redraw the census with no request, axe-clean, no sideways scroll", async ({
+    page,
+  }) => {
+    await page.goto("/design#profile");
+    const section = page.locator('section[aria-labelledby="profile-two-weeks-guest-census"]');
+    await expect(section).toBeVisible({ timeout: HYDRATION_WAIT });
+    const sentence = section.locator("[data-census-sentence]");
+    const plot = section.locator("[data-census-plot]");
+    const marker = section.locator("[data-census-marker]");
+    const ticks = section.locator("[data-census-ticks]");
+    await expect(sentence).toHaveText(
+      /^Your average speed beats that of \d+\.\d\s% of the Ministry's comrades\.$/,
+    );
+    await expect(plot).toHaveAttribute("aria-label", /You: 54\.2\sWPM\.$/);
+    await expect(ticks).toContainText("150 WPM");
+
+    const speed = section.getByRole("button", { name: "SPEED" });
+    const accuracy = section.getByRole("button", { name: "ACCURACY" });
+    const best = section.getByRole("button", { name: "BEST" });
+    await expect(speed).toHaveAttribute("aria-pressed", "true");
+    // hydrated: a press flips the state (retried until the client leaf answers)
+    await expect(async () => {
+      await accuracy.click();
+      await expect(accuracy).toHaveAttribute("aria-pressed", "true", { timeout: scaled(500) });
+    }).toPass({ timeout: HYDRATION_WAIT });
+    // back to speed, then everything after this point must happen with no request
+    await speed.click();
+    await expect(speed).toHaveAttribute("aria-pressed", "true");
+    const left = await marker.getAttribute("style");
+    await page.waitForLoadState("networkidle");
+    const requests: string[] = [];
+    page.on("request", (r) => requests.push(r.url()));
+    await accuracy.click();
+    await expect(sentence).toContainText("Your average accuracy beats");
+    await expect(ticks).toContainText("80 %");
+    await best.click();
+    await expect(best).toHaveAttribute("aria-pressed", "true");
+    await expect(sentence).toContainText("Your best accuracy beats");
+    await expect(plot).toHaveAttribute("aria-label", /You: 96\.1\s%\.$/);
+    expect(await marker.getAttribute("style")).not.toBe(left);
+    await speed.focus();
+    await page.keyboard.press("Enter");
+    await expect(sentence).toContainText("Your best speed beats");
+    await expect(ticks).toContainText("150 WPM");
+    expect(requests, "requests while switching").toEqual([]);
+
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const { violations } = await new AxeBuilder({ page })
+        .include('section[aria-labelledby="profile-two-weeks-guest-census"]')
+        .include('section[aria-labelledby="profile-two-weeks-account-census"]')
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .analyze();
+      const bad = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+      expect(
+        bad.map((v) => v.id),
+        `axe ${scheme}`,
+      ).toEqual([]);
+    }
+    await page.setViewportSize({ width: 375, height: 800 });
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, "sideways scroll").toBe(false);
   });
 });

@@ -70,6 +70,7 @@ import {
 } from "@/features/results";
 import {
   type ProfileFixture,
+  censusFixtures,
   profileFixtures,
   ProfileScreen,
   profileLabels,
@@ -389,7 +390,7 @@ const PROFILE_STATES: { id: ProfileFixture; title: string; caption: string }[] =
     id: "two-weeks",
     title: "Two weeks",
     caption:
-      "Both languages, wins and podiums, clean streaks, the output curve with its trend, eight archive rows: no blank block.",
+      "Both languages, wins and podiums, clean streaks, the typist census (the guest in the middle of the census fixture, the account near the top: its tag flips left), the output curve with its trend, eight archive rows: no blank block.",
   },
 ];
 const PROFILE_VIEWERS = [
@@ -1428,7 +1429,8 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
         <p className="type-body max-w-prose text-fg">
           The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
           four tubes, the ink band, the folder tabs, the service record, from three races the clean
-          streaks, the output curve and the race archives and, under three races, the blank block.
+          streaks, the typist census, the output curve and the race archives and, under three races,
+          the blank block.
         </p>
         {PROFILE_STATES.flatMap((state) =>
           PROFILE_VIEWERS.map((who) => (
@@ -1453,6 +1455,12 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
                   links={{ play: "/#play", settings: "/settings", signUp: "/sign-up" }}
                   level={3}
                   idPrefix={`profile-${state.id}-${who.key}`}
+                  census={
+                    state.id === "two-weeks"
+                      ? () =>
+                          Promise.resolve(censusFixtures[who.key === "guest" ? "middle" : "top"])
+                      : undefined
+                  }
                 />
               </div>
             </HudSpecimen>

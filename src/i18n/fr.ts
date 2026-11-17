@@ -1166,6 +1166,30 @@ export const fr = {
         flat: ", tendance stable",
       },
     },
+    /** #967, bible 14.3 : la section du recensement, `Ta place au Ministère` (ADR 0023 : aucun effectif). */
+    census: {
+      kicker: "RECENSEMENT DES DACTYLOS",
+      title: "Ta place au Ministère",
+      modesLabel: "Mesure",
+      modes: { speed: "VITESSE", accuracy: "PRÉCISION" },
+      metricsLabel: "Ton chiffre",
+      metrics: { average: "MOYENNE", best: "MEILLEURE" },
+      subjects: {
+        averageSpeed: "vitesse moyenne",
+        bestSpeed: "meilleure vitesse",
+        averageAccuracy: "précision moyenne",
+        bestAccuracy: "meilleure précision",
+      },
+      sentence: "Ta {subject} dépasse celle de {percentile} des camarades du Ministère.",
+      you: "TOI · {value}",
+      plot: "{sentence} Toi : {value}.",
+      units: { speed: "MPM", accuracy: "%" },
+      legend: {
+        beaten: "camarades que tu dépasses",
+        ahead: "ceux devant toi",
+        cumulative: "part cumulée",
+      },
+    },
     streaks: {
       title: "SÉRIES SANS FAUTE",
       tag: "COURSES D'AFFILÉE",

@@ -1,0 +1,195 @@
+/*
+ * Ta place au Ministère (#967, bible 14.3 "Personnel file", reference docs/design/bible/Profil.dc.html
+ * section RECENSEMENT DES DACTYLOS): ported 1:1 in layout, sizes and type; colours through roles. Bars
+ * beaten are ink (`fg`), those ahead the muted bar tone (`fg` 18% into `surface`, the file's #CDB78F);
+ * the cumulative curve is violet as a mark (`rival`, as the output curve's speed series, bible 3.1);
+ * the marker, its tag and the percentile are *you* (red, paper text). No motion.
+ */
+@reference "../../../app/globals.css";
+
+/* the tabs right of the title (7.5 on the reference's label type): 44px, ink when pressed */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-end;
+}
+.tab {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+  cursor: pointer;
+}
+.tab[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the frame: paper, 2px ink rule */
+.frame {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  padding: clamp(18px, 2.5vw, 32px);
+  overflow-x: clip;
+}
+.sentence {
+  margin: 0 0 30px;
+  @apply type-body;
+  font-size: clamp(18px, 1.8vw, 22px);
+  line-height: 1.5;
+}
+.percentile {
+  padding: 1px 8px;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  @apply type-typing;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* the plot: 260px, 2px ink rules left and under; bars, the curve over them, the marker */
+.plot {
+  position: relative;
+  height: 260px;
+  margin-top: 10px;
+  border-left: 2px solid var(--color-fg);
+  border-bottom: 2px solid var(--color-fg);
+}
+.bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+}
+.bar {
+  flex: 1;
+}
+.beaten {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+.ahead {
+  background: color-mix(in srgb, var(--color-fg) 18%, var(--color-surface));
+}
+.curve {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.curve path {
+  fill: none;
+  stroke: var(--color-rival);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.marker {
+  position: absolute;
+  top: -14px;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-you);
+}
+.tag {
+  position: absolute;
+  top: 0;
+  padding: 4px 9px;
+  background: var(--color-you);
+  color: var(--color-primary-fg);
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+.tagRight {
+  left: 8px;
+}
+.tagLeft {
+  right: 8px;
+}
+.ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  @apply type-typing;
+  font-size: 12px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* the toggle and the legend over a dashed 7.4 separator; both wrap */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+.toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+}
+.option {
+  min-height: 44px;
+  padding: 8px 13px;
+  border: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+.option[aria-pressed="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+.legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  @apply type-body;
+  font-size: 14px;
+  line-height: normal;
+  color: var(--color-fg-muted);
+}
+.legend > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+}
+.curveSwatch {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  background: var(--color-rival);
+}

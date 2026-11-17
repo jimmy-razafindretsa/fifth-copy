@@ -5,8 +5,12 @@
  *   layout + page      entryJSFiles from .next/server/app/<route>/page_client-reference-manifest.js
  * Files are deduped, gzipped (level 9) and summed in decimal kB. Polyfills are nomodule-only and excluded.
  *
+ * Next's own routes (`/_not-found`, `/_global-error`) have no page entry: their first load is every entry
+ * of their manifest (layout, not-found, global-error).
+ *
  *   npm run build && npx tsx scripts/bundle-budget.ts '/lobby/[code]'
- * Exit: 0 under budget, 1 over budget, 2 usage / unknown route / unreadable build.
+ *   npm run build && npx tsx scripts/bundle-budget.ts --all     (every App Router route, CI #986)
+ * Exit: 0 under budget, 1 over budget (any route with --all), 2 usage / unknown route / unreadable build.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -54,6 +58,10 @@ export function firstLoadFiles(distDir: string, route: string): string[] {
   };
   const entries = readEntryJsFiles(clientManifest);
   const pageKeys = Object.keys(entries).filter((k) => k.endsWith("/page"));
+  const internal = /^\/_[^/]+$/.test(route); // Next's /_not-found, /_global-error: no page entry
+  if (internal && pageKeys.length === 0) {
+    return [...new Set([...rootMainFiles, ...Object.values(entries).flat()])];
+  }
   if (pageKeys.length !== 1)
     throw new BudgetError(`expected one page entry in ${clientManifest}, found ${pageKeys.length}`);
   const layoutKeys = Object.keys(entries).filter((k) => k.endsWith("/layout"));
@@ -64,6 +72,30 @@ export function firstLoadFiles(distDir: string, route: string): string[] {
       ...entries[pageKeys[0]!]!,
     ]),
   ];
+}
+
+/**
+ * Every App Router route of the build: each `server/app` folder with a page client-reference manifest,
+ * as its path (route groups kept, e.g. `/(auth)/sign-in`; the root is `/`), sorted.
+ */
+export function allRoutes(distDir: string): string[] {
+  const app = path.join(distDir, "server/app");
+  if (!fs.existsSync(app)) throw new BudgetError(`no ${app} (run npm run build first?)`);
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      if (!e.isDirectory()) return [];
+      const full = path.join(dir, e.name);
+      return [
+        ...(fs.existsSync(path.join(full, "page_client-reference-manifest.js")) ? [full] : []),
+        ...walk(full),
+      ];
+    });
+  const routes = [
+    ...(fs.existsSync(path.join(app, "page_client-reference-manifest.js")) ? [app] : []),
+    ...walk(app),
+  ].map((d) => `/${path.relative(app, d).split(path.sep).join("/")}`);
+  if (routes.length === 0) throw new BudgetError(`no routes under ${app}`);
+  return routes.sort();
 }
 
 export function gzipKb(distDir: string, files: string[]): number {
@@ -81,13 +113,19 @@ export function run(
 ): number {
   const route = argv[0];
   if (!route || argv.length > 1) {
-    io.error("usage: npx tsx scripts/bundle-budget.ts '<route>'   e.g. '/lobby/[code]'");
+    io.error("usage: npx tsx scripts/bundle-budget.ts '<route>' | --all   e.g. '/lobby/[code]'");
     return 2;
   }
   try {
-    const kb = gzipKb(distDir, firstLoadFiles(distDir, route));
-    io.log(`${route} ${kb.toFixed(1)} kB gzip (budget ${BUDGET_KB})`);
-    return kb > BUDGET_KB ? 1 : 0;
+    const routes = route === "--all" ? allRoutes(distDir) : [route];
+    const over = routes.filter((r) => {
+      const kb = gzipKb(distDir, firstLoadFiles(distDir, r));
+      io.log(`${r} ${kb.toFixed(1)} kB gzip (budget ${BUDGET_KB})`);
+      return kb > BUDGET_KB;
+    });
+    if (over.length > 0 && routes.length > 1)
+      io.error(`bundle-budget: over ${BUDGET_KB} kB: ${over.join(" ")}`);
+    return over.length > 0 ? 1 : 0;
   } catch (e) {
     if (!(e instanceof BudgetError) && !(e instanceof SyntaxError)) throw e;
     io.error(`bundle-budget: ${e.message}`);

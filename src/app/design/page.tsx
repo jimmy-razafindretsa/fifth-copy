@@ -391,7 +391,7 @@ const PROFILE_STATES: { id: ProfileFixture; title: string; caption: string }[] =
     id: "two-weeks",
     title: "Two weeks",
     caption:
-      "Both languages, wins and podiums, clean streaks, the typist census (the guest in the middle of the census fixture, the account near the top: its tag flips left), the progress by key (the two-week key file: 14 days, keys never met left empty), the output curve with its trend, the key sheet (E selected, Q to work on), eight archive rows: no blank block.",
+      "Both languages, wins and podiums, clean streaks, the typist census (the guest in the middle of the census fixture, the account near the top: its tag flips left), the progress by key (the two-week key file: 14 days, keys never met left empty), the output curve with its trend, the key sheet (E selected, Q to work on), the key inventory (four rows of 30 bars, Q under the goal), eight archive rows: no blank block.",
   },
 ];
 const PROFILE_VIEWERS = [
@@ -1430,8 +1430,9 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
         <p className="type-body max-w-prose text-fg">
           The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
           four tubes, the ink band, the folder tabs, the service record, from three races the clean
-          streaks, the typist census, the progress by key, the output curve, the key sheet, the
-          attendance register and the race archives and, under three races, the blank block.
+          streaks, the typist census, the progress by key, the output curve, the key sheet, the key
+          inventory, the attendance register and the race archives and, under three races, the blank
+          block.
         </p>
         {PROFILE_STATES.flatMap((state) =>
           PROFILE_VIEWERS.map((who) => (

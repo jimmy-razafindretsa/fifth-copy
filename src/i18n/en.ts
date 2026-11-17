@@ -1284,6 +1284,31 @@ export const en = {
       legendSpeed: "speed on key {key}",
       legendGoal: "{goal} WPM goal",
     },
+    keyInventory: {
+      kicker: "KEY INVENTORY",
+      title: "Speed, strokes and errors",
+      intro:
+        "Average speed per key, then how many times you struck it, missed it, and the share of misses.",
+      region: "Speed, strokes and errors, scrolls sideways",
+      rows: {
+        speed: "AVG SPEED",
+        strokes: "STROKES",
+        errors: "ERRORS",
+        ratio: "ERROR RATIO",
+      },
+      legendGoal: "{goal} WPM goal",
+      table: {
+        caption: "Speed, strokes and errors by key",
+        key: "Key",
+        speed: "Average speed",
+        strokes: "Strokes",
+        errors: "Errors",
+        ratio: "Error ratio",
+      },
+      wpm: "WPM",
+      reached: "goal reached",
+      under: "under the goal",
+    },
     attendance: {
       kicker: "TIME SHEET",
       title: "Attendance register",

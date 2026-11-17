@@ -45,6 +45,7 @@ describe("getPreferences defaults (#66 C2)", () => {
       locale: "fr",
       sound: false,
       machineSkin: "teleprinter",
+      dailyGoalMin: 15,
     });
   });
 
@@ -57,6 +58,7 @@ describe("getPreferences defaults (#66 C2)", () => {
       locale: "en",
       sound: false,
       machineSkin: "teleprinter",
+      dailyGoalMin: 15,
     });
   });
 
@@ -103,9 +105,15 @@ describe.skipIf(!testDatabaseUrl)(
         locale: "fr",
         sound: false,
         machineSkin: "teleprinter",
+        dailyGoalMin: 15,
       });
       await db.preference.update({ where: { userId: viewer.id }, data: { locale: "EN" } });
       expect((await getPreferences(viewer)).locale).toBe("en");
+      // #968 C1, C4: the stored goal is read; one outside the schema reads the default
+      await db.preference.update({ where: { userId: viewer.id }, data: { dailyGoalMin: 30 } });
+      expect((await getPreferences(viewer)).dailyGoalMin).toBe(30);
+      await db.preference.update({ where: { userId: viewer.id }, data: { dailyGoalMin: 7 } });
+      expect((await getPreferences(viewer)).dailyGoalMin).toBe(15);
     });
   },
 );

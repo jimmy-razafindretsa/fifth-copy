@@ -284,6 +284,26 @@ describe("getProfile (stand-in client)", () => {
     expect(own.attendance.months.at(-1)!.days[11]).toMatchObject({ level: 4 });
   });
 
+  it("#968 C4: a goal of 30 drops a 15-minute day from 100 % to 50 %, in the same number of queries", async () => {
+    const { db, calls } = fakeDb([
+      { createdAt: NOW, cleanWpm: 40, accuracy: 0.9, lang: "FR", durationMs: 15 * 60_000 },
+    ]);
+    const today = (p: Awaited<ReturnType<typeof getProfile>>) =>
+      p.attendance.months.at(-1)!.days.find((d) => d.today)!;
+    const byDefault = await getProfile(VIEWER, { db, now: NOW });
+    const before = calls.length;
+    expect(today(byDefault)).toMatchObject({ minutes: 15, level: 4 });
+    // the route passes the preference read it already makes, still pending
+    const own = await getProfile(VIEWER, { db, now: NOW, goalMin: Promise.resolve(30) });
+    expect(calls.length - before).toBe(before);
+    expect(own.attendance.goalMin).toBe(30);
+    expect(today(own)).toMatchObject({ minutes: 15, level: 2 });
+    // no viewer: no query, the goal still read
+    const blank = await getProfile(null, { db, now: NOW, goalMin: Promise.resolve(30) });
+    expect(blank.attendance.goalMin).toBe(30);
+    expect(calls.length - before).toBe(before);
+  });
+
   it("C4: 250 stored results give 200 points in 9 queries, the latest ones, oldest first", async () => {
     const rows = Array.from({ length: 250 }, (_, i) => ({
       createdAt: new Date(NOW.getTime() - (250 - i) * 60_000),

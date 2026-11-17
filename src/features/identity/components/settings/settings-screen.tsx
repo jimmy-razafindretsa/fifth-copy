@@ -3,6 +3,7 @@ import type { Viewer } from "@/server/auth";
 import type { UpdatePreferences } from "../../actions/update-preferences";
 import type { Preferences } from "../../schema";
 import { AccountSection, type AccountAvatar } from "./account-section";
+import { DailyGoal } from "./daily-goal";
 import { LanguagePicker } from "./language-picker";
 import { LayoutPicker } from "./layout-picker";
 import { MachinePicker, type MachineSpecimens } from "./machine-picker";
@@ -11,7 +12,7 @@ import { ThemePicker } from "./theme-picker";
 import type { SaveStatus } from "./use-preference-save";
 import styles from "./settings.module.css";
 
-type SectionKey = "layout" | "theme" | "language" | "sound" | "machine";
+type SectionKey = "layout" | "theme" | "language" | "sound" | "machine" | "goal";
 
 /**
  * The settings docket (#66): header `FORM 1-F` + ink tag, then the sections split by the dashed docket
@@ -89,6 +90,13 @@ export async function SettingsDocket({
         action={action}
         initialStatus={initialStatus.machine}
         specimens={machineSpecimens}
+      />
+      <DailyGoal
+        value={preferences.dailyGoalMin}
+        labels={s.goal}
+        status={s.status}
+        action={action}
+        initialStatus={initialStatus.goal}
       />
       <AccountSection viewer={viewer} t={t} idPrefix={idPrefix} avatar={avatar} />
     </div>

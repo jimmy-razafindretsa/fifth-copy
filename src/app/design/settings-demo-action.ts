@@ -13,6 +13,7 @@ export async function fileSpecimenPreference(patch: unknown): Promise<UpdatePref
       locale: "en",
       sound: true,
       machineSkin: "teleprinter",
+      dailyGoalMin: 15,
     },
   };
 }

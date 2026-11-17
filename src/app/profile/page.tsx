@@ -23,14 +23,17 @@ import { getLocale, getT } from "@/i18n";
  * and creates no guest: a cookie that no longer resolves shows the blank file, unassigned. The typist
  * census (#967, ADR 0023) streams in its own `Suspense` slot inside the file; the key file (#961) feeds
  * the progress by key (#962). The keyboard map (#324) draws it on identity's layouts, starting on the
- * viewer's saved layout, else the locale's default (as the race machine does).
+ * viewer's saved layout, else the locale's default (as the race machine does); the attendance register
+ * shades each day against the viewer's daily goal (#968).
  */
 export default async function ProfilePage() {
   const [viewer, t, locale] = await Promise.all([getViewer(), getT(), getLocale()]);
+  // the register reads the viewer's daily goal (#968) from the preference read the page already makes
+  const preferencesRead = getPreferences(viewer);
   const [profile, keyFile, preferences, since, outfit, avatar] = await Promise.all([
-    getProfile(viewer),
+    getProfile(viewer, { goalMin: preferencesRead.then((p) => p.dailyGoalMin) }),
     getKeyFile(viewer),
-    getPreferences(viewer),
+    preferencesRead,
     viewer ? getServiceStart(viewer.id) : null,
     viewer ? getClerkOutfit(viewer.id) : null,
     viewer ? getAvatarUser(viewer) : null,

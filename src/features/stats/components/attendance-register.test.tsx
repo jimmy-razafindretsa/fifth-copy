@@ -189,6 +189,19 @@ describe("AttendanceRegister: legend and names (C6)", () => {
     expect(swatches).toEqual([0, 1, 2, 3, 4].map((l) => `data-level="${l}"`));
   });
 
+  it("#968 C4: a goal of 30 reads in the legend; a 15-minute day drops from level 4 to level 2", () => {
+    const rows = [on("2026-11-12", 15)];
+    const legend = (html: string) => text(html.split("data-legend")[1]!.split("</section>")[0]!);
+    const at15 = render("fr", attendanceOf(rows, NOW, 15));
+    const at30f = render("fr", attendanceOf(rows, NOW, 30));
+    const at30e = render("en", attendanceOf(rows, NOW, 30));
+    expect(legend(at30f)).toContain("OBJECTIF QUOTIDIEN (30 MIN)");
+    expect(legend(at30e)).toContain("DAILY GOAL (30 MIN)");
+    expect(attrs(at15, "2026-11-12")).toContain('data-level="4"');
+    expect(attrs(at30f, "2026-11-12")).toContain('data-level="2"');
+    expect(cell(at30e, "2026-11-12")).toContain("15 min, 50 % of the goal");
+  });
+
   it("every day is named by its figures, never by colour alone", () => {
     const fhtml = render("fr");
     const ehtml = render("en");

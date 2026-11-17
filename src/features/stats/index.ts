@@ -15,6 +15,15 @@ export {
   type ProfileService,
   type SeriesPoint,
 } from "./view/profile";
+// The attendance register (#330): the daily goal the goal setting (#968) replaces with the viewer's own.
+export {
+  ATTENDANCE_MONTHS,
+  DEFAULT_DAILY_GOAL_MIN,
+  type AttendanceDay,
+  type AttendanceLevel,
+  type AttendanceMonth,
+  type ProfileAttendance,
+} from "./view/attendance";
 export { PROFILE_FIXTURE_NOW, type ProfileFixture, profileFixtures } from "./view/profile-fixtures";
 // The Personnel file screen (#932): the route and `/design#profile` compose it.
 export {

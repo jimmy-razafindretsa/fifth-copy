@@ -1201,6 +1201,23 @@ export const fr = {
       row: "≥ {threshold} %",
       foot: "La plus longue suite de courses terminées au-dessus de chaque seuil de précision. Plus la suite est longue, plus le Major est content.",
     },
+    keyProgress: {
+      kicker: "RAPPORT D'APPRENTISSAGE",
+      title: "Progression par touche",
+      intro:
+        "Une ligne par touche, une case par jour de frappe. Les touches jamais rencontrées restent vides.",
+      region: "Progression par touche, défilement horizontal",
+      key: "TOUCHE",
+      days: "JOUR 1 → {count}",
+      dayOne: "JOUR 1",
+      average: "MOY. MPM",
+      row: "{key} : moyenne {average} MPM, de {low} à {high} sur {count} jours",
+      rowOne: "{key} : moyenne {average} MPM, sur 1 jour",
+      rowAverage: "{key} : moyenne {average} MPM",
+      never: "{key} : jamais rencontrée",
+      slow: "LENTE",
+      fast: "RAPIDE",
+    },
     attendance: {
       kicker: "FEUILLE DE POINTAGE",
       title: "Registre de présence",

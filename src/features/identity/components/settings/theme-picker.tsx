@@ -1,7 +1,7 @@
 "use client";
 
 import type { UpdatePreferences } from "../../actions/update-preferences";
-import { PREFERENCE_THEMES, type PreferenceTheme } from "../../schema";
+import { PREFERENCE_THEMES, type PreferenceTheme } from "../../preferences/values";
 import { SegmentedSection } from "./segmented-choice";
 import type { StatusLabels } from "./status-line";
 import type { SaveStatus } from "./use-preference-save";

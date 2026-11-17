@@ -134,6 +134,7 @@ describe("privacy page: facts match docs/privacy (C3)", () => {
       "until you delete it",
     ],
     ["| 30 days after the race |", "30 jours", "30 days"],
+    ["| 90 days after the stats day |", "90 jours", "90 days"],
     ["| Request logs and IP addresses | 30 days |", "30 jours", "30 days"],
     ["24 hours after the lobby closes", "24 heures", "24 hours"],
     ["1 hour after the last activity", "1 heure", "1 hour"],
@@ -201,6 +202,21 @@ describe("privacy page: facts match docs/privacy (C3)", () => {
     expect(doc("docs/privacy/inventory.md")).toContain("for 24 h after that race ended");
     expect(section(privacyFr, "avatars")).toMatch(/salon ou une course.*24 heures/);
     expect(section(privacyEn, "avatars")).toMatch(/lobby or a race.*24 hours/);
+  });
+
+  it("the keystroke and letter-pair purge is delivered (#315): present tense, its own period", () => {
+    const item = (content: readonly PrivacySection[], label: RegExp) =>
+      content.find((s) => s.id === "retention")!.list!.find((i) => label.test(i))!;
+    const fr = [item(privacyFr, /^Touches tapées/), item(privacyFr, /paire de lettres/)];
+    const en = [item(privacyEn, /^Keys typed/), item(privacyEn, /pair of letters/)];
+    expect(fr[0]).toContain("sont effacées 30 jours");
+    expect(fr[1]).toContain("sont effacées 90 jours");
+    expect(en[0]).toContain("are deleted 30 days");
+    expect(en[1]).toContain("are deleted 90 days");
+    for (const text of [...fr, ...en]) expect(text).not.toMatch(/bientôt|soon|seront|will be/i);
+    // only the guest purge (#86) is still to come
+    expect(section(privacyFr, "retention")).not.toMatch(/touches arrivent bientôt/);
+    expect(section(privacyEn, "retention")).not.toMatch(/and keys is coming soon/);
   });
 
   it("the session cookie is delivered (#38) and lasts SESSION_MAX_AGE", () => {

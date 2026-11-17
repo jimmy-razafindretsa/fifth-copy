@@ -4,9 +4,10 @@ import type { PrivacySection } from "./types";
  * Privacy page, English (card #76). Second on `/privacy` after the French text (`privacy.fr.ts`), for players
  * aged 12 to 17: "you", short sentences. Same ids, paragraphs and list items as the French file
  * (`content.test.ts`). Every fact comes from `docs/privacy/*` and the ADRs (0009, 0014, 0019, 0022); what is
- * not delivered yet (#81 self-service deletion, #86 and #315 purges) is written in the future tense ("soon"),
+ * not delivered yet (#81 self-service deletion, #86 guest purge) is written in the future tense ("soon"),
  * never as a present fact (owner decision, 2026-11-02). Accounts (#36), the session cookie (#38) and GitHub,
- * Discord and Google sign-in (#49, #828) are delivered, so they read in the present tense.
+ * Discord and Google sign-in (#49, #828) and the keystroke and letter-pair purge (#315) are delivered, so
+ * they read in the present tense.
  * Not reviewed by a lawyer (#438).
  */
 export const privacyEn: readonly PrivacySection[] = [
@@ -53,12 +54,13 @@ export const privacyEn: readonly PrivacySection[] = [
     heading: "How long we keep it",
     paragraphs: [
       "We keep nothing longer than needed. Here is how long we keep each thing.",
-      "The automatic deletion of guests and keys is coming soon.",
+      "The automatic deletion of guests is coming soon.",
     ],
     list: [
       "Inactive guest account: it will be deleted after 12 months with no race, sign-in or settings change.",
       "Account (username, GitHub, Discord or Google): kept until you delete it, or your school asks us to.",
-      "Keys typed during a race: they will be deleted 30 days after the race.",
+      "Keys typed during a race: they are deleted 30 days after the race.",
+      "Your daily stats per pair of letters: they are deleted 90 days later.",
       "Server logs and IP addresses: 30 days.",
       "Lobbies: 24 hours after they close.",
       "Live race rooms: 1 hour after the last activity.",

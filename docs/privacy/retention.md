@@ -21,8 +21,8 @@ They are the project's choices, not legal advice.
 | Guest cookie in the browser | At most 1 year; it identifies nothing once the guest account is deleted | `src/server/auth/guest-cookie.ts` (cookie expiry), #81 clears it |
 | Session cookie | Until sign-out or expiry | #38 (Auth.js JWT, ADR 0009), #81 clears it |
 | Avatars | Until replaced, rejected or the account is deleted; rejected files are deleted at once | ADR 0014, #64, #81 |
-| Raw keystrokes | 30 days after the race | ADR 0008, #315 (worker purge) |
-| Daily letter-pair stats | 90 days after the stats day | ADR 0024, #315 (worker purge) |
+| Raw keystrokes | 30 days after the race | ADR 0008, `stats.purge` worker job (#315, shipped) |
+| Daily letter-pair stats | 90 days after the stats day | ADR 0024, `stats.purge` worker job (#315, shipped) |
 | Request logs and IP addresses | 30 days | #403 (log rotation), #420 (structured logs with PII redaction) |
 | Lobbies | 24 hours after the lobby closes | ADR 0008, #143 (expiry sweep) |
 | Invites | 24 hours, or as soon as the invite is used | ADR 0008 (Redis TTL) |

@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 import { DeviceTube, Stamp, Star } from "@/components/ui";
 import type { Messages } from "@/i18n";
 import { fill } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
+import type { Census } from "../view/census";
 import { CURVE_MIN_RACES, CURVE_RACES, TREND_MIN_POINTS } from "../view/performance-curve";
 import type { Profile } from "../view/profile";
 import {
@@ -18,6 +19,7 @@ import {
   tubes,
 } from "../view/profile-figures";
 import { rankFor } from "../view/rank";
+import { CensusSlot } from "./census-slot";
 import { GradeLadder } from "./grade-ladder";
 import { PerformanceCurve } from "./performance-curve";
 import { ArchiveSection, StreaksDocket } from "./profile-records";
@@ -64,6 +66,11 @@ export type ProfileScreenProps = {
   level?: 1 | 2 | 3;
   /** Prefix of the heading ids (`profile`): `/design` shows several files on one page. */
   idPrefix?: string;
+  /**
+   * The typist census read for this viewer (#967, `getCensus`; a fixture on `/design`). Called from 3
+   * counted races; its section streams in its own `Suspense` boundary after the clean streaks.
+   */
+  census?: () => Promise<Census | null>;
 };
 
 type Heading = "h1" | "h2" | "h3" | "h4";
@@ -72,7 +79,7 @@ type Heading = "h1" | "h2" | "h3" | "h4";
  * The Personnel file (#932, bible 14.3 "Personnel file", reference `Profil.dc.html`): one screen that
  * draws a `Profile` and the viewer's identity as an ordered list of sections, the hero (stage, file side,
  * four tubes, the grade ladder of #337), the ink band, the folder tabs, the service record, from three races the clean streaks
- * (#936), the output curve (#933) and the race archives (#936), under three races the blank block.
+ * (#936), the typist census (#967), the output curve (#933) and the race archives (#936), under three races the blank block.
  * Later cards add a section each. Server-rendered; the stage is the one client leaf.
  */
 export function ProfileScreen({
@@ -85,6 +92,7 @@ export function ProfileScreen({
   links,
   level = 1,
   idPrefix = "profile",
+  census,
 }: ProfileScreenProps) {
   const ids = {
     name: `${idPrefix}-name`,
@@ -94,6 +102,7 @@ export function ProfileScreen({
     streaks: `${idPrefix}-streaks`,
     archive: `${idPrefix}-archive`,
     ladder: `${idPrefix}-ladder`,
+    census: `${idPrefix}-census`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -242,6 +251,18 @@ export function ProfileScreen({
               id={ids.streaks}
               heading={Section}
             />
+          ) : null}
+
+          {census && races >= BLANK_BELOW ? (
+            <Suspense fallback={null}>
+              <CensusSlot
+                read={census}
+                labels={labels.census}
+                locale={locale}
+                id={ids.census}
+                heading={Section as "h2" | "h3" | "h4"}
+              />
+            </Suspense>
           ) : null}
 
           {curvePoints.length >= CURVE_MIN_RACES ? (

@@ -7,9 +7,6 @@ import { LOCALES, type Locale } from "@/i18n/locale";
 /** The keys of the typing machine, row by row (`TypingMachine`'s `rows`, bible 7.7a). */
 type Rows = readonly (readonly string[])[];
 
-/** Without a saved layout the UI language picks one (ADR 0010: the race language stays independent). */
-const BY_LOCALE: Record<Locale, KeyboardLayoutId> = { fr: "CSA", en: "US_QWERTY" };
-
 /**
  * The machine's rows for a viewer (#224 C2, R179): `layout` is the viewer's saved keyboard layout, `null`
  * until the settings screen (#66) stores one, then `locale` (the request's UI language) chooses:
@@ -27,9 +24,11 @@ export async function machineRows(input: {
   layout: KeyboardLayoutId | null;
   locale: Locale;
 }): Promise<Rows> {
-  const { keyboardLayoutIds, layouts } = await import("@/features/identity");
+  // without a saved layout the UI language picks one (identity's `localeLayouts`; ADR 0010: the race
+  // language stays independent)
+  const { keyboardLayoutIds, layouts, localeLayouts } = await import("@/features/identity");
   const { layout, locale } = z
     .strictObject({ layout: z.enum(keyboardLayoutIds).nullable(), locale: z.enum(LOCALES) })
     .parse(input);
-  return layouts[layout ?? BY_LOCALE[locale]];
+  return layouts[layout ?? localeLayouts[locale]];
 }

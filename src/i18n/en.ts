@@ -1317,6 +1317,23 @@ export const en = {
       reached: "goal reached",
       under: "under the goal",
     },
+    keyboardMap: {
+      kicker: "MACHINE PLAN · {layout}",
+      title: "Keyboard map",
+      layouts: "Keyboard layout",
+      board: "Keyboard map, {layout}",
+      pads: { top: "TAB", home: "CAPS", bottom: "SHIFT" },
+      rows: {
+        number: "NUMBER ROW",
+        top: "TOP ROW",
+        home: "HOME ROW",
+        bottom: "BOTTOM ROW",
+      },
+      key: "{key}: {strokes} of strokes, {errors} errors",
+      untyped: "{key}: never struck",
+      legendSize: "circle size: how often you strike it",
+      legendCore: "red core: share of errors",
+    },
     attendance: {
       kicker: "TIME SHEET",
       title: "Attendance register",

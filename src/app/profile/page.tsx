@@ -4,8 +4,13 @@ import {
   DefaultPortrait,
   getAvatarUser,
   getClerkOutfit,
+  getPreferences,
   getServiceStart,
   getViewer,
+  keyboardLayoutIds,
+  layouts,
+  localeLayouts,
+  numberRows,
 } from "@/features/identity";
 import { clerkEmbedSrc, LINKS } from "@/features/landing";
 import { SiteHeader } from "@/app/_components/site-header";
@@ -17,13 +22,15 @@ import { getLocale, getT } from "@/i18n";
  * session or a guest cookie through; the page reads only through `getViewer()` and the viewer's own id,
  * and creates no guest: a cookie that no longer resolves shows the blank file, unassigned. The typist
  * census (#967, ADR 0023) streams in its own `Suspense` slot inside the file; the key file (#961) feeds
- * the progress by key (#962).
+ * the progress by key (#962). The keyboard map (#324) draws it on identity's layouts, starting on the
+ * viewer's saved layout, else the locale's default (as the race machine does).
  */
 export default async function ProfilePage() {
   const [viewer, t, locale] = await Promise.all([getViewer(), getT(), getLocale()]);
-  const [profile, keyFile, since, outfit, avatar] = await Promise.all([
+  const [profile, keyFile, preferences, since, outfit, avatar] = await Promise.all([
     getProfile(viewer),
     getKeyFile(viewer),
+    getPreferences(viewer),
     viewer ? getServiceStart(viewer.id) : null,
     viewer ? getClerkOutfit(viewer.id) : null,
     viewer ? getAvatarUser(viewer) : null,
@@ -47,6 +54,13 @@ export default async function ProfilePage() {
           links={{ play: `/${LINKS.play}`, settings: "/settings", signUp: AUTH_LINKS.signUp }}
           census={viewer ? () => getCensus(viewer) : undefined}
           keyFile={keyFile}
+          keyboard={{
+            initial: preferences.layout ?? localeLayouts[locale],
+            layouts: keyboardLayoutIds.map((id) => ({
+              id,
+              keys: { number: numberRows[id], letters: layouts[id] },
+            })),
+          }}
         />
       </main>
     </>

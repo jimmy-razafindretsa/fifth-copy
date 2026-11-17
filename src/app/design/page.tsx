@@ -24,6 +24,10 @@ import {
   ResetStates,
   SettingsStates,
   gradeRead,
+  keyboardLayoutIds,
+  layouts,
+  localeLayouts,
+  numberRows,
 } from "@/features/identity";
 import { HeaderBar } from "@/features/landing";
 import { getTheme, ThemeToggle } from "@/features/preferences";
@@ -1431,8 +1435,8 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
           The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
           four tubes, the ink band, the folder tabs, the service record, from three races the clean
           streaks beside the suspect letter pairs, the typist census, the progress by key, the
-          output curve, the key sheet, the key inventory, the attendance register and the race
-          archives and, under three races, the blank block.
+          output curve, the key sheet, the key inventory, the keyboard map, the attendance register
+          and the race archives and, under three races, the blank block.
         </p>
         {PROFILE_STATES.flatMap((state) =>
           PROFILE_VIEWERS.map((who) => (
@@ -1464,6 +1468,13 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
                       : undefined
                   }
                   keyFile={state.id === "two-weeks" ? keyFileFixtures.twoWeeks : undefined}
+                  keyboard={{
+                    initial: localeLayouts[locale],
+                    layouts: keyboardLayoutIds.map((id) => ({
+                      id,
+                      keys: { number: numberRows[id], letters: layouts[id] },
+                    })),
+                  }}
                 />
               </div>
             </HudSpecimen>

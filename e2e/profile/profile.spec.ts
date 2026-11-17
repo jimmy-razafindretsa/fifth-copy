@@ -1311,3 +1311,138 @@ test.describe("suspect letter pairs (#965)", () => {
     await expect(page.locator('[data-section="suspect-pairs"]')).toHaveCount(2);
   });
 });
+
+// Contract of #324 (C6, C7, C8): the keyboard map ("Carte du clavier", bible 14.3). With three counted
+// races and the key sheet's rows a guest (no saved layout) sees it right after the key inventory and
+// before the attendance register, on the locale's default layout (English: US QWERTY); switching to
+// AZERTY from the keyboard redraws it with no request. At 375 the board keeps its proportions inside the
+// column. Axe-clean at 375 / 768 / 1280 in both themes; `/design#profile` shows it.
+
+const keyboardMap = (page: Page) => page.locator('[data-section="keyboard-map"]');
+
+test.describe("keyboard map (#324)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ context, page }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await withoutWebGL(page);
+  });
+
+  test("C6 C7 after the inventory on the locale's layout; AZERTY from the keyboard, no request; 375 keeps proportions", async ({
+    page,
+    request,
+    context,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await openFile(page);
+    await expect(curve(page)).toBeVisible();
+    await expect(keyboardMap(page)).toHaveCount(0);
+
+    await keySheetRows(lobby.hostUserId);
+    await openFile(page);
+    const section = keyboardMap(page);
+    await expect(section.getByRole("heading", { name: "Keyboard map" })).toBeVisible();
+    await expect(section.locator("[data-keyboard-kicker]")).toHaveText("MACHINE PLAN · US QWERTY");
+    const order = await page
+      .locator("[data-section]")
+      .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")));
+    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("key-inventory") + 1);
+    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("attendance") - 1);
+
+    const layouts = section.getByRole("group", { name: "Keyboard layout" });
+    await expect(layouts.getByRole("button")).toHaveCount(4);
+    await expect(layouts.getByRole("button", { name: "US QWERTY" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // e: 60 of the 93 strokes on US QWERTY keys (ç is not one), 3 errors; k never struck
+    const board = section.getByRole("group", { name: "Keyboard map, US QWERTY" });
+    await expect(
+      board.getByRole("img", { name: "E: 64.5 % of strokes, 5.0 % errors" }),
+    ).toBeVisible();
+    await expect(board.getByRole("img", { name: "K: never struck" })).toBeVisible();
+    await expect(section.locator('[data-row-share="top"] dd')).toHaveText("65 %");
+    const firstTop = section.locator('[data-keyboard-row="top"] [data-key-cap]').first();
+    await expect(firstTop).toHaveText("Q");
+
+    // AZERTY from the keyboard: no request, the board redraws from the page's props
+    const requests: string[] = [];
+    page.on("request", (r) => requests.push(r.url()));
+    const azerty = layouts.getByRole("button", { name: "AZERTY" });
+    await azerty.focus();
+    await page.keyboard.press("Enter");
+    await expect(azerty).toHaveAttribute("aria-pressed", "true");
+    await expect(firstTop).toHaveText("A");
+    await expect(section.locator("[data-keyboard-kicker]")).toHaveText("MACHINE PLAN · AZERTY");
+    await expect(section.getByRole("group", { name: "Keyboard map, AZERTY" })).toBeVisible();
+    expect(requests).toEqual([]);
+
+    // French at 375: CSA first; the board stays inside the column, keys square fractions of its width
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await page.setViewportSize({ width: 375, height: 800 });
+    await openFile(page);
+    await expect(keyboardMap(page).locator("[data-keyboard-kicker]")).toHaveText(
+      "PLAN DE LA MACHINE · FRANÇAIS CANADIEN (CSA)",
+    );
+    const boardBox = (await keyboardMap(page).locator("[data-keyboard-board]").boundingBox())!;
+    expect(boardBox.x).toBeGreaterThanOrEqual(0);
+    expect(boardBox.x + boardBox.width).toBeLessThanOrEqual(375);
+    const key = (await keyboardMap(page).locator('[data-key="e"]').boundingBox())!;
+    expect(Math.abs(key.width - key.height)).toBeLessThan(1);
+    expect(key.width).toBeLessThan(boardBox.width / 13);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, "sideways scroll").toBe(false);
+  });
+
+  test("C8 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await keySheetRows(lobby.hostUserId);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of [375, 768, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openFile(page);
+        await expect(keyboardMap(page)).toBeVisible();
+        const { violations } = await new AxeBuilder({ page })
+          .include('[data-section="keyboard-map"]')
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const bad = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+        expect(
+          bad.map((v) => v.id),
+          `axe ${scheme} ${width}`,
+        ).toEqual([]);
+        if (width === 375) {
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          );
+          expect(overflow, "sideways scroll").toBe(false);
+        }
+      }
+    }
+  });
+
+  test("C8 /design#profile shows the map for the two-week fixture", async ({ page }) => {
+    await page.goto("/design#profile");
+    const section = page.locator(
+      'section[aria-labelledby="profile-two-weeks-guest-keyboard-map"][data-section="keyboard-map"]',
+    );
+    await expect(section).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(section.locator("[data-keyboard-row]")).toHaveCount(4);
+    await expect(section.locator('[data-key="e"] [data-key-circle]')).toHaveAttribute(
+      "style",
+      /width:\s*140%/,
+    );
+    await expect(page.locator('[data-section="keyboard-map"]')).toHaveCount(2);
+  });
+});

@@ -14,8 +14,15 @@ export { Avatar, avatarSrc, type AvatarUser, type AvatarDisplaySize } from "./av
 export { DefaultPortrait, portraitVariant } from "./avatars/default-portrait";
 export { getAvatarUser } from "./queries/avatar-user";
 export { avatarQuery, normalizeUsername } from "./schema";
-// The keyboard layouts (R179, #224): pure data the race machine, the settings picker (#66) and the heatmap read.
-export { keyboardLayoutIds, layouts, type KeyboardLayoutId } from "./keyboard/layouts";
+// The keyboard layouts (R179, #224): pure data the race machine, the settings picker (#66) and the heatmap read;
+// the number rows and the locale default feed the Personnel file's keyboard map (#324).
+export {
+  keyboardLayoutIds,
+  layouts,
+  type KeyboardLayoutId,
+  localeLayouts,
+  numberRows,
+} from "./keyboard/layouts";
 // The clerk outfit (bible 10.1, #687): catalogue, validation, the per-desk fallback, the save and the read.
 export {
   OUTFIT_CATALOGUE,

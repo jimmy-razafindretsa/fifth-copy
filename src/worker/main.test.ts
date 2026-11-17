@@ -37,6 +37,12 @@ describe("worker registry", () => {
     expect(sweep).toBeDefined();
     expect(durationMs(sweep!.every)).toBe(10 * 60 * 1000);
   });
+
+  it("registers the per-key rollup every minute (#314)", () => {
+    const rollup = jobs.find((j) => j.name === "stats.rollup");
+    expect(rollup).toBeDefined();
+    expect(durationMs(rollup!.every)).toBe(60 * 1000);
+  });
 });
 
 describe("runWorker", () => {

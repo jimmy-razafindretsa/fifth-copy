@@ -5,9 +5,10 @@ import type { PrivacySection } from "./types";
  * 12 to 17: Québec French, "tu" form (bible 2), short sentences. Keep in step with `privacy.en.ts` (same ids,
  * same number of paragraphs and list items; `content.test.ts` checks parity, plain language and the facts).
  * Every fact comes from `docs/privacy/*` and the ADRs (0009, 0014, 0019, 0022). What is not delivered yet
- * (#81 self-service deletion, #86 and #315 purges) is written in the future tense ("bientôt"), never as a
+ * (#81 self-service deletion, #86 guest purge) is written in the future tense ("bientôt"), never as a
  * present fact (owner decision, 2026-11-02). Accounts (#36), the session cookie (#38) and GitHub, Discord
- * and Google sign-in (#49, #828) are delivered, so they read in the present tense.
+ * and Google sign-in (#49, #828) and the keystroke and letter-pair purge (#315) are delivered, so they
+ * read in the present tense.
  * Not reviewed by a lawyer (#438).
  */
 export const privacyFr: readonly PrivacySection[] = [
@@ -54,12 +55,13 @@ export const privacyFr: readonly PrivacySection[] = [
     heading: "Combien de temps on le garde",
     paragraphs: [
       "On ne garde rien plus longtemps que nécessaire. Voici la durée pour chaque chose.",
-      "Les effacements automatiques des invités et des touches arrivent bientôt.",
+      "L'effacement automatique des invités arrive bientôt.",
     ],
     list: [
       "Compte d'invité inactif : il sera effacé après 12 mois sans course, connexion ni changement de réglage.",
       "Compte (nom d'utilisateur, GitHub, Discord ou Google) : gardé jusqu'à ce que tu le supprimes, ou que ton école le demande.",
-      "Touches tapées pendant une course : elles seront effacées 30 jours après la course.",
+      "Touches tapées pendant une course : elles sont effacées 30 jours après la course.",
+      "Tes statistiques du jour par paire de lettres : elles sont effacées 90 jours plus tard.",
       "Journaux des serveurs et adresses IP : 30 jours.",
       "Salons : 24 heures après leur fermeture.",
       "Salles de course en direct : 1 heure après la dernière activité.",

@@ -716,6 +716,44 @@ test.describe("attendance register (#330)", () => {
     }
   });
 
+  test("#968 C4 a goal of 30 filed on /settings: the legend reads 30 MIN, a 15-minute day drops to 50 %", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    await racesOnDays(request, lobby, [0]);
+    const db = new Client({ connectionString: process.env.DATABASE_URL });
+    await db.connect();
+    try {
+      await db.query(`UPDATE "RaceResult" SET "durationMs" = 900000 WHERE "userId" = $1`, [
+        lobby.hostUserId,
+      ]);
+    } finally {
+      await db.end();
+    }
+    const { today } = torontoWindow();
+    await openFile(page);
+    await expect(attendance(page)).toContainText("DAILY GOAL (15 MIN)");
+    await expect(attendance(page).locator(`[data-day="${today}"]`)).toHaveAttribute(
+      "data-level",
+      "4",
+    );
+
+    await page.goto("/settings");
+    const slider = page.getByRole("slider", { name: "DAILY GOAL" });
+    await expect(slider).toHaveAttribute("data-hydrated", "", { timeout: HYDRATION_WAIT });
+    await slider.fill("30");
+    await expect(page.locator('[data-setting="dailyGoalMin"]').getByRole("status")).toHaveText(
+      "FILED",
+    );
+
+    await openFile(page);
+    await expect(attendance(page)).toContainText("DAILY GOAL (30 MIN)");
+    const cell = attendance(page).locator(`[data-day="${today}"]`);
+    await expect(cell).toHaveAttribute("data-level", "2");
+    await expect(cell).toContainText(/\(today\): 15 min, 50 % of the goal$/);
+  });
+
   test("C8 /design#profile shows the register for the two-week fixture", async ({ page }) => {
     await page.goto("/design#profile");
     const section = page.locator(

@@ -642,18 +642,23 @@ async function setSizing(itemId: string, n: number, estimate?: number, priority?
 
 /**
  * The issue, made sure to be on the project. createIssue's projectV2Ids is not always honoured (#975, #986
- * and #992 were created off the board), so add the item explicitly when it is missing. Idempotent:
- * addProjectV2ItemById returns the existing item for an issue already on the project.
+ * and #992 were created off the board), so add the item explicitly when it is missing. When the item
+ * appears late (it was there after all), the add fails with "already exists" and counts as done.
  */
 async function attachToProject(n: number): Promise<FullIssue> {
   const c = await ctx();
   const i = await getIssue(n);
   if (i.projectItems.nodes.some((p) => p.project.id === c.project.id)) return i;
-  await mutate(
-    `add ${cardId(n)} to project`,
-    `mutation($input: AddProjectV2ItemByIdInput!) { addProjectV2ItemById(input: $input) { item { id } } }`,
-    { input: { projectId: c.project.id, contentId: i.id } },
-  );
+  try {
+    await mutate(
+      `add ${cardId(n)} to project`,
+      `mutation($input: AddProjectV2ItemByIdInput!) { addProjectV2ItemById(input: $input) { item { id } } }`,
+      { input: { projectId: c.project.id, contentId: i.id } },
+    );
+  } catch (e) {
+    // createIssue's projectV2Ids can land a moment after the issue is readable (#997): the item exists.
+    if (!/already exists in this project/i.test(String(e))) throw e;
+  }
   return getIssue(n);
 }
 

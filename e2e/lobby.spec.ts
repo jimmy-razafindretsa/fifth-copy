@@ -11,6 +11,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./race/helpers";
 import { Client } from "pg";
 import { contrastRatio, type Rgb } from "../src/lib/color";
@@ -920,7 +921,7 @@ test.describe("late joiner (#732 C3)", () => {
 
     const { host, code, lobbyId } = await hostRoom(browser, opened, { before: recordRaceTokens });
     await setHostSettings(host, { errorMode: "block", wordCount: 10, timerS: null });
-    await page.goto(`/race/${lobbyId}`);
+    await openRace(page, { code, lobbyId });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     await expect(startButton(host)).toBeEnabled();
     await warmRace(host, lobbyId);

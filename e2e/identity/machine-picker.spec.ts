@@ -3,7 +3,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { machineSkinIds } from "../../src/features/race/components/machine/skin";
 import { expect, test } from "../fixtures";
 import { deleteUsers, plantGuest } from "../auth/auth-helpers";
-import { hostRoom, warmRace } from "../race/helpers";
+import { hostRoom, warmRace, openRace } from "../race/helpers";
 import { group, openSettings, settingsDocket } from "./settings-helpers";
 
 // #638 C2, C3: the MACHINE section of /settings (7.1 segmented toggle, one segment per registered skin,
@@ -86,7 +86,7 @@ test.describe("#638 machine skin preference", () => {
     await fileSkin(page, chosen);
     const room = await hostRoom(browser, opened);
     await warmRace(page, room.lobbyId);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.locator(`[data-machine][data-skin="${chosen}"]`)).toHaveCount(1);
   });
 
@@ -95,7 +95,7 @@ test.describe("#638 machine skin preference", () => {
     const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
     opened.push(context);
     const page = await context.newPage();
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.locator('[data-machine][data-skin="teleprinter"]')).toHaveCount(1);
   });
 });

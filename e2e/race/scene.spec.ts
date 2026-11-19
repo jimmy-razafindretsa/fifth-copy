@@ -9,6 +9,7 @@ import {
   warmRace,
   withoutWebGL,
   type SimulatedPlayer,
+  openRace,
 } from "./helpers";
 
 // Contract of #563 C2, C4, C5 (ADR 0017 option A, bible 11.3, 12, 7.3, 7.4, 8): the seat view loads the
@@ -117,7 +118,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
       await gate;
       await route.continue();
     });
-    await page.goto(`/race/${room.lobbyId}?scene=pin`);
+    await openRace(page, room, "?scene=pin");
 
     // #951: the waiting room is the one loading screen; the scene's own card is gone
     const card = loadingCard(page);
@@ -137,7 +138,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
   }) => {
     const room = await hostRoom(browser, opened);
     players = await simulatedPlayers(1, room.lobbyId);
-    await page.goto(`/race/${room.lobbyId}?scene=pin`);
+    await openRace(page, room, "?scene=pin");
     const view = scene(page);
     await expect(view).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
     await expect(view).toHaveAttribute("data-scene-fov", "62");
@@ -161,7 +162,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
     browser,
   }) => {
     const room = await hostRoom(browser, opened);
-    await page.goto(`/race/${room.lobbyId}?scene=pin`);
+    await openRace(page, room, "?scene=pin");
     await expect(scene(page)).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
     await expect(scene(page)).toHaveAttribute("data-scene-motion", "full");
     const seat = await seatFrame(page);
@@ -197,7 +198,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
     });
     opened.push(context);
     const page = await context.newPage();
-    await page.goto(`/race/${room.lobbyId}?scene=pin`);
+    await openRace(page, room, "?scene=pin");
     await expect(scene(page)).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
     await expect(scene(page)).toHaveAttribute("data-scene-motion", "reduce");
     const seat = await seatFrame(page);
@@ -218,7 +219,7 @@ test.describe("#563 seat scene", { tag: "@scene" }, () => {
       const room = await hostRoom(browser, opened, { before: (host) => withoutWebGL(host) });
       await page.emulateMedia({ colorScheme });
       await page.addInitScript(groundAudit);
-      await page.goto(`/race/${room.lobbyId}?scene=pin`);
+      await openRace(page, room, "?scene=pin");
       await expect(scene(page)).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
       await expect(scene(page)).toHaveAttribute("data-scene-preset", "low");
       await expect(startButton(room.host)).toBeEnabled();

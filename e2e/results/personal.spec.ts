@@ -7,6 +7,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "../race/helpers";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
 import { normalizeTypeable, type Keystroke } from "@fifth-copy/engine";
@@ -160,7 +161,7 @@ test.describe("Dawn report personal card, WPM graph (#865)", () => {
     test.setTimeout(scaled(120_000));
     const room = await hostRoom(browser, opened, { before: recordRaceTokens });
     await setHostSettings(room.host, { wordCount: 10, timerS: null });
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(startButton(room.host)).toBeEnabled();
     await warmRace(room.host, room.lobbyId);
     await startButton(room.host).click();

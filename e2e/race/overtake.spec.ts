@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, startButton, warmRace } from "./helpers";
+import { hostRoom, phaseOf, startButton, warmRace, openRace } from "./helpers";
 
 // Contract of #232 C2, C3, C4: the overtake stamps live over the race server started by
 // playwright.config.ts. Host and one guest; the guest takes its desk from the seat view itself, so it
@@ -136,7 +136,7 @@ test.describe("#232 overtake stamps", () => {
         .addCookies([{ name: "locale", value: "fr", url: test.info().project.use.baseURL! }]);
     }
     await prepare(page, guestFrames);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/\d{2}$/);
     const guestDesk = await deskOf(page);
     await expect(startButton(room.host)).toBeEnabled();

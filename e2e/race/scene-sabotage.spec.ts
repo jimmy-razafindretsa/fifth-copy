@@ -8,6 +8,7 @@ import {
   startButton,
   warmRace,
   type SimulatedPlayer,
+  openRace,
 } from "./helpers";
 
 // Contract of #999 C63-C65 (bible 10.2 "Sabotage throw", 8 flash rule, 15 `fc-race-sabotage` /
@@ -203,7 +204,7 @@ test.describe("#999 C63 sabotage plays reach the seat scene", { tag: "@scene" },
     });
     await page.setViewportSize({ width: 1280, height: 800 });
     if (before) sims.push(...(await simulatedPlayers(before, room.lobbyId)));
-    await page.goto(`/race/${room.lobbyId}?scene=pin`);
+    await openRace(page, room, "?scene=pin");
     const heading = page.getByRole("heading", { level: 1 });
     await expect(heading).toHaveText(/\d{2}$/);
     const desk = Number(/(\d{2})$/.exec((await heading.textContent())!)![1]);

@@ -12,6 +12,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #235 C3, C4 and C6 over the race server playwright.config.ts starts (ARCHITECTURE 7.4: a
@@ -107,7 +108,7 @@ test.describe("#235 line cut and reconnecting states", () => {
     const room = await hostRoom(page.context().browser()!, opened, { before: recordRaceTokens });
     await setHostSettings(room.host, { wordCount: 10, ...(timed ? { timerS: 60 } : {}) });
     const line = await cuttableLine(page);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/, { timeout: scaled(20_000) });
     const guest = await deskOf(page);
     await expect(startButton(room.host)).toBeEnabled();

@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { expectSeatShellLayout, hostRoom, withoutWebGL } from "./helpers";
+import { expectSeatShellLayout, hostRoom, withoutWebGL, openRace } from "./helpers";
 
 // Contract of #563 C3 (ADR 0013 2D fallback, bible 7.4 extension #560, 14.3): without WebGL2 the seat
 // view never loads the scene (no frame, no /3d/ request), stays on its paper backdrop and shows the
@@ -28,7 +28,7 @@ test.describe("#563 C3 seat view without WebGL2", () => {
     page.on("request", (r) => {
       if (new URL(r.url()).pathname.startsWith("/3d/")) embeds.push(r.url());
     });
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" })).toBeVisible({
       timeout: scaled(20_000),
     });
@@ -72,7 +72,7 @@ test.describe("#563 C3 seat view without WebGL2", () => {
       .addCookies([{ name: "locale", value: "fr", url: test.info().project.use.baseURL! }]);
     const room = await hostRoom(browser, opened);
     await withoutWebGL(page);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.locator('[data-notice="no-scene"]')).toHaveText(
       "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
       { timeout: scaled(20_000) },

@@ -9,6 +9,7 @@ import {
   startButton,
   warmRace,
   type SimulatedPlayer,
+  openRace,
 } from "./helpers";
 
 // Contract of #999 C2, C4, C5, C66 (bible 11.3 Overview, 10.3 "Lamp", 14.3 "Projector view", 15
@@ -145,7 +146,7 @@ test.describe(
       browser,
     }) => {
       test.setTimeout(scaled(240_000));
-      const { host, lobbyId } = await hostRoom(browser, opened, {
+      const { host, code, lobbyId } = await hostRoom(browser, opened, {
         before: async (h) => {
           await h.setViewportSize({ width: 1280, height: 800 });
           await recordRaceTokens(h);
@@ -162,7 +163,7 @@ test.describe(
       sims.push(a!, b!);
 
       await page.setViewportSize({ width: 1280, height: 800 });
-      await page.goto(`/race/${lobbyId}?view=projector&scene=pin`);
+      await openRace(page, { code, lobbyId }, "?view=projector&scene=pin");
       await expect(stage(page)).toHaveAttribute("data-scene-camera", "over");
       await expect(stage(page)).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
       // C4: one plaque per desk, placed from the scene's anchors (visible), with DESK and the name

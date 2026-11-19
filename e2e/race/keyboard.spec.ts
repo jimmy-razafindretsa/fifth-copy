@@ -9,6 +9,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #224 C2, C4-C7, live over the race server started by playwright.config.ts: the seat view's
@@ -166,7 +167,7 @@ test.describe("#224 machine keys, live", () => {
     const room = await hostRoom(browser, opened, { before: recordRaceTokens });
     await setHostSettings(room.host, settings);
     await before?.();
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     await expect(startButton(room.host)).toBeEnabled();
     await warmRace(room.host, room.lobbyId);
@@ -189,14 +190,14 @@ test.describe("#224 machine keys, live", () => {
     await page
       .context()
       .addCookies([{ name: "locale", value: "fr", url: test.info().project.use.baseURL! }]);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^VUE DE TA PLACE/);
     for (const ch of ["é", "è", "ç"]) await expect(keyCap(page, ch), ch).toHaveCount(1);
     const csa = await keyList(page);
     expect(csa.slice(0, 6).join(" ")).toBe("q w e r t y");
     expect(csa).toEqual([..."qwertyuiop^ç", ..."asdfghjkl;èà", ..."ùzxcvbnm,.é", " "]);
 
-    await room.host.goto(`/race/${room.lobbyId}`);
+    await openRace(room.host, room);
     await expect(room.host.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW/);
     for (const ch of ["é", "è", "ç"]) await expect(keyCap(room.host, ch), ch).toHaveCount(0);
     const us = await keyList(room.host);

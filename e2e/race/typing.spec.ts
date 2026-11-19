@@ -8,6 +8,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #215 (the parent of #558 and #559): the whole typing path over the race server
@@ -47,7 +48,7 @@ async function startedRace(
 ) {
   const room = await hostRoom(browser, opened, { before: recordRaceTokens });
   await setHostSettings(room.host, { wordCount: 10 });
-  await page.goto(`/race/${room.lobbyId}`);
+  await openRace(page, room);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
   await expect(startButton(room.host)).toBeEnabled();
   await warmRace(room.host, room.lobbyId);

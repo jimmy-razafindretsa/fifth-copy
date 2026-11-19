@@ -8,6 +8,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #242 C3 over the race server playwright.config.ts starts. Host and one guest in a
@@ -82,7 +83,7 @@ test.describe("#242 screen reader announcements", () => {
     const room = await hostRoom(browser, opened, { before: recordRaceTokens });
     await setHostSettings(room.host, { wordCount: 10 });
     await page.addInitScript(recorder);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/\d{2}$/);
     await expect(startButton(room.host)).toBeEnabled();
     await warmRace(room.host, room.lobbyId);

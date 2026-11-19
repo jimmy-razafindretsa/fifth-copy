@@ -8,6 +8,7 @@ import {
   startButton,
   warmRace,
   type SimulatedPlayer,
+  openRace,
 } from "./helpers";
 
 // Contract of #695 C2, C4, C5, C8 (ADR 0013 fallback below Low, ADR 0017 shared main thread, bible 12,
@@ -204,7 +205,7 @@ test.describe("#695 the seat scene never starves input", { tag: "@scene" }, () =
     page.on("websocket", (ws) =>
       ws.on("framesent", ({ payload }) => sent.push({ t: Date.now(), payload: String(payload) })),
     );
-    await page.goto(`/race/${room.lobbyId}${query}`);
+    await openRace(page, room, query);
     await expect(page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" })).toBeVisible({
       timeout: scaled(60_000),
     });

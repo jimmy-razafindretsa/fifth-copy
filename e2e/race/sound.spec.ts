@@ -1,7 +1,7 @@
 import type { BrowserContext, Page, Response } from "@playwright/test";
 import { expect, test } from "../fixtures";
 import { ACTION_WAIT, scaled } from "../timeouts";
-import { hostRoom } from "./helpers";
+import { hostRoom, openRace } from "./helpers";
 
 // Contract of #243 C4 and C6, over the real seat view and race server: the sound toggle is muted by
 // default, files the choice through `updatePreferences({ sound })`, and the page initialises from
@@ -50,7 +50,7 @@ test.describe("#243 sound toggle", () => {
 
   async function seat(page: Page, browser: Parameters<typeof hostRoom>[0]) {
     const room = await hostRoom(browser, opened);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     // seated = hydrated and connected
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/, {
       timeout: scaled(30_000),
@@ -86,7 +86,7 @@ test.describe("#243 sound toggle", () => {
       .toEqual(["/sounds/clack.ogg", "/sounds/jam.ogg", "/sounds/stamp.ogg"]);
 
     // the page initialises from getPreferences: ON after a reload, and the audio loads at once
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(segment(page, "ON")).toHaveAttribute("aria-pressed", "true", {
       timeout: ACTION_WAIT,
     });
@@ -98,7 +98,7 @@ test.describe("#243 sound toggle", () => {
     await segment(page, "OFF").click();
     await expect(sound(page)).not.toHaveAttribute("aria-busy", "true", { timeout: ACTION_WAIT });
     const fresh = watchNetwork(page);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/, {
       timeout: scaled(30_000),
     });
@@ -114,7 +114,7 @@ test.describe("#243 sound toggle", () => {
     const url = test.info().project.use.baseURL!;
     await page.context().addCookies([{ name: "locale", value: "fr", url }]);
     const room = await hostRoom(browser, opened);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       /^VUE DE TA PLACE · BUREAU \d{2}$/,
       { timeout: scaled(30_000) },

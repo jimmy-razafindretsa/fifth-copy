@@ -1,7 +1,7 @@
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { disjoint, hostRoom, phaseOf, SEAT_HUD, startButton, warmRace } from "./helpers";
+import { disjoint, hostRoom, phaseOf, SEAT_HUD, startButton, warmRace, openRace } from "./helpers";
 
 // Contract of #251 C2-C4 (bible 14.3 tablets, 7.10, 18; ADR 0013): the seat view of a running race on a
 // tablet, landscape 1024x768 and portrait 768x1024. Playwright cannot open a real on-screen keyboard, so
@@ -48,7 +48,7 @@ test.describe("#251 tablet seat view", () => {
   async function running(page: Page, browser: Browser) {
     test.slow();
     const room = await hostRoom(browser, opened);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" })).toBeVisible({
       timeout: scaled(20_000),
     });

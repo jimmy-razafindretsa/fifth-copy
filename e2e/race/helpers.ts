@@ -15,7 +15,7 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { LANDING, expect, test } from "../fixtures";
-import { scaled } from "../timeouts";
+import { HYDRATION_WAIT, scaled } from "../timeouts";
 
 // Room helpers shared by the lobby and race specs (#561 C10; first written for #107 in e2e/lobby.spec.ts).
 // They drive the real landing and the race server started by playwright.config.ts.
@@ -168,6 +168,54 @@ export async function hostRoom(
   const code = await createLobby(host);
   await expect(host.getByRole("list", { name: "Typists in the room" })).toBeVisible();
   return { context, host, code, lobbyId: await lobbyIdOf(code) };
+}
+
+/**
+ * Files the context's viewer a room code proof the way a typist does (#999 C13): `/race/<lobbyId>`
+ * serves no room code (so opens neither seat nor projector) to a viewer who is not the host and never
+ * proved the code. When the page would show the code gate, a throwaway page of the same context enters
+ * the code there, then closes before its refresh can take a desk (later actions are aborted, sockets
+ * refused), so the page under test sees one navigation, its routes and recorders untouched.
+ */
+export async function proveCode(page: Page, room: { lobbyId: string; code: string }) {
+  const html = await (await page.request.get(`/race/${room.lobbyId}`)).text();
+  if (!html.includes("data-code-gate")) return;
+  const scratch = await page.context().newPage();
+  try {
+    let proved = false;
+    const isAction = (r: { method(): string; headers(): Record<string, string> }) =>
+      r.method() === "POST" && !!r.headers()["next-action"];
+    await scratch.route("**/*", (route, r) =>
+      proved && isAction(r) ? route.abort() : route.continue(),
+    );
+    scratch.on("response", (r) => {
+      if (isAction(r.request()) && r.ok()) proved = true;
+    });
+    // the race server's sockets only: `next dev`'s HMR socket stays, or the page reloads
+    await scratch.routeWebSocket(
+      (url) => !url.pathname.startsWith("/_next/"),
+      (ws) => ws.close(),
+    );
+    await scratch.goto(`/race/${room.lobbyId}`);
+    // either locale: the gate's own form, by its field and submit
+    const form = scratch.locator("[data-code-gate] form");
+    // a click before hydration submits nothing (the field is controlled): retry until the action answers
+    await expect(async () => {
+      if (!proved) {
+        await form.locator('input[name="code"]').fill(room.code);
+        await form.locator('button[type="submit"]').click();
+      }
+      await expect.poll(() => proved, { timeout: scaled(10_000) }).toBe(true);
+    }).toPass({ timeout: HYDRATION_WAIT });
+  } finally {
+    await scratch.close();
+  }
+}
+
+/** Opens the seat view (or `query`, e.g. `?view=projector`) of `room` after `proveCode`. */
+export async function openRace(page: Page, room: { lobbyId: string; code: string }, query = "") {
+  await proveCode(page, room);
+  return page.goto(`/race/${room.lobbyId}${query}`);
 }
 
 /**

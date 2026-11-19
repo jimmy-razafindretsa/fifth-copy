@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, SEAT_HUD, startButton, warmRace } from "./helpers";
+import { hostRoom, phaseOf, SEAT_HUD, startButton, warmRace, openRace } from "./helpers";
 
 // Contract of #233 C4 and C5 over the race server playwright.config.ts starts. The server warns a
 // connected desk silent for 45 s and puts it to sleep at 60 s (spec 4.5, #183); `RACE_FAST_CLOCK=1` in
@@ -42,7 +42,7 @@ test.describe("#233 idle warning and Asleep at desk", () => {
     test.setTimeout(scaled(30_000 + 2 * (WARN_MS + KICK_MS + 2 * SLACK_MS)));
     await page.emulateMedia({ reducedMotion: "reduce" });
     const room = await hostRoom(page.context().browser()!, opened);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/);
     const guestDesk = await deskOf(page);
 

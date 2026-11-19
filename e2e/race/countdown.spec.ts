@@ -1,7 +1,7 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
-import { createLobby, joinAsGuest, lobbyIdOf } from "./helpers";
+import { createLobby, joinAsGuest, lobbyIdOf, openRace } from "./helpers";
 
 // Contract of #214: the host's START (C8), the lobby -> seat view move with no line cut and the phase
 // gate (C4), the 3-2-1 countdown and the GO stamp (C3), and its polite announcer (C5), live over the
@@ -369,7 +369,7 @@ test.describe("#214 countdown and GO stamp", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const frames: Frame[] = [];
     await prepare(page, frames);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(
       page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
     ).toBeVisible();
@@ -483,7 +483,7 @@ test.describe("#214 countdown and GO stamp", () => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
     await page.addInitScript(recorder);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(
       page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
     ).toBeVisible();

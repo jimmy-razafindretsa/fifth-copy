@@ -11,6 +11,7 @@ import {
   startButton,
   warmRace,
   type SimulatedPlayer,
+  openRace,
 } from "./helpers";
 
 // Contract of #999 C1, C3, C6, C7 (bible 14.3 "Projector view", ARCHITECTURE 7.8): `/race/<id>?view=
@@ -78,7 +79,9 @@ test.describe("#999 the projector view", () => {
   }, info) => {
     test.skip(info.project.use.viewport?.width !== 1280, "desktop project");
     test.setTimeout(scaled(150_000) + LOAD_LIMIT_MS);
-    const { host, lobbyId } = await hostRoom(browser, opened, { before: recordRaceTokens });
+    const { host, code, lobbyId } = await hostRoom(browser, opened, {
+      before: recordRaceTokens,
+    });
     // the host watches (#876): the twelve simulated typists are the whole field, so the race ends
     await setHostSettings(host, { hostWatches: true, wordCount: 10 });
     players = [
@@ -92,7 +95,7 @@ test.describe("#999 the projector view", () => {
     const page = await context.newPage();
     const sent = sentFrames(page);
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto(`/race/${lobbyId}?view=projector`);
+    await openRace(page, { code, lobbyId }, "?view=projector");
 
     // waiting: the kicker, the paper ring with every desk, the roster in the sidebar with no place yet
     await expect(projector.kicker(page)).toHaveText("PROJECTOR VIEW");
@@ -184,7 +187,7 @@ test.describe("#999 the projector view", () => {
   }, info) => {
     test.skip(info.project.use.viewport?.width !== 1280, "desktop project");
     test.setTimeout(scaled(120_000) + LOAD_LIMIT_MS);
-    const { context, host, lobbyId } = await hostRoom(browser, opened, {
+    const { context, host, code, lobbyId } = await hostRoom(browser, opened, {
       before: recordRaceTokens,
     });
     players = await simulatedPlayers(1, lobbyId);
@@ -200,7 +203,7 @@ test.describe("#999 the projector view", () => {
     opened.push(other);
     const page = await other.newPage();
     const line = await cuttableLine(page);
-    await page.goto(`/race/${lobbyId}?view=projector`);
+    await openRace(page, { code, lobbyId }, "?view=projector");
     await expect(projector.state(page)).toHaveAttribute("data-projector-state", "waiting", {
       timeout: HYDRATION_WAIT,
     });

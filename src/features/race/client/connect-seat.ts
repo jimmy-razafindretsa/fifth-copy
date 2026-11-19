@@ -10,6 +10,8 @@ import { bindRaceSocket, type RaceEvent } from "./store";
  */
 export type MintRaceToken = (input: {
   code: string;
+  /** #999 C1: a read-only `role: spectator` token (the projector), for any viewer, the host included. */
+  spectator?: boolean;
 }) => Promise<
   | { ok: true; token: string; url: string }
   | { ok: false; error: "not-found" | "closed" | "rate-limited" }
@@ -26,6 +28,12 @@ export type ConnectSeatOptions = {
   load?: () => Promise<{ connectToRoom: typeof connectToRoom }>;
   /** Gets the socket once it is open (the typing path of #559 sends through it); its `Off` runs at cleanup. */
   onSocket?: (socket: RoomSocket) => Off;
+  /**
+   * #999 C1: join as a spectator (the projector view): a `spectator` token, no desk, so no resume key
+   * read or stored, no parked waiting-room socket released, and no `onSocket` (nothing to send: no
+   * `keys`, no `ready`).
+   */
+  spectator?: boolean;
 };
 
 /**
@@ -46,7 +54,9 @@ export function connectSeat({
   dispatch,
   load = () => import("./socket"),
   onSocket,
+  spectator = false,
 }: ConnectSeatOptions): () => void {
+  const input = spectator ? { code, spectator: true } : { code };
   let aborted = false;
   let socket: RoomSocket | null = null;
   let unbind = () => {};
@@ -60,7 +70,7 @@ export function connectSeat({
     dispatch({ type: "token-error", error: error === "rate-limited" ? "generic" : error });
   const remint = () => {
     reminted = true;
-    mint({ code }).then(
+    mint(input).then(
       (again) => {
         if (aborted) return;
         if (!again.ok) return tokenError(again.error);
@@ -80,21 +90,23 @@ export function connectSeat({
     }
     dispatch(event);
   };
-  Promise.all([mint({ code }), load()]).then(
+  Promise.all([mint(input), load()]).then(
     ([result, socketModule]) => {
       if (aborted) return;
       if (!result.ok) return tokenError(result.error);
       token = result.token;
       socket = socketModule.connectToRoom(result.url, () => token, {
-        resumeKey: () => readResumeKey(lobbyId) ?? issued,
+        resumeKey: () => (spectator ? null : (readResumeKey(lobbyId) ?? issued)),
       });
       const offIssued = socket.onWelcome((welcome) => {
         if (welcome.resumeKey) issued = welcome.resumeKey;
         reminted = false;
       });
-      const offBind = bindRaceSocket(socket, seatDispatch, { lobbyId });
-      const offHandoff = socket.onWelcome(() => releaseParkedSocket(lobbyId));
-      const offSocket = onSocket?.(socket) ?? (() => {});
+      const offBind = bindRaceSocket(socket, seatDispatch, spectator ? {} : { lobbyId });
+      const offHandoff = spectator
+        ? () => {}
+        : socket.onWelcome(() => releaseParkedSocket(lobbyId));
+      const offSocket = (!spectator && onSocket?.(socket)) || (() => {});
       unbind = () => {
         offSocket();
         offBind();

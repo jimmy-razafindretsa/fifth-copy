@@ -87,16 +87,9 @@ test.describe("invite links (#809)", () => {
     await checkScreen(page);
   });
 
-  test("C4 C6 the host's LINK row issues a link; phones show no invite rows", async ({ page }) => {
+  test("C4 C6 the host's LINK row issues a link, on a phone too (#999 C14)", async ({ page }) => {
     await createLobby(page);
     await expect(rows(page)).toHaveCount(1, { timeout: HYDRATION_WAIT });
-    const width = page.viewportSize()?.width ?? 0;
-    if (width <= 480) {
-      await expect(linkLabel(page)).toBeHidden();
-      await expect(page.getByRole("button", { name: "NEW LINK" })).toBeHidden();
-      await checkScreen(page);
-      return;
-    }
     const newLink = page.getByRole("button", { name: "NEW LINK" });
     await expect(linkLabel(page)).toBeVisible();
     expect((await newLink.boundingBox())!.height).toBeGreaterThanOrEqual(44);

@@ -22,6 +22,20 @@ import { HYDRATION_WAIT, scaled } from "../timeouts";
 
 export const LOBBY_PATH = /^\/lobby\/([A-HJ-NP-Z]{3}-[0-9]{4})$/;
 
+/**
+ * Resolves once the waiting room has mounted its join (its first lobby action, the race token mint, is
+ * sent from the mount): the page's role (desk or phone watcher, #999 C9) is decided by then.
+ */
+function lobbyMounted(page: Page) {
+  return page.waitForRequest(
+    (r) =>
+      r.method() === "POST" &&
+      !!r.headers()["next-action"] &&
+      LOBBY_PATH.test(new URL(r.url()).pathname),
+    { timeout: HYDRATION_WAIT },
+  );
+}
+
 /** Creates a private race from the landing and returns its code; the page stays in the waiting room. */
 export async function createLobby(page: Page): Promise<string> {
   // #999 C15: a phone's landing has no race entry (phones watch). A phone-sized page opens its room
@@ -31,11 +45,11 @@ export async function createLobby(page: Page): Promise<string> {
   const phone = size !== null && size.width <= 480;
   if (phone) await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(LANDING);
+  const mounted = phone ? lobbyMounted(page) : null;
   await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
   await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
-  if (phone) {
-    // the room root carries `data-host` once the host's welcome is in (its desk taken)
-    await expect(page.locator("[data-host]").first()).toBeAttached({ timeout: HYDRATION_WAIT });
+  if (mounted && size) {
+    await mounted;
     await page.setViewportSize(size);
   }
   return LOBBY_PATH.exec(new URL(page.url()).pathname)![1]!;
@@ -53,11 +67,21 @@ export async function joinAsGuest(
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
   const page = await context.newPage();
   await before?.(page);
+  // #999 C9, C15: a phone watches (no code join on its landing, no desk in its lobby). A phone-sized
+  // project's guest joins at a desk's width, keeps it until its desk is in, then returns to its size.
+  const size = page.viewportSize();
+  const phone = size !== null && size.width <= 480;
+  if (phone) await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(LANDING);
+  const mounted = phone ? lobbyMounted(page) : null;
   const form = page.getByRole("form", { name: "Join with code" });
   await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);
   await form.getByRole("button", { name: "JOIN →", exact: true }).click();
   await page.waitForURL(`**/lobby/${code}`);
+  if (mounted && size) {
+    await mounted;
+    await page.setViewportSize(size);
+  }
   return { context, page };
 }
 

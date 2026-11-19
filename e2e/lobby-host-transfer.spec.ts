@@ -131,6 +131,10 @@ test.describe("host transfer (#137)", () => {
       }).observe(document.body, { subtree: true, childList: true, attributes: true });
     });
 
+    // a page's role is decided when it mounts: a phone-sized host would come back watching (#999 C14),
+    // so the desk host reloads at a desk's width
+    if ((host.viewportSize()?.width ?? 1280) <= 480)
+      await host.setViewportSize({ width: 1280, height: 800 });
     await host.reload();
     await expect(roll(host)).toHaveCount(2, { timeout: ACTION_WAIT });
     await expect(startButton(host)).toBeVisible();

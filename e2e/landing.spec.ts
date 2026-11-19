@@ -178,7 +178,11 @@ test.describe("landing page (#497)", () => {
       "aria-pressed",
       "true",
     );
-    await expect(page.getByRole("button", { name: "COURSE RAPIDE" }).first()).toBeVisible();
+    // a phone's hero holds the watch entry, a desk's the race entries (#999 C15)
+    const phone = (page.viewportSize()?.width ?? 1280) <= 480;
+    await expect(
+      page.getByRole("button", { name: phone ? "REGARDER →" : "COURSE RAPIDE" }).first(),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "QUART DE NUIT" })).toBeVisible();
     // one language at a time (bible 2): no English section heading is left
     await expect(page.getByRole("heading", { level: 2, name: STORY })).toHaveCount(0);
@@ -768,6 +772,10 @@ const codeField = (page: Page) => joinForm(page).getByLabel(JOIN_FIELD, { exact:
 const joinButton = (page: Page) => joinForm(page).getByRole("button", { name: JOIN, exact: true });
 
 test.describe("landing lobby entries (#99)", () => {
+  test.skip(
+    ({ viewport }) => (viewport?.width ?? 1280) <= 480,
+    "phones watch: the race entries are a desk's (#999 C15)",
+  );
   test("C1 create and join forms are siblings in the wrapping row after the pitch", async ({
     page,
   }) => {
@@ -1137,10 +1145,9 @@ test.describe("site header at phone width (#696)", () => {
   });
 
   test("C1 C2 landing with a guest docket", async ({ page }) => {
-    await ready(page);
-    // any entry files the guest; QUICK RACE would seat it in another test's open room (#128)
-    await hero(page).getByRole("button", { name: CREATE, exact: true }).click();
-    await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
+    // any entry files the guest; QUICK RACE would seat it in another test's open room (#128);
+    // `createLobby` widens a phone for the desk's entry (#999 C15)
+    await createLobby(page);
     await ready(page);
     await expectTwoRowHeader(page, { docket: true });
   });

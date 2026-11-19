@@ -23,6 +23,11 @@ const ORDER = ["play", "practice", "rooms", "file", "clerk", "settings"];
 const LABELS = ["PLAY", "PRACTICE", "OPEN ROOMS", "MY FILE", "MY CLERK", "SETTINGS"];
 const desktopOnly = () => test.skip(test.info().project.name !== "desktop", "desktop project only");
 const selected = (page: Page) => menu(page).locator('[data-selected="true"]');
+/** Phones watch (#999 C15, bible 14.5): at <= 480 the menu drops the race entries, PLAY and PRACTICE. */
+const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 480;
+const DESK_ONLY = new Set(["play", "practice"]);
+const forViewport = <T>(page: Page, list: readonly T[]) =>
+  isPhone(page) ? list.filter((_, i) => !DESK_ONLY.has(ORDER[i] ?? "")) : [...list];
 const focusedEntry = (page: Page) =>
   page.evaluate(() => document.activeElement?.getAttribute("data-entry") ?? null);
 
@@ -43,8 +48,11 @@ test.describe("routing (C1)", () => {
     context,
   }) => {
     const response = await page.goto("/");
+    // a phone's hero holds the watch entry in QUICK RACE's place (#999 C15)
     await expect(
-      page.getByRole("button", { name: "QUICK RACE", exact: true }).first(),
+      page
+        .getByRole("button", { name: isPhone(page) ? "WATCH →" : "QUICK RACE", exact: true })
+        .first(),
     ).toBeVisible();
     await expect(page.locator("section[data-open-rooms]")).toBeVisible();
     await expect(menu(page)).toHaveCount(0);
@@ -80,11 +88,12 @@ test.describe("entries (C2, C4, C5, C10)", () => {
   test("exactly six entries in order; each link lands where it says", async ({ page, context }) => {
     await guest(context);
     await openMenu(page);
-    await expect(entries(page)).toHaveCount(6);
+    const order = forViewport(page, ORDER);
+    await expect(entries(page)).toHaveCount(order.length);
     expect(
       await entries(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-entry"))),
-    ).toEqual(ORDER);
-    for (const [i, label] of LABELS.entries())
+    ).toEqual(order);
+    for (const [i, label] of forViewport(page, LABELS).entries())
       await expect(entries(page).nth(i)).toContainText(label);
     await expect(entry(page, "rooms")).toHaveAttribute("href", "/welcome#rooms");
     await expect(entry(page, "file")).toHaveAttribute("href", "/profile");
@@ -106,6 +115,7 @@ test.describe("entries (C2, C4, C5, C10)", () => {
   });
 
   test("PLAY runs quickRace and lands on /lobby/<code> @matchmaking", async ({ page, context }) => {
+    test.skip(isPhone(page), "phones watch: PLAY is a desk's (#999 C15)");
     await guest(context);
     await openMenu(page);
     await entry(page, "play").click();
@@ -156,14 +166,16 @@ test.describe("entries (C2, C4, C5, C10)", () => {
     const labels = await entries(page).evaluateAll((els) =>
       els.map((e) => e.querySelector("span:not([aria-hidden])")?.textContent?.trim()),
     );
-    expect(labels.map((l) => l?.replace(/\s*\d+ NOUVEAUX?$/, ""))).toEqual([
-      "JOUER",
-      "ENTRAÎNEMENT",
-      "SALLES OUVERTES",
-      "MON DOSSIER",
-      "MON COMMIS",
-      "RÉGLAGES",
-    ]);
+    expect(labels.map((l) => l?.replace(/\s*\d+ NOUVEAUX?$/, ""))).toEqual(
+      forViewport(page, [
+        "JOUER",
+        "ENTRAÎNEMENT",
+        "SALLES OUVERTES",
+        "MON DOSSIER",
+        "MON COMMIS",
+        "RÉGLAGES",
+      ]),
+    );
   });
 });
 
@@ -235,7 +247,7 @@ test.describe("key-hint bar (C6)", () => {
     );
     await expect(hints(page)).not.toContainText("ESC");
     await expect(hints(page).locator("[data-version]")).toContainText(/^v\d+\.\d+\.\d+/);
-    await entry(page, "play").focus();
+    await entry(page, isPhone(page) ? "rooms" : "play").focus();
     await page.keyboard.press("Escape");
     await expect(menu(page)).toBeVisible();
     await expect(page).toHaveURL(/\/$/);

@@ -2,7 +2,7 @@ import { fill } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
 import type { KeyFile } from "../view/key-file";
 import { initialKey } from "../view/key-sheet";
-import { KeySheet, type KeySheetKey, type KeySheetLabels } from "./key-sheet";
+import { KeySheet, type KeySheetKey, type KeySheetLabels, type PractiseAction } from "./key-sheet";
 import profile from "./profile.module.css";
 
 /**
@@ -16,12 +16,15 @@ export function KeySheetSection({
   locale,
   id,
   heading: Heading,
+  practise,
 }: {
   keyFile: KeyFile;
   labels: KeySheetLabels;
   locale: Locale;
   id: string;
   heading: "h2" | "h3" | "h4";
+  /** "Practise this letter" (#999 C47), handed down to the client leaf. */
+  practise?: PractiseAction;
 }) {
   const initial = initialKey(keyFile);
   if (!initial) return null;
@@ -46,7 +49,14 @@ export function KeySheetSection({
         </div>
         <p className={profile.intro}>{fill(labels.intro, { goal: keyFile.goal })}</p>
       </div>
-      <KeySheet keys={keys} initial={initial} goal={keyFile.goal} labels={labels} locale={locale} />
+      <KeySheet
+        keys={keys}
+        initial={initial}
+        goal={keyFile.goal}
+        labels={labels}
+        locale={locale}
+        practise={practise}
+      />
     </section>
   );
 }

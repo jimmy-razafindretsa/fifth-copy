@@ -1256,6 +1256,16 @@ export const fr = {
       messier:
         "Tu as raté le {key} {pct} % plus souvent que la semaine dernière : ralentis dessus, ça va se placer.",
       steady: "Ton {key} a gardé sa vitesse cette semaine. Du travail régulier.",
+      intro: "Semaine après semaine, touche par touche, d'après tes courses comptées.",
+      list: "Les remarques de la semaine",
+    },
+    accents: {
+      kicker: "ACCENTS ET CARACTÈRES SPÉCIAUX",
+      title: "Rangée des accents",
+      intro:
+        "Les accents et caractères spéciaux du français, chacun sa touche. Choisis-en une pour voir comment la taper.",
+      row: "Rangée des accents",
+      legendSize: "taille du cercle : fréquence de frappe, par rapport au reste de la rangée",
     },
     ladder: {
       label: "ÉCHELLE DES GRADES · SELON TA MOYENNE",
@@ -1468,6 +1478,10 @@ export const fr = {
       notReached: "objectif de {goal} MPM pas encore atteint",
       legendSpeed: "vitesse sur la touche {key}",
       legendGoal: "objectif {goal} MPM",
+      practise: "ENTRAÎNER CETTE LETTRE · {key}",
+      practising: "OUVERTURE DU BUREAU…",
+      practiseFailed: "La salle d'entraînement ne s'est pas ouverte. Réessaie.",
+      returned: "RETOURNÉ ·",
     },
     keyInventory: {
       kicker: "INVENTAIRE DES TOUCHES",

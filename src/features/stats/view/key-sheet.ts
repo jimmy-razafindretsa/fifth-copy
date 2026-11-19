@@ -62,3 +62,23 @@ export function initialKey(keyFile: Pick<KeyFile, "keys" | "mostTyped">): string
   if (most && most.state !== "none") return most.char;
   return keyFile.keys.find((k) => k.state !== "none")?.char ?? null;
 }
+
+/** The race settings "Practise this letter" (#329, #999 C47) asks the practice lobby for. */
+export type PracticeRequest = {
+  practiceLetters: [string];
+  language: "fr" | "en";
+  textType: "words";
+};
+
+/**
+ * The practice race of one key (#329, spec 13.3, 8): that key as the only practice letter, in random
+ * words (the generator puts it in 40 % of the words, `practice-letters.ts`); a plain letter in the UI
+ * language, an accented one (é è à ç) in French, the only language whose word lists hold it.
+ */
+export function practiceRequest(char: string, locale: "fr" | "en"): PracticeRequest {
+  return {
+    practiceLetters: [char],
+    language: /^[a-z]$/.test(char) ? locale : "fr",
+    textType: "words",
+  };
+}

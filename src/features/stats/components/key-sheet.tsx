@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Messages } from "@/i18n";
 import { fill } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
 import type { KeyFileEntry, KeyState } from "../view/key-file";
-import { keySheetPlot, keySpan } from "../view/key-sheet";
+import { keySheetPlot, keySpan, type PracticeRequest, practiceRequest } from "../view/key-sheet";
 import { GRID_LINES, PLOT } from "../view/performance-curve";
 import { BLANK_FIGURE, NBSP, oneDecimal } from "../view/profile-figures";
 import styles from "./key-sheet.module.css";
@@ -26,6 +27,14 @@ export type KeySheetKey = Pick<
   | "errorRate"
 >;
 
+/**
+ * The practice lobby's server action as the route hands it in (#329, #999 C47: lobby's
+ * `createPracticeLobby`): stats never imports lobby; the page passes the action down.
+ */
+export type PractiseAction = (
+  request: PracticeRequest,
+) => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
+
 export type KeySheetProps = {
   /** The 30 reference keys, in the key file's order. */
   keys: KeySheetKey[];
@@ -34,6 +43,8 @@ export type KeySheetProps = {
   goal: number;
   labels: KeySheetLabels;
   locale: Locale;
+  /** "Practise this letter" (#999 C47): absent (a `/design` specimen), no button. */
+  practise?: PractiseAction;
 };
 
 /** The key as its cap reads, upper case in the locale (`é` -> `É`). */
@@ -102,7 +113,7 @@ export function plotSentence(
  * server render already draws `initial`, so the sheet reads without JavaScript. A pick is announced
  * through a polite live region (empty until the first pick).
  */
-export function KeySheet({ keys, initial, goal, labels, locale }: KeySheetProps) {
+export function KeySheet({ keys, initial, goal, labels, locale, practise }: KeySheetProps) {
   const [selected, setSelected] = useState(initial);
   const [announced, setAnnounced] = useState("");
   const key = keys.find((k) => k.char === selected) ?? keys[0]!;
@@ -120,6 +131,9 @@ export function KeySheet({ keys, initial, goal, labels, locale }: KeySheetProps)
   return (
     <div className={styles.frame} data-key-sheet="" data-key-selected={key.char}>
       <KeyChips keys={keys} selected={key.char} onPick={pick} labels={labels} locale={locale} />
+      {practise ? (
+        <PractiseLetter char={key.char} action={practise} labels={labels} locale={locale} />
+      ) : null}
 
       <dl className={styles.cells}>
         {keyCells(key, labels, locale).map((cell) => (
@@ -221,6 +235,58 @@ export function KeyChips({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * "Practise this letter" (#329, #999 C47, spec 13.3): the 7.1 secondary button under the chips, for the
+ * selected key. It opens a private practice race against bots with that key as the only practice
+ * letter (`practiceRequest`) and sends the student to its lobby; a refusal is the 7.4 inline error
+ * line. Pending: `aria-busy`, the label reads `OPENING YOUR DESK…`, no spinner (7.2).
+ */
+export function PractiseLetter({
+  char,
+  action,
+  labels,
+  locale,
+}: {
+  char: string;
+  action: PractiseAction;
+  labels: KeySheetLabels;
+  locale: Locale;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [failed, setFailed] = useState(false);
+  const cap = capOf(char, locale);
+  const go = () =>
+    start(async () => {
+      setFailed(false);
+      try {
+        const result = await action(practiceRequest(char, locale));
+        if (result.ok) router.push(`/lobby/${result.code}`);
+        else setFailed(true);
+      } catch {
+        setFailed(true);
+      }
+    });
+  return (
+    <div className={styles.practise} data-key-practise={char}>
+      <button
+        type="button"
+        className={styles.practiseButton}
+        onClick={go}
+        disabled={pending}
+        aria-busy={pending ? "true" : undefined}
+      >
+        {pending ? labels.practising : fill(labels.practise, { key: cap })}
+      </button>
+      {failed ? (
+        <p role="alert" className={styles.practiseError}>
+          <span className={styles.practiseReturned}>{labels.returned}</span> {labels.practiseFailed}
+        </p>
+      ) : null}
     </div>
   );
 }

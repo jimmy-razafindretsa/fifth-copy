@@ -1319,6 +1319,16 @@ export const en = {
       messier:
         "You missed {key} {pct}% more often than last week: slow down on it and it will settle.",
       steady: "Your {key} held its speed this week. Steady work.",
+      intro: "Week over week, key by key, from your counted races.",
+      list: "This week's callouts",
+    },
+    accents: {
+      kicker: "ACCENTS & SPECIAL CHARACTERS",
+      title: "Accents row",
+      intro:
+        "The French accents and special characters, one key each. Pick one to see how to type it.",
+      row: "Accents row",
+      legendSize: "circle size: how often you strike it, next to the rest of the row",
     },
     ladder: {
       label: "GRADE LADDER · BY YOUR AVERAGE",
@@ -1526,6 +1536,10 @@ export const en = {
       notReached: "{goal} WPM goal not reached yet",
       legendSpeed: "speed on key {key}",
       legendGoal: "{goal} WPM goal",
+      practise: "PRACTISE THIS LETTER · {key}",
+      practising: "OPENING YOUR DESK…",
+      practiseFailed: "The practice room did not open. Try again.",
+      returned: "RETURNED ·",
     },
     keyInventory: {
       kicker: "KEY INVENTORY",

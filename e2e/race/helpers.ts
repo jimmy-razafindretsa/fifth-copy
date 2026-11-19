@@ -182,14 +182,14 @@ export async function proveCode(page: Page, room: { lobbyId: string; code: strin
   if (!html.includes("data-code-gate")) return;
   const scratch = await page.context().newPage();
   try {
-    let proved = false;
-    const isAction = (r: { method(): string; headers(): Record<string, string> }) =>
-      r.method() === "POST" && !!r.headers()["next-action"];
-    await scratch.route("**/*", (route, r) =>
-      proved && isAction(r) ? route.abort() : route.continue(),
-    );
-    scratch.on("response", (r) => {
-      if (isAction(r.request()) && r.ok()) proved = true;
+    // the gate's own action id (the first action the page posts); any other action (the seat's mint
+    // after the refresh) is aborted, so the scratch page never takes a desk
+    let proveAction: string | null = null;
+    await scratch.route("**/*", (route, r) => {
+      const action = r.method() === "POST" ? r.headers()["next-action"] : undefined;
+      if (!action) return route.continue();
+      proveAction ??= action;
+      return action === proveAction ? route.continue() : route.abort();
     });
     // the race server's sockets only: `next dev`'s HMR socket stays, or the page reloads
     await scratch.routeWebSocket(
@@ -198,14 +198,16 @@ export async function proveCode(page: Page, room: { lobbyId: string; code: strin
     );
     await scratch.goto(`/race/${room.lobbyId}`);
     // either locale: the gate's own form, by its field and submit
-    const form = scratch.locator("[data-code-gate] form");
-    // a click before hydration submits nothing (the field is controlled): retry until the action answers
+    const gate = scratch.locator("[data-code-gate]");
+    const form = gate.locator("form");
+    // a click before hydration submits nothing (the field is controlled), a refused proof (a slow
+    // Redis: it fails closed) keeps the gate: retry until the page leaves it
     await expect(async () => {
-      if (!proved) {
+      if ((await gate.count()) > 0) {
         await form.locator('input[name="code"]').fill(room.code);
         await form.locator('button[type="submit"]').click();
       }
-      await expect.poll(() => proved, { timeout: scaled(10_000) }).toBe(true);
+      await expect(gate).toHaveCount(0, { timeout: scaled(10_000) });
     }).toPass({ timeout: HYDRATION_WAIT });
   } finally {
     await scratch.close();

@@ -1,5 +1,5 @@
 import { LandingPage, OpenRooms } from "@/features/landing";
-import { LobbyEntries, QuickRaceButton } from "@/features/lobby";
+import { LobbyEntries, QuickRaceButton } from "@/features/lobby/client";
 import { listOpenLobbies } from "@/features/lobby/server";
 import { getT } from "@/i18n";
 import { headerGrade } from "./site-header";
@@ -7,6 +7,8 @@ import { headerGrade } from "./site-header";
 /**
  * The landing as composed for `/` (a first-time visitor) and `/welcome` (anyone, #943 C5: a viewer's
  * stable landing URL, where OPEN ROOMS, CREATE PRIVATE RACE, the code join and the guide live).
+ * The proxy serves a cookieless `/` from `/welcome` (ADR 0026), so this module is the visitor's whole
+ * landing: lobby controls come through the light client door only (`@/features/lobby/client`).
  */
 export async function LandingView() {
   const t = await getT();

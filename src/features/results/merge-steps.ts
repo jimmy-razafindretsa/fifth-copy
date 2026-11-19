@@ -8,6 +8,14 @@ registerMergeStep({
     (await tx.raceResult.updateMany({ where: { userId: guestId }, data: { userId: accountId } }))
       .count,
 });
+// The races the guest hosted (`Race.hostUserId`, ADR 0027): the account keeps the race-time host's
+// view of their curves; the guest row's deletion would otherwise clear it (SetNull).
+registerMergeStep({
+  model: "Race",
+  run: async (tx, guestId, accountId) =>
+    (await tx.race.updateMany({ where: { hostUserId: guestId }, data: { hostUserId: accountId } }))
+      .count,
+});
 registerMergeStep({
   model: "RaceKeystrokes",
   run: async (tx, guestId, accountId) =>

@@ -228,6 +228,10 @@ type StoredResult = {
 type StoredRace = {
   id: string;
   endReason: "ALL_FINISHED" | "VOID" | null;
+  /** The host when the race started (`Race.hostUserId`); null for races started before it was recorded. */
+  hostUserId: string | null;
+  lobbyId: string | null;
+  /** The lobby's current host, which can change after the race. */
   lobby: { hostUserId: string } | null;
   results: StoredResult[];
 };
@@ -235,6 +239,8 @@ type StoredRace = {
 const stored = (over: Partial<StoredRace> = {}): StoredRace => ({
   id: RACE_ID,
   endReason: "ALL_FINISHED",
+  hostUserId: "u-host",
+  lobbyId: "lob-1",
   lobby: { hostUserId: "u-host" },
   results: [
     {
@@ -385,6 +391,34 @@ describe("getRaceSeriesForAll (#999 C51, ADR 0027)", () => {
     expect(lines.map((l) => l.desk)).toEqual([5, 3, 9]);
   });
 
+  it("the audience is fixed at race time: a member who becomes host later sees no other line", async () => {
+    // u-heir joined the lobby and inherited the host role after this race; they had no desk in it
+    const { db, selects } = storedDb([stored({ lobby: { hostUserId: "u-heir" } })]);
+    expect(await getRaceSeriesForAll(RACE_ID, { id: "u-heir" }, { db })).toEqual([]);
+    expect(selects.some(readsSeries)).toBe(false);
+  });
+
+  it("the race-time host who did not type still sees every line after handing the role on", async () => {
+    const { db } = storedDb([stored({ lobby: { hostUserId: "u-heir" } })]);
+    const lines = await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db });
+    expect(lines.map((l) => l.desk)).toEqual([5, 3, 9]);
+  });
+
+  it("a race with no recorded host is shown to its typists only, never to the current host", async () => {
+    const { db, selects } = storedDb([stored({ hostUserId: null })]);
+    expect(await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db })).toEqual([]);
+    expect(selects.some(readsSeries)).toBe(false);
+    const typist = await getRaceSeriesForAll(RACE_ID, { id: "u-me" }, { db });
+    expect(typist.map((l) => l.desk)).toEqual([5, 9]);
+  });
+
+  it("the gate reads the race's own host, not the lobby's current one", async () => {
+    const { db, selects } = storedDb([stored()]);
+    await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db });
+    expect(selects[0]).toHaveProperty("hostUserId", true);
+    expect(JSON.stringify(selects[0])).not.toContain('"lobby":{"select":{"hostUserId"');
+  });
+
   it("an outsider (neither a participant nor the host) gets none, and no series is read", async () => {
     const { db, selects, findUnique } = storedDb([stored()]);
     expect(await getRaceSeriesForAll(RACE_ID, { id: "u-stranger" }, { db })).toEqual([]);
@@ -403,7 +437,7 @@ describe("getRaceSeriesForAll (#999 C51, ADR 0027)", () => {
     const voided = storedDb([stored({ endReason: "VOID" })]);
     expect(await getRaceSeriesForAll(RACE_ID, { id: "u-me" }, { db: voided.db })).toEqual([]);
     expect(voided.selects.some(readsSeries)).toBe(false);
-    const orphan = storedDb([stored({ lobby: null })]);
+    const orphan = storedDb([stored({ lobbyId: null, lobby: null })]);
     expect(await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db: orphan.db })).toEqual([]);
     expect(orphan.selects.some(readsSeries)).toBe(false);
   });

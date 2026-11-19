@@ -120,7 +120,10 @@ export async function getRaceSeries(
 
 /**
  * Every other desk's line of one race (#999 C51, ADR 0027), for the decided audience only: a viewer with
- * a `RaceResult` in the race (a participant) or the race's host (its lobby's host, also when watching).
+ * a `RaceResult` in the race (a participant) or the race's host (`Race.hostUserId`, the lobby's host when
+ * the race started, also when watching). The audience is fixed at race time: a member who inherits the
+ * host role later is not in it, and a race with no recorded host (started before #999, or that host's
+ * account deleted) is shown to its typists only, never to the lobby's current host.
  * The audience is checked first, by a query that reads no series; a visitor, a spectator, a link holder
  * and anyone else get `[]` and nothing else is read. Then only the stored `RaceResult.wpmSeries` columns
  * of unflagged rows are read (never a `RaceKeystrokes` row of anyone): the viewer's own desk is left out
@@ -142,13 +145,14 @@ export async function getRaceSeriesForAll(
     where: { id: parsed.data },
     select: {
       endReason: true,
-      lobby: { select: { hostUserId: true } },
+      hostUserId: true,
+      lobbyId: true,
       results: { where: { userId: viewer.id }, select: { desk: true }, take: 1 },
     },
   });
   if (!gate || gate.endReason === "VOID") return [];
   const mine = gate.results[0]?.desk ?? null;
-  const hosts = !!gate.lobby && gate.lobby.hostUserId === viewer.id;
+  const hosts = gate.lobbyId !== null && gate.hostUserId !== null && gate.hostUserId === viewer.id;
   if (mine === null && !hosts) return [];
 
   const race = await client.race.findUnique({

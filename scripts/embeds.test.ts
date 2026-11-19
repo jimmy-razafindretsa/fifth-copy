@@ -555,6 +555,60 @@ describe("podium clerk page (#688)", () => {
     expect(page).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
   });
 
+  // #999 C37: the Major's sleeve and hand enter the frame and pin the medal (bible 10.3 "Pinning", 14.4)
+  describe("the Major's pinning (#999 C37)", () => {
+    const pinning = source(/const PINNING = \{[^}]*\};/);
+    const pinPhase = source(/function pinPhase\(u, o\) \{[\s\S]*?\n\}/);
+    const phase = new Function(
+      "u",
+      "const sm = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };\n" +
+        `${pinning}\n${pinPhase}\nreturn pinPhase(u, { reach: 0, press: 0, pinned: false, done: false });`,
+    ) as (u: number) => { reach: number; press: number; pinned: boolean; done: boolean };
+    const timing = new Function(`${pinning}\nreturn PINNING;`)() as Record<string, number>;
+    const end = timing.wait + timing.reach + timing.press + timing.back;
+
+    it("waits, reaches in, presses, pins at the end of the press, withdraws, then is done", () => {
+      expect(phase(0)).toEqual({ reach: 0, press: 0, pinned: false, done: false });
+      const inReach = [0.2, 0.5, 0.8].map((f) => phase(timing.wait + f * timing.reach).reach);
+      expect(inReach[0]).toBeGreaterThan(0);
+      expect(inReach[1]).toBeGreaterThan(inReach[0]);
+      expect(inReach[2]).toBeGreaterThan(inReach[1]);
+      const press = phase(timing.wait + timing.reach + timing.press / 2);
+      expect(press).toMatchObject({ reach: 1, pinned: false });
+      expect(press.press).toBeGreaterThan(0.9);
+      const after = phase(timing.wait + timing.reach + timing.press + 0.01);
+      expect(after.pinned).toBe(true);
+      expect(after.reach).toBeGreaterThan(0.95);
+      expect(phase(end + 0.01)).toEqual({ reach: 0, press: 0, pinned: true, done: true });
+    });
+
+    it("plays inside the bible 12 budget of a plinth: about 2.5 s, one merged arm mesh, disposed after", () => {
+      expect(end).toBeGreaterThan(2);
+      expect(end).toBeLessThan(3);
+      expect(page).toContain("major = new THREE.Mesh(merge(g), mat);");
+      expect(page).toContain("scene.remove(major); major.geometry.dispose(); major = null;");
+    });
+
+    it("wears the Major's tunic olive, gold cuff and skin (10.3), no red", () => {
+      const arm = source(/function majorArm\(\) \{[\s\S]*?\n\}/);
+      expect(page).toContain("const MAJOR = { tunic: 0x5B5E3C, cuff: 0xE2B23A, skin: 0xEBC09C };");
+      expect(arm).not.toMatch(/0x[0-9A-F]{6}/i);
+      expect(arm).toContain("MAJOR.tunic");
+      expect(arm).toContain("MAJOR.cuff");
+      expect(arm).toContain("MAJOR.skin");
+    });
+
+    it("under reduced motion sets the pin at once (#688 static state) before any frame is drawn", () => {
+      const loop = source(/function loop\(now\) \{[\s\S]*?\n\}/);
+      const set = loop.indexOf("if (!pinMode && still) pinOn('set');");
+      expect(set).toBeGreaterThan(-1);
+      expect(set).toBeLessThan(loop.indexOf("renderer.render(scene, camera);"));
+      expect(page).toContain("root.dataset.pin = 'pinned'; root.dataset.pinMode = mode;");
+      // the salute answers the pinning: no idle gesture while the Major's hand is in the frame
+      expect(page).toContain("nextIdle = Infinity");
+    });
+  });
+
   it("draws no text in WebGL and takes no pointer or orbit input", () => {
     expect(page).not.toMatch(/fillText|\.font = |fonts\.load|embed-fonts/);
     expect(page).not.toMatch(/pointermove|pointerdown|OrbitControls|fc-look|fc-reissue/);

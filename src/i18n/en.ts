@@ -898,6 +898,16 @@ export const en = {
         clean: "Not one error on file: keep this rhythm and the speed will follow.",
         special: "The {key} key slipped {n} times: the guide shows how to type it.",
         key: "The {key} key slipped {n} times: slow down on it next race and the rest will follow.",
+        space:
+          "The space bar slipped {n} times: leave one clean space after each word, never two, never none.",
+        capital:
+          "The capital {key} slipped {n} times: hold Shift with your other hand first, then strike the letter.",
+        punctuation:
+          "The {key} key slipped {n} times: punctuation counts too, so spot it before you reach the end of the word.",
+        digit:
+          "The {key} key slipped {n} times: numbers live on the top row, so reach up for them without looking down.",
+        spread:
+          "Your slips were spread over {n} different keys: a steadier, slightly slower rhythm fixes most of them.",
         accuracy: "Speed is good, accuracy is better: slow down a little and make every key count.",
         steady: "A steady copy: next race, push the pace a little on the words you know.",
       },

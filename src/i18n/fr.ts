@@ -848,6 +848,16 @@ export const fr = {
         clean: "Aucune faute au dossier : garde ce rythme et la vitesse suivra.",
         special: "La touche {key} t'a échappé {n} fois : le guide montre comment la taper.",
         key: "La touche {key} t'a échappé {n} fois : ralentis dessus à la prochaine course, le reste suivra.",
+        space:
+          "La barre d'espace t'a échappé {n} fois : une seule espace nette après chaque mot, jamais deux, jamais aucune.",
+        capital:
+          "La majuscule {key} t'a échappé {n} fois : tiens d'abord Maj de l'autre main, puis frappe la lettre.",
+        punctuation:
+          "La touche {key} t'a échappé {n} fois : la ponctuation compte aussi, repère-la avant d'arriver au bout du mot.",
+        digit:
+          "La touche {key} t'a échappé {n} fois : les chiffres sont sur la rangée du haut, va les chercher sans baisser les yeux.",
+        spread:
+          "Tes fautes sont réparties sur {n} touches : un rythme plus régulier, un peu plus lent, en corrige la plupart.",
         accuracy:
           "La vitesse, c'est bien, la précision, c'est mieux : ralentis un peu et fais compter chaque touche.",
         steady:

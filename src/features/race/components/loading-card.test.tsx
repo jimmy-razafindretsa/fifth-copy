@@ -26,7 +26,9 @@ describe("LoadingCard (#563 C2)", () => {
         ready={{ label: en.race.waiting.rows.ready, value: "11 / 12" }}
       />,
     );
-    expect(html).toMatch(/<p data-ready="true"[^>]*><span[^>]*>READY<\/span><span[^>]*>11 \/ 12<\/span><\/p>/);
+    expect(html).toMatch(
+      /<p data-ready="true"[^>]*><span[^>]*>READY<\/span><span[^>]*>11 \/ 12<\/span><\/p>/,
+    );
     expect(renderToStaticMarkup(<LoadingCard labels={en.race.scene} tip={null} />)).not.toContain(
       "data-ready",
     );

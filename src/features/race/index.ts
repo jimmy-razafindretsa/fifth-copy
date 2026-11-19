@@ -15,10 +15,7 @@ export type {
 export { getRaceSeat, type RaceSeatInfo } from "./queries/get-race-seat";
 export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
 /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk; the route fills its stage. */
-export {
-  ProjectorScreen,
-  type ProjectorScreenProps,
-} from "./seat/projector/projector-screen";
+export { ProjectorScreen, type ProjectorScreenProps } from "./seat/projector/projector-screen";
 export type { ProjectorScreenLabels } from "./seat/projector/projector-live";
 /** The machine's keys for a viewer (#224): a server function, so identity never reaches a client graph. */
 export { machineRows } from "./view/machine-rows";

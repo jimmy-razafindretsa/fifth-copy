@@ -99,8 +99,12 @@ describe("Top10Sidebar (#999 C3)", () => {
 
   it("C7: rows at the projector scale, 28px at 1080p, growing with the screen; the header at 20px", () => {
     const css = readFileSync(path.join(__dirname, "top10-sidebar.module.css"), "utf8");
-    expect(css).toContain("--_row: max(28px, min(calc(100vw * 28 / 1920), calc(100vh * 28 / 1080)));");
-    expect(css).toContain("--_head: max(20px, min(calc(100vw * 20 / 1920), calc(100vh * 20 / 1080)));");
+    expect(css).toContain(
+      "--_row: max(28px, min(calc(100vw * 28 / 1920), calc(100vh * 28 / 1080)));",
+    );
+    expect(css).toContain(
+      "--_head: max(20px, min(calc(100vw * 20 / 1920), calc(100vh * 20 / 1080)));",
+    );
     for (const part of ["row", "place", "name", "value", "status"]) {
       const rule = new RegExp(`\\.${part} \\{[^}]*font-size: var\\(--_row\\);`);
       expect(css, part).toMatch(rule);

@@ -48,8 +48,15 @@ export function Top10Sidebar({ rows, count, labels }: Top10SidebarProps) {
       {rows.length > 0 ? (
         <ol aria-label={labels.standings} className={styles.rows}>
           {rows.map((r) => (
-            <li key={r.desk} data-desk={r.desk} data-place={r.place ?? undefined} className={styles.row}>
-              <span className={styles.place}>{r.place === null ? labels.noPlace : two(r.place)}</span>
+            <li
+              key={r.desk}
+              data-desk={r.desk}
+              data-place={r.place ?? undefined}
+              className={styles.row}
+            >
+              <span className={styles.place}>
+                {r.place === null ? labels.noPlace : two(r.place)}
+              </span>
               <span className={styles.mark}>
                 <IdentityMarker shape={r.marker.shape} ink={r.marker.colour} />
               </span>

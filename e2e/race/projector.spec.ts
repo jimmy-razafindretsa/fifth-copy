@@ -31,14 +31,22 @@ const projector = {
 /** Every frame the page's race sockets send (`42["keys"…`, `42["ready"…` must never be among them). */
 function sentFrames(page: Page): string[] {
   const sent: string[] = [];
-  page.on("websocket", (ws) => ws.on("framesent", ({ payload }) => void sent.push(String(payload))));
+  page.on("websocket", (ws) =>
+    ws.on("framesent", ({ payload }) => void sent.push(String(payload))),
+  );
   return sent;
 }
 
 /** No typing surface and no desk control anywhere on the page (C1). */
 async function expectNoDesk(page: Page) {
   await expect(page.getByRole("textbox")).toHaveCount(0);
-  for (const part of [SEAT_HUD.telex, SEAT_HUD.machine, SEAT_HUD.tray, SEAT_HUD.abandon, SEAT_HUD.sheet])
+  for (const part of [
+    SEAT_HUD.telex,
+    SEAT_HUD.machine,
+    SEAT_HUD.tray,
+    SEAT_HUD.abandon,
+    SEAT_HUD.sheet,
+  ])
     await expect(part(page)).toHaveCount(0);
 }
 
@@ -123,10 +131,13 @@ test.describe("#999 the projector view", () => {
     for (const [i, p] of players.entries()) await p.type(2 * (players.length - i));
     const leaders = players.slice(0, 10).map((p) => String(p.desk));
     await expect
-      .poll(() => projector.rows(page).evaluateAll((li) => li.map((l) => l.getAttribute("data-desk"))), {
-        message: "the top 10 by the server's rank",
-        timeout: scaled(15_000),
-      })
+      .poll(
+        () => projector.rows(page).evaluateAll((li) => li.map((l) => l.getAttribute("data-desk"))),
+        {
+          message: "the top 10 by the server's rank",
+          timeout: scaled(15_000),
+        },
+      )
       .toEqual(leaders);
     await expect(projector.rows(page).first()).toHaveAttribute("data-place", "1");
     await expect(projector.rows(page).nth(9)).toHaveAttribute("data-place", "10");
@@ -173,7 +184,9 @@ test.describe("#999 the projector view", () => {
   }, info) => {
     test.skip(info.project.use.viewport?.width !== 1280, "desktop project");
     test.setTimeout(scaled(120_000) + LOAD_LIMIT_MS);
-    const { context, host, lobbyId } = await hostRoom(browser, opened, { before: recordRaceTokens });
+    const { context, host, lobbyId } = await hostRoom(browser, opened, {
+      before: recordRaceTokens,
+    });
     players = await simulatedPlayers(1, lobbyId);
 
     // the host's own context opens the projector: a spectator token, the host's desk untouched

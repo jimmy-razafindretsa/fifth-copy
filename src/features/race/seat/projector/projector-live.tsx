@@ -68,10 +68,7 @@ export function ProjectorLive({
     [code, lobbyId, store],
   );
 
-  const status = useMemo(
-    () => ({ ...labels, loading: labels.projector.connecting }),
-    [labels],
-  );
+  const status = useMemo(() => ({ ...labels, loading: labels.projector.connecting }), [labels]);
 
   let body: React.ReactNode = null;
   switch (state) {
@@ -115,7 +112,11 @@ export function ProjectorLive({
  * The projector's top-10 sidebar over the store (#999 C3): `topTenRows` of the roster, the last
  * snapshot and the server's final ranking, memoised per snapshot; never a `you`.
  */
-export function Top10Live({ labels }: { labels: Pick<ProjectorScreenLabels, "projector" | "finish"> }) {
+export function Top10Live({
+  labels,
+}: {
+  labels: Pick<ProjectorScreenLabels, "projector" | "finish">;
+}) {
   const members = useRaceStore((s) => s.members);
   const desks = useRaceStore((s) => s.desks);
   const ranks = useRaceStore((s) => s.ranks);

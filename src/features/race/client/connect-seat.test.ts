@@ -392,12 +392,23 @@ describe("connectSeat as a spectator (#999 C1)", () => {
     });
     await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalledTimes(1));
     expect(mint).toHaveBeenCalledWith({ code: "KGB-4821", spectator: true });
-    const opts = (connectToRoom.mock.calls[0] as unknown as [string, () => string, { resumeKey: () => string | null }])[2];
+    const opts = (
+      connectToRoom.mock.calls[0] as unknown as [
+        string,
+        () => string,
+        { resumeKey: () => string | null },
+      ]
+    )[2];
     expect(opts.resumeKey()).toBeNull();
     expect(onSocket).not.toHaveBeenCalled();
     // the store's binding and the issued-key memory only: no handoff release
     expect(room.onWelcome).toHaveBeenCalledTimes(2);
-    room.deliver("welcome", { resumeKey: null, room: { phase: "waiting" }, serverNow: 0, race: null });
+    room.deliver("welcome", {
+      resumeKey: null,
+      room: { phase: "waiting" },
+      serverNow: 0,
+      race: null,
+    });
     expect(parked.close).not.toHaveBeenCalled();
     // an expired token re-mints a spectator one
     room.deliver("connectError", "bad-token");

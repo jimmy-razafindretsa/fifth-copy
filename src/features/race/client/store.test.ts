@@ -2717,17 +2717,16 @@ describe("#999 the projector's spectator store", () => {
   });
 
   it("never reports ready, even with the room loading and its scene settled", () => {
-    const s = run(
-      { type: "welcome", payload: watching },
-      loading,
-      { type: "scene-settled" },
-    );
+    const s = run({ type: "welcome", payload: watching }, loading, { type: "scene-settled" });
     expect(s.phase).toBe("loading");
     expect(selectShouldReady(s)).toBe(false);
     const store = createRaceStore(s);
     const sink = { sendReady: vi.fn() };
     const stop = sendReady(store, sink);
-    store.dispatch({ type: "readiness", payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, pending: [1] } });
+    store.dispatch({
+      type: "readiness",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, pending: [1] },
+    });
     stop();
     expect(sink.sendReady).not.toHaveBeenCalled();
   });

@@ -137,3 +137,167 @@
   display: flex;
   justify-content: space-between;
 }
+
+/*
+ * Other lines (#999 C52, bible 14.4 "Other lines", 3.1 rival inks): each other desk's line is a 2px
+ * polyline in its rival ink (a mark: 3:1 on the plot's paper in both themes), a bot's dashed (simulated);
+ * the viewer's own stays the ink line on top (agit-red is 1.76:1 on the Night shift ground). Each shown
+ * line ends in its 12px marker (the race card's shapes, 1.5 `fg` stroke; yours `you` red), on a layer
+ * over the plot so the shapes never stretch with it.
+ */
+.rival {
+  vector-effect: non-scaling-stroke;
+  fill: none;
+  stroke: var(--_ink, var(--color-fg-muted));
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.rival[data-simulated="true"] {
+  stroke-dasharray: 8 4;
+}
+
+.marker {
+  display: block;
+  fill: var(--_ink, var(--color-fg-muted));
+  stroke: var(--color-fg);
+  stroke-width: 1.5px;
+  flex: none;
+}
+
+.marker[data-ink="you"] {
+  --_ink: var(--color-you);
+}
+
+.rival[data-ink="rival-0"],
+.marker[data-ink="rival-0"] {
+  --_ink: var(--color-rival-0);
+}
+.rival[data-ink="rival-1"],
+.marker[data-ink="rival-1"] {
+  --_ink: var(--color-rival-1);
+}
+.rival[data-ink="rival-2"],
+.marker[data-ink="rival-2"] {
+  --_ink: var(--color-rival-2);
+}
+.rival[data-ink="rival-3"],
+.marker[data-ink="rival-3"] {
+  --_ink: var(--color-rival-3);
+}
+.rival[data-ink="rival-4"],
+.marker[data-ink="rival-4"] {
+  --_ink: var(--color-rival-4);
+}
+.rival[data-ink="rival-5"],
+.marker[data-ink="rival-5"] {
+  --_ink: var(--color-rival-5);
+}
+.rival[data-ink="rival-6"],
+.marker[data-ink="rival-6"] {
+  --_ink: var(--color-rival-6);
+}
+.rival[data-ink="rival-7"],
+.marker[data-ink="rival-7"] {
+  --_ink: var(--color-rival-7);
+}
+.rival[data-ink="rival-8"],
+.marker[data-ink="rival-8"] {
+  --_ink: var(--color-rival-8);
+}
+.rival[data-ink="rival-9"],
+.marker[data-ink="rival-9"] {
+  --_ink: var(--color-rival-9);
+}
+.rival[data-ink="rival-10"],
+.marker[data-ink="rival-10"] {
+  --_ink: var(--color-rival-10);
+}
+.rival[data-ink="rival-11"],
+.marker[data-ink="rival-11"] {
+  --_ink: var(--color-rival-11);
+}
+
+.ends {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  pointer-events: none;
+}
+
+.end {
+  position: absolute;
+  left: calc(var(--x) * 100%);
+  top: calc(var(--y) * 100%);
+  translate: -50% -50%;
+  line-height: 0;
+}
+
+/* the toggle: a fieldset of 7.2 checkbox rows (24px box, 44px row, focus a 2px ink outline) */
+.toggle {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: 4px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.2em;
+  color: var(--color-fg-muted);
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.choice input {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--color-fg);
+}
+
+.choice input:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+.choiceText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  @apply type-typing;
+  font-size: 13px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.simulated {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--color-fg-muted);
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}

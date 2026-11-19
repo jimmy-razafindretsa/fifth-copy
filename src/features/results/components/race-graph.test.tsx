@@ -6,7 +6,15 @@ import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import type { PersonalStats } from "../view/personal";
 import { personalLabels } from "../view/report-labels";
-import { formatRaceTime, graphGeometry, type RaceSeries } from "../view/series";
+import {
+  defaultLines,
+  formatRaceTime,
+  graphGeometry,
+  plotOf,
+  toggleLine,
+  type RaceLine,
+  type RaceSeries,
+} from "../view/series";
 import { PersonalCard } from "./personal-card";
 import { RaceGraph } from "./race-graph";
 
@@ -117,5 +125,140 @@ describe("RaceGraph (#865 C3)", () => {
     expect(html).toMatch(
       /<h2[^>]*>FORM 5-R · YOUR COPY<\/h2>[\s\S]*<h3[^>]*>WPM THROUGH THE RACE<\/h3>/,
     );
+  });
+});
+
+// Contract of #999 C52: several lines, each in its rival ink (`rivalIdentity`: the desk allocator's ink
+// and shape, the viewer's `you`), with a keyboard-accessible player toggle of real checkboxes (you, the
+// winner, the last place, any typist of the ranking; several at once), in both languages.
+const OTHERS: RaceLine[] = [
+  {
+    desk: 5,
+    name: "Lynx-785",
+    place: 1,
+    isBot: false,
+    wpm: 61.4,
+    endMs: 36_000,
+    points: [
+      { t: 10_000, wpm: 50 },
+      { t: 36_000, wpm: 61.4 },
+    ],
+  },
+  {
+    desk: 13,
+    name: "Typist Bot 13",
+    place: 3,
+    isBot: true,
+    wpm: 40,
+    endMs: 50_000,
+    points: [
+      { t: 0, wpm: 40 },
+      { t: 50_000, wpm: 40 },
+    ],
+  },
+  {
+    desk: 9,
+    name: "Stoat-31",
+    place: 4,
+    isBot: false,
+    wpm: 22,
+    endMs: 50_000,
+    points: [{ t: 50_000, wpm: 22 }],
+  },
+];
+const compared = (
+  labels = EN,
+  series: RaceSeries | null = SERIES,
+  viewerDesk: number | null = 12,
+) =>
+  renderToStaticMarkup(
+    <RaceGraph
+      series={series}
+      labels={labels}
+      others={OTHERS}
+      viewerDesk={viewerDesk}
+      lastPlace={4}
+    />,
+  );
+
+describe("RaceGraph with other lines (#999 C52)", () => {
+  it("one scale and one time axis for every line; a typist's line from GO, a bot's flat", () => {
+    const plot = plotOf(SERIES, OTHERS);
+    expect(plot.yMax).toBe(70); // 61.4 rounded up to a ten
+    expect(plot.endMs).toBe(50_000);
+    expect(plot.lines.map((l) => l.id)).toEqual(["you", "5", "13", "9"]);
+    expect(plot.lines[2]!.line).toBe("0,42.9 1000,42.9"); // 40 of 70, flat from GO
+    expect(plot.lines[1]!.line.startsWith("0,100 ")).toBe(true); // GO at 0 WPM
+    expect(plot.lines[1]!.end).toEqual({ x: 0.72, y: 0.123 });
+  });
+
+  it("draws you, the winner and the last place first, each line in its desk's ink and shape", () => {
+    expect(defaultLines(true, OTHERS, 4)).toEqual(["you", "5", "9"]);
+    const html = compared();
+    expect(html.match(/<svg[^>]*role="img"/g)).toHaveLength(1);
+    // the viewer's own: the ink line; the winner and the last place: rival inks (desk 5 and 9's)
+    expect(html).toContain("data-line=");
+    expect(html).toContain('data-line-desk="5" data-ink="rival-4"');
+    expect(html).toContain('data-line-desk="9" data-ink="rival-8"');
+    expect(html).not.toContain('data-line-desk="13"'); // the bot is not drawn until ticked
+    expect(html).toContain('data-lines="3"');
+    // end markers: yours red, the others in their shapes (desk 13: a square, 13-24)
+    expect(html).toMatch(/data-end="you"[^>]*>.*?data-ink="you" data-marker="circle"/);
+    expect(css).toMatch(/\.rival \{[^}]*stroke: var\(--_ink/);
+    expect(css).toMatch(/\.rival\[data-ink="rival-4"\][\s\S]*?--_ink: var\(--color-rival-4\)/);
+  });
+
+  it("a toggle of real checkboxes, one per line, the first three ticked; a bot is simulated", () => {
+    const html = compared();
+    expect(html).toMatch(
+      /<fieldset[^>]*data-toggle[^>]*><legend[^>]*>LINES ON THE GRAPH<\/legend>/,
+    );
+    const boxes = [...html.matchAll(/<input[^>]*type="checkbox"[^>]*>/g)].map((m) => m[0]);
+    expect(boxes).toHaveLength(4);
+    const checked = boxes.filter((b) => b.includes("checked"));
+    expect(checked.map((b) => /data-line-choice="([^"]+)"/.exec(b)![1])).toEqual(["you", "5", "9"]);
+    // every box has its label
+    for (const b of boxes) {
+      const id = /id="([^"]+)"/.exec(b)![1]!;
+      expect(html).toContain(`for="${id}"`);
+    }
+    expect(html).toContain(">YOU<");
+    expect(html).toContain(">№ 1 · Lynx-785 · 61 WPM<");
+    expect(html).toContain(">№ 3 · Typist Bot 13 · 40 WPM<");
+    expect(html).toContain(">SIMULATED<");
+    const fr = compared(FR);
+    expect(fr).toContain(">COURBES AFFICHÉES<");
+    expect(fr).toContain(">TOI<");
+    expect(fr).toContain(">№ 1 · Lynx-785 · 61 MPM<");
+    expect(fr).toContain(">SIMULÉ<");
+  });
+
+  it("several at once: ticking adds a line, unticking removes it, in the graph's order", () => {
+    const order = ["you", "5", "13", "9"];
+    expect(toggleLine(["you", "5", "9"], "13", true, order)).toEqual(["you", "5", "13", "9"]);
+    expect(toggleLine(["you", "5", "9"], "5", false, order)).toEqual(["you", "9"]);
+    expect(toggleLine([], "9", true, order)).toEqual(["9"]);
+  });
+
+  it("the image keeps the viewer's sentence; a watching host's names the lines shown", () => {
+    expect(compared()).toContain('aria-label="Peak 53 WPM, final 48 WPM, 2 bonuses received."');
+    const host = compared(EN, null, null);
+    expect(host).toContain('aria-label="WPM through the race, 2 lines shown."');
+    expect(host).not.toContain(">YOU<");
+    expect(host).not.toContain("NO TRACE ON FILE");
+    expect(compared(FR, null, null)).toContain(
+      'aria-label="MPM au fil de la course, 2 courbes affichées."',
+    );
+    // a typist with no trace of their own still sees the others, under NO TRACE ON FILE
+    expect(compared(EN, null, 12)).toContain("NO TRACE ON FILE");
+  });
+
+  it("bots alone and no other line: the graph is the viewer's own (#865)", () => {
+    const bots = OTHERS.filter((l) => l.isBot);
+    const alone = (series: RaceSeries | null) =>
+      renderToStaticMarkup(<RaceGraph series={series} labels={EN} others={bots} />);
+    expect(alone(null)).toContain("NO TRACE ON FILE");
+    expect(alone(null)).not.toContain("<svg");
+    expect(render(SERIES)).not.toContain("<fieldset");
   });
 });

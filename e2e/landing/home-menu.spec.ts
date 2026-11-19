@@ -138,7 +138,7 @@ test.describe("entries (C2, C4, C5, C10)", () => {
     await expect(page.getByRole("form", { name: "Join with code" })).toBeVisible();
   });
 
-  test("C5 the guide link of a viewer's pages lands on the landing's How a race runs", async ({
+  test("C5 the guide link of a viewer's pages lands on the guide (#999 C28)", async ({
     page,
     context,
   }) => {
@@ -146,17 +146,17 @@ test.describe("entries (C2, C4, C5, C10)", () => {
     await guest(context);
     await page.goto("/profile");
     const guide = page.getByRole("banner").getByRole("link", { name: "HOW TO TYPE É Ç « »" });
-    await expect(guide).toHaveAttribute("href", "/welcome#how");
+    await expect(guide).toHaveAttribute("href", "/guide");
     await guide.click();
-    await expect(page).toHaveURL(/\/welcome#how$/);
-    await expect(page.locator("section#how")).toBeVisible();
+    await expect(page).toHaveURL(/\/guide$/);
+    await expect(page.getByRole("heading", { level: 1, name: "HOW TO TYPE IT" })).toBeVisible();
   });
 
-  test("C5 a visitor's guide link on / stays the in-page anchor", async ({ page }) => {
+  test("C5 a visitor's guide link on / goes to the guide too (#999 C28)", async ({ page }) => {
     await page.goto("/");
     await expect(
       page.getByRole("banner").getByRole("link", { name: "HOW TO TYPE É Ç « »" }),
-    ).toHaveAttribute("href", "#how");
+    ).toHaveAttribute("href", "/guide");
   });
 
   test("C10 in French the six entries read JOUER … RÉGLAGES", async ({ page, context }) => {

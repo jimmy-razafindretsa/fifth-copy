@@ -1448,6 +1448,40 @@ test.describe("keyboard map (#324)", () => {
     expect(overflow, "sideways scroll").toBe(false);
   });
 
+  test("#999 C29 a special character's key links to /guide#<char>; a plain key does not", async ({
+    page,
+    request,
+    context,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const lobby = await seedLobby(page); // the lobby helper reads the English UI
+    await threeRaces(request, lobby);
+    await keySheetRows(lobby.hostUserId);
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    // French: CSA first, whose ç, é, è, à and ù keys are the guide's characters
+    const board = keyboardMap(page).locator("[data-keyboard-board]");
+    for (const [char, anchor] of [
+      ["ç", "c-cedilla"],
+      ["é", "e-acute"],
+      ["è", "e-grave"],
+      ["à", "a-grave"],
+      ["ù", "u-grave"],
+    ] as const) {
+      await expect(board.locator(`[data-key="${char}"]`)).toHaveAttribute(
+        "href",
+        `/guide#${anchor}`,
+      );
+    }
+    await expect(board.locator('[data-key="e"]')).not.toHaveAttribute("href", /.*/);
+    const cedilla = board.locator('[data-key="ç"]');
+    await expect(cedilla).toHaveAccessibleName(/^Ç.* · comment la taper$/);
+    await cedilla.click();
+    await expect(page).toHaveURL(/\/guide#c-cedilla$/);
+    await expect(page.locator("#c-cedilla")).toBeInViewport();
+  });
+
   test("C8 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
     page,
     request,

@@ -13,6 +13,7 @@ const PAGES = [
   "/recover",
   "/settings",
   "/privacy",
+  "/guide",
   "/profile",
   "/no-such-desk",
 ] as const;

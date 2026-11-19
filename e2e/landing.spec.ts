@@ -142,10 +142,10 @@ test.describe("landing page (#497)", () => {
     const header = page.locator("header");
     await expect(header.getByRole("link", { name: "FIFTH COPY" })).toHaveAttribute("href", "/");
     const nav = header.getByRole("navigation", { name: "Site" });
-    // on the landing the guide is the in-page anchor; elsewhere it names `/welcome#how` (#899, #943)
+    // the guide is its own page, from every page (#999 C28)
     await expect(nav.getByRole("link", { name: "HOW TO TYPE É Ç « »" })).toHaveAttribute(
       "href",
-      "#how",
+      "/guide",
     );
     const language = nav.getByRole("group", { name: "Language" });
     await expect(language.getByRole("button", { name: "EN", exact: true })).toHaveAttribute(

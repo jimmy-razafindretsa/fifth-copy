@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { fill } from "@/i18n/format";
 import type { MissedKey } from "../view/keys";
 import type { PersonalLabels } from "../view/report-labels";
@@ -28,9 +29,12 @@ export function tipSentence(tip: Tip, labels: PersonalLabels): string {
 export function CoachingSections({
   coaching,
   labels,
+  between,
 }: {
   coaching: Coaching;
   labels: PersonalLabels;
+  /** A section between the errors by key and the tip (#999 C54: the keyboard heatmap). */
+  between?: ReactNode;
 }) {
   return (
     <>
@@ -48,6 +52,7 @@ export function CoachingSections({
           <KeyList keys={coaching.keys} labels={labels} />
         )}
       </div>
+      {between}
       <div className={styles.section} data-section="tip" data-tip={coaching.tip.id}>
         <h3 className={styles.tag}>{labels.tip.tag}</h3>
         <p className={styles.sentence} data-field="tip">

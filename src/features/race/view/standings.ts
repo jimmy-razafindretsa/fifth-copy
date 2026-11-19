@@ -3,11 +3,14 @@ import type { EndReason, PLAYER_STATUSES, RankingEntry } from "@fifth-copy/proto
 
 type PlayerStatus = (typeof PLAYER_STATUSES)[number];
 import { fill } from "@/i18n/format";
+import { identityOfDesk } from "@/lib/rival-identity";
 import {
   projectLanes,
   rankOrder,
   selectField,
   type Lane,
+  type MarkerInk,
+  type MarkerShape,
   type RaceCardSource,
 } from "./race-card-view";
 
@@ -109,5 +112,73 @@ export function finalRows(
     you: e.desk === you,
     value: fill(labels.wpm, { n: Math.round(e.wpm) }),
     status: e.status === "typing" && reason !== "timer" ? null : labels.status[e.status],
+  }));
+}
+
+/** The projector's sidebar holds at most this many rows (#999 C3, bible 14.3 "Projector view"). */
+export const TOP_TEN = 10;
+
+/**
+ * One row of the projector's top-10 sidebar (#999 C3): the place (`null` before the first snapshot: the
+ * roster by desk, no place yet), the desk, the name, the desk's identity marker, and the figure: the
+ * status word when the desk is not typing, else the value (`72 %` live, `52 WPM` final; `null` before
+ * the race). Never a `you`: the projector holds no desk, and even the host's own desk is a rival ink.
+ */
+export type TopTenRow = {
+  place: number | null;
+  desk: number;
+  name: string;
+  marker: { shape: MarkerShape; colour: MarkerInk };
+  value: string | null;
+  status: string | null;
+};
+
+/** What the sidebar reads: the race card's fields plus the server's `ended` (its final ranking). */
+export type TopTenSource = Omit<RaceCardSource, "you"> & {
+  readonly ending: { readonly reason: EndReason; readonly ranking: readonly RankingEntry[] } | null;
+};
+
+/**
+ * The projector's top 10 (#999 C3, bible 14.3 "Projector view"): after the end, the server's final
+ * ranking as sent (`finalRows`); while racing, the live standings in the server's rank order
+ * (`selectStandings` + `liveRows`, engine progress, ADR 0007); before the first snapshot, the roster by
+ * desk with no place. Cut to `TOP_TEN`; every desk in its rival identity (#565), none as `you`. Pure.
+ */
+export function topTenRows(source: TopTenSource, labels: FinishLabels): TopTenRow[] {
+  const roster = new Map(source.members.map((m) => [m.desk, m]));
+  const marker = (desk: number) => {
+    const { colour, shape } = identityOfDesk(desk, roster, null);
+    return { colour, shape };
+  };
+  const { ending } = source;
+  if (ending && ending.ranking.length > 0) {
+    return finalRows(ending.ranking.slice(0, TOP_TEN), ending.reason, null, labels).map((r) => ({
+      place: r.place,
+      desk: r.desk,
+      name: r.name,
+      marker: marker(r.desk),
+      value: r.value,
+      status: r.status,
+    }));
+  }
+  const lanes = selectStandings({ ...source, you: null }).slice(0, TOP_TEN);
+  if (lanes.length > 0) {
+    const rows = liveRows(lanes, labels);
+    return lanes.map((l, i) => ({
+      place: l.rank,
+      desk: l.desk,
+      name: l.name,
+      marker: l.marker,
+      value: rows[i]!.value,
+      status: rows[i]!.status,
+    }));
+  }
+  return source.members.slice(0, TOP_TEN).map((m) => ({
+    place: null,
+    desk: m.desk,
+    name: m.name,
+    marker: marker(m.desk),
+    value: null,
+    status: null,
   }));
 }

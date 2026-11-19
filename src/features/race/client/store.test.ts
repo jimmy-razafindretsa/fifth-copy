@@ -44,6 +44,7 @@ const {
   selectSceneGate,
   selectSceneSabotage,
   selectShouldReady,
+  selectProjectorState,
   watchBlurExpiry,
   watchRefusalExpiry,
   watchStampExpiry,
@@ -2688,5 +2689,71 @@ describe("#999 sabotage plays for the scene", () => {
     });
     expect(back.sabotage).toBeNull();
     expect(reduceRace(back, sent(1, [3])).sabotage).toMatchObject({ seq: 2 });
+  });
+});
+
+// Contract of #999 C1 and C6 (the store half): the projector page is a spectator (`role: spectator`, no
+// desk). It never reports ready, never takes a key (so `createTyping` has nothing to send) and its stage
+// state follows the room: waiting, loading, countdown, racing, finished, connection lost.
+describe("#999 the projector's spectator store", () => {
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "The receipt is ready.",
+    language: "en" as const,
+    wordCount: 4,
+    t0: 1_767_225_633_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const watching = welcome({ role: "spectator", you: null, resumeKey: null });
+  const loading: RaceEvent = {
+    type: "loading",
+    payload: { v: PROTOCOL_VERSION, race: RACE, pending: [1, 3, 5] },
+  };
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const ended = (reason: "all-finished" | "void"): RaceEvent => ({
+    type: "ended",
+    payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason, ranking: [] },
+    at: RACE.t0 + 60_000,
+  });
+
+  it("never reports ready, even with the room loading and its scene settled", () => {
+    const s = run(
+      { type: "welcome", payload: watching },
+      loading,
+      { type: "scene-settled" },
+    );
+    expect(s.phase).toBe("loading");
+    expect(selectShouldReady(s)).toBe(false);
+    const store = createRaceStore(s);
+    const sink = { sendReady: vi.fn() };
+    const stop = sendReady(store, sink);
+    store.dispatch({ type: "readiness", payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, pending: [1] } });
+    stop();
+    expect(sink.sendReady).not.toHaveBeenCalled();
+  });
+
+  it("never takes a key: no prediction, no input, the state unchanged", () => {
+    const racing = run({ type: "welcome", payload: watching }, countdown, { type: "go" });
+    expect(racing.phase).toBe("running");
+    expect(racing.you).toBeNull();
+    expect(racing.prediction).toBeNull();
+    expect(selectCanType(racing)).toBe(false);
+    expect(reduceRace(racing, { type: "key", keystroke: { t: 100, key: "T" } })).toBe(racing);
+  });
+
+  it("the stage state follows the room through every phase", () => {
+    expect(selectProjectorState(initialRaceState)).toBe("connecting");
+    const waiting = run({ type: "welcome", payload: watching });
+    expect(selectProjectorState(waiting)).toBe("waiting");
+    const loaded = reduceRace(waiting, loading);
+    expect(selectProjectorState(loaded)).toBe("loading");
+    const counting = reduceRace(loaded, countdown);
+    expect(selectProjectorState(counting)).toBe("countdown");
+    const racing = reduceRace(counting, { type: "go" });
+    expect(selectProjectorState(racing)).toBe("racing");
+    expect(selectProjectorState(reduceRace(racing, ended("all-finished")))).toBe("finished");
+    // a voided race is the lost room; a cut line is connection lost
+    expect(selectProjectorState(reduceRace(racing, ended("void")))).toBe("lost");
+    expect(selectProjectorState(reduceRace(racing, { type: "reconnecting" }))).toBe("reconnecting");
   });
 });

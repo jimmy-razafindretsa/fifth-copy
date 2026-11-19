@@ -1245,3 +1245,29 @@ export function selectReadyLine(state: RaceState): string | null {
   const two = (n: number) => String(n).padStart(2, "0");
   return `${two(ready)} / ${two(total)}`;
 }
+
+/**
+ * The projector view's state (#999 C6, bible 14.3 "Projector view"): the live state its stage shows,
+ * from the spectator page's store. `racing` from GO, `finished` once the server ended the race (a
+ * voided race is `lost`: the lost room); a cut line is `reconnecting` (connection lost).
+ */
+export type ProjectorState =
+  | "connecting"
+  | "waiting"
+  | "loading"
+  | "countdown"
+  | "racing"
+  | "finished"
+  | "reconnecting"
+  | "lost";
+
+export function selectProjectorState(state: RaceState): ProjectorState {
+  switch (state.phase) {
+    case "running":
+      return "racing";
+    case "ended":
+      return "finished";
+    default:
+      return state.phase;
+  }
+}

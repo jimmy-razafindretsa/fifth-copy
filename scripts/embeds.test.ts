@@ -564,15 +564,22 @@ describe("podium clerk page (#688)", () => {
       "const sm = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };\n" +
         `${pinning}\n${pinPhase}\nreturn pinPhase(u, { reach: 0, press: 0, pinned: false, done: false });`,
     ) as (u: number) => { reach: number; press: number; pinned: boolean; done: boolean };
-    const timing = new Function(`${pinning}\nreturn PINNING;`)() as Record<string, number>;
+    const timing = new Function(`${pinning}\nreturn PINNING;`)() as {
+      wait: number;
+      reach: number;
+      press: number;
+      back: number;
+    };
     const end = timing.wait + timing.reach + timing.press + timing.back;
 
     it("waits, reaches in, presses, pins at the end of the press, withdraws, then is done", () => {
       expect(phase(0)).toEqual({ reach: 0, press: 0, pinned: false, done: false });
-      const inReach = [0.2, 0.5, 0.8].map((f) => phase(timing.wait + f * timing.reach).reach);
-      expect(inReach[0]).toBeGreaterThan(0);
-      expect(inReach[1]).toBeGreaterThan(inReach[0]);
-      expect(inReach[2]).toBeGreaterThan(inReach[1]);
+      const [early, mid, late] = [0.2, 0.5, 0.8].map(
+        (f) => phase(timing.wait + f * timing.reach).reach,
+      ) as [number, number, number];
+      expect(early).toBeGreaterThan(0);
+      expect(mid).toBeGreaterThan(early);
+      expect(late).toBeGreaterThan(mid);
       const press = phase(timing.wait + timing.reach + timing.press / 2);
       expect(press).toMatchObject({ reach: 1, pinned: false });
       expect(press.press).toBeGreaterThan(0.9);

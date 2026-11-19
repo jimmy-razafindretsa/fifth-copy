@@ -191,8 +191,8 @@ test.describe("Dawn report podium (#300)", () => {
       })
       .toBe("pinned/major pinned/major pinned/major");
     const [gold, silver, bronze] = (await pins(page)).map((p) => p.at);
-    expect(gold).toBeLessThan(silver);
-    expect(silver).toBeLessThan(bronze);
+    expect(gold).toBeLessThan(silver ?? NaN);
+    expect(silver).toBeLessThan(bronze ?? NaN);
   });
 
   test("C37 under reduced motion the medals are already pinned: no Major, no animation", async ({

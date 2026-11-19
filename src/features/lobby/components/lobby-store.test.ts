@@ -18,7 +18,7 @@ import {
   type LobbyEvent,
   type VersionReload,
 } from "./lobby-store";
-import { joinRoom, LATE_JOIN_RETRY_MS, type JoinRoomDeps } from "./late-join";
+import { joinRoom, LATE_JOIN_RETRY_MS, watchRoom, type JoinRoomDeps } from "./late-join";
 
 // Contract of card 107, C5: the lobby store reduces `welcome` and `roster` into a desk-sorted list.
 // Fixtures of the v4 shape (#557): members carry isBot and their desk identity.
@@ -1322,5 +1322,95 @@ describe("the host watches (#876 C5)", () => {
       { type: "reconnected" },
     );
     expect(back.phase).toBe("live");
+  });
+});
+
+// Contract of #999 C9 (the lobby half): a phone that is not the room's host watches the waiting room on a
+// read-only spectator token: one spectator mint, no player join, no desk, and the race's start still
+// moves the page on (the race page's phone screen watches).
+describe("watchRoom: a phone watches the waiting room (#999 C9)", () => {
+  function harness(result: Awaited<ReturnType<JoinRoomDeps["mint"]>> | null = null) {
+    const sockets: ReturnType<typeof fakeSocket>[] = [];
+    const events: LobbyEvent[] = [];
+    // the input is asserted through `mint.mock.calls`
+    const mint = vi.fn(async (input: { spectator: boolean }) =>
+      input && result
+        ? result
+        : { ok: true as const, token: "spectator-token", url: "ws://race.test" },
+    );
+    const connect = vi.fn(async () => {
+      const fake = fakeSocket();
+      sockets.push(fake);
+      return fake.socket;
+    });
+    const attach = vi.fn((socket: RoomSocket) =>
+      bindRoomSocket(socket, (e) => events.push(e), {
+        versionReload: { reload: vi.fn(), storage: null },
+      }),
+    );
+    const deps = { mint, connect, attach, dispatch: (e: LobbyEvent) => events.push(e) };
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const state = () => events.reduce(reduceLobby, initialLobbyState);
+    return { sockets, events, mint, connect, attach, deps, flush, state };
+  }
+  const watching: RoomEvents["welcome"] = {
+    ...welcome(1, [ada, bob]),
+    role: "spectator",
+    you: null,
+  };
+
+  it("one spectator mint, its socket attached: live with no desk, the roster in", async () => {
+    const h = harness();
+    watchRoom(h.deps);
+    await h.flush();
+    expect(h.mint.mock.calls).toEqual([[{ spectator: true }]]);
+    expect(h.attach).toHaveBeenCalledWith(h.sockets[0]!.socket);
+    h.sockets[0]!.fire("welcome", watching);
+    expect(h.state()).toMatchObject({ phase: "live", you: null, watching: false });
+    expect(h.state().members).toHaveLength(2);
+  });
+
+  it("the race's countdown moves the page to the race like a player's", async () => {
+    const h = harness();
+    watchRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("welcome", watching);
+    h.sockets[0]!.fire("countdown", {
+      v: PROTOCOL_VERSION,
+      race: { raceId: "r-1" } as never,
+    } as never);
+    expect(h.state()).toMatchObject({ phase: "starting", raceId: "r-1" });
+  });
+
+  it("a refused mint is the page's error; a throttled one the generic error", async () => {
+    for (const [error, shown] of [
+      ["not-found", "not-found"],
+      ["rate-limited", "generic"],
+    ] as const) {
+      const h = harness({ ok: false, error } as never);
+      watchRoom(h.deps);
+      await h.flush();
+      expect(h.connect).not.toHaveBeenCalled();
+      expect(h.state()).toMatchObject({ phase: "error", error: shown });
+    }
+  });
+
+  it("a socket the server closed ends on the generic error; the cancel never closes the page's socket", async () => {
+    const h = harness();
+    const cancel = watchRoom(h.deps);
+    await h.flush();
+    h.sockets[0]!.fire("welcome", watching);
+    h.sockets[0]!.fire("serverDisconnect", undefined);
+    expect(h.state()).toMatchObject({ phase: "error", error: "generic" });
+    cancel();
+    expect(h.sockets[0]!.socket.close).not.toHaveBeenCalled();
+  });
+
+  it("cancelled before the mint resolves: no socket is opened", async () => {
+    const h = harness();
+    watchRoom(h.deps)();
+    await h.flush();
+    expect(h.connect).not.toHaveBeenCalled();
+    expect(h.attach).not.toHaveBeenCalled();
   });
 });

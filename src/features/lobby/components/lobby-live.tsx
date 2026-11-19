@@ -16,7 +16,8 @@ import { mintRaceToken } from "../actions/mint-race-token";
 import { setLobbyType } from "../actions/set-lobby-type";
 import { errorMessage, type EntryErrors } from "./entry-errors";
 import { InlineError } from "./inline-error";
-import { joinRoom } from "./late-join";
+import { isPhoneViewport } from "@/lib/phone";
+import { joinRoom, watchRoom } from "./late-join";
 import { fill, playersLabel, type LobbyLabels } from "./lobby-labels";
 import {
   autoStartSecondsAt,
@@ -129,6 +130,11 @@ type ViewProps = {
   remove?: RemoveState;
   onRemove?: (desk: number) => void;
   onRemoveBlur?: (desk: number) => void;
+  /**
+   * #999 C9: this page is a phone watching on a spectator token (not the room's host): the roll opens
+   * with the phones statement row, and nothing of the room's controls shows.
+   */
+  phoneWatch?: boolean;
 };
 
 /**
@@ -142,7 +148,8 @@ const isHost = (state: LobbyState) =>
  * The waiting room's layout for one lobby state (no hooks, so every state renders in tests; #498, bible
  * 14.3): the dockets column (the room docket with its invite rows, the `FORM 5-L` settings docket, the
  * host's START under it) beside the seat ring (#731) and the roll. Phones keep the room docket, the roll
- * and START (CSS).
+ * and START (CSS); a phone host (#999 C14, the root's `data-host`) also keeps the settings and the invite
+ * rows, with its remove controls on the roll.
  */
 export function LobbyLiveView({
   code,
@@ -160,6 +167,7 @@ export function LobbyLiveView({
   remove = IDLE_REMOVE,
   onRemove,
   onRemoveBlur,
+  phoneWatch = false,
 }: ViewProps) {
   // removed by the host (#133): the docket replaces the room, nothing of it stays on the page
   if (room.phase === "removed") return <RemovedDocket labels={labels.remove.docket} />;
@@ -209,7 +217,7 @@ export function LobbyLiveView({
       />
     ) : null;
   return (
-    <div className={styles.room}>
+    <div className={styles.room} data-host={isHost(state) ? "" : undefined}>
       <div className={styles.dockets}>
         <RoomCodeDocket
           code={code}
@@ -269,6 +277,12 @@ export function LobbyLiveView({
           {/* the host left for good (#137): the NEW HOST stamp over the roll, until its hold ends */}
           {state.newHost && known ? (
             <NewHostStampOverlay stamp={state.newHost} members={state.members} labels={labels} />
+          ) : null}
+          {/* #999 C9: a phone watches from the back of the room: a statement row, no pulse */}
+          {phoneWatch && state.phase !== "error" ? (
+            <p role="status" data-notice="phones" className={styles.notice}>
+              {labels.phonesWatch}
+            </p>
           ) : null}
           {state.phase === "reconnecting" ? (
             <p role="status" className={cn(styles.notice, styles.pulse)}>
@@ -360,8 +374,14 @@ export function LobbyLive({
   labels,
   errors,
   reset,
+  host = false,
 }: {
   code: string;
+  /**
+   * The viewer is the lobby's host (`Lobby.hostUserId`, decided by the server page; #999 C9, C14): on a
+   * phone a host joins with its player token and watches (`hostWatches`), anyone else on a spectator token.
+   */
+  host?: boolean;
   /** The room's lobby id (`Lobby.id`): the resume key and the parked socket are keyed by it. */
   lobbyId: string;
   /** `Lobby.type` as the server rendered it; `setLobbyType` revalidates the page, which renews it. */
@@ -385,6 +405,11 @@ export function LobbyLive({
   const socketRef = useRef<RoomSocket | null>(null);
   // set once the page moves to the seat view: the cleanup then parks the socket instead of closing it
   const handedOver = useRef(false);
+  // #999 C9, C14: a phone viewport, read once at mount; a phone that is not the host only watches
+  const phone = useRef(false);
+  const [phoneWatch, setPhoneWatch] = useState(false);
+  // #999 C14: the settings a phone host last asked to watch from (one `hostWatches` patch per change)
+  const askedWatch = useRef<LobbyState["settings"]>(null);
 
   useEffect(() => {
     // StrictMode runs this twice in dev: a cancelled join never opens a socket.
@@ -394,7 +419,10 @@ export function LobbyLive({
     // The socket module (socket.io-client + protocol schemas) is a lazy chunk (ADR 0013 budget):
     // its download overlaps the first mint round trip, and a failed chunk load is a generic error.
     const raceModule = import("@/features/race");
-    const cancel = joinRoom({
+    phone.current = isPhoneViewport();
+    const watcher = phone.current && !host;
+    setPhoneWatch(watcher);
+    const cancel = (watcher ? watchRoom : joinRoom)({
       mint: ({ spectator }) => mintRaceToken({ code, spectator }),
       connect: async (url, token) => {
         race = await raceModule;
@@ -422,10 +450,24 @@ export function LobbyLive({
       cancel();
       unbind();
       socketRef.current = null;
-      if (socket && handedOver.current && race) race.parkSocket(lobbyId, socket);
+      // a phone's spectator socket holds no desk: nothing to keep for the race page
+      if (socket && handedOver.current && race && !watcher) race.parkSocket(lobbyId, socket);
       else socket?.close();
     };
-  }, [code, lobbyId]);
+  }, [code, lobbyId, host]);
+
+  // #999 C14: a host on a phone keeps the room's controls but never a desk: while it holds one in a
+  // waiting room, it files WATCHES (#876) once per settings change (a refusal is not retried until the
+  // room's settings change again).
+  useEffect(() => {
+    const socket = socketRef.current;
+    const { settings } = state;
+    if (!phone.current || !socket || !settings || settings.hostWatches) return;
+    if (state.phase !== "live" || state.you === null || !isHost(state)) return;
+    if (askedWatch.current === settings) return;
+    askedWatch.current = settings;
+    void socket.sendHostSettings({ hostWatches: true });
+  }, [state]);
 
   // The countdown moves the page to the seat view of the started race, once.
   useEffect(() => {
@@ -558,6 +600,7 @@ export function LobbyLive({
       remove={remove}
       onRemove={onRemove}
       onRemoveBlur={onRemoveBlur}
+      phoneWatch={phoneWatch}
     />
   );
 }

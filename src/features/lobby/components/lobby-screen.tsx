@@ -49,6 +49,7 @@ export async function LobbyScreen({ code }: { code: string }) {
         lobbyType={lobby.type === "PUBLIC" ? "public" : "private"}
         labels={t.lobby}
         errors={t.landing.errors}
+        host={viewer !== null && lobby.hostUserId === viewer.id}
         reset={
           canReset ? (
             <ResetDocket

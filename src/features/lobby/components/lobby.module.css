@@ -746,10 +746,19 @@
     order: 2;
   }
 
-  .settings,
-  .settingsSlot,
-  .invite,
-  .reset {
+  /* #999 C14: a phone host keeps the settings, the invite rows and the reset; anyone else on a phone
+     has the room docket, the roll and the seat ring */
+  .room:not([data-host]) .settings,
+  .room:not([data-host]) .settingsSlot,
+  .room:not([data-host]) .invite,
+  .room:not([data-host]) .reset {
     display: none;
+  }
+
+  .room[data-host] .settings,
+  .room[data-host] .settingsSlot,
+  .room[data-host] .invite,
+  .room[data-host] .reset {
+    order: 3;
   }
 }

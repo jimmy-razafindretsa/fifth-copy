@@ -89,7 +89,12 @@ describe("selectSceneView (#563, ADR 0017)", () => {
 
   // #999 C5 (bible 10.3 "Lamp"): the Major's lamp is on the leader while the room runs, else it hangs down
   it("#999 C5: the lamp is the desk at ranks[0] while running, else null", () => {
-    const running = { ...base, phase: "running", race: { text: "abcdefghij" }, desks: [entry(1, 2), entry(3, 6), entry(5, 4)] };
+    const running = {
+      ...base,
+      phase: "running",
+      race: { text: "abcdefghij" },
+      desks: [entry(1, 2), entry(3, 6), entry(5, 4)],
+    };
     expect(selectSceneView({ ...running, ranks: [3, 5, 1] }).lamp).toBe(3);
     expect(selectSceneView({ ...running, ranks: [5, 3, 1] }).lamp).toBe(5);
     expect(selectSceneView({ ...running, ranks: [] }).lamp).toBeNull();

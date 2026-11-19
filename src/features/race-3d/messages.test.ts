@@ -190,7 +190,14 @@ describe("overview camera and plaque anchors (#999 C2, C4)", () => {
   });
 
   it("accepts fc-scene-anchors: [desk, x, y] with x and y in 0..1, an empty list too", () => {
-    const anchors = { type: "fc-scene-anchors", v, anchors: [[1, 0.25, 0.5], [7, 1, 0]] };
+    const anchors = {
+      type: "fc-scene-anchors",
+      v,
+      anchors: [
+        [1, 0.25, 0.5],
+        [7, 1, 0],
+      ],
+    };
     expect(parseSceneMessage(anchors)).toEqual(anchors);
     expect(parseSceneMessage({ type: "fc-scene-anchors", v, anchors: [] })).toEqual({
       type: "fc-scene-anchors",
@@ -216,6 +223,8 @@ describe("overview camera and plaque anchors (#999 C2, C4)", () => {
       null,
     ])
       expect(parseSceneMessage({ type: "fc-scene-anchors", v, anchors })).toBeNull();
-    expect(parseSceneMessage({ type: "fc-scene-anchors", v: 1, anchors: [[1, 0.5, 0.5]] })).toBeNull();
+    expect(
+      parseSceneMessage({ type: "fc-scene-anchors", v: 1, anchors: [[1, 0.5, 0.5]] }),
+    ).toBeNull();
   });
 });

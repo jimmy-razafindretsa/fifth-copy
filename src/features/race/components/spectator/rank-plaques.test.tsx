@@ -152,7 +152,9 @@ describe("the flip's CSS (C5, bible 8)", () => {
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{\s*\.plaque\[data-flip\] \{\s*animation: none;/,
     );
-    expect(css).toMatch(/:root\[data-motion="reduce"\] \.plaque\[data-flip\] \{\s*animation: none;/);
+    expect(css).toMatch(
+      /:root\[data-motion="reduce"\] \.plaque\[data-flip\] \{\s*animation: none;/,
+    );
   });
 
   it("flips with a transform only (one movement, no luminance change: the flash rule)", () => {

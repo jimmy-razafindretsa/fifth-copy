@@ -9,10 +9,8 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { Member } from "@fifth-copy/protocol";
 import { useReducedMotion } from "@/components/ui";
 import { fill } from "@/i18n/format";
-import { useRaceStore } from "../../client/use-race-store";
 import styles from "./rank-plaques.module.css";
 
 /**
@@ -29,7 +27,7 @@ export type PlaqueLabels = { plaqueDesk: string; noPlace: string };
 
 /** Every desk of the roster by desk number, with the server's live rank (ADR 0006). Pure. */
 export function plaqueRows(
-  members: readonly Pick<Member, "desk" | "name">[],
+  members: readonly { desk: number; name: string }[],
   ranks: readonly number[],
 ): PlaqueRow[] {
   const rankOf = new Map(ranks.map((desk, i) => [desk, i + 1]));
@@ -117,7 +115,13 @@ const two = (n: number) => String(n).padStart(2, "0");
  * CSS reads `--motion-duration-slam`; its `data-flips` counts them); under reduced motion the rank just
  * changes. Decorative: the layer is `aria-hidden` (the top-10 sidebar is the accessible standings).
  */
-export function RankPlaques({ rows, labels }: { rows: readonly PlaqueRow[]; labels: PlaqueLabels }) {
+export function RankPlaques({
+  rows,
+  labels,
+}: {
+  rows: readonly PlaqueRow[];
+  labels: PlaqueLabels;
+}) {
   const channel = useContext(PlaqueChannel);
   const reduce = useReducedMotion();
   const nodes = useRef(new Map<number, HTMLElement>());
@@ -179,12 +183,4 @@ export function RankPlaques({ rows, labels }: { rows: readonly PlaqueRow[]; labe
       ))}
     </>
   );
-}
-
-/** The plaques over the spectator store (#999 C4): every desk of the roster with its live rank. */
-export function RankPlaquesLive({ labels }: { labels: PlaqueLabels }) {
-  const members = useRaceStore((s) => s.members);
-  const ranks = useRaceStore((s) => s.ranks);
-  const rows = useMemo(() => plaqueRows(members, ranks), [members, ranks]);
-  return <RankPlaques rows={rows} labels={labels} />;
 }

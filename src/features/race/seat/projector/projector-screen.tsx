@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { MintRaceToken } from "../../client/connect-seat";
 import { RaceStoreProvider } from "../../client/use-race-store";
-import { PlaqueAnchorsProvider, RankPlaquesLive } from "../../components/spectator/rank-plaques";
+import { PlaqueAnchorsProvider } from "../../components/spectator/rank-plaques";
+import { RankPlaquesLive } from "./rank-plaques-live";
 import { ProjectorLive, Top10Live, type ProjectorScreenLabels } from "./projector-live";
 import styles from "./projector-screen.module.css";
 

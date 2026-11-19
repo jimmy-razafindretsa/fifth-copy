@@ -17,10 +17,7 @@ export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
 /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk; the route fills its stage. */
 export { ProjectorScreen, type ProjectorScreenProps } from "./seat/projector/projector-screen";
 export type { ProjectorScreenLabels } from "./seat/projector/projector-live";
-export {
-  usePlaqueAnchors,
-  type PlaqueAnchor,
-} from "./components/spectator/rank-plaques";
+export { usePlaqueAnchors, type PlaqueAnchor } from "./components/spectator/rank-plaques";
 /** The machine's keys for a viewer (#224): a server function, so identity never reaches a client graph. */
 export { machineRows } from "./view/machine-rows";
 export type { RaceSeatLabels, SeatErrorLabels } from "./seat/seat-view";

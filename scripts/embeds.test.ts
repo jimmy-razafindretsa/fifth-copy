@@ -737,7 +737,10 @@ describe("seating (#927)", () => {
     expect(seat).toContain(
       "const over = VIEW === 'over', order = []; DESKS.forEach((s, i) => { if (s.occ || (!i && !over)) order.push(i); });",
     );
-    const body = seat.slice(seat.indexOf("function anchors() {"), seat.indexOf("// the room's desks"));
+    const body = seat.slice(
+      seat.indexOf("function anchors() {"),
+      seat.indexOf("// the room's desks"),
+    );
     expect(body).toContain("if (VIEW !== 'over') return;"); // the seat POV never sends anchors
     expect(body).toContain("send({ type: 'fc-scene-anchors', anchors: out });");
     // off screen (outside the frame or behind the camera): no anchor, so the plaque hides
@@ -754,7 +757,9 @@ describe("seating (#927)", () => {
     expect(lamp.match(/new THREE\.Mesh\(/g)).toHaveLength(2); // the merged shade, the beam
     expect(lamp).toContain("new THREE.MeshBasicMaterial({ color: 0xFFD08A");
     expect(lamp).not.toMatch(/Light\(/); // no new light
-    expect(lamp).toContain("if (reduced()) lampDir.copy(lampTo); else lampDir.lerp(lampTo, 1 - Math.exp(-dt * 4))");
+    expect(lamp).toContain(
+      "if (reduced()) lampDir.copy(lampTo); else lampDir.lerp(lampTo, 1 - Math.exp(-dt * 4))",
+    );
     expect(lamp).toContain("beam.visible = slot >= 0 && !isSelfPov(slot);");
     expect(seat).toContain(
       "Object.assign(ROOT.dataset, { lamp: lamp ?? 'none', lampMode: reduced() ? 'set' : 'swing' });",

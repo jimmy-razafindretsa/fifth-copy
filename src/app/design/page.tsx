@@ -1435,8 +1435,9 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
           The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
           four tubes, the ink band, the folder tabs, the service record, from three races the clean
           streaks beside the suspect letter pairs, the typist census, the progress by key, the
-          output curve, the key sheet, the key inventory, the keyboard map, the attendance register
-          and the race archives and, under three races, the blank block.
+          output curve, the key sheet, the key inventory, the keyboard map, the accents row, the
+          attendance register and the race archives and, under three races, the blank block; the
+          two-week file also shows the weekly bulletin.
         </p>
         {PROFILE_STATES.flatMap((state) =>
           PROFILE_VIEWERS.map((who) => (
@@ -1468,6 +1469,14 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
                       : undefined
                   }
                   keyFile={state.id === "two-weeks" ? keyFileFixtures.twoWeeks : undefined}
+                  callouts={
+                    state.id === "two-weeks"
+                      ? [
+                          { kind: "faster", char: "ç", pct: 30 },
+                          { kind: "cleaner", char: "é", pct: 25 },
+                        ]
+                      : undefined
+                  }
                   keyboard={{
                     initial: localeLayouts[locale],
                     layouts: keyboardLayoutIds.map((id) => ({

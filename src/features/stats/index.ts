@@ -84,6 +84,17 @@ export {
   lengthOf,
 } from "./personal-bests/rule";
 export { getPersonalBests, type PersonalBestRow } from "./personal-bests/query";
+// Improvement callouts (#999 C48, ADR 0024): week over week per key from the daily aggregates.
+export { getCallouts } from "./callouts/query";
+export {
+  CALLOUT_LIMIT,
+  CALLOUT_MIN_CHANGE,
+  CALLOUT_MIN_ERRORS,
+  CALLOUT_MIN_TIMED_HITS,
+  type Callout,
+  type CalloutKind,
+  calloutsOf,
+} from "./callouts/rule";
 // Achievements (#999 C34, C35): the stable ids and the pure award rules.
 export { ACHIEVEMENT_IDS, type AchievementId, isAchievementId } from "./achievements/ids";
 export { earnedBy, type AwardFacts } from "./achievements/rules";

@@ -1,0 +1,51 @@
+/*
+ * "Bulletin de la semaine" / "Weekly bulletin" (#999 C49, bible 14.3 "Personnel file"): no reference
+ * section, so it extends the Dawn report's order of the day (#867: one Courier Prime sentence, kind and
+ * concrete) and the suspect pairs' docket rows (#965: paper docket, 2px ink rule, rows under the dashed
+ * 7.4 separator). The key sits in the ranking's portrait cell (32px paper square in a 2px ink rule,
+ * IBM Plex Mono 500 16px). Colours through roles; nothing moves.
+ */
+@reference "../../../app/globals.css";
+
+.docket {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 22px;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.key {
+  flex: none;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sentence {
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}

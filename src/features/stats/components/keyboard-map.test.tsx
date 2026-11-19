@@ -232,7 +232,9 @@ describe("ProfileScreen placement (#324 C7)", () => {
     const html = screen("two-weeks", keyFileFixtures.twoWeeks, { ...KEYBOARD, initial: "AZERTY" });
     const order = [...html.matchAll(/data-section="([^"]+)"/g)].map((m) => m[1]);
     expect(order.indexOf("keyboard-map")).toBe(order.indexOf("key-inventory") + 1);
-    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("attendance") - 1);
+    // the accents row (#999 C55) follows the map, then the attendance register
+    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("accents") - 1);
+    expect(order.indexOf("accents")).toBe(order.indexOf("attendance") - 1);
     expect(html).toContain('data-keyboard-layout="AZERTY"');
     expect(html).toContain(">PLAN DE LA MACHINE · AZERTY</p>");
   });

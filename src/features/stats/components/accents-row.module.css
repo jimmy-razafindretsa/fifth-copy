@@ -1,0 +1,40 @@
+/*
+ * "Rangée des accents" / "Accents row" (#999 C55, bible 14.3 "Personnel file", extending the keyboard
+ * map of #324): the map's frame, key, cap, circle, core and legend (keyboard-map.module.css); this file
+ * only lays the one row out. The board is the map's (paper, 3px ink rule, 8px ink offset), its keys a
+ * fixed square that wraps on phones, at least the 44px target (every key is a link). Nothing moves.
+ */
+@reference "../../../app/globals.css";
+
+.board {
+  margin: 0;
+  padding: clamp(10px, 2vw, 22px);
+  list-style: none;
+  max-width: 980px;
+  background: var(--color-bg);
+  border: 3px solid var(--color-fg);
+  box-shadow: 8px 8px 0 var(--color-fg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.slot {
+  display: block;
+}
+
+.key {
+  display: block;
+  width: clamp(44px, 4.6vw, 52px);
+}
+
+.cap {
+  font-size: 15px;
+}
+
+.legend {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 26px;
+}

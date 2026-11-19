@@ -28,12 +28,16 @@ import {
   tubes,
 } from "../view/profile-figures";
 import { rankFor } from "../view/rank";
+import type { Callout } from "../callouts/rule";
+import { AccentsRow } from "./accents-row";
 import { AttendanceRegister } from "./attendance-register";
 import { Bests } from "./bests";
+import { Callouts } from "./callouts";
 import { CensusSlot } from "./census-slot";
 import { GradeLadder } from "./grade-ladder";
 import { KeyInventory } from "./key-inventory";
 import { KeyProgress } from "./key-progress";
+import type { PractiseAction } from "./key-sheet";
 import { KeySheetSection } from "./key-sheet-section";
 import { KeyboardMap } from "./keyboard-map";
 import { Medals } from "./medals";
@@ -124,6 +128,16 @@ export type ProfileScreenProps = {
    * Absent or null: no section.
    */
   bests?: readonly BestInput[] | null;
+  /**
+   * The viewer's improvement callouts (#999 C48, `getCallouts`): from 3 counted races, at least one
+   * makes the "Weekly bulletin" after the census. Absent, null or empty: no section.
+   */
+  callouts?: readonly Callout[] | null;
+  /**
+   * The practice lobby's action (#999 C47, lobby's `createPracticeLobby`, passed in by the route):
+   * the key sheet's "Practise this letter". Absent (`/design`): no button.
+   */
+  practise?: PractiseAction;
 };
 
 type Heading = "h1" | "h2" | "h3" | "h4";
@@ -141,11 +155,13 @@ export const PROFILE_SECTIONS = [
   "dockets",
   "bests",
   "census",
+  "callouts",
   "keyProgress",
   "curve",
   "keySheet",
   "keyInventory",
   "keyboardMap",
+  "accents",
   "attendance",
   "medals",
   "archive",
@@ -160,8 +176,9 @@ export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
  * the service record, under three races the blank block, from three races the clean streaks (#936)
  * then the personal bests (#999 C43, on every file with a viewer; the 7-day line and gain headline of
  * #999 C45 are in the output curve)
- * beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the
- * output curve (#933), the key sheet (#963), the key inventory (#964), the keyboard map (#324), the
+ * beside the suspect letter pairs (#965), the typist census (#967), the weekly callouts (#999 C49), the
+ * progress by key (#962), the output curve (#933), the key sheet (#963, with "Practise this letter",
+ * #999 C47), the key inventory (#964), the keyboard map (#324), the accents row (#999 C55), the
  * attendance register (#330), the enamel pins (#999 C36) and the race archives (#936). Each section carries its `data-section`
  * marker. Server-rendered; the stage and the interactive plots are client leaves.
  */
@@ -180,6 +197,8 @@ export function ProfileScreen({
   keyboard,
   medals,
   bests,
+  callouts,
+  practise,
 }: ProfileScreenProps) {
   const ids = {
     name: `${idPrefix}-name`,
@@ -198,6 +217,8 @@ export function ProfileScreen({
     keyboardMap: `${idPrefix}-keyboard-map`,
     medals: `${idPrefix}-medals`,
     bests: `${idPrefix}-bests`,
+    callouts: `${idPrefix}-callouts`,
+    accents: `${idPrefix}-accents`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -307,6 +328,16 @@ export function ProfileScreen({
           />
         </Suspense>
       ) : null,
+    callouts:
+      counted && callouts && callouts.length > 0 ? (
+        <Callouts
+          callouts={callouts}
+          labels={labels.callouts}
+          locale={locale}
+          id={ids.callouts}
+          heading={Section as "h2" | "h3" | "h4"}
+        />
+      ) : null,
     keyProgress: keyed ? (
       <KeyProgress
         keyFile={keyed}
@@ -354,6 +385,7 @@ export function ProfileScreen({
         locale={locale}
         id={ids.keySheet}
         heading={Section as "h2" | "h3" | "h4"}
+        practise={practise}
       />
     ) : null,
     keyInventory: keyed ? (
@@ -380,6 +412,16 @@ export function ProfileScreen({
           heading={Section as "h2" | "h3" | "h4"}
         />
       ) : null,
+    accents: keyed ? (
+      <AccentsRow
+        byChar={keyed.byChar}
+        labels={labels.accents}
+        mapLabels={labels.keyboardMap}
+        locale={locale}
+        id={ids.accents}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
     attendance: counted ? (
       <AttendanceRegister
         attendance={profile.attendance}

@@ -8,6 +8,8 @@ export { RaceScene, type RaceSceneFallback, type RaceSceneProps } from "./race-s
 export { detectWebGL2 } from "./detect-webgl";
 export {
   presetChoice,
+  type SceneAnchor,
+  type SceneCamera,
   sceneSettings,
   SCENE_PRESETS,
   type SceneBudget,

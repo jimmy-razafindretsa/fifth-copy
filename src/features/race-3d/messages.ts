@@ -7,7 +7,10 @@
  */
 import type { SceneSabotage, SceneView } from "@/features/race";
 
-/** 2 (#999 M2): the one-shot sabotage message and its acknowledgement; a v1 message is dropped both ways. */
+/**
+ * 2 (#999 M2, M3b): the one-shot sabotage message and its acknowledgement, and the overview camera's
+ * plaque anchors; a v1 message is dropped both ways.
+ */
 export const SCENE_PROTOCOL = 2;
 
 /** The served embed (bible 16, scripts/embeds.ts). */
@@ -66,11 +69,13 @@ export type RaceSabotageMessage = {
 };
 
 const v = SCENE_PROTOCOL;
+/** `camera`: the seat POV (a desk's page), or the orbiting overview (the projector, #999 C2; bible 11.3). */
 export const raceInitMessage = (
   view: SceneView,
   preset: ScenePresetChoice,
   motion: SceneMotion,
-): RaceInitMessage => ({ type: "fc-race-init", v, view, preset, motion, camera: "pov" });
+  camera: SceneCamera = "pov",
+): RaceInitMessage => ({ type: "fc-race-init", v, view, preset, motion, camera });
 export const raceStateMessage = (view: SceneView): RaceStateMessage => ({
   type: "fc-race-state",
   v,
@@ -122,8 +127,19 @@ export type SceneSabotageMessage = {
   to: number[];
   mode: SabotageMode;
 };
+/**
+ * One desk's plaque point (#999 C4): `[desk, x, y]`, x and y in 0..1 of the scene's frame (0, 0 = top
+ * left), the point above the typist's head projected by the overview camera.
+ */
+export type SceneAnchor = readonly [desk: number, x: number, y: number];
+/**
+ * Where each desk's rank plaque stands (#999 C4, bible 15): sent only by the `over` camera, every drawn
+ * frame while it orbits and once per layout when still; a desk off screen is absent.
+ */
+export type SceneAnchorsMessage = { type: "fc-scene-anchors"; v: number; anchors: SceneAnchor[] };
 export type SceneMessage =
   | SceneHelloMessage
+  | SceneAnchorsMessage
   | SceneReadyMessage
   | SceneTelemetryMessage
   | SceneFallbackMessage
@@ -139,6 +155,10 @@ const MAX_SCENE_DESKS = 64;
 const desk = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 1;
 const desks = (x: unknown): x is number[] =>
   Array.isArray(x) && x.length >= 1 && x.length <= MAX_SCENE_DESKS && x.every(desk);
+
+const unit = (x: unknown): x is number => count(x) && (x as number) <= 1;
+const anchor = (x: unknown): x is SceneAnchor =>
+  Array.isArray(x) && x.length === 3 && desk(x[0]) && unit(x[1]) && unit(x[2]);
 
 /** A scene -> page message of this protocol version with a well-formed payload, or `null`. */
 export function parseSceneMessage(data: unknown): SceneMessage | null {
@@ -182,6 +202,16 @@ export function parseSceneMessage(data: unknown): SceneMessage | null {
             from: data.from,
             to: [...data.to],
             mode: data.mode,
+          }
+        : null;
+    case "fc-scene-anchors":
+      return Array.isArray(data.anchors) &&
+        data.anchors.length <= MAX_SCENE_DESKS &&
+        data.anchors.every(anchor)
+        ? {
+            type: data.type,
+            v,
+            anchors: data.anchors.map(([d, x, y]: SceneAnchor) => [d, x, y] as const),
           }
         : null;
     default:

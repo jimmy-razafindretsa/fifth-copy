@@ -176,3 +176,46 @@ describe("sabotage messages (#999 C60)", () => {
     expect(parseSceneMessage({ ...ack, colour: "red" })).toEqual(ack);
   });
 });
+
+// Contract of #999 C2 and C4 (bible 11.3 Overview, 15; ADR 0017 SCENE_PROTOCOL 2): the projector's init
+// asks for the orbiting overview; the overview answers with each on-screen desk's plaque point.
+describe("overview camera and plaque anchors (#999 C2, C4)", () => {
+  it("the init carries the overview camera when asked, the seat POV otherwise", () => {
+    expect(raceInitMessage(view, "low", "full", "over")).toMatchObject({
+      type: "fc-race-init",
+      v,
+      camera: "over",
+    });
+    expect(raceInitMessage(view, "low", "full").camera).toBe("pov");
+  });
+
+  it("accepts fc-scene-anchors: [desk, x, y] with x and y in 0..1, an empty list too", () => {
+    const anchors = { type: "fc-scene-anchors", v, anchors: [[1, 0.25, 0.5], [7, 1, 0]] };
+    expect(parseSceneMessage(anchors)).toEqual(anchors);
+    expect(parseSceneMessage({ type: "fc-scene-anchors", v, anchors: [] })).toEqual({
+      type: "fc-scene-anchors",
+      v,
+      anchors: [],
+    });
+    // extra tuple members are dropped by the guard, never passed on
+    expect(parseSceneMessage({ ...anchors, html: "<b>" })).toEqual(anchors);
+  });
+
+  it("drops a malformed anchor list, and any v1 message", () => {
+    for (const anchors of [
+      [[0, 0.5, 0.5]],
+      [[1.5, 0.5, 0.5]],
+      [[1, -0.1, 0.5]],
+      [[1, 0.5, 1.2]],
+      [[1, Number.NaN, 0.5]],
+      [[1, 0.5]],
+      [[1, 0.5, 0.5, 9]],
+      [{ desk: 1, x: 0.5, y: 0.5 }],
+      Array.from({ length: 65 }, (_, k) => [k + 1, 0.5, 0.5]),
+      "1,0.5,0.5",
+      null,
+    ])
+      expect(parseSceneMessage({ type: "fc-scene-anchors", v, anchors })).toBeNull();
+    expect(parseSceneMessage({ type: "fc-scene-anchors", v: 1, anchors: [[1, 0.5, 0.5]] })).toBeNull();
+  });
+});

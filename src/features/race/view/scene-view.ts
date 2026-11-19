@@ -37,7 +37,10 @@ export type SceneView = {
   self: number | null;
   /** Sorted by desk. */
   desks: SceneDesk[];
-  /** The Major's lamp target desk (#267); `null` until then. */
+  /**
+   * The Major's lamp target desk (#267, #999 C5; bible 10.3 "Lamp"): the leader (`ranks[0]`) while the
+   * room runs, else `null` (the lamp hangs down).
+   */
   lamp: number | null;
   phase: ScenePhase;
 };
@@ -73,6 +76,7 @@ function viewFrom({ phase, you, members, desks, ranks, race }: SceneSource): Sce
   const ticks = new Map(selectField(desks, textLength).map((t) => [t.desk, t.progress]));
   const codes = new Map(desks.map((d) => [d[0], d[4]]));
   const rankOf = new Map(ranks.map((desk, i) => [desk, i + 1]));
+  const room = scenePhase(phase, race !== null);
   return {
     self: you,
     desks: [...members]
@@ -84,8 +88,8 @@ function viewFrom({ phase, you, members, desks, ranks, race }: SceneSource): Sce
         rank: rankOf.get(m.desk) ?? null,
         progress: race ? (ticks.get(m.desk) ?? 0) : 0,
       })),
-    lamp: null,
-    phase: scenePhase(phase, race !== null),
+    lamp: room === "running" ? (ranks[0] ?? null) : null,
+    phase: room,
   };
 }
 

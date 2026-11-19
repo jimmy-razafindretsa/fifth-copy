@@ -23,8 +23,7 @@ type Current = "profile" | "landing";
  * the guide link, EN/FR, NIGHT SHIFT, then the account control (#36): the viewer's docket and SIGN IN or
  * SIGN OUT. The docket only shows a viewer that exists: reads never create guests (ADR 0009).
  * The docket is the one link to the viewer's Personnel file (#932; the separate MY FILE link went in #951:
- * both did the same thing). On the landing (`current="landing"`, `/` and
- * `/welcome`) the guide link is the in-page `#how` anchor. A viewer elsewhere gets `← MENU` beside the
+ * both did the same thing). The guide link goes to `/guide` (#999 C28). A viewer off the landing gets `← MENU` beside the
  * brand (#951), back to the Home menu.
  * With `grade` (the stats feature's `getRank`, handed in by the route: the landing never imports stats,
  * ADR 0021) an account's docket ends with its grade tag (#969). The read runs beside the avatar's; done
@@ -106,8 +105,8 @@ export function HeaderBar({
         </a>
       ) : null}
       <nav aria-label={navLabel ?? t.header.navLabel} className={styles.nav}>
-        {/* on the landing itself the guide stays the in-page anchor (#943 C5) */}
-        <a href={current === "landing" ? LINKS.how : LINKS.guide} className={styles.navLink}>
+        {/* the special-characters guide, from every page (#999 C28) */}
+        <a href={LINKS.guide} className={styles.navLink}>
           {t.header.guide}
         </a>
         <LocaleToggle locale={locale} label={t.header.languageLabel} />

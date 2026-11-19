@@ -54,7 +54,6 @@ export function coachingFrom(input: TipInput): Coaching {
 
 /**
  * Where the `special` tip sends the typist: the guide `HOW TO TYPE É Ç « »`, the site header's own link
- * (`LINKS.guide` of the landing feature through `REPORT_LINKS`, #899), which anchors to the landing's
- * "How a race runs" until the special-characters guide (#388) ships its route.
+ * (`LINKS.guide` of the landing feature through `REPORT_LINKS`, #899): `/guide` (#999 C28).
  */
 export const GUIDE_HREF = REPORT_LINKS.guide;

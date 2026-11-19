@@ -39,7 +39,7 @@ export function FooterView({ brand, labels: f, links = LINKS, social = SOCIAL_LI
     {
       title: f.learn,
       links: [
-        [f.links.guide, links.how], // in-page on the landing (#943)
+        [f.links.guide, links.guide], // the special-characters guide (#999 C28)
         [f.links.teachers, links.teachers],
         [f.links.profile, links.profile],
       ],

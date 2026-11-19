@@ -134,7 +134,9 @@ describe("Home menu links (#943 C5)", () => {
   it("the landing has one stable URL for a viewer, with its rooms docket and guide section", () => {
     expect(LINKS.landing).toBe("/welcome");
     expect(LINKS.rooms).toBe(`${LINKS.landing}#rooms`);
-    expect(LINKS.guide).toBe(`${LINKS.landing}#how`);
+    // the guide is its own route since #999 C28; the landing keeps its in-page "How a race runs"
+    expect(LINKS.guide).toBe("/guide");
+    expect(served(LINKS.guide)).toBe(true);
     expect(LINKS.how).toBe("#how");
     expect(served(LINKS.landing)).toBe(true);
   });

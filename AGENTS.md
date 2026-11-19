@@ -108,6 +108,7 @@ Next.js (App Router, TypeScript strict) + Prisma + PostgreSQL. Tracker: GitHub, 
 - `public/3d/*.html` is generated from the bible's reference 3D pages by `scripts/embeds.ts` (`npm run embeds`, drift-checked in unit tests); never edit it by hand. Landing e2e: gate interactions on hydration (`ready(page)` in `e2e/landing.spec.ts`).
 - Animations: UI transitions and micro-motion read `--motion-*` tokens (tokens.css), never literal durations; bible-8 keyframes keep their listed durations; every animation stops under `prefers-reduced-motion` and `[data-motion="reduce"]`, never `!important`.
 - Bundles (ADR 0025): app modules are side-effect free; a module run by a bare `import "./x";` (merge-step registrations) must be listed in package.json `sideEffects` (`src/lib/side-effects.test.ts`). Client components never import a zod `schema.ts`; CI runs `scripts/bundle-budget.ts --all` (300 kB, ADR 0018).
+- Landing (ADR 0026, #999): `src/proxy.ts` rewrites a cookieless GET of `/` to `/welcome` (landing-only module, URL stays `/`); e2e and Lighthouse without cookies hit `/welcome`'s code. A new identity cookie joins the proxy's list. Light routes import feature UI only through `<feature>/client.ts`.
 - Colours: follow `docs/design/components.md` "Colour usage rules" (no raw hex, no `--brand-*`, ink grounds carry paper text, gold and device colours only where owned); `scripts/check-colours.ts` (check.sh `colours`) enforces them.
 
 ## Architecture map
@@ -121,7 +122,7 @@ src/server/                      db client, auth (getViewer/requireHost), intern
 src/worker/                      job scheduler entry point (ADR 0011)
 src/i18n/                        fr/en typed catalogs, getT/useT (ADR 0010)
 src/lib/                         pure utilities
-src/env.ts                       validated env (web); src/proxy.ts = locale default + optimistic redirects only
+src/env.ts                       validated env (web); src/proxy.ts = locale default + optimistic redirects + the `/` visitor rewrite
 packages/engine/                 @fifth-copy/engine: pure race rules, shared (ADR 0007)
 packages/protocol/               @fifth-copy/protocol: zod wire schemas, race settings, tokens (ADR 0006)
 services/race-server/            separate Node process; never imports src/ or Prisma (ADR 0006, 0008)

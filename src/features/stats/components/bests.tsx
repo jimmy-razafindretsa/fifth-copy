@@ -128,14 +128,10 @@ export function Bests({
                 <thead>
                   <tr>
                     <th scope="col">{labels.table.language}</th>
-                    <th scope="col" className={styles.textCol}>
-                      {labels.table.text}
-                    </th>
+                    <th scope="col">{labels.table.text}</th>
                     <th scope="col">{labels.table.best}</th>
                     <th scope="col">{labels.table.accuracy}</th>
-                    <th scope="col" className={styles.dateCol}>
-                      {labels.table.date}
-                    </th>
+                    <th scope="col">{labels.table.date}</th>
                   </tr>
                 </thead>
                 <tbody>

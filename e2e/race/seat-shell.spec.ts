@@ -1,6 +1,6 @@
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
-import { scaled } from "../timeouts";
+import { HYDRATION_WAIT, scaled } from "../timeouts";
 import {
   closeLobby,
   createLobby,
@@ -275,34 +275,41 @@ test.describe("#561 seat view shell", () => {
     }
   });
 
-  test("C5 phones (<= 480 px) see only the notice and never take a desk", async ({
+  test("C5 phones (<= 480 px) never take a desk: the phone spectator screen (#999 C9), its role kept across a resize", async ({
     page,
     browser,
   }) => {
-    // the room lives in the host's context: the page under test only ever visits /race, so every
-    // socket it opens would be the seat view's own
+    // the room lives in the host's context: the page under test only ever visits /race
     const room = await hostRoom(browser);
     host = room.context;
-    const sockets: string[] = [];
-    page.on("websocket", (ws) => sockets.push(ws.url()));
+    const mints: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() === "POST" && r.headers()["next-action"]) mints.push(r.postData() ?? "");
+    });
     for (const width of [375, 480]) {
       await page.setViewportSize({ width, height: 812 });
       await openRace(page, room);
-      const phones = page.locator("[data-phones]");
-      await expect(phones).toHaveText("PHONES WATCH FROM THE BACK OF THE ROOM");
-      await expect(phones).toBeVisible();
-      await expect(page.locator("[data-hud]")).toBeHidden();
-      await expect(page.getByRole("heading")).toHaveCount(0);
+      await expect(page.locator("[data-phone-screen]")).toBeVisible({ timeout: HYDRATION_WAIT });
+      await expect(page.locator('[data-phone-screen] > [data-notice="phones"]')).toHaveText(
+        "PHONES WATCH FROM THE BACK OF THE ROOM",
+      );
+      await expect(page.locator("[data-hud]")).toHaveCount(0);
+      await expect(page.getByRole("textbox")).toHaveCount(0);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,
       );
       expect(overflow).toBeLessThanOrEqual(0);
     }
-    // hydrated, and still no socket: give a would-be mint and connect the time they take
+    // every mint the phone made was a spectator's: it never asked for a desk
     await page.waitForLoadState("networkidle");
-    expect(sockets.filter((u) => u.includes("/socket.io/"))).toEqual([]);
+    expect(mints.length).toBeGreaterThan(0);
+    for (const body of mints) expect(body).toContain('"spectator":true');
+    // a role is decided at mount: widening keeps the phone screen; a desk's width loads the seat
     await page.setViewportSize({ width: 481, height: 812 });
-    await expect(page.locator("[data-hud]")).toBeVisible();
-    await expect(page.locator("[data-phones]")).toBeHidden();
+    await expect(page.locator("[data-phone-screen]")).toBeVisible();
+    await expect(page.locator("[data-hud]")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator("[data-hud]")).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(page.locator("[data-phone-screen]")).toHaveCount(0);
   });
 });

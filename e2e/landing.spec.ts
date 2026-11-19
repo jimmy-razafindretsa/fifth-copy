@@ -375,8 +375,10 @@ test.describe("landing page (#497)", () => {
 
     const final = page.locator("[aria-labelledby='final-title']");
     expect(await final.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(primary);
-    await expect(final.getByRole("button", { name: QUICK })).toBeVisible();
-    await expect(page.getByRole("button", { name: QUICK })).toHaveCount(2);
+    // #999 C15: phones watch, so a phone's landing has no QUICK RACE (hero or final band)
+    const onPhone = (page.viewportSize()?.width ?? 1280) <= 480;
+    await expect(final.getByRole("button", { name: QUICK })).toHaveCount(onPhone ? 0 : 1);
+    await expect(page.getByRole("button", { name: QUICK })).toHaveCount(onPhone ? 0 : 2);
 
     const footer = page.locator("footer");
     // #875: a link appears when its route ships (AEGIS CORP. holds privacy, #76; LEARN the file, #932);
@@ -455,6 +457,57 @@ test.describe("landing page (#497)", () => {
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
   }
+});
+
+// Contract of #999 C15 (bible 14.3 "Phone spectator"): at 480 px and under the landing swaps QUICK
+// RACE and the private-race entries for a watch entry (a room code or a spectator link); wider, nothing
+// changes. A wrong entry is refused before any request.
+test.describe("phones watch: the landing's watch entry (#999 C15)", () => {
+  test.beforeEach(() => test.slow());
+  const watch = (page: Page) => page.getByRole("form", { name: "Watch a race" });
+  const raceEntries = (page: Page) => [
+    page.getByRole("button", { name: QUICK, exact: true }),
+    page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }),
+    page.getByRole("button", { name: /^PRACTI/ }),
+    page.getByRole("form", { name: "Join with code" }),
+  ];
+
+  test("C15 at 360 to 480 px: the watch entry, no race entry, no horizontal scroll; wider: the race entries", async ({
+    page,
+  }) => {
+    for (const width of [360, 430, 480]) {
+      await page.setViewportSize({ width, height: 812 });
+      await ready(page);
+      await expect(watch(page)).toBeVisible();
+      await expect(watch(page).getByLabel("WATCH WITH CODE OR LINK")).toBeVisible();
+      for (const entry of raceEntries(page)) await expect(entry).toHaveCount(0);
+      expect(await overflow(page), `${width}: horizontal scroll`).toBeLessThanOrEqual(0);
+    }
+    await expectNoA11yViolations(page);
+    await page.setViewportSize({ width: 481, height: 812 });
+    await expect(watch(page)).toBeHidden();
+    for (const entry of raceEntries(page)) await expect(entry.first()).toBeVisible();
+  });
+
+  test("C15 a wrong entry is refused on the spot; a spectator link opens its watch page", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await ready(page);
+    const field = watch(page).getByLabel("WATCH WITH CODE OR LINK");
+    await field.fill("hello");
+    await watch(page).getByRole("button", { name: "WATCH →" }).click();
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Enter a code like KGB-4821 or paste a watch link" }),
+    ).toBeVisible();
+    // an unknown link still goes to its page, which refuses it (#999 C12)
+    await field.fill(`https://example.test/watch/${"x".repeat(43)}`);
+    await watch(page).getByRole("button", { name: "WATCH →" }).click();
+    await page.waitForURL(`**/watch/${"x".repeat(43)}`);
+    await expect(page.getByText("LINK USED OR EXPIRED", { exact: true })).toBeVisible();
+  });
 });
 
 // Contract of #651 (bible 3.2): the landing always opens on paper, even under a dark OS, on first

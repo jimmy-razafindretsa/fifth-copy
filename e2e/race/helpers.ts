@@ -24,9 +24,20 @@ export const LOBBY_PATH = /^\/lobby\/([A-HJ-NP-Z]{3}-[0-9]{4})$/;
 
 /** Creates a private race from the landing and returns its code; the page stays in the waiting room. */
 export async function createLobby(page: Page): Promise<string> {
+  // #999 C15: a phone's landing has no race entry (phones watch). A phone-sized page opens its room
+  // at a desk's width, keeps it until the lobby has mounted its desk (a page's role is decided at
+  // mount), then returns to its own size.
+  const size = page.viewportSize();
+  const phone = size !== null && size.width <= 480;
+  if (phone) await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(LANDING);
   await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
   await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
+  if (phone) {
+    // the room root carries `data-host` once the host's welcome is in (its desk taken)
+    await expect(page.locator("[data-host]").first()).toBeAttached({ timeout: HYDRATION_WAIT });
+    await page.setViewportSize(size);
+  }
   return LOBBY_PATH.exec(new URL(page.url()).pathname)![1]!;
 }
 

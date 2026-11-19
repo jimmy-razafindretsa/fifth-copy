@@ -70,6 +70,7 @@
     "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
+    "lighthouse": "^13.6.0",
     "minimatch": "^10.2.6",
     "prettier": "^3.9.9",
     "prisma": "^7.10.1",

@@ -85,12 +85,16 @@ describe("OpenRooms (#807)", () => {
 
   it("C3 empty: one still statement row, no list", () => {
     const html = docket({ ok: true, lobbies: [] });
-    expect(html).toContain(">NO OPEN ROOM · PRESS QUICK RACE</p>");
+    expect(html).toMatch(
+      />NO OPEN ROOM · PRESS QUICK RACE<\/span><span[^>]*>NO OPEN ROOM · WATCH WITH A CODE OR LINK<\/span><\/p>/,
+    );
     expect(html).not.toContain("<ul");
     expect(html).not.toContain('role="alert"');
     expect(
       docket({ ok: true, lobbies: [] }, { labels: fr.landing.rooms, errors: fr.landing.errors }),
-    ).toContain("AUCUNE SALLE OUVERTE · APPUIE SUR COURSE RAPIDE");
+    ).toMatch(
+      /AUCUNE SALLE OUVERTE · APPUIE SUR COURSE RAPIDE.*AUCUNE SALLE OUVERTE · REGARDE AVEC UN CODE OU UN LIEN/,
+    );
   });
 
   it("C3 error: the inline error line with the unavailable sentence, role=alert", () => {

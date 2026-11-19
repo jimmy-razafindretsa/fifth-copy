@@ -95,6 +95,8 @@ export const en = {
       join: "JOIN →",
       joinName: "Join room {code}",
       empty: "NO OPEN ROOM · PRESS QUICK RACE",
+      /** #999 C15: a phone has no QUICK RACE; its empty row points at the watch entry above. */
+      emptyPhone: "NO OPEN ROOM · WATCH WITH A CODE OR LINK",
     },
     errors: {
       prefix: "RETURNED ·",

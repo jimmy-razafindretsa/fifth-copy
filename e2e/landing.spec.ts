@@ -476,6 +476,19 @@ test.describe("phones watch: the landing's watch entry (#999 C15)", () => {
     page.getByRole("form", { name: "Join with code" }),
   ];
 
+  const EMPTY_DESK = "NO OPEN ROOM · PRESS QUICK RACE";
+  const EMPTY_PHONE = "NO OPEN ROOM · WATCH WITH A CODE OR LINK";
+  /**
+   * The open-rooms docket's empty row, when it is empty (parallel workers open public rooms, so it may
+   * list one): its one visible statement is `text`.
+   */
+  async function expectEmptyRow(page: Page, text: string) {
+    const docket = page.locator("section[data-open-rooms]");
+    await expect(docket.locator("[aria-busy='true']")).toHaveCount(0, { timeout: ACTION_WAIT });
+    if ((await docket.getByRole("list").count()) > 0) return;
+    await expect(docket.getByText(text, { exact: true })).toBeVisible();
+  }
+
   test("C15 at 360 to 480 px: the watch entry, no race entry, no horizontal scroll; wider: the race entries", async ({
     page,
   }) => {
@@ -485,12 +498,17 @@ test.describe("phones watch: the landing's watch entry (#999 C15)", () => {
       await expect(watch(page)).toBeVisible();
       await expect(watch(page).getByLabel("WATCH WITH CODE OR LINK")).toBeVisible();
       for (const entry of raceEntries(page)) await expect(entry).toHaveCount(0);
+      // the open rooms' empty row never points a phone at QUICK RACE: it points at the watch entry
+      await expect(page.getByText(EMPTY_DESK, { exact: true })).toBeHidden();
+      await expectEmptyRow(page, EMPTY_PHONE);
       expect(await overflow(page), `${width}: horizontal scroll`).toBeLessThanOrEqual(0);
     }
     await expectNoA11yViolations(page);
     await page.setViewportSize({ width: 481, height: 812 });
     await expect(watch(page)).toBeHidden();
     for (const entry of raceEntries(page)) await expect(entry.first()).toBeVisible();
+    await expect(page.getByText(EMPTY_PHONE, { exact: true })).toBeHidden();
+    await expectEmptyRow(page, EMPTY_DESK);
   });
 
   test("C15 a wrong entry is refused on the spot; a spectator link opens its watch page", async ({

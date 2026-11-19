@@ -113,7 +113,15 @@ function OpenRoomsBody({ result, labels, errors }: Labels & { result: ListOpenLo
       </p>
     );
   }
-  if (result.lobbies.length === 0) return <p className={styles.notice}>{labels.empty}</p>;
+  if (result.lobbies.length === 0) {
+    // #999 C15: a phone (480px and under) has no QUICK RACE; its row points at the watch entry instead
+    return (
+      <p className={styles.notice}>
+        <span className={styles.desk}>{labels.empty}</span>
+        <span className={styles.phone}>{labels.emptyPhone}</span>
+      </p>
+    );
+  }
   return (
     <ul className={styles.list} aria-label={labels.listName}>
       {result.lobbies.slice(0, OPEN_ROOMS_MAX).map((room) => (

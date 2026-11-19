@@ -144,6 +144,21 @@
   letter-spacing: 0.16em;
 }
 
+/* #999 C15: the desk's statement points at QUICK RACE, a phone's (480px and under) at the watch entry */
+.phone {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .desk {
+    display: none;
+  }
+
+  .phone {
+    display: inline;
+  }
+}
+
 /* the 7.4 inline error line as the docket's row: newsprint, Courier Prime 15px in the red text role,
    the Oswald RETURNED · prefix; the docket's own 2px rule is its border */
 .error {

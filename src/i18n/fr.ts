@@ -94,6 +94,7 @@ export const fr = {
       join: "REJOINDRE →",
       joinName: "Rejoindre la salle {code}",
       empty: "AUCUNE SALLE OUVERTE · APPUIE SUR COURSE RAPIDE",
+      emptyPhone: "AUCUNE SALLE OUVERTE · REGARDE AVEC UN CODE OU UN LIEN",
     },
     errors: {
       prefix: "RETOURNÉ ·",

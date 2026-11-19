@@ -31,6 +31,11 @@ export type Top10SidebarProps = {
   /** Typists in the room (the roster), for the header value. */
   count: number;
   labels: ProjectorLabels;
+  /**
+   * #999 C10: the phone spectator's scale (bible 14.3 "Phone spectator"): the finished view's roll-row
+   * sizes (15px rows, 13px header) instead of the projector's.
+   */
+  compact?: boolean;
 };
 
 const two = (n: number) => String(n).padStart(2, "0");
@@ -42,9 +47,13 @@ const two = (n: number) => String(n).padStart(2, "0");
  * (the status word when the desk is not typing). Never a `you`: the projector holds no desk. Never a
  * scroll, no motion. Presentational: the rows are `topTenRows`' (ADR 0007).
  */
-export function Top10Sidebar({ rows, count, labels }: Top10SidebarProps) {
+export function Top10Sidebar({ rows, count, labels, compact = false }: Top10SidebarProps) {
   return (
-    <section aria-label={labels.top} data-top10 className={cn(docket.docket, styles.sidebar)}>
+    <section
+      aria-label={labels.top}
+      data-top10
+      className={cn(docket.docket, styles.sidebar, compact && styles.compact)}
+    >
       <div className={styles.head}>
         <span className={styles.tag}>{labels.top}</span>
         <span className={styles.count}>{fill(labels.typists, { n: count })}</span>

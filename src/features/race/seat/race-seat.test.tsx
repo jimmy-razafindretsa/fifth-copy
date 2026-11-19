@@ -16,7 +16,7 @@ const decode = (html: string) =>
     .replace(/&amp;/g, "&")
     .replace(/&#x27;/g, "'")
     .replace(/&quot;/g, '"');
-const seat = { lobbyId: "cmuvut8r2000106r7wf01vr30", code: "KGB-4821" };
+const seat = { lobbyId: "cmuvut8r2000106r7wf01vr30", code: "KGB-4821", host: false };
 const mint = async () => ({ ok: false as const, error: "closed" as const });
 /** The route hands the machine its rows (#224, `machineRows`); any rows do here. */
 const ROWS = [

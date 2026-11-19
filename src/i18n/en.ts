@@ -320,6 +320,8 @@ export const en = {
     /** A non-host's 7.4 notice row at the top of the roll (#105). */
     waitingForHost: "WAITING FOR THE HOST",
     /** The 7.4 notice row at the top of the roll while the host follows the race without a desk (#876). */
+    /** #999 C9: the still notice row of a phone watching the lobby on a spectator token (bible 14.3). */
+    phonesWatch: "PHONES WATCH FROM THE BACK OF THE ROOM",
     hostWatching: "THE HOST IS WATCHING",
     /**
      * A public room's automatic start (#814, bible 14.3): the room docket's `STATUS` value with the
@@ -641,6 +643,10 @@ export const en = {
     ] as string[],
     /** #951: why the 3D room went away (under the no-scene notice); `{fps}` = frames a second measured. */
     /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk. */
+    /** #999 C10: the phone spectator screen (bible 14.3 "Phone spectator"): its one heading. */
+    phone: {
+      kicker: "SPECTATOR VIEW",
+    },
     projector: {
       kicker: "PROJECTOR VIEW",
       connecting: "Tuning in to the room…",

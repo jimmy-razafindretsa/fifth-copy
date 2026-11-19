@@ -18,6 +18,7 @@ import {
 } from "../client/store";
 import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
+import { usePhoneAtMount } from "./phone-switch";
 import {
   atGo,
   Countdown,
@@ -42,7 +43,8 @@ import { useShortcutLabel } from "../view/play-shortcut";
 import { selectAccuracy, selectFinishWpm, selectPlace } from "../view/counters";
 import type { ExitLabels } from "../view/hud-labels";
 import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view/standings";
-import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
+import { isPhoneViewport } from "@/lib/phone";
+import type { RaceSeatLabels, SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
 export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors" | "presence">;
@@ -263,8 +265,10 @@ export function SeatFinish({ labels }: { labels: FinishLabels }) {
 /**
  * The seat view's client leaf (#561 C4, ARCHITECTURE 8.3): after the server rendered the HUD shell, it
  * mints the race token through the lobby action, connects with `connectToRoom` (lazily loaded) and feeds
- * the one race store every HUD leaf reads; it renders the live state. Phones only watch (the layout shows
- * them the notice; spectator mode is #292), so a phone-width page never takes a desk.
+ * the one race store every HUD leaf reads; it renders the live state. Phones only watch (#999 C9: the
+ * page's `PhoneSwitch` swaps the seat for the phone spectator screen at mount), so a phone-width page
+ * never mints a desk's token, never connects and never mounts the race input: the input mounts only
+ * once the browser said it is not a phone (none in the server render).
  * Its root carries the store's phase as `data-phase` (`countdown` until GO, `running` from GO: the gate
  * #559's input reads) and holds the countdown overlay and the race's one polite announcer (#242: 3, 2,
  * 1, GO of #214, the overtake lines of #232, your place, your finish, the race over). It owns the typing path too (#559): the hidden `RaceInput`,
@@ -300,6 +304,8 @@ export function RaceSeatLive({
   const { announce, countdown, stamps } = labels;
   const announcer = useMemo(() => ({ announce, countdown, stamps }), [announce, countdown, stamps]);
   const typing = useRef<Typing | null>(null);
+  // #999 C9: the typing surface exists only on a desk's screen, never on a phone (decided at mount)
+  const desk = usePhoneAtMount() === false;
   const press = useCallback((key: string) => typing.current?.press(key), []);
   // #236: Enter plays your card; the store gates it and `sendBonusPlays` sends it
   const play = useCallback(() => store.dispatch({ type: "bonus-play", at: Date.now() }), [store]);
@@ -321,7 +327,7 @@ export function RaceSeatLive({
   }, [mint]);
 
   useEffect(() => {
-    if (window.matchMedia(PHONE_QUERY).matches) return;
+    if (isPhoneViewport()) return;
     return connectSeat({
       code,
       lobbyId,
@@ -374,16 +380,18 @@ export function RaceSeatLive({
       ) : (
         <StampRow stamp={stamp} wpm={finishWpm} labels={labels.stamps} otherName={otherName} />
       )}
-      <RaceInput
-        disabled={!canType}
-        onKey={press}
-        onPlay={play}
-        playKey={playKey}
-        label={labels.input}
-        mode={mode}
-        backspace={backspace}
-        errors={errors}
-      />
+      {desk ? (
+        <RaceInput
+          disabled={!canType}
+          onKey={press}
+          onPlay={play}
+          playKey={playKey}
+          label={labels.input}
+          mode={mode}
+          backspace={backspace}
+          errors={errors}
+        />
+      ) : null}
       {/* #242: the one polite announcer, present before the countdown starts so each change is read;
           nothing to say once lost (the lost line is its own alert) */}
       {phase !== "lost" ? <RaceAnnouncer step={step} labels={announcer} /> : null}

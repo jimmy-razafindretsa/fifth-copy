@@ -36,12 +36,19 @@ export function ProjectorLive({
   lobbyId,
   mint,
   labels,
+  spectator = true,
 }: {
   /** `null` on a spectator link's page (#999 C12): no way back to a lobby the viewer has no code for. */
   code: string | null;
   lobbyId: string;
   mint: MintRaceToken;
   labels: ProjectorScreenLabels;
+  /**
+   * `false` only for the room's host on the phone spectator screen (#999 C14): it joins with its own
+   * player token as the watching host of #876 (no desk while `hostWatches`), so its presence keeps the
+   * host role through the race; still no typing path and no `ready`. Everyone else: a spectator token.
+   */
+  spectator?: boolean;
 }) {
   const store = useRaceStoreApi();
   const state = useRaceStore(selectProjectorState);
@@ -62,11 +69,11 @@ export function ProjectorLive({
       connectSeat({
         code,
         lobbyId,
-        spectator: true,
+        spectator,
         mint: (input) => mintRef.current(input),
         dispatch: store.dispatch,
       }),
-    [code, lobbyId, store],
+    [code, lobbyId, spectator, store],
   );
 
   const status = useMemo(() => ({ ...labels, loading: labels.projector.connecting }), [labels]);
@@ -115,8 +122,11 @@ export function ProjectorLive({
  */
 export function Top10Live({
   labels,
+  compact = false,
 }: {
   labels: Pick<ProjectorScreenLabels, "projector" | "finish">;
+  /** #999 C10: the phone spectator's scale. */
+  compact?: boolean;
 }) {
   const members = useRaceStore((s) => s.members);
   const desks = useRaceStore((s) => s.desks);
@@ -127,5 +137,7 @@ export function Top10Live({
     () => topTenRows({ members, desks, ranks, race, ending }, labels.finish),
     [members, desks, ranks, race, ending, labels.finish],
   );
-  return <Top10Sidebar rows={rows} count={members.length} labels={labels.projector} />;
+  return (
+    <Top10Sidebar rows={rows} count={members.length} labels={labels.projector} compact={compact} />
+  );
 }

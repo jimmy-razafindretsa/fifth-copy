@@ -2756,3 +2756,43 @@ describe("#999 the projector's spectator store", () => {
     expect(selectProjectorState(reduceRace(racing, { type: "reconnecting" }))).toBe("reconnecting");
   });
 });
+
+// Contract of #999 C9 and C11 (the store half): a phone never holds a desk. A guest's phone joins as a
+// spectator (above); a host's phone joins with its own token but watches (#876: `role: player`, no desk,
+// `you: null`). Either way the store never reports ready, never takes a key (so the socket never sends
+// `keys`) and its screen follows the room like the projector's.
+describe("#999 a phone watches: no desk, no keys", () => {
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "The receipt is ready.",
+    language: "en" as const,
+    wordCount: 4,
+    t0: 1_767_225_633_000,
+    timerS: DEFAULT_RACE_SETTINGS.timerS,
+  };
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const loading: RaceEvent = {
+    type: "loading",
+    payload: { v: PROTOCOL_VERSION, race: RACE, pending: [1, 3] },
+  };
+
+  it.each([
+    [
+      "a guest's phone (spectator token)",
+      welcome({ role: "spectator", you: null, resumeKey: null }),
+    ],
+    ["the host's phone (watching host)", welcome({ role: "player", you: null, resumeKey: null })],
+  ])("%s never readies, never types, and follows the room", (_, payload) => {
+    const waiting = run({ type: "welcome", payload });
+    expect(selectProjectorState(waiting)).toBe("waiting");
+    const loaded = reduceRace(reduceRace(waiting, loading), { type: "scene-settled" });
+    expect(selectShouldReady(loaded)).toBe(false);
+    const racing = reduceRace(reduceRace(loaded, countdown), { type: "go" });
+    expect(selectProjectorState(racing)).toBe("racing");
+    expect(racing.you).toBeNull();
+    expect(selectCanType(racing)).toBe(false);
+    // every keystroke a phone could make is dropped: nothing reaches the typing path's `keys` batch
+    for (const key of ["T", "h", "e", "Backspace"])
+      expect(reduceRace(racing, { type: "key", keystroke: { t: 100, key } })).toBe(racing);
+  });
+});

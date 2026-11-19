@@ -3,10 +3,11 @@
 import { raceSeatIdSchema } from "../schema";
 
 /**
- * The room behind a seat view: the lobby the race server keys the room by, and its join code when
- * the viewer may know it (#999 C13), else `null`.
+ * The room behind a seat view: the lobby the race server keys the room by, its join code when the
+ * viewer may know it (#999 C13), else `null`, and whether the viewer is the lobby's host (#999 C14: a
+ * host on a phone watches with its own player token, the watching host of #876).
  */
-export type RaceSeatInfo = { lobbyId: string; code: string | null };
+export type RaceSeatInfo = { lobbyId: string; code: string | null; host: boolean };
 
 /**
  * Resolves the `[raceId]` of `/race/[raceId]` (#561 C1) to its lobby: a `Race.id` through
@@ -39,15 +40,20 @@ export async function getRaceSeat(id: string): Promise<RaceSeatInfo | null> {
       : ((await db.race.findUnique({ where: { id: key }, select: { lobby: { select } } }))?.lobby ??
         null);
   if (!lobby) return null;
-  return { lobbyId: lobby.id, code: (await mayKnowCode(lobby)) ? lobby.code : null };
+  const { known, host } = await viewerOf(lobby);
+  return { lobbyId: lobby.id, code: known ? lobby.code : null, host };
 }
 
-async function mayKnowCode(lobby: { id: string; hostUserId: string }): Promise<boolean> {
+async function viewerOf(lobby: {
+  id: string;
+  hostUserId: string;
+}): Promise<{ known: boolean; host: boolean }> {
   const [{ getViewer }, { codeProofStore }] = await Promise.all([
     import("@/server/auth"),
     import("@/server/room-code-proof"),
   ]);
   const viewer = await getViewer();
-  if (!viewer) return false;
-  return viewer.id === lobby.hostUserId || codeProofStore().holds(viewer.id, lobby.id);
+  if (!viewer) return { known: false, host: false };
+  if (viewer.id === lobby.hostUserId) return { known: true, host: true };
+  return { known: await codeProofStore().holds(viewer.id, lobby.id), host: false };
 }

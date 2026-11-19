@@ -1,9 +1,10 @@
 import { InviteRefused, mintSpectatorToken } from "@/features/lobby";
 import { peekSpectatorLink } from "@/features/lobby/server";
-import { ProjectorScreen } from "@/features/race";
+import { PhoneScreen, PhoneSwitch, ProjectorScreen } from "@/features/race";
 import { getT } from "@/i18n";
 import { SiteHeader } from "@/app/_components/site-header";
 import { ProjectorStage } from "../../race/[raceId]/projector-stage";
+import { WatchRing } from "../../race/[raceId]/watch-ring";
 
 /**
  * `/watch/[token]` (#999 C12, C13; bible 14.3 "Projector view", ARCHITECTURE 8.1): a reusable spectator
@@ -32,13 +33,28 @@ export default async function Watch({ params }: PageProps<"/watch/[token]">) {
       </>
     );
   }
+  const seat = { lobbyId: link.lobbyId, code: null };
+  const mint = mintSpectatorToken.bind(null, token);
+  // #999 C9, C10: a phone gets the phone spectator screen instead (decided at mount)
   return (
     <main className="flex flex-1 flex-col">
-      <ProjectorScreen
-        seat={{ lobbyId: link.lobbyId, code: null }}
-        labels={t.race}
-        mint={mintSpectatorToken.bind(null, token)}
-        stage={<ProjectorStage labels={t.lobby.ring} title={t.race.projector.scene} />}
+      <PhoneSwitch
+        phone={
+          <PhoneScreen
+            seat={seat}
+            labels={t.race}
+            mint={mint}
+            ring={<WatchRing labels={t.lobby.ring} />}
+          />
+        }
+        wide={
+          <ProjectorScreen
+            seat={seat}
+            labels={t.race}
+            mint={mint}
+            stage={<ProjectorStage labels={t.lobby.ring} title={t.race.projector.scene} />}
+          />
+        }
       />
     </main>
   );

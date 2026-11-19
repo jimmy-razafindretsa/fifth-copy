@@ -1,0 +1,59 @@
+/*
+ * The phone spectator screen (#999 C10; bible 14.3 "Phone spectator", 7.10, 18): one column on the flat
+ * themed paper ground, gutters `clamp(16px,4vw,48px)`, 16px between blocks, no site header, no page-wide
+ * sideways scroll at any width from 320px. The kicker is the seat view's (red Oswald 13px `.24em`, link
+ * role on Night shift); the live state and the standings are the projector's at the finished view's
+ * scale; the seat ring diagram closes the column, as wide as the column allows (its 30px desks stay
+ * apart in a 328px ring, the 360px phone's column).
+ */
+
+@reference "../../../../app/globals.css";
+
+.screen {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
+  padding: 16px clamp(16px, 4vw, 48px) 32px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  overflow-x: clip;
+}
+
+.kicker {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* the status slot's own skeleton and finished view keep their HUD widths, capped by the column */
+.status > :global(*) {
+  max-width: 100%;
+}
+
+/*
+ * The lobby's seat ring diagram (14.3), shown here although the lobby hides it at 480px and under (a
+ * phone's lobby is not this page): as wide as the column, centred.
+ */
+.ring {
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+}
+
+.ring :global([data-seat-ring][role="img"]) {
+  display: block;
+}

@@ -318,6 +318,8 @@ export const fr = {
       bot: "B",
     },
     waitingForHost: "EN ATTENTE DE L'HÔTE",
+    /** #999 C9: the still notice row of a phone watching the lobby on a spectator token (bible 14.3). */
+    phonesWatch: "LES CELLULAIRES REGARDENT DU FOND DE LA SALLE",
     hostWatching: "L'HÔTE REGARDE",
     autoStart: {
       status: "DÉPART DANS {n} S",
@@ -604,6 +606,9 @@ export const fr = {
       "Soixante secondes sans toucher une touche et le Major te renvoie chez toi.",
     ],
     /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk. */
+    phone: {
+      kicker: "VUE SPECTATEUR",
+    },
     projector: {
       kicker: "VUE PROJECTEUR",
       connecting: "Connexion à la salle…",

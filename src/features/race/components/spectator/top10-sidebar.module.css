@@ -17,6 +17,13 @@
   min-width: 0;
 }
 
+/* #999 C10: the phone spectator's scale (bible 14.3 "Phone spectator"): the finished view's roll rows */
+.sidebar.compact {
+  --_row: 15px;
+  --_head: 13px;
+  --_pad: 12px;
+}
+
 .head {
   display: flex;
   flex-wrap: wrap;

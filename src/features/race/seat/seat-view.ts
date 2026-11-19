@@ -81,9 +81,11 @@ export type SeatPresenceLabels = {
   backToLobby: string;
 };
 
-/** Phones watch from the back of the room (spectator mode is #292): the seat view shows only a notice. */
-export const PHONE_MAX_WIDTH_PX = 480;
-export const PHONE_QUERY = `(max-width: ${PHONE_MAX_WIDTH_PX}px)`;
+/**
+ * Phones watch from the back of the room (bible 18): the seat view's server render shows only a notice at
+ * this width, and the page swaps it for the phone spectator screen at mount (#999 C9, `PhoneSwitch`).
+ */
+export { PHONE_MAX_WIDTH_PX, PHONE_QUERY } from "@/lib/phone";
 
 /** Tablets and small laptops get the compact race card (bible 7.4a): below 1280px. */
 export const COMPACT_MAX_WIDTH_PX = 1279;

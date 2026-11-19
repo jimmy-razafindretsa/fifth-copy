@@ -1,10 +1,18 @@
 import { notFound } from "next/navigation";
 import { getPreferences, getViewer, updatePreferences } from "@/features/identity";
 import { mintRaceToken, RoomCodeGate } from "@/features/lobby";
-import { getRaceSeat, machineRows, ProjectorScreen, RaceSeat } from "@/features/race";
+import {
+  getRaceSeat,
+  machineRows,
+  PhoneScreen,
+  PhoneSwitch,
+  ProjectorScreen,
+  RaceSeat,
+} from "@/features/race";
 import { getLocale, getT } from "@/i18n";
 import { ProjectorStage } from "./projector-stage";
 import { SeatScene } from "./seat-scene";
+import { WatchRing } from "./watch-ring";
 
 /**
  * `/race/[raceId]` (#561, ARCHITECTURE 8.1): the seat view of a race (`Race.id`) or of a lobby's room
@@ -19,6 +27,9 @@ import { SeatScene } from "./seat-scene";
  * read-only `spectator` token for any viewer (the host's own seat stays on the plain URL), no desk, no
  * keys, the top 10 beside the stage; its stage is `ProjectorStage` (the overview scene with its rank
  * plaques, or the ring diagram on paper).
+ * #999 C9, C10, C14: a phone (480px and under) never keeps a desk: `PhoneSwitch` swaps the seat or the
+ * projector for the phone spectator screen at mount (a spectator token; the room's host watches on its
+ * own player token, the watching host of #876), its overview the seat ring (`WatchRing`).
  * #999 C13: the room code is served only to the room's host or to a viewer holding its proof
  * (`getRaceSeat`); anyone else (a spectator link's holder, a shared URL, a new device) gets the code
  * entry first, and no seat or projector opens until the code is proven.
@@ -41,15 +52,30 @@ export default async function RacePage({ params, searchParams }: PageProps<"/rac
     );
   }
   const known = { lobbyId: seat.lobbyId, code: seat.code };
+  // the projector query always watches on a spectator token (the host's own seat stays untouched)
+  const phone = (t: Awaited<ReturnType<typeof getT>>, spectator: boolean) => (
+    <PhoneScreen
+      seat={known}
+      labels={t.race}
+      mint={mintRaceToken}
+      spectator={spectator}
+      ring={<WatchRing labels={t.lobby.ring} />}
+    />
+  );
   if (view === "projector") {
     const t = await getT();
     return (
       <main className="flex flex-1 flex-col">
-        <ProjectorScreen
-          seat={known}
-          labels={t.race}
-          mint={mintRaceToken}
-          stage={<ProjectorStage labels={t.lobby.ring} title={t.race.projector.scene} />}
+        <PhoneSwitch
+          phone={phone(t, true)}
+          wide={
+            <ProjectorScreen
+              seat={known}
+              labels={t.race}
+              mint={mintRaceToken}
+              stage={<ProjectorStage labels={t.lobby.ring} title={t.race.projector.scene} />}
+            />
+          }
         />
       </main>
     );
@@ -58,21 +84,26 @@ export default async function RacePage({ params, searchParams }: PageProps<"/rac
   const rows = await machineRows({ layout: null, locale: await getLocale() });
   return (
     <main className="flex flex-1 flex-col">
-      <RaceSeat
-        seat={known}
-        labels={t.race}
-        mint={mintRaceToken}
-        rows={rows}
-        skin={machineSkin}
-        sound={sound}
-        saveSound={updatePreferences}
-        scene={
-          <SeatScene
-            labels={t.race.scene}
-            notice={t.race.notice}
-            drop={t.race.sceneDrop}
-            tips={t.race.didYouKnow}
-            waiting={{ ...t.race.waiting, cards: t.race.sabotageTray.cards }}
+      <PhoneSwitch
+        phone={phone(t, !seat.host)}
+        wide={
+          <RaceSeat
+            seat={{ ...seat, code: seat.code }}
+            labels={t.race}
+            mint={mintRaceToken}
+            rows={rows}
+            skin={machineSkin}
+            sound={sound}
+            saveSound={updatePreferences}
+            scene={
+              <SeatScene
+                labels={t.race.scene}
+                notice={t.race.notice}
+                drop={t.race.sceneDrop}
+                tips={t.race.didYouKnow}
+                waiting={{ ...t.race.waiting, cards: t.race.sabotageTray.cards }}
+              />
+            }
           />
         }
       />

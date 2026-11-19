@@ -59,8 +59,12 @@ beforeEach(() => {
 
 describe("getRaceSeat (#561 C1)", () => {
   it.each([
-    ["an existing Race.id, through Race.lobbyId", RACE_ID, { lobbyId: LOBBY.id, code: LOBBY.code }],
-    ["an existing lobby id", LOBBY.id, { lobbyId: LOBBY.id, code: LOBBY.code }],
+    [
+      "an existing Race.id, through Race.lobbyId",
+      RACE_ID,
+      { lobbyId: LOBBY.id, code: LOBBY.code, host: true },
+    ],
+    ["an existing lobby id", LOBBY.id, { lobbyId: LOBBY.id, code: LOBBY.code, host: true }],
     ["an unknown race id", UNKNOWN_RACE_ID, null],
     ["an unknown lobby id", ORPHAN_LOBBY_ID, null],
     ["a race whose lobby is gone", ORPHAN_RACE_ID, null],
@@ -104,7 +108,9 @@ describe("getRaceSeat serves the room code only to its holders (#999 C13)", () =
     state.viewer = viewer;
     state.proofs = new Set(["usr_proved:" + LOBBY.id, "usr_other:cmuvumv5q002f0fr7b6mgzfcf"]);
     const code = served ? LOBBY.code : null;
-    await expect(getRaceSeat(RACE_ID)).resolves.toEqual({ lobbyId: LOBBY.id, code });
-    await expect(getRaceSeat(LOBBY.id)).resolves.toEqual({ lobbyId: LOBBY.id, code });
+    // #999 C14: only the room's host is told it hosts (its phone watches on its own player token)
+    const host = viewer?.id === "usr_host";
+    await expect(getRaceSeat(RACE_ID)).resolves.toEqual({ lobbyId: LOBBY.id, code, host });
+    await expect(getRaceSeat(LOBBY.id)).resolves.toEqual({ lobbyId: LOBBY.id, code, host });
   });
 });

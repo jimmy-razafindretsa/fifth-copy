@@ -17,6 +17,13 @@ export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
 /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk; the route fills its stage. */
 export { ProjectorScreen, type ProjectorScreenProps } from "./seat/projector/projector-screen";
 export type { ProjectorScreenLabels } from "./seat/projector/projector-live";
+/** The phone spectator screen (#999 C9-C11, bible 14.3 "Phone spectator") and the page's mount-time switch to it. */
+export {
+  PhoneScreen,
+  type PhoneScreenLabels,
+  type PhoneScreenProps,
+} from "./seat/projector/phone-screen";
+export { PhoneSwitch } from "./seat/phone-switch";
 export { usePlaqueAnchors, type PlaqueAnchor } from "./components/spectator/rank-plaques";
 /** The machine's keys for a viewer (#224): a server function, so identity never reaches a client graph. */
 export { machineRows } from "./view/machine-rows";

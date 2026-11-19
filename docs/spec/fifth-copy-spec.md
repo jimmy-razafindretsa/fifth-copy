@@ -190,6 +190,7 @@ Backspace: allowed in both modes (host can disable it in Continue mode).
 ### 6.4 Projector / spectator view
 - Overview camera orbiting the ring, top-10 sidebar, rank plaques above heads.
 - Used by the teacher's big screen and by **phones (spectator mode)**.
+- Built in #999 (bible 14.3 "Projector view" and "Phone spectator"; ARCHITECTURE 7.8): `/race/<id>?view=projector` and the host's reusable spectator link `/watch/<token>`; phones (<= 480 px) always watch, a phone host keeps the host controls; no spectator is ever served the room code unless they are the host or proved it.
 
 ---
 
@@ -345,6 +346,7 @@ WPM, raw WPM, accuracy, place, lobby size, language, text type, settings, durati
 - A **"How to type it"** page: for each special character (é, è, ê, ë, à, â, ç, ù, û, ô, î, ï, œ, æ, « », €, …) show the key combination **per keyboard layout** and OS (Windows / macOS / ChromeOS).
 - Linked from the heatmap and from errors on special characters during a race ("Stuck on ç? Here's how").
 - A "Special characters" text type in host settings for drilling (§8).
+- Built in #999 (bible 14.3 "How to type special characters"): `/guide`; a combination shows only once checked on a real machine for that layout and OS (`work/log/999.md` "Guide checks"), every other pair shows an honest empty state. The race hint appears after three wrong presses on one special character. Dead-key input handling (#247, #566) stays post-v1.
 
 ---
 

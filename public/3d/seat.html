@@ -990,6 +990,10 @@ await slice();
 // Pooled instanced meshes (forms, balls, puffs: one draw each), flat Lambert, palette colours. At most
 // THROW_FLY_MAX fly, the rest land directly; objects rest in their desk's frame (a re-seat carries them).
 // `<html>`: data-throws-flying|-peak|-landed|-puffs, data-throw-cover (largest view share since the last play).
+// Every throw runs on the wall clock (`wallS`), never the frame-clamped animation time `t`: a slow or resting
+// loop (software WebGL, #695's rest) draws fewer frames of a flight or a puff, never a longer one: each is drawn
+// at least once (a flight at most at its apex, a puff at its swell), then ends on time or at the next frame. Race
+// end and reduced motion clear and report at once, with no frame needed.
 const THROW_FLY_MAX = 8, THROW_COVER = 0.2, PUFF_S = 1;
 const BLUR_S = 5; // the engine's BLUR_MS
 const throwMat = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -1015,7 +1019,7 @@ function land(o, burst) {
   if (o.kind !== 'smoke-break') return;
   if (!burst) { o.until = o.blurEnd; return; }
   o.gone = true;
-  PUFFS.push({ slot: o.slot, local: o.local.clone(), at: t, s: isSelfPov(o.slot) ? 0.5 : 1 });
+  PUFFS.push({ slot: o.slot, local: o.local.clone(), at: wallS(), s: isSelfPov(o.slot) ? 0.5 : 1 });
   if (PUFFS.length > POOL_MAX.puff) PUFFS.shift();
   if (!isSelfPov(o.slot)) Clerks.flinch(o.slot);
 }
@@ -1032,7 +1036,7 @@ function play(kind, from, to, mode) {
     if (still) land(o, false);
     else {
       const f = kind === 'exemption' ? slot : src;
-      o.fly = { from: f, fromLocal: f < 0 ? null : isSelfPov(f) ? AT.selfHand : AT.hand, at: t + (gest ? Clerks.release(gest) : 0), dur: kind === 'exemption' ? 0.6 : 0.75, direct: OBJ.filter(q => q.fly && !q.fly.direct).length >= THROW_FLY_MAX };
+      o.fly = { from: f, fromLocal: f < 0 ? null : isSelfPov(f) ? AT.selfHand : AT.hand, at: wallS() + (gest ? Clerks.release(gest) : 0), dur: kind === 'exemption' ? 0.6 : 0.75, direct: OBJ.filter(q => q.fly && !q.fly.direct).length >= THROW_FLY_MAX };
     }
     OBJ.push(o);
   }
@@ -1045,6 +1049,7 @@ function throwsStill(clear = false) {
   for (const o of OBJ) if (o.fly) { if (o.kind === 'smoke-break') o.local.copy(AT.desk); land(o, false); }
   PUFFS = []; Clerks.still();
   if (clear) OBJ = [];
+  throwsUpdate();
 }
 const _tp = new THREE.Vector3(), _ts = new THREE.Vector3(), _te = new THREE.Vector3(), _tq = new THREE.Quaternion(), _tr = new THREE.Quaternion(), _tm = new THREE.Matrix4(), _tl = new THREE.Matrix4(), _tx = new THREE.Euler();
 const deskWorld = (slot, local, out) => out.copy(local).applyMatrix4(Clerks.deskM[slot]);
@@ -1062,11 +1067,12 @@ function throwsUpdate() {
   let flying = 0;
   for (const o of OBJ) {
     if (o.until <= now || !DESKS[o.slot].occ) o.gone = true;
-    if (o.fly && (t - o.fly.at) / o.fly.dur >= 1) land(o, true);
+    if (o.fly && (o.fly.seen || o.fly.direct) && (now - o.fly.at) / o.fly.dur >= 1) land(o, true);
     if (o.gone) continue;
     if (o.fly) {
-      const u = (t - o.fly.at) / o.fly.dur;
+      let u = (now - o.fly.at) / o.fly.dur;
       if (u < 0 || o.fly.direct) continue; // in the hand, or landing directly: not drawn yet
+      if (!o.fly.seen) { o.fly.seen = true; u = Math.min(u, 0.5); }
       flying++;
       deskWorld(o.slot, o.local, _te);
       if (o.fly.from < 0 || !DESKS[o.fly.from].occ) _tp.copy(_te).setY(_te.y + 1.6); else deskWorld(o.fly.from, o.fly.fromLocal, _tp);
@@ -1079,9 +1085,11 @@ function throwsUpdate() {
   }
   OBJ = OBJ.filter(o => !o.gone);
   // a puff swells in its first 30%, then shrinks away: one appearance (flash rule, bible 8)
-  PUFFS = PUFFS.filter(q => t - q.at < PUFF_S && DESKS[q.slot].occ);
+  PUFFS = PUFFS.filter(q => (now - q.at < PUFF_S || !q.seen) && DESKS[q.slot].occ);
   for (const q of PUFFS) {
-    const k = (t - q.at) / PUFF_S, s = Math.max(0.001, q.s * (k < 0.3 ? 0.4 + 0.6 * ssm(k / 0.3) : 1 - ssm((k - 0.3) / 0.7)));
+    const k = q.seen ? (now - q.at) / PUFF_S : Math.min(0.3, (now - q.at) / PUFF_S);
+    q.seen = true;
+    const s = Math.max(0.001, q.s * (k < 0.3 ? 0.4 + 0.6 * ssm(k / 0.3) : 1 - ssm((k - 0.3) / 0.7)));
     _tl.compose(q.local, _tq.identity(), _ts.setScalar(s)); _tm.multiplyMatrices(Clerks.deskM[q.slot], _tl);
     draw('puff', _tm, RADIUS.puff * s, n);
   }

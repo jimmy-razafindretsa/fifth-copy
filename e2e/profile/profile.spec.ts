@@ -1760,19 +1760,23 @@ test.describe("the whole Personnel file (#970)", () => {
     rollup(lobby.hostUserId);
     const rows = await rolledUp(lobby.hostUserId);
     expect(rows.chars, "the rollup wrote key rows").toBeGreaterThan(0);
-    const population = await censusPopulation();
-
+    // the shared e2e database's population moves under parallel specs: hold the census to it only
+    // when the reads on both sides of the load agree
+    const before = (await censusPopulation()) >= 30;
     await openFile(page);
     await expect(figure(page, "races")).toHaveText("3");
     await expect(page.locator('[data-section="keyboard-map"]')).toBeVisible();
-    const expected = FILE_ORDER.filter(
-      (s) =>
-        s !== "blank" &&
-        (s !== "suspect-pairs" || rows.pairs > 0) &&
-        (s !== "census" || population >= 30),
+    const after = (await censusPopulation()) >= 30;
+    const sections = await sectionsOf(page);
+    expect(sections.filter((s) => s !== "census")).toEqual(
+      FILE_ORDER.filter(
+        (s) => s !== "blank" && s !== "census" && (s !== "suspect-pairs" || rows.pairs > 0),
+      ),
     );
-    if (population >= 30) await expect(census(page)).toBeVisible();
-    expect(await sectionsOf(page)).toEqual(expected);
+    if (before === after) {
+      expect(sections.includes("census"), "census").toBe(before);
+      if (before) await expect(census(page)).toBeVisible();
+    }
     await expect(page.locator('[data-section="key-progress"] [data-key-days]')).toHaveText("DAY 1");
     await expect(attendance(page).locator('[data-attendance="active"] dd')).toHaveText(/^1 \//);
 
@@ -1809,17 +1813,23 @@ test.describe("the whole Personnel file (#970)", () => {
     const lobby = await seedLobby(page);
     await racesOnDays(request, lobby, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     await twoWeeksOfKeys(lobby.hostUserId);
-    const population = await censusPopulation();
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       for (const width of [375, 768, 1280]) {
         const at = `${scheme} ${width}`;
         await page.setViewportSize({ width, height: 900 });
+        // the shared e2e database's population moves while parallel specs add and erase typists: read
+        // it on both sides of the load, and hold the census to it only when both reads agree
+        const before = (await censusPopulation()) >= 30;
         await openFile(page);
         await expect(page.locator('[data-section="keyboard-map"]'), at).toBeVisible();
-        expect(await sectionsOf(page), at).toEqual(
-          FILE_ORDER.filter((s) => s !== "blank" && (s !== "census" || population >= 30)),
-        );
+        const after = (await censusPopulation()) >= 30;
+        const sections = await sectionsOf(page);
+        expect(
+          sections.filter((s) => s !== "census"),
+          at,
+        ).toEqual(FILE_ORDER.filter((s) => s !== "blank" && s !== "census"));
+        if (before === after) expect(sections.includes("census"), `${at} census`).toBe(before);
         await expectNoA11yViolations(page);
         await expect(page.locator("h1"), at).toHaveCount(1);
         const report = await page.locator("main").evaluate((main) => {

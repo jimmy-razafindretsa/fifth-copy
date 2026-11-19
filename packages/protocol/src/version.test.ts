@@ -3,7 +3,7 @@ import { envelopeSchema, PROTOCOL_VERSION } from "./index";
 
 describe("version", () => {
   it("is 20 (#926: phase `loading`, `loading`/`readiness`/`ready`, `welcome.pending`)", () => {
-    expect(PROTOCOL_VERSION).toBe(20);
+    expect(PROTOCOL_VERSION).toBe(21);
   });
 
   it.each([

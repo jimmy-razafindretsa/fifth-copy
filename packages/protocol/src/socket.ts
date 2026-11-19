@@ -122,7 +122,11 @@ export const welcomeSchema = z.object({
   role: raceRoleSchema,
   /** `null` for a spectator. */
   you: deskSchema.nullable(),
-  room: z.object({ code: roomCodeSchema, phase: phaseSchema }),
+  /**
+   * `code` is `null` for every spectator (#999 C13, protocol 21): a spectator token is minted for a room
+   * code or a spectator link, and the welcome never tells a link holder the code.
+   */
+  room: z.object({ code: roomCodeSchema.nullable(), phase: phaseSchema }),
   members: membersSchema,
   settings: raceSettingsSchema,
   race: raceInfoSchema.nullable(),

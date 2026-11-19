@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
+import type { Browser, BrowserContext, Locator, Page, WebSocketRoute } from "@playwright/test";
 import { SignJWT } from "jose";
 import { Client } from "pg";
 import { io, type Socket } from "socket.io-client";
@@ -499,4 +499,50 @@ export async function blockWebSockets(page: Page) {
       },
     });
   });
+}
+
+/**
+ * The guest's line to the race server, cuttable (#235 C3): every race socket of the page goes through a
+ * `routeWebSocket` relay. `goOffline` sets the context offline (no polling fallback), closes the live
+ * socket (the server sees the disconnect, the client starts reconnecting) and refuses new ones until
+ * `goOnline`. Install before the page loads. Shared by #235's `line-cut.spec.ts` and #999's projector.
+ */
+export async function cuttableLine(page: Page) {
+  // page side -> server side; an `onClose` handler turns off Playwright's own close forwarding, so both
+  // sides are closed here
+  const live = new Map<WebSocketRoute, WebSocketRoute>();
+  let offline = false;
+  // An attempt made while offline stalls until `goOnline`, as on a dead network. Closing it instead
+  // would hang the client: the page sees the mocked socket open then close before the engine.io
+  // handshake, which socket.io's Manager only gives up on after its 20 s connect timeout.
+  const held: Array<() => void> = [];
+  await page.routeWebSocket(/\/socket\.io\//, async (ws) => {
+    if (offline) await new Promise<void>((resume) => held.push(resume));
+    const server = ws.connectToServer();
+    live.set(ws, server);
+    ws.onClose(() => {
+      live.delete(ws);
+      void server.close();
+    });
+    server.onClose(() => {
+      live.delete(ws);
+      void ws.close();
+    });
+  });
+  return {
+    async goOffline() {
+      offline = true;
+      await page.context().setOffline(true);
+      for (const [ws, server] of [...live]) {
+        live.delete(ws);
+        await server.close();
+        await ws.close({ code: 1001, reason: "offline" });
+      }
+    },
+    async goOnline() {
+      offline = false;
+      await page.context().setOffline(false);
+      for (const resume of held.splice(0)) resume();
+    },
+  };
 }

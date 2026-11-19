@@ -1123,9 +1123,9 @@ part(lampParts, C(0.033, 0.125, 0.19, 12, true), 0xD8D2C0, 0, -0.28, 0).userData
 const beam = new THREE.Mesh(C(0.06, 0.55, 1, 16, true).translate(0, -0.5, 0), new THREE.MeshBasicMaterial({ color: 0xFFD08A, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide, fog: false }));
 beam.position.y = -0.38; lampG.add(new THREE.Mesh(merge(lampParts), mat), beam); scene.add(lampG); beam.visible = false;
 const LAMP_AT = V3(0, 0.8, 0.3), lampDir = V3(0, -1, 0), lampTo = V3(0, -1, 0), _la = V3(0, 0, 0);
-let LAMP = null;
+let LAMP; // undefined until the first view, so it reports `none` too
 function lampUpdate(dt) {
-  const slot = LAMP === null ? -1 : slotOf(LAMP);
+  const slot = LAMP == null ? -1 : slotOf(LAMP);
   if (slot >= 0) { deskWorld(slot, LAMP_AT, _la); lampTo.subVectors(_la, lampG.position).normalize(); } else lampTo.copy(DOWN);
   if (reduced()) lampDir.copy(lampTo); else lampDir.lerp(lampTo, 1 - Math.exp(-dt * 4)).normalize();
   lampG.quaternion.setFromUnitVectors(DOWN, lampDir);

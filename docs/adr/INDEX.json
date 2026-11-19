@@ -449,6 +449,23 @@
       "supersededBy": [],
       "rule": "A route that must stay light imports feature UI through `<feature>/client.ts` (nothing reachable from it is a lobby store, the race socket client, socket.io or a server.ts; dependency-cruiser `feature-client-entry-light`); the proxy serves a GET of `/` without a session or guest cookie from `/welcome` by a rewrite on cookie presence only, and `scripts/landing-bundle.test.ts` checks that module's client graph carries no lobby store, race socket or zod.",
       "file": "docs/adr/0026-client-door-and-visitor-landing.md"
+    },
+    {
+      "id": "0027",
+      "title": "Other players' race speed curves are stored per result and shown only to the race's participants and host",
+      "status": "proposed",
+      "category": "data",
+      "scope": [
+        "src/features/results/**",
+        "src/app/api/internal/races/**",
+        "src/features/stats/jobs/purge-keystrokes.ts",
+        "prisma/schema/race.prisma",
+        "docs/privacy/**"
+      ],
+      "supersedes": [],
+      "supersededBy": [],
+      "rule": "Another player's speed curve is read only from `RaceResult.wpmSeries` (at most 60 clean-WPM points, written once by the results filing route), only for a viewer with a `RaceResult` in that race or the race's host, never for a flagged row, a bot gets a flat line at its stored clean WPM, and no other user's `RaceKeystrokes` is read at request time; the series is cleared by `stats.purge` 30 days after the result.",
+      "file": "docs/adr/0027-race-speed-curves-privacy.md"
     }
   ]
 }

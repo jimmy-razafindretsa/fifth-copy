@@ -3,7 +3,8 @@
 // here holds a keystroke or a per-race key record: raw keys live only in race.prisma RaceKeystrokes.
 // `day` is the stats day of src/lib/time.ts (America/Toronto), stored as that calendar date
 // (`YYYY-MM-DD` at 00:00 UTC). Timing is kept as sums so rollups add up: mean ms = totalMs / timedHits.
-// Guest merge (ADR 0009): src/features/results/merge-steps.ts moves the rows, summing a clashing key.
+// Guest merge (ADR 0009): src/features/results/merge-steps.ts moves the per-key rows, summing a clashing
+// key; src/features/stats/merge-steps.ts carries Achievement and PersonalBest (#999).
 // Extension point: a later dimension (language, mode) is an additive column with a default.
 
 /// One typist's day for one expected character on one keyboard layout.
@@ -42,4 +43,51 @@ model BigramStatDaily {
   @@id([userId, day, pair])
   /// The 90-day purge (#315).
   @@index([day])
+}
+
+/// One medal a typist earned (#333, #999 C34, spec 13.4): `achievementId` is a stable code constant of
+/// src/features/stats/achievements/ids.ts (never renamed: a row outlives the code that awarded it). The
+/// primary key awards each medal at most once; written only by the results filing route after a
+/// counted, unflagged result (#999 C35).
+model Achievement {
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  awardedAt     DateTime @default(now())
+
+  @@id([userId, achievementId])
+}
+
+/// Text type of a race (@fifth-copy/protocol `textTypeSchema`), for personal bests.
+enum RaceTextType {
+  SENTENCES
+  WORDS
+  SPECIAL_CHARACTERS
+}
+
+/// Length bucket of a race text by its word count (src/features/stats/personal-bests/rule.ts).
+enum RaceLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+/// A typist's best clean WPM (ADR 0016) per language, text type and length (#321, #999 C41, C42): one
+/// row per key, raised only by a better counted, unflagged result (the rule of personal-bests/rule.ts).
+model PersonalBest {
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language   RaceLanguage
+  textType   RaceTextType
+  length     RaceLength
+  cleanWpm   Float
+  /// 0..1, of the same result.
+  accuracy   Float
+  /// The race that set it; null once that race row is gone.
+  raceId     String?
+  race       Race?        @relation(fields: [raceId], references: [id], onDelete: SetNull)
+  achievedAt DateTime
+
+  @@id([userId, language, textType, length])
+  @@index([raceId])
 }

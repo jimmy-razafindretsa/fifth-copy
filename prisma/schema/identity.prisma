@@ -33,6 +33,8 @@ model User {
   raceKeystrokes     RaceKeystrokes[]
   charStats          CharStatDaily[]
   bigramStats        BigramStatDaily[]
+  achievements       Achievement[]
+  personalBests      PersonalBest[]
   oauthAccounts      OAuthAccount[]
   recoveryCode       RecoveryCode?
   preference         Preference?

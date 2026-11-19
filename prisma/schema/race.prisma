@@ -1,7 +1,7 @@
 // Race domain (ADR 0008): the durable record of a race, owned by src/features/results.
 // The race server is database-less; the web app writes these rows through /api/internal/* (#199, #189).
 // Extension points (additive migrations, later cards): stats.prisma (CharStatDaily, BigramStatDaily,
-// later PersonalBest, Achievement) relates to Race.id / User.id. texts.prisma (#346) holds the corpus with no relation
+// PersonalBest, Achievement) relates to Race.id / User.id. texts.prisma (#346) holds the corpus with no relation
 // from Race: the race keeps its own text snapshot.
 
 enum RaceLanguage {
@@ -54,6 +54,7 @@ model Race {
   createdAt       DateTime         @default(now())
   results         RaceResult[]
   keystrokes      RaceKeystrokes[]
+  personalBests   PersonalBest[]
 
   @@index([lobbyId])
 }
@@ -96,10 +97,17 @@ model RaceResult {
   suspicious       Boolean      @default(false)
   suspiciousReason String?
   engineVersion    String
+  /// The desk's clean WPM through the race (#952, #999 C53, ADR 0027): at most 60 `[t, cleanWpm]`
+  /// points (t = ms since GO, the engine's `wpmSeries`), written once by the filing route from the
+  /// trace it receives. Null for bots, flagged rows, an empty trace, rows filed before #999, and
+  /// after the 30-day purge (`stats.purge`, docs/privacy/retention.md).
+  wpmSeries        Json?
   createdAt        DateTime     @default(now())
 
   @@unique([raceId, desk])
   @@index([userId])
+  /// The 30-day purge of `wpmSeries` (#999, ADR 0027).
+  @@index([createdAt])
 }
 
 /// Raw keystrokes of one human desk: gzip of the JSON Keystroke[] (@fifth-copy/engine), kept 30 days.

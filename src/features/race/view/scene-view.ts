@@ -122,10 +122,7 @@ export type SceneSabotage = { seq: number; kind: BonusKind; from: number; to: nu
  * nothing they bring back is replayed). Same kind, from and to desks; `to` is never empty on the wire
  * (an Exemption is self-targeted, `[from]`).
  */
-export function sabotageFrom(
-  payload: RaceEvent,
-  phase: string,
-): Omit<SceneSabotage, "seq"> | null {
+export function sabotageFrom(payload: RaceEvent, phase: string): Omit<SceneSabotage, "seq"> | null {
   if (payload.kind !== "bonus-sent" || phase !== "running") return null;
   return { kind: payload.bonus, from: payload.from, to: [...payload.to] };
 }

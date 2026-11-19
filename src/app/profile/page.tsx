@@ -14,7 +14,14 @@ import {
 } from "@/features/identity";
 import { clerkEmbedSrc, LINKS } from "@/features/landing";
 import { SiteHeader } from "@/app/_components/site-header";
-import { getCensus, getKeyFile, getProfile, ProfileScreen, profileLabels } from "@/features/stats";
+import {
+  getCensus,
+  getKeyFile,
+  getMedals,
+  getProfile,
+  ProfileScreen,
+  profileLabels,
+} from "@/features/stats";
 import { getLocale, getT } from "@/i18n";
 
 /**
@@ -24,19 +31,21 @@ import { getLocale, getT } from "@/i18n";
  * census (#967, ADR 0023) streams in its own `Suspense` slot inside the file; the key file (#961) feeds
  * the progress by key (#962). The keyboard map (#324) draws it on identity's layouts, starting on the
  * viewer's saved layout, else the locale's default (as the race machine does); the attendance register
- * shades each day against the viewer's daily goal (#968).
+ * shades each day against the viewer's daily goal (#968). The enamel pins (#999 C36) read the viewer's
+ * own awards.
  */
 export default async function ProfilePage() {
   const [viewer, t, locale] = await Promise.all([getViewer(), getT(), getLocale()]);
   // the register reads the viewer's daily goal (#968) from the preference read the page already makes
   const preferencesRead = getPreferences(viewer);
-  const [profile, keyFile, preferences, since, outfit, avatar] = await Promise.all([
+  const [profile, keyFile, preferences, since, outfit, avatar, medals] = await Promise.all([
     getProfile(viewer, { goalMin: preferencesRead.then((p) => p.dailyGoalMin) }),
     getKeyFile(viewer),
     preferencesRead,
     viewer ? getServiceStart(viewer.id) : null,
     viewer ? getClerkOutfit(viewer.id) : null,
     viewer ? getAvatarUser(viewer) : null,
+    getMedals(viewer),
   ]);
   const picture = avatar ? (
     <Avatar user={avatar} size={128} decorative />
@@ -57,6 +66,7 @@ export default async function ProfilePage() {
           links={{ play: `/${LINKS.play}`, settings: "/settings", signUp: AUTH_LINKS.signUp }}
           census={viewer ? () => getCensus(viewer) : undefined}
           keyFile={keyFile}
+          medals={medals}
           keyboard={{
             initial: preferences.layout ?? localeLayouts[locale],
             layouts: keyboardLayoutIds.map((id) => ({

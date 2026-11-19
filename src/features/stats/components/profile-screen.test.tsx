@@ -365,6 +365,7 @@ describe("ProfileScreen reference order (#970 C1)", () => {
       "keyInventory",
       "keyboardMap",
       "attendance",
+      "medals",
       "archive",
     ]);
   });

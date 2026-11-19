@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
 import type { Census } from "../view/census";
 import type { KeyFile } from "../view/key-file";
+import type { MedalShelf } from "../view/medals";
 import { type KeyboardLayoutKeys, keyboardMapOf } from "../view/keyboard-map";
 import { CURVE_MIN_RACES, CURVE_RACES, TREND_MIN_POINTS } from "../view/performance-curve";
 import type { Profile } from "../view/profile";
@@ -28,6 +29,7 @@ import { KeyInventory } from "./key-inventory";
 import { KeyProgress } from "./key-progress";
 import { KeySheetSection } from "./key-sheet-section";
 import { KeyboardMap } from "./keyboard-map";
+import { Medals } from "./medals";
 import { PerformanceCurve } from "./performance-curve";
 import { ArchiveSection, StreaksDocket } from "./profile-records";
 import { ProfileStage } from "./profile-stage";
@@ -104,6 +106,11 @@ export type ProfileScreenProps = {
    * key data) the section draws after the key inventory. Absent: no section.
    */
   keyboard?: ProfileKeyboard;
+  /**
+   * The viewer's enamel pins (#999 C36, `getMedals`): the whole catalogue, earned, new or locked, on
+   * every file with a viewer (a blank file too: none earned yet). Absent or null: no section.
+   */
+  medals?: MedalShelf | null;
 };
 
 type Heading = "h1" | "h2" | "h3" | "h4";
@@ -126,6 +133,7 @@ export const PROFILE_SECTIONS = [
   "keyInventory",
   "keyboardMap",
   "attendance",
+  "medals",
   "archive",
 ] as const;
 
@@ -138,7 +146,7 @@ export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
  * the service record, under three races the blank block, from three races the clean streaks (#936)
  * beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the
  * output curve (#933), the key sheet (#963), the key inventory (#964), the keyboard map (#324), the
- * attendance register (#330) and the race archives (#936). Each section carries its `data-section`
+ * attendance register (#330), the enamel pins (#999 C36) and the race archives (#936). Each section carries its `data-section`
  * marker. Server-rendered; the stage and the interactive plots are client leaves.
  */
 export function ProfileScreen({
@@ -154,6 +162,7 @@ export function ProfileScreen({
   census,
   keyFile,
   keyboard,
+  medals,
 }: ProfileScreenProps) {
   const ids = {
     name: `${idPrefix}-name`,
@@ -170,6 +179,7 @@ export function ProfileScreen({
     keyInventory: `${idPrefix}-key-inventory`,
     suspectPairs: `${idPrefix}-suspect-pairs`,
     keyboardMap: `${idPrefix}-keyboard-map`,
+    medals: `${idPrefix}-medals`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -335,6 +345,15 @@ export function ProfileScreen({
         labels={labels.attendance}
         locale={locale}
         id={ids.attendance}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
+    medals: medals ? (
+      <Medals
+        shelf={medals}
+        labels={labels.medals}
+        locale={locale}
+        id={ids.medals}
         heading={Section as "h2" | "h3" | "h4"}
       />
     ) : null,

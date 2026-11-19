@@ -658,11 +658,15 @@ test.describe("attendance register (#330)", () => {
     await expect(cell).toContainText(/\(today\): 0 min, 5 % of the goal$/);
     await expect(section.getByRole("table")).toHaveCount(3);
     await expect(section).toContainText("DAILY GOAL (15 MIN)");
-    // the section sits before the race archives
+    // the section sits before the race archives, the enamel pins between them (#999 C36)
     const order = await page
       .locator("[data-section]")
       .evaluateAll((els) => els.map((e) => e.getAttribute("data-section")));
-    expect(order.indexOf("attendance")).toBe(order.indexOf("archive") - 1);
+    expect(order.slice(order.indexOf("attendance"), order.indexOf("archive") + 1)).toEqual([
+      "attendance",
+      "medals",
+      "archive",
+    ]);
 
     // French
     const url = test.info().project.use.baseURL!;
@@ -1537,7 +1541,7 @@ test.describe("keyboard map (#324)", () => {
 // each day, letter pairs) is axe-clean at 375, 768 and 1280 in both themes, has one h1, names every
 // plot, keeps every control at 44px or more and never scrolls sideways at 375.
 
-/** The reference's order (`PROFILE_SECTIONS` of the screen, under the hero, band and tabs). */
+/** The reference's order (`PROFILE_SECTIONS` of the screen, under the hero, band and tabs; #999 C36 adds the pins). */
 const FILE_ORDER = [
   "hero",
   "band",
@@ -1553,6 +1557,7 @@ const FILE_ORDER = [
   "key-inventory",
   "keyboard-map",
   "attendance",
+  "medals",
   "archive",
 ];
 
@@ -1669,7 +1674,7 @@ test.describe("the whole Personnel file (#970)", () => {
   }) => {
     const lobby = await seedLobby(page);
     await openFile(page);
-    expect(await sectionsOf(page)).toEqual(["hero", "band", "tabs", "service", "blank"]);
+    expect(await sectionsOf(page)).toEqual(["hero", "band", "tabs", "service", "blank", "medals"]);
 
     await threeTypedRaces(request, lobby);
     rollup(lobby.hostUserId);
@@ -1700,7 +1705,7 @@ test.describe("the whole Personnel file (#970)", () => {
       await seedLobby(stranger);
       await openFile(stranger);
       await expect(blank(stranger)).toBeVisible();
-      expect(await sectionsOf(stranger)).toEqual(["hero", "band", "tabs", "service", "blank"]);
+      expect(await sectionsOf(stranger)).toEqual(["hero", "band", "tabs", "service", "blank", "medals"]);
       await expect(figure(stranger, "races")).toHaveText("—");
       await expect(stranger.locator("[data-key], [data-day]")).toHaveCount(0);
       await expect(tubes(stranger).first()).toHaveText("--");

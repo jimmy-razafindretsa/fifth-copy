@@ -39,6 +39,7 @@ Spec section 16.2 puts room state, presence, reconnection tokens, host transfer 
 ### Restart behaviour
 - Race server restart: rooms whose Redis hash is still present are rehydrated into `waiting` or `ended` state; a room that was `running` is **voided** (players see "Line cut, the cable was lost"; nothing is persisted) because the authoritative clock is gone (cards #204, #205). Deploys avoid this by draining (ADR 0012).
 - Redis loss: live rooms end with the same void state; Postgres is untouched. Nothing durable is ever only in Redis.
+- Web key families (amendment, #999, proposed in the card's PR; Deliver accepts): the web's Redis also holds `web:watch:<token>` (a reusable spectator link -> lobby id, 24 h TTL, read without consuming) and `web:code-proof:<userId>:<lobbyId>` (this viewer proved the room code, 24 h TTL). Both carry a TTL, both fail closed (an unreachable Redis refuses the link and serves no code), and neither is durable: losing them only asks for the code again.
 
 ### Schema layout
 One Prisma file per feature in `prisma/schema/`: `identity.prisma`, `lobby.prisma`, `race.prisma`, `texts.prisma`, `stats.prisma`, `jobs.prisma`. Cross-feature relations are allowed; field lists live only there.

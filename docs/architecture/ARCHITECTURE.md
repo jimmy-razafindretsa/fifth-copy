@@ -294,13 +294,15 @@ Client: paste blocked, text rendered as individual spans with `user-select: none
 ### 7.8 Spectators (spec 6.4, 3.5)
 Projector and phones join the room on the `spectator` channel with a `role: spectator` token (no desk, no `keys`). They receive snapshots and events; the projector view uses the overview camera; phones get the HUD in spectator mode and never mount the typing surface (R36, card #293).
 
+Joining as a spectator (#999 C12, C13; ADR 0006, 0008, 0009 amendments): the host issues a reusable **spectator link** `/watch/<token>` from the room docket's `WATCH` row (`createSpectatorLink`, host only, rate-limited; `web:watch:<token>` in the web's Redis, 24 h, read without consuming, fails closed). Opening it peeks the link, makes a guest on demand and mints a `spectator` token (`mintSpectatorToken`); the page is the projector view and its props, action answers and token carry no room code. A spectator token is minted only for the host, a holder of the room code or a holder of a valid link. The web serves the room code (`getRaceSeat`, the Dawn report's lobby link) only to the host or a viewer holding a **code proof** (`web:code-proof:<userId>:<lobbyId>`, 24 h, filed when the viewer mints with the code or enters it on `/race/<lobbyId>`'s code entry; fails closed); a host or a proof holder may still mint a spectator token after the lobby closed, to rejoin a running race. Every spectator `welcome` carries `room.code: null` (protocol 21). Spectators never count toward the participant minimum or the 30 seats; the race server's spectator cap (`room-full`) is unchanged.
+
 ### 7.9 Capacity
 100 players x 20 keys/s worst case = 2000 keystrokes/s in <= 50 ms batches = <= 2000 small messages/s in; 10 snapshots/s x 100 clients x <= 3 kB (100 late-race desks, benchmarked) = <= 3 MB/s out. One Node process with 2 vCPU handles this with headroom; the engine step is microseconds. Beyond that: Socket.IO Redis adapter plus room-sticky routing (additive, no protocol change).
 
 ## 8. Web app design
 
 ### 8.1 Routes (`src/app`)
-`/` landing (Quick race, Create private race, Join with code) · `/(auth)/sign-in`, `/sign-up`, `/recover` · `/lobby/[code]` · `/invite/[token]` · `/race/[raceId]` (seat view; `?view=projector` overview; phones forced to spectator) · `/results/[raceId]` Dawn report · `/profile` Personnel file · `/settings` · `/guide` special characters · `/privacy` · `/design` · `/api/health` · `/api/internal/*` (HMAC) · `/api/avatars/[userId]` (lobby-scoped).
+`/` landing (Quick race, Create private race, Join with code) · `/(auth)/sign-in`, `/sign-up`, `/recover` · `/lobby/[code]` · `/invite/[token]` · `/race/[raceId]` (seat view; `?view=projector` overview; phones forced to spectator; without the room code for this viewer: the code entry, #999) · `/watch/[token]` spectator link (projector view, never the code, #999) · `/results/[raceId]` Dawn report · `/profile` Personnel file · `/settings` · `/guide` special characters · `/privacy` · `/design` · `/api/health` · `/api/internal/*` (HMAC) · `/api/avatars/[userId]` (lobby-scoped).
 
 ### 8.2 Features and their public API (`index.ts`)
 - `identity`: `getViewer`, `requireViewer`, `ensureGuest`, `signUp`, `signIn`, `signOut`, `redeemRecoveryCode`, `mergeGuestInto`, `updatePreferences`, `uploadAvatar`, `deleteMyData`.

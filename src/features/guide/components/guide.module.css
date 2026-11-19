@@ -1,0 +1,359 @@
+/*
+ * "How to type it" (#999 C26, bible 14.3 "How to type special characters"). No reference file: the page
+ * extends the closest patterns, the privacy page's form file (kicker, H1 at the not-found scale, intro on
+ * newsprint under a 2px ink rule), the 7.4 docket (ink tag header, dashed rows), the 7.1 segmented toggle
+ * (the keyboard map's switch, as links) and the settings picker's key caps (paper caps in a 1px ink
+ * rule, IBM Plex Mono 500). Colours are roles from docs/design/tokens.css only. Nothing moves.
+ */
+
+@reference "../../../app/globals.css";
+
+.screen {
+  --gutter: clamp(16px, 4vw, 48px);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: var(--color-bg);
+}
+
+.file {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 56px var(--gutter);
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.kicker {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+}
+
+.title {
+  margin: 0;
+  @apply type-display-lg;
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 0.98;
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+
+.intro {
+  margin: 0;
+  max-width: min(72ch, 100%);
+  @apply type-body;
+  font-size: 19px;
+  line-height: 1.6;
+}
+
+/* the desk docket: 7.4 on paper, an ink tag header, one row per control */
+.desk {
+  max-width: 760px;
+  background: var(--color-bg);
+  border: 2px solid var(--color-fg);
+}
+
+.deskHead {
+  padding: 9px 18px;
+  border-bottom: 2px solid var(--color-fg);
+}
+
+.tag {
+  display: inline-block;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 1px 6px;
+}
+
+.deskRow {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 18px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.deskRow:last-child {
+  border-bottom: 0;
+}
+
+.deskLabel {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+  color: var(--color-fg-muted);
+  padding-top: 14px;
+}
+
+.deskValue {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 7.1 segmented toggle (the keyboard map's switch), each segment a link */
+.switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+}
+
+.option {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 13px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  @apply type-label;
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  text-align: center;
+}
+
+.option:hover {
+  background: var(--color-surface);
+}
+
+.option[aria-current="true"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+/* the OS state: the save state's label recipe (settings), muted; unknown in the link role */
+.osState {
+  margin: 0;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.osUnknown {
+  color: var(--color-link);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 48px var(--gutter) 96px;
+}
+
+/* the characters' index: a 7.4 docket on newsprint, one 44px cell per character */
+.index {
+  background: var(--color-surface);
+  border: 2px solid var(--color-fg);
+}
+
+.indexList {
+  list-style: none;
+  margin: 0;
+  padding: 12px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.indexLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.indexLink:hover {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.empty {
+  max-width: 760px;
+}
+
+/* one 7.4 docket per character, a 7.10 fluid grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 24px;
+}
+
+.entry {
+  background: var(--color-bg);
+  border: 2px solid var(--color-fg);
+  scroll-margin-top: 16px;
+}
+
+.entry:target {
+  outline: 3px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+.entryHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 2px solid var(--color-fg);
+  background: var(--color-surface);
+}
+
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 56px;
+  border: 1px solid var(--color-fg);
+  background: var(--color-bg);
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.name {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: 0.16em;
+}
+
+.rows {
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 18px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row dt {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+  color: var(--color-fg-muted);
+}
+
+.row dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.stroke,
+.strokeKeys {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--color-fg);
+  background: var(--color-bg);
+  @apply type-typing;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.plus {
+  @apply type-typing;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-fg-muted);
+}
+
+.then {
+  @apply type-body;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-fg-muted);
+}
+
+/* the empty state of a pair: the locked card's dashed rule (7.6), the label recipe, muted */
+.unchecked {
+  display: inline-block;
+  border: 1px dashed color-mix(in srgb, var(--color-fg) 50%, transparent);
+  padding: 4px 8px;
+  @apply type-label;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.backToTop {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.18em;
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .deskRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .deskLabel {
+    padding-top: 0;
+  }
+}

@@ -758,7 +758,8 @@ function lowGeo(g) {
   const p = g.parameters, half = (n, m) => Math.max(m, Math.ceil(n / 2));
   switch (g.type) {
     case 'SphereGeometry': return new THREE.SphereGeometry(p.radius, half(p.widthSegments, 5), half(p.heightSegments, 3), p.phiStart, p.phiLength, p.thetaStart, p.thetaLength);
-    case 'LatheGeometry': return new THREE.LatheGeometry(p.points, half(p    case 'CapsuleGeometry': return new THREE.CapsuleGeometry(p.radius, p.height ?? p.length, 1, 5);
+    case 'LatheGeometry': return new THREE.LatheGeometry(p.points, half(p.segments, 7), p.phiStart, p.phiLength);
+    case 'CapsuleGeometry': return new THREE.CapsuleGeometry(p.radius, p.height ?? p.length, 1, 5);
     case 'CylinderGeometry': return new THREE.CylinderGeometry(p.radiusTop, p.radiusBottom, p.height, half(p.radialSegments, 4), 1, p.openEnded, p.thetaStart, p.thetaLength);
     case 'TorusGeometry': return new THREE.TorusGeometry(p.radius, p.tube, 3, half(p.tubularSegments, 6), p.arc);
     default: return g.clone();
@@ -1173,7 +1174,7 @@ function arrange() {
   order.forEach((i, k) => Clerks.place(i, L.angles[k], L.ring));
   DESKS.forEach((s, i) => { stations.setVisibleAt(i, s.occ); stations.setMatrixAt(i, Clerks.deskM[i]); });
   camera.fov = L.fov; camera.aspect = innerWidth / innerHeight;
-  if (over) { if (LAID !== 'over' + n) orbitA = L.start; LAID = 'over' + n; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
+  if (over) { if (LAID !== 'over' + n) orbitA = L.start; LAID = 'over' + n; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); ROOT.dataset.orbit = orbitA.toFixed(3); }
   else { LAID = ''; camera.position.set(0, 1.02, L.ring - 0.05); camera.lookAt(0, 0.95, 0); }
   camera.updateProjectionMatrix(); camera.updateMatrixWorld();
   let seen = 0;

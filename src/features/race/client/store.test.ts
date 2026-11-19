@@ -42,6 +42,7 @@ const {
   sendReady,
   selectReadyLine,
   selectSceneGate,
+  selectSceneSabotage,
   selectShouldReady,
   watchBlurExpiry,
   watchRefusalExpiry,
@@ -149,6 +150,9 @@ describe("reduceRace (#561 C2)", () => {
       // #926: the readiness barrier's awaited desks and this page's settled scene
       pending: null,
       sceneSettled: false,
+      // #999 C61: no sabotage for the scene yet
+      sabotage: null,
+      sabotageSeq: 0,
     });
   });
 
@@ -1716,8 +1720,10 @@ describe("#236 bonus state", () => {
       cooldownUntil: NOW + 80 + COOLDOWN_MS,
     });
     expect(confirmed.bonus.pending).toBeNull();
-    // another desk's play is not yours
-    expect(reduceRace(playing, sent(3))).toBe(playing);
+    // another desk's play is not yours (the scene still gets it: #999 C61)
+    const theirs = reduceRace(playing, sent(3));
+    expect(theirs.bonus).toBe(playing.bonus);
+    expect(theirs.sabotage).toMatchObject({ from: 3, to: [1] });
     // the next card arrives while cooling: no play until the cooldown is over
     const again = reduceRace(confirmed, earned());
     expect(reduceRace(again, play(NOW + 80 + COOLDOWN_MS - 1))).toBe(again);
@@ -2622,5 +2628,65 @@ describe("#926 the shared loading", () => {
     expect(selectReadyLine(loaded(readiness([5])))).toBe("02 / 03");
     expect(selectReadyLine(loaded(readiness([])))).toBe("03 / 03");
     expect(selectReadyLine(run({ type: "welcome", payload: welcome() }))).toBeNull();
+  });
+});
+
+// Contract of #999 C61 (the store half): a `bonus-sent` while the race runs is the scene's next sabotage
+// play, one `seq` each; nothing before GO, after the end, or brought back by a welcome.
+describe("#999 sabotage plays for the scene", () => {
+  const T = 1_767_225_600_000;
+  const RACE = {
+    raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    text: "ab cd ef",
+    language: "en" as const,
+    wordCount: 3,
+    t0: T + 3_000,
+    timerS: 60,
+  };
+  const countdown: RaceEvent = { type: "countdown", payload: { v: PROTOCOL_VERSION, race: RACE } };
+  const sent = (from: number, to: number[], bonus = "smoke-break"): RaceEvent =>
+    ({
+      type: "event",
+      payload: { v: PROTOCOL_VERSION, kind: "bonus-sent", from, to, bonus },
+      at: T + 5_000,
+    }) as RaceEvent;
+  const running = () => run({ type: "welcome", payload: welcome() }, countdown, { type: "go" });
+
+  it("each bonus-sent while running is one play, with the next seq, same kind, from and to", () => {
+    const one = reduceRace(running(), sent(3, [1, 5]));
+    expect(selectSceneSabotage(one)).toEqual({ seq: 1, kind: "smoke-break", from: 3, to: [1, 5] });
+    const two = reduceRace(one, sent(1, [1], "exemption"));
+    expect(selectSceneSabotage(two)).toEqual({ seq: 2, kind: "exemption", from: 1, to: [1] });
+    // your own play is a play too, and still confirms your card
+    const mine = reduceRace(two, sent(5, [3], "extra-paperwork"));
+    expect(mine.sabotage).toMatchObject({ seq: 3, from: 5, to: [3] });
+  });
+
+  it("nothing before GO or after the end; a new race, a GO and an end clear it", () => {
+    const waiting = run({ type: "welcome", payload: welcome() });
+    expect(reduceRace(waiting, sent(3, [1])).sabotage).toBeNull();
+    const counting = reduceRace(waiting, countdown);
+    expect(reduceRace(counting, sent(3, [1])).sabotage).toBeNull();
+    const played = reduceRace(running(), sent(3, [1]));
+    const ended = reduceRace(played, {
+      type: "ended",
+      payload: { v: PROTOCOL_VERSION, raceId: RACE.raceId, reason: "timer", ranking: [] },
+      at: T + 70_000,
+    });
+    expect(ended.sabotage).toBeNull();
+    expect(reduceRace(ended, sent(3, [1])).sabotage).toBeNull();
+    expect(reduceRace(played, countdown).sabotage).toBeNull();
+  });
+
+  it("a welcome or a reconnect brings no play back, and the seq keeps growing", () => {
+    const played = reduceRace(running(), sent(3, [1]));
+    const cut = reduceRace(played, { type: "disconnected" });
+    expect(reduceRace(cut, sent(3, [1])).sabotageSeq).toBe(1);
+    const back = reduceRace(cut, {
+      type: "welcome",
+      payload: welcome({ room: { ...welcome().room, phase: "running" }, race: RACE }),
+    });
+    expect(back.sabotage).toBeNull();
+    expect(reduceRace(back, sent(1, [3])).sabotage).toMatchObject({ seq: 2 });
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "@fifth-copy/protocol";
 import type { LastKey } from "../view/machine-props";
 import { raceCardViewFrom, type RaceCardView } from "../view/race-card-view";
+import { sabotageFrom, type SceneSabotage } from "../view/scene-view";
 import { NO_TEXT_VIEW, typedViewFrom, type TypedView } from "../view/typed-view";
 import { bestOffset, clockOffset, remainingTo, type PongSample } from "./clock";
 import {
@@ -199,6 +200,13 @@ export type RaceState = {
    * fallback, a phone). Told once by the scene leaf (`scene-settled`); never goes back.
    */
   sceneSettled: boolean;
+  /**
+   * The last sabotage card played in this race (#999 C61, `sabotageFrom`): set by a `bonus-sent` while
+   * `running` only, cleared by every `welcome`, new race, GO and end, so the scene never replays one.
+   */
+  sabotage: SceneSabotage | null;
+  /** The last sabotage `seq` handed out (never reset: each play stays unique across races). */
+  sabotageSeq: number;
 };
 
 /**
@@ -294,6 +302,8 @@ export const initialRaceState: RaceState = {
   keysHeld: false,
   pending: null,
   sceneSettled: false,
+  sabotage: null,
+  sabotageSeq: 0,
 };
 
 /** No exit, no warning, no lamp, nothing in flight: a (re)connect or a new race (#233). */
@@ -412,6 +422,7 @@ function newRace(state: RaceState, race: NonNullable<Welcome["race"]>): RaceStat
     endedAt: null,
     bonus: { ...NO_BONUS, plays: state.bonus.plays },
     ...NO_EXIT,
+    sabotage: null,
   };
 }
 
@@ -461,6 +472,9 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         keysHeld: false,
         pending: w.room.phase === "loading" ? w.pending : null,
         sceneSettled: state.sceneSettled,
+        // nothing a welcome brings back is played again (#999 C61)
+        sabotage: null,
+        sabotageSeq: state.sabotageSeq,
       };
       // a reload after your exit: the server's status brings the docket back
       return withStatusExit(next);
@@ -508,6 +522,7 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         ...state,
         phase: state.phase === "countdown" ? "running" : state.phase,
         room: { ...state.room, phase: "running" },
+        sabotage: null,
       };
     case "key": {
       // typing is locked before GO and after your own finish (the engine refuses a key once you stop)
@@ -551,15 +566,17 @@ export function reduceRace(state: RaceState, event: RaceEvent): RaceState {
         endedAt: event.at,
         idleWarning: false,
         lampTarget: null,
+        sabotage: null,
       };
     case "event": {
-      const bonus = reduceBonusEvent(state, event.payload, event.at);
+      const next = withSabotage(state, event.payload);
+      const bonus = reduceBonusEvent(next, event.payload, event.at);
       if (bonus) return bonus;
-      const exit = reduceExitEvent(state, event.payload);
+      const exit = reduceExitEvent(next, event.payload);
       if (exit) return exit;
-      if (event.payload.kind === "new-host") return reduceNewHost(state, event.payload, event.at);
-      const stamp = stampFromEvent(event.payload, state.you, state.prediction?.state.errors ?? 0);
-      return stamp ? queueStamp(state, stamp, event.at) : state;
+      if (event.payload.kind === "new-host") return reduceNewHost(next, event.payload, event.at);
+      const stamp = stampFromEvent(event.payload, next.you, next.prediction?.state.errors ?? 0);
+      return stamp ? queueStamp(next, stamp, event.at) : next;
     }
     case "stamp-expired": {
       const stamps = expireStamp(state.stamps, event.id, event.at);
@@ -673,6 +690,14 @@ function reduceNewHost(
   const next =
     members === state.members && role === state.role ? state : { ...state, members, role };
   return state.room && NOTICE_PHASES.has(state.room.phase) ? queueStamp(next, notice, at) : next;
+}
+
+/** A `bonus-sent` the scene plays (#999 C61): the next `seq`, only while the race runs. */
+function withSabotage(state: RaceState, payload: RoomEvents["event"]): RaceState {
+  const play = sabotageFrom(payload, state.phase);
+  if (!play) return state;
+  const seq = state.sabotageSeq + 1;
+  return { ...state, sabotageSeq: seq, sabotage: { seq, ...play } };
 }
 
 /**
@@ -1192,6 +1217,9 @@ export function sendReady(store: RaceStore, socket: ReadySink): Off {
   check();
   return off;
 }
+
+/** The last sabotage played while running (#999 C61): the scene leaf posts each new `seq` once. */
+export const selectSceneSabotage = (s: RaceState): SceneSabotage | null => s.sabotage;
 
 /**
  * What the seat scene may do (#926 C4): `wait` until the room's phase is known, `paper` once a typist's

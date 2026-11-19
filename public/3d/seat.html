@@ -41,15 +41,15 @@ html[data-motion="reduce"] .grain{animation:none}
 // The race seat scene (#563, ADR 0017 option A; design bible 9, 11, 12, 15): the Full Lobby reference
 // (`Fifth Copy Full Lobby.html`), verbatim room, clerks, Major, lights and post layer, seen from your desk
 // (11.3 seat POV, FOV 62, your clerk and paper hidden) and driven by the race page over postMessage:
-// `fc-race-init` / `-state` / `-motion` / `-preset` in, `fc-scene-hello` / `-ready` / `-telemetry` /
-// `-fallback` out (src/features/race-3d/messages.ts, `v` = SCENE_PROTOCOL). Both directions are locked to
+// `fc-race-init` / `-state` / `-motion` / `-preset` / `-sabotage` in, `fc-scene-hello` / `-ready` / `-telemetry` /
+// `-fallback` / `-sabotage` out (src/features/race-3d/messages.ts, `v` = SCENE_PROTOCOL). Both directions are locked to
 // this page's origin. The reference's random typing is replaced by the room's desks: your desk sits at the
 // camera's slot, rivals at theirs, a clerk types while the race runs and its desk is typing; empty desks
 // have no clerk. Presets (12): `?preset=low|medium|high` forces one, `auto` measures a fixed probe before
 // any of the room exists (below the floor: the paper fallback, the room never built; #695). Reduced motion (8): the bulb burns steady, nothing turns or bobs.
 // three.js is imported once the probe has passed (below): a weak device never loads it (#695)
 
-const SCENE_PROTOCOL = 1;
+const SCENE_PROTOCOL = 2; // #999: 2 adds the one-shot fc-race-sabotage and its fc-scene-sabotage ack
 const Q = new URLSearchParams(location.search);
 const PRESETS = {
   low: { pr: 1, near: 6, aa: false },
@@ -1069,7 +1069,16 @@ const ready = () => {
   send({ type: 'fc-scene-ready', preset: PRESET, fov: +camera.fov.toFixed(1), desks: PLACED });
 };
 
-function onMessage(e) {
+// #999 (bible 15): a sabotage card played in the race, a one-shot event acknowledged with how the scene showed
+// it. Until the throw choreography (bible 10.2 "Sabotage throw") lands, the object appears where it lands: `static`.
+const SABOTAGE_KINDS = ['extra-paperwork', 'exemption', 'smoke-break'];
+const isDesk = x => Number.isInteger(x) && x >= 1;
+function sabotage(kind, from, to) {
+  send({ type: 'fc-scene-sabotage', kind, from, to: [...to], mode: 'static' });
+}
+
+// `replayed`: a message the inbox kept while the room was built; a sabotage from then is over, never played late
+function onMessage(e, replayed = false) {
   if (e.origin !== location.origin || e.source !== parent) return;
   const d = e.data;
   if (!d || typeof d !== 'object') return;
@@ -1088,8 +1097,9 @@ function onMessage(e) {
   if (d.type === 'fc-race-state' && d.view && typeof d.view === 'object') applyView(d.view);
   if (d.type === 'fc-race-motion' && (d.motion === 'full' || d.motion === 'reduce')) { PAGE_REDUCE = d.motion === 'reduce'; applyMotion(); }
   if (d.type === 'fc-race-preset' && PRESETS[d.preset]) applyPreset(d.preset);
+  if (d.type === 'fc-race-sabotage' && !replayed && SABOTAGE_KINDS.includes(d.kind) && isDesk(d.from) && Array.isArray(d.to) && d.to.length > 0 && d.to.length <= 64 && d.to.every(isDesk)) sabotage(d.kind, d.from, d.to);
 }
-removeEventListener('message', toInbox); addEventListener('message', onMessage); inbox.splice(0).forEach(onMessage);
+removeEventListener('message', toInbox); addEventListener('message', e => onMessage(e)); inbox.splice(0).forEach(e => onMessage(e, true));
 
 // #695: the scene shares the race page's main thread (ADR 0017). A drawn frame slower than the Low floor
 // (1/18 s: software WebGL, a starved CPU) is followed by as long a rest with nothing drawn, so the page's

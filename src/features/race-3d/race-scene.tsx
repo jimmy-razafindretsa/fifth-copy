@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EmbedFrame, useEmbedBridge, useReducedMotion } from "@/components/ui";
-import type { SceneView } from "@/features/race";
+import type { SceneSabotage, SceneView } from "@/features/race";
 import { detectWebGL2 } from "./detect-webgl";
 import { FRAME_BUDGET_START, frameBudget } from "./frame-budget";
 import {
@@ -10,6 +10,7 @@ import {
   raceInitMessage,
   raceMotionMessage,
   racePresetMessage,
+  raceSabotageMessage,
   raceStateMessage,
   sceneSettings,
   seatEmbedSrc,
@@ -23,6 +24,11 @@ import styles from "./race-scene.module.css";
 export type RaceSceneProps = {
   /** `selectSceneView` of the race store: the only thing the scene reads (ADR 0017). */
   view: SceneView;
+  /**
+   * `selectSceneSabotage` of the race store (#999 C61): each new `seq` is posted once as
+   * `fc-race-sabotage`; one already there when the scene says hello is never sent (no replay).
+   */
+  sabotage?: SceneSabotage | null;
   /**
    * The page's `?preset=` value: `low`, `medium` or `high` forces that preset (tests force `low`, bible
    * 12); anything else (or nothing) lets the scene's benchmark choose.
@@ -63,10 +69,13 @@ type Ready = { preset: ScenePreset; fov: number; desks: number };
  * container then reports `data-scene-fov|desks|preset|self`), telemetry and fallbacks. Every telemetry
  * second goes through `frameBudget` (#695, ADR 0013's Low floor on a running scene): a blown budget is
  * `onFallback("frame-budget")`, once; under `?scene=pin` (`data-scene-budget="off"`) verdicts are ignored.
+ * A sabotage play (#999) is posted once per `seq` as `fc-race-sabotage`; the scene's `fc-scene-sabotage`
+ * ack is written to `data-scene-sabotage` (`<kind>:<from>:<to,...>:<mode>`, e2e reads it).
  * It never writes race state: nothing here reaches the store.
  */
 export function RaceScene({
   view,
+  sabotage = null,
   preset: requested,
   scene: pin,
   title,
@@ -79,10 +88,12 @@ export function RaceScene({
   const reduce = useReducedMotion();
   const [ready, setReady] = useState<Ready | null>(null);
   const container = useRef<HTMLDivElement>(null);
-  const latest = useRef({ view, reduce, onReady, onFallback, onTelemetry });
+  const latest = useRef({ view, sabotage, reduce, onReady, onFallback, onTelemetry });
   const hello = useRef(false);
+  /** The last sabotage `seq` posted, or there before the hello (never replayed). */
+  const played = useRef(0);
   useEffect(() => {
-    latest.current = { view, reduce, onReady, onFallback, onTelemetry };
+    latest.current = { view, sabotage, reduce, onReady, onFallback, onTelemetry };
   });
 
   const postRef = useRef<(message: unknown) => void>(() => {});
@@ -93,6 +104,7 @@ export function RaceScene({
       switch (message.type) {
         case "fc-scene-hello":
           hello.current = true;
+          played.current = Math.max(played.current, now.sabotage?.seq ?? 0);
           post(raceInitMessage(now.view, preset, now.reduce ? "reduce" : "full"));
           return;
         case "fc-scene-ready":
@@ -125,6 +137,17 @@ export function RaceScene({
         case "fc-scene-fallback":
           now.onFallback?.(message.reason, message.fps);
           return;
+        case "fc-scene-sabotage": {
+          const node = container.current;
+          if (node)
+            node.dataset.sceneSabotage = [
+              message.kind,
+              message.from,
+              message.to.join(","),
+              message.mode,
+            ].join(":");
+          return;
+        }
       }
     },
     [preset, budget],
@@ -145,6 +168,13 @@ export function RaceScene({
     const frame = requestAnimationFrame(() => post(raceStateMessage(view)));
     return () => cancelAnimationFrame(frame);
   }, [view, post]);
+
+  // each sabotage play once, at once (an event, not a view: never coalesced or replayed)
+  useEffect(() => {
+    if (!hello.current || !sabotage || sabotage.seq <= played.current) return;
+    played.current = sabotage.seq;
+    post(raceSabotageMessage(sabotage));
+  }, [sabotage, post]);
 
   useEffect(() => {
     if (hello.current) post(raceMotionMessage(reduce ? "reduce" : "full"));

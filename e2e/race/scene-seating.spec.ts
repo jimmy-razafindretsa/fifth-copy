@@ -27,7 +27,7 @@ const room = (n: number) => ({
 });
 
 async function post(page: Page, msg: Record<string, unknown>) {
-  await page.evaluate((m) => postMessage({ v: 1, ...m }, location.origin), msg);
+  await page.evaluate((m) => postMessage({ v: 2, ...m }, location.origin), msg);
 }
 
 const html = (page: Page) => page.locator("html");

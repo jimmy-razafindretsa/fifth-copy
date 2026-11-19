@@ -127,6 +127,22 @@ describe("seat page (#563)", () => {
       expect(seat).toContain(`type: '${type}'`);
   });
 
+  // #999 C60: protocol 2 on the embed's side too; the sabotage play is acked once, never replayed
+  it("speaks SCENE_PROTOCOL 2 and acks a checked fc-race-sabotage, never one kept in the inbox", () => {
+    expect(seat).toContain("const SCENE_PROTOCOL = 2;");
+    expect(seat).not.toContain("const SCENE_PROTOCOL = 1;");
+    expect(seat).toContain(
+      "const SABOTAGE_KINDS = ['extra-paperwork', 'exemption', 'smoke-break'];",
+    );
+    expect(seat).toContain(
+      "d.type === 'fc-race-sabotage' && !replayed && SABOTAGE_KINDS.includes(d.kind) && isDesk(d.from)",
+    );
+    expect(seat).toContain(
+      "send({ type: 'fc-scene-sabotage', kind, from, to: [...to], mode: 'static' });",
+    );
+    expect(seat).toContain("inbox.splice(0).forEach(e => onMessage(e, true));");
+  });
+
   it("shows the seat POV (bible 11.3) and hides your clerk and paper", () => {
     // #927: the POV's FOV and eye follow the seating block (62 is its floor, R its ring)
     expect(seat).toContain("FOV_POV = 62");

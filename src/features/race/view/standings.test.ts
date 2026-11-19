@@ -171,7 +171,9 @@ describe("topTenRows (#999 C3)", () => {
     const s = source(12, [1, 2, 3]);
     const rows = topTenRows({ ...s, ending: { reason: "all-finished", ranking } }, en.race.finish);
     expect(rows).toHaveLength(10);
-    expect(rows[0]).toMatchObject({ place: 1, desk: 12, value: "60 WPM", status: "FILED" });
+    // bible 14.3: `52 WPM` once the race is over, never the status word
+    expect(rows[0]).toMatchObject({ place: 1, desk: 12, value: "60 WPM", status: null });
+    expect(rows.every((r) => r.status === null)).toBe(true);
     expect(rows[9]).toMatchObject({ place: 10, desk: 3, value: "51 WPM" });
     // an end with no ranking (a reload found the room ended) falls back to the live order
     const live = topTenRows({ ...s, ending: { reason: "timer", ranking: [] } }, en.race.finish);

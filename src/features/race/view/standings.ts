@@ -121,8 +121,8 @@ export const TOP_TEN = 10;
 /**
  * One row of the projector's top-10 sidebar (#999 C3): the place (`null` before the first snapshot: the
  * roster by desk, no place yet), the desk, the name, the desk's identity marker, and the figure: the
- * status word when the desk is not typing, else the value (`72 %` live, `52 WPM` final; `null` before
- * the race). Never a `you`: the projector holds no desk, and even the host's own desk is a rival ink.
+ * status word when the desk is not typing, else the value (`72 %` live; `null` before the race); once
+ * the race is over, `52 WPM` alone (bible 14.3: no status word at RACE OVER). Never a `you`: the projector holds no desk, and even the host's own desk is a rival ink.
  */
 export type TopTenRow = {
   place: number | null;
@@ -158,7 +158,7 @@ export function topTenRows(source: TopTenSource, labels: FinishLabels): TopTenRo
       name: r.name,
       marker: marker(r.desk),
       value: r.value,
-      status: r.status,
+      status: null,
     }));
   }
   const lanes = selectStandings({ ...source, you: null }).slice(0, TOP_TEN);

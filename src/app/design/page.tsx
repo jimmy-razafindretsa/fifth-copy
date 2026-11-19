@@ -58,11 +58,14 @@ import {
   type DawnReportFixture,
   filingLabels,
   FilingNoticeView,
+  heatmapFixture,
+  heatmapOf,
   PersonalCard,
   type PersonalFixture,
   personalFixtures,
   personalLabels,
   Podium,
+  raceLineFixtures,
   type RaceSeriesFixture,
   raceSeriesFixtures,
   podiumLabels,
@@ -1338,6 +1341,43 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
               </div>
             </HudSpecimen>
           ))}
+        </div>
+        <div id="results-personal-graph-lines" className="grid gap-6 md:grid-cols-2">
+          <HudSpecimen
+            id="personal-graph-lines"
+            title="WPM graph, every typist's line"
+            caption="For the race's typists and host only: the winner and the last place in their rival inks beside yours; tick a bot's flat, simulated line or any typist."
+          >
+            <div className="w-full max-w-[400px]">
+              <PersonalCard
+                stats={personalFixtures.populated}
+                labels={personalLabels(t)}
+                series={raceSeriesFixtures.marks}
+                others={raceLineFixtures}
+                lastPlace={6}
+              />
+            </div>
+          </HudSpecimen>
+          <HudSpecimen
+            id="personal-heatmap"
+            title="Keyboard heatmap"
+            caption="This race's keys on your keyboard: paper typed clean, gold to red from one error to the most missed key, newsprint never asked for."
+          >
+            <div id="results-personal-heatmap" className="w-full max-w-[400px]">
+              <PersonalCard
+                stats={coachingFixtures.key.stats}
+                labels={personalLabels(t)}
+                coaching={coachingFixtures.key.coaching}
+                heatmap={{
+                  map: heatmapOf(heatmapFixture, {
+                    number: numberRows.US_QWERTY,
+                    letters: layouts.US_QWERTY,
+                  }),
+                  layout: "US_QWERTY",
+                }}
+              />
+            </div>
+          </HudSpecimen>
         </div>
         <div id="results-personal-keys" className="grid gap-6 md:grid-cols-2">
           {COACHING_STATES.map((state) => (

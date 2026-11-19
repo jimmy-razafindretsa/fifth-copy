@@ -901,6 +901,22 @@ export const en = {
           other: "Peak {peak} WPM, final {final} WPM, {n} bonuses received.",
         },
         noTrace: "NO TRACE ON FILE",
+        lines: "LINES ON THE GRAPH",
+        you: "YOU",
+        line: "№ {place} · {name} · {wpm} WPM",
+        simulated: "SIMULATED",
+        others: {
+          one: "WPM through the race, {n} line shown.",
+          other: "WPM through the race, {n} lines shown.",
+        },
+      },
+      heatmap: {
+        title: "KEYBOARD HEATMAP",
+        board: "Keyboard heatmap, {layout}: {keys}.",
+        key: "{key} × {n}",
+        clean: "Keyboard heatmap, {layout}: no error on the keyboard.",
+        legendClean: "paper: no error",
+        legendHeat: "gold to red: fewer to more errors",
       },
       keys: {
         title: "ERRORS BY KEY",

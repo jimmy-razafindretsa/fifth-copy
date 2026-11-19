@@ -6,7 +6,8 @@
 import { OUTFIT_CATALOGUE, outfitForDesk, type Outfit } from "@/features/identity";
 import type { DawnReport, ReportEntry, ReportRace } from "./dawn-report";
 import type { PersonalStats } from "./personal";
-import type { RaceSeries } from "./series";
+import type { RaceLine, RaceSeries } from "./series";
+import type { KeyCount } from "./heatmap";
 import type { MissedKey } from "./keys";
 import { coachingFrom, type Coaching } from "./tip";
 
@@ -155,6 +156,66 @@ export const raceSeriesFixtures = {
 } satisfies Record<string, RaceSeries | null>;
 
 export type RaceSeriesFixture = keyof typeof raceSeriesFixtures;
+
+/**
+ * `/design#results-personal-graph-lines` (#999 C52): the populated card's graph with the other typists'
+ * stored lines: the winner, a bot (simulated, flat), a typist in the middle and the last place.
+ */
+export const raceLineFixtures: RaceLine[] = [
+  {
+    desk: 7,
+    name: "Lynx-785",
+    place: 1,
+    isBot: false,
+    wpm: 61.4,
+    endMs: 41_000,
+    points: [8, 16, 24, 32, 41].map((s, i) => ({ t: s * 1_000, wpm: [44, 58, 63, 60, 61.4][i]! })),
+  },
+  {
+    desk: 13,
+    name: "Typist Bot 13",
+    place: 2,
+    isBot: true,
+    wpm: 52,
+    endMs: 44_000,
+    points: [
+      { t: 0, wpm: 52 },
+      { t: 44_000, wpm: 52 },
+    ],
+  },
+  {
+    desk: 25,
+    name: "Heron-404",
+    place: 4,
+    isBot: false,
+    wpm: 39.5,
+    endMs: 50_000,
+    points: [10, 20, 30, 40, 50].map((s, i) => ({ t: s * 1_000, wpm: [30, 41, 36, 40, 39.5][i]! })),
+  },
+  {
+    desk: 4,
+    name: "Marmot-648",
+    place: 6,
+    isBot: false,
+    wpm: 22,
+    endMs: 50_000,
+    points: [10, 20, 30, 40, 50].map((s, i) => ({ t: s * 1_000, wpm: [18, 25, 21, 23, 22][i]! })),
+  },
+];
+
+/** `/design#results-personal-heatmap` (#999 C54): the populated card's key tallies of one race. */
+export const heatmapFixture: KeyCount[] = [
+  ...[..."the clerk files fifth copy in order".replace(/ /g, "")].map((char) => ({
+    char,
+    attempts: 6,
+    errors: 0,
+  })),
+  { char: "t", attempts: 14, errors: 4 },
+  { char: " ", attempts: 30, errors: 3 },
+  { char: "é", attempts: 2, errors: 2 },
+  { char: "a", attempts: 8, errors: 1 },
+  { char: "r", attempts: 9, errors: 1 },
+];
 
 /** One specimen of the errors by key and the tip (#867 C5): the card it sits on and its coaching. */
 export type CoachingFixtureData = { stats: PersonalStats; coaching: Coaching };

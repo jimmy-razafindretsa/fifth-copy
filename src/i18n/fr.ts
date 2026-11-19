@@ -847,6 +847,22 @@ export const fr = {
           other: "Pointe à {peak} MPM, arrivée à {final} MPM, {n} bonus reçus.",
         },
         noTrace: "AUCUNE TRACE AU DOSSIER",
+        lines: "COURBES AFFICHÉES",
+        you: "TOI",
+        line: "№ {place} · {name} · {wpm} MPM",
+        simulated: "SIMULÉ",
+        others: {
+          one: "MPM au fil de la course, {n} courbe affichée.",
+          other: "MPM au fil de la course, {n} courbes affichées.",
+        },
+      },
+      heatmap: {
+        title: "CARTE DES FAUTES",
+        board: "Carte des fautes, {layout} : {keys}.",
+        key: "{key} × {n}",
+        clean: "Carte des fautes, {layout} : aucune faute au clavier.",
+        legendClean: "papier : aucune faute",
+        legendHeat: "de l'or au rouge : de moins en plus de fautes",
       },
       keys: {
         title: "ERREURS PAR TOUCHE",

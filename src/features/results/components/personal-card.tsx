@@ -3,11 +3,13 @@ import { fill } from "@/i18n/format";
 import { formatAccuracy, formatWpm } from "../view/dawn-report";
 import type { BonusTally, PersonalStats } from "../view/personal";
 import type { PersonalLabels } from "../view/report-labels";
-import type { RaceSeries } from "../view/series";
+import type { Heatmap } from "../view/heatmap";
+import type { RaceLine, RaceSeries } from "../view/series";
 import type { Coaching } from "../view/tip";
 import { CoachingSections } from "./coaching";
 import styles from "./personal-card.module.css";
 import { RaceGraph } from "./race-graph";
+import { ReportHeatmap } from "./report-heatmap";
 
 export type PersonalCardProps = {
   stats: PersonalStats;
@@ -22,6 +24,17 @@ export type PersonalCardProps = {
    * specimen of the other sections).
    */
   coaching?: Coaching;
+  /**
+   * The graph's other lines (#999 C52, `getRaceSeriesForAll`), the viewer's desk being `stats.desk`, and
+   * the ranking's last place; left out, the graph is the viewer's own line alone.
+   */
+  others?: readonly RaceLine[];
+  lastPlace?: number;
+  /**
+   * The compact keyboard heatmap (#999 C54, `heatmapOf` on the viewer's layout), between the errors by
+   * key and the tip; left out or `null` (no trace on file), the card has none.
+   */
+  heatmap?: { map: Heatmap; layout: string } | null;
 };
 
 /**
@@ -32,7 +45,15 @@ export type PersonalCardProps = {
  * Then the WPM graph (#865, `RaceGraph`) from `series`, then the errors by key and the tip (#867,
  * `CoachingSections`) from `coaching`. Extension point: the personal-best flag (#321) is a further section. No gold (bible 3), no motion.
  */
-export function PersonalCard({ stats, labels, series, coaching }: PersonalCardProps) {
+export function PersonalCard({
+  stats,
+  labels,
+  series,
+  coaching,
+  others,
+  lastPlace,
+  heatmap,
+}: PersonalCardProps) {
   const tagId = useId();
   return (
     <section
@@ -57,8 +78,22 @@ export function PersonalCard({ stats, labels, series, coaching }: PersonalCardPr
       )}
       <Figures stats={stats} labels={labels} />
       <Bonuses stats={stats} labels={labels} />
-      {series !== undefined && <RaceGraph series={series} labels={labels} />}
-      {coaching && <CoachingSections coaching={coaching} labels={labels} />}
+      {series !== undefined && (
+        <RaceGraph
+          series={series}
+          labels={labels}
+          others={others}
+          viewerDesk={stats.desk}
+          lastPlace={lastPlace}
+        />
+      )}
+      {coaching && (
+        <CoachingSections
+          coaching={coaching}
+          labels={labels}
+          between={heatmap ? <ReportHeatmap {...heatmap} labels={labels} /> : undefined}
+        />
+      )}
     </section>
   );
 }

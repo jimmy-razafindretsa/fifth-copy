@@ -992,7 +992,10 @@ await slice();
 // ---------- sabotage throws (#999, bible 10.2 "Sabotage throw") ----------
 // Pooled instanced meshes (forms, balls, puffs: one draw each), flat Lambert, palette colours. At most
 // THROW_FLY_MAX fly, the rest land directly; objects rest in their desk's frame (a re-seat carries them).
-// `<html>`: data-throws-flying|-peak|-landed|-puffs, data-throw-cover (largest view share since the last play).
+// `<html>`: data-throws-flying|-peak|-landed|-puffs, data-throw-cover (largest view share since the last play),
+// and facts a slow loop cannot hide between two readings, since the last play: data-throws-puffs-peak (most
+// puffs drawn in one frame), -puffs-total (balls burst) and -calls-peak (most draw calls of a frame that drew
+// a thrown object or a puff).
 // Every throw runs on the wall clock (`wallS`), never the frame-clamped animation time `t`: a slow or resting
 // loop (software WebGL, #695's rest) draws fewer frames of a flight or a puff, never a longer one: each is drawn
 // at least once (a flight at most at its apex, a puff at its swell), then ends on time or at the next frame. Race
@@ -1012,7 +1015,7 @@ const IM = { forms: pooled(formsGeo, throwMat, 'forms'), ball: pooled(ballGeo, t
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const AT = { hand: V3(0.28, 0.9, 0.5), selfHand: V3(0.3, DESK_Y + 0.12, 0.8), forms: V3(-0.36, DESK_Y + 0.025, 0.66), head: V3(0, 0.95, 0.36),
   selfHead: V3(0.12, DESK_Y + 0.08, 0.75), desk: V3(0.3, DESK_Y + 0.055, 0.8), floor: V3(0.45, 0.055, -0.55), selfFloor: V3(0.62, 0.055, 0.3) };
-let SELF_DESK = 1, OBJ = [], PUFFS = [], FLY_PEAK = 0, COVER = 0;
+let SELF_DESK = 1, OBJ = [], PUFFS = [], FLY_PEAK = 0, COVER = 0, PUFF_PEAK = 0, PUFF_TOTAL = 0, CALLS_PEAK = 0;
 const slotOf = desk => { const i = (((desk - SELF_DESK) % N) + N) % N; return DESKS[i] && DESKS[i].occ ? i : -1; };
 const isSelfPov = slot => slot === 0 && VIEW === 'pov';
 const wallS = () => performance.now() / 1000;
@@ -1022,7 +1025,7 @@ function land(o, burst) {
   if (o.kind !== 'smoke-break') return;
   if (!burst) { o.until = o.blurEnd; return; }
   o.gone = true;
-  PUFFS.push({ slot: o.slot, local: o.local.clone(), at: wallS(), s: isSelfPov(o.slot) ? 0.5 : 1 });
+  PUFFS.push({ slot: o.slot, local: o.local.clone(), at: wallS(), s: isSelfPov(o.slot) ? 0.5 : 1 }); PUFF_TOTAL++;
   if (PUFFS.length > POOL_MAX.puff) PUFFS.shift();
   if (!isSelfPov(o.slot)) Clerks.flinch(o.slot);
 }
@@ -1045,7 +1048,8 @@ function play(kind, from, to, mode) {
   }
   // fixed pools: the oldest of a type gives its place
   for (const type of ['forms', 'ball']) { const of = OBJ.filter(o => o.type === type); of.slice(0, Math.max(0, of.length - POOL_MAX[type])).forEach(o => { o.gone = true; }); }
-  OBJ = OBJ.filter(o => !o.gone); FLY_PEAK = 0; COVER = 0;
+  OBJ = OBJ.filter(o => !o.gone); FLY_PEAK = 0; COVER = 0; PUFF_PEAK = 0; PUFF_TOTAL = 0; CALLS_PEAK = 0; ROOT.dataset.throwsCallsPeak = 0;
+  if (still) throwsUpdate(); // a static play shows where it lands at once, with no frame needed
 }
 // reduced motion, or race end (`clear`)
 function throwsStill(clear = false) {
@@ -1097,8 +1101,8 @@ function throwsUpdate() {
     draw('puff', _tm, RADIUS.puff * s, n);
   }
   for (const type in IM) { const im = IM[type]; im.count = n[type]; im.visible = n[type] > 0; im.instanceMatrix.needsUpdate = true; }
-  FLY_PEAK = Math.max(FLY_PEAK, flying);
-  Object.entries({ throwsFlying: flying, throwsPeak: FLY_PEAK, throwsLanded: n.forms + n.ball - flying, throwsPuffs: n.puff, throwCover: +COVER.toFixed(3) })
+  FLY_PEAK = Math.max(FLY_PEAK, flying); PUFF_PEAK = Math.max(PUFF_PEAK, n.puff);
+  Object.entries({ throwsFlying: flying, throwsPeak: FLY_PEAK, throwsLanded: n.forms + n.ball - flying, throwsPuffs: n.puff, throwsPuffsPeak: PUFF_PEAK, throwsPuffsTotal: PUFF_TOTAL, throwCover: +COVER.toFixed(3) })
     .forEach(([k, v]) => { if (ROOT.dataset[k] !== String(v)) ROOT.dataset[k] = v; });
 }
 
@@ -1278,6 +1282,7 @@ function loop(now) {
   if (VIEW === 'over' && !reduced()) { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); camera.updateMatrixWorld(); ROOT.dataset.orbit = orbitA.toFixed(3); }
   lampUpdate(dt); anchors();
   renderer.render(scene, camera);
+  if (IM.forms.visible || IM.ball.visible || IM.puff.visible) { CALLS_PEAK = Math.max(CALLS_PEAK, renderer.info.render.calls); ROOT.dataset.throwsCallsPeak = CALLS_PEAK; }
   if (pendingReady) { pendingReady = false; if (PROBED) { STRESS = true; stressAt = -1; } else ready(); }
   if (STRESS) {
     if (stressAt < 0) { stressAt = now; stressFrames = 0; }

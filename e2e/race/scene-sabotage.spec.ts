@@ -124,15 +124,20 @@ test.describe("#999 sabotage throws, the embed on its own", { tag: "@scene" }, (
   }) => {
     await openSeat(page, 6, "reduce");
     await expect(html(page)).toHaveAttribute("data-motion", "reduce");
-    await sabotage(page, "smoke-break", 6, [1, 2, 3, 4, 5]);
-    await expect(html(page)).toHaveAttribute("data-sabotage", "smoke-break:6:1,2,3,4,5:static");
-    await expect(html(page)).toHaveAttribute("data-throws-landed", "5", { timeout: SCENE_WAIT });
+    // the three plays go in one task: a static play shows where it lands at once (no frame needed), so the
+    // seven objects are all there long before the balls' blur ends, however slow the frames (software WebGL)
     const shownAt = Date.now();
-    await sabotage(page, "extra-paperwork", 3, [1]);
-    await sabotage(page, "exemption", 4, [4]);
+    await page.evaluate(() =>
+      [
+        { kind: "smoke-break", from: 6, to: [1, 2, 3, 4, 5] },
+        { kind: "extra-paperwork", from: 3, to: [1] },
+        { kind: "exemption", from: 4, to: [4] },
+      ].forEach((m) => postMessage({ v: 2, type: "fc-race-sabotage", ...m }, location.origin)),
+    );
     await expect(html(page)).toHaveAttribute("data-sabotage", "exemption:4:4:static");
     await expect(html(page)).toHaveAttribute("data-throws-landed", "7", { timeout: SCENE_WAIT });
-    // the balls leave with the blur (the engine's BLUR_MS, 5 s, wall clock), the rest stays
+    // the balls leave with the blur (the engine's BLUR_MS, 5 s, wall clock, from a play after `shownAt`),
+    // the rest stays
     await expect(html(page)).toHaveAttribute("data-throws-landed", "2", { timeout: SCENE_WAIT });
     expect(Date.now() - shownAt).toBeGreaterThan(4_000);
     await expect(html(page)).toHaveAttribute("data-throws-peak", "0");

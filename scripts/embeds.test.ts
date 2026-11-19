@@ -733,6 +733,34 @@ describe("seating (#927)", () => {
     for (const a of two.angles) expect(gap(a, two.start)).toBeLessThan(Math.PI / 2);
   });
 
+  it("#999 C2, C4: the overview places only taken desks (an empty desk 1 leaves no gap) and sends plaque anchors", () => {
+    expect(seat).toContain(
+      "const over = VIEW === 'over', order = []; DESKS.forEach((s, i) => { if (s.occ || (!i && !over)) order.push(i); });",
+    );
+    const body = seat.slice(seat.indexOf("function anchors() {"), seat.indexOf("// the room's desks"));
+    expect(body).toContain("if (VIEW !== 'over') return;"); // the seat POV never sends anchors
+    expect(body).toContain("send({ type: 'fc-scene-anchors', anchors: out });");
+    // off screen (outside the frame or behind the camera): no anchor, so the plaque hides
+    expect(body).toContain("Math.abs(_c.x) <= 1 && Math.abs(_c.y) <= 1 && _c.z < 1");
+    // sent on change only, from the render loop
+    expect(body).toContain("if (key === ANCHORS) return;");
+    expect(seat).toContain("lampUpdate(dt); anchors();");
+    expect(seat).toContain("ROOT.dataset.orbit = orbitA.toFixed(3);");
+  });
+
+  it("#999 C5 (bible 10.3 Lamp): one shade mesh and one unlit beam aim at view.lamp, set at once under reduce", () => {
+    const lamp = seat.slice(seat.indexOf("const lampG"), seat.indexOf("const PLAQUE_AT"));
+    expect(lamp).toContain("lampG.position.set(0, 3.18, 0)");
+    expect(lamp.match(/new THREE\.Mesh\(/g)).toHaveLength(2); // the merged shade, the beam
+    expect(lamp).toContain("new THREE.MeshBasicMaterial({ color: 0xFFD08A");
+    expect(lamp).not.toMatch(/Light\(/); // no new light
+    expect(lamp).toContain("if (reduced()) lampDir.copy(lampTo); else lampDir.lerp(lampTo, 1 - Math.exp(-dt * 4))");
+    expect(lamp).toContain("beam.visible = slot >= 0 && !isSelfPov(slot);");
+    expect(seat).toContain(
+      "Object.assign(ROOT.dataset, { lamp: lamp ?? 'none', lampMode: reduced() ? 'set' : 'swing' });",
+    );
+  });
+
   it("C7: the stations are one batched mesh, hidden when empty; carriages and paper of empty desks are not drawn", () => {
     expect(seat).toContain("const stations = new THREE.BatchedMesh(N,");
     expect(seat).toContain("stations.setVisibleAt(i, s.occ)");

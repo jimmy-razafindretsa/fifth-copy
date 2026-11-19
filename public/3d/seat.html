@@ -14,23 +14,11 @@
 <link rel="stylesheet" href="/3d/fonts/embed-fonts.css">
 <style>
 html,body{margin:0;height:100%;background:#2B2C2A;overflow:hidden;font-family:'Share Tech Mono',monospace;color:#C9C6B8}
-a{color:#E8DCC0}a:hover{color:#fff}
 canvas{position:fixed;inset:0;display:block}
-.plate{position:fixed;left:20px;top:16px;z-index:5;display:flex;flex-direction:column;gap:8px}
-.plate h1{margin:0;font:700 24px 'Stardos Stencil',serif;letter-spacing:.08em;color:#E8DCC0;white-space:nowrap}
-.plate p{margin:0;font-size:12px;letter-spacing:.12em;color:#8E8C80;white-space:nowrap}
-.ctl{display:flex;flex-direction:column;gap:6px}
-.grp{display:flex;align-items:center;gap:8px}
-.grp>span{width:74px;font-size:10px;letter-spacing:.16em;color:#8E8C80}
-.seg{display:flex}
-.seg button{font:12px 'Share Tech Mono',monospace;background:rgba(27,29,27,.85);color:#C9C6B8;border:1px solid #55574f;margin-left:-1px;padding:6px 10px;cursor:pointer;white-space:nowrap}
-.seg button.on{background:#E8DCC0;color:#23201D;border-color:#E8DCC0;position:relative}
-.plate,.stats{display:none!important}
 canvas{filter:sepia(.1) saturate(.92) contrast(1.03)}
 .vig{position:fixed;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse at 50% 45%,transparent 62%,rgba(24,18,10,.32) 100%)}
 .grain{position:fixed;inset:-50%;pointer-events:none;z-index:4;opacity:.06;mix-blend-mode:overlay;animation:grain .6s steps(6) infinite}
 @keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-7%,4%)}40%{transform:translate(5%,-6%)}60%{transform:translate(-3%,8%)}80%{transform:translate(8%,2%)}100%{transform:translate(0,0)}}
-.stats{position:fixed;right:16px;bottom:14px;z-index:5;font-size:11px;letter-spacing:.1em;color:#8E8C80;white-space:nowrap}
 html[data-motion="reduce"] .grain{animation:none}
 @media (prefers-reduced-motion: reduce){.grain{animation:none}}
 </style>
@@ -38,16 +26,9 @@ html[data-motion="reduce"] .grain{animation:none}
 <body>
 <div class="vig"></div><div class="grain" id="grain"></div>
 <script type="module">
-// The race seat scene (#563, ADR 0017 option A; design bible 9, 11, 12, 15): the Full Lobby reference
-// (`Fifth Copy Full Lobby.html`), verbatim room, clerks, Major, lights and post layer, seen from your desk
-// (11.3 seat POV, FOV 62, your clerk and paper hidden) and driven by the race page over postMessage:
-// `fc-race-init` / `-state` / `-motion` / `-preset` / `-sabotage` in, `fc-scene-hello` / `-ready` / `-telemetry` /
-// `-fallback` / `-sabotage` out (src/features/race-3d/messages.ts, `v` = SCENE_PROTOCOL). Both directions are locked to
-// this page's origin. The reference's random typing is replaced by the room's desks: your desk sits at the
-// camera's slot, rivals at theirs, a clerk types while the race runs and its desk is typing; empty desks
-// have no clerk. Presets (12): `?preset=low|medium|high` forces one, `auto` measures a fixed probe before
-// any of the room exists (below the floor: the paper fallback, the room never built; #695). Reduced motion (8): the bulb burns steady, nothing turns or bobs.
-// three.js is imported once the probe has passed (below): a weak device never loads it (#695)
+// The race seat scene (#563, ADR 0017 A; bible 9, 11, 12, 15): the Full Lobby room seen from your desk
+// (11.3 POV) or from above (`camera: 'over'`), driven over postMessage (src/features/race-3d/messages.ts),
+// both directions locked to this origin. three.js loads only once the probe has passed (#695).
 
 const SCENE_PROTOCOL = 2; // #999: 2 adds the one-shot fc-race-sabotage and its fc-scene-sabotage ack
 const Q = new URLSearchParams(location.search);
@@ -59,24 +40,21 @@ const PRESETS = {
 const FORCED = PRESETS[Q.get('preset')] ? Q.get('preset') : null;
 let PRESET = FORCED || 'low'; // `auto` probes at the LOW drawing buffer, then settles (#695)
 const send = msg => { if (parent !== window) parent.postMessage({ v: SCENE_PROTOCOL, ...msg }, location.origin); };
-// #695: the room is built in slices of about 50 ms of work (a desk, a part of a clerk, a mesh, rows of the grime
-// texture, the shader programs), each its own task, so on a slow CPU the race page sharing this main thread
-// (ADR 0017) runs its countdown, GO and keys between them; a fast CPU never waits.
+// #695: the room is built in ~50 ms slices so the race page sharing this thread keeps running
 let sliceAt = performance.now();
 const slice = async () => {
   if (performance.now() - sliceAt < 50) return;
   await new Promise(go => setTimeout(go, 0)); sliceAt = performance.now();
 };
 
-// ---------- the probe, then three.js and the renderer: before any of the room (#695, owner DECISION "Benchmark avant la salle") ----------
+// ---------- the probe, then three.js and the renderer, before the room (#695) ----------
 const ROOT = document.documentElement; ROOT.dataset.room = 'none';
 const CLEAR = 0x4A4C47; // the scene's clear colour (background and fog below)
 let LOST = false, CAPPED = false;
 const EMBED = Q.get('embed') === '1';
 const pixelRatio = () => EMBED ? 1 : PRESETS[PRESET].pr;
 const onLost = e => { e.preventDefault(); LOST = true; send({ type: 'fc-scene-fallback', reason: 'context-lost' }); };
-// the canvas and its WebGL2 context (LOW: no AA) exist before three.js loads: the probe draws on them, and the
-// renderer takes them over when the settled preset has no AA
+// the canvas and context exist before three.js: the probe draws on them
 const CANVAS = document.createElement('canvas');
 const GL = CANVAS.getContext('webgl2', { alpha: false, depth: true, stencil: false, antialias: false, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
 if (!GL) { send({ type: 'fc-scene-fallback', reason: 'no-webgl2' }); throw new Error('fc-seat: no WebGL2'); }
@@ -89,8 +67,7 @@ fitCanvas(); document.body.prepend(CANVAS);
 const CLEAR_RGB = [CLEAR >> 16, (CLEAR >> 8) & 255, CLEAR & 255].map(v => v / 255);
 GL.clearColor(...CLEAR_RGB, 1); GL.clear(GL.COLOR_BUFFER_BIT); GL.clearColor(0, 0, 0, 0); // the flat ground
 
-// The page's messages wait in an inbox until the room's handler takes over (it replays them); `fc-race-init`
-// also starts the probe. `fc-scene-hello` goes now: the page answers with its init while the room is not built.
+// the page's messages wait in an inbox until the room's handler replays them; `fc-race-init` starts the probe
 const inbox = [];
 const fromPage = e => e.origin === location.origin && e.source === parent && e.data && typeof e.data === 'object';
 const toInbox = e => { if (fromPage(e)) inbox.push(e); };
@@ -105,19 +82,8 @@ const initMessage = new Promise(go => {
 });
 send({ type: 'fc-scene-hello' });
 
-// Bible 12 Benchmark (#695, #912): `auto` measures the device, not the room. The probe is its own tiny WebGL2
-// program (no three.js: a weak device never loads it): PROBE_QUADS quads blended in the clear colour (the player
-// sees a flat ground behind the loading card, never a test pattern), drawn into the LOW drawing buffer on the
-// visible canvas, the quads bounded to PROBE_MAX_PIXELS of it (same aspect; the clear still covers the whole
-// canvas), so its fill load follows the viewport up to 1280×800 and no further (#912). Its first frame
-// (compile) is dropped; then it draws back to back and measures on the wall clock, frame to frame (each
-// frame's commit counts). The reading is the median frame interval (`probeFps`), so one stall of the main
-// thread the race page shares (ADR 0017) is one long interval among short ones and moves nothing (#912): a
-// first window of PROBE_WINDOW s decides a weak device at once, from at least 2 intervals (`probeDone`), a
-// passing one is measured to PROBE_SPAN s in all (ADR 0013: at most 2 s). Below PROBE_MIN_FPS (a hopeless
-// device: the room would starve input): `benchmark-low`, the loop stops and the room is never built;
-// otherwise LOW / MEDIUM / HIGH by PROBE_MEDIUM_FPS / PROBE_HIGH_FPS, and a browser cap (flat 27-33 fps, low
-// CPU ms; bible 12) settles MEDIUM. Above the floor the running scene's frame budget is the judge (bible 12).
+// Bible 12 Benchmark (#695, #912): a tiny WebGL2 probe (no three.js) in the clear colour, bounded to
+// PROBE_MAX_PIXELS; the median frame interval decides: below PROBE_MIN_FPS `benchmark-low`, else LOW/MEDIUM/HIGH.
 const PROBE_MIN_FPS = 5, PROBE_MEDIUM_FPS = 53, PROBE_HIGH_FPS = 57;
 const PROBE_QUADS = 128, PROBE_WINDOW = 0.5, PROBE_SPAN = 1.5, PROBE_MAX_PIXELS = 1024000;
 // the reading: frames per second at the median frame interval (ms; the lower middle of an even count)
@@ -619,16 +585,14 @@ bulb.shadow.mapSize.set(512, 512); bulb.shadow.bias = -0.002;
 // ---------- 30 typing clerks (batched: 1 draw call + carriages + paper) ----------
 const Clerks = (() => {
 const ARM_L = 0.33, SEAT = 0.26, ROOT_Y = 0.10, DESK_Y = 0.44;
-const CATS = {
-  hair:    { label: 'HAIR', opts: [['side', 'Side part', 'CLERK STANDARD'], ['buzz', 'Buzz cut', 'BARRACKS'], ['quiff', 'Quiff', 'DANCE HALL'], ['bowl', 'Bowl cut', 'HOME-MADE'], ['bald', 'Bald', 'POLISHED']] },
-  glasses: { label: 'GLASSES', opts: [['round', 'Round wire', 'BRASS FRAME'], ['dark', 'Dark lenses', 'SECRET POLICE'], ['square', 'Square frames', 'ACCOUNTANT'], ['monocle', 'Monocle', 'OLD MONEY'], ['none', 'None', '20/20 VISION']] },
-  hat:     { label: 'HAT', opts: [['none', 'None', 'INDOORS'], ['ushanka', 'Ushanka', 'WINTER ISSUE'], ['kepka', 'Flat cap', 'FACTORY FLOOR'], ['eyeshade', 'Eyeshade', 'NIGHT SHIFT'], ['beret', 'Beret', 'ARTIST UNION']] },
-  clothes: { label: 'CLOTHES', opts: [['vest', 'Knit vest', 'OLIVE WOOL'], ['cardigan', 'Cardigan', 'GRANDMA KNIT'], ['jacket', 'Work jacket', 'NAVY CANVAS'], ['sweater', 'Sweater', 'GREY RIB'], ['braces', 'Shirt & braces', 'SUMMER']] },
-  face:    { label: 'FACE', opts: [['stache', 'Moustache', 'REGULATION'], ['clean', 'Clean shave', 'FRESH RAZOR'], ['beard', 'Full beard', 'PHILOSOPHER']] },
+const CATS = { // the outfit options randCfg picks from (#563: ids only, the locker's labels are not shown here)
+  hair: ['side', 'buzz', 'quiff', 'bowl', 'bald'],
+  glasses: ['round', 'dark', 'square', 'monocle', 'none'],
+  hat: ['none', 'ushanka', 'kepka', 'eyeshade', 'beret'],
+  clothes: ['vest', 'cardigan', 'jacket', 'sweater', 'braces'],
+  face: ['stache', 'clean', 'beard'],
 };
 const HAIRCOL = ['#4A3526', '#1E1A17', '#A4552A', '#C9A465', '#8C8A84'];
-const cfg = { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: HAIRCOL[0] };
-let tab = 'hair';
 
 const COL = { skin: 0xF0C6A2, white: 0xF6F1E6, black: 0x161616, shirt: 0xE6DCC6, trousers: 0x55544E, shoe: 0x241914, brass: 0xB8933F, scarf: 0x2E8C8A };
 const CLOTH = {
@@ -791,8 +755,7 @@ function lowGeo(g) {
   const p = g.parameters, half = (n, m) => Math.max(m, Math.ceil(n / 2));
   switch (g.type) {
     case 'SphereGeometry': return new THREE.SphereGeometry(p.radius, half(p.widthSegments, 5), half(p.heightSegments, 3), p.phiStart, p.phiLength, p.thetaStart, p.thetaLength);
-    case 'LatheGeometry': return new THREE.LatheGeometry(p.points, half(p.segments, 7), p.phiStart, p.phiLength);
-    case 'CapsuleGeometry': return new THREE.CapsuleGeometry(p.radius, p.height ?? p.length, 1, 5);
+    case 'LatheGeometry': return new THREE.LatheGeometry(p.points, half(p    case 'CapsuleGeometry': return new THREE.CapsuleGeometry(p.radius, p.height ?? p.length, 1, 5);
     case 'CylinderGeometry': return new THREE.CylinderGeometry(p.radiusTop, p.radiusBottom, p.height, half(p.radialSegments, 4), 1, p.openEnded, p.thetaStart, p.thetaLength);
     case 'TorusGeometry': return new THREE.TorusGeometry(p.radius, p.tube, 3, half(p.tubularSegments, 6), p.arc);
     default: return g.clone();
@@ -845,7 +808,7 @@ const GLANCES = [[0.42, 0], [0.42, 0], [0.12, 0], [0.2, 0.5], [0.2, -0.45], [0.0
 const pool = [];
 function randCfg(i) {
   if (i === 0) return { hair: 'side', glasses: 'round', hat: 'none', clothes: 'vest', face: 'stache', hairCol: HAIRCOL[0] };
-  const c = {}; Object.entries(CATS).forEach(([k, o], j) => c[k] = o.opts[Math.floor(hash(i * 7.3 + j) * o.opts.length)][0]);
+  const c = {}; Object.entries(CATS).forEach(([k, o], j) => c[k] = o[Math.floor(hash(i * 7.3 + j) * o.length)]);
   c.hairCol = HAIRCOL[Math.floor(hash(i * 3.1) * HAIRCOL.length)]; return c;
 }
 async function makeClerk(i) {
@@ -940,8 +903,7 @@ function animClerk(c, d, dt, i) {
 }
 
 let lodT = 0;
-// #940: only the clerks the scene draws are ranked (an empty desk or your own clerk hidden at POV takes no LOD0
-// place); `drawn` is the visibility update() applies this frame, so a clerk that just sat down is ranked at once
+// #940: only the clerks the scene draws are ranked for LOD0
 const drawn = i => OCC[i] && !(i === 0 && HIDE0);
 function updateLod() {
   const order = [];
@@ -1147,10 +1109,45 @@ function applyMotion() {
 }
 MQ.addEventListener('change', applyMotion); applyMotion();
 
+// ---------- the Major's lamp (bible 10.3 "Lamp", #999 C5) and the overview's plaque anchors (C4) ----------
+// hung under the bulb from its top, it points at the leader (`view.lamp`): a swing while motion is on, set at once under
+// reduce; `<html data-lamp="<desk>|none" data-lamp-mode="swing|set">`. One shade mesh, one beam, no light.
+const lampG = new THREE.Group(), lampParts = new THREE.Group(); lampG.position.set(0, 3.18, 0);
+part(lampParts, C(0.012, 0.012, 0.2, 6), COL.brass, 0, -0.1, 0);
+part(lampParts, C(0.035, 0.13, 0.2, 12, true), COL.enamel, 0, -0.28, 0);
+part(lampParts, C(0.033, 0.125, 0.19, 12, true), 0xD8D2C0, 0, -0.28, 0).userData.flip = true;
+const beam = new THREE.Mesh(C(0.06, 0.55, 1, 16, true).translate(0, -0.5, 0), new THREE.MeshBasicMaterial({ color: 0xFFD08A, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+beam.position.y = -0.38; lampG.add(new THREE.Mesh(merge(lampParts), mat), beam); scene.add(lampG); beam.visible = false;
+const LAMP_AT = V3(0, 0.8, 0.3), lampDir = V3(0, -1, 0), lampTo = V3(0, -1, 0), _la = V3(0, 0, 0);
+let LAMP = null;
+function lampUpdate(dt) {
+  const slot = LAMP === null ? -1 : slotOf(LAMP);
+  if (slot >= 0) { deskWorld(slot, LAMP_AT, _la); lampTo.subVectors(_la, lampG.position).normalize(); } else lampTo.copy(DOWN);
+  if (reduced()) lampDir.copy(lampTo); else lampDir.lerp(lampTo, 1 - Math.exp(-dt * 4)).normalize();
+  lampG.quaternion.setFromUnitVectors(DOWN, lampDir);
+  // the beam never shines into your own eyes at POV
+  beam.visible = slot >= 0 && !isSelfPov(slot); beam.scale.y = slot >= 0 ? _la.distanceTo(lampG.position) - 0.38 : 1;
+}
+const PLAQUE_AT = V3(0, 1.45, 0.36);
+let ANCHORS = '';
+/** `[desk, x, y]` of each drawn desk's plaque point on screen (0..1 of the frame); `over` only */
+function anchors() {
+  if (VIEW !== 'over') return;
+  const out = [];
+  DESKS.forEach((s, i) => {
+    if (!s.occ) return; _c.copy(PLAQUE_AT).applyMatrix4(Clerks.deskM[i]).project(camera);
+    if (Math.abs(_c.x) <= 1 && Math.abs(_c.y) <= 1 && _c.z < 1) out.push([(i + SELF_DESK - 1) % N + 1, +((_c.x + 1) / 2).toFixed(4), +((1 - _c.y) / 2).toFixed(4)]);
+  });
+  const key = JSON.stringify(out); if (key === ANCHORS) return; ANCHORS = key;
+  ROOT.dataset.anchors = out.length; send({ type: 'fc-scene-anchors', anchors: out });
+}
+
 // the room's desks: your desk at the camera's slot (0), the others around the ring by desk number
 let DESKS = Array.from({ length: N }, () => ({ occ: true, typing: true })), PLACED = N;
 function applyView(view) {
   const self = Number.isInteger(view.self) ? view.self : 1; SELF_DESK = self;
+  const lamp = Number.isInteger(view.lamp) && view.lamp >= 1 ? view.lamp : null;
+  if (lamp !== LAMP) { LAMP = lamp; Object.assign(ROOT.dataset, { lamp: lamp ?? 'none', lampMode: reduced() ? 'set' : 'swing' }); }
   const slots = Array.from({ length: N }, () => ({ occ: false, typing: false }));
   for (const d of Array.isArray(view.desks) ? view.desks : []) {
     if (!Number.isInteger(d.desk)) continue;
@@ -1167,8 +1164,9 @@ function applyView(view) {
 let LAID = '';
 const _c = new THREE.Vector3();
 function arrange() {
-  const order = [0]; DESKS.forEach((s, i) => { if (i && s.occ) order.push(i); });
-  const n = order.length, over = VIEW === 'over', L = over ? overLayout(n) : povLayout(n, innerWidth / innerHeight);
+  // the POV keeps your slot (0) for the camera; the overview places drawn desks only (a spectator has none)
+  const over = VIEW === 'over', order = []; DESKS.forEach((s, i) => { if (s.occ || (!i && !over)) order.push(i); });
+  const n = order.length, L = over ? overLayout(n) : povLayout(n, innerWidth / innerHeight);
   order.forEach((i, k) => Clerks.place(i, L.angles[k], L.ring));
   DESKS.forEach((s, i) => { stations.setVisibleAt(i, s.occ); stations.setMatrixAt(i, Clerks.deskM[i]); });
   camera.fov = L.fov; camera.aspect = innerWidth / innerHeight;
@@ -1178,6 +1176,7 @@ function arrange() {
   let seen = 0;
   for (const i of order.slice(1)) { _c.set(0, DESK_Y, 0.6).applyMatrix4(Clerks.deskM[i]).project(camera); if (Math.abs(_c.x) <= 1 && Math.abs(_c.y) <= 1 && _c.z < 1) seen++; }
   Object.assign(ROOT.dataset, { seats: PLACED, layout: over ? 'even' : L.staged ? 'staged' : 'ring', fov: +L.fov.toFixed(1), ring: +L.ring.toFixed(2), rivalsInView: seen });
+  anchors();
 }
 arrange(); addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); arrange(); });
 function applyPreset(p) {
@@ -1264,7 +1263,8 @@ function loop(now) {
   bulb.intensity = 70 * k; bulbMesh.material.color.copy(bulbOff).lerp(bulbOn, Math.min(1, k));
   if (FORCE !== VIEW) setView(FORCE);
   Clerks.update(dt, VIEW === 'pov'); throwsUpdate(); if (!reduced()) dustUpdate(t);
-  if (VIEW === 'over' && !reduced()) { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
+  if (VIEW === 'over' && !reduced()) { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); camera.updateMatrixWorld(); ROOT.dataset.orbit = orbitA.toFixed(3); }
+  lampUpdate(dt); anchors();
   renderer.render(scene, camera);
   if (pendingReady) { pendingReady = false; if (PROBED) { STRESS = true; stressAt = -1; } else ready(); }
   if (STRESS) {

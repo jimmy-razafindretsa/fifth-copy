@@ -12,6 +12,7 @@ import {
   useTransition,
 } from "react";
 import { Star } from "@/components/ui";
+import { PHONE_QUERY } from "@/lib/phone";
 import styles from "./home.module.css";
 
 /** What PLAY and PRACTICE answer (lobby `quickRace`, `createPracticeLobby`). */
@@ -26,6 +27,11 @@ export type HomeEntry = {
   /** The gold `<n> NEW` tag (part of the entry's accessible name). */
   tag?: string;
   activate: { href: string } | { action: () => Promise<EntryResult>; pendingLabel: string };
+  /**
+   * A race entry (PLAY, PRACTICE): a desk's, so a phone's menu leaves it out (#999 C15, bible 14.3
+   * "Phone spectator": phones watch).
+   */
+  deskOnly?: boolean;
 };
 
 export type HomeMenuLabels = {
@@ -61,6 +67,11 @@ export type HomeMenuProps = {
 
 const WIDE = "(min-width: 768px)";
 const noSubscribe = () => () => {};
+const onPhoneChange = (change: () => void) => {
+  const query = window.matchMedia(PHONE_QUERY);
+  query.addEventListener("change", change);
+  return () => query.removeEventListener("change", change);
+};
 
 /**
  * Runs PLAY or PRACTICE: the room to land on, or the error line to show (the entry is enabled again).
@@ -88,7 +99,7 @@ export async function runEntryAction(
  * the menu). The only client leaf of the screen; everything streamed comes in as props.
  */
 export function HomeMenu({
-  entries,
+  entries: all,
   labels,
   signOut,
   signInHref,
@@ -110,6 +121,13 @@ export function HomeMenu({
     () => true,
     () => false,
   );
+  // #999 C15: a phone's menu has no race entry (its CSS hides them until this hydrates)
+  const phone = useSyncExternalStore(
+    onPhoneChange,
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false,
+  );
+  const entries = phone ? all.filter((entry) => !entry.deskOnly) : all;
 
   useEffect(() => {
     if (specimen) return;
@@ -158,7 +176,7 @@ export function HomeMenu({
     }
   };
 
-  const current = entries[selected];
+  const current = entries[selected] ?? entries[0];
 
   return (
     <>
@@ -170,7 +188,7 @@ export function HomeMenu({
       >
         <ul className={styles.entries} onKeyDown={onKeyDown}>
           {entries.map((entry, i) => {
-            const isSelected = i === selected;
+            const isSelected = i === (selected < entries.length ? selected : 0);
             const pending = pendingId === entry.id;
             const common = {
               ref: (el: HTMLAnchorElement | HTMLButtonElement | null) => {
@@ -180,6 +198,7 @@ export function HomeMenu({
               tabIndex: isSelected ? 0 : -1,
               "data-selected": isSelected ? "true" : "false",
               "data-entry": entry.id,
+              "data-desk-only": entry.deskOnly ? "" : undefined,
               onFocus: () => setSelected(i),
               // hover selects; while the focus is in the menu it follows, so Tab still leaves the group
               onMouseEnter: () => {

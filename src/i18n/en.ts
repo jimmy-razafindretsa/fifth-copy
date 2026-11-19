@@ -70,6 +70,19 @@ export const en = {
       join: "JOIN →",
       joining: "JOINING…",
     },
+    /**
+     * The phone landing's watch entry (#999 C15, bible 14.3 "Phone spectator"): phones watch, so at
+     * 480px and under it replaces QUICK RACE and the private-race entries.
+     */
+    watch: {
+      formName: "Watch a race",
+      label: "WATCH WITH CODE OR LINK",
+      placeholder: "KGB-4821",
+      submit: "WATCH →",
+      pending: "OPENING…",
+      note: "Phones watch from the back of the room. Type at a desk.",
+      invalid: "Enter a code like KGB-4821 or paste a watch link",
+    },
     /** The open-rooms docket under the code join (#807, bible 14.1): public rooms joinable right now. */
     rooms: {
       title: "OPEN ROOMS",

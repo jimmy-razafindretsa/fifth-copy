@@ -214,3 +214,8 @@
     padding-right: 20px;
   }
 }
+
+/* #999 C15 the phone landing's watch entry: a room code or a pasted spectator link, kept as typed */
+.watchInput {
+  text-transform: none;
+}

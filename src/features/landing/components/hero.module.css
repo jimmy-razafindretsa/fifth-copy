@@ -309,6 +309,24 @@
   align-items: stretch;
 }
 
+/* #999 C15 the phone watch entry: phones watch (bible 14.3 "Phone spectator"), so at 480px and under
+   it stands where QUICK RACE and the private-race entries stand on a desk */
+.watch {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .watch {
+    display: flex;
+  }
+
+  .cta [data-desk-only] {
+    display: none;
+  }
+}
+
 /* live feed column (bible 7.8) */
 .aside {
   flex: 1 1 440px;

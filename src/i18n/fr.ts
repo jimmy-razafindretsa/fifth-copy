@@ -69,6 +69,19 @@ export const fr = {
       join: "ENTRER →",
       joining: "ENTRÉE…",
     },
+    /**
+     * L'entrée spectateur de l'accueil sur cellulaire (#999 C15, bible 14.3) : à 480 px et moins elle
+     * remplace COURSE RAPIDE et les entrées de course privée.
+     */
+    watch: {
+      formName: "Regarder une course",
+      label: "REGARDER AVEC CODE OU LIEN",
+      placeholder: "KGB-4821",
+      submit: "REGARDER →",
+      pending: "OUVERTURE…",
+      note: "Les cellulaires regardent du fond de la salle. On tape à un bureau.",
+      invalid: "Entrez un code comme KGB-4821 ou collez un lien de spectateur",
+    },
     /** Le registre des salles ouvertes sous le code (#807, bible 14.1). */
     rooms: {
       title: "SALLES OUVERTES",

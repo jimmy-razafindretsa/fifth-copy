@@ -14,7 +14,13 @@ describe("medalShelf", () => {
     expect(shelf.earned).toBe(0);
     expect(shelf.medals.map((m) => m.id)).toEqual([...ACHIEVEMENT_IDS]);
     expect(shelf.medals.every((m) => m.state === "locked" && m.awardedAt === null)).toBe(true);
-    expect(shelf.medals.map((m) => m.code)).toEqual(["PIN-01", "PIN-02", "PIN-03", "PIN-04", "PIN-05"]);
+    expect(shelf.medals.map((m) => m.code)).toEqual([
+      "PIN-01",
+      "PIN-02",
+      "PIN-03",
+      "PIN-04",
+      "PIN-05",
+    ]);
     expect(emptyShelf().earned).toBe(0);
   });
 

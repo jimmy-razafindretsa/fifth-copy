@@ -110,7 +110,9 @@ test.describe("#215 typing path: telex strip, typed sheet, local prediction", ()
     const header = (await cable.textContent())!;
     // one race, one header: the host's desk reads the same cable
     await expect(host.locator("[data-telex] [data-cable]")).toHaveText(header);
-    expect(await cable.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Special[_ ]Elite/);
+    expect(await cable.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(
+      /Special[_ ]Elite/,
+    );
     // outside the typed chars: no char state inside it, not in the tape, not in the sheet
     await expect(cable.locator("[data-state]")).toHaveCount(0);
     const text = await stripText(page);

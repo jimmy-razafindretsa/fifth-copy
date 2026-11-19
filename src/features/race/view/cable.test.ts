@@ -5,7 +5,10 @@ import { cableHeader } from "./cable";
 
 // #999 C40 (R26): the intercepted-cable header that frames each race text, never part of it.
 describe("cableHeader", () => {
-  const ids = Array.from({ length: 40 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+  const ids = Array.from(
+    { length: 40 },
+    (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+  );
 
   it("is the same for the same race, in both languages the same template slot", () => {
     for (const id of ids) {

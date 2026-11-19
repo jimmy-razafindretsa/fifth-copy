@@ -143,8 +143,8 @@ describe("improvement callouts (#999 C40, consumed by C48)", () => {
 
   it("every template names the key and its percentage", () => {
     for (const catalog of [en, fr]) {
-      const { kicker: _k, title: _t, ...templates } = catalog.profile.callouts;
-      for (const [id, template] of Object.entries(templates)) {
+      for (const [id, template] of Object.entries(catalog.profile.callouts)) {
+        if (id === "kicker" || id === "title") continue;
         expect(template, id).toContain("{key}");
         if (id !== "steady") expect(template, id).toContain("{pct}");
       }

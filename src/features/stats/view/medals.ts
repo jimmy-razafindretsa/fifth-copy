@@ -35,7 +35,8 @@ export const pinCode = (index: number) => `PIN-${String(index + 1).padStart(2, "
 
 export function medalShelf(awards: readonly MedalAward[], now: Date): MedalShelf {
   const at = new Map<AchievementId, Date>();
-  for (const a of awards) if (isAchievementId(a.achievementId)) at.set(a.achievementId, a.awardedAt);
+  for (const a of awards)
+    if (isAchievementId(a.achievementId)) at.set(a.achievementId, a.awardedAt);
   const medals = ACHIEVEMENT_IDS.map((id, i): Medal => {
     const awardedAt = at.get(id) ?? null;
     const state: MedalState =

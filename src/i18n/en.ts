@@ -1316,7 +1316,8 @@ export const en = {
       faster: "Your {key} is {pct}% faster than last week.",
       slower: "Your {key} is {pct}% slower than last week: a short practice brings it back.",
       cleaner: "You missed {key} {pct}% less often than last week.",
-      messier: "You missed {key} {pct}% more often than last week: slow down on it and it will settle.",
+      messier:
+        "You missed {key} {pct}% more often than last week: slow down on it and it will settle.",
       steady: "Your {key} held its speed this week. Steady work.",
     },
     ladder: {

@@ -1250,9 +1250,11 @@ export const fr = {
       kicker: "BULLETIN DE LA SEMAINE",
       title: "Cette semaine à ton bureau",
       faster: "Ton {key} est {pct} % plus rapide que la semaine dernière.",
-      slower: "Ton {key} est {pct} % plus lent que la semaine dernière : un court entraînement le remettra en forme.",
+      slower:
+        "Ton {key} est {pct} % plus lent que la semaine dernière : un court entraînement le remettra en forme.",
       cleaner: "Tu as raté le {key} {pct} % moins souvent que la semaine dernière.",
-      messier: "Tu as raté le {key} {pct} % plus souvent que la semaine dernière : ralentis dessus, ça va se placer.",
+      messier:
+        "Tu as raté le {key} {pct} % plus souvent que la semaine dernière : ralentis dessus, ça va se placer.",
       steady: "Ton {key} a gardé sa vitesse cette semaine. Du travail régulier.",
     },
     ladder: {

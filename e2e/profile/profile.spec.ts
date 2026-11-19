@@ -1705,7 +1705,14 @@ test.describe("the whole Personnel file (#970)", () => {
       await seedLobby(stranger);
       await openFile(stranger);
       await expect(blank(stranger)).toBeVisible();
-      expect(await sectionsOf(stranger)).toEqual(["hero", "band", "tabs", "service", "blank", "medals"]);
+      expect(await sectionsOf(stranger)).toEqual([
+        "hero",
+        "band",
+        "tabs",
+        "service",
+        "blank",
+        "medals",
+      ]);
       await expect(figure(stranger, "races")).toHaveText("—");
       await expect(stranger.locator("[data-key], [data-day]")).toHaveCount(0);
       await expect(tubes(stranger).first()).toHaveText("--");

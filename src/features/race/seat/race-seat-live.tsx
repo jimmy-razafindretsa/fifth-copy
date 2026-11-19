@@ -148,7 +148,7 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
  * `GO_STAMP_MS` after GO. One timeout per step change; the store's GO (`bindRaceSocket`) reads the same
  * `race.t0` and offset, so the phase turns `running` as the stamp lands.
  */
-function useCountdownStep(): CountdownStep | null {
+export function useCountdownStep(): CountdownStep | null {
   const phase = useRaceStore((s) => s.phase);
   const t0 = useRaceStore((s) => s.race?.t0 ?? null);
   const offset = useRaceStore((s) => s.clockOffset);

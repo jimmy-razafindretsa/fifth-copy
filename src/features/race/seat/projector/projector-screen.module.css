@@ -1,0 +1,111 @@
+/*
+ * The projector view (#999 C6, C7; bible 14.3 "Projector view", 7.10): one full-viewport frame on the flat
+ * themed paper ground, no page scroll. Every size is given at 1920x1080 and grows with the screen,
+ * `max(N, min(N/1920 of the width, N/1080 of the height))`. From 1024px: the stage (1fr) and the 520px
+ * sidebar on the right, 24px gutters; the kicker and the live state sit at the top of the stage column,
+ * over the stage (the overview scene, or the seat ring diagram on paper). The plaque layer (M3b) covers
+ * the frame and never takes a pointer. Under 1024px the sidebar stacks under the stage.
+ */
+
+@reference "../../../../app/globals.css";
+
+.screen {
+  --_gutter: max(24px, min(calc(100vw * 24 / 1920), calc(100vh * 24 / 1080)));
+  --_side: max(520px, min(calc(100vw * 520 / 1920), calc(100vh * 520 / 1080)));
+  --_kicker: max(20px, min(calc(100vw * 20 / 1920), calc(100vh * 20 / 1080)));
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--_side);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--_gutter);
+  height: 100dvh;
+  padding: var(--_gutter);
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* the stage: the scene's slot, or the paper fallback's ring, centred in the free space */
+.stage {
+  grid-column: 1;
+  grid-row: 2;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  container-type: size;
+}
+
+/* the lobby's seat ring diagram (14.3), as large as the stage allows */
+.stage :global([data-seat-ring][role="img"]) {
+  width: min(100cqw, 100cqh);
+}
+
+/* the rank plaques (M3b) over the scene: decorative, never a pointer */
+.plaques {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.main {
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--_gutter);
+  min-width: 0;
+}
+
+/* the kicker in its paper chip (red Oswald, link role on Night shift), at 20px */
+.kicker {
+  margin: 0;
+  @apply type-label;
+  font-size: var(--_kicker);
+  line-height: normal;
+  letter-spacing: 0.24em;
+  color: var(--color-link);
+  background: var(--color-bg);
+  padding: 2px 8px;
+}
+
+/* the live state, centred in the stage column */
+.status {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--_gutter);
+  width: min(720px, 100%);
+}
+
+.side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  z-index: 2;
+  align-self: start;
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .screen {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .stage {
+    grid-row: 2;
+    height: min(100vw - 2 * var(--_gutter), 70vh);
+  }
+
+  .side {
+    grid-column: 1;
+    grid-row: 3;
+  }
+}

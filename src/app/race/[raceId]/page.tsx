@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { getPreferences, getViewer, updatePreferences } from "@/features/identity";
 import { mintRaceToken } from "@/features/lobby";
-import { getRaceSeat, machineRows, RaceSeat } from "@/features/race";
+import { getRaceSeat, machineRows, ProjectorScreen, RaceSeat } from "@/features/race";
 import { getLocale, getT } from "@/i18n";
+import { ProjectorStage } from "./projector-stage";
 import { SeatScene } from "./seat-scene";
 
 /**
@@ -14,11 +15,27 @@ import { SeatScene } from "./seat-scene";
  * machine's skin is the viewer's filed one (#638; `teleprinter` without a preference or a viewer).
  * The sound toggle (#243) starts from the viewer's filed `sound` (muted by default) and files through
  * `updatePreferences`. The 3D seat scene (#563) is `SeatScene`, a client leaf that loads race-3d after the HUD mounted.
+ * `?view=projector` (#999, bible 14.3 "Projector view") is the spectator page for a classroom screen: a
+ * read-only `spectator` token for any viewer (the host's own seat stays on the plain URL), no desk, no
+ * keys, the top 10 beside the stage; its stage is `ProjectorStage` (the ring diagram on paper).
  */
-export default async function RacePage({ params }: PageProps<"/race/[raceId]">) {
-  const { raceId } = await params;
+export default async function RacePage({ params, searchParams }: PageProps<"/race/[raceId]">) {
+  const [{ raceId }, { view }] = await Promise.all([params, searchParams]);
   const seat = await getRaceSeat(raceId);
   if (!seat) notFound();
+  if (view === "projector") {
+    const t = await getT();
+    return (
+      <main className="flex flex-1 flex-col">
+        <ProjectorScreen
+          seat={seat}
+          labels={t.race}
+          mint={mintRaceToken}
+          stage={<ProjectorStage labels={t.lobby.ring} />}
+        />
+      </main>
+    );
+  }
   const [t, { machineSkin, sound }] = await Promise.all([getT(), getViewer().then(getPreferences)]);
   const rows = await machineRows({ layout: null, locale: await getLocale() });
   return (

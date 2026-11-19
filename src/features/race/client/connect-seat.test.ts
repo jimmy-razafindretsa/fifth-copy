@@ -42,7 +42,7 @@ describe("connectSeat (#561 C4)", () => {
       load: async () => ({ connectToRoom }),
     });
     await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalledTimes(1));
-    expect(mint).toHaveBeenCalledWith({ code: "KGB-4821" });
+    expect(mint).toHaveBeenCalledWith({ code: "KGB-4821", lobbyId: LOBBY });
     const [url, token] = connectToRoom.mock.calls[0] as unknown as [string, () => string];
     expect(url).toBe("http://r");
     // the token is read before every handshake (#235 C6: a re-mint replaces it)
@@ -68,6 +68,25 @@ describe("connectSeat (#561 C4)", () => {
       });
       await vi.waitFor(() => expect(dispatch).toHaveBeenCalled());
       expect(dispatch).toHaveBeenCalledWith({ type: "token-error", error });
+      expect(connectToRoom).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["rate-limited", "unavailable"] as const)(
+    "#999: a %s mint is the generic token error, no socket",
+    async (error) => {
+      const connectToRoom = vi.fn();
+      const dispatch = vi.fn();
+      connectSeat({
+        code: null,
+        lobbyId: LOBBY,
+        spectator: true,
+        mint: async () => ({ ok: false, error }),
+        dispatch,
+        load: async () => ({ connectToRoom }),
+      });
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalled());
+      expect(dispatch).toHaveBeenCalledWith({ type: "token-error", error: "generic" });
       expect(connectToRoom).not.toHaveBeenCalled();
     },
   );
@@ -391,7 +410,7 @@ describe("connectSeat as a spectator (#999 C1)", () => {
       spectator: true,
     });
     await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalledTimes(1));
-    expect(mint).toHaveBeenCalledWith({ code: "KGB-4821", spectator: true });
+    expect(mint).toHaveBeenCalledWith({ code: "KGB-4821", spectator: true, lobbyId: LOBBY });
     const opts = (
       connectToRoom.mock.calls[0] as unknown as [
         string,
@@ -413,7 +432,7 @@ describe("connectSeat as a spectator (#999 C1)", () => {
     // an expired token re-mints a spectator one
     room.deliver("connectError", "bad-token");
     await vi.waitFor(() => expect(mint).toHaveBeenCalledTimes(2));
-    expect(mint).toHaveBeenLastCalledWith({ code: "KGB-4821", spectator: true });
+    expect(mint).toHaveBeenLastCalledWith({ code: "KGB-4821", spectator: true, lobbyId: LOBBY });
     stop();
     releaseParkedSocket(LOBBY);
   });

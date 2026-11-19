@@ -9,17 +9,23 @@ import { bindRaceSocket, type RaceEvent } from "./store";
  * down by the route: the race feature never imports the lobby, whose client code imports the race).
  */
 export type MintRaceToken = (input: {
-  code: string;
+  /**
+   * The room code, or `null` on a spectator link's page (#999 C12: its mint is bound to the link and
+   * ignores the input; the page never holds the code).
+   */
+  code: string | null;
   /** #999 C1: a read-only `role: spectator` token (the projector), for any viewer, the host included. */
   spectator?: boolean;
-}) => Promise<
-  | { ok: true; token: string; url: string }
-  | { ok: false; error: "not-found" | "closed" | "rate-limited" }
->;
+  /** #999 C13: the page's room; the code of another room is `not-found`. */
+  lobbyId?: string;
+}) => Promise<{ ok: true; token: string; url: string } | { ok: false; error: MintError }>;
+
+/** Why a mint was refused; `unavailable` (#999 C12: a spectator link while Redis is away) reads as the generic error. */
+export type MintError = "not-found" | "closed" | "rate-limited" | "unavailable";
 
 export type ConnectSeatOptions = {
-  /** The room code the token is minted for (the lobby's code, `KGB-4821`). */
-  code: string;
+  /** The room code the token is minted for (the lobby's code, `KGB-4821`); `null` on a spectator link's page. */
+  code: string | null;
   /** The room's lobby id: the resume key is read and written under it (#561 C11). */
   lobbyId: string;
   mint: MintRaceToken;
@@ -56,7 +62,7 @@ export function connectSeat({
   onSocket,
   spectator = false,
 }: ConnectSeatOptions): () => void {
-  const input = spectator ? { code, spectator: true } : { code };
+  const input = spectator ? { code, spectator: true, lobbyId } : { code, lobbyId };
   let aborted = false;
   let socket: RoomSocket | null = null;
   let unbind = () => {};
@@ -65,9 +71,12 @@ export function connectSeat({
   // The token of the next handshake, and whether it was re-minted since the last `welcome` (#235 C6).
   let token = "";
   let reminted = false;
-  const tokenError = (error: "not-found" | "closed" | "rate-limited") =>
-    // A throttled mint (#207) is the generic error, as a failed load is.
-    dispatch({ type: "token-error", error: error === "rate-limited" ? "generic" : error });
+  const tokenError = (error: MintError) =>
+    // A throttled mint (#207) or an unavailable link store (#999) is the generic error, as a failed load is.
+    dispatch({
+      type: "token-error",
+      error: error === "rate-limited" || error === "unavailable" ? "generic" : error,
+    });
   const remint = () => {
     reminted = true;
     mint(input).then(

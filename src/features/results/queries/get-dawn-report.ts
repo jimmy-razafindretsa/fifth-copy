@@ -9,6 +9,11 @@ import { personalFrom } from "../view/personal";
 type ReportViewer = { id: string } | null;
 
 type Db = Pick<typeof appDb, "race">;
+/** Whether a viewer holds the room code proof of a lobby (#999 C13); the web Redis store by default. */
+type HoldsProof = (userId: string, lobbyId: string) => Promise<boolean>;
+
+const defaultHoldsProof: HoldsProof = async (userId, lobbyId) =>
+  (await import("@/server/room-code-proof")).codeProofStore().holds(userId, lobbyId);
 
 const raceIdSchema = z.uuid();
 
@@ -26,7 +31,7 @@ const raceIdSchema = z.uuid();
 export async function getDawnReport(
   raceId: string,
   viewer: ReportViewer,
-  { db }: { db?: Db } = {},
+  { db, holdsProof = defaultHoldsProof }: { db?: Db; holdsProof?: HoldsProof } = {},
 ): Promise<DawnReport | null> {
   const parsed = raceIdSchema.safeParse(raceId);
   if (!parsed.success) return null;
@@ -38,7 +43,7 @@ export async function getDawnReport(
       textLanguage: true,
       endedAt: true,
       endReason: true,
-      lobby: { select: { code: true, status: true, hostUserId: true } },
+      lobby: { select: { id: true, code: true, status: true, hostUserId: true } },
       results: {
         orderBy: [{ place: "asc" }, { desk: "asc" }],
         select: {
@@ -62,7 +67,15 @@ export async function getDawnReport(
   });
   // #613 C2: a voided race (race.void job) has no report, not even a filing notice.
   if (!race || race.endReason === "VOID") return null;
-  const lobbyCode = race.lobby?.code ?? null;
+  const mine = viewer ? race.results.find((r) => r.userId === viewer.id) : undefined;
+  // #999 C13: the room code only for those who hold it (the host, a desk of this race, a viewer with
+  // the code proof): a spectator link's holder reaches this report from the projector, never the code.
+  const lobby = race.lobby;
+  const knowsCode =
+    !!lobby &&
+    !!viewer &&
+    (lobby.hostUserId === viewer.id || !!mine || (await holdsProof(viewer.id, lobby.id)));
+  const lobbyCode = knowsCode ? lobby.code : null;
   if (race.results.length === 0) return { kind: "filing", raceId: race.id, lobbyCode };
 
   const entries: ReportEntry[] = race.results.map((r) => ({
@@ -78,7 +91,6 @@ export async function getDawnReport(
     suspicious: r.suspicious,
     outfit: parseOutfit(r.user?.outfit) ?? outfitForDesk(r.desk),
   }));
-  const mine = viewer ? race.results.find((r) => r.userId === viewer.id) : undefined;
   return {
     kind: "report",
     race: {

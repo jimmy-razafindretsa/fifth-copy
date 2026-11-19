@@ -14,8 +14,11 @@ import { SeatAbandon, SeatKicker, SeatRaceCard, SeatSheet, SeatTelex } from "./s
 import type { RaceSeatLabels } from "./seat-view";
 
 export type RaceSeatProps = {
-  /** The room behind the page (`getRaceSeat`). */
-  seat: RaceSeatInfo;
+  /**
+   * The room behind the page (`getRaceSeat`), its code known: a seat is only opened by the code's
+   * holder (#999 C13: the route asks for the code first when `getRaceSeat` served none).
+   */
+  seat: RaceSeatInfo & { code: string };
   /** The `race` catalog of the request's language (ADR 0010). */
   labels: RaceSeatLabels;
   /** The lobby's `mintRaceToken` action, passed by the route. */

@@ -8,6 +8,10 @@ export { joinByCode } from "./actions/join-by-code";
 export { peekInvite, redeemInvite } from "./actions/redeem-invite";
 export { INVITE_TOKEN_RE } from "./invite-token";
 export { mintRaceToken } from "./actions/mint-race-token";
+// #999 C12, C13: the reusable spectator link, its spectator mint, and the race page's code entry
+export { createSpectatorLink } from "./actions/create-spectator-link";
+export { mintSpectatorToken } from "./actions/mint-spectator-token";
+export { RoomCodeGate, type RoomCodeGateLabels } from "./components/room-code-gate";
 export { InlineError } from "./components/inline-error";
 export { LobbyEntries } from "./components/lobby-entries";
 export { QuickRaceButton } from "./components/quick-race-button";
@@ -22,7 +26,11 @@ export type {
   QuickRaceResult,
   RaceTokenResult,
   RedeemInviteResult,
+  SpectatorTokenResult,
+  CreateSpectatorLinkResult,
+  ProveRoomCodeResult,
 } from "./types";
 export type { CreateLobbyOptions } from "./actions/create-lobby";
 export { LobbyScreen } from "./components/lobby-screen";
 export { InvitePage } from "./components/invite-page";
+export { InviteRefused } from "./components/invite-refused";

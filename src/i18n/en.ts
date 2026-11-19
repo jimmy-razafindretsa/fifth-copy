@@ -514,8 +514,33 @@ export const en = {
       /** createInvite answered `not-host` (the row only shows to the host; the action decides). */
       notHost: "Only the host can issue a link.",
     },
+    /**
+     * The host's reusable spectator link row (#999 C12, bible 14.3 "the watch row"): the link row's
+     * recipe; a projector or a phone opens it and watches, never seated, never told the room code.
+     */
+    watchLinks: {
+      label: "WATCH",
+      newLink: "NEW WATCH LINK",
+      issuing: "ISSUING…",
+      urlName: "Spectator link",
+      copy: "COPY",
+      copied: "COPIED",
+      copiedStatus: "Spectator link copied",
+      selectedStatus: "Spectator link selected: copy it with your keyboard",
+      notHost: "Only the host can issue a link.",
+    },
   },
   race: {
+    /**
+     * The race page's room code entry (#999 C13, bible 14.3 "Room code entry"): `/race/<id>` served no
+     * code (not the host, no proof on file), so it asks for it first.
+     */
+    codeGate: {
+      kicker: "MINISTRY OF TYPING · ROOM CODE",
+      title: "CODE, PLEASE",
+      body: "This room opens with its code. Type it to take your desk or to watch the race.",
+      formName: "Room code",
+    },
     kicker: { seat: "SEAT VIEW", desk: "SEAT VIEW · DESK {n}" },
     telex: { strip: "Text to type" },
     /** The 3-2-1 countdown and the Major's dual stamp `НАЧАЛИ · GO` (#214, bible 2, 7.3). */

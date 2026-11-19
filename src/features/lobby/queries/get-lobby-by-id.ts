@@ -5,3 +5,14 @@ import { db } from "@/server/db";
 export function findLobbyById(id: string) {
   return db.lobby.findUnique({ where: { id }, select: { code: true, status: true } });
 }
+
+/**
+ * The lobby a spectator link points at (#999 C12): its status and host, by id. Never its code: a
+ * link holder is not told the room code (C13), so the code is not even read on that path.
+ */
+export function findLobbyForWatch(id: string) {
+  return db.lobby.findUnique({
+    where: { id },
+    select: { id: true, status: true, hostUserId: true },
+  });
+}

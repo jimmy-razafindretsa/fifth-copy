@@ -28,7 +28,9 @@ export type LimitAction =
   | "recovery-redeem"
   | "recovery-redeem-account"
   | "guest-create"
-  | "avatar-view";
+  | "avatar-view"
+  | "spectator-link"
+  | "watch";
 
 /** Actions counted per (subject, room code) by `limit.code` (#699). */
 export type CodeAction = "join-by-code" | "mint-race-token-new-guest";
@@ -88,6 +90,11 @@ export const LIMITS = {
   // race server is asked. A full 30-desk roll is 29 portraits per version and size, so 240 a minute
   // is a few rolls a minute; the owner's own avatar is never counted.
   "avatar-view": { max: 240, windowMs: 60_000 },
+  // Spectator links (#999 C12, ADR 0008): `spectator-link` counts the links one host issues
+  // (`user:<id>`), as `invite`; `watch` counts one client's spectator mints through a link
+  // (`requestSubject()`), spent before the token is looked up, sized above a class behind one address.
+  "spectator-link": { max: 20, windowMs: 60_000 },
+  watch: { max: 120, windowMs: 60_000 },
 } as const satisfies Record<LimitAction, LimitRule>;
 
 /** Prefix of the web app's limiter keys: `web:rl:<action>:<subjectKey(subject)>`. */

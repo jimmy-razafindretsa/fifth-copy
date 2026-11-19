@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getPreferences, getViewer, updatePreferences } from "@/features/identity";
-import { mintRaceToken } from "@/features/lobby";
+import { mintRaceToken, RoomCodeGate } from "@/features/lobby";
 import { getRaceSeat, machineRows, ProjectorScreen, RaceSeat } from "@/features/race";
 import { getLocale, getT } from "@/i18n";
 import { ProjectorStage } from "./projector-stage";
@@ -19,17 +19,34 @@ import { SeatScene } from "./seat-scene";
  * read-only `spectator` token for any viewer (the host's own seat stays on the plain URL), no desk, no
  * keys, the top 10 beside the stage; its stage is `ProjectorStage` (the overview scene with its rank
  * plaques, or the ring diagram on paper).
+ * #999 C13: the room code is served only to the room's host or to a viewer holding its proof
+ * (`getRaceSeat`); anyone else (a spectator link's holder, a shared URL, a new device) gets the code
+ * entry first, and no seat or projector opens until the code is proven.
  */
 export default async function RacePage({ params, searchParams }: PageProps<"/race/[raceId]">) {
   const [{ raceId }, { view }] = await Promise.all([params, searchParams]);
   const seat = await getRaceSeat(raceId);
   if (!seat) notFound();
+  if (seat.code === null) {
+    const t = await getT();
+    return (
+      <main className="flex flex-1 flex-col">
+        <RoomCodeGate
+          lobbyId={seat.lobbyId}
+          labels={t.race.codeGate}
+          entry={t.landing.actions}
+          errors={t.landing.errors}
+        />
+      </main>
+    );
+  }
+  const known = { lobbyId: seat.lobbyId, code: seat.code };
   if (view === "projector") {
     const t = await getT();
     return (
       <main className="flex flex-1 flex-col">
         <ProjectorScreen
-          seat={seat}
+          seat={known}
           labels={t.race}
           mint={mintRaceToken}
           stage={<ProjectorStage labels={t.lobby.ring} title={t.race.projector.scene} />}
@@ -42,7 +59,7 @@ export default async function RacePage({ params, searchParams }: PageProps<"/rac
   return (
     <main className="flex flex-1 flex-col">
       <RaceSeat
-        seat={seat}
+        seat={known}
         labels={t.race}
         mint={mintRaceToken}
         rows={rows}

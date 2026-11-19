@@ -42,6 +42,7 @@ import { newHostAnnouncement, newHostHoldMs, NewHostStampOverlay } from "./new-h
 import { SeatRing } from "./seat-ring";
 import { InviteDocket } from "./invite-docket";
 import { InviteLinkRow } from "./invite-link-row";
+import { createSpectatorLink } from "../actions/create-spectator-link";
 import { ROOM_CODE_ID, RoomCodeDocket } from "./room-code-docket";
 import { hostForm } from "./settings-controls";
 import { SettingsDocket } from "./settings-docket";
@@ -223,11 +224,19 @@ export function LobbyLiveView({
             code={code}
             codeId={ROOM_CODE_ID}
             labels={labels.invite}
-            // the host's single-use link row (#809): only for the viewer whose own row hosts;
-            // createInvite refuses everyone else anyway
+            // the host's single-use link row (#809) and the reusable watch link row (#999 C12): only
+            // for the viewer whose own row hosts; both actions refuse everyone else anyway
             links={
               isHost(state) ? (
-                <InviteLinkRow code={code} labels={labels.links} errors={errors} />
+                <>
+                  <InviteLinkRow code={code} labels={labels.links} errors={errors} />
+                  <InviteLinkRow
+                    code={code}
+                    labels={labels.watchLinks}
+                    errors={errors}
+                    issue={createSpectatorLink}
+                  />
+                </>
               ) : undefined
             }
           />

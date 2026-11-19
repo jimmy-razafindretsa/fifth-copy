@@ -7,11 +7,17 @@ import { ProjectorLive, Top10Live, type ProjectorScreenLabels } from "./projecto
 import styles from "./projector-screen.module.css";
 
 export type ProjectorScreenProps = {
-  /** The room behind the page (`getRaceSeat`): the code the spectator token is minted for. */
-  seat: { code: string; lobbyId: string };
+  /**
+   * The room behind the page (`getRaceSeat`): the code the spectator token is minted for, or `null` on
+   * a spectator link's page (#999 C12, C13: the link holder is never told the code).
+   */
+  seat: { code: string | null; lobbyId: string };
   /** The `race` catalog of the request's language (ADR 0010). */
   labels: ProjectorScreenLabels;
-  /** The lobby's `mintRaceToken` action, passed by the route (called with `spectator: true`). */
+  /**
+   * The lobby's `mintRaceToken` action, passed by the route (called with `spectator: true`), or on a
+   * spectator link's page its `mintSpectatorToken` bound to the link's token.
+   */
   mint: MintRaceToken;
   /**
    * The stage (#999 C2, C6): the route's client leaf. The overview scene behind everything once WebGL2

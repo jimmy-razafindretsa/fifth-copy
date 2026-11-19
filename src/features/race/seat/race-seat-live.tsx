@@ -76,7 +76,8 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
 type ViewProps = {
   phase: RacePhase;
   lost: RaceLostReason | null;
-  code: string;
+  /** `null` for a spectator link's projector (#999 C13): the ways back to the lobby are left out. */
+  code: string | null;
   labels: SeatStatusLabels;
 };
 
@@ -118,10 +119,15 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
               data-notice="room-lost"
               className={cn(docket.notice, notice.notice, styles.roomLost)}
             >
-              {labels.presence.roomLost} ·{" "}
-              <a href={`/lobby/${code}`} className={styles.roomLink}>
-                {labels.presence.backToLobby}
-              </a>
+              {labels.presence.roomLost}
+              {code === null ? null : (
+                <>
+                  {" · "}
+                  <a href={`/lobby/${code}`} className={styles.roomLink}>
+                    {labels.presence.backToLobby}
+                  </a>
+                </>
+              )}
             </p>
           </div>
         );
@@ -133,9 +139,11 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
             {labels.errors[LOST_COPY[lost ?? "generic"]]}
           </p>
           {/* a full page load: after a version refusal the waiting room fetches the new bundle */}
-          <a href={`/lobby/${code}`} className={styles.back}>
-            {labels.errors.back}
-          </a>
+          {code === null ? null : (
+            <a href={`/lobby/${code}`} className={styles.back}>
+              {labels.errors.back}
+            </a>
+          )}
         </div>
       );
     default:

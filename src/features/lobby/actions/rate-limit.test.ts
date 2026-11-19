@@ -307,7 +307,7 @@ describe.skipIf(!testDatabaseUrl)(
       matchmaking.runQuickRace.mockReset();
     });
 
-    it("with REDIS_URL on a closed port both actions still succeed and one warning is logged", async () => {
+    it("with REDIS_URL on a closed port both actions still succeed and one warning per store is logged", async () => {
       state.env.REDIS_URL = `redis://127.0.0.1:${await closedPort()}/0`;
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       ip();
@@ -316,8 +316,11 @@ describe.skipIf(!testDatabaseUrl)(
       await expect(joinByCode({ code: CODE })).resolves.toEqual({ ok: true, code: CODE });
       expect((await mintRaceToken({ code: CODE })).ok).toBe(true);
       const lines = warn.mock.calls.map(([line]) => JSON.parse(String(line)) as { msg: string });
-      expect(lines).toHaveLength(1);
-      expect(lines[0]!.msg).toBe("rate limiter unavailable, allowing");
+      // the limiter fails open; the room code proof (#999 C13) fails closed, the mint still stands
+      expect(lines.map((l) => l.msg)).toEqual([
+        "rate limiter unavailable, allowing",
+        "code proof store unavailable, refusing",
+      ]);
     });
   },
 );

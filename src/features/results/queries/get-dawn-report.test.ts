@@ -33,7 +33,7 @@ type RaceRow = {
   textLanguage: "FR" | "EN";
   endedAt: Date | null;
   endReason: "ALL_FINISHED" | "TIMER" | "VOID" | null;
-  lobby: { code: string; status: "WAITING" | "CLOSED"; hostUserId?: string } | null;
+  lobby: { id?: string; code: string; status: "WAITING" | "CLOSED"; hostUserId?: string } | null;
   results: Row[];
 };
 
@@ -80,7 +80,7 @@ const RACES: RaceRow[] = [
     textLanguage: "FR",
     endedAt: ENDED,
     endReason: "ALL_FINISHED",
-    lobby: { code: "KGB-4821", status: "WAITING", hostUserId: "usr_host" },
+    lobby: { id: "lob_1", code: "KGB-4821", status: "WAITING", hostUserId: "usr_host" },
     // stored out of order: the query orders by place, then desk
     results: [
       row({
@@ -213,6 +213,22 @@ describe("getDawnReport (#300 C1)", () => {
     expect(none?.kind === "report" && none.race.lobbyOpen).toBe(false);
   });
 
+  it("#999 C13: the room code only for its host, a desk of the race or a proof holder", async () => {
+    const { db } = fakeDb();
+    const proofs = new Set(["u-proved:lob_1"]);
+    const holdsProof = async (u: string, l: string) => proofs.has(`${u}:${l}`);
+    const code = async (viewer: { id: string } | null) => {
+      const r = await getDawnReport(RACE_ID, viewer, { db, holdsProof });
+      return r?.kind === "report" ? r.race.lobbyCode : "no report";
+    };
+    expect(await code({ id: "usr_host" })).toBe("KGB-4821");
+    expect(await code({ id: "u-otter" })).toBe("KGB-4821");
+    expect(await code({ id: "u-proved" })).toBe("KGB-4821");
+    // a spectator link's holder, a visitor
+    expect(await code({ id: "u-link" })).toBeNull();
+    expect(await code(null)).toBeNull();
+  });
+
   it("answers filing while the race has no results", async () => {
     const { db } = fakeDb();
     await expect(getDawnReport(FILING_ID, { id: "u-lynx" }, { db })).resolves.toEqual({
@@ -224,7 +240,7 @@ describe("getDawnReport (#300 C1)", () => {
 
   it("answers the report: race, entries by place with clean WPM, never adjustedWpm", async () => {
     const { db, findUnique } = fakeDb();
-    const report = await getDawnReport(RACE_ID, null, { db });
+    const report = await getDawnReport(RACE_ID, { id: "usr_host" }, { db });
     expect(report).toMatchObject({
       kind: "report",
       race: {
@@ -238,7 +254,7 @@ describe("getDawnReport (#300 C1)", () => {
       viewerDesk: null,
     });
     expect(findUnique.mock.calls[0]![0].select.lobby).toEqual({
-      select: { code: true, status: true, hostUserId: true },
+      select: { id: true, code: true, status: true, hostUserId: true },
     });
     if (report?.kind !== "report") throw new Error("report expected");
     expect(report.entries.map((e) => [e.place, e.desk, e.wpm])).toEqual([

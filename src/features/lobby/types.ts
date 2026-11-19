@@ -20,6 +20,26 @@ export type RaceTokenResult =
   | { ok: true; token: string; url: string }
   | { ok: false; error: "not-found" | "closed" | "rate-limited" };
 
+/**
+ * mintSpectatorToken's answer (#999 C12): a `spectator` token through a spectator link, or why not.
+ * `not-found`: the link was never issued, expired, or its room is gone; `unavailable`: Redis did not
+ * answer (fail closed).
+ */
+export type SpectatorTokenResult =
+  | { ok: true; token: string; url: string }
+  | { ok: false; error: "not-found" | "rate-limited" | "unavailable" };
+
+/** createSpectatorLink's answer (#999 C12): the reusable `${NEXT_PUBLIC_APP_URL}/watch/<token>`, or why not. */
+export type CreateSpectatorLinkResult = CreateInviteResult;
+
+/** proveRoomCode's answer (#999 C13): the proof is on file, or why not. */
+export type ProveRoomCodeResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: "invalid-format" | "not-found" | "closed" | "rate-limited" | "unavailable";
+    };
+
 /** setLobbyType's answer (#114): the host's lobby is now `type`, or why not. */
 /** `unavailable`: the race server did not answer (#815); nothing was written, the host retries. */
 export type SetLobbyTypeResult =

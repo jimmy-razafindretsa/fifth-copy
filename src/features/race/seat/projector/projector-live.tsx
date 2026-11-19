@@ -37,7 +37,8 @@ export function ProjectorLive({
   mint,
   labels,
 }: {
-  code: string;
+  /** `null` on a spectator link's page (#999 C12): no way back to a lobby the viewer has no code for. */
+  code: string | null;
   lobbyId: string;
   mint: MintRaceToken;
   labels: ProjectorScreenLabels;

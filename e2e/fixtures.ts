@@ -150,7 +150,7 @@ export function watchPage(page: Page): { errors: string[]; settle: () => Promise
  * (e2e/race/scene.spec.ts): every other race spec runs on the paper
  * fallback (#563 C3), so headless software WebGL (#690) never loads two or three scenes per test, and the
  * scene's same-origin frame never re-runs a spec's `addInitScript`. The probe answers `null` for `webgl2`
- * in the top frame of `/race/*` only (checked at call time: client navigations from the lobby count);
+ * in the top frame of `/race/*` and `/watch/*` (#999) only (checked at call time: client navigations from the lobby count);
  * other routes and every embed frame keep WebGL.
  */
 function noRaceScene() {
@@ -160,7 +160,7 @@ function noRaceScene() {
     id: string,
     ...rest: unknown[]
   ) {
-    if (id === "webgl2" && window.top === window && location.pathname.startsWith("/race/"))
+    if (id === "webgl2" && window.top === window && /^\/(race|watch)\//.test(location.pathname))
       return null;
     return (original as (...a: unknown[]) => unknown).call(this, id, ...rest);
   } as typeof original;

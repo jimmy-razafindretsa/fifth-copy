@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // the page (which then serves the code); a refusal is an error line, a throttle or outage the generic one.
 const prove = vi.hoisted(() => vi.fn());
 vi.mock("../actions/prove-room-code", () => ({ proveRoomCode: prove }));
+vi.mock("../actions/join-by-code", () => ({ joinByCode: vi.fn() }));
 
 const { makeGateAction } = await import("./room-code-gate");
 

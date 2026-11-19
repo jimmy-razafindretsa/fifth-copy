@@ -1268,6 +1268,57 @@ export const en = {
   },
   /** The Personnel file at /profile (#932, bible 14.3 "Personnel file", reference Profil.dc.html). */
   profile: {
+    /**
+     * The enamel pins (#999 C36, C40; spec 13.4, bible 13, 7.6, 14.3 "Medals"): the section and each
+     * pin's in-world name and description, keyed by the stable achievement ids (`ACHIEVEMENT_IDS`).
+     */
+    medals: {
+      kicker: "DECORATIONS · ENAMEL PINS",
+      title: "Medals",
+      intro:
+        "Pinned to your file for good. A locked pin shows what the Ministry still expects of you.",
+      count: "{n} / {total} PINNED",
+      none: "No pin on your file yet. Win a race, or finish one without a single error, and the Ministry pins your first.",
+      list: "Enamel pins",
+      awarded: "PINNED {date}",
+      locked: "LOCKED",
+      new: "NEW",
+      pins: {
+        "first-win": {
+          name: "Order of the First Copy",
+          description: "Win a race against at least one other desk.",
+        },
+        "wpm-50-club": {
+          name: "Fifty Club",
+          description: "Finish a race at 50 clean words per minute or more.",
+        },
+        "accuracy-100": {
+          name: "Spotless Copy",
+          description: "Finish a race without a single error.",
+        },
+        "accent-master": {
+          name: "Master of Accents",
+          description: "Finish an accent text at 95% accuracy or more.",
+        },
+        "streak-7-days": {
+          name: "Seven-Day Shift",
+          description: "Race on seven days in a row.",
+        },
+      },
+    },
+    /**
+     * The improvement callout templates (#999 C40, consumed by the callouts of C48): week over week,
+     * per key, from the daily character stats. `{key}` the character, `{pct}` a whole percentage.
+     */
+    callouts: {
+      kicker: "WEEKLY BULLETIN",
+      title: "This week at your desk",
+      faster: "Your {key} is {pct}% faster than last week.",
+      slower: "Your {key} is {pct}% slower than last week: a short practice brings it back.",
+      cleaner: "You missed {key} {pct}% less often than last week.",
+      messier: "You missed {key} {pct}% more often than last week: slow down on it and it will settle.",
+      steady: "Your {key} held its speed this week. Steady work.",
+    },
     ladder: {
       label: "GRADE LADDER · BY YOUR AVERAGE",
       next: "{wpm} / {next} WPM → {rank}",

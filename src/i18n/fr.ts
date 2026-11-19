@@ -1212,6 +1212,49 @@ export const fr = {
   },
   /** Le Dossier du personnel sur /profile (#932, bible 14.3, référence Profil.dc.html). */
   profile: {
+    medals: {
+      kicker: "DÉCORATIONS · ÉPINGLETTES",
+      title: "Médailles",
+      intro:
+        "Épinglées à ton dossier pour de bon. Une épinglette verrouillée montre ce que le Ministère attend encore de toi.",
+      count: "{n} / {total} ÉPINGLÉES",
+      none: "Aucune épinglette à ton dossier pour l'instant. Gagne une course, ou finis-en une sans une seule faute, et le Ministère épingle ta première.",
+      list: "Épinglettes",
+      awarded: "ÉPINGLÉE LE {date}",
+      locked: "VERROUILLÉ",
+      new: "NOUVEAU",
+      pins: {
+        "first-win": {
+          name: "Ordre de la première copie",
+          description: "Gagne une course contre au moins un autre bureau.",
+        },
+        "wpm-50-club": {
+          name: "Club des cinquante",
+          description: "Termine une course à 50 mots par minute nets ou plus.",
+        },
+        "accuracy-100": {
+          name: "Copie sans tache",
+          description: "Termine une course sans une seule faute.",
+        },
+        "accent-master": {
+          name: "Maître des accents",
+          description: "Termine un texte à accents avec 95 % de précision ou plus.",
+        },
+        "streak-7-days": {
+          name: "Semaine de service",
+          description: "Fais une course sept jours de suite.",
+        },
+      },
+    },
+    callouts: {
+      kicker: "BULLETIN DE LA SEMAINE",
+      title: "Cette semaine à ton bureau",
+      faster: "Ton {key} est {pct} % plus rapide que la semaine dernière.",
+      slower: "Ton {key} est {pct} % plus lent que la semaine dernière : un court entraînement le remettra en forme.",
+      cleaner: "Tu as raté le {key} {pct} % moins souvent que la semaine dernière.",
+      messier: "Tu as raté le {key} {pct} % plus souvent que la semaine dernière : ralentis dessus, ça va se placer.",
+      steady: "Ton {key} a gardé sa vitesse cette semaine. Du travail régulier.",
+    },
     ladder: {
       label: "ÉCHELLE DES GRADES · SELON TA MOYENNE",
       next: "{wpm} / {next} MPM → {rank}",

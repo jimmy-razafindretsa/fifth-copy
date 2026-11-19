@@ -130,3 +130,24 @@ describe("ranks (#999 C39, #945; bible 2 canonical strings, engine thresholds)",
     });
   });
 });
+
+describe("improvement callouts (#999 C40, consumed by C48)", () => {
+  it("fills the card's example in both languages", () => {
+    expect(fill(en.profile.callouts.faster, { key: "ç", pct: 30 })).toBe(
+      "Your ç is 30% faster than last week.",
+    );
+    expect(fill(fr.profile.callouts.faster, { key: "ç", pct: 30 })).toBe(
+      "Ton ç est 30 % plus rapide que la semaine dernière.",
+    );
+  });
+
+  it("every template names the key and its percentage", () => {
+    for (const catalog of [en, fr]) {
+      const { kicker: _k, title: _t, ...templates } = catalog.profile.callouts;
+      for (const [id, template] of Object.entries(templates)) {
+        expect(template, id).toContain("{key}");
+        if (id !== "steady") expect(template, id).toContain("{pct}");
+      }
+    }
+  });
+});

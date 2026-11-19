@@ -24,7 +24,16 @@ describe("selectStuckChar (#999 C30)", () => {
   });
 
   it("a plain letter, a digit or a space never makes a hint", () => {
-    expect(selectStuckChar(map([["e", 9], ["7", 5], [" ", 4]]), new Set())).toBeNull();
+    expect(
+      selectStuckChar(
+        map([
+          ["e", 9],
+          ["7", 5],
+          [" ", 4],
+        ]),
+        new Set(),
+      ),
+    ).toBeNull();
   });
 
   it("the first special character in error order, skipping the plain ones", () => {

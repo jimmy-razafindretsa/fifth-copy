@@ -362,6 +362,36 @@
   color: var(--color-fg-muted);
 }
 
+/* the output curve's head (#999 C45): the intro over the gain headline, right of the title */
+.headSide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 460px;
+}
+
+/* the "+X WPM since you started" headline: the medals' 7.4 count cell (paper, 2px ink rule), the
+   figure in the cell's Plex Mono, the words after it in Courier Prime */
+.gain {
+  margin: 0;
+  padding: 10px 16px;
+  background-color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.gainFigure {
+  @apply type-typing;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* 7.4 multi-cell grid: paper cells on a 2px ink ground (gap 2px on ink, never per-cell borders). Twelve
    cells in 2, 3, 4 or 6 columns, so every row is full and no ink shows through (#951). */
 .grid {

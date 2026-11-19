@@ -1,0 +1,54 @@
+/*
+ * Personal bests on the Personnel file (#999 C43, bible 14.3 "Personal bests", an extension of the clean
+ * streaks' 7.4 docket, `profile.module.css`): only what the dockets add. The none sentence is the medals'
+ * (a dashed rule on the ground); the verdict is the docket foot in ink; the bests table scrolls sideways
+ * inside its own region when narrower than its columns, as the race archive does. No motion.
+ */
+@reference "../../../app/globals.css";
+
+.none {
+  margin: 0;
+  padding: 16px 20px;
+  border: 2px dashed var(--color-border);
+  @apply type-body;
+  font-size: 17px;
+  line-height: 1.55;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* the docket foot, in ink: the one sentence that compares the languages */
+.verdict {
+  margin: 0;
+  padding: 16px 22px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* the containing block of the visually hidden caption, so it never escapes the scroll */
+.scroll {
+  position: relative;
+  overflow-x: auto;
+}
+
+.table {
+  min-width: 520px;
+}
+
+.textCol {
+  width: 34%;
+}
+
+.dateCol {
+  width: 22%;
+}
+
+.text,
+.date {
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.08em;
+}

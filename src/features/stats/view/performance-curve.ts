@@ -166,10 +166,18 @@ export type Curve = {
   accuracy: CurveSeries;
   /** The speed trend as a 2-point path, null under 6 races. */
   trend: { path: string; direction: TrendDirection } | null;
+  /**
+   * The 7-day moving average (#999 C45, `SeriesPoint.avg7`) on the speed scale: one value per race, the
+   * mean clean WPM of the 7 stats-timezone days ending on its day; null when the points carry none.
+   */
+  week: { path: string; last: number } | null;
 };
 
-/** A point of the curve: what `Profile.progress.series` carries (accuracy 0..1). */
-export type CurvePoint = { cleanWpm: number; accuracy: number };
+/**
+ * A point of the curve: what `Profile.progress.series` carries (accuracy 0..1); `avg7` is the 7-day
+ * moving average of its day (absent: no 7-day line).
+ */
+export type CurvePoint = { cleanWpm: number; accuracy: number; avg7?: number };
 
 function series(values: number[], k: number, scale: Scale): CurveSeries {
   const smooth = movingAverage(values, k) as number[];
@@ -198,7 +206,10 @@ export function performanceCurve(points: readonly CurvePoint[], k: number): Curv
   const width = Math.min(SMOOTHING.max, Math.max(SMOOTHING.min, Math.round(k)));
   const wpm = latest.map((p) => p.cleanWpm);
   const accuracy = latest.map((p) => p.accuracy * 100);
-  const speedAxis = speedScale(wpm);
+  const avg7 = latest.map((p) => p.avg7 ?? null);
+  const hasWeek = avg7.some((v) => v !== null);
+  // the 7-day line shares the speed axis: its values (which may reach races before the 40 drawn) widen it
+  const speedAxis = speedScale(hasWeek ? [...wpm, ...avg7] : wpm);
   const line = trendLine(wpm);
   let trend: Curve["trend"] = null;
   if (line) {
@@ -215,6 +226,7 @@ export function performanceCurve(points: readonly CurvePoint[], k: number): Curv
     speed: series(wpm, width, speedAxis),
     accuracy: series(accuracy, width, accuracyScale(accuracy)),
     trend,
+    week: hasWeek ? { path: linePath(avg7, speedAxis), last: present(avg7).at(-1) ?? 0 } : null,
   };
 }
 
@@ -244,4 +256,9 @@ export function curveSummary(curve: Curve, locale: Locale) {
     accuracyFrom: oneDecimal(curve.accuracy.first, locale),
     accuracyTo: oneDecimal(curve.accuracy.last, locale),
   };
+}
+
+/** The gain since the first races (#999 C45, `ProfileProgress.gain`), signed: `+6`, `−3` (U+2212), `0`. */
+export function signedGain(gain: number): string {
+  return gain > 0 ? `+${gain}` : gain < 0 ? `\u2212${Math.abs(gain)}` : "0";
 }

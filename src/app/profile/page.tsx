@@ -18,6 +18,7 @@ import {
   getCensus,
   getKeyFile,
   getMedals,
+  getPersonalBests,
   getProfile,
   ProfileScreen,
   profileLabels,
@@ -32,13 +33,13 @@ import { getLocale, getT } from "@/i18n";
  * the progress by key (#962). The keyboard map (#324) draws it on identity's layouts, starting on the
  * viewer's saved layout, else the locale's default (as the race machine does); the attendance register
  * shades each day against the viewer's daily goal (#968). The enamel pins (#999 C36) read the viewer's
- * own awards.
+ * own awards; the personal bests (#999 C43) the viewer's own stored bests.
  */
 export default async function ProfilePage() {
   const [viewer, t, locale] = await Promise.all([getViewer(), getT(), getLocale()]);
   // the register reads the viewer's daily goal (#968) from the preference read the page already makes
   const preferencesRead = getPreferences(viewer);
-  const [profile, keyFile, preferences, since, outfit, avatar, medals] = await Promise.all([
+  const [profile, keyFile, preferences, since, outfit, avatar, medals, bests] = await Promise.all([
     getProfile(viewer, { goalMin: preferencesRead.then((p) => p.dailyGoalMin) }),
     getKeyFile(viewer),
     preferencesRead,
@@ -46,6 +47,7 @@ export default async function ProfilePage() {
     viewer ? getClerkOutfit(viewer.id) : null,
     viewer ? getAvatarUser(viewer) : null,
     getMedals(viewer),
+    viewer ? getPersonalBests(viewer) : null,
   ]);
   const picture = avatar ? (
     <Avatar user={avatar} size={128} decorative />
@@ -67,6 +69,7 @@ export default async function ProfilePage() {
           census={viewer ? () => getCensus(viewer) : undefined}
           keyFile={keyFile}
           medals={medals}
+          bests={bests}
           keyboard={{
             initial: preferences.layout ?? localeLayouts[locale],
             layouts: keyboardLayoutIds.map((id) => ({

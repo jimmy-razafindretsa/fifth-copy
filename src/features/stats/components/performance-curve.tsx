@@ -16,12 +16,16 @@ import {
   SMOOTHING,
   speedTickLabels,
 } from "../view/performance-curve";
+import { oneDecimal } from "../view/profile-figures";
 import styles from "./performance-curve.module.css";
 
 export type PerformanceCurveLabels = Messages["profile"]["curve"];
 
 export type PerformanceCurveProps = {
-  /** The latest counted races, oldest first (`Profile.progress.series`, at most the 40 drawn). */
+  /**
+   * The latest counted races, oldest first (`Profile.progress.series`, at most the 40 drawn), each with
+   * its 7-day average (`avg7`, #999 C45) for the dotted 7-day line.
+   */
   points: CurvePoint[];
   labels: PerformanceCurveLabels;
   locale: Locale;
@@ -52,6 +56,7 @@ export function CurveFrame({
   const summary = fill(labels.summary, {
     ...curveSummary(curve, locale),
     trend: curve.trend ? labels.trend[curve.trend.direction] : "",
+    week: curve.week ? fill(labels.week, { wpm: oneDecimal(curve.week.last, locale) }) : "",
   });
   // the unit labels sit above or below their line's end, the higher line's above, so they never meet
   const speedAbove = curve.speed.end.y <= curve.accuracy.end.y;
@@ -90,6 +95,9 @@ export function CurveFrame({
             />
             {curve.trend ? (
               <path d={curve.trend.path} className={styles.trend} data-curve-line="trend" />
+            ) : null}
+            {curve.week ? (
+              <path d={curve.week.path} className={styles.week} data-curve-line="week" />
             ) : null}
           </svg>
           <EndLabel series={curve.speed} text={labels.units.speed} above={speedAbove} />
@@ -133,6 +141,12 @@ export function CurveFrame({
             <li>
               <i className={styles.trendSwatch} aria-hidden="true" />
               {labels.legend.trend}
+            </li>
+          ) : null}
+          {curve.week ? (
+            <li>
+              <i className={styles.weekSwatch} aria-hidden="true" />
+              {labels.legend.week}
             </li>
           ) : null}
         </ul>

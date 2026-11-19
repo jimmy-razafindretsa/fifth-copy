@@ -358,6 +358,7 @@ describe("ProfileScreen reference order (#970 C1)", () => {
       "service",
       "blank",
       "dockets",
+      "bests",
       "census",
       "keyProgress",
       "curve",

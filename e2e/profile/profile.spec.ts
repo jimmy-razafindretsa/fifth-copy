@@ -178,7 +178,7 @@ test.describe("Personnel file at /profile (#932)", () => {
     expect(at).toBeGreaterThan(streaks);
     // only the sections PROFILE_SECTIONS places between the dockets and the curve may come between them
     expect(order.slice(streaks + 1, at)).toEqual(
-      ["suspect-pairs", "census", "key-progress"].filter((s) => order.includes(s)),
+      ["suspect-pairs", "bests", "census", "key-progress"].filter((s) => order.includes(s)),
     );
     const plot = curve(page).getByRole("img");
     await expect(plot).toHaveAccessibleName(
@@ -202,6 +202,77 @@ test.describe("Personnel file at /profile (#932)", () => {
     await expect(slider).toHaveValue("8");
     expect(await speed.getAttribute("d")).not.toBe(before.line);
     expect(await dots.getAttribute("d")).toBe(before.dots);
+  });
+
+  // #999 C45: the output curve draws the 7-day moving average beside the per-race speed and accuracy
+  // lines and, from 10 counted races, heads with "+X WPM since you started" (latest five minus earliest five).
+  test("#999 C45 ten races: speed, accuracy and 7-day lines, inline SVG; +X WPM since you started", async ({
+    page,
+    request,
+    context,
+  }) => {
+    test.setTimeout(scaled(180_000));
+    const lobby = await seedLobby(page);
+    // 30, 32 .. 48: earliest five average 34, latest five 44 -> +10
+    for (let i = 0; i < 10; i += 1) {
+      const desks: Desk[] = [
+        { desk: 1, name: "Host", place: 1, wpm: 30 + 2 * i, userId: lobby.hostUserId },
+        { desk: 2, name: "Typist Bot", place: 2, wpm: 20, isBot: true },
+      ];
+      await postResults(request, await startRace(request, lobby, desks), desks);
+    }
+    await openFile(page);
+    const svg = curve(page).locator("svg[role=img]");
+    await expect(svg).toHaveCount(1);
+    for (const line of ["speed", "accuracy", "week", "trend"])
+      await expect(svg.locator(`[data-curve-line="${line}"]`)).toHaveCount(1);
+    // every race today: the 7-day line is flat at the ten races' mean, 39.0
+    await expect(svg).toHaveAccessibleName(/, trending up, 7-day average 39\.0 WPM\.$/);
+    await expect(curve(page).getByText("7-day average")).toBeVisible();
+    const gain = page.locator("[data-curve-gain]");
+    await expect(gain).toHaveText("+10 WPM since you started");
+    await expect(gain).toBeVisible();
+    // no chart library: one inline SVG, no canvas
+    await expect(page.locator('[data-section="curve"] canvas')).toHaveCount(0);
+
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(page.locator("[data-curve-gain]")).toHaveText("+10 MPM depuis tes débuts");
+  });
+
+  // #999 C46: a file with few races says what will appear and links to Quick race; a guest has a file.
+  test("#999 C46 one race: the blank block names the graphs to come and links to Quick race; three: the gain's threshold", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    const desks: Desk[] = [
+      { desk: 1, name: "Host", place: 1, wpm: 40, userId: lobby.hostUserId },
+      { desk: 2, name: "Typist Bot", place: 2, wpm: 20, isBot: true },
+    ];
+    await postResults(request, await startRace(request, lobby, desks), desks);
+    await openFile(page);
+    // a guest's own file
+    await expect(page.locator("[data-guest-tag]")).toBeVisible();
+    await expect(screen(page)).toHaveAttribute("data-profile-state", "almost");
+    await expect(blank(page).getByRole("heading")).toHaveText(
+      "The Ministry has almost nothing on you.",
+    );
+    await expect(blank(page)).toContainText(
+      "Finish three races and the graphs will appear here: speed, accuracy, weak keys, attendance register.",
+    );
+    const cta = blank(page).getByRole("link", { name: "QUICK RACE" });
+    await expect(cta).toHaveAttribute("href", "/#play");
+    await expect(curve(page)).toHaveCount(0);
+
+    await threeRaces(request, lobby);
+    await openFile(page);
+    await expect(curve(page)).toBeVisible();
+    await expect(page.locator('[data-section="curve"]')).toContainText(
+      "Your gain since you started shows from 10 races.",
+    );
+    await expect(page.locator("[data-curve-gain]")).toHaveCount(0);
   });
 
   test("C6 (#936) three races against a bot: archive rows newest first, BOTS, one MEDAL; the 90 % streak", async ({
@@ -1550,6 +1621,7 @@ const FILE_ORDER = [
   "blank",
   "streaks",
   "suspect-pairs",
+  "bests",
   "census",
   "key-progress",
   "curve",
@@ -1674,7 +1746,15 @@ test.describe("the whole Personnel file (#970)", () => {
   }) => {
     const lobby = await seedLobby(page);
     await openFile(page);
-    expect(await sectionsOf(page)).toEqual(["hero", "band", "tabs", "service", "blank", "medals"]);
+    expect(await sectionsOf(page)).toEqual([
+      "hero",
+      "band",
+      "tabs",
+      "service",
+      "blank",
+      "bests",
+      "medals",
+    ]);
 
     await threeTypedRaces(request, lobby);
     rollup(lobby.hostUserId);
@@ -1711,6 +1791,7 @@ test.describe("the whole Personnel file (#970)", () => {
         "tabs",
         "service",
         "blank",
+        "bests",
         "medals",
       ]);
       await expect(figure(stranger, "races")).toHaveText("—");

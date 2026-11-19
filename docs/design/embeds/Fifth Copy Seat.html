@@ -879,6 +879,18 @@ function prevFor(g, side, start, s) { for (let j = g - 1; j >= start; j--) if (s
 const tL = new THREE.Vector3(), tR = new THREE.Vector3(), lever = new THREE.Vector3(), DOWN = new THREE.Vector3(0, -1, 0), v = new THREE.Vector3();
 const _m = new THREE.Matrix4(), _h = new THREE.Matrix4(), _l = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _e = new THREE.Euler(), _I = new THREE.Quaternion();
 const put = (c, part, m) => { _w.multiplyMatrices(DM, m); bm.setMatrixAt(c.inst[part], _w); };
+// #999 (bible 10.2 "Sabotage throw"): the sender's gesture and the target's head recoil, on the clerks' clock
+const GEST = [], FLINCH = [], GEST_DUR = { toss: 0.6, crumple: 1 }, FLINCH_S = 0.45;
+const WIND = new THREE.Vector3(0.3, 1.0, -0.06), REL = new THREE.Vector3(0.28, 0.9, 0.5), OVER = new THREE.Vector3(0.24, 0.98, -0.26);
+const CRUMPLE_L = new THREE.Vector3(-0.05, 0.62, 0.42), CRUMPLE_R = new THREE.Vector3(0.05, 0.62, 0.42), _g = new THREE.Vector3();
+let clock = 0;
+function gesture(g, u) {
+  const w = u < 0.15 ? ss(u / 0.15) : u > 0.8 ? 1 - ss((u - 0.8) / 0.2) : 1;
+  if (g.kind === 'toss') { _g.copy(u < 0.55 ? WIND : REL); if (u >= 0.55 && u < 0.75) _g.lerpVectors(WIND, REL, ss((u - 0.55) / 0.2)); tR.lerp(_g, w); return; }
+  if (u < 0.45) { tL.lerp(CRUMPLE_L, w); tR.lerp(CRUMPLE_R, w); return; }
+  _g.lerpVectors(CRUMPLE_R, OVER, ss((u - 0.45) / 0.2)); tR.lerp(_g, w); tL.lerp(CRUMPLE_L, 1 - ss((u - 0.45) / 0.3));
+}
+const recoil = i => { const f = FLINCH[i] === undefined ? -1 : (clock - FLINCH[i]) / FLINCH_S; return f >= 0 && f <= 1 ? Math.sin(f * Math.PI) * 0.35 : 0; };
 const setVis = (c, part, on) => BATCHED ? bm.setVisibleAt(c.inst[part], on) : (c.mesh[part].visible = on);
 function aimArm(c, n, target, d) {
   const sh = c.piv[n]; v.set(target.x - sh.x, target.y - ROOT_Y - sh.y, target.z - sh.z);
@@ -914,9 +926,11 @@ function animClerk(c, d, dt, i) {
   const ee = 1 - Math.exp(-dt * 18); E.x += ((H.ty - H.y) * 0.05 + E.jx - E.x) * ee; E.y += (-(H.tx - H.x) * 0.05 + E.jy - E.y) * ee;
   if (t > E.blink) { E.bt = t; E.blink = t + 2 + Math.random() * 3; }
   const bp = (t - E.bt) / 0.15, lid = bp >= 0 && bp <= 1 ? Math.sin(bp * Math.PI) : 0;
+  const gs = GEST[i]; if (gs) { const u = (clock - gs.at) / GEST_DUR[gs.kind]; if (u >= 1) GEST[i] = null; else gesture(gs, u); }
+  const rc = recoil(i);
   const bob = (press * 0.004 + Math.sin(t * 1.6) * 0.003) * BOB;
   _p.set(d.x, ROOT_Y + bob, d.z); _s.set(1 + Math.sin(t * 1.6) * 0.006 * BOB, 1, 1); _m.compose(_p, _I, _s); put(c, 'body', _m);
-  const ph = c.piv.head; _p.set(d.x + ph.x, ROOT_Y + ph.y + bob, d.z + ph.z); _e.set(H.x, H.y, 0); _q.setFromEuler(_e); _s.set(1, 1, 1); _h.compose(_p, _q, _s); put(c, 'head', _h);
+  const ph = c.piv.head; _p.set(d.x + ph.x, ROOT_Y + ph.y + bob, d.z + ph.z - rc * 0.1); _e.set(H.x - rc, H.y, 0); _q.setFromEuler(_e); _s.set(1, 1, 1); _h.compose(_p, _q, _s); put(c, 'head', _h);
   if (c.curLod === 0) {
     _p.set(clamp(E.x, -0.012, 0.012), clamp(E.y, -0.008, 0.008), 0); _s.set(1, 1 - lid * 0.9, 1); _l.compose(_p, _I, _s); _m.multiplyMatrices(_h, _l); put(c, 'eyes', _m);
     _p.set(0, 0, 0); _s.set(1, Math.max(0.001, lid), 1); _l.compose(_p, _I, _s); _m.multiplyMatrices(_h, _l); put(c, 'lids', _m); setVis(c, 'lids', lid > 0.01 && SHOWN[i]);
@@ -973,7 +987,7 @@ function reportLod0() {
   const v = a + '/' + b; if (ROOT.dataset.lod0 !== v) ROOT.dataset.lod0 = v;
 }
 function update(dt, hide0) {
-  HIDE0 = hide0;
+  HIDE0 = hide0; clock += dt;
   let lod = false; lodT -= dt; if (lodT <= 0) { updateLod(); lodT = 0.25; lod = true; }
   active.forEach((c, i) => {
     const show = drawn(i);
@@ -987,10 +1001,14 @@ function update(dt, hide0) {
 /** slots[i] = { occ, typing } for the ring's 30 desks; `near` = the preset's LOD0 seats (12). */
 function seat(slots, near) { slots.forEach((s, i) => { OCC[i] = s.occ; TYPING[i] = s.typing; }); P.near = near; lodT = 0; }
 const setBob = on => { BOB = on ? 1 : 0; };
+// #999: slot i throws (`toss` | `crumple`) or is hit; `still` stops both
+const throwAt = (i, kind) => { GEST[i] = { kind, at: clock }; };
+const flinch = i => { FLINCH[i] = clock; };
+const still = () => { GEST.length = 0; FLINCH.length = 0; };
 /** puts slot i's clerk at ring angle `a` (#927): the same clerk, only its station moves */
 const _y = new THREE.Vector3(0, 1, 0), _r = new THREE.Quaternion();
 function place(i, a, r) { L.desks[i].set(Math.sin(a) * r, 0, Math.cos(a) * r); deskM[i].compose(L.desks[i], _r.setFromAxisAngle(_y, a + Math.PI), _s.set(1, 1, 1)); }
-return { init, update, seat, setBob, place, deskM };
+return { init, update, seat, setBob, place, deskM, throwAt, flinch, still, release: kind => GEST_DUR[kind] * (kind === 'toss' ? 0.7 : 0.65) };
 })();
 await Clerks.init(N, R_CHAIR);
 
@@ -1008,6 +1026,111 @@ function dustUpdate(t) {
 }
 
 await slice();
+// ---------- sabotage throws (#999, bible 10.2 "Sabotage throw") ----------
+// Pooled instanced meshes (forms, balls, puffs: one draw each), flat Lambert, palette colours. At most
+// THROW_FLY_MAX fly, the rest land directly; objects rest in their desk's frame (a re-seat carries them).
+// `<html>`: data-throws-flying|-peak|-landed|-puffs, data-throw-cover (largest view share since the last play).
+const THROW_FLY_MAX = 8, THROW_COVER = 0.2, PUFF_S = 1;
+const BLUR_S = 5; // the engine's BLUR_MS
+const throwMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const puffMat = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false });
+const geoOf = f => { const g = new THREE.Group(); f(g); return merge(g); };
+const formsGeo = geoOf(g => { part(g, B(0.22, 0.05, 0.3), COL.paper, 0, 0, 0); part(g, B(0.21, 0.004, 0.29), 0xCFC3A6, 0.01, 0.027, 0).rotation.y = 0.08; [-0.08, 0.08].forEach(z => part(g, B(0.226, 0.054, 0.012), COL.ink, 0, 0, z)); });
+const ballGeo = geoOf(g => { part(g, S(0.055, 5, 4), COL.paper, 0, 0, 0); part(g, S(0.03, 4, 3), 0xCFC3A6, 0.03, 0.02, 0.01); });
+const puffGeo = geoOf(g => [[0, 0, 0, 0.12], [0.09, 0.03, 0, 0.08], [-0.08, 0.02, 0.03, 0.09]].forEach(([x, y, z, r]) => part(g, S(r, 8, 6), 0xD8D4CA, x, y, z)));
+const POOL_MAX = { forms: 32, ball: 64, puff: 32 }, RADIUS = { forms: 0.2, ball: 0.07, puff: 0.2 };
+const pooled = (geo, m, type) => { const im = new THREE.InstancedMesh(geo, m, POOL_MAX[type]); im.count = 0; im.visible = im.frustumCulled = false; scene.add(im); return im; };
+const IM = { forms: pooled(formsGeo, throwMat, 'forms'), ball: pooled(ballGeo, throwMat, 'ball'), puff: pooled(puffGeo, puffMat, 'puff') };
+// desk-frame points (clerk at the origin facing +z); `self*` = your desk at POV (the camera is its head)
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const AT = { hand: V3(0.28, 0.9, 0.5), selfHand: V3(0.3, DESK_Y + 0.12, 0.8), forms: V3(-0.36, DESK_Y + 0.025, 0.66), head: V3(0, 0.95, 0.36),
+  selfHead: V3(0.12, DESK_Y + 0.08, 0.75), desk: V3(0.3, DESK_Y + 0.055, 0.8), floor: V3(0.45, 0.055, -0.55), selfFloor: V3(0.62, 0.055, 0.3) };
+let SELF_DESK = 1, OBJ = [], PUFFS = [], FLY_PEAK = 0, COVER = 0;
+const slotOf = desk => { const i = (((desk - SELF_DESK) % N) + N) % N; return DESKS[i] && DESKS[i].occ ? i : -1; };
+const isSelfPov = slot => slot === 0 && VIEW === 'pov';
+const wallS = () => performance.now() / 1000;
+// a Smoke Break's ball bursts into a puff, the head recoils (throw), or lies till the blur ends
+function land(o, burst) {
+  o.fly = null;
+  if (o.kind !== 'smoke-break') return;
+  if (!burst) { o.until = o.blurEnd; return; }
+  o.gone = true;
+  PUFFS.push({ slot: o.slot, local: o.local.clone(), at: t, s: isSelfPov(o.slot) ? 0.5 : 1 });
+  if (PUFFS.length > POOL_MAX.puff) PUFFS.shift();
+  if (!isSelfPov(o.slot)) Clerks.flinch(o.slot);
+}
+function play(kind, from, to, mode) {
+  const src = slotOf(from), still = mode === 'static';
+  const gest = !still && src >= 0 && !isSelfPov(src) ? (kind === 'exemption' ? 'crumple' : 'toss') : null;
+  if (gest) Clerks.throwAt(src, gest);
+  for (const desk of kind === 'exemption' ? [from] : to) {
+    const slot = slotOf(desk); if (slot < 0) continue;
+    const self = isSelfPov(slot), type = kind === 'extra-paperwork' ? 'forms' : 'ball';
+    const local = (type === 'forms' ? AT.forms : kind === 'exemption' ? (self ? AT.selfFloor : AT.floor) : still ? AT.desk : self ? AT.selfHead : AT.head).clone();
+    if (type === 'forms') local.y += 0.05 * Math.min(3, OBJ.filter(o => o.type === 'forms' && o.slot === slot).length);
+    const o = { kind, type, slot, local, yaw: (hash(OBJ.length + desk) - 0.5) * 0.8, blurEnd: wallS() + BLUR_S, until: Infinity, fly: null, gone: false };
+    if (still) land(o, false);
+    else {
+      const f = kind === 'exemption' ? slot : src;
+      o.fly = { from: f, fromLocal: f < 0 ? null : isSelfPov(f) ? AT.selfHand : AT.hand, at: t + (gest ? Clerks.release(gest) : 0), dur: kind === 'exemption' ? 0.6 : 0.75, direct: OBJ.filter(q => q.fly && !q.fly.direct).length >= THROW_FLY_MAX };
+    }
+    OBJ.push(o);
+  }
+  // fixed pools: the oldest of a type gives its place
+  for (const type of ['forms', 'ball']) { const of = OBJ.filter(o => o.type === type); of.slice(0, Math.max(0, of.length - POOL_MAX[type])).forEach(o => { o.gone = true; }); }
+  OBJ = OBJ.filter(o => !o.gone); FLY_PEAK = 0; COVER = 0;
+}
+// reduced motion, or race end (`clear`)
+function throwsStill(clear = false) {
+  for (const o of OBJ) if (o.fly) { if (o.kind === 'smoke-break') o.local.copy(AT.desk); land(o, false); }
+  PUFFS = []; Clerks.still();
+  if (clear) OBJ = [];
+}
+const _tp = new THREE.Vector3(), _ts = new THREE.Vector3(), _te = new THREE.Vector3(), _tq = new THREE.Quaternion(), _tr = new THREE.Quaternion(), _tm = new THREE.Matrix4(), _tl = new THREE.Matrix4(), _tx = new THREE.Euler();
+const deskWorld = (slot, local, out) => out.copy(local).applyMatrix4(Clerks.deskM[slot]);
+// drawn shrunk to cover at most THROW_COVER of the view (bible 8)
+function draw(type, m, r, n) {
+  _tp.setFromMatrixPosition(m);
+  const d = camera.position.distanceTo(_tp), k = r / (Math.max(d, 1e-3) * Math.tan(camera.fov * RAD / 2));
+  let c = d <= r ? 1 : Math.PI * k * k / (4 * camera.aspect);
+  if (c > THROW_COVER) { m.scale(_ts.setScalar(Math.sqrt(THROW_COVER / c))); c = THROW_COVER; }
+  COVER = Math.max(COVER, c);
+  IM[type].setMatrixAt(n[type]++, m);
+}
+function throwsUpdate() {
+  const n = { forms: 0, ball: 0, puff: 0 }, now = wallS();
+  let flying = 0;
+  for (const o of OBJ) {
+    if (o.until <= now || !DESKS[o.slot].occ) o.gone = true;
+    if (o.fly && (t - o.fly.at) / o.fly.dur >= 1) land(o, true);
+    if (o.gone) continue;
+    if (o.fly) {
+      const u = (t - o.fly.at) / o.fly.dur;
+      if (u < 0 || o.fly.direct) continue; // in the hand, or landing directly: not drawn yet
+      flying++;
+      deskWorld(o.slot, o.local, _te);
+      if (o.fly.from < 0 || !DESKS[o.fly.from].occ) _tp.copy(_te).setY(_te.y + 1.6); else deskWorld(o.fly.from, o.fly.fromLocal, _tp);
+      const h = Math.min(1.6, 0.4 + 0.12 * _tp.distanceTo(_te));
+      _tp.lerp(_te, u); _tp.y += 4 * h * u * (1 - u);
+      _tx.set(o.type === 'ball' ? u * 9 : 0, o.yaw + (1 - u) * (o.type === 'ball' ? 6 : 1.5), 0);
+      _tq.setFromRotationMatrix(Clerks.deskM[o.slot]).multiply(_tr.setFromEuler(_tx)); _tm.compose(_tp, _tq, _ts.set(1, 1, 1));
+    } else { _tl.compose(o.local, _tq.setFromEuler(_tx.set(0, o.yaw, 0)), _ts.set(1, 1, 1)); _tm.multiplyMatrices(Clerks.deskM[o.slot], _tl); }
+    draw(o.type, _tm, RADIUS[o.type], n);
+  }
+  OBJ = OBJ.filter(o => !o.gone);
+  // a puff swells in its first 30%, then shrinks away: one appearance (flash rule, bible 8)
+  PUFFS = PUFFS.filter(q => t - q.at < PUFF_S && DESKS[q.slot].occ);
+  for (const q of PUFFS) {
+    const k = (t - q.at) / PUFF_S, s = Math.max(0.001, q.s * (k < 0.3 ? 0.4 + 0.6 * ssm(k / 0.3) : 1 - ssm((k - 0.3) / 0.7)));
+    _tl.compose(q.local, _tq.identity(), _ts.setScalar(s)); _tm.multiplyMatrices(Clerks.deskM[q.slot], _tl);
+    draw('puff', _tm, RADIUS.puff * s, n);
+  }
+  for (const type in IM) { const im = IM[type]; im.count = n[type]; im.visible = n[type] > 0; im.instanceMatrix.needsUpdate = true; }
+  FLY_PEAK = Math.max(FLY_PEAK, flying);
+  Object.entries({ throwsFlying: flying, throwsPeak: FLY_PEAK, throwsLanded: n.forms + n.ball - flying, throwsPuffs: n.puff, throwCover: +COVER.toFixed(3) })
+    .forEach(([k, v]) => { if (ROOT.dataset[k] !== String(v)) ROOT.dataset[k] = v; });
+}
+
 // ---------- behaviour (the race page drives the scene, #563) ----------
 let FORCE = 'pov';
 let VIEW = 'pov', TURN = true, STUTTER = true, t = 0, last = performance.now(), nextStutter = 4, stutterT = -1, orbitA = 0.6;
@@ -1021,7 +1144,7 @@ const MQ = matchMedia('(prefers-reduced-motion: reduce)');
 let PAGE_REDUCE = false;
 const reduced = () => MQ.matches || PAGE_REDUCE;
 function applyMotion() {
-  const r = reduced(); STUTTER = !r; TURN = !r; Clerks.setBob(!r);
+  const r = reduced(); STUTTER = !r; TURN = !r; Clerks.setBob(!r); if (r) throwsStill();
   document.documentElement.dataset.motion = r ? 'reduce' : 'full';
   document.documentElement.dataset.bulb = r ? 'steady' : 'stutter';
 }
@@ -1030,7 +1153,7 @@ MQ.addEventListener('change', applyMotion); applyMotion();
 // the room's desks: your desk at the camera's slot (0), the others around the ring by desk number
 let DESKS = Array.from({ length: N }, () => ({ occ: true, typing: true })), PLACED = N;
 function applyView(view) {
-  const self = Number.isInteger(view.self) ? view.self : 1;
+  const self = Number.isInteger(view.self) ? view.self : 1; SELF_DESK = self;
   const slots = Array.from({ length: N }, () => ({ occ: false, typing: false }));
   for (const d of Array.isArray(view.desks) ? view.desks : []) {
     if (!Number.isInteger(d.desk)) continue;
@@ -1038,6 +1161,7 @@ function applyView(view) {
     slots[i] = { occ: true, typing: view.phase === 'running' && d.status === 'typing' };
   }
   DESKS = slots; PLACED = slots.filter(s => s.occ).length;
+  if (view.phase !== 'running') throwsStill(true); // #999: every thrown object goes at race end
   Clerks.seat(DESKS, PRESETS[PRESET].near); arrange();
 }
 // #927 (bible 11.1, 11.3): one station per player, the seating block's layout for the view and the window's
@@ -1072,12 +1196,14 @@ const ready = () => {
   send({ type: 'fc-scene-ready', preset: PRESET, fov: +camera.fov.toFixed(1), desks: PLACED });
 };
 
-// #999 (bible 15): a sabotage card played in the race, a one-shot event acknowledged with how the scene showed
-// it. Until the throw choreography (bible 10.2 "Sabotage throw") lands, the object appears where it lands: `static`.
+// #999 (bible 15): a sabotage play, acked `throw` or `static` (reduced motion); `<html data-sabotage>` repeats it
 const SABOTAGE_KINDS = ['extra-paperwork', 'exemption', 'smoke-break'];
 const isDesk = x => Number.isInteger(x) && x >= 1;
 function sabotage(kind, from, to) {
-  send({ type: 'fc-scene-sabotage', kind, from, to: [...to], mode: 'static' });
+  const mode = reduced() ? 'static' : 'throw';
+  play(kind, from, to, mode);
+  send({ type: 'fc-scene-sabotage', kind, from, to: [...to], mode });
+  ROOT.dataset.sabotage = [kind, from, to.join(','), mode].join(':');
 }
 
 // `replayed`: a message the inbox kept while the room was built; a sabotage from then is over, never played late
@@ -1140,7 +1266,7 @@ function loop(now) {
   }
   bulb.intensity = 70 * k; bulbMesh.material.color.copy(bulbOff).lerp(bulbOn, Math.min(1, k));
   if (FORCE !== VIEW) setView(FORCE);
-  Clerks.update(dt, VIEW === 'pov'); if (!reduced()) dustUpdate(t);
+  Clerks.update(dt, VIEW === 'pov'); throwsUpdate(); if (!reduced()) dustUpdate(t);
   if (VIEW === 'over' && !reduced()) { orbitA += dt * ORBIT; camera.position.set(Math.sin(orbitA) * 8.6, 4.6, Math.cos(orbitA) * 8.6); camera.lookAt(0, 0.6, 0); }
   renderer.render(scene, camera);
   if (pendingReady) { pendingReady = false; if (PROBED) { STRESS = true; stressAt = -1; } else ready(); }

@@ -137,10 +137,36 @@ describe("seat page (#563)", () => {
     expect(seat).toContain(
       "d.type === 'fc-race-sabotage' && !replayed && SABOTAGE_KINDS.includes(d.kind) && isDesk(d.from)",
     );
-    expect(seat).toContain(
-      "send({ type: 'fc-scene-sabotage', kind, from, to: [...to], mode: 'static' });",
-    );
+    expect(seat).toContain("send({ type: 'fc-scene-sabotage', kind, from, to: [...to], mode });");
     expect(seat).toContain("inbox.splice(0).forEach(e => onMessage(e, true));");
+  });
+
+  // #999 C62, C64, C65 (bible 10.2 "Sabotage throw", 8, 9): the throws are pooled instanced meshes in flat
+  // Lambert from the palette (no red, no text), at most 8 in flight, static under reduced motion, cleared at
+  // race end, never covering more than a quarter of the view
+  it("throws each sabotage play with pooled instanced meshes, static under reduced motion", () => {
+    const block = seat.slice(
+      seat.indexOf("// ---------- sabotage throws"),
+      seat.indexOf("// ---------- behaviour"),
+    );
+    expect(block.length).toBeGreaterThan(0);
+    expect(seat).toContain("const mode = reduced() ? 'static' : 'throw';");
+    expect(block).toContain("const THROW_FLY_MAX = 8, THROW_COVER = 0.2,");
+    expect(block).toContain(
+      "direct: OBJ.filter(q => q.fly && !q.fly.direct).length >= THROW_FLY_MAX",
+    );
+    expect(block).toContain("new THREE.InstancedMesh(geo, m, POOL_MAX[type])");
+    expect(block).toContain("new THREE.MeshLambertMaterial({ vertexColors: true })");
+    expect(block).not.toMatch(
+      /COL\.red|COL\.banner|MeshStandardMaterial|MeshBasicMaterial|TextGeometry/,
+    );
+    expect(block).toContain("const BLUR_S = 5;");
+    expect(seat).toContain("if (view.phase !== 'running') throwsStill(true);");
+    expect(seat).toContain("Clerks.setBob(!r); if (r) throwsStill();");
+    expect(seat).toContain("throwsUpdate();");
+    // the Smoke Break's ball bursts into one puff and the target's head recoils, never under reduce
+    expect(block).toContain("if (!isSelfPov(o.slot)) Clerks.flinch(o.slot);");
+    expect(block).toContain("const gest = !still && src >= 0");
   });
 
   it("shows the seat POV (bible 11.3) and hides your clerk and paper", () => {

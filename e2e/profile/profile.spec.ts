@@ -1612,7 +1612,10 @@ test.describe("keyboard map (#324)", () => {
 // each day, letter pairs) is axe-clean at 375, 768 and 1280 in both themes, has one h1, names every
 // plot, keeps every control at 44px or more and never scrolls sideways at 375.
 
-/** The reference's order (`PROFILE_SECTIONS` of the screen, under the hero, band and tabs; #999 C36 adds the pins). */
+/**
+ * The reference's order (`PROFILE_SECTIONS` of the screen, under the hero, band and tabs; #999 C36 adds
+ * the pins, C49 the weekly bulletin, C55 the accents row).
+ */
 const FILE_ORDER = [
   "hero",
   "band",
@@ -1623,11 +1626,13 @@ const FILE_ORDER = [
   "suspect-pairs",
   "bests",
   "census",
+  "callouts",
   "key-progress",
   "curve",
   "key-sheet",
   "key-inventory",
   "keyboard-map",
+  "accents",
   "attendance",
   "medals",
   "archive",
@@ -1770,7 +1775,12 @@ test.describe("the whole Personnel file (#970)", () => {
     const sections = await sectionsOf(page);
     expect(sections.filter((s) => s !== "census")).toEqual(
       FILE_ORDER.filter(
-        (s) => s !== "blank" && s !== "census" && (s !== "suspect-pairs" || rows.pairs > 0),
+        // one day of key rows: no week to compare yet, so no weekly bulletin
+        (s) =>
+          s !== "blank" &&
+          s !== "census" &&
+          s !== "callouts" &&
+          (s !== "suspect-pairs" || rows.pairs > 0),
       ),
     );
     if (before === after) {
@@ -1872,5 +1882,146 @@ test.describe("the whole Personnel file (#970)", () => {
         }
       }
     }
+  });
+});
+
+// #999 C49, C55, C29: the weekly bulletin and the accents row on the Personnel file (bible 14.3).
+
+const callouts = (page: Page) => page.locator('[data-section="callouts"]');
+const accents = (page: Page) => page.locator('[data-section="accents"]');
+
+/** The stats day `daysAgo` days before today in Toronto, as `YYYY-MM-DD`. */
+function torontoDay(daysAgo: number): string {
+  const { today } = torontoWindow();
+  const [y, m, d] = today.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d - daysAgo)).toISOString().slice(0, 10);
+}
+
+/** `ç` at 20 WPM last week and 26 WPM this week (30 % faster), 30 timed presses each; `é` this week. */
+async function twoWeeksOfCedilla(userId: string) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    for (const [daysAgo, char, wpm, errors] of [
+      [8, "ç", 20, 1],
+      [1, "ç", 26, 1],
+      [1, "é", 40, 4],
+    ] as const) {
+      await db.query(
+        `INSERT INTO "CharStatDaily" ("userId", day, char, layout, hits, errors, "timedHits", "totalMs")
+         VALUES ($1, $2::date, $3, 'FR_CA', 30, $4, 30, $5)`,
+        [userId, torontoDay(daysAgo), char, errors, Math.round((12_000 * 30) / wpm)],
+      );
+    }
+  } finally {
+    await db.end();
+  }
+}
+
+test.describe("weekly bulletin and accents row (#999)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ page }) => {
+    await withoutWebGL(page);
+  });
+
+  test("C49 the weekly bulletin tells the week-over-week change, in English and French", async ({
+    page,
+    request,
+    context,
+  }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await openFile(page);
+    await expect(callouts(page)).toHaveCount(0); // no key rows yet: no section, no placeholder
+
+    await twoWeeksOfCedilla(lobby.hostUserId);
+    await openFile(page);
+    const list = callouts(page).getByRole("list", { name: "This week's callouts" });
+    await expect(
+      callouts(page).getByRole("heading", { name: "This week at your desk" }),
+    ).toBeVisible();
+    // the key's cell is aria-hidden; the sentence carries the key
+    await expect(list.getByRole("listitem")).toHaveText([
+      /^Ç\s*Your ç is 30% faster than last week\.$/,
+    ]);
+    const order = await sectionsOf(page);
+    expect(order.indexOf("callouts")).toBeLessThan(order.indexOf("key-progress"));
+
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(
+      callouts(page).getByRole("heading", { name: "Cette semaine à ton bureau" }),
+    ).toBeVisible();
+    await expect(
+      callouts(page).getByRole("list", { name: "Les remarques de la semaine" }),
+    ).toContainText("Ton ç est 30 % plus rapide que la semaine dernière.");
+  });
+
+  test("C55 C29 the accents row: every accent and special character, each a link to /guide#<char>", async ({
+    page,
+    request,
+    context,
+  }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await keySheetRows(lobby.hostUserId);
+    await openFile(page);
+    const row = accents(page).getByRole("list", { name: "Accents row" });
+    await expect(accents(page).getByRole("heading", { name: "Accents row" })).toBeVisible();
+    await expect(row.getByRole("link")).toHaveCount(17);
+    for (const [char, anchor] of [
+      ["é", "e-acute"],
+      ["è", "e-grave"],
+      ["ê", "e-circumflex"],
+      ["à", "a-grave"],
+      ["ç", "c-cedilla"],
+      ["ù", "u-grave"],
+      ["œ", "oe-ligature"],
+      ["«", "guillemet-open"],
+      ["»", "guillemet-close"],
+    ] as const) {
+      await expect(row.locator(`[data-key="${char}"]`)).toHaveAttribute("href", `/guide#${anchor}`);
+    }
+    // ç was struck (circle and core), œ never
+    await expect(row.locator('[data-key="ç"] [data-key-circle]')).toBeVisible();
+    await expect(row.locator('[data-key="œ"]')).toHaveAttribute("data-key-typed", "false");
+    await expect(row.locator('[data-key="œ"]')).toHaveAccessibleName(
+      "Œ: never struck · how to type it",
+    );
+    const order = await sectionsOf(page);
+    expect(order.indexOf("accents")).toBe(order.indexOf("keyboard-map") + 1);
+
+    const cedilla = row.locator('[data-key="ç"]');
+    await expect(cedilla).toHaveAccessibleName(/^Ç: .* errors · how to type it$/);
+    await cedilla.click();
+    await expect(page).toHaveURL(/\/guide#c-cedilla$/);
+    await expect(page.locator("#c-cedilla")).toBeInViewport();
+
+    // French at 375: the row wraps inside the column, keys at least 44px, no sideways scroll
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await page.setViewportSize({ width: 375, height: 800 });
+    await openFile(page);
+    const fr = accents(page).getByRole("list", { name: "Rangée des accents" });
+    await expect(fr.locator('[data-key="ç"]')).toHaveAccessibleName(/ · comment la taper$/);
+    const key = (await fr.locator('[data-key="é"]').boundingBox())!;
+    expect(key.width).toBeGreaterThanOrEqual(43.5);
+    expect(Math.abs(key.width - key.height)).toBeLessThan(1);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, "sideways scroll").toBe(false);
+    const { violations } = await new AxeBuilder({ page })
+      .include('[data-section="accents"]')
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(
+      violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id),
+    ).toEqual([]);
   });
 });

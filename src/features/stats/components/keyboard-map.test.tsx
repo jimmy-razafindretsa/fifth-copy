@@ -8,7 +8,8 @@ import type { CharCount, KeyFile } from "../view/key-file";
 import { keyFileFixtures } from "../view/key-file-fixtures";
 import { keyboardMapOf } from "../view/keyboard-map";
 import { profileFixtures } from "../view/profile-fixtures";
-import { KeyboardMapSection, type KeyboardMapLayout, keyName } from "./keyboard-map";
+import { keyName } from "../view/key-name";
+import { KeyboardMapSection, type KeyboardMapLayout } from "./keyboard-map";
 import { type ProfileKeyboard, ProfileScreen, profileLabels } from "./profile-screen";
 
 // #324 C3-C7 (the server half): "Carte du clavier" (bible 14.3, `Profil.dc.html` `PLAN DE LA MACHINE`).

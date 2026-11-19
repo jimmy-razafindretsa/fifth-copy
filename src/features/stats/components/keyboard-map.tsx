@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { guideHref } from "@/features/guide/client";
-import type { Messages } from "@/i18n";
 import { fill } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
@@ -10,14 +9,14 @@ import {
   circleSize,
   coreSize,
   type KeyboardMap as KeyboardMapData,
-  type KeyboardMapKey,
   rowPercent,
 } from "../view/keyboard-map";
-import { NBSP, oneDecimal } from "../view/profile-figures";
+import { keyName, type KeyboardMapLabels } from "../view/key-name";
+import { NBSP } from "../view/profile-figures";
 import styles from "./keyboard-map.module.css";
 import profile from "./profile.module.css";
 
-export type KeyboardMapLabels = Messages["profile"]["keyboardMap"];
+export type { KeyboardMapLabels };
 
 /** One layout of the switch: its id, its settings label and its map, already computed on the server. */
 export type KeyboardMapLayout = { id: string; name: string; map: KeyboardMapData };
@@ -33,16 +32,6 @@ export type KeyboardMapProps = {
   id: string;
   heading: "h2" | "h3" | "h4";
 };
-
-/** A key's accessible name (#324 C6): `E : 14,7 % des frappes, 2,1 % de fautes`, or untyped. */
-export function keyName(key: KeyboardMapKey, labels: KeyboardMapLabels, locale: Locale): string {
-  if (!key.typed || key.errorRate === null) return fill(labels.untyped, { key: key.cap });
-  return fill(labels.key, {
-    key: key.cap,
-    strokes: `${oneDecimal(key.ofStrokes * 100, locale)}${NBSP}%`,
-    errors: `${oneDecimal(key.errorRate * 100, locale)}${NBSP}%`,
-  });
-}
 
 /**
  * "Carte du clavier" (#324, bible 14.3, `Profil.dc.html` `PLAN DE LA MACHINE`): the client leaf holds the

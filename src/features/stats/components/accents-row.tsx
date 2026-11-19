@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { accentsRowOf } from "../view/accents-row";
 import type { CharCount } from "../view/key-file";
 import { circleSize, coreSize } from "../view/keyboard-map";
-import { keyName, type KeyboardMapLabels } from "./keyboard-map";
+import { keyName, type KeyboardMapLabels } from "../view/key-name";
 import own from "./accents-row.module.css";
 import map from "./keyboard-map.module.css";
 import profile from "./profile.module.css";

@@ -6,6 +6,7 @@ import {
   keyErrors,
   normalizeTypeable,
   wpmSeries,
+  type KeyTally,
 } from "@fifth-copy/engine";
 import { textOverlaySchema } from "@fifth-copy/protocol";
 import type { db as appDb } from "@/server/db";
@@ -14,7 +15,8 @@ import { storedEngineSettingsSchema } from "../stored-replay";
 import { decodeKeystrokes } from "../trace-codec";
 import { missedKeys, type MissedKey } from "../view/keys";
 import { parseBonusLog } from "../view/personal";
-import { receivedMarks, type RaceSeries } from "../view/series";
+import { storedSeriesSchema } from "../filed-series";
+import { receivedMarks, type RaceLine, type RaceSeries } from "../view/series";
 
 /** Who is looking: only the id matters (ADR 0009). */
 type SeriesViewer = { id: string } | null;
@@ -29,6 +31,11 @@ export type PersonalReplay = {
   series: RaceSeries | null;
   /** Every key the viewer missed, most missed first (`missedKeys`); only counts leave the query. */
   missed: MissedKey[];
+  /**
+   * Every key the text asked for, its presses and errors (the engine's `keyErrors`, #999 C54): the
+   * report's keyboard heatmap reads it. Counts only, the viewer's own.
+   */
+  keys: KeyTally[];
 };
 
 /**
@@ -80,6 +87,7 @@ export async function getPersonalReplay(
     normalizeTypeable(race.textContent),
     overlay.data ?? EMPTY_OVERLAY,
   );
+  const keys = keyErrors({ keystrokes, text, settings: settings.data });
   const points = wpmSeries({
     keystrokes,
     text,
@@ -96,7 +104,8 @@ export async function getPersonalReplay(
             marks: receivedMarks(mine.desk, parseBonusLog(mine.bonusLog)),
             endMs: mine.durationMs,
           },
-    missed: missedKeys(keyErrors({ keystrokes, text, settings: settings.data })),
+    missed: missedKeys(keys),
+    keys,
   };
 }
 
@@ -107,4 +116,82 @@ export async function getRaceSeries(
   deps: { db?: Db } = {},
 ): Promise<RaceSeries | null> {
   return (await getPersonalReplay(raceId, viewer, deps))?.series ?? null;
+}
+
+/**
+ * Every other desk's line of one race (#999 C51, ADR 0027), for the decided audience only: a viewer with
+ * a `RaceResult` in the race (a participant) or the race's host (its lobby's host, also when watching).
+ * The audience is checked first, by a query that reads no series; a visitor, a spectator, a link holder
+ * and anyone else get `[]` and nothing else is read. Then only the stored `RaceResult.wpmSeries` columns
+ * of unflagged rows are read (never a `RaceKeystrokes` row of anyone): the viewer's own desk is left out
+ * (their card replays their own trace, `getPersonalReplay`), a flagged row is never read, a row with no
+ * stored series (purged after 30 days, filed before #999, no trace) or one the schema rejects has no line,
+ * and a bot is a flat line at its clean WPM. Place order. Fails closed: no viewer, a bad id, no race, a
+ * voided race, a race with no lobby and a viewer outside the audience all get `[]`.
+ */
+export async function getRaceSeriesForAll(
+  raceId: string,
+  viewer: SeriesViewer,
+  { db }: { db?: Db } = {},
+): Promise<RaceLine[]> {
+  if (!viewer) return [];
+  const parsed = raceIdSchema.safeParse(raceId);
+  if (!parsed.success) return [];
+  const client = db ?? (await import("@/server/db")).db;
+  const gate = await client.race.findUnique({
+    where: { id: parsed.data },
+    select: {
+      endReason: true,
+      lobby: { select: { hostUserId: true } },
+      results: { where: { userId: viewer.id }, select: { desk: true }, take: 1 },
+    },
+  });
+  if (!gate || gate.endReason === "VOID") return [];
+  const mine = gate.results[0]?.desk ?? null;
+  const hosts = !!gate.lobby && gate.lobby.hostUserId === viewer.id;
+  if (mine === null && !hosts) return [];
+
+  const race = await client.race.findUnique({
+    where: { id: parsed.data },
+    select: {
+      results: {
+        where: { suspicious: false, ...(mine === null ? {} : { desk: { not: mine } }) },
+        orderBy: [{ place: "asc" }, { desk: "asc" }],
+        select: {
+          desk: true,
+          name: true,
+          isBot: true,
+          place: true,
+          cleanWpm: true,
+          durationMs: true,
+          wpmSeries: true,
+        },
+      },
+    },
+  });
+  if (!race) return [];
+  return race.results.flatMap((r): RaceLine[] => {
+    const base = {
+      desk: r.desk,
+      name: r.name,
+      place: r.place,
+      isBot: r.isBot,
+      wpm: r.cleanWpm,
+      endMs: r.durationMs,
+    };
+    if (r.isBot) {
+      return [
+        {
+          ...base,
+          points: [
+            { t: 0, wpm: r.cleanWpm },
+            { t: r.durationMs, wpm: r.cleanWpm },
+          ],
+        },
+      ];
+    }
+    const points = storedSeriesSchema.safeParse(r.wpmSeries);
+    if (!points.success) return [];
+    return [{ ...base, points: points.data.map(([t, wpm]) => ({ t, wpm })) }];
+  });
 }

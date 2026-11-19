@@ -545,7 +545,10 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
   test("C4 COPY writes the room code to the clipboard and reads COPIED, then COPY", async ({
     page,
   }) => {
-    test.skip(test.info().project.name === "mobile", "COPY is a desk check (a phone host's controls: #999 phone-host.spec)");
+    test.skip(
+      test.info().project.name === "mobile",
+      "COPY is a desk check (a phone host's controls: #999 phone-host.spec)",
+    );
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const code = await createLobby(page);
     await expect(rows(page)).toHaveCount(1);
@@ -573,7 +576,10 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
   });
 
   test("C4 without a clipboard API, COPY selects the room code", async ({ page }) => {
-    test.skip(test.info().project.name === "mobile", "COPY is a desk check (a phone host's controls: #999 phone-host.spec)");
+    test.skip(
+      test.info().project.name === "mobile",
+      "COPY is a desk check (a phone host's controls: #999 phone-host.spec)",
+    );
     await page.addInitScript(() =>
       Object.defineProperty(Navigator.prototype, "clipboard", { get: () => undefined }),
     );
@@ -585,7 +591,10 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
   });
 
   test("C4 under reduced motion COPIED stays until the button blurs", async ({ page }) => {
-    test.skip(test.info().project.name === "mobile", "COPY is a desk check (a phone host's controls: #999 phone-host.spec)");
+    test.skip(
+      test.info().project.name === "mobile",
+      "COPY is a desk check (a phone host's controls: #999 phone-host.spec)",
+    );
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await createLobby(page);

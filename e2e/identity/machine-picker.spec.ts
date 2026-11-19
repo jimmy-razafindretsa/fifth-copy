@@ -82,6 +82,10 @@ test.describe("#638 machine skin preference", () => {
   });
 
   test("C3 the seat view draws the filed skin", async ({ page, browser }) => {
+    test.skip(
+      test.info().project.name === "mobile",
+      "phones watch: the machine is a desk's (#999 C9)",
+    );
     const chosen = machineSkinIds[machineSkinIds.length - 1]!;
     await fileSkin(page, chosen);
     const room = await hostRoom(browser, opened);
@@ -91,6 +95,10 @@ test.describe("#638 machine skin preference", () => {
   });
 
   test("C3 a viewer without a preference gets the teleprinter", async ({ browser }) => {
+    test.skip(
+      test.info().project.name === "mobile",
+      "phones watch: the machine is a desk's (#999 C9)",
+    );
     const room = await hostRoom(browser, opened);
     const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
     opened.push(context);

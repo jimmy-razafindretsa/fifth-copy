@@ -175,26 +175,27 @@ async function warm(page: Page, lobbyId: string) {
 }
 
 /**
- * The seat view is ready in `context` before START (#854): under load the move to `/race/<raceId>` could
+ * The race page is ready in `context` before START (#854): under load the move to `/race/<raceId>` could
  * finish loading the seat view only after GO, so the countdown it must show was already gone. A second
- * page of the same context opens the room's seat view at phone width, where it never takes a desk
- * (#561: no mint, no socket, so no member joins or is line-cut), and waits for its client leaf's own
- * ready marker (the telex strip's `data-telex-ready`, set in a layout effect: hydrated); the route's
- * code is then compiled and loaded before the click.
+ * page of the same context opens the room's race page at phone width, where it never takes a desk
+ * (#561, #999 C9: phones watch), and waits for the phone spectator screen, a client-only render
+ * (`PhoneSwitch`): hydrated, so the route's code, the seat view's chunks among it, is compiled and loaded
+ * before the click. It watches nothing either: its server actions (the spectator mint) are aborted and
+ * the race server's sockets closed, so no member or spectator joins and no line is cut.
  */
 async function seatViewReady(context: BrowserContext, lobbyId: string) {
   const seat = await context.newPage();
-  const sockets: string[] = [];
-  seat.on("websocket", (ws) => sockets.push(ws.url()));
+  await seat.route("**/*", (route, r) =>
+    r.method() === "POST" && r.headers()["next-action"] ? route.abort() : route.continue(),
+  );
+  // the race server's sockets only: `next dev`'s HMR socket stays, or the page reloads
+  await seat.routeWebSocket(
+    (url) => !url.pathname.startsWith("/_next/"),
+    (ws) => ws.close(),
+  );
   await seat.setViewportSize({ width: 375, height: 812 });
   await seat.goto(`/race/${lobbyId}`);
-  await expect(seat.locator('[data-telex-ready="true"]')).toHaveCount(1, {
-    timeout: HYDRATION_WAIT,
-  });
-  expect(
-    sockets.filter((u) => u.includes("/socket.io/")),
-    "warm-up seat view socket",
-  ).toEqual([]);
+  await expect(seat.locator("[data-phone-screen]")).toHaveCount(1, { timeout: HYDRATION_WAIT });
   await seat.close();
 }
 

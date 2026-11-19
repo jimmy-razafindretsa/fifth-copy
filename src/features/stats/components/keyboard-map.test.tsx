@@ -77,7 +77,7 @@ const keyTag = (html: string, char: string) => {
   const attr = char.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
   const m = html.match(
     new RegExp(
-      `<div[^>]*data-key="${attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>(.*?)</div>`,
+      `<(?:div|a)[^>]*data-key="${attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>(.*?)</(?:div|a)>`,
     ),
   );
   return m?.[0] ?? "";
@@ -140,6 +140,22 @@ describe("the board (#324 C4)", () => {
     // s misses 12 %: the core fills its circle
     expect(keyTag(html, "s")).toMatch(/style="width:100%" data-key-core=""/);
     expect(keyTag(html, "ù")).toContain("width:140%");
+  });
+
+  it("#999 C29 a special character's key links to its guide entry; a plain key stays a picture", () => {
+    const html = draw("CSA");
+    for (const [char, anchor] of [
+      ["ç", "c-cedilla"],
+      ["é", "e-acute"],
+      ["ù", "u-grave"],
+    ] as const) {
+      const tag = keyTag(html, char);
+      expect(tag).toMatch(new RegExp(`^<a [^>]*href="/guide#${anchor}"`));
+      expect(tag).toMatch(/aria-label="[^"]+ · comment la taper"/);
+      expect(tag).not.toContain('role="img"');
+    }
+    expect(keyTag(html, "e")).toMatch(/^<div [^>]*role="img"/);
+    expect(keyTag(html, "e")).not.toContain("href=");
   });
 
   it("an untyped key: the newsprint ground, no circle", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { guideHref } from "@/features/guide/client";
 import type { Messages } from "@/i18n";
 import { fill } from "@/i18n/format";
 import type { Locale } from "@/i18n/locale";
@@ -112,34 +113,48 @@ export function KeyboardMapSection({
                   </span>
                 </div>
               ) : null}
-              {row.keys.map((key) => (
-                <div
-                  key={key.char}
-                  role="img"
-                  aria-label={keyName(key, labels, locale)}
-                  className={cn(styles.key, !key.typed && styles.untyped)}
-                  style={{ width: width(1) }}
-                  data-key={key.char}
-                  data-key-typed={key.typed ? "true" : "false"}
-                >
-                  <span className={styles.cap} data-key-cap="">
-                    {key.cap}
-                  </span>
-                  {key.typed ? (
-                    <span
-                      className={styles.circle}
-                      style={{ width: `${circleSize(key.share)}%` }}
-                      data-key-circle=""
-                    >
-                      <span
-                        className={styles.core}
-                        style={{ width: `${coreSize(key.errorRate)}%` }}
-                        data-key-core=""
-                      />
+              {row.keys.map((key) => {
+                const guide = guideHref(key.char);
+                // a special character's key is a link to its guide entry (#999 C29); the rest are pictures
+                const Key = guide ? "a" : "div";
+                return (
+                  <Key
+                    key={key.char}
+                    {...(guide
+                      ? {
+                          href: guide,
+                          "aria-label": fill(labels.guide, { name: keyName(key, labels, locale) }),
+                          "data-key-guide": "",
+                        }
+                      : { role: "img", "aria-label": keyName(key, labels, locale) })}
+                    className={cn(
+                      styles.key,
+                      !key.typed && styles.untyped,
+                      guide && styles.guideKey,
+                    )}
+                    style={{ width: width(1) }}
+                    data-key={key.char}
+                    data-key-typed={key.typed ? "true" : "false"}
+                  >
+                    <span className={styles.cap} data-key-cap="">
+                      {key.cap}
                     </span>
-                  ) : null}
-                </div>
-              ))}
+                    {key.typed ? (
+                      <span
+                        className={styles.circle}
+                        style={{ width: `${circleSize(key.share)}%` }}
+                        data-key-circle=""
+                      >
+                        <span
+                          className={styles.core}
+                          style={{ width: `${coreSize(key.errorRate)}%` }}
+                          data-key-core=""
+                        />
+                      </span>
+                    ) : null}
+                  </Key>
+                );
+              })}
             </div>
           ))}
           <div className={styles.space} aria-hidden="true" />

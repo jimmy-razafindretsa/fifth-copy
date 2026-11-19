@@ -610,7 +610,21 @@ export const en = {
       formName: "Room code",
     },
     kicker: { seat: "SEAT VIEW", desk: "SEAT VIEW · DESK {n}" },
-    telex: { strip: "Text to type" },
+    telex: {
+      strip: "Text to type",
+      /**
+       * The intercepted-cable headers (#999 C40, R26, bible 4): Special Elite, above the tape, framing
+       * the race text and never part of it; `cableHeader` picks one per race and fills the cable `{n}`.
+       */
+      cables: [
+        "INTERCEPTED CABLE · № {n} · COPY AS RECEIVED",
+        "INTERCEPTED CABLE · № {n} · PRIORITY: URGENT",
+        "INTERCEPTED CABLE · № {n} · FOR THE FIFTH COPY",
+        "INTERCEPTED CABLE · № {n} · ORIGIN UNKNOWN",
+        "INTERCEPTED CABLE · № {n} · FILE BEFORE DAWN",
+        "INTERCEPTED CABLE · № {n} · DO NOT FOLD",
+      ],
+    },
     /** The 3-2-1 countdown and the Major's dual stamp `НАЧАЛИ · GO` (#214, bible 2, 7.3). */
     countdown: { major: "НАЧАЛИ", go: "GO" },
     /** The overtake stamps (#232, bible 2, 7.3): the dual in-world headline, Russian then this language. */

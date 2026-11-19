@@ -18,6 +18,22 @@
   -webkit-user-select: none;
 }
 
+/* #999 C40 (R26, bible 4, 7.7): the intercepted-cable header, the flavour face on the tape, ink in both
+   themes like the tape (3.2), under a dashed rule; one line, never typed (outside the tape's chars) */
+.cable {
+  @apply type-flavour;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--color-typing-done);
+  color: var(--color-typing-done);
+  font-size: 14px;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .viewport {
   overflow: hidden;
   white-space: nowrap;

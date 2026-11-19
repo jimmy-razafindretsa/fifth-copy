@@ -572,7 +572,17 @@ export const fr = {
       formName: "Code de la salle",
     },
     kicker: { seat: "VUE DE TA PLACE", desk: "VUE DE TA PLACE · BUREAU {n}" },
-    telex: { strip: "Texte à taper" },
+    telex: {
+      strip: "Texte à taper",
+      cables: [
+        "CÂBLE INTERCEPTÉ · № {n} · COPIE CONFORME",
+        "CÂBLE INTERCEPTÉ · № {n} · PRIORITÉ : URGENT",
+        "CÂBLE INTERCEPTÉ · № {n} · POUR LA CINQUIÈME COPIE",
+        "CÂBLE INTERCEPTÉ · № {n} · ORIGINE INCONNUE",
+        "CÂBLE INTERCEPTÉ · № {n} · À CLASSER AVANT L'AUBE",
+        "CÂBLE INTERCEPTÉ · № {n} · NE PAS PLIER",
+      ],
+    },
     countdown: { major: "НАЧАЛИ", go: "PARTEZ" },
     /** The overtake stamps (#232, bible 2, 7.3): the dual in-world headline, Russian then this language. */
     stamps: {

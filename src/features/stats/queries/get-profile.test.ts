@@ -323,6 +323,37 @@ describe("getProfile (stand-in client)", () => {
     expect(p.progress.gain).toBe(245);
   });
 
+  it("#999 C44: per-race WPM and accuracy, the 7-day average by stats-timezone day, the gain since start", async () => {
+    // 22:30 in Toronto on Nov 12 is already Nov 13 in UTC: it belongs to Nov 12's window
+    const at = (iso: string) => new Date(iso);
+    const rows = [
+      { createdAt: at("2026-11-01T15:00:00Z"), cleanWpm: 20, accuracy: 0.9, lang: "FR" as const },
+      { createdAt: at("2026-11-02T15:00:00Z"), cleanWpm: 22, accuracy: 0.9, lang: "EN" as const },
+      { createdAt: at("2026-11-03T15:00:00Z"), cleanWpm: 24, accuracy: 0.91, lang: "FR" as const },
+      { createdAt: at("2026-11-04T15:00:00Z"), cleanWpm: 26, accuracy: 0.91, lang: "EN" as const },
+      { createdAt: at("2026-11-05T15:00:00Z"), cleanWpm: 28, accuracy: 0.92, lang: "FR" as const },
+      { createdAt: at("2026-11-08T15:00:00Z"), cleanWpm: 30, accuracy: 0.92, lang: "EN" as const },
+      { createdAt: at("2026-11-09T15:00:00Z"), cleanWpm: 32, accuracy: 0.93, lang: "FR" as const },
+      { createdAt: at("2026-11-10T15:00:00Z"), cleanWpm: 34, accuracy: 0.93, lang: "EN" as const },
+      { createdAt: at("2026-11-11T15:00:00Z"), cleanWpm: 36, accuracy: 0.94, lang: "FR" as const },
+      { createdAt: at("2026-11-13T03:30:00Z"), cleanWpm: 40, accuracy: 0.95, lang: "EN" as const },
+    ];
+    const { db } = fakeDb(rows);
+    const p = await getProfile(VIEWER, { db, now: NOW });
+    const { series, gain } = p.progress;
+    // one point per counted race, oldest first, with its own clean WPM and accuracy
+    expect(series.map((s) => s.cleanWpm)).toEqual(rows.map((r) => r.cleanWpm));
+    expect(series.map((s) => s.accuracy)).toEqual(rows.map((r) => r.accuracy));
+    // the late race's day is its Toronto day
+    expect(series.at(-1)?.day).toBe("2026-11-12");
+    // Nov 12's window is Nov 6..12: 30, 32, 34, 36, 40
+    expect(series.at(-1)?.avg7).toBeCloseTo((30 + 32 + 34 + 36 + 40) / 5, 6);
+    // Nov 8's window is Nov 2..8: 22, 24, 26, 28, 30
+    expect(series[5]?.avg7).toBeCloseTo((22 + 24 + 26 + 28 + 30) / 5, 6);
+    // latest five (30..40, mean 34.4) minus the earliest five (20..28, mean 24)
+    expect(gain).toBe(10);
+  });
+
   it("COUNTED_RACE is imported from the results feature, not copied", () => {
     // #943: the counted filter moved to counted-where.ts, shared with getMissions
     const source = readFileSync(path.join(__dirname, "get-profile.ts"), "utf8");

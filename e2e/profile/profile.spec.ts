@@ -1473,7 +1473,9 @@ test.describe("keyboard map (#324)", () => {
       .locator("[data-section]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")));
     expect(order.indexOf("keyboard-map")).toBe(order.indexOf("key-inventory") + 1);
-    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("attendance") - 1);
+    // the accents row (#999 C55) sits between the map and the register
+    expect(order.indexOf("accents")).toBe(order.indexOf("keyboard-map") + 1);
+    expect(order.indexOf("attendance")).toBe(order.indexOf("accents") + 1);
 
     const layouts = section.getByRole("group", { name: "Keyboard layout" });
     await expect(layouts.getByRole("button")).toHaveCount(4);

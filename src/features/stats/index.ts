@@ -1,6 +1,8 @@
 // Stats feature (ADR 0008, #931): the Personnel file read path over stored race results. Reads
 // `RaceResult` through `@/features/results`' COUNTED_RACE, never raw keystrokes. Server-only exports
 // (getProfile): never import this index from a client component; client code imports types only.
+// Guest merge steps (ADR 0009, #999): achievements and personal bests; listed in package.json sideEffects.
+import "./merge-steps";
 export { getProfile } from "./queries/get-profile";
 export {
   EMPTY_SERVICE,
@@ -70,3 +72,18 @@ export {
   type PairStatRow,
 } from "./view/key-file";
 export { type KeyFileFixture, keyFileFixtures } from "./view/key-file-fixtures";
+// Personal bests (#999 C41, ADR 0016): the one pure rule and the viewer's query (server-only).
+export {
+  bestKeyOf,
+  type BestKey,
+  type BestLanguage,
+  type BestLength,
+  type BestTextType,
+  isPersonalBest,
+  LENGTH_BUCKETS,
+  lengthOf,
+} from "./personal-bests/rule";
+export { getPersonalBests, type PersonalBestRow } from "./personal-bests/query";
+// Achievements (#999 C34, C35): the stable ids and the pure award rules.
+export { ACHIEVEMENT_IDS, type AchievementId, isAchievementId } from "./achievements/ids";
+export { earnedBy, type AwardFacts } from "./achievements/rules";

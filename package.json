@@ -9,7 +9,9 @@
     "./src/features/lobby/index.ts",
     "./src/features/lobby/merge-step.ts",
     "./src/features/results/index.ts",
-    "./src/features/results/merge-steps.ts"
+    "./src/features/results/merge-steps.ts",
+    "./src/features/stats/index.ts",
+    "./src/features/stats/merge-steps.ts"
   ],
   "scripts": {
     "dev": "next dev",

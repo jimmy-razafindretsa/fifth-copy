@@ -5,6 +5,7 @@ import {
 } from "@fifth-copy/protocol";
 import { env } from "@/env";
 import { MAX_RESULTS_BODY_BYTES, persistRaceResults } from "@/features/results";
+import { awardAchievements, recordPersonalBests } from "@/features/stats/server";
 import { webNonceStore } from "@/server/internal-api/nonces";
 import { internalRefusalResponse, requireInternal } from "@/server/internal-api/verify";
 
@@ -17,7 +18,8 @@ const refuse = (status: number, error: InternalError["error"]) =>
  * `persistRaceResults` stores the chunk in one transaction, idempotent per (race, desk). Refusals:
  * 401 bad-signature / stale-timestamp / replay, 400 bad-body, 426 version, 404 not-found; a bare
  * 503 when the nonce store is unavailable (#716). Any other failure is a bare 500 (the race server
- * retries). Never logs a body or an error detail.
+ * retries). Never logs a body or an error detail. In the same transaction, the stats steps record the
+ * chunk's personal bests and award its achievements (#999 C35, C41; results never imports stats).
  */
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const verified = await requireInternal(request, {
@@ -30,7 +32,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   if (!parsed.success || parsed.data.raceId !== id) return refuse(400, "bad-body");
   try {
-    const result = await persistRaceResults(parsed.data);
+    const result = await persistRaceResults(parsed.data, {
+      afterSave: [recordPersonalBests, awardAchievements],
+    });
     if (!result.ok) return refuse(result.error === "not-found" ? 404 : 400, result.error);
     return Response.json(result.response);
   } catch {

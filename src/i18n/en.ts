@@ -615,6 +615,15 @@ export const en = {
       "Sixty seconds without a key and the Major sends you home.",
     ] as string[],
     /** #951: why the 3D room went away (under the no-scene notice); `{fps}` = frames a second measured. */
+    /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk. */
+    projector: {
+      kicker: "PROJECTOR VIEW",
+      connecting: "Tuning in to the room…",
+      top: "TOP 10",
+      typists: "{n} TYPISTS",
+      standings: "Top 10 standings",
+      noPlace: "··",
+    },
     sceneDrop: {
       "no-webgl2": "This browser has no WebGL2, so the 3D room cannot run here.",
       "benchmark-low":

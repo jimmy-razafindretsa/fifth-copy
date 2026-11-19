@@ -586,6 +586,15 @@ export const fr = {
       "Tes meilleures vitesses et ta moyenne sont classées dans ton dossier après chaque course.",
       "Soixante secondes sans toucher une touche et le Major te renvoie chez toi.",
     ],
+    /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk. */
+    projector: {
+      kicker: "VUE PROJECTEUR",
+      connecting: "Connexion à la salle…",
+      top: "TOP 10",
+      typists: "{n} DACTYLOS",
+      standings: "Classement, 10 premiers",
+      noPlace: "··",
+    },
     sceneDrop: {
       "no-webgl2": "Ce navigateur n'a pas WebGL2 : la salle en 3D ne peut pas tourner ici.",
       "benchmark-low":

@@ -17,8 +17,12 @@ export type ProjectorLabels = {
   typists: string;
   /** The list's accessible name. */
   standings: string;
-  /** The place cell before the first snapshot (no rank yet). */
+  /** The place cell before the first snapshot (no rank yet); a plaque's too. */
   noPlace: string;
+  /** The overview scene frame's name (#999 C2). */
+  scene: string;
+  /** A rank plaque's desk (#999 C4): `DESK {n}`. */
+  plaqueDesk: string;
 };
 
 export type Top10SidebarProps = {

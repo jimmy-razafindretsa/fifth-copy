@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { MintRaceToken } from "../../client/connect-seat";
 import { RaceStoreProvider } from "../../client/use-race-store";
+import { PlaqueAnchorsProvider, RankPlaquesLive } from "../../components/spectator/rank-plaques";
 import { ProjectorLive, Top10Live, type ProjectorScreenLabels } from "./projector-live";
 import styles from "./projector-screen.module.css";
 
@@ -13,11 +14,10 @@ export type ProjectorScreenProps = {
   mint: MintRaceToken;
   /**
    * The stage (#999 C2, C6): the route's client leaf. The overview scene behind everything once WebGL2
-   * runs (M3b), else the lobby's CSS seat ring diagram with no `you` (the paper fallback).
+   * runs, else the lobby's CSS seat ring diagram with no `you` (the paper fallback). It sends the scene's
+   * anchors to the plaques through `usePlaqueAnchors` (the provider is here).
    */
   stage?: ReactNode;
-  /** The rank plaques over the scene (#999 C4, M3b); nothing until they come. */
-  plaques?: ReactNode;
 };
 
 /**
@@ -25,28 +25,31 @@ export type ProjectorScreenProps = {
  * the teacher's big screen. A spectator page: no desk, so no telex, sheet, machine, race card, tray,
  * Abandon or input. One full-viewport frame on the paper ground: the stage (the scene or the ring, the
  * plaque layer, the kicker and the live state) and the top-10 sidebar on the right, everything at the
- * projector scale. One race store around it, fed by `ProjectorLive`'s spectator socket.
+ * projector scale. One race store around it, fed by `ProjectorLive`'s spectator socket; the rank plaques
+ * (C4, C5) over the stage, placed from the scene's anchors (none on paper: every plaque stays hidden).
  */
-export function ProjectorScreen({ seat, labels, mint, stage, plaques }: ProjectorScreenProps) {
+export function ProjectorScreen({ seat, labels, mint, stage }: ProjectorScreenProps) {
   return (
     <RaceStoreProvider>
-      <div data-projector className={styles.screen}>
-        <div data-projector-stage className={styles.stage}>
-          {stage}
-        </div>
-        <div data-plaques aria-hidden="true" className={styles.plaques}>
-          {plaques}
-        </div>
-        <div className={styles.main}>
-          <h1 className={styles.kicker}>{labels.projector.kicker}</h1>
-          <div data-projector-status className={styles.status}>
-            <ProjectorLive code={seat.code} lobbyId={seat.lobbyId} mint={mint} labels={labels} />
+      <PlaqueAnchorsProvider>
+        <div data-projector className={styles.screen}>
+          <div data-projector-stage className={styles.stage}>
+            {stage}
+          </div>
+          <div data-plaques aria-hidden="true" className={styles.plaques}>
+            <RankPlaquesLive labels={labels.projector} />
+          </div>
+          <div className={styles.main}>
+            <h1 className={styles.kicker}>{labels.projector.kicker}</h1>
+            <div data-projector-status className={styles.status}>
+              <ProjectorLive code={seat.code} lobbyId={seat.lobbyId} mint={mint} labels={labels} />
+            </div>
+          </div>
+          <div className={styles.side}>
+            <Top10Live labels={labels} />
           </div>
         </div>
-        <div className={styles.side}>
-          <Top10Live labels={labels} />
-        </div>
-      </div>
+      </PlaqueAnchorsProvider>
     </RaceStoreProvider>
   );
 }

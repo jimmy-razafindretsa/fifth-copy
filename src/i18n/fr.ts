@@ -594,6 +594,8 @@ export const fr = {
       typists: "{n} DACTYLOS",
       standings: "Classement, 10 premiers",
       noPlace: "··",
+      scene: "La salle, vue d'en haut",
+      plaqueDesk: "BUREAU {n}",
     },
     sceneDrop: {
       "no-webgl2": "Ce navigateur n'a pas WebGL2 : la salle en 3D ne peut pas tourner ici.",

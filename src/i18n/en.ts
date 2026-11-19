@@ -623,6 +623,8 @@ export const en = {
       typists: "{n} TYPISTS",
       standings: "Top 10 standings",
       noPlace: "··",
+      scene: "The ring room, from above",
+      plaqueDesk: "DESK {n}",
     },
     sceneDrop: {
       "no-webgl2": "This browser has no WebGL2, so the 3D room cannot run here.",

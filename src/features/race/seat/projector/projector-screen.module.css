@@ -3,8 +3,8 @@
  * themed paper ground, no page scroll. Every size is given at 1920x1080 and grows with the screen,
  * `max(N, min(N/1920 of the width, N/1080 of the height))`. From 1024px: the stage (1fr) and the 520px
  * sidebar on the right, 24px gutters; the kicker and the live state sit at the top of the stage column,
- * over the stage (the overview scene, or the seat ring diagram on paper). The plaque layer (M3b) covers
- * the frame and never takes a pointer. Under 1024px the sidebar stacks under the stage.
+ * over the stage (the overview scene, or the seat ring diagram on paper). The overview scene's layer is
+ * fixed to the whole frame behind everything; the plaque layer covers the frame over it, never a pointer. Under 1024px the sidebar stacks under the stage.
  */
 
 @reference "../../../../app/globals.css";
@@ -34,6 +34,17 @@
   display: grid;
   place-items: center;
   min-height: 0;
+}
+
+/*
+ * the paper fallback fills the stage and sizes the ring (#999 M3b: the size container is here, not on the
+ * stage, whose containment would also trap the overview scene's fixed full-frame layer)
+ */
+.stage > :global([data-scene="paper"]) {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
   container-type: size;
 }
 
@@ -42,7 +53,7 @@
   width: min(100cqw, 100cqh);
 }
 
-/* the rank plaques (M3b) over the scene: decorative, never a pointer */
+/* the rank plaques (#999 C4) over the scene: decorative, never a pointer; the sidebar stays over them */
 .plaques {
   position: absolute;
   inset: 0;

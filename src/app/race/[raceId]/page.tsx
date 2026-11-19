@@ -17,7 +17,8 @@ import { SeatScene } from "./seat-scene";
  * `updatePreferences`. The 3D seat scene (#563) is `SeatScene`, a client leaf that loads race-3d after the HUD mounted.
  * `?view=projector` (#999, bible 14.3 "Projector view") is the spectator page for a classroom screen: a
  * read-only `spectator` token for any viewer (the host's own seat stays on the plain URL), no desk, no
- * keys, the top 10 beside the stage; its stage is `ProjectorStage` (the ring diagram on paper).
+ * keys, the top 10 beside the stage; its stage is `ProjectorStage` (the overview scene with its rank
+ * plaques, or the ring diagram on paper).
  */
 export default async function RacePage({ params, searchParams }: PageProps<"/race/[raceId]">) {
   const [{ raceId }, { view }] = await Promise.all([params, searchParams]);
@@ -31,7 +32,7 @@ export default async function RacePage({ params, searchParams }: PageProps<"/rac
           seat={seat}
           labels={t.race}
           mint={mintRaceToken}
-          stage={<ProjectorStage labels={t.lobby.ring} />}
+          stage={<ProjectorStage labels={t.lobby.ring} title={t.race.projector.scene} />}
         />
       </main>
     );

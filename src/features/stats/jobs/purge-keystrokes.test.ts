@@ -10,6 +10,7 @@ import {
   PURGE_BATCH,
   PURGE_MAX_BATCHES,
   RAW_KEYSTROKES_RETENTION_DAYS,
+  SPEED_CURVE_RETENTION_DAYS,
   purgeExpiredStats,
   purgeKeystrokes,
 } from "./purge-keystrokes";
@@ -61,6 +62,9 @@ describe("purgeKeystrokes job (C1, C3, C5)", () => {
     };
     expect(days("Raw keystrokes")).toBe(RAW_KEYSTROKES_RETENTION_DAYS);
     expect(days("Daily letter-pair stats")).toBe(LETTER_PAIR_RETENTION_DAYS);
+    expect(days("Race speed curves (`RaceResult.wpmSeries`, #952)")).toBe(
+      SPEED_CURVE_RETENTION_DAYS,
+    );
   });
 
   it("C5 the retention and inventory rows name this job as shipped", () => {
@@ -141,6 +145,9 @@ describe.skipIf(!testDatabaseUrl)(
               bonusesReceived: 0,
               bonusLog: [],
               engineVersion: "0.1.0",
+              // the speed curve filed with it (ADR 0027), as old as its keys
+              wpmSeries: [[10_000, 50]],
+              createdAt,
             },
           },
         },
@@ -206,6 +213,26 @@ describe.skipIf(!testDatabaseUrl)(
         expect(await db.race.count({ where: { id } }), id).toBe(1);
         expect(await db.raceResult.count({ where: { raceId: id } }), id).toBe(1);
       }
+    });
+
+    it("#999 C53 clears speed curves filed more than 30 days ago and keeps the result rows", async () => {
+      const u = await user();
+      const young = await race(u, 30 * DAY - 60 * MINUTE);
+      const old = await race(u, 30 * DAY + MINUTE);
+
+      await run();
+
+      const rows = await db.raceResult.findMany({
+        where: { userId: u },
+        select: { raceId: true, wpmSeries: true, cleanWpm: true },
+      });
+      expect(rows).toHaveLength(2);
+      expect(rows.find((r) => r.raceId === young)?.wpmSeries).toEqual([[10_000, 50]]);
+      expect(rows.find((r) => r.raceId === old)).toEqual({
+        raceId: old,
+        wpmSeries: null,
+        cleanWpm: 50,
+      });
     });
 
     it("C2 deletes letter-pair days more than 90 days before the stats day and never char stats", async () => {
@@ -338,7 +365,13 @@ describe.skipIf(!testDatabaseUrl)(
       expect(lines).toEqual([
         {
           msg: "stats purged",
-          fields: { raceKeystrokes: 5, neverRolledUp: 3, bigramStatDaily: 2, batches: 2 },
+          fields: {
+            raceKeystrokes: 5,
+            neverRolledUp: 3,
+            wpmSeries: 2,
+            bigramStatDaily: 2,
+            batches: 3,
+          },
         },
       ]);
     });

@@ -7,3 +7,6 @@ import "server-only";
 export { COUNTED_RACE } from "./queries/counted-races";
 // A stored trace ready to replay: keystrokes, effective text, engine settings (#314).
 export { storedReplay, type StoredReplay, type StoredTrace } from "./stored-replay";
+// The after-save steps of the results filing transaction (#999 C35, C41): stats implements them, the
+// filing route composes them.
+export type { AfterSaveStep, FiledRace, FiledResult } from "./actions/persist-results";

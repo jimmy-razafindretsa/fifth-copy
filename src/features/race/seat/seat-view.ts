@@ -1,5 +1,6 @@
 import type { CountdownLabels } from "../components/countdown";
 import type { StampRowLabels } from "../components/stamp-row";
+import type { StuckHintLabels } from "../components/stuck-hint";
 import type { TelexLabels } from "../components/telex-strip";
 import type { FinishLabels } from "../view/standings";
 import type {
@@ -32,6 +33,8 @@ export type RaceSeatLabels = {
   /** The live notices, plus the phones-only notice (bible 7.4 notice row). */
   notice: RaceNoticeLabels & { phones: string };
   errors: SeatErrorLabels;
+  /** The stuck hint (#999 C31): `STUCK ON ç? HERE'S HOW →`, the link to the guide's entry. */
+  stuckHint: StuckHintLabels;
   /** The room-lost notice (#235 C4): its statement and the link back to the lobby. */
   presence: SeatPresenceLabels;
   abandon: AbandonLabels;

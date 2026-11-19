@@ -35,6 +35,8 @@ import { FinishedView } from "../components/finished-view";
 import { nixieNumber } from "../components/nixie-counters";
 import { RaceNotice } from "../components/race-notice";
 import { RaceAnnouncer } from "../components/race-announcer";
+import type { StuckHintLabels } from "../components/stuck-hint";
+import { StuckHintLive } from "../components/stuck-hint-live";
 import { StampRow } from "../components/stamp-row";
 import stampStyles from "../components/stamp-row.module.css";
 import { createCooldownSampler } from "../components/sabotage-tray-live";
@@ -55,6 +57,8 @@ export type SeatLiveLabels = SeatStatusLabels &
     input: string;
     /** #951: `SABOTAGE AVAILABLE · {key}`, over the race when a card is dealt. */
     sabotageAlert?: string;
+    /** #999 C31: the stuck hint's copy; no hint without it (the projector's live leaf has none). */
+    stuckHint?: StuckHintLabels;
   };
 
 const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "back">> = {
@@ -301,6 +305,8 @@ export function RaceSeatLive({
   const backspace = useRaceStore((s) => s.settings?.backspace);
   const errors = useRaceStore((s) => s.prediction?.state.errors);
   const finishWpm = useRaceStore(selectFinishWpm);
+  // #999 C30: the stuck hint's hinted characters are this race's (a new race mounts a fresh leaf)
+  const raceId = useRaceStore((s) => s.race?.raceId ?? null);
   const { announce, countdown, stamps } = labels;
   const announcer = useMemo(() => ({ announce, countdown, stamps }), [announce, countdown, stamps]);
   const typing = useRef<Typing | null>(null);
@@ -391,6 +397,10 @@ export function RaceSeatLive({
           backspace={backspace}
           errors={errors}
         />
+      ) : null}
+      {/* #999 C31: after the input in the page, so it never comes before it; it never takes the focus */}
+      {desk && labels.stuckHint ? (
+        <StuckHintLive key={raceId ?? "none"} labels={labels.stuckHint} />
       ) : null}
       {/* #242: the one polite announcer, present before the countdown starts so each change is read;
           nothing to say once lost (the lost line is its own alert) */}

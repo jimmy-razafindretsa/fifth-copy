@@ -704,6 +704,8 @@ export const fr = {
       "no-scene": "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
       phones: "LES CELLULAIRES REGARDENT DU FOND DE LA SALLE",
     },
+    /** The stuck hint (#999 C31, bible 7.4 notice row): `{char}` is the character the typist keeps missing. */
+    stuckHint: { stuck: "BLOQUÉ SUR {char} ?", how: "VOICI COMMENT →" },
     /** Presence (#235, bible 7.4 notice row): the room went away under a seated page (#204). */
     presence: {
       roomLost: "LA SALLE EST PERDUE",

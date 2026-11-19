@@ -1,0 +1,37 @@
+/*
+ * The stuck hint (#999 C31, bible 7.4 notice row, extension): standing alone in the seat view's status
+ * slot, the row is a one-row docket (2px ink rule, paper ground), like the race notices. A pointer to the
+ * guide, not a live state: it does not pulse and has no motion (it appears and goes, as the notices do).
+ */
+
+@reference "../../../app/globals.css";
+
+.hint {
+  border: 2px solid var(--color-fg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* the character as the text shows it: the label face's caps never turn `ç` into `Ç` */
+.char {
+  text-transform: none;
+}
+
+/* the 7.4 notice row's link (the room-lost row's recipe): underlined ink, a 44px press target */
+.link {
+  display: inline-block;
+  padding-block: 14px;
+  margin-block: -14px;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

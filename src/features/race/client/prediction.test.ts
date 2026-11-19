@@ -478,7 +478,9 @@ describe("errorsByChar (#999 C30)", () => {
     p = p.markSent(p.unacked.length);
     expect(p.errorsByChar.get("ç")).toBe(2);
     // the server disagrees (it saw fewer keys): the unacked keys replay on top of its state
-    const server = progress(fold(keys("Le "), initialState(), BLOCK));
+    const server = progress(
+      keys("Le ").reduce((s, k) => applyKeystroke(s, k, TEXT, BLOCK), initialState()),
+    );
     p = p.reconcile(server, 3);
     expect(p.errorsByChar.get("ç")).toBe(2);
     p = p.withText(`${TEXT} !`);

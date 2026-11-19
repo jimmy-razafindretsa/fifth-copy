@@ -70,6 +70,7 @@ export function RaceSeat({
               loading: labels.loading,
               notice: labels.notice,
               errors: labels.errors,
+              stuckHint: labels.stuckHint,
               presence: labels.presence,
               countdown: labels.countdown,
               sabotageAlert: labels.sabotageTray.alert,

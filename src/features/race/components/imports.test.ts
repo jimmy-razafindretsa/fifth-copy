@@ -66,6 +66,8 @@ const STORE_READERS: Record<string, string> = {
   [path.join(components, "race-announcer.tsx")]: "../client/use-race-store",
   // #937: the waiting room reads slices of the store (its view model lives in view/waiting-room-view)
   [path.join(components, "waiting-room-live.tsx")]: "../client/use-race-store",
+  // #999 C30: the stuck hint reads the prediction's wrong-press counts (its choice lives in view/stuck-hint)
+  [path.join(components, "stuck-hint-live.tsx")]: "../client/use-race-store",
 };
 
 /**

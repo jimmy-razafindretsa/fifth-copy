@@ -742,6 +742,8 @@ export const en = {
       "no-scene": "NO PICTURE FROM THE ROOM · KEEP TYPING",
       phones: "PHONES WATCH FROM THE BACK OF THE ROOM",
     },
+    /** The stuck hint (#999 C31, bible 7.4 notice row): `{char}` is the character the typist keeps missing. */
+    stuckHint: { stuck: "STUCK ON {char}?", how: "HERE'S HOW →" },
     /** Presence (#235, bible 7.4 notice row): the room went away under a seated page (#204). */
     presence: {
       roomLost: "THE ROOM WAS LOST",

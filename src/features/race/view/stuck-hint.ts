@@ -24,8 +24,8 @@ export function selectStuckChar(
   hinted: ReadonlySet<string>,
 ): string | null {
   const done = new Set([...hinted].map(stuckHintKey));
-  for (const [char, errors] of errorsByChar) {
-    if (errors < STUCK_HINT_ERRORS) continue;
+  for (const [char, presses] of errorsByChar) {
+    if (presses < STUCK_HINT_ERRORS) continue;
     const key = stuckHintKey(char);
     if (key !== null && !done.has(key)) return char;
   }

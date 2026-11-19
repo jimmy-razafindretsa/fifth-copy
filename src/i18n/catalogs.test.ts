@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { BOT_LEVEL_WPM, BOT_LEVELS } from "@fifth-copy/engine";
 import { describe, expect, it } from "vitest";
+import { rankFor } from "@/features/stats/view/rank";
 import { en } from "./en";
 import { fill } from "./format";
 import { fr } from "./fr";
@@ -90,5 +94,39 @@ describe("locale", () => {
     expect(localeFromAcceptLanguage("de-DE,en-US;q=0.7")).toBe("en");
     expect(localeFromAcceptLanguage("de")).toBeNull();
     expect(localeFromAcceptLanguage(null)).toBeNull();
+  });
+});
+
+describe("ranks (#999 C39, #945; bible 2 canonical strings, engine thresholds)", () => {
+  // bible 2's "Ranks" row, read from the bible itself so a copy can never drift from it
+  const bible = readFileSync(
+    fileURLToPath(new URL("../../docs/design/bible/FIFTH_COPY_DESIGN_BIBLE.md", import.meta.url)),
+    "utf8",
+  );
+  const row = bible.split("\n").find((line) => line.startsWith("| Ranks |"));
+  const [, , enCell, frCell] = (row ?? "").split("|").map((cell) => cell.trim());
+  const canonical = { en: enCell?.split(" · "), fr: frCell?.split(" · ") };
+
+  it("the bible's Ranks row lists one name per engine level", () => {
+    expect(row).toBeDefined();
+    expect(canonical.en).toHaveLength(BOT_LEVELS.length);
+    expect(canonical.fr).toHaveLength(BOT_LEVELS.length);
+  });
+
+  for (const [locale, catalog] of [
+    ["en", en],
+    ["fr", fr],
+  ] as const) {
+    it(`${locale}: the rank names are bible 2's canonical strings, in BOT_LEVELS order`, () => {
+      expect([...catalog.landing.clerk.ranks]).toEqual(canonical[locale]);
+    });
+  }
+
+  it("each rank starts at the engine's own threshold (BOT_LEVEL_WPM), never a copied one", () => {
+    BOT_LEVELS.forEach((level, i) => {
+      const floor = i === 0 ? 0 : BOT_LEVEL_WPM[level];
+      expect(rankFor(floor).rank, level).toBe(level);
+      if (i > 0) expect(rankFor(floor - 0.01).rank, level).toBe(BOT_LEVELS[i - 1]);
+    });
   });
 });

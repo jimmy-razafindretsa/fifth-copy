@@ -45,6 +45,12 @@ export type Prediction = {
    * before the first key, after a Backspace, from a server state. A key that types nothing keeps it.
    */
   readonly typedAt: number | null;
+  /**
+   * The wrong presses per target character (#999 C30), in the order each character first went wrong:
+   * the char under the cursor when the engine counted the error. Counted once, when the key is pushed
+   * (a reconcile replaying unacked keys counts nothing again); the stuck hint reads it.
+   */
+  readonly errorsByChar: ReadonlyMap<string, number>;
   /** Applies a key locally and queues it; the same prediction when the engine refuses it. */
   push(keystroke: Keystroke): Prediction;
   /** `count` more keys left for the server (a batch went out). */
@@ -128,6 +134,20 @@ function adopt(from: PlayerState, server: ServerProgress | PlayerState): PlayerS
   return { ...from, ...server, typed, finishedAt };
 }
 
+/** No wrong press yet (shared: an empty count never changes). */
+const NO_ERRORS: ReadonlyMap<string, number> = new Map();
+
+/** `errors` with one more wrong press on `char`; the same map when `char` is unknown. */
+function countError(
+  errors: ReadonlyMap<string, number>,
+  char: string | undefined,
+): ReadonlyMap<string, number> {
+  if (char === undefined) return errors;
+  const next = new Map(errors);
+  next.set(char, (errors.get(char) ?? 0) + 1);
+  return next;
+}
+
 const clamp = (n: number, max: number) => Math.max(0, Math.min(max, Math.floor(n)));
 
 /** What the engine's numbers say about the last key it took (#220): struck, and the pop stamp. */
@@ -157,6 +177,7 @@ export function createPrediction({
     sent: number,
     state: PlayerState,
     mark: Mark,
+    errorsByChar: ReadonlyMap<string, number>,
   ): Prediction {
     const step = (s: PlayerState, keystroke: Keystroke) => apply(s, keystroke, text, settings);
     const self: Prediction = {
@@ -170,21 +191,18 @@ export function createPrediction({
       // Block mode refused the key: it was counted as an error and the cursor held
       jammed: settings.errorMode === "block" && mark.wrong,
       typedAt: mark.typedAt,
+      errorsByChar,
       push(keystroke) {
         const next = step(state, keystroke);
         if (next === state) return self;
-        return make(
-          text,
-          base,
-          [...unacked, keystroke],
-          sent,
-          next,
-          markOf(state, next, keystroke.t, mark),
-        );
+        const m = markOf(state, next, keystroke.t, mark);
+        // the error lands on the char the cursor stood on (Block holds there, Continue strikes it)
+        const errors = m.wrong ? countError(errorsByChar, text[state.cursor]) : errorsByChar;
+        return make(text, base, [...unacked, keystroke], sent, next, m, errors);
       },
       markSent(count) {
         const n = clamp(sent + count, unacked.length);
-        return n === sent ? self : make(text, base, unacked, n, state, mark);
+        return n === sent ? self : make(text, base, unacked, n, state, mark, errorsByChar);
       },
       ackedBy(server, at) {
         if (server.status !== "typing") return sent;
@@ -202,7 +220,7 @@ export function createPrediction({
         const sentLeft = Math.max(0, sent - n);
         if (sameProgress(predicted, server)) {
           // the server agrees: the shown state stands (same object, nothing re-renders)
-          return n === 0 ? self : make(text, predicted, rest, sentLeft, state, mark);
+          return n === 0 ? self : make(text, predicted, rest, sentLeft, state, mark, errorsByChar);
         }
         // the server's state stands: no char of it was just typed, so nothing pops for it
         const authority = adopt(predicted, server);
@@ -213,14 +231,14 @@ export function createPrediction({
           if (after !== next) m = markOf(next, after, keystroke.t, m);
           next = after;
         }
-        return make(text, authority, rest, sentLeft, next, m);
+        return make(text, authority, rest, sentLeft, next, m, errorsByChar);
       },
       withText(next) {
-        return next === text ? self : make(next, base, unacked, sent, state, mark);
+        return next === text ? self : make(next, base, unacked, sent, state, mark, errorsByChar);
       },
     };
     return self;
   }
 
-  return make(text, initial, [], 0, initial, NO_MARK);
+  return make(text, initial, [], 0, initial, NO_MARK, NO_ERRORS);
 }

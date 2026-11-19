@@ -433,3 +433,55 @@ describe("withText (#236 C1)", () => {
     expect(p.withText(TEXT)).toBe(p);
   });
 });
+
+// Contract of #999 C30: the prediction counts the wrong presses per target character (`errorsByChar`),
+// the stuck hint's input. Only keys the viewer typed count (once, at `push`): a reconcile that replays
+// unacked keys over the server's state counts nothing again.
+describe("errorsByChar (#999 C30)", () => {
+  const at = (key: string, t: number): Keystroke => ({ key, t });
+
+  it("starts empty", () => {
+    expect(createPrediction({ text: TEXT, settings: BLOCK }).errorsByChar.size).toBe(0);
+  });
+
+  it("counts every wrong press on its target character (Block: the cursor holds on it)", () => {
+    // "Le re" typed, the cursor on `ç`; three wrong presses there
+    let p = createPrediction({ text: TEXT, settings: BLOCK });
+    for (const k of keys("Le re")) p = p.push(k);
+    p = p.push(at("q", 1000)).push(at("x", 1050)).push(at("c", 1100));
+    expect([...p.errorsByChar]).toEqual([["ç", 3]]);
+    // the right key ends the jam; the count stays (the hint is once per race)
+    p = p.push(at("ç", 1200));
+    expect(p.state.cursor).toBe(6);
+    expect(p.errorsByChar.get("ç")).toBe(3);
+  });
+
+  it("counts on the struck character in Continue mode, in first-error order", () => {
+    let p = createPrediction({ text: TEXT, settings: CONTINUE });
+    p = p.push(at("x", 100)).push(at("Backspace", 150)).push(at("L", 200)).push(at("a", 250));
+    expect([...p.errorsByChar]).toEqual([
+      ["L", 1],
+      ["e", 1],
+    ]);
+  });
+
+  it("a right key, a Backspace and a refused key count nothing", () => {
+    let p = createPrediction({ text: TEXT, settings: BLOCK });
+    p = p.push(at("L", 100)).push(at("Backspace", 150)).push(at("L", 200));
+    expect(p.errorsByChar.size).toBe(0);
+  });
+
+  it("markSent, reconcile and withText keep the counts without counting a key twice", () => {
+    let p = createPrediction({ text: TEXT, settings: BLOCK });
+    for (const k of keys("Le re")) p = p.push(k);
+    p = p.push(at("q", 1000)).push(at("q", 1050));
+    p = p.markSent(p.unacked.length);
+    expect(p.errorsByChar.get("ç")).toBe(2);
+    // the server disagrees (it saw fewer keys): the unacked keys replay on top of its state
+    const server = progress(fold(keys("Le "), initialState(), BLOCK));
+    p = p.reconcile(server, 3);
+    expect(p.errorsByChar.get("ç")).toBe(2);
+    p = p.withText(`${TEXT} !`);
+    expect(p.errorsByChar.get("ç")).toBe(2);
+  });
+});

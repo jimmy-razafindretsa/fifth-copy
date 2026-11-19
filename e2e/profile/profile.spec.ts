@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { Client } from "pg";
+import { ENGINE_VERSION } from "@fifth-copy/engine";
+import { DEFAULT_RACE_SETTINGS, PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { type Desk, postResults, seedLobby, startRace, withoutWebGL } from "../results/helpers";
 import { signInAccount } from "../landing/home-helpers";
@@ -558,6 +561,79 @@ async function censusPopulation(): Promise<number> {
   }
 }
 
+/**
+ * The census population of the shared e2e database is not monotonic: parallel specs add typists, merge a
+ * guest's history into an account on sign-in (two typists become one) and erase users. Reading it on
+ * both sides of a page load therefore never bounds what the page read in between. A test that needs the
+ * census holds a floor of its own instead (`holdCensusFloor`); C6, which needs a small population, runs
+ * only while no floor stands. The two meet on this Postgres advisory lock: floors share it, C6 takes it
+ * alone.
+ */
+const CENSUS_FLOOR_LOCK = 970_967;
+
+/**
+ * Holds the census floor for one test: 30 guest typists of its own, each with 3 counted results
+ * (`countedPopulationWhere`: human, unflagged, finished, in a race ended ALL_FINISHED), so the page's
+ * population read stays at 30 or more whatever the other specs do meanwhile. Returns the release, which
+ * erases those typists and their races and frees the shared lock.
+ */
+async function holdCensusFloor(): Promise<() => Promise<void>> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  const tag = `e2e_floor_${randomBytes(6).toString("hex")}`;
+  const races = [1, 2, 3].map((n) => `${tag}_race${n}`);
+  try {
+    await db.query("SELECT pg_advisory_lock_shared($1)", [CENSUS_FLOOR_LOCK]);
+    await db.query(
+      `INSERT INTO "User" (id, "isGuest", "typistName")
+       SELECT $1 || '_' || i, true, $1 || '_' || i FROM generate_series(1, 30) i`,
+      [tag],
+    );
+    await db.query(
+      `INSERT INTO "Race" (id, "textContent", "textLanguage", "textWordCount", settings, "startedAt",
+         "endedAt", "endReason", "engineVersion", "protocolVersion")
+       SELECT r, 'the quick fox', 'EN', 3, $2::jsonb, now() - interval '5 min', now(), 'ALL_FINISHED', $3, $4
+       FROM unnest($1::text[]) r`,
+      [races, JSON.stringify(DEFAULT_RACE_SETTINGS), ENGINE_VERSION, PROTOCOL_VERSION],
+    );
+    await db.query(
+      `INSERT INTO "RaceResult" (id, "raceId", "userId", desk, name, "isBot", place, status, wpm,
+         "rawWpm", "cleanWpm", "adjustedWpm", accuracy, progress, correct, errors, total, "durationMs",
+         "bonusesSent", "bonusesReceived", "bonusLog", "engineVersion")
+       SELECT r || '_' || i, r, $2 || '_' || i, i, $2 || '_' || i, false, i, 'FINISHED', 40, 40, 40, 40,
+         0.95, 1, 13, 0, 13, 20000, 0, 0, '[]'::jsonb, $3
+       FROM unnest($1::text[]) r, generate_series(1, 30) i`,
+      [races, tag, ENGINE_VERSION],
+    );
+  } catch (error) {
+    await db.end();
+    throw error;
+  }
+  return async () => {
+    try {
+      await db.query(`DELETE FROM "Race" WHERE id = ANY($1)`, [races]);
+      await db.query(`DELETE FROM "User" WHERE id LIKE $1`, [`${tag}\\_%`]);
+    } finally {
+      await db.end();
+    }
+  };
+}
+
+/**
+ * Takes the census floor lock alone, or `null` while some test holds a floor (the population is then 30
+ * or more by construction). While it is held no floor can be raised. Release by ending the client.
+ */
+async function censusWithoutFloor(): Promise<Client | null> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  const { rows } = await db.query<{ ok: boolean }>("SELECT pg_try_advisory_lock($1) AS ok", [
+    CENSUS_FLOOR_LOCK,
+  ]);
+  if (rows[0]!.ok) return db;
+  await db.end();
+  return null;
+}
+
 const census = (page: Page) => page.locator('[data-section="census"]');
 
 test.describe("typist census (#967)", () => {
@@ -574,13 +650,19 @@ test.describe("typist census (#967)", () => {
     request,
   }) => {
     await threeRaces(request, await seedLobby(page));
-    const population = await censusPopulation();
-    test.skip(population >= 30, `the shared e2e database holds ${population} typists`);
-    await openFile(page);
-    await expect(figure(page, "races")).toHaveText("3");
-    await expect(page.locator("[data-section='streaks']")).toBeVisible();
-    await expect(census(page)).toHaveCount(0);
-    await expect(page.getByText("Your place at the Ministry")).toHaveCount(0);
+    const alone = await censusWithoutFloor();
+    test.skip(!alone, "another test holds a census floor of 30 typists");
+    try {
+      const population = await censusPopulation();
+      test.skip(population >= 30, `the shared e2e database holds ${population} typists`);
+      await openFile(page);
+      await expect(figure(page, "races")).toHaveText("3");
+      await expect(page.locator("[data-section='streaks']")).toBeVisible();
+      await expect(census(page)).toHaveCount(0);
+      await expect(page.getByText("Your place at the Ministry")).toHaveCount(0);
+    } finally {
+      await alone?.end();
+    }
   });
 
   test("C4 C7 /design: tabs and toggle redraw the census with no request, axe-clean, no sideways scroll", async ({
@@ -1609,7 +1691,7 @@ test.describe("keyboard map (#324)", () => {
 // #970 C3, C4: the closing checks of epic #959, on the whole Personnel file. C3: a guest finishes three
 // races through the signed internal routes, each carrying its keystroke trace; the rollup of #314 runs
 // (the worker's own function, `rollup-once.ts`, scoped to that guest); /profile then shows every section
-// whose data exists, in the reference's order (the census only above its floor of 30 typists), and a
+// whose data exists, in the reference's order (the census on a floor of 30 typists the test holds), and a
 // second browser context sees none of it. C4: a two-week file (a race on each of 14 days, key rows on
 // each day, letter pairs) is axe-clean at 375, 768 and 1280 in both themes, has one h1, names every
 // plot, keeps every control at 44px or more and never scrolls sideways at 375.
@@ -1767,27 +1849,21 @@ test.describe("the whole Personnel file (#970)", () => {
     rollup(lobby.hostUserId);
     const rows = await rolledUp(lobby.hostUserId);
     expect(rows.chars, "the rollup wrote key rows").toBeGreaterThan(0);
-    // the shared e2e database's population moves under parallel specs: hold the census to it only
-    // when the reads on both sides of the load agree
-    const before = (await censusPopulation()) >= 30;
-    await openFile(page);
-    await expect(figure(page, "races")).toHaveText("3");
-    await expect(page.locator('[data-section="keyboard-map"]')).toBeVisible();
-    const after = (await censusPopulation()) >= 30;
-    const sections = await sectionsOf(page);
-    expect(sections.filter((s) => s !== "census")).toEqual(
-      FILE_ORDER.filter(
-        // one day of key rows: no week to compare yet, so no weekly bulletin
-        (s) =>
-          s !== "blank" &&
-          s !== "census" &&
-          s !== "callouts" &&
-          (s !== "suspect-pairs" || rows.pairs > 0),
-      ),
-    );
-    if (before === after) {
-      expect(sections.includes("census"), "census").toBe(before);
-      if (before) await expect(census(page)).toBeVisible();
+    // the census needs 30 typists: this test holds a floor of its own (see `holdCensusFloor`)
+    const releaseFloor = await holdCensusFloor();
+    try {
+      await openFile(page);
+      await expect(figure(page, "races")).toHaveText("3");
+      await expect(page.locator('[data-section="keyboard-map"]')).toBeVisible();
+      await expect(census(page)).toBeVisible();
+      expect(await sectionsOf(page)).toEqual(
+        FILE_ORDER.filter(
+          // one day of key rows: no week to compare yet, so no weekly bulletin
+          (s) => s !== "blank" && s !== "callouts" && (s !== "suspect-pairs" || rows.pairs > 0),
+        ),
+      );
+    } finally {
+      await releaseFloor();
     }
     await expect(page.locator('[data-section="key-progress"] [data-key-days]')).toHaveText("DAY 1");
     await expect(attendance(page).locator('[data-attendance="active"] dd')).toHaveText(/^1 \//);
@@ -1825,64 +1901,62 @@ test.describe("the whole Personnel file (#970)", () => {
     const lobby = await seedLobby(page);
     await racesOnDays(request, lobby, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     await twoWeeksOfKeys(lobby.hostUserId);
-    for (const scheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme: scheme });
-      for (const width of [375, 768, 1280]) {
-        const at = `${scheme} ${width}`;
-        await page.setViewportSize({ width, height: 900 });
-        // the shared e2e database's population moves while parallel specs add and erase typists: read
-        // it on both sides of the load, and hold the census to it only when both reads agree
-        const before = (await censusPopulation()) >= 30;
-        await openFile(page);
-        await expect(page.locator('[data-section="keyboard-map"]'), at).toBeVisible();
-        const after = (await censusPopulation()) >= 30;
-        const sections = await sectionsOf(page);
-        expect(
-          sections.filter((s) => s !== "census"),
-          at,
-        ).toEqual(FILE_ORDER.filter((s) => s !== "blank" && s !== "census"));
-        if (before === after) expect(sections.includes("census"), `${at} census`).toBe(before);
-        await expectNoA11yViolations(page);
-        await expect(page.locator("h1"), at).toHaveCount(1);
-        const report = await page.locator("main").evaluate((main) => {
-          const shown = (el: Element) => {
-            const box = el.getBoundingClientRect();
-            return box.width > 0 && box.height > 0 && !el.closest('[aria-hidden="true"]');
-          };
-          const named = (el: Element) =>
-            !!(
-              el.getAttribute("aria-label")?.trim() ||
-              el.getAttribute("aria-labelledby")?.trim() ||
-              el.querySelector(":scope > title")?.textContent?.trim()
+    // the census needs 30 typists: this test holds a floor of its own (see `holdCensusFloor`)
+    const releaseFloor = await holdCensusFloor();
+    try {
+      for (const scheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: scheme });
+        for (const width of [375, 768, 1280]) {
+          const at = `${scheme} ${width}`;
+          await page.setViewportSize({ width, height: 900 });
+          await openFile(page);
+          await expect(page.locator('[data-section="keyboard-map"]'), at).toBeVisible();
+          await expect(census(page), at).toBeVisible();
+          expect(await sectionsOf(page), at).toEqual(FILE_ORDER.filter((s) => s !== "blank"));
+          await expectNoA11yViolations(page);
+          await expect(page.locator("h1"), at).toHaveCount(1);
+          const report = await page.locator("main").evaluate((main) => {
+            const shown = (el: Element) => {
+              const box = el.getBoundingClientRect();
+              return box.width > 0 && box.height > 0 && !el.closest('[aria-hidden="true"]');
+            };
+            const named = (el: Element) =>
+              !!(
+                el.getAttribute("aria-label")?.trim() ||
+                el.getAttribute("aria-labelledby")?.trim() ||
+                el.querySelector(":scope > title")?.textContent?.trim()
+              );
+            const plots = [...main.querySelectorAll("svg, canvas")].filter(shown);
+            const unnamed = plots
+              .filter((el) => !named(el))
+              .map((el) => el.closest("[data-section]")?.getAttribute("data-section") ?? "?");
+            const controls = [
+              ...main.querySelectorAll(
+                'a[href], button, input, select, textarea, [role="slider"], [role="tab"], [tabindex="0"]',
+              ),
+            ].filter(shown);
+            const small = controls
+              .map((el) => ({ el, box: el.getBoundingClientRect() }))
+              .filter(({ box }) => box.height < 43.5 || box.width < 43.5)
+              .map(
+                ({ el, box }) =>
+                  `${el.closest("[data-section]")?.getAttribute("data-section") ?? "?"} ${el.tagName} ${Math.round(box.width)}x${Math.round(box.height)}`,
+              );
+            return { plots: plots.length, unnamed, controls: controls.length, small };
+          });
+          expect(report.plots, at).toBeGreaterThan(0);
+          expect(report.unnamed, `${at} plots without a text alternative`).toEqual([]);
+          expect(report.small, `${at} controls under 44px`).toEqual([]);
+          if (width === 375) {
+            const overflow = await page.evaluate(
+              () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
             );
-          const plots = [...main.querySelectorAll("svg, canvas")].filter(shown);
-          const unnamed = plots
-            .filter((el) => !named(el))
-            .map((el) => el.closest("[data-section]")?.getAttribute("data-section") ?? "?");
-          const controls = [
-            ...main.querySelectorAll(
-              'a[href], button, input, select, textarea, [role="slider"], [role="tab"], [tabindex="0"]',
-            ),
-          ].filter(shown);
-          const small = controls
-            .map((el) => ({ el, box: el.getBoundingClientRect() }))
-            .filter(({ box }) => box.height < 43.5 || box.width < 43.5)
-            .map(
-              ({ el, box }) =>
-                `${el.closest("[data-section]")?.getAttribute("data-section") ?? "?"} ${el.tagName} ${Math.round(box.width)}x${Math.round(box.height)}`,
-            );
-          return { plots: plots.length, unnamed, controls: controls.length, small };
-        });
-        expect(report.plots, at).toBeGreaterThan(0);
-        expect(report.unnamed, `${at} plots without a text alternative`).toEqual([]);
-        expect(report.small, `${at} controls under 44px`).toEqual([]);
-        if (width === 375) {
-          const overflow = await page.evaluate(
-            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-          );
-          expect(overflow, "sideways scroll").toBe(false);
+            expect(overflow, "sideways scroll").toBe(false);
+          }
         }
       }
+    } finally {
+      await releaseFloor();
     }
   });
 });

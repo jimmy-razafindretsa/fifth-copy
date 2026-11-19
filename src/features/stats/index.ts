@@ -87,3 +87,13 @@ export { getPersonalBests, type PersonalBestRow } from "./personal-bests/query";
 // Achievements (#999 C34, C35): the stable ids and the pure award rules.
 export { ACHIEVEMENT_IDS, type AchievementId, isAchievementId } from "./achievements/ids";
 export { earnedBy, type AwardFacts } from "./achievements/rules";
+// The enamel pins of the Personnel file (#999 C36): the pure shelf and the viewer's read (server-only).
+export {
+  emptyShelf,
+  MEDAL_NEW_DAYS,
+  type Medal,
+  type MedalShelf,
+  type MedalState,
+  medalShelf,
+} from "./view/medals";
+export { getMedals } from "./queries/get-medals";

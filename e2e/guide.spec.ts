@@ -60,7 +60,9 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await expect(
         page.getByRole("link", { name: "Apple · Enter characters with accent marks" }),
       ).toHaveAttribute("href", /^https:\/\/support\.apple\.com\//);
-      await expect(page.locator("#e-circumflex [data-guide-keys]")).toHaveText(/Option\s*\+\s*i\s*then\s*e/);
+      await expect(page.locator("#e-circumflex [data-guide-keys]")).toHaveText(
+        /Option\s*\+\s*i\s*then\s*e/,
+      );
 
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);

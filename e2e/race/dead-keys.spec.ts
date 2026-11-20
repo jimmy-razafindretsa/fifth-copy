@@ -83,7 +83,8 @@ test.describe("#1001 dead keys and composition, live", () => {
       new MutationObserver((records) => {
         for (const r of records) {
           const el = r.target as Element;
-          if (el.getAttribute("data-wrong") === "true") w.__red.push(el.getAttribute("data-key") ?? "?");
+          if (el.getAttribute("data-wrong") === "true")
+            w.__red.push(el.getAttribute("data-key") ?? "?");
         }
       }).observe(machine, { attributes: true, subtree: true, attributeFilter: ["data-wrong"] });
       for (const el of machine.querySelectorAll('[data-wrong="true"]')) {

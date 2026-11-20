@@ -10,6 +10,7 @@ import * as race3d from "./index";
 const root = process.cwd();
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
 const LEAF = "src/app/race/[raceId]/seat-scene.tsx";
+const PROJECTOR_LEAF = "src/app/race/[raceId]/projector-stage.tsx";
 
 describe("race-3d public face (#563 C1)", () => {
   it("exports RaceScene and detectWebGL2", () => {
@@ -32,12 +33,14 @@ describe("race-3d public face (#563 C1)", () => {
   });
 
   it("the route loads it only with next/dynamic, ssr: false, from a client leaf", () => {
-    const leaf = read(LEAF);
-    expect(leaf).toMatch(/^"use client";/);
-    expect(leaf).toContain('import dynamic from "next/dynamic";');
-    expect(leaf).toMatch(
-      /dynamic\(\s*\(\)\s*=>\s*import\("@\/features\/race-3d"\)(\.then\(\(\w+\) => \w+\.RaceScene\))?\s*,\s*\{\s*ssr:\s*false,?\s*\}\s*\)/,
-    );
+    // #999 C2: the projector's stage is the second leaf (the overview camera), loaded the same way
+    for (const leaf of [read(LEAF), read(PROJECTOR_LEAF)]) {
+      expect(leaf).toMatch(/^"use client";/);
+      expect(leaf).toContain('import dynamic from "next/dynamic";');
+      expect(leaf).toMatch(
+        /dynamic\(\s*\(\)\s*=>\s*import\("@\/features\/race-3d"\)(\.then\(\(\w+\) => \w+\.RaceScene\))?\s*,\s*\{\s*ssr:\s*false,?\s*\}\s*\)/,
+      );
+    }
     // no other mention of race-3d in the route: no static import, no second dynamic one
     const files = readdirSync(path.join(root, "src/app/race/[raceId]")).filter((f) =>
       /\.tsx?$/.test(f),
@@ -45,7 +48,7 @@ describe("race-3d public face (#563 C1)", () => {
     const mentions = files.flatMap((f) =>
       [...read(`src/app/race/[raceId]/${f}`).matchAll(/@\/features\/race-3d/g)].map(() => f),
     );
-    expect(mentions).toEqual(["seat-scene.tsx"]);
+    expect(mentions.sort()).toEqual(["projector-stage.tsx", "seat-scene.tsx"]);
   });
 
   it("the leaf mounts no scene until an effect has run after mount (HUD first; #951: only the waiting room)", () => {

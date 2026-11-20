@@ -29,9 +29,31 @@ describe("proxy", () => {
   });
 
   it("any other path passes without a cookie (#951: the proxy now sees every route)", () => {
-    expect(passes(proxy(request("/")))).toBe(true);
+    expect(passes(proxy(request("/welcome")))).toBe(true);
     expect(passes(proxy(request("/lobby/KGB-4821")))).toBe(true);
     expect(passes(proxy(request("/profiles")))).toBe(true);
+  });
+
+  // #999 C56 (ADR 0026): a cookieless GET of `/` is served the landing-only module, the URL unchanged.
+  const rewrittenTo = (res: Response) => {
+    const to = res.headers.get("x-middleware-rewrite");
+    return to ? new URL(to).pathname : null;
+  };
+
+  it("/ without a session or guest cookie is rewritten to the visitor landing module", () => {
+    expect(rewrittenTo(proxy(request("/")))).toBe("/welcome");
+    expect(rewrittenTo(proxy(request("/?ref=x", "locale=fr")))).toBe("/welcome");
+  });
+
+  it("/ with a session or a guest cookie passes to the Home menu (a stale one still gets the landing there)", () => {
+    expect(passes(proxy(request("/", "authjs.session-token=x")))).toBe(true);
+    expect(passes(proxy(request("/", "__Secure-authjs.session-token=x")))).toBe(true);
+    expect(passes(proxy(request("/", "fc_guest=abc")))).toBe(true);
+  });
+
+  it("a server action POST to / is never rewritten", () => {
+    const post = new NextRequest(new URL("/", "http://localhost:3000"), { method: "POST" });
+    expect(passes(proxy(post))).toBe(true);
   });
 
   for (const path of ["/settings", "/profile", "/locker"]) {
@@ -66,7 +88,9 @@ describe("proxy", () => {
       const www = new NextRequest(new URL("/", "http://localhost:8080"), {
         headers: { "x-forwarded-host": "www.fifthcopy.com" },
       });
-      expect(passes(proxy(www))).toBe(true);
+      // no redirect (a cookieless `/` is then served the visitor module, #999)
+      expect(proxy(www).headers.get("location")).toBeNull();
+      expect(rewrittenTo(proxy(www))).toBe("/welcome");
     } finally {
       app.url = "http://localhost:3000";
     }

@@ -22,7 +22,8 @@ export const privacyFr: readonly PrivacySection[] = [
     list: [
       "Un numéro d'invité, gardé dans un témoin de ton navigateur.",
       "Ton nom de dactylo. Pour les invités, il est créé au hasard, comme Moineau-482.",
-      "Tes résultats de course : vitesse, précision, rang et temps.",
+      "Tes résultats de course : vitesse, précision, rang et temps. Tes meilleures vitesses et les médailles que tu gagnes.",
+      "Ta vitesse tout au long de chaque course. Seuls les joueurs de cette course et son hôte la voient.",
       "Les touches que tu tapes pendant une course, avec leur rythme.",
       "L'allure de ton commis en 3D et tes réglages, comme la langue et le thème.",
       "L'adresse de ton appareil sur Internet (IP), quand il parle à nos serveurs.",
@@ -60,7 +61,7 @@ export const privacyFr: readonly PrivacySection[] = [
     list: [
       "Compte d'invité inactif : il sera effacé après 12 mois sans course, connexion ni changement de réglage.",
       "Compte (nom d'utilisateur, GitHub, Discord ou Google) : gardé jusqu'à ce que tu le supprimes, ou que ton école le demande.",
-      "Touches tapées pendant une course : elles sont effacées 30 jours après la course.",
+      "Touches tapées pendant une course, et ta vitesse tout au long de cette course : elles sont effacées 30 jours après la course.",
       "Tes statistiques du jour par paire de lettres : elles sont effacées 90 jours plus tard.",
       "Journaux des serveurs et adresses IP : 30 jours.",
       "Salons : 24 heures après leur fermeture.",

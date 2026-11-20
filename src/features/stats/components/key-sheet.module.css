@@ -215,3 +215,56 @@
   height: 0;
   border-top: 2px dashed var(--color-link);
 }
+
+/* ---- "Practise this letter" (#999 C47): the 7.1 secondary button under the chips, 18px apart ---- */
+.practise {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.practiseButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 2px solid var(--color-fg);
+  background: transparent;
+  color: var(--color-fg);
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+}
+
+.practiseButton:hover:enabled {
+  background: var(--color-surface);
+}
+
+.practiseButton:disabled {
+  cursor: progress;
+}
+
+/* the 7.4 inline error line */
+.practiseError {
+  margin: 0;
+  max-width: 100%;
+  border: 2px solid var(--color-fg);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-link);
+  text-wrap: pretty;
+}
+
+.practiseReturned {
+  @apply type-label;
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}

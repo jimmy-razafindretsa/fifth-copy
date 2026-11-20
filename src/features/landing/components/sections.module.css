@@ -390,6 +390,17 @@
 }
 
 /* 8. final call: red halftone band (bible 6) with the inverted primary button */
+.finalAction {
+  display: contents;
+}
+
+/* #999 C15 phones watch: the band keeps REPORT TO YOUR DESK. and loses the desk's QUICK RACE */
+@media (max-width: 480px) {
+  .finalAction {
+    display: none;
+  }
+}
+
 .final {
   background-color: var(--color-primary);
   background-image: radial-gradient(

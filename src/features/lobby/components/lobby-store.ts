@@ -2,8 +2,7 @@ import type { Member, RaceSettings } from "@fifth-copy/protocol";
 import type { ConnectErrorReason, Off, RoomEvents, RoomSocket } from "@/features/race";
 import type { EntryError } from "./entry-errors";
 
-/** Desks in a waiting room (spec: thirty desks, one message). */
-export const ROOM_SEATS = 30;
+export { ROOM_SEATS } from "../seats";
 
 /**
  * Why the waiting room cannot be shown; each maps to a landing error line. `server-disconnect`: the race

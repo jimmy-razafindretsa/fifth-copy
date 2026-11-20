@@ -201,6 +201,18 @@ describe("socket schemas", () => {
       false,
     ],
     [
+      "#999 welcome with no room code (a spectator)",
+      welcomeSchema,
+      { ...welcome, role: "spectator", you: null, room: { code: null, phase: "waiting" } },
+      true,
+    ],
+    [
+      "#999 welcome missing room code",
+      welcomeSchema,
+      { ...welcome, room: { phase: "waiting" } },
+      false,
+    ],
+    [
       "welcome bad code",
       welcomeSchema,
       { ...welcome, room: { code: "KOB-4821", phase: "waiting" } },

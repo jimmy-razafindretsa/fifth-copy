@@ -5,9 +5,13 @@
  * zod (ADR 0017 amendment, #563): this module is in the race-3d client chunk, and zod classic costs
  * ~91 kB gzip in a chunk (#626); the checks are the same ones a schema would make.
  */
-import type { SceneView } from "@/features/race";
+import type { SceneSabotage, SceneView } from "@/features/race";
 
-export const SCENE_PROTOCOL = 1;
+/**
+ * 2 (#999 M2, M3b): the one-shot sabotage message and its acknowledgement, and the overview camera's
+ * plaque anchors; a v1 message is dropped both ways.
+ */
+export const SCENE_PROTOCOL = 2;
 
 /** The served embed (bible 16, scripts/embeds.ts). */
 export const SEAT_EMBED = "/3d/seat.html";
@@ -21,6 +25,15 @@ export type SceneMotion = "full" | "reduce";
 export type SceneCamera = "pov" | "over";
 export const SCENE_FALLBACKS = ["no-webgl2", "benchmark-low", "context-lost"] as const;
 export type SceneFallbackReason = (typeof SCENE_FALLBACKS)[number];
+/**
+ * The protocol's bonus kinds (`bonusKindSchema`), written out: this chunk never loads the protocol's zod
+ * (#626). `messages.test.ts` pins the list to the protocol's.
+ */
+export const SABOTAGE_KINDS = ["extra-paperwork", "exemption", "smoke-break"] as const;
+export type SabotageKind = (typeof SABOTAGE_KINDS)[number];
+/** `throw`: the scene played the gesture and flight; `static`: the object appears where it lands (reduce). */
+export const SABOTAGE_MODES = ["throw", "static"] as const;
+export type SabotageMode = (typeof SABOTAGE_MODES)[number];
 export type SceneTelemetry = {
   fps: number;
   calls: number;
@@ -43,13 +56,26 @@ export type RaceInitMessage = {
 export type RaceStateMessage = { type: "fc-race-state"; v: number; view: SceneView };
 export type RaceMotionMessage = { type: "fc-race-motion"; v: number; motion: SceneMotion };
 export type RacePresetMessage = { type: "fc-race-preset"; v: number; preset: ScenePreset };
+/**
+ * A sabotage card was played (#999 C60): a one-shot event, never a field of `SceneView` (a view replays
+ * safely after a reload, an event must not). `to`: the hit desks; an Exemption is `[from]`.
+ */
+export type RaceSabotageMessage = {
+  type: "fc-race-sabotage";
+  v: number;
+  kind: SabotageKind;
+  from: number;
+  to: number[];
+};
 
 const v = SCENE_PROTOCOL;
+/** `camera`: the seat POV (a desk's page), or the orbiting overview (the projector, #999 C2; bible 11.3). */
 export const raceInitMessage = (
   view: SceneView,
   preset: ScenePresetChoice,
   motion: SceneMotion,
-): RaceInitMessage => ({ type: "fc-race-init", v, view, preset, motion, camera: "pov" });
+  camera: SceneCamera = "pov",
+): RaceInitMessage => ({ type: "fc-race-init", v, view, preset, motion, camera });
 export const raceStateMessage = (view: SceneView): RaceStateMessage => ({
   type: "fc-race-state",
   v,
@@ -64,6 +90,14 @@ export const racePresetMessage = (preset: ScenePreset): RacePresetMessage => ({
   type: "fc-race-preset",
   v,
   preset,
+});
+
+export const raceSabotageMessage = ({ kind, from, to }: SceneSabotage): RaceSabotageMessage => ({
+  type: "fc-race-sabotage",
+  v,
+  kind,
+  from,
+  to: [...to],
 });
 
 // scene -> page
@@ -84,14 +118,47 @@ export type SceneFallbackMessage = {
   /** #951: the frame rate the scene measured when it gave up (`benchmark-low`), when it has one. */
   fps?: number;
 };
+/** The scene played (or placed) a sabotage it was sent (#999 C60): e2e proves the scene saw it. */
+export type SceneSabotageMessage = {
+  type: "fc-scene-sabotage";
+  v: number;
+  kind: SabotageKind;
+  from: number;
+  to: number[];
+  mode: SabotageMode;
+};
+/**
+ * One desk's plaque point (#999 C4): `[desk, x, y]`, x and y in 0..1 of the scene's frame (0, 0 = top
+ * left), the point above the typist's head projected by the overview camera.
+ */
+export type SceneAnchor = readonly [desk: number, x: number, y: number];
+/**
+ * Where each desk's rank plaque stands (#999 C4, bible 15): sent only by the `over` camera, every drawn
+ * frame while it orbits and once per layout when still; a desk off screen is absent.
+ */
+export type SceneAnchorsMessage = { type: "fc-scene-anchors"; v: number; anchors: SceneAnchor[] };
 export type SceneMessage =
-  SceneHelloMessage | SceneReadyMessage | SceneTelemetryMessage | SceneFallbackMessage;
+  | SceneHelloMessage
+  | SceneAnchorsMessage
+  | SceneReadyMessage
+  | SceneTelemetryMessage
+  | SceneFallbackMessage
+  | SceneSabotageMessage;
 
 const isRecord = (x: unknown): x is Record<string, unknown> =>
   typeof x === "object" && x !== null && !Array.isArray(x);
 const count = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0;
 const oneOf = <T extends string>(list: readonly T[], x: unknown): x is T =>
   (list as readonly unknown[]).includes(x);
+/** A desk number (1-based); the scene never sees more desks than this. */
+const MAX_SCENE_DESKS = 64;
+const desk = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 1;
+const desks = (x: unknown): x is number[] =>
+  Array.isArray(x) && x.length >= 1 && x.length <= MAX_SCENE_DESKS && x.every(desk);
+
+const unit = (x: unknown): x is number => count(x) && (x as number) <= 1;
+const anchor = (x: unknown): x is SceneAnchor =>
+  Array.isArray(x) && x.length === 3 && desk(x[0]) && unit(x[1]) && unit(x[2]);
 
 /** A scene -> page message of this protocol version with a well-formed payload, or `null`. */
 export function parseSceneMessage(data: unknown): SceneMessage | null {
@@ -122,6 +189,30 @@ export function parseSceneMessage(data: unknown): SceneMessage | null {
     case "fc-scene-fallback":
       return oneOf(SCENE_FALLBACKS, data.reason)
         ? { type: data.type, v, reason: data.reason, ...(count(data.fps) ? { fps: data.fps } : {}) }
+        : null;
+    case "fc-scene-sabotage":
+      return oneOf(SABOTAGE_KINDS, data.kind) &&
+        desk(data.from) &&
+        desks(data.to) &&
+        oneOf(SABOTAGE_MODES, data.mode)
+        ? {
+            type: data.type,
+            v,
+            kind: data.kind,
+            from: data.from,
+            to: [...data.to],
+            mode: data.mode,
+          }
+        : null;
+    case "fc-scene-anchors":
+      return Array.isArray(data.anchors) &&
+        data.anchors.length <= MAX_SCENE_DESKS &&
+        data.anchors.every(anchor)
+        ? {
+            type: data.type,
+            v,
+            anchors: data.anchors.map(([d, x, y]: SceneAnchor) => [d, x, y] as const),
+          }
         : null;
     default:
       return null;

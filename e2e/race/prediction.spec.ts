@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, startButton, warmRace } from "./helpers";
+import { hostRoom, phaseOf, startButton, warmRace, openRace } from "./helpers";
 
 // Contract of #559 C6: a key never waits for the server. Host and one guest in a room, the host starts;
 // after GO the guest types the first 12 characters of the strip: its sheet shows 12 `done` spans within
@@ -66,7 +66,7 @@ test.describe("#559 local prediction", () => {
     // the guest takes a desk from the seat view itself
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.addInitScript(recorder);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     const desk = String(
       Number(

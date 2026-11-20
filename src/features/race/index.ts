@@ -14,6 +14,17 @@ export type {
  * importable from client modules (the lobby loads it lazily). */
 export { getRaceSeat, type RaceSeatInfo } from "./queries/get-race-seat";
 export { RaceSeat, type RaceSeatProps } from "./seat/race-seat";
+/** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk; the route fills its stage. */
+export { ProjectorScreen, type ProjectorScreenProps } from "./seat/projector/projector-screen";
+export type { ProjectorScreenLabels } from "./seat/projector/projector-live";
+/** The phone spectator screen (#999 C9-C11, bible 14.3 "Phone spectator") and the page's mount-time switch to it. */
+export {
+  PhoneScreen,
+  type PhoneScreenLabels,
+  type PhoneScreenProps,
+} from "./seat/projector/phone-screen";
+export { PhoneSwitch } from "./seat/phone-switch";
+export { usePlaqueAnchors, type PlaqueAnchor } from "./components/spectator/rank-plaques";
 /** The machine's keys for a viewer (#224): a server function, so identity never reaches a client graph. */
 export { machineRows } from "./view/machine-rows";
 export type { RaceSeatLabels, SeatErrorLabels } from "./seat/seat-view";
@@ -25,6 +36,7 @@ export {
   reduceRace,
   selectReadyLine,
   selectSceneGate,
+  selectSceneSabotage,
 } from "./client/store";
 export type {
   RaceEvent,
@@ -91,8 +103,9 @@ export type {
   SabotageTrayLabels,
 } from "./view/hud-labels";
 /** The 3D seat scene's one input (#563, ADR 0017): a memoised view of the store; race-3d reads nothing else. */
+/** #999 C61: its one-shot sabotage plays (`fc-race-sabotage`), a `seq` each, never part of the view. */
 export { selectSceneView } from "./view/scene-view";
-export type { SceneDesk, ScenePhase, SceneView } from "./view/scene-view";
+export type { SceneDesk, ScenePhase, SceneSabotage, SceneView } from "./view/scene-view";
 /** The scene's loading card (#563 C2) and the phone query the scene leaf skips (phones watch, #292). */
 export { LoadingCard, type LoadingCardProps, type SceneLabels } from "./components/loading-card";
 export { WaitingRoom, type WaitingRoomLabels } from "./components/waiting-room";

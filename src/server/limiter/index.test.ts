@@ -189,7 +189,11 @@ describe("createWebLimit (C3, real Redis)", () => {
       "sign-in",
       "sign-in-account",
       "sign-up",
+      "spectator-link",
+      "watch",
     ]);
+    expect(LIMITS["spectator-link"]).toEqual({ max: 20, windowMs: 60_000 });
+    expect(LIMITS.watch).toEqual({ max: 120, windowMs: 60_000 });
     expect(LIMITS["join-by-code"]).toEqual({ max: 120, windowMs: 60_000 });
     expect(LIMITS["mint-race-token"]).toEqual({ max: 10, windowMs: 60_000 });
     expect(LIMITS["mint-race-token-new-guest"]).toEqual({ max: 120, windowMs: 60_000 });

@@ -8,6 +8,7 @@ import {
   RaceNotice,
   selectReadyLine,
   selectSceneGate,
+  selectSceneSabotage,
   selectSceneView,
   useRaceDispatch,
   useRaceStore,
@@ -78,6 +79,7 @@ export function SeatScene({ labels, notice, tips, waiting, drop: dropLabels }: S
   const [tip, setTip] = useState<string | null>(null);
   const [scene, setScene] = useState<string | null>(null);
   const view = useRaceStore(selectSceneView);
+  const sabotage = useRaceStore(selectSceneSabotage);
   const gate = useRaceStore(selectSceneGate);
   // non-null while the room loads (#926): the waiting room (#937) is up
   const loadingRoom = useRaceStore(selectReadyLine) !== null;
@@ -145,6 +147,7 @@ export function SeatScene({ labels, notice, tips, waiting, drop: dropLabels }: S
       {gate === "wait" ? null : (
         <RaceScene
           view={view}
+          sabotage={sabotage}
           preset={preset}
           scene={scene}
           title={labels.title}

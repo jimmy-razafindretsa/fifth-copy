@@ -7,7 +7,7 @@ import {
   replayTrace,
   type Keystroke,
 } from "@fifth-copy/engine";
-import { getPersonalReplay, getRaceSeries } from "./get-race-series";
+import { getPersonalReplay, getRaceSeries, getRaceSeriesForAll } from "./get-race-series";
 
 vi.mock("server-only", () => ({}));
 
@@ -206,5 +206,239 @@ describe("getPersonalReplay, missed keys (#867 C3)", () => {
     const empty = fakeDb([race({ keystrokes: [{ desk: 3, userId: "u-me", ...blob([]) }] })]);
     expect(await getPersonalReplay(RACE_ID, { id: "u-me" }, { db: empty.db })).toBeNull();
     expect(await getPersonalReplay(RACE_ID, null, { db: clean.db })).toBeNull();
+  });
+});
+
+// Contract of #999 C51 (ADR 0027): the series of every result of one race, for the decided audience
+// only (a viewer with a result in the race, or the race's host). The audience is checked by a first
+// query that reads no series at all; only then are the stored `RaceResult.wpmSeries` columns read, and
+// never a `RaceKeystrokes` row. A flagged row and the viewer's own desk (their card replays their own
+// trace) are left out; a bot is a flat line at its clean WPM, simulated.
+type StoredResult = {
+  desk: number;
+  userId: string | null;
+  name: string;
+  isBot: boolean;
+  place: number;
+  cleanWpm: number;
+  durationMs: number;
+  suspicious: boolean;
+  wpmSeries: unknown;
+};
+type StoredRace = {
+  id: string;
+  endReason: "ALL_FINISHED" | "VOID" | null;
+  /** The host when the race started (`Race.hostUserId`); null for races started before it was recorded. */
+  hostUserId: string | null;
+  lobbyId: string | null;
+  /** The lobby's current host, which can change after the race. */
+  lobby: { hostUserId: string } | null;
+  results: StoredResult[];
+};
+
+const stored = (over: Partial<StoredRace> = {}): StoredRace => ({
+  id: RACE_ID,
+  endReason: "ALL_FINISHED",
+  hostUserId: "u-host",
+  lobbyId: "lob-1",
+  lobby: { hostUserId: "u-host" },
+  results: [
+    {
+      desk: 5,
+      userId: "u-win",
+      name: "Lynx-785",
+      isBot: false,
+      place: 1,
+      cleanWpm: 61.4,
+      durationMs: 40_000,
+      suspicious: false,
+      wpmSeries: [
+        [10_000, 55],
+        [40_000, 61.4],
+      ],
+    },
+    {
+      desk: 3,
+      userId: "u-me",
+      name: "Otter-12",
+      isBot: false,
+      place: 2,
+      cleanWpm: 48,
+      durationMs: 42_000,
+      suspicious: false,
+      wpmSeries: [[42_000, 48]],
+    },
+    {
+      desk: 9,
+      userId: null,
+      name: "Typist Bot 9",
+      isBot: true,
+      place: 3,
+      cleanWpm: 40,
+      durationMs: 50_000,
+      suspicious: false,
+      wpmSeries: null,
+    },
+    {
+      desk: 11,
+      userId: "u-flag",
+      name: "Heron-404",
+      isBot: false,
+      place: 4,
+      cleanWpm: 99,
+      durationMs: 30_000,
+      suspicious: true,
+      wpmSeries: [[30_000, 99]],
+    },
+    {
+      desk: 12,
+      userId: "u-old",
+      name: "Stoat-31",
+      isBot: false,
+      place: 5,
+      cleanWpm: 20,
+      durationMs: 50_000,
+      suspicious: false,
+      wpmSeries: null, // purged after 30 days, or filed before #999
+    },
+    {
+      desk: 14,
+      userId: "u-bad",
+      name: "Crane-77",
+      isBot: false,
+      place: 6,
+      cleanWpm: 18,
+      durationMs: 50_000,
+      suspicious: false,
+      wpmSeries: [["x", 1]], // a stored value the schema rejects
+    },
+  ],
+  ...over,
+});
+
+type ResultWhere = { userId?: string; suspicious?: boolean; desk?: { not: number } };
+type AllArgs = {
+  where: { id: string };
+  select: Record<string, unknown> & { results?: { where?: ResultWhere; select: object } };
+};
+
+/** An in-memory Race table that applies the nested `where` and records every select it was asked. */
+function storedDb(rows: StoredRace[]) {
+  const selects: AllArgs["select"][] = [];
+  const findUnique = vi.fn(async ({ where, select }: AllArgs) => {
+    selects.push(select);
+    const r = rows.find((x) => x.id === where.id);
+    if (!r) return null;
+    const w = select.results?.where ?? {};
+    const results = r.results.filter(
+      (x) =>
+        (w.userId === undefined || x.userId === w.userId) &&
+        (w.suspicious === undefined || x.suspicious === w.suspicious) &&
+        (w.desk === undefined || x.desk !== w.desk.not),
+    );
+    return { ...r, results };
+  });
+  return { db: { race: { findUnique } } as never, findUnique, selects };
+}
+
+const readsSeries = (s: AllArgs["select"]) => JSON.stringify(s).includes("wpmSeries");
+const readsTrace = (s: AllArgs["select"]) => JSON.stringify(s).includes("keystrokes");
+
+describe("getRaceSeriesForAll (#999 C51, ADR 0027)", () => {
+  it("a participant gets every other unflagged result's stored series, in place order", async () => {
+    const { db, selects } = storedDb([stored()]);
+    const lines = await getRaceSeriesForAll(RACE_ID, { id: "u-me" }, { db });
+    expect(lines.map((l) => l.desk)).toEqual([5, 9]);
+    expect(lines[0]).toEqual({
+      desk: 5,
+      name: "Lynx-785",
+      place: 1,
+      isBot: false,
+      wpm: 61.4,
+      endMs: 40_000,
+      points: [
+        { t: 10_000, wpm: 55 },
+        { t: 40_000, wpm: 61.4 },
+      ],
+    });
+    // never a keystroke row, for anyone
+    expect(selects.some(readsTrace)).toBe(false);
+  });
+
+  it("a bot is a flat line at its stored clean WPM over its race time", async () => {
+    const { db } = storedDb([stored()]);
+    const bot = (await getRaceSeriesForAll(RACE_ID, { id: "u-me" }, { db })).find(
+      (l) => l.desk === 9,
+    )!;
+    expect(bot.isBot).toBe(true);
+    expect(bot.points).toEqual([
+      { t: 0, wpm: 40 },
+      { t: 50_000, wpm: 40 },
+    ]);
+  });
+
+  it("a flagged row is never shown to others, and is not even read", async () => {
+    const { db, selects } = storedDb([stored()]);
+    const lines = await getRaceSeriesForAll(RACE_ID, { id: "u-me" }, { db });
+    expect(lines.some((l) => l.desk === 11)).toBe(false);
+    const read = selects.find(readsSeries)!;
+    expect(read.results?.where?.suspicious).toBe(false);
+  });
+
+  it("the race's host without a desk sees every unflagged line", async () => {
+    const { db } = storedDb([stored()]);
+    const lines = await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db });
+    expect(lines.map((l) => l.desk)).toEqual([5, 3, 9]);
+  });
+
+  it("the audience is fixed at race time: a member who becomes host later sees no other line", async () => {
+    // u-heir joined the lobby and inherited the host role after this race; they had no desk in it
+    const { db, selects } = storedDb([stored({ lobby: { hostUserId: "u-heir" } })]);
+    expect(await getRaceSeriesForAll(RACE_ID, { id: "u-heir" }, { db })).toEqual([]);
+    expect(selects.some(readsSeries)).toBe(false);
+  });
+
+  it("the race-time host who did not type still sees every line after handing the role on", async () => {
+    const { db } = storedDb([stored({ lobby: { hostUserId: "u-heir" } })]);
+    const lines = await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db });
+    expect(lines.map((l) => l.desk)).toEqual([5, 3, 9]);
+  });
+
+  it("a race with no recorded host is shown to its typists only, never to the current host", async () => {
+    const { db, selects } = storedDb([stored({ hostUserId: null })]);
+    expect(await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db })).toEqual([]);
+    expect(selects.some(readsSeries)).toBe(false);
+    const typist = await getRaceSeriesForAll(RACE_ID, { id: "u-me" }, { db });
+    expect(typist.map((l) => l.desk)).toEqual([5, 9]);
+  });
+
+  it("the gate reads the race's own host, not the lobby's current one", async () => {
+    const { db, selects } = storedDb([stored()]);
+    await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db });
+    expect(selects[0]).toHaveProperty("hostUserId", true);
+    expect(JSON.stringify(selects[0])).not.toContain('"lobby":{"select":{"hostUserId"');
+  });
+
+  it("an outsider (neither a participant nor the host) gets none, and no series is read", async () => {
+    const { db, selects, findUnique } = storedDb([stored()]);
+    expect(await getRaceSeriesForAll(RACE_ID, { id: "u-stranger" }, { db })).toEqual([]);
+    expect(findUnique).toHaveBeenCalledTimes(1);
+    expect(selects.some(readsSeries)).toBe(false);
+    expect(selects.some(readsTrace)).toBe(false);
+  });
+
+  it("fails closed: no viewer, a bad id, no race, a voided race, a race with no lobby", async () => {
+    const { db, findUnique } = storedDb([stored()]);
+    expect(await getRaceSeriesForAll(RACE_ID, null, { db })).toEqual([]);
+    expect(await getRaceSeriesForAll("not-a-uuid", { id: "u-me" }, { db })).toEqual([]);
+    expect(findUnique).not.toHaveBeenCalled();
+    const other = "0e4f6b1a-6a8f-4c1e-9d0e-1f2a3b4c5d6e";
+    expect(await getRaceSeriesForAll(other, { id: "u-me" }, { db })).toEqual([]);
+    const voided = storedDb([stored({ endReason: "VOID" })]);
+    expect(await getRaceSeriesForAll(RACE_ID, { id: "u-me" }, { db: voided.db })).toEqual([]);
+    expect(voided.selects.some(readsSeries)).toBe(false);
+    const orphan = storedDb([stored({ lobbyId: null, lobby: null })]);
+    expect(await getRaceSeriesForAll(RACE_ID, { id: "u-host" }, { db: orphan.db })).toEqual([]);
+    expect(orphan.selects.some(readsSeries)).toBe(false);
   });
 });

@@ -15,10 +15,13 @@ export async function LandingHero({
   primary,
   entries,
   rooms,
+  watch,
 }: {
   primary: React.ReactNode;
   entries: React.ReactNode;
   rooms: React.ReactNode;
+  /** #999 C15: the phone watch entry, shown at 480px and under in place of `primary` and `entries`. */
+  watch?: React.ReactNode;
 }) {
   const t = await getT();
   const feed = drawFeedFacts();
@@ -54,11 +57,19 @@ export async function LandingHero({
           <p className={styles.pitch}>{t.landing.pitch}</p>
           <TypingStrip key={t.landing.tape.sentence} labels={t.landing.tape} />
           <div className={styles.cta}>
-            <div className={styles.ctaRow}>
+            <div className={styles.ctaRow} data-desk-only={watch ? "" : undefined}>
               {primary}
               <p className={styles.note}>{t.landing.quick.note}</p>
             </div>
-            <div className={styles.entries}>{entries}</div>
+            <div className={styles.entries} data-desk-only={watch ? "" : undefined}>
+              {entries}
+            </div>
+            {watch ? (
+              <div className={styles.watch} data-watch-entry>
+                {watch}
+                <p className={styles.note}>{t.landing.watch.note}</p>
+              </div>
+            ) : null}
             {rooms}
           </div>
         </div>

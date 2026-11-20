@@ -31,9 +31,16 @@ export { ReportActions } from "./components/report-actions";
 export { PersonalCard, type PersonalCardProps } from "./components/personal-card";
 export type { BonusTally, PersonalStats } from "./view/personal";
 // The WPM graph (#865): the viewer's own series and received-bonus marks, and its card section.
-export { getPersonalReplay, getRaceSeries, type PersonalReplay } from "./queries/get-race-series";
+export {
+  getPersonalReplay,
+  getRaceSeries,
+  getRaceSeriesForAll,
+  type PersonalReplay,
+} from "./queries/get-race-series";
 export { RaceGraph, type RaceGraphProps } from "./components/race-graph";
-export type { BonusMark, RaceSeries } from "./view/series";
+export type { BonusMark, RaceLine, RaceSeries } from "./view/series";
+// The compact keyboard heatmap (#999 C54): the viewer's key tallies on one layout.
+export { heatmapOf, type Heatmap } from "./view/heatmap";
 // Errors by key and the one tip (#867): the viewer's missed keys and the pure tip choice.
 export { coachingFrom, type Coaching, pickTip, type Tip, TIP_IDS } from "./view/tip";
 export type { MissedKey } from "./view/keys";
@@ -51,6 +58,8 @@ export {
   type DawnReportFixture,
   personalFixtures,
   type PersonalFixture,
+  heatmapFixture,
+  raceLineFixtures,
   raceSeriesFixtures,
   type RaceSeriesFixture,
 } from "./view/dawn-report-fixtures";

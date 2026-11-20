@@ -20,6 +20,7 @@ import {
   simulatedPlayers,
   startButton,
   warmRace,
+  openRace,
   type SimulatedPlayer,
 } from "./helpers";
 
@@ -75,7 +76,7 @@ test.describe("#236 Sabotage tray and bonus effects", () => {
       }),
     );
     if (before) sims.push(...(await simulatedPlayers(before, room.lobbyId)));
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/\d{2}$/);
     if (after) {
       sims.push(

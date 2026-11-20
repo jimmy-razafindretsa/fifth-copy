@@ -20,6 +20,7 @@ import styles from "./lobby.module.css";
 vi.mock("../actions/mint-race-token", () => ({ mintRaceToken: vi.fn() }));
 vi.mock("../actions/set-lobby-type", () => ({ setLobbyType: vi.fn() }));
 vi.mock("../actions/create-invite", () => ({ createInvite: vi.fn() }));
+vi.mock("../actions/create-spectator-link", () => ({ createSpectatorLink: vi.fn() }));
 
 const labels = en.lobby;
 const errors = en.landing.errors;

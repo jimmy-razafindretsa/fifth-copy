@@ -33,9 +33,17 @@ const CLIENT_LEAVES = [
   "components/filing-notice.tsx",
   "components/podium-clerk.tsx",
   "components/plinth-mounts.tsx",
+  "components/race-graph-lines.tsx",
 ];
 /** Plain modules the leaves load (no "use client" of their own): bundled for the browser too. */
-const CLIENT_LOADED = ["embed-messages.ts", "view/dawn-report.ts", "components/podium-mount.ts"];
+const CLIENT_LOADED = [
+  "embed-messages.ts",
+  "view/dawn-report.ts",
+  "components/podium-mount.ts",
+  // #999 C52: the graph's client leaf draws with these
+  "components/race-graph-plot.tsx",
+  "view/series.ts",
+];
 const PRISMA = /^@\/server\/db$|^@\/generated\/prisma|^@prisma\//;
 
 describe("results imports (#300 C9)", () => {
@@ -97,7 +105,9 @@ describe("results imports (#300 C9)", () => {
 
   it("results reaches identity only through its barrel; client-loaded modules only for types (#688)", () => {
     for (const file of sources(feature)) {
-      for (const s of specifiers(readFileSync(file, "utf8")).filter((x) => /identity/.test(x))) {
+      for (const s of specifiers(readFileSync(file, "utf8")).filter((x) =>
+        /(^|\/)identity(\/|$)/.test(x),
+      )) {
         expect(s, rel(file)).toBe("@/features/identity");
       }
     }

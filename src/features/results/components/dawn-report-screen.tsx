@@ -1,10 +1,18 @@
 import type { ReactNode } from "react";
-import type { GradeSource } from "@/features/identity";
-import { getT } from "@/i18n";
+import {
+  layouts,
+  localeLayouts,
+  numberRows,
+  type GradeSource,
+  type KeyboardLayoutId,
+} from "@/features/identity";
+import { getLocale, getT } from "@/i18n";
 import type { DawnReport } from "../view/dawn-report";
 import { rankingRowsFrom } from "../view/ranking";
 import type { PersonalReplay } from "../queries/get-race-series";
 import { coachingFrom } from "../view/tip";
+import { heatmapOf } from "../view/heatmap";
+import { hasTypistLine, type RaceLine } from "../view/series";
 import {
   filingLabels,
   personalLabels,
@@ -15,6 +23,8 @@ import {
 import styles from "./dawn-report.module.css";
 import { FilingNotice } from "./filing-notice";
 import { PersonalCard } from "./personal-card";
+import card from "./personal-card.module.css";
+import { RaceGraph } from "./race-graph";
 import { Podium } from "./podium";
 import { RankingTable } from "./ranking-table";
 import { ReportActions } from "./report-actions";
@@ -70,17 +80,40 @@ export async function DawnReportScreen({
   report,
   viewerIsGuest = false,
   replay = null,
+  others = [],
+  layout,
   grade,
 }: {
   report: DawnReport;
   viewerIsGuest?: boolean;
   replay?: PersonalReplay | null;
+  /**
+   * The other desks' lines of the WPM graph (#999 C52, `getRaceSeriesForAll`: empty outside the race's
+   * participants and host, ADR 0027).
+   */
+  others?: readonly RaceLine[];
+  /** The keyboard the heatmap draws (#999 C54): the viewer's saved layout, else the report language's. */
+  layout?: KeyboardLayoutId | undefined;
   /** The header's grade read (#969), handed in by the route (results never imports stats). */
   grade?: GradeSource | undefined;
 }) {
   // loaded at render: the internal result routes import this index too, and must not evaluate the header
-  const [{ LandingHeader }, t] = await Promise.all([import("@/features/landing"), getT()]);
+  const [{ LandingHeader }, t, locale] = await Promise.all([
+    import("@/features/landing"),
+    getT(),
+    getLocale(),
+  ]);
   const r = t.results;
+  const labels = personalLabels(t);
+  const lastPlace =
+    report.kind === "report" ? Math.max(0, ...report.entries.map((e) => e.place)) : 0;
+  const board = layout ?? localeLayouts[locale];
+  const heatmap = replay
+    ? {
+        map: heatmapOf(replay.keys, { number: numberRows[board], letters: layouts[board] }),
+        layout: board,
+      }
+    : null;
   return (
     <>
       <LandingHeader grade={grade} />
@@ -100,13 +133,27 @@ export async function DawnReportScreen({
             report.kind === "report" && report.personal ? (
               <PersonalCard
                 stats={report.personal}
-                labels={personalLabels(t)}
+                labels={labels}
                 series={replay?.series ?? null}
+                others={others}
+                lastPlace={lastPlace}
+                heatmap={heatmap}
                 coaching={coachingFrom({
                   accuracy: report.personal.accuracy,
                   missed: replay?.missed ?? null,
                 })}
               />
+            ) : report.kind === "report" && report.viewerHosts && hasTypistLine(others) ? (
+              // #999 C52: a host who watched has no card, yet sees the typists' lines (ADR 0027)
+              <section className={card.docket} aria-label={labels.graph.title} data-graph-only>
+                <RaceGraph
+                  series={null}
+                  labels={labels}
+                  others={others}
+                  viewerDesk={null}
+                  lastPlace={lastPlace}
+                />
+              </section>
             ) : undefined
           }
           actions={

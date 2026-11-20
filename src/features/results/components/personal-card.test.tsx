@@ -180,9 +180,10 @@ describe("PersonalCard errors by key and tip (#867 C3)", () => {
     expect(html.indexOf('data-section="keys"')).toBeLessThan(html.indexOf('data-section="tip"'));
   });
 
-  it("a space names SPACE in the tip", () => {
+  it("a missed space bar gets the space tip (#999 C40)", () => {
     const html = withCoaching({ accuracy: 0.9, missed: [{ char: " ", count: 3 }] });
-    expect(html).toContain("The SPACE key slipped 3 times");
+    expect(html).toMatch(/data-tip="space"/);
+    expect(html).toContain("The space bar slipped 3 times");
   });
 
   it("the special tip links to the guide", () => {
@@ -190,7 +191,7 @@ describe("PersonalCard errors by key and tip (#867 C3)", () => {
     expect(html).toMatch(/data-tip="special"/);
     expect(html).toContain("The é key slipped 5 times: the guide shows how to type it.");
     const link = html.match(/<a [^>]*data-guide[^>]*>([^<]*)<\/a>/)!;
-    expect(link[0]).toContain('href="/welcome#how"');
+    expect(link[0]).toContain('href="/guide"');
     expect(link[1]).toBe("HOW TO TYPE É Ç « »");
   });
 
@@ -216,7 +217,7 @@ describe("PersonalCard errors by key and tip (#867 C3)", () => {
     const html = withCoaching({ accuracy: 0.9, missed: [{ char: " ", count: 3 }] }, FR);
     expect(text(sectionOf(html, "keys"))).toBe("ERREURS PAR TOUCHE ESPACE × 3");
     expect(html).toContain(">ORDRE DU JOUR<");
-    expect(html).toContain("La touche ESPACE t&#x27;a échappé 3 fois");
+    expect(html).toContain("La barre d&#x27;espace t&#x27;a échappé 3 fois");
     expect(text(sectionOf(withCoaching({ accuracy: 1, missed: [] }, FR), "keys"))).toBe(
       "ERREURS PAR TOUCHE AUCUNE",
     );

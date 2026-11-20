@@ -58,11 +58,14 @@ import {
   type DawnReportFixture,
   filingLabels,
   FilingNoticeView,
+  heatmapFixture,
+  heatmapOf,
   PersonalCard,
   type PersonalFixture,
   personalFixtures,
   personalLabels,
   Podium,
+  raceLineFixtures,
   type RaceSeriesFixture,
   raceSeriesFixtures,
   podiumLabels,
@@ -1339,6 +1342,43 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
             </HudSpecimen>
           ))}
         </div>
+        <div id="results-personal-graph-lines" className="grid gap-6 md:grid-cols-2">
+          <HudSpecimen
+            id="personal-graph-lines"
+            title="WPM graph, every typist's line"
+            caption="For the race's typists and host only: the winner and the last place in their rival inks beside yours; tick a bot's flat, simulated line or any typist."
+          >
+            <div className="w-full max-w-[400px]">
+              <PersonalCard
+                stats={personalFixtures.populated}
+                labels={personalLabels(t)}
+                series={raceSeriesFixtures.marks}
+                others={raceLineFixtures}
+                lastPlace={6}
+              />
+            </div>
+          </HudSpecimen>
+          <HudSpecimen
+            id="personal-heatmap"
+            title="Keyboard heatmap"
+            caption="This race's keys on your keyboard: paper typed clean, gold to red from one error to the most missed key, newsprint never asked for."
+          >
+            <div id="results-personal-heatmap" className="w-full max-w-[400px]">
+              <PersonalCard
+                stats={coachingFixtures.key.stats}
+                labels={personalLabels(t)}
+                coaching={coachingFixtures.key.coaching}
+                heatmap={{
+                  map: heatmapOf(heatmapFixture, {
+                    number: numberRows.US_QWERTY,
+                    letters: layouts.US_QWERTY,
+                  }),
+                  layout: "US_QWERTY",
+                }}
+              />
+            </div>
+          </HudSpecimen>
+        </div>
         <div id="results-personal-keys" className="grid gap-6 md:grid-cols-2">
           {COACHING_STATES.map((state) => (
             <HudSpecimen
@@ -1435,8 +1475,9 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
           The viewer&apos;s own file at /profile: the hero with the stage (the picture here), the
           four tubes, the ink band, the folder tabs, the service record, from three races the clean
           streaks beside the suspect letter pairs, the typist census, the progress by key, the
-          output curve, the key sheet, the key inventory, the keyboard map, the attendance register
-          and the race archives and, under three races, the blank block.
+          output curve, the key sheet, the key inventory, the keyboard map, the accents row, the
+          attendance register and the race archives and, under three races, the blank block; the
+          two-week file also shows the weekly bulletin.
         </p>
         {PROFILE_STATES.flatMap((state) =>
           PROFILE_VIEWERS.map((who) => (
@@ -1468,6 +1509,14 @@ export default async function DesignPage({ searchParams }: PageProps<"/design">)
                       : undefined
                   }
                   keyFile={state.id === "two-weeks" ? keyFileFixtures.twoWeeks : undefined}
+                  callouts={
+                    state.id === "two-weeks"
+                      ? [
+                          { kind: "faster", char: "ç", pct: 30 },
+                          { kind: "cleaner", char: "é", pct: 25 },
+                        ]
+                      : undefined
+                  }
                   keyboard={{
                     initial: localeLayouts[locale],
                     layouts: keyboardLayoutIds.map((id) => ({

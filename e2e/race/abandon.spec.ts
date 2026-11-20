@@ -9,6 +9,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #233 C2 and C3 over the race server playwright.config.ts starts. A host and one guest
@@ -53,7 +54,7 @@ test.describe("#233 Abandon and the Reassigned notice", () => {
         if (String(payload).startsWith('42["abandon"')) abandons.count++;
       }),
     );
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/);
     const guestDesk = await deskOf(page);
 

@@ -1,5 +1,11 @@
 import { charsOf, normalizeTypeable } from "@fifth-copy/engine";
-import { PLAYER_STATUSES, type Member, type Snapshot } from "@fifth-copy/protocol";
+import {
+  PLAYER_STATUSES,
+  type BonusKind,
+  type Member,
+  type RaceEvent,
+  type Snapshot,
+} from "@fifth-copy/protocol";
 import { selectField } from "./race-card-view";
 
 type PlayerStatus = (typeof PLAYER_STATUSES)[number];
@@ -31,7 +37,10 @@ export type SceneView = {
   self: number | null;
   /** Sorted by desk. */
   desks: SceneDesk[];
-  /** The Major's lamp target desk (#267); `null` until then. */
+  /**
+   * The Major's lamp target desk (#267, #999 C5; bible 10.3 "Lamp"): the leader (`ranks[0]`) while the
+   * room runs, else `null` (the lamp hangs down).
+   */
   lamp: number | null;
   phase: ScenePhase;
 };
@@ -67,6 +76,7 @@ function viewFrom({ phase, you, members, desks, ranks, race }: SceneSource): Sce
   const ticks = new Map(selectField(desks, textLength).map((t) => [t.desk, t.progress]));
   const codes = new Map(desks.map((d) => [d[0], d[4]]));
   const rankOf = new Map(ranks.map((desk, i) => [desk, i + 1]));
+  const room = scenePhase(phase, race !== null);
   return {
     self: you,
     desks: [...members]
@@ -78,8 +88,8 @@ function viewFrom({ phase, you, members, desks, ranks, race }: SceneSource): Sce
         rank: rankOf.get(m.desk) ?? null,
         progress: race ? (ticks.get(m.desk) ?? 0) : 0,
       })),
-    lamp: null,
-    phase: scenePhase(phase, race !== null),
+    lamp: room === "running" ? (ranks[0] ?? null) : null,
+    phase: room,
   };
 }
 
@@ -102,4 +112,21 @@ export function selectSceneView(source: SceneSource): SceneView {
   const view = viewFrom(source);
   last = { source, view };
   return view;
+}
+
+/**
+ * A sabotage card played in this race (#999 C61): the scene's one-shot `fc-race-sabotage`. `seq` grows by
+ * one with each play the store takes, so the scene leaf posts each one exactly once and never again.
+ */
+export type SceneSabotage = { seq: number; kind: BonusKind; from: number; to: number[] };
+
+/**
+ * The play a race event is for the scene, or `null` (#999 C61): only a `bonus-sent` while the seat's own
+ * phase is `running` (after GO, before the end; a cut line, a reconnect or a welcome is never running, so
+ * nothing they bring back is replayed). Same kind, from and to desks; `to` is never empty on the wire
+ * (an Exemption is self-targeted, `[from]`).
+ */
+export function sabotageFrom(payload: RaceEvent, phase: string): Omit<SceneSabotage, "seq"> | null {
+  if (payload.kind !== "bonus-sent" || phase !== "running") return null;
+  return { kind: payload.bonus, from: payload.from, to: [...payload.to] };
 }

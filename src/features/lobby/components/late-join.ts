@@ -180,3 +180,42 @@ export function joinRoom({
     unwatch();
   };
 }
+
+/**
+ * A phone's waiting room (#999 C9; bible 14.3 "Phone spectator", 18): phones watch, so a phone that is
+ * not the room's host joins on a read-only `spectator` token (no desk, never `keys`): one mint, one
+ * socket, handed to the page's store like a player's (its welcome has `you: null`, the roster, the
+ * settings; the `countdown` moves the page to the race, where the phone screen watches). A refused mint
+ * is the page's error line (a throttled one the generic line); a socket the server closed (the room went
+ * away, the spectator cap) ends on the generic error, since nothing reconnects it. Returns the cancel,
+ * which never unbinds or closes the attached socket (the page does, as after `joinRoom`).
+ */
+export function watchRoom({
+  mint,
+  connect,
+  attach,
+  dispatch,
+}: Pick<JoinRoomDeps, "mint" | "connect" | "attach" | "dispatch">): () => void {
+  let cancelled = false;
+  let off: Off = () => {};
+  void (async () => {
+    const result = await mint({ spectator: true }).catch(() => null);
+    if (cancelled) return;
+    if (!result?.ok) {
+      const error = !result || result.error === "rate-limited" ? "generic" : result.error;
+      dispatch({ type: "token-error", error });
+      return;
+    }
+    const socket = await connect(result.url, result.token).catch(() => null);
+    if (cancelled) return void socket?.close();
+    if (!socket) return void dispatch({ type: "token-error", error: "generic" });
+    attach(socket);
+    off = socket.onServerDisconnect(() => {
+      if (!cancelled) dispatch({ type: "token-error", error: "generic" });
+    });
+  })();
+  return () => {
+    cancelled = true;
+    off();
+  };
+}

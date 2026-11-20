@@ -1,7 +1,7 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { HYDRATION_WAIT, scaled } from "../timeouts";
-import { createLobby, joinAsGuest, lobbyIdOf } from "./helpers";
+import { createLobby, joinAsGuest, lobbyIdOf, openRace } from "./helpers";
 
 // Contract of #214: the host's START (C8), the lobby -> seat view move with no line cut and the phase
 // gate (C4), the 3-2-1 countdown and the GO stamp (C3), and its polite announcer (C5), live over the
@@ -175,26 +175,27 @@ async function warm(page: Page, lobbyId: string) {
 }
 
 /**
- * The seat view is ready in `context` before START (#854): under load the move to `/race/<raceId>` could
+ * The race page is ready in `context` before START (#854): under load the move to `/race/<raceId>` could
  * finish loading the seat view only after GO, so the countdown it must show was already gone. A second
- * page of the same context opens the room's seat view at phone width, where it never takes a desk
- * (#561: no mint, no socket, so no member joins or is line-cut), and waits for its client leaf's own
- * ready marker (the telex strip's `data-telex-ready`, set in a layout effect: hydrated); the route's
- * code is then compiled and loaded before the click.
+ * page of the same context opens the room's race page at phone width, where it never takes a desk
+ * (#561, #999 C9: phones watch), and waits for the phone spectator screen, a client-only render
+ * (`PhoneSwitch`): hydrated, so the route's code, the seat view's chunks among it, is compiled and loaded
+ * before the click. It watches nothing either: its server actions (the spectator mint) are aborted and
+ * the race server's sockets closed, so no member or spectator joins and no line is cut.
  */
 async function seatViewReady(context: BrowserContext, lobbyId: string) {
   const seat = await context.newPage();
-  const sockets: string[] = [];
-  seat.on("websocket", (ws) => sockets.push(ws.url()));
+  await seat.route("**/*", (route, r) =>
+    r.method() === "POST" && r.headers()["next-action"] ? route.abort() : route.continue(),
+  );
+  // the race server's sockets only: `next dev`'s HMR socket stays, or the page reloads
+  await seat.routeWebSocket(
+    (url) => !url.pathname.startsWith("/_next/"),
+    (ws) => ws.close(),
+  );
   await seat.setViewportSize({ width: 375, height: 812 });
   await seat.goto(`/race/${lobbyId}`);
-  await expect(seat.locator('[data-telex-ready="true"]')).toHaveCount(1, {
-    timeout: HYDRATION_WAIT,
-  });
-  expect(
-    sockets.filter((u) => u.includes("/socket.io/")),
-    "warm-up seat view socket",
-  ).toEqual([]);
+  await expect(seat.locator("[data-phone-screen]")).toHaveCount(1, { timeout: HYDRATION_WAIT });
   await seat.close();
 }
 
@@ -369,7 +370,7 @@ test.describe("#214 countdown and GO stamp", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const frames: Frame[] = [];
     await prepare(page, frames);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(
       page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
     ).toBeVisible();
@@ -483,7 +484,7 @@ test.describe("#214 countdown and GO stamp", () => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
     await page.addInitScript(recorder);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(
       page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
     ).toBeVisible();

@@ -18,6 +18,7 @@ import {
 } from "../client/store";
 import { createTyping, type Typing } from "../client/typing";
 import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
+import { usePhoneAtMount } from "./phone-switch";
 import {
   atGo,
   Countdown,
@@ -34,6 +35,8 @@ import { FinishedView } from "../components/finished-view";
 import { nixieNumber } from "../components/nixie-counters";
 import { RaceNotice } from "../components/race-notice";
 import { RaceAnnouncer } from "../components/race-announcer";
+import type { StuckHintLabels } from "../components/stuck-hint";
+import { StuckHintLive } from "../components/stuck-hint-live";
 import { StampRow } from "../components/stamp-row";
 import stampStyles from "../components/stamp-row.module.css";
 import { createCooldownSampler } from "../components/sabotage-tray-live";
@@ -42,7 +45,8 @@ import { useShortcutLabel } from "../view/play-shortcut";
 import { selectAccuracy, selectFinishWpm, selectPlace } from "../view/counters";
 import type { ExitLabels } from "../view/hud-labels";
 import { finalRows, liveRows, selectStandings, type FinishLabels } from "../view/standings";
-import { PHONE_QUERY, type RaceSeatLabels, type SeatErrorLabels } from "./seat-view";
+import { isPhoneViewport } from "@/lib/phone";
+import type { RaceSeatLabels, SeatErrorLabels } from "./seat-view";
 import styles from "./race-seat.module.css";
 
 export type SeatStatusLabels = Pick<RaceSeatLabels, "loading" | "notice" | "errors" | "presence">;
@@ -53,6 +57,8 @@ export type SeatLiveLabels = SeatStatusLabels &
     input: string;
     /** #951: `SABOTAGE AVAILABLE · {key}`, over the race when a card is dealt. */
     sabotageAlert?: string;
+    /** #999 C31: the stuck hint's copy; no hint without it (the projector's live leaf has none). */
+    stuckHint?: StuckHintLabels;
   };
 
 const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "back">> = {
@@ -76,7 +82,8 @@ const LOST_COPY: Record<RaceLostReason, keyof Omit<SeatErrorLabels, "prefix" | "
 type ViewProps = {
   phase: RacePhase;
   lost: RaceLostReason | null;
-  code: string;
+  /** `null` for a spectator link's projector (#999 C13): the ways back to the lobby are left out. */
+  code: string | null;
   labels: SeatStatusLabels;
 };
 
@@ -118,10 +125,15 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
               data-notice="room-lost"
               className={cn(docket.notice, notice.notice, styles.roomLost)}
             >
-              {labels.presence.roomLost} ·{" "}
-              <a href={`/lobby/${code}`} className={styles.roomLink}>
-                {labels.presence.backToLobby}
-              </a>
+              {labels.presence.roomLost}
+              {code === null ? null : (
+                <>
+                  {" · "}
+                  <a href={`/lobby/${code}`} className={styles.roomLink}>
+                    {labels.presence.backToLobby}
+                  </a>
+                </>
+              )}
             </p>
           </div>
         );
@@ -133,9 +145,11 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
             {labels.errors[LOST_COPY[lost ?? "generic"]]}
           </p>
           {/* a full page load: after a version refusal the waiting room fetches the new bundle */}
-          <a href={`/lobby/${code}`} className={styles.back}>
-            {labels.errors.back}
-          </a>
+          {code === null ? null : (
+            <a href={`/lobby/${code}`} className={styles.back}>
+              {labels.errors.back}
+            </a>
+          )}
         </div>
       );
     default:
@@ -148,7 +162,7 @@ export function RaceSeatLiveView({ phase, lost, code, labels }: ViewProps) {
  * `GO_STAMP_MS` after GO. One timeout per step change; the store's GO (`bindRaceSocket`) reads the same
  * `race.t0` and offset, so the phase turns `running` as the stamp lands.
  */
-function useCountdownStep(): CountdownStep | null {
+export function useCountdownStep(): CountdownStep | null {
   const phase = useRaceStore((s) => s.phase);
   const t0 = useRaceStore((s) => s.race?.t0 ?? null);
   const offset = useRaceStore((s) => s.clockOffset);
@@ -255,8 +269,10 @@ export function SeatFinish({ labels }: { labels: FinishLabels }) {
 /**
  * The seat view's client leaf (#561 C4, ARCHITECTURE 8.3): after the server rendered the HUD shell, it
  * mints the race token through the lobby action, connects with `connectToRoom` (lazily loaded) and feeds
- * the one race store every HUD leaf reads; it renders the live state. Phones only watch (the layout shows
- * them the notice; spectator mode is #292), so a phone-width page never takes a desk.
+ * the one race store every HUD leaf reads; it renders the live state. Phones only watch (#999 C9: the
+ * page's `PhoneSwitch` swaps the seat for the phone spectator screen at mount), so a phone-width page
+ * never mints a desk's token, never connects and never mounts the race input: the input mounts only
+ * once the browser said it is not a phone (none in the server render).
  * Its root carries the store's phase as `data-phase` (`countdown` until GO, `running` from GO: the gate
  * #559's input reads) and holds the countdown overlay and the race's one polite announcer (#242: 3, 2,
  * 1, GO of #214, the overtake lines of #232, your place, your finish, the race over). It owns the typing path too (#559): the hidden `RaceInput`,
@@ -289,9 +305,13 @@ export function RaceSeatLive({
   const backspace = useRaceStore((s) => s.settings?.backspace);
   const errors = useRaceStore((s) => s.prediction?.state.errors);
   const finishWpm = useRaceStore(selectFinishWpm);
+  // #999 C30: the stuck hint's hinted characters are this race's (a new race mounts a fresh leaf)
+  const raceId = useRaceStore((s) => s.race?.raceId ?? null);
   const { announce, countdown, stamps } = labels;
   const announcer = useMemo(() => ({ announce, countdown, stamps }), [announce, countdown, stamps]);
   const typing = useRef<Typing | null>(null);
+  // #999 C9: the typing surface exists only on a desk's screen, never on a phone (decided at mount)
+  const desk = usePhoneAtMount() === false;
   const press = useCallback((key: string) => typing.current?.press(key), []);
   // #236: Enter plays your card; the store gates it and `sendBonusPlays` sends it
   const play = useCallback(() => store.dispatch({ type: "bonus-play", at: Date.now() }), [store]);
@@ -313,7 +333,7 @@ export function RaceSeatLive({
   }, [mint]);
 
   useEffect(() => {
-    if (window.matchMedia(PHONE_QUERY).matches) return;
+    if (isPhoneViewport()) return;
     return connectSeat({
       code,
       lobbyId,
@@ -366,16 +386,22 @@ export function RaceSeatLive({
       ) : (
         <StampRow stamp={stamp} wpm={finishWpm} labels={labels.stamps} otherName={otherName} />
       )}
-      <RaceInput
-        disabled={!canType}
-        onKey={press}
-        onPlay={play}
-        playKey={playKey}
-        label={labels.input}
-        mode={mode}
-        backspace={backspace}
-        errors={errors}
-      />
+      {desk ? (
+        <RaceInput
+          disabled={!canType}
+          onKey={press}
+          onPlay={play}
+          playKey={playKey}
+          label={labels.input}
+          mode={mode}
+          backspace={backspace}
+          errors={errors}
+        />
+      ) : null}
+      {/* #999 C31: after the input in the page, so it never comes before it; it never takes the focus */}
+      {desk && labels.stuckHint ? (
+        <StuckHintLive key={raceId ?? "none"} labels={labels.stuckHint} />
+      ) : null}
       {/* #242: the one polite announcer, present before the countdown starts so each change is read;
           nothing to say once lost (the lost line is its own alert) */}
       {phase !== "lost" ? <RaceAnnouncer step={step} labels={announcer} /> : null}

@@ -9,6 +9,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #220 C3-C6, live over the race server started by playwright.config.ts: the host's error
@@ -72,7 +73,7 @@ test.describe("#220 error modes, live", () => {
   ) {
     const room = await hostRoom(browser, opened, { before: recordRaceTokens });
     if (!settingsAfterSeat) await setHostSettings(room.host, settings);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     if (settingsAfterSeat) {
       await setHostSettings(room.host, settings);

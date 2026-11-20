@@ -6,6 +6,7 @@ import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
 import { buildProfile, type ResultRow } from "../view/profile";
 import { PROFILE_FIXTURE_NOW, profileFixtures } from "../view/profile-fixtures";
+import { signedGain } from "../view/performance-curve";
 import { CurveFrame, PerformanceCurve } from "./performance-curve";
 import { ProfileScreen, profileLabels } from "./profile-screen";
 
@@ -236,5 +237,57 @@ describe("told apart without colour (C5)", () => {
     expect(text(html)).not.toContain("trend");
     expect(text(screen(4))).toContain("Your last 4 races.");
     expect(text(screen(4))).not.toContain("dashed line");
+  });
+});
+
+// #999 C45: the 7-day moving average line and the "+X WPM since you started" headline.
+describe("PerformanceCurve 7-day line and gain (#999 C45)", () => {
+  const weekPoints = (n: number) =>
+    profileOf(n).progress.series.map((p) => ({
+      cleanWpm: p.cleanWpm,
+      accuracy: p.accuracy,
+      avg7: p.avg7,
+    }));
+  const weekFrame = (n: number, lang: "en" | "fr" = "en") =>
+    renderToStaticMarkup(
+      <CurveFrame
+        points={weekPoints(n)}
+        labels={(lang === "en" ? en : fr).profile.curve}
+        locale={lang}
+        smoothing={3}
+      />,
+    );
+
+  it("draws the 7-day average as its own dotted ink line, in the legend and the SVG's name", () => {
+    const html = weekFrame(40);
+    expect(pathOf(html, "week")).toMatch(/^M20\.0 [\d.]+(L[\d.]+ [\d.]+){39}$/);
+    expect(text(html)).toContain("7-day average");
+    expect(svgName(html)).toMatch(/, trending up, 7-day average \d+\.\d WPM\.$/);
+    expect(svgName(weekFrame(40, "fr"))).toMatch(/, moyenne sur 7 jours de \d+,\d MPM\.$/);
+    expect(text(weekFrame(40, "fr"))).toContain("moyenne sur 7 jours");
+    // a dotted ink stroke, apart from the trend's dashes, that never scales
+    expect(css).toMatch(/\.week \{[^}]*stroke: var\(--color-fg\);[^}]*stroke-dasharray: 0 6;/);
+    expect(css).toMatch(/\.weekSwatch \{[^}]*dotted var\(--color-fg\)/);
+    // points without an average draw no 7-day line
+    expect(pathOf(frame(40), "week")).toBeUndefined();
+  });
+
+  it("the headline reads the gain since the first races from 10 races; under 10 it says when it comes", () => {
+    const ten = screen(40);
+    expect(ten).toMatch(/data-curve-gain="\d+"/);
+    expect(text(ten)).toMatch(/\+\d+ WPM since you started/);
+    expect(text(screen(40, "fr"))).toMatch(/\+\d+ MPM depuis tes débuts/);
+    const few = screen(6);
+    expect(few).not.toContain("data-curve-gain");
+    expect(text(few)).toContain("Your gain since you started shows from 10 races.");
+    expect(text(screen(6, "fr"))).toContain(
+      "Ton gain depuis tes débuts s'affiche à partir de 10 courses.",
+    );
+  });
+
+  it("the gain is signed with a true minus and an unsigned zero", () => {
+    expect(signedGain(6)).toBe("+6");
+    expect(signedGain(-3)).toBe("−3");
+    expect(signedGain(0)).toBe("0");
   });
 });

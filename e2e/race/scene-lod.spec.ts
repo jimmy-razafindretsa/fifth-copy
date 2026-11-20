@@ -9,12 +9,15 @@ import { scaled } from "../timeouts";
 // checks), drives it with `fc-race-init` / `fc-race-state` and reads what the page reports on `<html>`:
 // `data-lod0="<a>/<b>"` (a = drawn clerks at LOD0, b = drawn clerks) and `data-calls` (the renderer's draw
 // calls per frame, refreshed every second). `@scene`, desktop project only (software WebGL), every wait
-// through e2e/timeouts.ts.
+// through e2e/timeouts.ts. #999 C65 adds the sabotage throws' budget (bible 10.2 "Sabotage throw"): pooled
+// instanced meshes, so a Smoke Break on 29 desks keeps the frame at most 60 draw calls, with at most 8
+// objects in flight (`data-throws-flying`, `-peak`) and the others landing directly; it reads the per-play
+// facts `data-throws-puffs-total`, `-puffs-peak` and `-calls-peak` (bible 10.2 "Report").
 
 const SCENE_WAIT = scaled(60_000);
 
 /** A room of `n` desks numbered 1..n, you at desk 1, waiting. */
-const room = (n: number) => ({
+const room = (n: number, phase = "waiting") => ({
   self: 1,
   desks: Array.from({ length: n }, (_, k) => ({
     desk: k + 1,
@@ -24,19 +27,19 @@ const room = (n: number) => ({
     progress: 0,
   })),
   lamp: null,
-  phase: "waiting",
+  phase,
 });
 
 async function post(page: Page, msg: Record<string, unknown>) {
-  await page.evaluate((m) => postMessage({ v: 1, ...m }, location.origin), msg);
+  await page.evaluate((m) => postMessage({ v: 2, ...m }, location.origin), msg);
 }
 
 const html = (page: Page) => page.locator("html");
 
-async function open(page: Page, n: number, motion = "full") {
+async function open(page: Page, n: number, motion = "full", phase = "waiting") {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/3d/seat.html?preset=low");
-  await post(page, { type: "fc-race-init", view: room(n), preset: "low", motion });
+  await post(page, { type: "fc-race-init", view: room(n, phase), preset: "low", motion });
   await expect(html(page)).toHaveAttribute("data-room", "ready", { timeout: SCENE_WAIT });
   await expect(html(page)).toHaveAttribute("data-seats", String(n), { timeout: SCENE_WAIT });
 }
@@ -82,5 +85,39 @@ test.describe("#940 LOD0 places go to drawn clerks only", { tag: "@scene" }, () 
     await expect(html(page)).toHaveAttribute("data-seats", "30", { timeout: SCENE_WAIT });
     await expectLod0(page, 6, 29);
     expect(await fresh(), "draw calls in a room of 30 vs a room of 6").toBe(six);
+  });
+
+  test("#999 C65 a Smoke Break on 29 desks: at most 8 objects in flight, the rest land directly, at most 60 draw calls, all gone at race end", async ({
+    page,
+  }) => {
+    const num = async (name: string) =>
+      Number((await html(page).getAttribute(`data-${name}`)) ?? NaN);
+    await open(page, 30, "full", "running");
+    await post(page, {
+      type: "fc-race-sabotage",
+      kind: "smoke-break",
+      from: 30,
+      to: Array.from({ length: 29 }, (_, k) => k + 1),
+    });
+    // a puff lives 1 s of wall time and a software-WebGL frame can take longer, so the test reads the
+    // facts the page keeps since the play (peaks and totals), never a short-lived state between two readings:
+    // every ball bursts into a puff (8 after their flight, the rest landing directly), more than 8 of them in
+    // one frame, still one draw, and no frame that drew a thrown object or a puff went over 60 draw calls
+    await expect(html(page)).toHaveAttribute("data-throws-puffs-total", "29", {
+      timeout: SCENE_WAIT,
+    });
+    await expect(html(page)).toHaveAttribute("data-throws-puffs", "0", { timeout: SCENE_WAIT });
+    expect(await num("throws-peak"), "most in flight at once").toBe(8);
+    expect(await num("throws-puffs-peak"), "most puffs in one frame").toBeGreaterThan(8);
+    const callsPeak = await num("throws-calls-peak");
+    expect(callsPeak, "draw calls of a frame with throws").toBeGreaterThan(0);
+    expect(callsPeak, "draw calls of a frame with throws").toBeLessThanOrEqual(60);
+    // clutter from the other kinds goes at race end
+    await post(page, { type: "fc-race-sabotage", kind: "extra-paperwork", from: 3, to: [1] });
+    await post(page, { type: "fc-race-sabotage", kind: "exemption", from: 7, to: [7] });
+    await expect(html(page)).toHaveAttribute("data-throws-landed", "2", { timeout: SCENE_WAIT });
+    await post(page, { type: "fc-race-state", view: room(30, "ended") });
+    await expect(html(page)).toHaveAttribute("data-throws-landed", "0", { timeout: SCENE_WAIT });
+    await expect(html(page)).toHaveAttribute("data-throws-flying", "0");
   });
 });

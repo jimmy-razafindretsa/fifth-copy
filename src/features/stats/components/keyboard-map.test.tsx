@@ -8,7 +8,8 @@ import type { CharCount, KeyFile } from "../view/key-file";
 import { keyFileFixtures } from "../view/key-file-fixtures";
 import { keyboardMapOf } from "../view/keyboard-map";
 import { profileFixtures } from "../view/profile-fixtures";
-import { KeyboardMapSection, type KeyboardMapLayout, keyName } from "./keyboard-map";
+import { keyName } from "../view/key-name";
+import { KeyboardMapSection, type KeyboardMapLayout } from "./keyboard-map";
 import { type ProfileKeyboard, ProfileScreen, profileLabels } from "./profile-screen";
 
 // #324 C3-C7 (the server half): "Carte du clavier" (bible 14.3, `Profil.dc.html` `PLAN DE LA MACHINE`).
@@ -77,7 +78,7 @@ const keyTag = (html: string, char: string) => {
   const attr = char.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
   const m = html.match(
     new RegExp(
-      `<div[^>]*data-key="${attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>(.*?)</div>`,
+      `<(?:div|a)[^>]*data-key="${attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>(.*?)</(?:div|a)>`,
     ),
   );
   return m?.[0] ?? "";
@@ -140,6 +141,22 @@ describe("the board (#324 C4)", () => {
     // s misses 12 %: the core fills its circle
     expect(keyTag(html, "s")).toMatch(/style="width:100%" data-key-core=""/);
     expect(keyTag(html, "ù")).toContain("width:140%");
+  });
+
+  it("#999 C29 a special character's key links to its guide entry; a plain key stays a picture", () => {
+    const html = draw("CSA");
+    for (const [char, anchor] of [
+      ["ç", "c-cedilla"],
+      ["é", "e-acute"],
+      ["ù", "u-grave"],
+    ] as const) {
+      const tag = keyTag(html, char);
+      expect(tag).toMatch(new RegExp(`^<a [^>]*href="/guide#${anchor}"`));
+      expect(tag).toMatch(/aria-label="[^"]+ · comment la taper"/);
+      expect(tag).not.toContain('role="img"');
+    }
+    expect(keyTag(html, "e")).toMatch(/^<div [^>]*role="img"/);
+    expect(keyTag(html, "e")).not.toContain("href=");
   });
 
   it("an untyped key: the newsprint ground, no circle", () => {
@@ -216,7 +233,9 @@ describe("ProfileScreen placement (#324 C7)", () => {
     const html = screen("two-weeks", keyFileFixtures.twoWeeks, { ...KEYBOARD, initial: "AZERTY" });
     const order = [...html.matchAll(/data-section="([^"]+)"/g)].map((m) => m[1]);
     expect(order.indexOf("keyboard-map")).toBe(order.indexOf("key-inventory") + 1);
-    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("attendance") - 1);
+    // the accents row (#999 C55) follows the map, then the attendance register
+    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("accents") - 1);
+    expect(order.indexOf("accents")).toBe(order.indexOf("attendance") - 1);
     expect(html).toContain('data-keyboard-layout="AZERTY"');
     expect(html).toContain(">PLAN DE LA MACHINE · AZERTY</p>");
   });

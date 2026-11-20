@@ -19,8 +19,14 @@ import {
   type RaceResultsRequest,
   type RaceResultsResponse,
 } from "@fifth-copy/protocol";
-import { Prisma, type RaceEndReason, type ResultStatus } from "@/generated/prisma/client";
+import {
+  Prisma,
+  type RaceEndReason,
+  type RaceLanguage,
+  type ResultStatus,
+} from "@/generated/prisma/client";
 import { db as appDb } from "@/server/db";
+import { filedSeriesOf } from "../filed-series";
 import { decodeKeystrokes, MAX_KEYSTROKE_JSON_BYTES } from "../trace-codec";
 
 /**
@@ -36,6 +42,43 @@ export type PersistResultsResult =
   { ok: true; response: RaceResultsResponse } | { ok: false; error: "not-found" | "bad-body" };
 
 type Db = Pick<typeof appDb, "race" | "user" | "$transaction">;
+
+/** The race a chunk was filed for, as the after-save steps see it (inside the transaction). */
+export type FiledRace = {
+  id: string;
+  textLanguage: RaceLanguage;
+  textWordCount: number;
+  /** `Race.settings`: untyped JSON (the wire's race settings); parse before use. */
+  settings: unknown;
+  /** Desks at the start, from the request. */
+  lobbySize: number;
+  endedAt: Date;
+};
+
+/** One stored human result of the chunk (a desk with a user), as the after-save steps see it. */
+export type FiledResult = {
+  userId: string;
+  desk: number;
+  isBot: boolean;
+  place: number;
+  status: ResultStatus;
+  /** ADR 0016: the only speed award rules read. */
+  cleanWpm: number;
+  /** 0..1. */
+  accuracy: number;
+  /** An anti-cheat flag was raised (#195): nothing is ever awarded from it. */
+  suspicious: boolean;
+};
+
+/**
+ * A step run inside the filing transaction after the chunk's rows are written (#999 C35, C41): the
+ * stats feature's personal bests and achievements, composed by the route (results never imports
+ * stats, which imports results). Each step must be idempotent: a repeated chunk runs them again.
+ */
+export type AfterSaveStep = (
+  tx: Prisma.TransactionClient,
+  filed: { race: FiledRace; results: FiledResult[] },
+) => Promise<void>;
 
 /** Engine status -> stored status (prisma/schema/race.prisma); `typing` at the end timed out. */
 const STATUS_TO_DB: Record<PlayerStatus, ResultStatus> = {
@@ -112,15 +155,17 @@ const isKnownError = (err: unknown, code: string) =>
  * `suspiciousReason` = the flag codes joined by `,`; #195). Refuses an unknown race (`not-found`) and an
  * incoherent chunk or a trace that does not inflate to `count` keystrokes within
  * `maxStoredTraceKeys` of the race's base text (`bad-body`, nothing written). A desk whose user no longer exists (account deleted
- * mid-race) is acknowledged without a row: its deletion would have removed it anyway.
+ * mid-race) is acknowledged without a row: its deletion would have removed it anyway. Each human,
+ * unflagged desk with a trace also stores its speed curve (`wpmSeries`, ADR 0027). The `afterSave`
+ * steps run last, in the same transaction, with the stored human results (#999 C35, C41).
  */
 export async function persistRaceResults(
   request: RaceResultsRequest,
-  { db = appDb }: { db?: Db } = {},
+  { db = appDb, afterSave = [] }: { db?: Db; afterSave?: readonly AfterSaveStep[] } = {},
 ): Promise<PersistResultsResult> {
   const race = await db.race.findUnique({
     where: { id: request.raceId },
-    select: { textContent: true },
+    select: { textContent: true, textLanguage: true, textWordCount: true, settings: true },
   });
   if (!race) return { ok: false, error: "not-found" };
   if (!coherent(request)) return { ok: false, error: "bad-body" };
@@ -143,6 +188,23 @@ export async function persistRaceResults(
       ),
     );
     const stored = request.results.filter((r) => r.userId === null || known.has(r.userId));
+    // The speed curve of each human, unflagged desk with a trace (ADR 0027): computed once here, so
+    // no request ever replays another user's keystrokes. Bots and flagged rows store none.
+    const series = new Map<number, ReturnType<typeof filedSeriesOf>>();
+    for (const r of stored) {
+      const trace = traces.get(r.desk);
+      if (!trace || r.flags.length > 0) continue;
+      series.set(
+        r.desk,
+        filedSeriesOf({
+          textContent: race.textContent,
+          settings: race.settings,
+          overlay: r.overlay,
+          keystrokes: trace.keystrokes,
+          durationMs: r.durationMs,
+        }),
+      );
+    }
     await db.$transaction(async (tx) => {
       await tx.race.updateMany({
         // First real end wins; a VOID end is the race.void sweep's guess (#613) and gives way.
@@ -186,6 +248,7 @@ export async function persistRaceResults(
             suspicious: r.flags.length > 0,
             suspiciousReason: r.flags.map((f) => f.code).join(",") || null,
             engineVersion: r.engineVersion,
+            wpmSeries: series.get(r.desk) ?? Prisma.DbNull,
           },
         });
       }
@@ -204,6 +267,34 @@ export async function persistRaceResults(
           },
         });
       }
+      if (afterSave.length === 0) return;
+      const filed = {
+        race: {
+          id: request.raceId,
+          textLanguage: race.textLanguage,
+          textWordCount: race.textWordCount,
+          settings: race.settings,
+          lobbySize: request.lobbySize,
+          endedAt: new Date(request.endedAt),
+        },
+        results: stored.flatMap((r): FiledResult[] =>
+          r.userId === null
+            ? []
+            : [
+                {
+                  userId: r.userId,
+                  desk: r.desk,
+                  isBot: r.isBot,
+                  place: r.place,
+                  status: STATUS_TO_DB[r.status],
+                  cleanWpm: r.cleanWpm,
+                  accuracy: r.accuracy,
+                  suspicious: r.flags.length > 0,
+                },
+              ],
+        ),
+      };
+      for (const step of afterSave) await step(tx, filed);
     });
   };
 

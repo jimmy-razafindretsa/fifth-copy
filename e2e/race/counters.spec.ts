@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, SEAT_HUD, startButton, warmRace } from "./helpers";
+import { hostRoom, phaseOf, SEAT_HUD, startButton, warmRace, openRace } from "./helpers";
 
 // Contract of #225 C3 and C4: the nixie counters live over the race server started by
 // playwright.config.ts. Host (English) and one guest (French); the guest takes its desk from the seat
@@ -30,7 +30,7 @@ test.describe("#225 nixie counters", () => {
     await page
       .context()
       .addCookies([{ name: "locale", value: "fr", url: test.info().project.use.baseURL! }]);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/\d{2}$/);
     await expect(startButton(room.host)).toBeEnabled();
 

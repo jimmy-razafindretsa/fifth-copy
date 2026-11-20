@@ -1,0 +1,237 @@
+/*
+ * Medals on the Personnel file (#999 C36, bible 14.3 "Medals"): the section head of the file (kicker,
+ * h2, intro) and the pin catalogue as bible 7.6 item cards (the locker's card: min-height 118px, code,
+ * Courier Prime 700 21px name, Oswald sub-tag; locked = dashed violet rule, name at 55%, violet LOCKED
+ * and requirement; new = the red NEW tag). The pin is bible 13's medal, flat: gold, red enamel, the
+ * banner ribbon with gold and violet stripes, ink outlines. Colour roles only, so Night shift applies.
+ */
+
+@reference "../../../app/globals.css";
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px 40px;
+  margin-bottom: 22px;
+}
+
+.kicker {
+  margin: 0;
+  @apply type-label;
+  font-size: 13px;
+  line-height: normal;
+  letter-spacing: 0.28em;
+  color: var(--color-link);
+}
+
+.h2 {
+  margin: 8px 0 0;
+  @apply type-display-md;
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 460px;
+}
+
+.intro {
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-fg-muted);
+}
+
+/* the 7.4 cell of the attendance register's head: paper, 2px ink rule */
+.count {
+  margin: 0;
+  padding: 10px 16px;
+  background-color: var(--color-bg);
+  border: 2px solid var(--color-fg);
+  @apply type-typing;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+/* 7.6 extension (#15): the empty state borrows the locked card's dashed rule, ink, centred */
+.none {
+  margin: 0 0 16px;
+  padding: 16px 20px;
+  border: 2px dashed var(--color-border);
+  @apply type-body;
+  font-size: 17px;
+  line-height: 1.55;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 7.6 item card, owned */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 118px;
+  padding: 14px 14px 12px;
+  background-color: color-mix(in srgb, var(--color-bg) 60%, transparent);
+  color: var(--color-fg);
+  border: 2px solid color-mix(in srgb, var(--color-fg) 35%, transparent);
+}
+
+/* new: the 7.6 owned card at full paper with the 3px ink rule, and the red NEW tag */
+.card[data-state="new"] {
+  background-color: var(--color-bg);
+  border: 3px solid var(--color-fg);
+}
+
+/* 7.6 locked: dashed violet rule (the rival mark role, 3.3 on Night shift) */
+.card[data-state="locked"] {
+  border: 2px dashed var(--color-rival);
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.code {
+  @apply type-typing;
+  font-size: 11px;
+  color: var(--color-fg-muted);
+}
+
+.newTag {
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+  background-color: var(--color-primary);
+  color: var(--color-primary-fg);
+  padding: 1px 6px;
+}
+
+.body {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  @apply type-body;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.description {
+  margin: 0;
+  @apply type-body;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-fg-muted);
+  text-wrap: pretty;
+}
+
+.card[data-state="locked"] .name {
+  opacity: 0.55;
+}
+
+/* the requirement in violet: the violet text role (3.3: violet text is the untyped role) */
+.card[data-state="locked"] .description,
+.locked {
+  color: var(--color-untyped);
+}
+
+.sub,
+.locked {
+  margin: auto 0 0;
+  @apply type-label;
+  font-size: 10px;
+  line-height: normal;
+  letter-spacing: 0.16em;
+}
+
+.sub {
+  color: var(--color-fg-muted);
+}
+
+/* the pin: bible 13's medal, flat */
+.pin {
+  flex: none;
+  width: 48px;
+  height: auto;
+}
+
+.ribbon {
+  fill: var(--color-pressed);
+}
+
+.gold,
+.disc {
+  fill: var(--color-reward);
+}
+
+.violet {
+  fill: var(--color-rival);
+}
+
+.enamel {
+  fill: var(--color-primary);
+}
+
+.outline {
+  fill: none;
+  stroke: var(--color-band);
+  stroke-width: 1.5;
+}
+
+.ring {
+  fill: none;
+  stroke: var(--color-reward);
+  stroke-width: 2;
+}
+
+.disc {
+  stroke: var(--color-band);
+  stroke-width: 1.2;
+}
+
+.rim {
+  fill: none;
+  stroke: var(--color-band);
+  stroke-width: 0.8;
+  opacity: 0.4;
+}
+
+/* locked: the pin greyed (7.6's locked item at 55%), not yet pinned */
+.card[data-state="locked"] .pin {
+  filter: grayscale(1);
+  opacity: 0.45;
+}

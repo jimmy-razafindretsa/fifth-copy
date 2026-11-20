@@ -10,7 +10,6 @@ import {
   type HostSettingsAck,
   type HostStartAck,
   type RaceTokenClaims,
-  type RoomCode,
   type ServerToClientEvents,
 } from "@fifth-copy/protocol";
 import type { Clock } from "../clock";
@@ -60,7 +59,8 @@ export function attachSpectator(
         v: PROTOCOL_VERSION,
         role,
         you: null,
-        room: { code: room.code as RoomCode, phase: room.phase },
+        // #999 C13 (protocol 21): never the code, whoever minted the token (a link holder must not learn it)
+        room: { code: null, phase: room.phase },
         members,
         settings: room.settings,
         race: room.race,

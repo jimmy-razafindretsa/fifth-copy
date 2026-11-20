@@ -20,6 +20,27 @@ const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const day = (key: string) => new Date(`${key}T00:00:00.000Z`);
 const MODELS = ["CharStatDaily", "BigramStatDaily"] as const;
 
+describe("race host merge step (ADR 0027)", () => {
+  beforeAll(async () => {
+    await import("./merge-steps");
+  });
+
+  it("moves the races the guest hosted to the account", async () => {
+    const step = registered.filter((s) => s.model === "Race");
+    expect(step).toHaveLength(1);
+    const updateMany = vi.fn(async () => ({ count: 2 }));
+    const moved = await step[0]!.run({ race: { updateMany } } as never, "g-1", "a-1", {
+      afterCommit: () => {},
+      onRollback: () => {},
+    });
+    expect(moved).toBe(2);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { hostUserId: "g-1" },
+      data: { hostUserId: "a-1" },
+    });
+  });
+});
+
 describe.skipIf(!testDatabaseUrl)("per-key stats merge steps (needs TEST_DATABASE_URL)", () => {
   const db = createPrismaClient(testDatabaseUrl ?? "postgresql://unused");
   const PREFIX = "test-merge-stats-";

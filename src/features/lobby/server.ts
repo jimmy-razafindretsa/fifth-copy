@@ -17,3 +17,6 @@ export { shareLobby } from "./queries/share-lobby";
 // Players online on the Home menu (#943): human typists seated in live rooms, counts only.
 export { countTypistsOnline } from "./queries/count-typists-online";
 export type { CountTypistsOnlineResult } from "./queries/count-typists-online";
+// The spectator link's page (#999 C12): the room a `/watch/<token>` link opens, by lobby id only.
+export { peekSpectatorLink } from "./queries/peek-spectator-link";
+export type { PeekSpectatorLinkResult } from "./queries/peek-spectator-link";

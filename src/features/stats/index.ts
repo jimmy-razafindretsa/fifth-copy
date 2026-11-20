@@ -1,6 +1,8 @@
 // Stats feature (ADR 0008, #931): the Personnel file read path over stored race results. Reads
 // `RaceResult` through `@/features/results`' COUNTED_RACE, never raw keystrokes. Server-only exports
 // (getProfile): never import this index from a client component; client code imports types only.
+// Guest merge steps (ADR 0009, #999): achievements and personal bests; listed in package.json sideEffects.
+import "./merge-steps";
 export { getProfile } from "./queries/get-profile";
 export {
   EMPTY_SERVICE,
@@ -70,3 +72,39 @@ export {
   type PairStatRow,
 } from "./view/key-file";
 export { type KeyFileFixture, keyFileFixtures } from "./view/key-file-fixtures";
+// Personal bests (#999 C41, ADR 0016): the one pure rule and the viewer's query (server-only).
+export {
+  bestKeyOf,
+  type BestKey,
+  type BestLanguage,
+  type BestLength,
+  type BestTextType,
+  isPersonalBest,
+  LENGTH_BUCKETS,
+  lengthOf,
+} from "./personal-bests/rule";
+export { getPersonalBests, type PersonalBestRow } from "./personal-bests/query";
+// Improvement callouts (#999 C48, ADR 0024): week over week per key from the daily aggregates.
+export { getCallouts } from "./callouts/query";
+export {
+  CALLOUT_LIMIT,
+  CALLOUT_MIN_CHANGE,
+  CALLOUT_MIN_ERRORS,
+  CALLOUT_MIN_TIMED_HITS,
+  type Callout,
+  type CalloutKind,
+  calloutsOf,
+} from "./callouts/rule";
+// Achievements (#999 C34, C35): the stable ids and the pure award rules.
+export { ACHIEVEMENT_IDS, type AchievementId, isAchievementId } from "./achievements/ids";
+export { earnedBy, type AwardFacts } from "./achievements/rules";
+// The enamel pins of the Personnel file (#999 C36): the pure shelf and the viewer's read (server-only).
+export {
+  emptyShelf,
+  MEDAL_NEW_DAYS,
+  type Medal,
+  type MedalShelf,
+  type MedalState,
+  medalShelf,
+} from "./view/medals";
+export { getMedals } from "./queries/get-medals";

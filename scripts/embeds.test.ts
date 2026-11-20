@@ -127,6 +127,48 @@ describe("seat page (#563)", () => {
       expect(seat).toContain(`type: '${type}'`);
   });
 
+  // #999 C60: protocol 2 on the embed's side too; the sabotage play is acked once, never replayed
+  it("speaks SCENE_PROTOCOL 2 and acks a checked fc-race-sabotage, never one kept in the inbox", () => {
+    expect(seat).toContain("const SCENE_PROTOCOL = 2;");
+    expect(seat).not.toContain("const SCENE_PROTOCOL = 1;");
+    expect(seat).toContain(
+      "const SABOTAGE_KINDS = ['extra-paperwork', 'exemption', 'smoke-break'];",
+    );
+    expect(seat).toContain(
+      "d.type === 'fc-race-sabotage' && !replayed && SABOTAGE_KINDS.includes(d.kind) && isDesk(d.from)",
+    );
+    expect(seat).toContain("send({ type: 'fc-scene-sabotage', kind, from, to: [...to], mode });");
+    expect(seat).toContain("inbox.splice(0).forEach(e => onMessage(e, true));");
+  });
+
+  // #999 C62, C64, C65 (bible 10.2 "Sabotage throw", 8, 9): the throws are pooled instanced meshes in flat
+  // Lambert from the palette (no red, no text), at most 8 in flight, static under reduced motion, cleared at
+  // race end, never covering more than a quarter of the view
+  it("throws each sabotage play with pooled instanced meshes, static under reduced motion", () => {
+    const block = seat.slice(
+      seat.indexOf("// ---------- sabotage throws"),
+      seat.indexOf("// ---------- behaviour"),
+    );
+    expect(block.length).toBeGreaterThan(0);
+    expect(seat).toContain("const mode = reduced() ? 'static' : 'throw';");
+    expect(block).toContain("const THROW_FLY_MAX = 8, THROW_COVER = 0.2,");
+    expect(block).toContain(
+      "direct: OBJ.filter(q => q.fly && !q.fly.direct).length >= THROW_FLY_MAX",
+    );
+    expect(block).toContain("new THREE.InstancedMesh(geo, m, POOL_MAX[type])");
+    expect(block).toContain("new THREE.MeshLambertMaterial({ vertexColors: true })");
+    expect(block).not.toMatch(
+      /COL\.red|COL\.banner|MeshStandardMaterial|MeshBasicMaterial|TextGeometry/,
+    );
+    expect(block).toContain("const BLUR_S = 5;");
+    expect(seat).toContain("if (view.phase !== 'running') throwsStill(true);");
+    expect(seat).toContain("Clerks.setBob(!r); if (r) throwsStill();");
+    expect(seat).toContain("throwsUpdate();");
+    // the Smoke Break's ball bursts into one puff and the target's head recoils, never under reduce
+    expect(block).toContain("if (!isSelfPov(o.slot)) Clerks.flinch(o.slot);");
+    expect(block).toContain("const gest = !still && src >= 0");
+  });
+
   it("shows the seat POV (bible 11.3) and hides your clerk and paper", () => {
     // #927: the POV's FOV and eye follow the seating block (62 is its floor, R its ring)
     expect(seat).toContain("FOV_POV = 62");
@@ -513,6 +555,67 @@ describe("podium clerk page (#688)", () => {
     expect(page).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
   });
 
+  // #999 C37: the Major's sleeve and hand enter the frame and pin the medal (bible 10.3 "Pinning", 14.4)
+  describe("the Major's pinning (#999 C37)", () => {
+    const pinning = source(/const PINNING = \{[^}]*\};/);
+    const pinPhase = source(/function pinPhase\(u, o\) \{[\s\S]*?\n\}/);
+    const phase = new Function(
+      "u",
+      "const sm = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };\n" +
+        `${pinning}\n${pinPhase}\nreturn pinPhase(u, { reach: 0, press: 0, pinned: false, done: false });`,
+    ) as (u: number) => { reach: number; press: number; pinned: boolean; done: boolean };
+    const timing = new Function(`${pinning}\nreturn PINNING;`)() as {
+      wait: number;
+      reach: number;
+      press: number;
+      back: number;
+    };
+    const end = timing.wait + timing.reach + timing.press + timing.back;
+
+    it("waits, reaches in, presses, pins at the end of the press, withdraws, then is done", () => {
+      expect(phase(0)).toEqual({ reach: 0, press: 0, pinned: false, done: false });
+      const [early, mid, late] = [0.2, 0.5, 0.8].map(
+        (f) => phase(timing.wait + f * timing.reach).reach,
+      ) as [number, number, number];
+      expect(early).toBeGreaterThan(0);
+      expect(mid).toBeGreaterThan(early);
+      expect(late).toBeGreaterThan(mid);
+      const press = phase(timing.wait + timing.reach + timing.press / 2);
+      expect(press).toMatchObject({ reach: 1, pinned: false });
+      expect(press.press).toBeGreaterThan(0.9);
+      const after = phase(timing.wait + timing.reach + timing.press + 0.01);
+      expect(after.pinned).toBe(true);
+      expect(after.reach).toBeGreaterThan(0.95);
+      expect(phase(end + 0.01)).toEqual({ reach: 0, press: 0, pinned: true, done: true });
+    });
+
+    it("plays inside the bible 12 budget of a plinth: about 2.5 s, one merged arm mesh, disposed after", () => {
+      expect(end).toBeGreaterThan(2);
+      expect(end).toBeLessThan(3);
+      expect(page).toContain("major = new THREE.Mesh(merge(g), mat);");
+      expect(page).toContain("scene.remove(major); major.geometry.dispose(); major = null;");
+    });
+
+    it("wears the Major's tunic olive, gold cuff and skin (10.3), no red", () => {
+      const arm = source(/function majorArm\(\) \{[\s\S]*?\n\}/);
+      expect(page).toContain("const MAJOR = { tunic: 0x5B5E3C, cuff: 0xE2B23A, skin: 0xEBC09C };");
+      expect(arm).not.toMatch(/0x[0-9A-F]{6}/i);
+      expect(arm).toContain("MAJOR.tunic");
+      expect(arm).toContain("MAJOR.cuff");
+      expect(arm).toContain("MAJOR.skin");
+    });
+
+    it("under reduced motion sets the pin at once (#688 static state) before any frame is drawn", () => {
+      const loop = source(/function loop\(now\) \{[\s\S]*?\n\}/);
+      const set = loop.indexOf("if (!pinMode && still) pinOn('set');");
+      expect(set).toBeGreaterThan(-1);
+      expect(set).toBeLessThan(loop.indexOf("renderer.render(scene, camera);"));
+      expect(page).toContain("root.dataset.pin = 'pinned'; root.dataset.pinMode = mode;");
+      // the salute answers the pinning: no idle gesture while the Major's hand is in the frame
+      expect(page).toContain("nextIdle = Infinity");
+    });
+  });
+
   it("draws no text in WebGL and takes no pointer or orbit input", () => {
     expect(page).not.toMatch(/fillText|\.font = |fonts\.load|embed-fonts/);
     expect(page).not.toMatch(/pointermove|pointerdown|OrbitControls|fc-look|fc-reissue/);
@@ -689,6 +792,39 @@ describe("seating (#927)", () => {
     // 2 players: both desks in the camera's half of the room
     const two = S.overLayout(2);
     for (const a of two.angles) expect(gap(a, two.start)).toBeLessThan(Math.PI / 2);
+  });
+
+  it("#999 C2, C4: the overview places only taken desks (an empty desk 1 leaves no gap) and sends plaque anchors", () => {
+    expect(seat).toContain(
+      "const over = VIEW === 'over', order = []; DESKS.forEach((s, i) => { if (s.occ || (!i && !over)) order.push(i); });",
+    );
+    const body = seat.slice(
+      seat.indexOf("function anchors() {"),
+      seat.indexOf("// the room's desks"),
+    );
+    expect(body).toContain("if (VIEW !== 'over') return;"); // the seat POV never sends anchors
+    expect(body).toContain("send({ type: 'fc-scene-anchors', anchors: out });");
+    // off screen (outside the frame or behind the camera): no anchor, so the plaque hides
+    expect(body).toContain("Math.abs(_c.x) <= 1 && Math.abs(_c.y) <= 1 && _c.z < 1");
+    // sent on change only, from the render loop
+    expect(body).toContain("if (key === ANCHORS) return;");
+    expect(seat).toContain("lampUpdate(dt); anchors();");
+    expect(seat).toContain("ROOT.dataset.orbit = orbitA.toFixed(3);");
+  });
+
+  it("#999 C5 (bible 10.3 Lamp): one shade mesh and one unlit beam aim at view.lamp, set at once under reduce", () => {
+    const lamp = seat.slice(seat.indexOf("const lampG"), seat.indexOf("const PLAQUE_AT"));
+    expect(lamp).toContain("lampG.position.set(0, 3.18, 0)");
+    expect(lamp.match(/new THREE\.Mesh\(/g)).toHaveLength(2); // the merged shade, the beam
+    expect(lamp).toContain("new THREE.MeshBasicMaterial({ color: 0xFFD08A");
+    expect(lamp).not.toMatch(/Light\(/); // no new light
+    expect(lamp).toContain(
+      "if (reduced()) lampDir.copy(lampTo); else lampDir.lerp(lampTo, 1 - Math.exp(-dt * 4))",
+    );
+    expect(lamp).toContain("beam.visible = slot >= 0 && !isSelfPov(slot);");
+    expect(seat).toContain(
+      "Object.assign(ROOT.dataset, { lamp: lamp ?? 'none', lampMode: reduced() ? 'set' : 'swing' });",
+    );
   });
 
   it("C7: the stations are one batched mesh, hidden when empty; carriages and paper of empty desks are not drawn", () => {

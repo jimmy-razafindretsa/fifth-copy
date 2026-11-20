@@ -11,6 +11,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./race/helpers";
 import { Client } from "pg";
 import { contrastRatio, type Rgb } from "../src/lib/color";
@@ -20,6 +21,9 @@ import { ACTION_WAIT, HYDRATION_WAIT, scaled } from "./timeouts";
 // Contract of #107: the waiting room /lobby/[code] (bible 4, 7.3, 7.4, 7.10, 8), live over the race
 // server started by playwright.config.ts. next/font and CSS modules rename families and keyframes,
 // so both are matched by regex; colour roles are resolved to rgb through a probe element.
+
+/** A desk's viewport, for the landing's race entries (phones watch, #999 C15). */
+const DESK = { width: 1280, height: 800 };
 
 const JWT = /eyJ[\w-]+\.[\w-]+\.[\w-]+/;
 
@@ -78,6 +82,8 @@ test.describe("lobby waiting room (#107)", () => {
   test("C3 an unknown code is a 404 and the landing says so", async ({ page, request }) => {
     expect((await request.get("/lobby/ZZZ-0000")).status()).toBe(404);
     expect((await request.get("/lobby/not-a-code")).status()).toBe(404);
+    // the code join is a desk's entry (phones watch, #999 C15)
+    await page.setViewportSize(DESK);
     await page.goto(LANDING);
     const form = page.getByRole("form", { name: "Join with code" });
     await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially("ZZZ0000");
@@ -101,7 +107,11 @@ test.describe("lobby waiting room (#107)", () => {
     await host.close();
     await expect.poll(() => lobbyStatusOf(code), { timeout: scaled(10_000) }).toBe("CLOSED");
 
-    const visitor = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    // the code join is a desk's entry (phones watch, #999 C15)
+    const visitor = await browser.newContext({
+      baseURL: test.info().project.use.baseURL,
+      viewport: DESK,
+    });
     try {
       const other = await visitor.newPage();
       await other.goto(LANDING);
@@ -535,7 +545,10 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
   test("C4 COPY writes the room code to the clipboard and reads COPIED, then COPY", async ({
     page,
   }) => {
-    test.skip(test.info().project.name === "mobile", "phones hide the invite row (C5)");
+    test.skip(
+      test.info().project.name === "mobile",
+      "COPY is a desk check (a phone host's controls: #999 phone-host.spec)",
+    );
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const code = await createLobby(page);
     await expect(rows(page)).toHaveCount(1);
@@ -563,7 +576,10 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
   });
 
   test("C4 without a clipboard API, COPY selects the room code", async ({ page }) => {
-    test.skip(test.info().project.name === "mobile", "phones hide the invite row (C5)");
+    test.skip(
+      test.info().project.name === "mobile",
+      "COPY is a desk check (a phone host's controls: #999 phone-host.spec)",
+    );
     await page.addInitScript(() =>
       Object.defineProperty(Navigator.prototype, "clipboard", { get: () => undefined }),
     );
@@ -575,7 +591,10 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
   });
 
   test("C4 under reduced motion COPIED stays until the button blurs", async ({ page }) => {
-    test.skip(test.info().project.name === "mobile", "phones hide the invite row (C5)");
+    test.skip(
+      test.info().project.name === "mobile",
+      "COPY is a desk check (a phone host's controls: #999 phone-host.spec)",
+    );
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await createLobby(page);
@@ -603,10 +622,13 @@ test.describe("lobby layout: settings docket, invite COPY, START (#498)", () => 
     const startBox = (await start.boundingBox())!;
 
     if (test.info().project.name === "mobile") {
-      // phones watch (bible 18): the room docket, the roll and START only, START last
-      await expect(settingsDocket(page)).toBeHidden();
-      await expect(copyButton(page)).toBeHidden();
+      // a host keeps every control on a phone (bible 14.3 "Lobby layout", #999 C14): the room docket,
+      // the roll, START under it, the settings docket after START
+      await expect(settingsDocket(page)).toBeVisible();
+      await expect(copyButton(page)).toBeVisible();
       expect(startBox.y).toBeGreaterThan(rollBox.y + rollBox.height);
+      const settingsBox = (await settingsDocket(page).boundingBox())!;
+      expect(settingsBox.y).toBeGreaterThanOrEqual(startBox.y + startBox.height);
     } else {
       await expect(settingsDocket(page)).toBeVisible();
       await expect(copyButton(page)).toBeVisible();
@@ -920,7 +942,7 @@ test.describe("late joiner (#732 C3)", () => {
 
     const { host, code, lobbyId } = await hostRoom(browser, opened, { before: recordRaceTokens });
     await setHostSettings(host, { errorMode: "block", wordCount: 10, timerS: null });
-    await page.goto(`/race/${lobbyId}`);
+    await openRace(page, { code, lobbyId });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     await expect(startButton(host)).toBeEnabled();
     await warmRace(host, lobbyId);

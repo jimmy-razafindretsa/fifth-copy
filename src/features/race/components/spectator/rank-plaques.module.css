@@ -1,0 +1,88 @@
+/*
+ * The rank plaques (#999 C4, C5; bible 14.3 "Projector view", 7.4 chip, 8 motion): one paper chip per desk
+ * over the overview scene, its bottom centre on the desk's anchor. `.anchor` fills the plaque layer and is
+ * moved by `placePlaques` (`translate` in % of itself = a share of the frame); `.plaque` sits at its top
+ * left, lifted by the individual `translate` property, so the flip's `transform` never fights the
+ * position. Text at 20px at 1080p, growing with the screen like the rest of the projector.
+ */
+
+@reference "../../../../app/globals.css";
+
+.anchor {
+  --_type: max(20px, min(calc(100vw * 20 / 1920), calc(100vh * 20 / 1080)));
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* a 7.4 paper chip with a 2px ink rule: rank | DESK 07 | name */
+.plaque {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  max-width: 18em;
+  padding: 2px 8px;
+  font-size: var(--_type);
+  line-height: 1.25;
+  white-space: nowrap;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  transform-origin: 50% 100%;
+}
+
+.rank {
+  @apply type-typing;
+  font-size: var(--_type);
+  line-height: inherit;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.desk {
+  @apply type-label;
+  font-size: var(--_type);
+  line-height: inherit;
+  letter-spacing: 0.08em;
+}
+
+.name {
+  @apply type-typing;
+  font-size: var(--_type);
+  line-height: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * An overtake or a new leader (#999 C5): the chip flips over its bottom edge once, a stamp's slam length
+ * (8: one transform, no luminance change, so the flash rule holds); zero under reduce (the token is 0ms)
+ * and stopped by both reduce selectors.
+ */
+.plaque[data-flip] {
+  animation: plaque-flip var(--motion-duration-slam) var(--motion-ease-slam) 1;
+}
+
+@keyframes plaque-flip {
+  from {
+    transform: perspective(600px) rotateX(-90deg);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plaque[data-flip] {
+    animation: none;
+  }
+}
+
+/* #28: the same stop under <html data-motion="reduce"> (tokens.css) */
+:root[data-motion="reduce"] .plaque[data-flip] {
+  animation: none;
+}

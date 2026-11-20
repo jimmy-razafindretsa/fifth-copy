@@ -8,6 +8,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #143 C4 and C5 over the race server playwright.config.ts starts: Race again. Host and one
@@ -64,7 +65,7 @@ test.describe("#143 Race again", () => {
     const room = await hostRoom(browser, opened, { before: recordRaceTokens });
     const { host, code, lobbyId } = room;
     await setHostSettings(host, { errorMode: "block", wordCount: 10, timerS: null });
-    await page.goto(`/race/${lobbyId}`);
+    await openRace(page, room);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     await expect(startButton(host)).toBeEnabled();
 

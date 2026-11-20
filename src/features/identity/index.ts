@@ -111,6 +111,8 @@ export { FirstRaceLayoutPrompt } from "./components/first-race-layout-prompt";
 export { LayoutPrompt, LAYOUT_PROMPT_KEY } from "./components/layout-prompt";
 // The locker's NEW items (#943 part E): the list, the seen cookie read (the MY CLERK tag).
 export { LOCKER_SEEN_COOKIE, NEW_ITEMS, type NewItemId } from "./clerk/new-items";
+// The locker items each enamel pin will unlock (#999 C36), by achievement id.
+export { PIN_LOCKS } from "./clerk/pin-locks";
 export { getLockerSeen, getLockerUnseen } from "./queries/locker-seen";
 // The locker (#943 part D): the screen, the seen-cookie action and its labels type.
 export { LockerScreen } from "./components/locker/locker-screen";

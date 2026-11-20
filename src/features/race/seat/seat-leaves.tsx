@@ -7,6 +7,7 @@ import { useRaceStore, useRaceStoreApi } from "../client/use-race-store";
 import { AbandonControl } from "../components/abandon-control";
 import { RaceCard } from "../components/race-card";
 import { TelexStrip, type TelexLabels } from "../components/telex-strip";
+import { cableHeader } from "../view/cable";
 import { TypedSheet } from "../components/typed-sheet";
 import type { AbandonLabels, RaceCardLabels } from "../view/hud-labels";
 import { COMPACT_QUERY, paperwork, type RaceSeatLabels } from "./seat-view";
@@ -22,7 +23,10 @@ import styles from "./race-seat.module.css";
 /** The telex strip over your desk's typed view (#559): empty until the race text arrives. */
 export function SeatTelex({ labels }: { labels: TelexLabels }) {
   const view = useRaceStore(selectTypedView);
-  return <TelexStrip view={view} labels={labels} />;
+  // #999 C40: the race's intercepted-cable header, once the room is on a race (same id, same header)
+  const raceId = useRaceStore((s) => s.race?.raceId ?? null);
+  const cable = raceId === null ? null : cableHeader(raceId, labels.cables ?? []);
+  return <TelexStrip view={view} labels={labels} cable={cable} />;
 }
 
 /** The typed sheet over the same view. */

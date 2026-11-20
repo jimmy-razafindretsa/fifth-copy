@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, simulatedPlayers, type SimulatedPlayer } from "./helpers";
+import { hostRoom, simulatedPlayers, type SimulatedPlayer, openRace } from "./helpers";
 
 // Contract of #927 C5, C6 (bible 11.1, 11.3; Art Direction slide 05 "3D render · small lobbies"): the seat
 // scene stages a small room for its owner and keeps the real ring from 14 players. C5 opens `/3d/seat.html`
@@ -27,7 +27,7 @@ const room = (n: number) => ({
 });
 
 async function post(page: Page, msg: Record<string, unknown>) {
-  await page.evaluate((m) => postMessage({ v: 1, ...m }, location.origin), msg);
+  await page.evaluate((m) => postMessage({ v: 2, ...m }, location.origin), msg);
 }
 
 const html = (page: Page) => page.locator("html");
@@ -113,7 +113,7 @@ test.describe("#927 the 3D room adapts to small lobbies", { tag: "@scene" }, () 
       const lobby = await hostRoom(browser, opened);
       // host + 6 simulated players + this page
       players = await simulatedPlayers(6, lobby.lobbyId);
-      await page.goto(`/race/${lobby.lobbyId}?scene=pin`);
+      await openRace(page, lobby, "?scene=pin");
       const view = scene(page);
       await expect(view).toHaveAttribute("data-scene", "ready", { timeout: SCENE_WAIT });
       await expect(view).toHaveAttribute("data-scene-desks", "8");

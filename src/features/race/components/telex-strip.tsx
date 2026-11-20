@@ -8,6 +8,8 @@ import { TypingChars } from "./typing-chars";
 export type TelexLabels = {
   /** The accessible name of the strip (the glyphs themselves are hidden from assistive tech). */
   strip: string;
+  /** The intercepted-cable header templates (#999 C40, `cableHeader`); the seat view only. */
+  cables?: readonly string[];
 };
 
 /**
@@ -53,8 +55,21 @@ function placeTape(
  * so the next char stays in view. Cursor changes follow with the CSS `scroll-behavior` (smooth, `auto`
  * under reduced motion); the first placement and re-placements after a resize or a font swap are instant.
  * A Smoke Break (#236) blurs the tape while `view.blurred` (`data-blur`).
+ *
+ * The seat view frames the tape with the intercepted-cable header (#999 C40, R26, bible 4, 7.7): one
+ * Special Elite line above the tape (`data-cable`), outside the typed chars, never text to type. `cable`
+ * undefined draws no header row (the landing's tape, `/design`); null keeps the row empty (before the
+ * race text arrives), so the tape never moves when the header lands.
  */
-export function TelexStrip({ view, labels }: { view: TypedView; labels: TelexLabels }) {
+export function TelexStrip({
+  view,
+  labels,
+  cable,
+}: {
+  view: TypedView;
+  labels: TelexLabels;
+  cable?: string | null;
+}) {
   const viewport = useRef<HTMLDivElement>(null);
   const tape = useRef<HTMLSpanElement>(null);
   // the char to keep in view: the next one, or the last one once the copy is finished
@@ -89,6 +104,11 @@ export function TelexStrip({ view, labels }: { view: TypedView; labels: TelexLab
       data-phase={surfacePhase(view)}
       data-blur={view.blurred}
     >
+      {cable === undefined ? null : (
+        <p className={styles.cable} data-cable="" aria-hidden={cable === null ? true : undefined}>
+          {cable ?? "\u00a0"}
+        </p>
+      )}
       <div ref={viewport} className={styles.viewport}>
         <span ref={tape} className={styles.tape} aria-hidden="true">
           <TypingChars chars={view.chars} last={view.cursor - 1} stamp={view.lastTypedAt} />

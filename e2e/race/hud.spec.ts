@@ -1,7 +1,15 @@
 import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, SEAT_HUD, simulatedPlayers, startButton, warmRace } from "./helpers";
+import {
+  hostRoom,
+  phaseOf,
+  SEAT_HUD,
+  simulatedPlayers,
+  startButton,
+  warmRace,
+  openRace,
+} from "./helpers";
 
 /**
  * #560 seat view HUD dockets on /design#race-hud: nixie counters, race card, Sabotage tray, Abandon
@@ -425,7 +433,7 @@ test.describe("#792 seat view lane: a 10-character name stays readable next to A
     const room = await hostRoom(page.context().browser()!, opened);
     // `next dev` compiles the seat view on its first request (this file's other tests only open /design)
     await warmRace(page, room.lobbyId);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/, { timeout: scaled(10_000) });
     // a third typist named Marmot-648 who never types: the server puts it to sleep
     const [marmot] = await simulatedPlayers(1, room.lobbyId, { names: ["Marmot-648"] });

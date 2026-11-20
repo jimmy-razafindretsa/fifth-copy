@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, startButton, warmRace } from "./helpers";
+import { hostRoom, phaseOf, startButton, warmRace, openRace } from "./helpers";
 
 // Contract of #559 C4 (the hidden input: aids off, locked until GO and after the finish, focused at GO
 // and on a press inside the typing surface, only printable keys and Backspace), C7 (paste, copy and drop
@@ -46,7 +46,7 @@ test.describe("#559 race input", () => {
     page.on("websocket", (ws) =>
       ws.on("framesent", ({ payload }) => sent.push({ t: Date.now(), payload: String(payload) })),
     );
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(
       page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
     ).toBeVisible();

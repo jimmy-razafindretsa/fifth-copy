@@ -71,7 +71,7 @@ async function tick(booted: Booted, n = 1) {
 }
 
 describe("spectator welcome and membership (C2)", () => {
-  it("welcome { spectator, you: null } lists both members; the roster stays at 2", async () => {
+  it("welcome { spectator, you: null, room.code: null } lists both members; the roster stays at 2", async () => {
     const r = await room();
     const [host, player] = r.seats;
     const rostersBefore = [host!.seen.rosters, player!.seen.rosters];
@@ -80,7 +80,8 @@ describe("spectator welcome and membership (C2)", () => {
     expect(welcome).toMatchObject({
       role: "spectator",
       you: null,
-      room: { code: "KGB-4821", phase: "waiting" },
+      // #999 C13: a spectator is never served the room code, whoever minted its token
+      room: { code: null, phase: "waiting" },
       state: null,
       overlay: null,
       bonus: null,
@@ -226,7 +227,12 @@ describe("a spectator carrying the host's own sub (host's projector tab)", () =>
     const [host] = r.seats;
     const hostRosters = host!.seen.rosters;
     const tab = await r.spectate(HOST_SUB);
-    expect(tab.seen.welcome).toMatchObject({ role: "spectator", you: null });
+    // #999 C13: no room code for any spectator, the host's own tab included (no token claim says why)
+    expect(tab.seen.welcome).toMatchObject({
+      role: "spectator",
+      you: null,
+      room: { code: null },
+    });
 
     const patch = { v: PROTOCOL_VERSION, patch: { bots: [{ level: "clerk" }] } };
     const settingsAck = await tab.client

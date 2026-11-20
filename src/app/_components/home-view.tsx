@@ -46,9 +46,16 @@ export async function HomeView({ viewer }: { viewer: Viewer }) {
       ? fill(unseen.length === 1 ? h.tag.one : h.tag.other, { n: unseen.length })
       : undefined;
   const entries: HomeEntry[] = [
-    { id: "play", ...e.play, activate: { action: quickRace, pendingLabel: h.pending.play } },
+    // race entries: a desk's, so a phone's menu leaves them out (#999 C15)
+    {
+      id: "play",
+      ...e.play,
+      deskOnly: true,
+      activate: { action: quickRace, pendingLabel: h.pending.play },
+    },
     {
       id: "practice",
+      deskOnly: true,
       ...e.practice,
       activate: { action: createPracticeLobby, pendingLabel: h.pending.practice },
     },

@@ -1,7 +1,8 @@
 /**
  * Import boundaries from AGENTS.md "Architecture map":
  *   app -> features -> server/lib
- *   a feature imports another feature only through its index.ts (or its server-only server.ts, ADR 0021)
+ *   a feature imports another feature only through its index.ts (or its server-only server.ts, ADR 0021,
+ *   or its light client.ts, ADR 0026)
  *   components/ui imports nothing from features
  *   Prisma client only in src/server/**, src/features/*\/{queries,actions,jobs} and src/worker/**
  * Workspace boundaries (docs/adr/0005, 0006, 0007):
@@ -60,7 +61,7 @@ module.exports = {
     {
       name: "feature-public-api-only",
       comment:
-        "Cross-feature imports must go through the other feature's index.ts, or its server-only server.ts (ADR 0021).",
+        "Cross-feature imports must go through the other feature's index.ts, its server-only server.ts (ADR 0021) or its light client.ts (ADR 0026).",
       severity: "error",
       from: { path: "^src/features/([^/]+)/" },
       to: {
@@ -69,6 +70,7 @@ module.exports = {
           "^src/features/$1/",
           "^src/features/[^/]+/index\\.tsx?$",
           "^src/features/[^/]+/server\\.ts$",
+          "^src/features/[^/]+/client\\.ts$",
         ],
       },
     },
@@ -99,13 +101,41 @@ module.exports = {
     {
       name: "app-feature-public-api-only",
       comment:
-        "Routes compose features through their index.ts (server code also through server.ts, ADR 0021).",
+        "Routes compose features through their index.ts (server code also through server.ts, ADR 0021; light client code through client.ts, ADR 0026).",
       severity: "error",
       from: { path: "^src/app/" },
       to: {
         path: "^src/features/[^/]+/.+",
-        pathNot: ["^src/features/[^/]+/index\\.tsx?$", "^src/features/[^/]+/server\\.ts$"],
+        pathNot: [
+          "^src/features/[^/]+/index\\.tsx?$",
+          "^src/features/[^/]+/server\\.ts$",
+          "^src/features/[^/]+/client\\.ts$",
+        ],
       },
+    },
+    {
+      name: "feature-client-entry-light",
+      comment:
+        "A feature's client.ts is its light client door (ADR 0026, #999): nothing reachable from it is the lobby store, the race socket client, socket.io or a server.ts. Zod is checked by scripts/landing-bundle.test.ts, which stops at server actions (their zod never reaches the browser; reachability here cannot).",
+      severity: "error",
+      from: { path: "^src/features/[^/]+/client\\.ts$" },
+      to: {
+        reachable: true,
+        path: [
+          "^src/features/lobby/components/lobby-store\\.ts$",
+          "^src/features/race/client/socket\\.ts$",
+          "^src/features/[^/]+/server\\.ts$",
+          "node_modules/(socket\\.io-client|engine\\.io-client)/",
+        ],
+      },
+    },
+    {
+      name: "visitor-landing-light-doors",
+      comment:
+        "The visitor landing module (/welcome, served for a cookieless /, ADR 0026) takes lobby UI through lobby/client.ts, never the lobby index.",
+      severity: "error",
+      from: { path: ["^src/app/welcome/", "^src/app/_components/landing-view\\.tsx$"] },
+      to: { path: "^src/features/lobby/index\\.tsx?$" },
     },
     {
       name: "race-3d-imports",
@@ -125,9 +155,9 @@ module.exports = {
     {
       name: "race-3d-only-from-race-route",
       comment:
-        "Only the race route loads the seat scene, lazily after the HUD (#563 C7, ADR 0013, 0017).",
+        "Only the race route (and the spectator link's projector, #999 C12) loads the seat scene, lazily after the HUD (#563 C7, ADR 0013, 0017).",
       severity: "error",
-      from: { pathNot: ["^src/features/race-3d/", "^src/app/race/"] },
+      from: { pathNot: ["^src/features/race-3d/", "^src/app/race/", "^src/app/watch/"] },
       to: { path: "^src/features/race-3d/" },
     },
     {

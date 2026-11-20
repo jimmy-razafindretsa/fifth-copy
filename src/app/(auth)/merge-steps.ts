@@ -5,3 +5,4 @@
 // bare here, and this file, is listed in package.json `sideEffects` (#986), or the bundler drops it.
 import "@/features/lobby";
 import "@/features/results";
+import "@/features/stats";

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
+import type { Browser, BrowserContext, Locator, Page, WebSocketRoute } from "@playwright/test";
 import { SignJWT } from "jose";
 import { Client } from "pg";
 import { io, type Socket } from "socket.io-client";
@@ -15,18 +15,43 @@ import {
   type Welcome,
 } from "@fifth-copy/protocol";
 import { LANDING, expect, test } from "../fixtures";
-import { scaled } from "../timeouts";
+import { HYDRATION_WAIT, scaled } from "../timeouts";
 
 // Room helpers shared by the lobby and race specs (#561 C10; first written for #107 in e2e/lobby.spec.ts).
 // They drive the real landing and the race server started by playwright.config.ts.
 
 export const LOBBY_PATH = /^\/lobby\/([A-HJ-NP-Z]{3}-[0-9]{4})$/;
 
+/**
+ * Resolves once the waiting room has mounted its join (its first lobby action, the race token mint, is
+ * sent from the mount): the page's role (desk or phone watcher, #999 C9) is decided by then.
+ */
+function lobbyMounted(page: Page) {
+  return page.waitForRequest(
+    (r) =>
+      r.method() === "POST" &&
+      !!r.headers()["next-action"] &&
+      LOBBY_PATH.test(new URL(r.url()).pathname),
+    { timeout: HYDRATION_WAIT },
+  );
+}
+
 /** Creates a private race from the landing and returns its code; the page stays in the waiting room. */
 export async function createLobby(page: Page): Promise<string> {
+  // #999 C15: a phone's landing has no race entry (phones watch). A phone-sized page opens its room
+  // at a desk's width, keeps it until the lobby has mounted its desk (a page's role is decided at
+  // mount), then returns to its own size.
+  const size = page.viewportSize();
+  const phone = size !== null && size.width <= 480;
+  if (phone) await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(LANDING);
+  const mounted = phone ? lobbyMounted(page) : null;
   await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
   await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
+  if (mounted && size) {
+    await mounted;
+    await page.setViewportSize(size);
+  }
   return LOBBY_PATH.exec(new URL(page.url()).pathname)![1]!;
 }
 
@@ -42,11 +67,21 @@ export async function joinAsGuest(
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
   const page = await context.newPage();
   await before?.(page);
+  // #999 C9, C15: a phone watches (no code join on its landing, no desk in its lobby). A phone-sized
+  // project's guest joins at a desk's width, keeps it until its desk is in, then returns to its size.
+  const size = page.viewportSize();
+  const phone = size !== null && size.width <= 480;
+  if (phone) await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(LANDING);
+  const mounted = phone ? lobbyMounted(page) : null;
   const form = page.getByRole("form", { name: "Join with code" });
   await form.getByLabel("JOIN WITH CODE", { exact: true }).pressSequentially(code);
   await form.getByRole("button", { name: "JOIN →", exact: true }).click();
   await page.waitForURL(`**/lobby/${code}`);
+  if (mounted && size) {
+    await mounted;
+    await page.setViewportSize(size);
+  }
   return { context, page };
 }
 
@@ -168,6 +203,56 @@ export async function hostRoom(
   const code = await createLobby(host);
   await expect(host.getByRole("list", { name: "Typists in the room" })).toBeVisible();
   return { context, host, code, lobbyId: await lobbyIdOf(code) };
+}
+
+/**
+ * Files the context's viewer a room code proof the way a typist does (#999 C13): `/race/<lobbyId>`
+ * serves no room code (so opens neither seat nor projector) to a viewer who is not the host and never
+ * proved the code. When the page would show the code gate, a throwaway page of the same context enters
+ * the code there, then closes before its refresh can take a desk (later actions are aborted, sockets
+ * refused), so the page under test sees one navigation, its routes and recorders untouched.
+ */
+export async function proveCode(page: Page, room: { lobbyId: string; code: string }) {
+  const html = await (await page.request.get(`/race/${room.lobbyId}`)).text();
+  if (!html.includes("data-code-gate")) return;
+  const scratch = await page.context().newPage();
+  try {
+    // the gate's own action id (the first action the page posts); any other action (the seat's mint
+    // after the refresh) is aborted, so the scratch page never takes a desk
+    let proveAction: string | null = null;
+    await scratch.route("**/*", (route, r) => {
+      const action = r.method() === "POST" ? r.headers()["next-action"] : undefined;
+      if (!action) return route.continue();
+      proveAction ??= action;
+      return action === proveAction ? route.continue() : route.abort();
+    });
+    // the race server's sockets only: `next dev`'s HMR socket stays, or the page reloads
+    await scratch.routeWebSocket(
+      (url) => !url.pathname.startsWith("/_next/"),
+      (ws) => ws.close(),
+    );
+    await scratch.goto(`/race/${room.lobbyId}`);
+    // either locale: the gate's own form, by its field and submit
+    const gate = scratch.locator("[data-code-gate]");
+    const form = gate.locator("form");
+    // a click before hydration submits nothing (the field is controlled), a refused proof (a slow
+    // Redis: it fails closed) keeps the gate: retry until the page leaves it
+    await expect(async () => {
+      if ((await gate.count()) > 0) {
+        await form.locator('input[name="code"]').fill(room.code);
+        await form.locator('button[type="submit"]').click();
+      }
+      await expect(gate).toHaveCount(0, { timeout: scaled(10_000) });
+    }).toPass({ timeout: HYDRATION_WAIT });
+  } finally {
+    await scratch.close();
+  }
+}
+
+/** Opens the seat view (or `query`, e.g. `?view=projector`) of `room` after `proveCode`. */
+export async function openRace(page: Page, room: { lobbyId: string; code: string }, query = "") {
+  await proveCode(page, room);
+  return page.goto(`/race/${room.lobbyId}${query}`);
 }
 
 /**
@@ -499,4 +584,50 @@ export async function blockWebSockets(page: Page) {
       },
     });
   });
+}
+
+/**
+ * The guest's line to the race server, cuttable (#235 C3): every race socket of the page goes through a
+ * `routeWebSocket` relay. `goOffline` sets the context offline (no polling fallback), closes the live
+ * socket (the server sees the disconnect, the client starts reconnecting) and refuses new ones until
+ * `goOnline`. Install before the page loads. Shared by #235's `line-cut.spec.ts` and #999's projector.
+ */
+export async function cuttableLine(page: Page) {
+  // page side -> server side; an `onClose` handler turns off Playwright's own close forwarding, so both
+  // sides are closed here
+  const live = new Map<WebSocketRoute, WebSocketRoute>();
+  let offline = false;
+  // An attempt made while offline stalls until `goOnline`, as on a dead network. Closing it instead
+  // would hang the client: the page sees the mocked socket open then close before the engine.io
+  // handshake, which socket.io's Manager only gives up on after its 20 s connect timeout.
+  const held: Array<() => void> = [];
+  await page.routeWebSocket(/\/socket\.io\//, async (ws) => {
+    if (offline) await new Promise<void>((resume) => held.push(resume));
+    const server = ws.connectToServer();
+    live.set(ws, server);
+    ws.onClose(() => {
+      live.delete(ws);
+      void server.close();
+    });
+    server.onClose(() => {
+      live.delete(ws);
+      void ws.close();
+    });
+  });
+  return {
+    async goOffline() {
+      offline = true;
+      await page.context().setOffline(true);
+      for (const [ws, server] of [...live]) {
+        live.delete(ws);
+        await server.close();
+        await ws.close({ code: 1001, reason: "offline" });
+      }
+    },
+    async goOnline() {
+      offline = false;
+      await page.context().setOffline(false);
+      for (const resume of held.splice(0)) resume();
+    },
+  };
 }

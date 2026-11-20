@@ -18,6 +18,23 @@ export type RaceSeries = {
 };
 
 /**
+ * Another desk's line on the graph (#999 C51, C52, ADR 0027): read from its stored `RaceResult.wpmSeries`
+ * (clean WPM, at most `MAX_SERIES_POINTS`), never from its trace; a bot's is flat at its clean WPM from
+ * GO to its race time (`isBot`: labelled simulated). Only the race's participants and host get any.
+ */
+export type RaceLine = {
+  desk: number;
+  name: string;
+  place: number;
+  isBot: boolean;
+  /** The ranking's clean WPM (`RaceResult.cleanWpm`). */
+  wpm: number;
+  /** The race time the line spans (`RaceResult.durationMs`). */
+  endMs: number;
+  points: WpmPoint[];
+};
+
+/**
  * The hits `desk` received, in time order: entries whose `to` is the desk from another desk (the
  * card's `RECEIVED` row counts the same ones, `tallyBonuses`; an exemption on oneself is sent).
  */
@@ -57,6 +74,7 @@ export type GraphGeometry = {
 };
 
 const round = (n: number) => Math.round(n * 10) / 10;
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /**
  * Where everything sits (#865): x is time over `endMs`, y the WPM over the scale's top (0 at the
@@ -79,4 +97,92 @@ export function graphGeometry(series: RaceSeries): GraphGeometry {
 export function formatRaceTime(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** The id of the viewer's own line on a graph with other lines. */
+export const YOU_LINE = "you";
+
+/** One line of the graph with other lines: its polyline and where its end marker sits (0..1 of the plot). */
+export type PlotLine = {
+  /** `YOU_LINE`, or the desk number as a string. */
+  id: string;
+  line: string;
+  end: { x: number; y: number };
+};
+
+export type RacePlot = {
+  yMax: number;
+  /** The time axis' end: the longest line's race time. */
+  endMs: number;
+  /** The viewer's received bonuses, on the shared time axis (none without a line of their own). */
+  marks: GraphMark[];
+  /** The viewer's line first (when they have one), then `others` in their order. */
+  lines: PlotLine[];
+};
+
+/**
+ * Where every line sits on one graph (#999 C52): one WPM scale (the highest point of any line rounded up
+ * to a ten, at least 10) and one time axis (the longest race time), so lines compare. A typist's line
+ * starts at GO with 0 WPM, as the viewer's does; a bot's is drawn as stored (flat from GO). Pure.
+ */
+export function plotOf(series: RaceSeries | null, others: readonly RaceLine[]): RacePlot {
+  const wpms = [...(series?.points ?? []), ...others.flatMap((l) => l.points)].map((p) => p.wpm);
+  const yMax = Math.max(10, Math.ceil(Math.max(0, ...wpms) / 10) * 10);
+  const ends = [
+    ...(series ? [series.endMs > 0 ? series.endMs : (series.points.at(-1)?.t ?? 0)] : []),
+    ...others.map((l) => (l.endMs > 0 ? l.endMs : (l.points.at(-1)?.t ?? 0))),
+  ];
+  const endMs = Math.max(1, ...ends);
+  const xOf = (t: number) => Math.min(1, Math.max(0, t / endMs));
+  const yOf = (wpm: number) => Math.min(1, Math.max(0, 1 - wpm / yMax));
+  const draw = (id: string, points: readonly WpmPoint[], fromGo: boolean): PlotLine => {
+    const all = fromGo ? [{ t: 0, wpm: 0 }, ...points] : [...points];
+    const last = all.at(-1) ?? { t: 0, wpm: 0 };
+    return {
+      id,
+      line: all.map((p) => `${round(xOf(p.t) * PLOT_W)},${round(yOf(p.wpm) * PLOT_H)}`).join(" "),
+      end: { x: round3(xOf(last.t)), y: round3(yOf(last.wpm)) },
+    };
+  };
+  const lines = [
+    ...(series ? [draw(YOU_LINE, series.points, true)] : []),
+    ...others.map((l) => draw(String(l.desk), l.points, !l.isBot)),
+  ];
+  const marks = (series?.marks ?? []).map((m, lane) => ({ ...m, x: xOf(m.t), lane }));
+  return { yMax, endMs, marks, lines };
+}
+
+/**
+ * The lines drawn first (#999 C52): the viewer's own, the winner's and the last place's (`lastPlace`, the
+ * ranking's), when they have one; with none of these, the first line. Ids as `PlotLine.id`.
+ */
+export function defaultLines(
+  hasOwn: boolean,
+  others: readonly RaceLine[],
+  lastPlace: number,
+): string[] {
+  const ids = [
+    ...(hasOwn ? [YOU_LINE] : []),
+    ...others.filter((l) => l.place === 1 || l.place === lastPlace).map((l) => String(l.desk)),
+  ];
+  if (ids.length > 0) return ids;
+  return others[0] ? [String(others[0].desk)] : [];
+}
+
+/** The toggle's next set: `id` added (checked) or removed, in the lines' order (`order`). */
+export function toggleLine(
+  shown: readonly string[],
+  id: string,
+  checked: boolean,
+  order: readonly string[],
+): string[] {
+  const next = new Set(shown);
+  if (checked) next.add(id);
+  else next.delete(id);
+  return order.filter((o) => next.has(o));
+}
+
+/** Whether other lines are worth a graph: at least one typist's (bots alone compare with nothing). */
+export function hasTypistLine(others: readonly RaceLine[]): boolean {
+  return others.some((l) => !l.isBot);
 }

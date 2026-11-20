@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { Client } from "pg";
+import { ENGINE_VERSION } from "@fifth-copy/engine";
+import { DEFAULT_RACE_SETTINGS, PROTOCOL_VERSION } from "@fifth-copy/protocol";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
 import { type Desk, postResults, seedLobby, startRace, withoutWebGL } from "../results/helpers";
 import { signInAccount } from "../landing/home-helpers";
@@ -178,7 +181,7 @@ test.describe("Personnel file at /profile (#932)", () => {
     expect(at).toBeGreaterThan(streaks);
     // only the sections PROFILE_SECTIONS places between the dockets and the curve may come between them
     expect(order.slice(streaks + 1, at)).toEqual(
-      ["suspect-pairs", "census", "key-progress"].filter((s) => order.includes(s)),
+      ["suspect-pairs", "bests", "census", "key-progress"].filter((s) => order.includes(s)),
     );
     const plot = curve(page).getByRole("img");
     await expect(plot).toHaveAccessibleName(
@@ -202,6 +205,77 @@ test.describe("Personnel file at /profile (#932)", () => {
     await expect(slider).toHaveValue("8");
     expect(await speed.getAttribute("d")).not.toBe(before.line);
     expect(await dots.getAttribute("d")).toBe(before.dots);
+  });
+
+  // #999 C45: the output curve draws the 7-day moving average beside the per-race speed and accuracy
+  // lines and, from 10 counted races, heads with "+X WPM since you started" (latest five minus earliest five).
+  test("#999 C45 ten races: speed, accuracy and 7-day lines, inline SVG; +X WPM since you started", async ({
+    page,
+    request,
+    context,
+  }) => {
+    test.setTimeout(scaled(180_000));
+    const lobby = await seedLobby(page);
+    // 30, 32 .. 48: earliest five average 34, latest five 44 -> +10
+    for (let i = 0; i < 10; i += 1) {
+      const desks: Desk[] = [
+        { desk: 1, name: "Host", place: 1, wpm: 30 + 2 * i, userId: lobby.hostUserId },
+        { desk: 2, name: "Typist Bot", place: 2, wpm: 20, isBot: true },
+      ];
+      await postResults(request, await startRace(request, lobby, desks), desks);
+    }
+    await openFile(page);
+    const svg = curve(page).locator("svg[role=img]");
+    await expect(svg).toHaveCount(1);
+    for (const line of ["speed", "accuracy", "week", "trend"])
+      await expect(svg.locator(`[data-curve-line="${line}"]`)).toHaveCount(1);
+    // every race today: the 7-day line is flat at the ten races' mean, 39.0
+    await expect(svg).toHaveAccessibleName(/, trending up, 7-day average 39\.0 WPM\.$/);
+    await expect(curve(page).getByText("7-day average")).toBeVisible();
+    const gain = page.locator("[data-curve-gain]");
+    await expect(gain).toHaveText("+10 WPM since you started");
+    await expect(gain).toBeVisible();
+    // no chart library: one inline SVG, no canvas
+    await expect(page.locator('[data-section="curve"] canvas')).toHaveCount(0);
+
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(page.locator("[data-curve-gain]")).toHaveText("+10 MPM depuis tes débuts");
+  });
+
+  // #999 C46: a file with few races says what will appear and links to Quick race; a guest has a file.
+  test("#999 C46 one race: the blank block names the graphs to come and links to Quick race; three: the gain's threshold", async ({
+    page,
+    request,
+  }) => {
+    const lobby = await seedLobby(page);
+    const desks: Desk[] = [
+      { desk: 1, name: "Host", place: 1, wpm: 40, userId: lobby.hostUserId },
+      { desk: 2, name: "Typist Bot", place: 2, wpm: 20, isBot: true },
+    ];
+    await postResults(request, await startRace(request, lobby, desks), desks);
+    await openFile(page);
+    // a guest's own file
+    await expect(page.locator("[data-guest-tag]")).toBeVisible();
+    await expect(screen(page)).toHaveAttribute("data-profile-state", "almost");
+    await expect(blank(page).getByRole("heading")).toHaveText(
+      "The Ministry has almost nothing on you.",
+    );
+    await expect(blank(page)).toContainText(
+      "Finish three races and the graphs will appear here: speed, accuracy, weak keys, attendance register.",
+    );
+    const cta = blank(page).getByRole("link", { name: "QUICK RACE" });
+    await expect(cta).toHaveAttribute("href", "/#play");
+    await expect(curve(page)).toHaveCount(0);
+
+    await threeRaces(request, lobby);
+    await openFile(page);
+    await expect(curve(page)).toBeVisible();
+    await expect(page.locator('[data-section="curve"]')).toContainText(
+      "Your gain since you started shows from 10 races.",
+    );
+    await expect(page.locator("[data-curve-gain]")).toHaveCount(0);
   });
 
   test("C6 (#936) three races against a bot: archive rows newest first, BOTS, one MEDAL; the 90 % streak", async ({
@@ -487,6 +561,79 @@ async function censusPopulation(): Promise<number> {
   }
 }
 
+/**
+ * The census population of the shared e2e database is not monotonic: parallel specs add typists, merge a
+ * guest's history into an account on sign-in (two typists become one) and erase users. Reading it on
+ * both sides of a page load therefore never bounds what the page read in between. A test that needs the
+ * census holds a floor of its own instead (`holdCensusFloor`); C6, which needs a small population, runs
+ * only while no floor stands. The two meet on this Postgres advisory lock: floors share it, C6 takes it
+ * alone.
+ */
+const CENSUS_FLOOR_LOCK = 970_967;
+
+/**
+ * Holds the census floor for one test: 30 guest typists of its own, each with 3 counted results
+ * (`countedPopulationWhere`: human, unflagged, finished, in a race ended ALL_FINISHED), so the page's
+ * population read stays at 30 or more whatever the other specs do meanwhile. Returns the release, which
+ * erases those typists and their races and frees the shared lock.
+ */
+async function holdCensusFloor(): Promise<() => Promise<void>> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  const tag = `e2e_floor_${randomBytes(6).toString("hex")}`;
+  const races = [1, 2, 3].map((n) => `${tag}_race${n}`);
+  try {
+    await db.query("SELECT pg_advisory_lock_shared($1)", [CENSUS_FLOOR_LOCK]);
+    await db.query(
+      `INSERT INTO "User" (id, "isGuest", "typistName")
+       SELECT $1 || '_' || i, true, $1 || '_' || i FROM generate_series(1, 30) i`,
+      [tag],
+    );
+    await db.query(
+      `INSERT INTO "Race" (id, "textContent", "textLanguage", "textWordCount", settings, "startedAt",
+         "endedAt", "endReason", "engineVersion", "protocolVersion")
+       SELECT r, 'the quick fox', 'EN', 3, $2::jsonb, now() - interval '5 min', now(), 'ALL_FINISHED', $3, $4
+       FROM unnest($1::text[]) r`,
+      [races, JSON.stringify(DEFAULT_RACE_SETTINGS), ENGINE_VERSION, PROTOCOL_VERSION],
+    );
+    await db.query(
+      `INSERT INTO "RaceResult" (id, "raceId", "userId", desk, name, "isBot", place, status, wpm,
+         "rawWpm", "cleanWpm", "adjustedWpm", accuracy, progress, correct, errors, total, "durationMs",
+         "bonusesSent", "bonusesReceived", "bonusLog", "engineVersion")
+       SELECT r || '_' || i, r, $2 || '_' || i, i, $2 || '_' || i, false, i, 'FINISHED', 40, 40, 40, 40,
+         0.95, 1, 13, 0, 13, 20000, 0, 0, '[]'::jsonb, $3
+       FROM unnest($1::text[]) r, generate_series(1, 30) i`,
+      [races, tag, ENGINE_VERSION],
+    );
+  } catch (error) {
+    await db.end();
+    throw error;
+  }
+  return async () => {
+    try {
+      await db.query(`DELETE FROM "Race" WHERE id = ANY($1)`, [races]);
+      await db.query(`DELETE FROM "User" WHERE id LIKE $1`, [`${tag}\\_%`]);
+    } finally {
+      await db.end();
+    }
+  };
+}
+
+/**
+ * Takes the census floor lock alone, or `null` while some test holds a floor (the population is then 30
+ * or more by construction). While it is held no floor can be raised. Release by ending the client.
+ */
+async function censusWithoutFloor(): Promise<Client | null> {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  const { rows } = await db.query<{ ok: boolean }>("SELECT pg_try_advisory_lock($1) AS ok", [
+    CENSUS_FLOOR_LOCK,
+  ]);
+  if (rows[0]!.ok) return db;
+  await db.end();
+  return null;
+}
+
 const census = (page: Page) => page.locator('[data-section="census"]');
 
 test.describe("typist census (#967)", () => {
@@ -503,13 +650,19 @@ test.describe("typist census (#967)", () => {
     request,
   }) => {
     await threeRaces(request, await seedLobby(page));
-    const population = await censusPopulation();
-    test.skip(population >= 30, `the shared e2e database holds ${population} typists`);
-    await openFile(page);
-    await expect(figure(page, "races")).toHaveText("3");
-    await expect(page.locator("[data-section='streaks']")).toBeVisible();
-    await expect(census(page)).toHaveCount(0);
-    await expect(page.getByText("Your place at the Ministry")).toHaveCount(0);
+    const alone = await censusWithoutFloor();
+    test.skip(!alone, "another test holds a census floor of 30 typists");
+    try {
+      const population = await censusPopulation();
+      test.skip(population >= 30, `the shared e2e database holds ${population} typists`);
+      await openFile(page);
+      await expect(figure(page, "races")).toHaveText("3");
+      await expect(page.locator("[data-section='streaks']")).toBeVisible();
+      await expect(census(page)).toHaveCount(0);
+      await expect(page.getByText("Your place at the Ministry")).toHaveCount(0);
+    } finally {
+      await alone?.end();
+    }
   });
 
   test("C4 C7 /design: tabs and toggle redraw the census with no request, axe-clean, no sideways scroll", async ({
@@ -658,11 +811,15 @@ test.describe("attendance register (#330)", () => {
     await expect(cell).toContainText(/\(today\): 0 min, 5 % of the goal$/);
     await expect(section.getByRole("table")).toHaveCount(3);
     await expect(section).toContainText("DAILY GOAL (15 MIN)");
-    // the section sits before the race archives
+    // the section sits before the race archives, the enamel pins between them (#999 C36)
     const order = await page
       .locator("[data-section]")
       .evaluateAll((els) => els.map((e) => e.getAttribute("data-section")));
-    expect(order.indexOf("attendance")).toBe(order.indexOf("archive") - 1);
+    expect(order.slice(order.indexOf("attendance"), order.indexOf("archive") + 1)).toEqual([
+      "attendance",
+      "medals",
+      "archive",
+    ]);
 
     // French
     const url = test.info().project.use.baseURL!;
@@ -1398,7 +1555,9 @@ test.describe("keyboard map (#324)", () => {
       .locator("[data-section]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("data-section")));
     expect(order.indexOf("keyboard-map")).toBe(order.indexOf("key-inventory") + 1);
-    expect(order.indexOf("keyboard-map")).toBe(order.indexOf("attendance") - 1);
+    // the accents row (#999 C55) sits between the map and the register
+    expect(order.indexOf("accents")).toBe(order.indexOf("keyboard-map") + 1);
+    expect(order.indexOf("attendance")).toBe(order.indexOf("accents") + 1);
 
     const layouts = section.getByRole("group", { name: "Keyboard layout" });
     await expect(layouts.getByRole("button")).toHaveCount(4);
@@ -1446,6 +1605,40 @@ test.describe("keyboard map (#324)", () => {
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
     expect(overflow, "sideways scroll").toBe(false);
+  });
+
+  test("#999 C29 a special character's key links to /guide#<char>; a plain key does not", async ({
+    page,
+    request,
+    context,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const lobby = await seedLobby(page); // the lobby helper reads the English UI
+    await threeRaces(request, lobby);
+    await keySheetRows(lobby.hostUserId);
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    // French: CSA first, whose ç, é, è, à and ù keys are the guide's characters
+    const board = keyboardMap(page).locator("[data-keyboard-board]");
+    for (const [char, anchor] of [
+      ["ç", "c-cedilla"],
+      ["é", "e-acute"],
+      ["è", "e-grave"],
+      ["à", "a-grave"],
+      ["ù", "u-grave"],
+    ] as const) {
+      await expect(board.locator(`[data-key="${char}"]`)).toHaveAttribute(
+        "href",
+        `/guide#${anchor}`,
+      );
+    }
+    await expect(board.locator('[data-key="e"]')).not.toHaveAttribute("href", /.*/);
+    const cedilla = board.locator('[data-key="ç"]');
+    await expect(cedilla).toHaveAccessibleName(/^Ç.* · comment la taper$/);
+    await cedilla.click();
+    await expect(page).toHaveURL(/\/guide#c-cedilla$/);
+    await expect(page.locator("#c-cedilla")).toBeInViewport();
   });
 
   test("C8 axe-clean at 375, 768 and 1280 in both themes; no sideways scroll at 375", async ({
@@ -1498,12 +1691,15 @@ test.describe("keyboard map (#324)", () => {
 // #970 C3, C4: the closing checks of epic #959, on the whole Personnel file. C3: a guest finishes three
 // races through the signed internal routes, each carrying its keystroke trace; the rollup of #314 runs
 // (the worker's own function, `rollup-once.ts`, scoped to that guest); /profile then shows every section
-// whose data exists, in the reference's order (the census only above its floor of 30 typists), and a
+// whose data exists, in the reference's order (the census on a floor of 30 typists the test holds), and a
 // second browser context sees none of it. C4: a two-week file (a race on each of 14 days, key rows on
 // each day, letter pairs) is axe-clean at 375, 768 and 1280 in both themes, has one h1, names every
 // plot, keeps every control at 44px or more and never scrolls sideways at 375.
 
-/** The reference's order (`PROFILE_SECTIONS` of the screen, under the hero, band and tabs). */
+/**
+ * The reference's order (`PROFILE_SECTIONS` of the screen, under the hero, band and tabs; #999 C36 adds
+ * the pins, C49 the weekly bulletin, C55 the accents row).
+ */
 const FILE_ORDER = [
   "hero",
   "band",
@@ -1512,13 +1708,17 @@ const FILE_ORDER = [
   "blank",
   "streaks",
   "suspect-pairs",
+  "bests",
   "census",
+  "callouts",
   "key-progress",
   "curve",
   "key-sheet",
   "key-inventory",
   "keyboard-map",
+  "accents",
   "attendance",
+  "medals",
   "archive",
 ];
 
@@ -1635,25 +1835,36 @@ test.describe("the whole Personnel file (#970)", () => {
   }) => {
     const lobby = await seedLobby(page);
     await openFile(page);
-    expect(await sectionsOf(page)).toEqual(["hero", "band", "tabs", "service", "blank"]);
+    expect(await sectionsOf(page)).toEqual([
+      "hero",
+      "band",
+      "tabs",
+      "service",
+      "blank",
+      "bests",
+      "medals",
+    ]);
 
     await threeTypedRaces(request, lobby);
     rollup(lobby.hostUserId);
     const rows = await rolledUp(lobby.hostUserId);
     expect(rows.chars, "the rollup wrote key rows").toBeGreaterThan(0);
-    const population = await censusPopulation();
-
-    await openFile(page);
-    await expect(figure(page, "races")).toHaveText("3");
-    await expect(page.locator('[data-section="keyboard-map"]')).toBeVisible();
-    const expected = FILE_ORDER.filter(
-      (s) =>
-        s !== "blank" &&
-        (s !== "suspect-pairs" || rows.pairs > 0) &&
-        (s !== "census" || population >= 30),
-    );
-    if (population >= 30) await expect(census(page)).toBeVisible();
-    expect(await sectionsOf(page)).toEqual(expected);
+    // the census needs 30 typists: this test holds a floor of its own (see `holdCensusFloor`)
+    const releaseFloor = await holdCensusFloor();
+    try {
+      await openFile(page);
+      await expect(figure(page, "races")).toHaveText("3");
+      await expect(page.locator('[data-section="keyboard-map"]')).toBeVisible();
+      await expect(census(page)).toBeVisible();
+      expect(await sectionsOf(page)).toEqual(
+        FILE_ORDER.filter(
+          // one day of key rows: no week to compare yet, so no weekly bulletin
+          (s) => s !== "blank" && s !== "callouts" && (s !== "suspect-pairs" || rows.pairs > 0),
+        ),
+      );
+    } finally {
+      await releaseFloor();
+    }
     await expect(page.locator('[data-section="key-progress"] [data-key-days]')).toHaveText("DAY 1");
     await expect(attendance(page).locator('[data-attendance="active"] dd')).toHaveText(/^1 \//);
 
@@ -1666,7 +1877,15 @@ test.describe("the whole Personnel file (#970)", () => {
       await seedLobby(stranger);
       await openFile(stranger);
       await expect(blank(stranger)).toBeVisible();
-      expect(await sectionsOf(stranger)).toEqual(["hero", "band", "tabs", "service", "blank"]);
+      expect(await sectionsOf(stranger)).toEqual([
+        "hero",
+        "band",
+        "tabs",
+        "service",
+        "blank",
+        "bests",
+        "medals",
+      ]);
       await expect(figure(stranger, "races")).toHaveText("—");
       await expect(stranger.locator("[data-key], [data-day]")).toHaveCount(0);
       await expect(tubes(stranger).first()).toHaveText("--");
@@ -1682,58 +1901,203 @@ test.describe("the whole Personnel file (#970)", () => {
     const lobby = await seedLobby(page);
     await racesOnDays(request, lobby, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     await twoWeeksOfKeys(lobby.hostUserId);
-    const population = await censusPopulation();
-    for (const scheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme: scheme });
-      for (const width of [375, 768, 1280]) {
-        const at = `${scheme} ${width}`;
-        await page.setViewportSize({ width, height: 900 });
-        await openFile(page);
-        await expect(page.locator('[data-section="keyboard-map"]'), at).toBeVisible();
-        expect(await sectionsOf(page), at).toEqual(
-          FILE_ORDER.filter((s) => s !== "blank" && (s !== "census" || population >= 30)),
-        );
-        await expectNoA11yViolations(page);
-        await expect(page.locator("h1"), at).toHaveCount(1);
-        const report = await page.locator("main").evaluate((main) => {
-          const shown = (el: Element) => {
-            const box = el.getBoundingClientRect();
-            return box.width > 0 && box.height > 0 && !el.closest('[aria-hidden="true"]');
-          };
-          const named = (el: Element) =>
-            !!(
-              el.getAttribute("aria-label")?.trim() ||
-              el.getAttribute("aria-labelledby")?.trim() ||
-              el.querySelector(":scope > title")?.textContent?.trim()
+    // the census needs 30 typists: this test holds a floor of its own (see `holdCensusFloor`)
+    const releaseFloor = await holdCensusFloor();
+    try {
+      for (const scheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: scheme });
+        for (const width of [375, 768, 1280]) {
+          const at = `${scheme} ${width}`;
+          await page.setViewportSize({ width, height: 900 });
+          await openFile(page);
+          await expect(page.locator('[data-section="keyboard-map"]'), at).toBeVisible();
+          await expect(census(page), at).toBeVisible();
+          expect(await sectionsOf(page), at).toEqual(FILE_ORDER.filter((s) => s !== "blank"));
+          await expectNoA11yViolations(page);
+          await expect(page.locator("h1"), at).toHaveCount(1);
+          const report = await page.locator("main").evaluate((main) => {
+            const shown = (el: Element) => {
+              const box = el.getBoundingClientRect();
+              return box.width > 0 && box.height > 0 && !el.closest('[aria-hidden="true"]');
+            };
+            const named = (el: Element) =>
+              !!(
+                el.getAttribute("aria-label")?.trim() ||
+                el.getAttribute("aria-labelledby")?.trim() ||
+                el.querySelector(":scope > title")?.textContent?.trim()
+              );
+            const plots = [...main.querySelectorAll("svg, canvas")].filter(shown);
+            const unnamed = plots
+              .filter((el) => !named(el))
+              .map((el) => el.closest("[data-section]")?.getAttribute("data-section") ?? "?");
+            const controls = [
+              ...main.querySelectorAll(
+                'a[href], button, input, select, textarea, [role="slider"], [role="tab"], [tabindex="0"]',
+              ),
+            ].filter(shown);
+            const small = controls
+              .map((el) => ({ el, box: el.getBoundingClientRect() }))
+              .filter(({ box }) => box.height < 43.5 || box.width < 43.5)
+              .map(
+                ({ el, box }) =>
+                  `${el.closest("[data-section]")?.getAttribute("data-section") ?? "?"} ${el.tagName} ${Math.round(box.width)}x${Math.round(box.height)}`,
+              );
+            return { plots: plots.length, unnamed, controls: controls.length, small };
+          });
+          expect(report.plots, at).toBeGreaterThan(0);
+          expect(report.unnamed, `${at} plots without a text alternative`).toEqual([]);
+          expect(report.small, `${at} controls under 44px`).toEqual([]);
+          if (width === 375) {
+            const overflow = await page.evaluate(
+              () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
             );
-          const plots = [...main.querySelectorAll("svg, canvas")].filter(shown);
-          const unnamed = plots
-            .filter((el) => !named(el))
-            .map((el) => el.closest("[data-section]")?.getAttribute("data-section") ?? "?");
-          const controls = [
-            ...main.querySelectorAll(
-              'a[href], button, input, select, textarea, [role="slider"], [role="tab"], [tabindex="0"]',
-            ),
-          ].filter(shown);
-          const small = controls
-            .map((el) => ({ el, box: el.getBoundingClientRect() }))
-            .filter(({ box }) => box.height < 43.5 || box.width < 43.5)
-            .map(
-              ({ el, box }) =>
-                `${el.closest("[data-section]")?.getAttribute("data-section") ?? "?"} ${el.tagName} ${Math.round(box.width)}x${Math.round(box.height)}`,
-            );
-          return { plots: plots.length, unnamed, controls: controls.length, small };
-        });
-        expect(report.plots, at).toBeGreaterThan(0);
-        expect(report.unnamed, `${at} plots without a text alternative`).toEqual([]);
-        expect(report.small, `${at} controls under 44px`).toEqual([]);
-        if (width === 375) {
-          const overflow = await page.evaluate(
-            () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-          );
-          expect(overflow, "sideways scroll").toBe(false);
+            expect(overflow, "sideways scroll").toBe(false);
+          }
         }
       }
+    } finally {
+      await releaseFloor();
     }
+  });
+});
+
+// #999 C49, C55, C29: the weekly bulletin and the accents row on the Personnel file (bible 14.3).
+
+const callouts = (page: Page) => page.locator('[data-section="callouts"]');
+const accents = (page: Page) => page.locator('[data-section="accents"]');
+
+/** The stats day `daysAgo` days before today in Toronto, as `YYYY-MM-DD`. */
+function torontoDay(daysAgo: number): string {
+  const { today } = torontoWindow();
+  const [y, m, d] = today.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d - daysAgo)).toISOString().slice(0, 10);
+}
+
+/** `ç` at 20 WPM last week and 26 WPM this week (30 % faster), 30 timed presses each; `é` this week. */
+async function twoWeeksOfCedilla(userId: string) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    for (const [daysAgo, char, wpm, errors] of [
+      [8, "ç", 20, 1],
+      [1, "ç", 26, 1],
+      [1, "é", 40, 4],
+    ] as const) {
+      await db.query(
+        `INSERT INTO "CharStatDaily" ("userId", day, char, layout, hits, errors, "timedHits", "totalMs")
+         VALUES ($1, $2::date, $3, 'FR_CA', 30, $4, 30, $5)`,
+        [userId, torontoDay(daysAgo), char, errors, Math.round((12_000 * 30) / wpm)],
+      );
+    }
+  } finally {
+    await db.end();
+  }
+}
+
+test.describe("weekly bulletin and accents row (#999)", () => {
+  test.setTimeout(scaled(150_000));
+
+  test.beforeEach(async ({ page }) => {
+    await withoutWebGL(page);
+  });
+
+  test("C49 the weekly bulletin tells the week-over-week change, in English and French", async ({
+    page,
+    request,
+    context,
+  }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await openFile(page);
+    await expect(callouts(page)).toHaveCount(0); // no key rows yet: no section, no placeholder
+
+    await twoWeeksOfCedilla(lobby.hostUserId);
+    await openFile(page);
+    const list = callouts(page).getByRole("list", { name: "This week's callouts" });
+    await expect(
+      callouts(page).getByRole("heading", { name: "This week at your desk" }),
+    ).toBeVisible();
+    // the key's cell is aria-hidden; the sentence carries the key
+    await expect(list.getByRole("listitem")).toHaveText([
+      /^Ç\s*Your ç is 30% faster than last week\.$/,
+    ]);
+    const order = await sectionsOf(page);
+    expect(order.indexOf("callouts")).toBeLessThan(order.indexOf("key-progress"));
+
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await openFile(page);
+    await expect(
+      callouts(page).getByRole("heading", { name: "Cette semaine à ton bureau" }),
+    ).toBeVisible();
+    await expect(
+      callouts(page).getByRole("list", { name: "Les remarques de la semaine" }),
+    ).toContainText("Ton ç est 30 % plus rapide que la semaine dernière.");
+  });
+
+  test("C55 C29 the accents row: every accent and special character, each a link to /guide#<char>", async ({
+    page,
+    request,
+    context,
+  }) => {
+    const url = test.info().project.use.baseURL!;
+    await context.addCookies([{ name: "locale", value: "en", url }]);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const lobby = await seedLobby(page);
+    await threeRaces(request, lobby);
+    await keySheetRows(lobby.hostUserId);
+    await openFile(page);
+    const row = accents(page).getByRole("list", { name: "Accents row" });
+    await expect(accents(page).getByRole("heading", { name: "Accents row" })).toBeVisible();
+    await expect(row.getByRole("link")).toHaveCount(17);
+    for (const [char, anchor] of [
+      ["é", "e-acute"],
+      ["è", "e-grave"],
+      ["ê", "e-circumflex"],
+      ["à", "a-grave"],
+      ["ç", "c-cedilla"],
+      ["ù", "u-grave"],
+      ["œ", "oe-ligature"],
+      ["«", "guillemet-open"],
+      ["»", "guillemet-close"],
+    ] as const) {
+      await expect(row.locator(`[data-key="${char}"]`)).toHaveAttribute("href", `/guide#${anchor}`);
+    }
+    // ç was struck (circle and core), œ never
+    await expect(row.locator('[data-key="ç"] [data-key-circle]')).toBeVisible();
+    await expect(row.locator('[data-key="œ"]')).toHaveAttribute("data-key-typed", "false");
+    await expect(row.locator('[data-key="œ"]')).toHaveAccessibleName(
+      "Œ: never struck · how to type it",
+    );
+    const order = await sectionsOf(page);
+    expect(order.indexOf("accents")).toBe(order.indexOf("keyboard-map") + 1);
+
+    const cedilla = row.locator('[data-key="ç"]');
+    await expect(cedilla).toHaveAccessibleName(/^Ç: .* errors · how to type it$/);
+    await cedilla.click();
+    await expect(page).toHaveURL(/\/guide#c-cedilla$/);
+    await expect(page.locator("#c-cedilla")).toBeInViewport();
+
+    // French at 375: the row wraps inside the column, keys at least 44px, no sideways scroll
+    await context.addCookies([{ name: "locale", value: "fr", url }]);
+    await page.setViewportSize({ width: 375, height: 800 });
+    await openFile(page);
+    const fr = accents(page).getByRole("list", { name: "Rangée des accents" });
+    await expect(fr.locator('[data-key="ç"]')).toHaveAccessibleName(/ · comment la taper$/);
+    const key = (await fr.locator('[data-key="é"]').boundingBox())!;
+    expect(key.width).toBeGreaterThanOrEqual(43.5);
+    expect(Math.abs(key.width - key.height)).toBeLessThan(1);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, "sideways scroll").toBe(false);
+    const { violations } = await new AxeBuilder({ page })
+      .include('[data-section="accents"]')
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(
+      violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id),
+    ).toEqual([]);
   });
 });

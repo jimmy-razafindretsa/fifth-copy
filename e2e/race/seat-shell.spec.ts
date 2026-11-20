@@ -1,7 +1,14 @@
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test } from "../fixtures";
-import { scaled } from "../timeouts";
-import { closeLobby, createLobby, lobbyIdOf, roomlessLobbyLike } from "./helpers";
+import { HYDRATION_WAIT, scaled } from "../timeouts";
+import {
+  closeLobby,
+  createLobby,
+  lobbyIdOf,
+  roomlessLobbyLike,
+  openRace,
+  proveCode,
+} from "./helpers";
 
 // Contract of #561: the seat view `/race/[raceId]` (C1, C4, C5, C6, C11 in the browser), live over the
 // race server started by playwright.config.ts. A host keeps the room open in its own context; the page
@@ -75,7 +82,9 @@ test.describe("#561 seat view shell", () => {
     const room = await hostRoom(browser);
     host = room.context;
 
-    // the server's HTML, before any script: the whole HUD in its before-start state, connecting
+    // the server's HTML, before any script: the whole HUD in its before-start state, connecting (once
+    // the page's viewer proved the room code, #999 C13)
+    await proveCode(page, room);
     const html = await (await page.request.get(`/race/${room.lobbyId}`)).text();
     for (const part of [
       'data-backdrop="paper"',
@@ -110,7 +119,7 @@ test.describe("#561 seat view shell", () => {
       await route.fulfill({ response, body });
     });
 
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(notice(page, "WAITING FOR THE HOST")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
     await expect(
@@ -174,7 +183,7 @@ test.describe("#561 seat view shell", () => {
       if (isRaceAction(r.method(), r.url(), r.headers())) await gate;
       await route.continue();
     });
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     const busy = page.getByRole("list", { name: "Taking your seat…" });
     await expect(busy).toHaveAttribute("aria-busy", "true");
     await expect(busy.locator("li")).toHaveCount(2);
@@ -201,7 +210,7 @@ test.describe("#561 seat view shell", () => {
       if (sockets.length === 0) ws.connectToServer();
       sockets.push(ws);
     });
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(notice(page, "WAITING FOR THE HOST")).toBeVisible();
     await sockets[0]!.close();
     const cut = notice(page, "LINE CUT · RECONNECTING");
@@ -219,7 +228,7 @@ test.describe("#561 seat view shell", () => {
     host = room.context;
     const gone = await roomlessLobbyLike(room.code);
 
-    await page.goto(`/race/${gone.id}`);
+    await openRace(page, { lobbyId: gone.id, code: gone.code });
     await expect(lostLine(page, "This room is no longer open.")).toBeVisible();
     await expect(lostLine(page, "RETURNED ·")).toBeVisible();
     const back = page.getByRole("link", { name: "BACK TO THE WAITING ROOM →" });
@@ -243,7 +252,7 @@ test.describe("#561 seat view shell", () => {
   }) => {
     const room = await hostRoom(browser);
     host = room.context;
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(notice(page, "WAITING FOR THE HOST")).toBeVisible();
     for (const size of LAYOUTS) {
       await page.setViewportSize(size);
@@ -266,35 +275,41 @@ test.describe("#561 seat view shell", () => {
     }
   });
 
-  test("C5 phones (<= 480 px) see only the notice and never take a desk", async ({
+  test("C5 phones (<= 480 px) never take a desk: the phone spectator screen (#999 C9), its role kept across a resize", async ({
     page,
     browser,
   }) => {
-    // the room lives in the host's context: the page under test only ever visits /race, so every
-    // socket it opens would be the seat view's own
+    // the room lives in the host's context: the page under test only ever visits /race
     const room = await hostRoom(browser);
     host = room.context;
-    const { lobbyId } = room;
-    const sockets: string[] = [];
-    page.on("websocket", (ws) => sockets.push(ws.url()));
+    const mints: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() === "POST" && r.headers()["next-action"]) mints.push(r.postData() ?? "");
+    });
     for (const width of [375, 480]) {
       await page.setViewportSize({ width, height: 812 });
-      await page.goto(`/race/${lobbyId}`);
-      const phones = page.locator("[data-phones]");
-      await expect(phones).toHaveText("PHONES WATCH FROM THE BACK OF THE ROOM");
-      await expect(phones).toBeVisible();
-      await expect(page.locator("[data-hud]")).toBeHidden();
-      await expect(page.getByRole("heading")).toHaveCount(0);
+      await openRace(page, room);
+      await expect(page.locator("[data-phone-screen]")).toBeVisible({ timeout: HYDRATION_WAIT });
+      await expect(page.locator('[data-phone-screen] > [data-notice="phones"]')).toHaveText(
+        "PHONES WATCH FROM THE BACK OF THE ROOM",
+      );
+      await expect(page.locator("[data-hud]")).toHaveCount(0);
+      await expect(page.getByRole("textbox")).toHaveCount(0);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,
       );
       expect(overflow).toBeLessThanOrEqual(0);
     }
-    // hydrated, and still no socket: give a would-be mint and connect the time they take
+    // every mint the phone made was a spectator's: it never asked for a desk
     await page.waitForLoadState("networkidle");
-    expect(sockets.filter((u) => u.includes("/socket.io/"))).toEqual([]);
+    expect(mints.length).toBeGreaterThan(0);
+    for (const body of mints) expect(body).toContain('"spectator":true');
+    // a role is decided at mount: widening keeps the phone screen; a desk's width loads the seat
     await page.setViewportSize({ width: 481, height: 812 });
-    await expect(page.locator("[data-hud]")).toBeVisible();
-    await expect(page.locator("[data-phones]")).toBeHidden();
+    await expect(page.locator("[data-phone-screen]")).toBeVisible();
+    await expect(page.locator("[data-hud]")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator("[data-hud]")).toBeVisible({ timeout: HYDRATION_WAIT });
+    await expect(page.locator("[data-phone-screen]")).toHaveCount(0);
   });
 });

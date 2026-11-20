@@ -4,7 +4,10 @@ import { Star } from "@/components/ui";
 import shared from "./landing.module.css";
 import styles from "./sections.module.css";
 
-/** Final call (bible 14.1 item 8): red halftone band, REPORT TO YOUR DESK., the inverted primary. */
+/**
+ * Final call (bible 14.1 item 8): red halftone band, REPORT TO YOUR DESK., the inverted primary (not on
+ * phones: phones watch, #999 C15).
+ */
 export async function FinalCall({ action }: { action: React.ReactNode }) {
   const t = await getT();
   return (
@@ -18,7 +21,8 @@ export async function FinalCall({ action }: { action: React.ReactNode }) {
           {t.landing.final.title}
         </h2>
       </div>
-      {action}
+      {/* a desk's action: phones watch (#999 C15), so the band keeps its words only */}
+      <div className={styles.finalAction}>{action}</div>
     </section>
   );
 }

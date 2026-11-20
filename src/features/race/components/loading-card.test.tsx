@@ -18,6 +18,22 @@ describe("LoadingCard (#563 C2)", () => {
     expect(html).not.toContain("data-did-you-know");
   });
 
+  it("#999 C6: the projector's READY count row, only when given", () => {
+    const html = renderToStaticMarkup(
+      <LoadingCard
+        labels={en.race.scene}
+        tip={null}
+        ready={{ label: en.race.waiting.rows.ready, value: "11 / 12" }}
+      />,
+    );
+    expect(html).toMatch(
+      /<p data-ready="true"[^>]*><span[^>]*>READY<\/span><span[^>]*>11 \/ 12<\/span><\/p>/,
+    );
+    expect(renderToStaticMarkup(<LoadingCard labels={en.race.scene} tip={null} />)).not.toContain(
+      "data-ready",
+    );
+  });
+
   it("shows one tip row when there is a line, in the page's language", () => {
     const html = renderToStaticMarkup(
       <LoadingCard labels={fr.race.scene} tip="La première machine à écrire date de 1868." />,

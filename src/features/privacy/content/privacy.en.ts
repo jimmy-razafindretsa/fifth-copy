@@ -21,7 +21,8 @@ export const privacyEn: readonly PrivacySection[] = [
     list: [
       "A guest number, kept in a cookie in your browser.",
       "Your typist name. Guests get one at random, like Sparrow-482.",
-      "Your race results: speed, accuracy, rank and time.",
+      "Your race results: speed, accuracy, rank and time. Your best speeds and the medals you earn.",
+      "Your speed through each race. Only the players of that race and its host see it.",
       "The keys you type during a race, with their timing.",
       "The look of your 3D clerk and your settings, like language and theme.",
       "Your device's address on the Internet (IP), when it talks to our servers.",
@@ -59,7 +60,7 @@ export const privacyEn: readonly PrivacySection[] = [
     list: [
       "Inactive guest account: it will be deleted after 12 months with no race, sign-in or settings change.",
       "Account (username, GitHub, Discord or Google): kept until you delete it, or your school asks us to.",
-      "Keys typed during a race: they are deleted 30 days after the race.",
+      "Keys typed during a race, and your speed through that race: they are deleted 30 days after the race.",
       "Your daily stats per pair of letters: they are deleted 90 days later.",
       "Server logs and IP addresses: 30 days.",
       "Lobbies: 24 hours after they close.",

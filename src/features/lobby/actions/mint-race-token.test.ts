@@ -10,6 +10,14 @@ const RACE_URL = "http://race.test:4000";
 const state = vi.hoisted(() => ({
   jar: new Map<string, { value: string }>(),
   db: null as unknown,
+  // #999 C13: the code proofs on file, `<user>:<lobby>`
+  proofs: new Set<string>(),
+}));
+vi.mock("@/server/room-code-proof", () => ({
+  codeProofStore: () => ({
+    record: async (user: string, lobby: string) => (state.proofs.add(`${user}:${lobby}`), true),
+    holds: async (user: string, lobby: string) => state.proofs.has(`${user}:${lobby}`),
+  }),
 }));
 
 vi.mock("next/headers", () => ({
@@ -52,6 +60,7 @@ describe("mintRaceToken (unit, fake DB)", () => {
     fake = fakeLobbyDb();
     state.db = fake.db;
     state.jar = new Map();
+    state.proofs = new Set();
     hostId = (await ensureGuest()).id;
     fake.seedLobby({ id: "lob_open", code: "KGB-4821", status: "WAITING", hostUserId: hostId });
     fake.seedLobby({ id: "lob_closed", code: "ZRT-1093", status: "CLOSED", hostUserId: hostId });
@@ -136,7 +145,7 @@ describe("mintRaceToken (unit, fake DB)", () => {
     expect((await verified(player.token)).claims.role).toBe("player");
   });
 
-  it("#187 C1: a CLOSED lobby returns closed for a spectator too", async () => {
+  it("#187 C1, #999: a CLOSED lobby returns closed for a spectator who never proved its code", async () => {
     state.jar = new Map();
     await expect(mintRaceToken({ code: "ZRT-1093", spectator: true })).resolves.toEqual({
       ok: false,
@@ -151,6 +160,58 @@ describe("mintRaceToken (unit, fake DB)", () => {
       mintRaceToken({ code: "KGB-4821", spectator: "yes" } as unknown as { code: string }),
     ).resolves.toEqual({ ok: false, error: "not-found" });
     expect(fake.db.user.create).not.toHaveBeenCalled();
+  });
+
+  it("#999 C13: a mint records the minted viewer's code proof for that lobby", async () => {
+    state.jar = new Map();
+    const result = await mintRaceToken({ code: "KGB-4821", spectator: true });
+    if (!result.ok) throw new Error(result.error);
+    const { sub } = (await verified(result.token)).claims;
+    expect([...state.proofs]).toEqual([`${sub}:lob_open`]);
+  });
+
+  it("#999 C13: a code of another room than the page's lobbyId is not-found, no guest, no proof", async () => {
+    state.jar = new Map();
+    await expect(
+      mintRaceToken({ code: "KGB-4821", spectator: true, lobbyId: "lob_other" }),
+    ).resolves.toEqual({ ok: false, error: "not-found" });
+    expect(fake.db.user.create).not.toHaveBeenCalled();
+    expect(state.proofs.size).toBe(0);
+    const ok = await mintRaceToken({ code: "KGB-4821", spectator: true, lobbyId: "lob_open" });
+    expect(ok.ok).toBe(true);
+  });
+
+  it("#999 M3a: a CLOSED lobby still mints a spectator token for its host and for a proof holder", async () => {
+    const host = await mintRaceToken({ code: "ZRT-1093", spectator: true });
+    if (!host.ok) throw new Error(host.error);
+    expect((await verified(host.token)).claims).toMatchObject({
+      sub: hostId,
+      lobby: "lob_closed",
+      role: "spectator",
+    });
+    // the host's own seat on a closed room stays closed
+    await expect(mintRaceToken({ code: "ZRT-1093" })).resolves.toEqual({
+      ok: false,
+      error: "closed",
+    });
+
+    state.jar = new Map();
+    const watcher = await ensureGuest();
+    await expect(mintRaceToken({ code: "ZRT-1093", spectator: true })).resolves.toEqual({
+      ok: false,
+      error: "closed",
+    });
+    state.proofs.add(`${watcher.id}:lob_closed`);
+    const back = await mintRaceToken({ code: "ZRT-1093", spectator: true });
+    if (!back.ok) throw new Error(back.error);
+    expect((await verified(back.token)).claims).toMatchObject({
+      sub: watcher.id,
+      role: "spectator",
+    });
+    await expect(mintRaceToken({ code: "ZRT-1093" })).resolves.toEqual({
+      ok: false,
+      error: "closed",
+    });
   });
 
   it("a token signed with another secret is rejected by jwtVerify", async () => {

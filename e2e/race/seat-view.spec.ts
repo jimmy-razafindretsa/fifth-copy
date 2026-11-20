@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
 import { scaled } from "../timeouts";
-import { hostRoom, phaseOf, SEAT_HUD, withoutWebGL } from "./helpers";
+import { hostRoom, phaseOf, SEAT_HUD, withoutWebGL, openRace } from "./helpers";
 
 // Contract of #210 C1 (integration of #558, #560, #561, #562/ADR 0017, #563; bible 14.3, 7.7, 7.4, 11.3,
 // 12): a guest who joined a lobby from the landing opens `/race/<lobbyId>` and gets the whole seat view in
@@ -66,7 +66,7 @@ test.describe("#210 C1 a guest from the lobby into the seat view", () => {
         await gate;
         await route.continue();
       });
-      await page.goto(`/race/${room.lobbyId}?scene=pin`);
+      await openRace(page, room, "?scene=pin");
 
       await expectWaitingHud(page);
       // #951: no stamped loading card; the scene loads behind the paper seat
@@ -92,7 +92,7 @@ test.describe("#210 C1 a guest from the lobby into the seat view", () => {
     const room = await hostRoom(browser, opened);
     await joinFromLanding(page, room.code);
     await withoutWebGL(page);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
 
     await expectWaitingHud(page);
     const notice = page.locator('[data-notice="no-scene"]');

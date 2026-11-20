@@ -70,6 +70,19 @@ export const en = {
       join: "JOIN →",
       joining: "JOINING…",
     },
+    /**
+     * The phone landing's watch entry (#999 C15, bible 14.3 "Phone spectator"): phones watch, so at
+     * 480px and under it replaces QUICK RACE and the private-race entries.
+     */
+    watch: {
+      formName: "Watch a race",
+      label: "WATCH WITH CODE OR LINK",
+      placeholder: "KGB-4821",
+      submit: "WATCH →",
+      pending: "OPENING…",
+      note: "Phones watch from the back of the room. Type at a desk.",
+      invalid: "Enter a code like KGB-4821 or paste a watch link",
+    },
     /** The open-rooms docket under the code join (#807, bible 14.1): public rooms joinable right now. */
     rooms: {
       title: "OPEN ROOMS",
@@ -82,6 +95,8 @@ export const en = {
       join: "JOIN →",
       joinName: "Join room {code}",
       empty: "NO OPEN ROOM · PRESS QUICK RACE",
+      /** #999 C15: a phone has no QUICK RACE; its empty row points at the watch entry above. */
+      emptyPhone: "NO OPEN ROOM · WATCH WITH A CODE OR LINK",
     },
     errors: {
       prefix: "RETURNED ·",
@@ -279,6 +294,57 @@ export const en = {
     backToTop: "BACK TO THE TOP ↑",
   },
   /** `/invite/[token]` (#809, bible 14.3): the invitation screen and the refusal screen. */
+  guide: {
+    title: "HOW TO TYPE IT",
+    kicker: "MINISTRY OF TYPING · TYPING GUIDE",
+    heading: "HOW TO TYPE IT",
+    intro: "Every accent and sign a race asks for, key by key. Pick your keyboard and your system.",
+    deskTag: "YOUR DESK",
+    layout: "KEYBOARD",
+    os: "SYSTEM",
+    osNames: { windows: "WINDOWS", mac: "MACOS", chromeos: "CHROMEOS" },
+    detected: "DETECTED ON THIS DEVICE",
+    chosen: "CHOSEN BY YOU",
+    unknown: "SYSTEM NOT DETECTED · PICK YOURS",
+    indexLabel: "Characters",
+    indexTag: "CHARACTERS",
+    unverifiedTag: "NOT CHECKED YET",
+    unverifiedPair:
+      "Nobody has typed these on a real {layout} keyboard under {os} yet. The Ministry files only what it has tried.",
+    unverifiedLayout:
+      "Nobody has typed these on a real {layout} keyboard yet. The Ministry files only what it has tried.",
+    then: "then",
+    keys: {
+      shift: "Shift",
+      alt: "Alt",
+      altgr: "AltGr",
+      option: "Option",
+      ctrl: "Ctrl",
+      cmd: "Cmd",
+      space: "Space",
+      numpad: "keypad",
+    },
+    chars: {
+      "e-acute": "e acute",
+      "e-grave": "e grave",
+      "e-circumflex": "e circumflex",
+      "e-diaeresis": "e diaeresis",
+      "a-grave": "a grave",
+      "a-circumflex": "a circumflex",
+      "c-cedilla": "c cedilla",
+      "u-grave": "u grave",
+      "u-circumflex": "u circumflex",
+      "o-circumflex": "o circumflex",
+      "i-circumflex": "i circumflex",
+      "i-diaeresis": "i diaeresis",
+      "oe-ligature": "o-e ligature",
+      "ae-ligature": "a-e ligature",
+      "guillemet-open": "opening guillemet",
+      "guillemet-close": "closing guillemet",
+      euro: "euro sign",
+    },
+    backToTop: "BACK TO THE TOP ↑",
+  },
   invite: {
     kicker: "MINISTRY OF TYPING · INVITATION",
     title: "YOU ARE EXPECTED",
@@ -320,6 +386,8 @@ export const en = {
     /** A non-host's 7.4 notice row at the top of the roll (#105). */
     waitingForHost: "WAITING FOR THE HOST",
     /** The 7.4 notice row at the top of the roll while the host follows the race without a desk (#876). */
+    /** #999 C9: the still notice row of a phone watching the lobby on a spectator token (bible 14.3). */
+    phonesWatch: "PHONES WATCH FROM THE BACK OF THE ROOM",
     hostWatching: "THE HOST IS WATCHING",
     /**
      * A public room's automatic start (#814, bible 14.3): the room docket's `STATUS` value with the
@@ -514,10 +582,49 @@ export const en = {
       /** createInvite answered `not-host` (the row only shows to the host; the action decides). */
       notHost: "Only the host can issue a link.",
     },
+    /**
+     * The host's reusable spectator link row (#999 C12, bible 14.3 "the watch row"): the link row's
+     * recipe; a projector or a phone opens it and watches, never seated, never told the room code.
+     */
+    watchLinks: {
+      label: "WATCH",
+      newLink: "NEW WATCH LINK",
+      issuing: "ISSUING…",
+      urlName: "Spectator link",
+      copy: "COPY",
+      copied: "COPIED",
+      copiedStatus: "Spectator link copied",
+      selectedStatus: "Spectator link selected: copy it with your keyboard",
+      notHost: "Only the host can issue a link.",
+    },
   },
   race: {
+    /**
+     * The race page's room code entry (#999 C13, bible 14.3 "Room code entry"): `/race/<id>` served no
+     * code (not the host, no proof on file), so it asks for it first.
+     */
+    codeGate: {
+      kicker: "MINISTRY OF TYPING · ROOM CODE",
+      title: "CODE, PLEASE",
+      body: "This room opens with its code. Type it to take your desk or to watch the race.",
+      formName: "Room code",
+    },
     kicker: { seat: "SEAT VIEW", desk: "SEAT VIEW · DESK {n}" },
-    telex: { strip: "Text to type" },
+    telex: {
+      strip: "Text to type",
+      /**
+       * The intercepted-cable headers (#999 C40, R26, bible 4): Special Elite, above the tape, framing
+       * the race text and never part of it; `cableHeader` picks one per race and fills the cable `{n}`.
+       */
+      cables: [
+        "INTERCEPTED CABLE · № {n} · COPY AS RECEIVED",
+        "INTERCEPTED CABLE · № {n} · PRIORITY: URGENT",
+        "INTERCEPTED CABLE · № {n} · FOR THE FIFTH COPY",
+        "INTERCEPTED CABLE · № {n} · ORIGIN UNKNOWN",
+        "INTERCEPTED CABLE · № {n} · FILE BEFORE DAWN",
+        "INTERCEPTED CABLE · № {n} · DO NOT FOLD",
+      ],
+    },
     /** The 3-2-1 countdown and the Major's dual stamp `НАЧАЛИ · GO` (#214, bible 2, 7.3). */
     countdown: { major: "НАЧАЛИ", go: "GO" },
     /** The overtake stamps (#232, bible 2, 7.3): the dual in-world headline, Russian then this language. */
@@ -615,6 +722,21 @@ export const en = {
       "Sixty seconds without a key and the Major sends you home.",
     ] as string[],
     /** #951: why the 3D room went away (under the no-scene notice); `{fps}` = frames a second measured. */
+    /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk. */
+    /** #999 C10: the phone spectator screen (bible 14.3 "Phone spectator"): its one heading. */
+    phone: {
+      kicker: "SPECTATOR VIEW",
+    },
+    projector: {
+      kicker: "PROJECTOR VIEW",
+      connecting: "Tuning in to the room…",
+      top: "TOP 10",
+      typists: "{n} TYPISTS",
+      standings: "Top 10 standings",
+      noPlace: "··",
+      scene: "The ring room, from above",
+      plaqueDesk: "DESK {n}",
+    },
     sceneDrop: {
       "no-webgl2": "This browser has no WebGL2, so the 3D room cannot run here.",
       "benchmark-low":
@@ -634,6 +756,8 @@ export const en = {
       "no-scene": "NO PICTURE FROM THE ROOM · KEEP TYPING",
       phones: "PHONES WATCH FROM THE BACK OF THE ROOM",
     },
+    /** The stuck hint (#999 C31, bible 7.4 notice row): `{char}` is the character the typist keeps missing. */
+    stuckHint: { stuck: "STUCK ON {char}?", how: "HERE'S HOW →" },
     /** Presence (#235, bible 7.4 notice row): the room went away under a seated page (#204). */
     presence: {
       roomLost: "THE ROOM WAS LOST",
@@ -777,6 +901,22 @@ export const en = {
           other: "Peak {peak} WPM, final {final} WPM, {n} bonuses received.",
         },
         noTrace: "NO TRACE ON FILE",
+        lines: "LINES ON THE GRAPH",
+        you: "YOU",
+        line: "№ {place} · {name} · {wpm} WPM",
+        simulated: "SIMULATED",
+        others: {
+          one: "WPM through the race, {n} line shown.",
+          other: "WPM through the race, {n} lines shown.",
+        },
+      },
+      heatmap: {
+        title: "KEYBOARD HEATMAP",
+        board: "Keyboard heatmap, {layout}: {keys}.",
+        key: "{key} × {n}",
+        clean: "Keyboard heatmap, {layout}: no error on the keyboard.",
+        legendClean: "paper: no error",
+        legendHeat: "gold to red: fewer to more errors",
       },
       keys: {
         title: "ERRORS BY KEY",
@@ -788,6 +928,16 @@ export const en = {
         clean: "Not one error on file: keep this rhythm and the speed will follow.",
         special: "The {key} key slipped {n} times: the guide shows how to type it.",
         key: "The {key} key slipped {n} times: slow down on it next race and the rest will follow.",
+        space:
+          "The space bar slipped {n} times: leave one clean space after each word, never two, never none.",
+        capital:
+          "The capital {key} slipped {n} times: hold Shift with your other hand first, then strike the letter.",
+        punctuation:
+          "The {key} key slipped {n} times: punctuation counts too, so spot it before you reach the end of the word.",
+        digit:
+          "The {key} key slipped {n} times: numbers live on the top row, so reach up for them without looking down.",
+        spread:
+          "Your slips were spread over {n} different keys: a steadier, slightly slower rhythm fixes most of them.",
         accuracy: "Speed is good, accuracy is better: slow down a little and make every key count.",
         steady: "A steady copy: next race, push the pace a little on the words you know.",
       },
@@ -1134,6 +1284,68 @@ export const en = {
   },
   /** The Personnel file at /profile (#932, bible 14.3 "Personnel file", reference Profil.dc.html). */
   profile: {
+    /**
+     * The enamel pins (#999 C36, C40; spec 13.4, bible 13, 7.6, 14.3 "Medals"): the section and each
+     * pin's in-world name and description, keyed by the stable achievement ids (`ACHIEVEMENT_IDS`).
+     */
+    medals: {
+      kicker: "DECORATIONS · ENAMEL PINS",
+      title: "Medals",
+      intro:
+        "Pinned to your file for good. A locked pin shows what the Ministry still expects of you.",
+      count: "{n} / {total} PINNED",
+      none: "No pin on your file yet. Win a race, or finish one without a single error, and the Ministry pins your first.",
+      list: "Enamel pins",
+      awarded: "PINNED {date}",
+      locked: "LOCKED",
+      new: "NEW",
+      pins: {
+        "first-win": {
+          name: "Order of the First Copy",
+          description: "Win a race against at least one other desk.",
+        },
+        "wpm-50-club": {
+          name: "Fifty Club",
+          description: "Finish a race at 50 clean words per minute or more.",
+        },
+        "accuracy-100": {
+          name: "Spotless Copy",
+          description: "Finish a race without a single error.",
+        },
+        "accent-master": {
+          name: "Master of Accents",
+          description: "Finish an accent text at 95% accuracy or more.",
+        },
+        "streak-7-days": {
+          name: "Seven-Day Shift",
+          description: "Race on seven days in a row.",
+        },
+      },
+    },
+    /**
+     * The improvement callout templates (#999 C40, consumed by the callouts of C48): week over week,
+     * per key, from the daily character stats. `{key}` the character, `{pct}` a whole percentage.
+     */
+    callouts: {
+      kicker: "WEEKLY BULLETIN",
+      title: "This week at your desk",
+      faster: "Your {key} is {pct}% faster than last week.",
+      slower: "Your {key} is {pct}% slower than last week: a short practice brings it back.",
+      cleaner: "You missed {key} {pct}% less often than last week.",
+      messier:
+        "You missed {key} {pct}% more often than last week: slow down on it and it will settle.",
+      steady: "Your {key} held its speed this week. Steady work.",
+      intro: "Week over week, key by key, from your counted races.",
+      list: "This week's callouts",
+    },
+    accents: {
+      kicker: "ACCENTS & SPECIAL CHARACTERS",
+      title: "Accents row",
+      intro:
+        "The French accents and special characters, one key each. Pick one to see how to type it.",
+      row: "Accents row",
+      legendSize: "circle size: how often you strike it, next to the rest of the row",
+    },
     ladder: {
       label: "GRADE LADDER · BY YOUR AVERAGE",
       next: "{wpm} / {next} WPM → {rank}",
@@ -1196,6 +1408,43 @@ export const en = {
       firstPlace: "1ST PLACE",
       top3: "TOP 3",
     },
+    bests: {
+      kicker: "PERSONAL BESTS · BY CATEGORY",
+      title: "Personal bests",
+      intro:
+        "Your best clean speed per language, text type and length. Only a counted race can set one.",
+      none: "No best on file yet. Finish a race and the Ministry files your fastest one here, per language, text type and length.",
+      languages: { FR: "FRENCH", EN: "ENGLISH" },
+      compare: {
+        title: "FRENCH VERSUS ENGLISH",
+        tag: "CLEAN SPEED",
+        caption: "French versus English: races, best and average clean speed per language",
+        language: "LANGUAGE",
+        races: "RACES",
+        best: "BEST",
+        mean: "AVERAGE",
+        faster: "In French you type {diff} WPM faster than in English, on average.",
+        slower: "In French you type {diff} WPM slower than in English, on average.",
+        even: "Same average speed in French and in English.",
+        only: {
+          FR: "Only French on file so far. Race in English to compare.",
+          EN: "Only English on file so far. Race in French to compare.",
+        },
+      },
+      table: {
+        title: "BY TEXT TYPE AND LENGTH",
+        tag: "CLEAN WPM",
+        caption: "Personal bests per language, text type and length",
+        region: "Personal bests, scrolls sideways",
+        language: "LANGUAGE",
+        text: "TEXT",
+        best: "BEST",
+        accuracy: "ACCURACY",
+        date: "SET ON",
+        types: { SENTENCES: "SENTENCES", WORDS: "WORDS", SPECIAL_CHARACTERS: "SPECIAL CHARACTERS" },
+        lengths: { SHORT: "SHORT", MEDIUM: "MEDIUM", LONG: "LONG" },
+      },
+    },
     curve: {
       kicker: "OUTPUT CURVE",
       title: "Speed race after race",
@@ -1206,10 +1455,15 @@ export const en = {
         speed: "speed (WPM, left)",
         accuracy: "accuracy (%, right)",
         trend: "trend",
+        week: "7-day average",
       },
       units: { speed: "WPM", accuracy: "%" },
       summary:
-        "{count} races: speed from {speedFrom} to {speedTo} WPM, accuracy from {accuracyFrom} to {accuracyTo}%{trend}.",
+        "{count} races: speed from {speedFrom} to {speedTo} WPM, accuracy from {accuracyFrom} to {accuracyTo}%{trend}{week}.",
+      week: ", 7-day average {wpm} WPM",
+      gain: "{gain} WPM",
+      gainSince: "since you started",
+      gainSoon: "Your gain since you started shows from {count} races.",
       trend: { up: ", trending up", down: ", trending down", flat: ", holding steady" },
     },
     /** #967, bible 14.3: the typist census section, `Ta place au Ministère` (ADR 0023: no head count). */
@@ -1298,6 +1552,10 @@ export const en = {
       notReached: "{goal} WPM goal not reached yet",
       legendSpeed: "speed on key {key}",
       legendGoal: "{goal} WPM goal",
+      practise: "PRACTISE THIS LETTER · {key}",
+      practising: "OPENING YOUR DESK…",
+      practiseFailed: "The practice room did not open. Try again.",
+      returned: "RETURNED ·",
     },
     keyInventory: {
       kicker: "KEY INVENTORY",
@@ -1338,6 +1596,7 @@ export const en = {
       },
       key: "{key}: {strokes} of strokes, {errors} errors",
       untyped: "{key}: never struck",
+      guide: "{name} · how to type it",
       legendSize: "circle size: how often you strike it",
       legendCore: "red core: share of errors",
     },

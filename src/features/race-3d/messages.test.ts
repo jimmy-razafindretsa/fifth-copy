@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { bonusKindSchema } from "@fifth-copy/protocol";
 import type { SceneView } from "@/features/race";
 import {
+  raceSabotageMessage,
+  SABOTAGE_KINDS,
   parseSceneMessage,
   presetChoice,
   sceneSettings,
@@ -83,6 +86,31 @@ describe("parseSceneMessage", () => {
       { type: "fc-scene-telemetry", v, fps: 1, calls: 1, triangles: 1, preset: "low", capped: 1 },
     ],
     ["unknown reason", { type: "fc-scene-fallback", v, reason: "bored" }],
+    ["a v1 reply", { type: "fc-scene-hello", v: 1 }],
+    [
+      "a v1 sabotage ack",
+      { type: "fc-scene-sabotage", v: 1, kind: "exemption", from: 1, to: [1], mode: "static" },
+    ],
+    [
+      "unknown sabotage kind",
+      { type: "fc-scene-sabotage", v, kind: "coffee", from: 1, to: [2], mode: "throw" },
+    ],
+    [
+      "no target",
+      { type: "fc-scene-sabotage", v, kind: "smoke-break", from: 1, to: [], mode: "throw" },
+    ],
+    [
+      "desk 0",
+      { type: "fc-scene-sabotage", v, kind: "smoke-break", from: 0, to: [2], mode: "throw" },
+    ],
+    [
+      "fractional desk",
+      { type: "fc-scene-sabotage", v, kind: "smoke-break", from: 1, to: [2.5], mode: "throw" },
+    ],
+    [
+      "unknown mode",
+      { type: "fc-scene-sabotage", v, kind: "smoke-break", from: 1, to: [2], mode: "slow" },
+    ],
   ])("rejects %s", (_, data) => {
     expect(parseSceneMessage(data)).toBeNull();
   });
@@ -115,5 +143,88 @@ describe("scene settings", () => {
     expect(sceneSettings("low", null)).toEqual({ preset: "low", budget: "on" });
     expect(sceneSettings("medium", "nope")).toEqual({ preset: "medium", budget: "on" });
     expect(sceneSettings("ultra", null)).toEqual({ preset: "auto", budget: "on" });
+  });
+});
+
+// Contract of #999 C60: SCENE_PROTOCOL 2, the page -> seat `fc-race-sabotage` and the seat -> page
+// `fc-scene-sabotage` ack (`mode` = `throw` | `static`), hand-written guards.
+describe("sabotage messages (#999 C60)", () => {
+  it("SCENE_PROTOCOL is 2 (the embed says the same: scripts/embeds.test.ts)", () => {
+    expect(SCENE_PROTOCOL).toBe(2);
+  });
+
+  it("the kinds are the protocol's bonus kinds", () => {
+    expect([...SABOTAGE_KINDS]).toEqual(bonusKindSchema.options);
+  });
+
+  it("builds fc-race-sabotage from a play, without its seq", () => {
+    const to = [1, 3];
+    const message = raceSabotageMessage({ seq: 4, kind: "extra-paperwork", from: 2, to });
+    expect(message).toEqual({ type: "fc-race-sabotage", v, kind: "extra-paperwork", from: 2, to });
+    expect(message.to).not.toBe(to);
+    expect(raceSabotageMessage({ seq: 1, kind: "exemption", from: 6, to: [6] })).toEqual({
+      type: "fc-race-sabotage",
+      v,
+      kind: "exemption",
+      from: 6,
+      to: [6],
+    });
+  });
+
+  it.each(["throw", "static"] as const)("accepts the %s ack and drops extra fields", (mode) => {
+    const ack = { type: "fc-scene-sabotage", v, kind: "smoke-break", from: 4, to: [1, 2], mode };
+    expect(parseSceneMessage({ ...ack, colour: "red" })).toEqual(ack);
+  });
+});
+
+// Contract of #999 C2 and C4 (bible 11.3 Overview, 15; ADR 0017 SCENE_PROTOCOL 2): the projector's init
+// asks for the orbiting overview; the overview answers with each on-screen desk's plaque point.
+describe("overview camera and plaque anchors (#999 C2, C4)", () => {
+  it("the init carries the overview camera when asked, the seat POV otherwise", () => {
+    expect(raceInitMessage(view, "low", "full", "over")).toMatchObject({
+      type: "fc-race-init",
+      v,
+      camera: "over",
+    });
+    expect(raceInitMessage(view, "low", "full").camera).toBe("pov");
+  });
+
+  it("accepts fc-scene-anchors: [desk, x, y] with x and y in 0..1, an empty list too", () => {
+    const anchors = {
+      type: "fc-scene-anchors",
+      v,
+      anchors: [
+        [1, 0.25, 0.5],
+        [7, 1, 0],
+      ],
+    };
+    expect(parseSceneMessage(anchors)).toEqual(anchors);
+    expect(parseSceneMessage({ type: "fc-scene-anchors", v, anchors: [] })).toEqual({
+      type: "fc-scene-anchors",
+      v,
+      anchors: [],
+    });
+    // extra tuple members are dropped by the guard, never passed on
+    expect(parseSceneMessage({ ...anchors, html: "<b>" })).toEqual(anchors);
+  });
+
+  it("drops a malformed anchor list, and any v1 message", () => {
+    for (const anchors of [
+      [[0, 0.5, 0.5]],
+      [[1.5, 0.5, 0.5]],
+      [[1, -0.1, 0.5]],
+      [[1, 0.5, 1.2]],
+      [[1, Number.NaN, 0.5]],
+      [[1, 0.5]],
+      [[1, 0.5, 0.5, 9]],
+      [{ desk: 1, x: 0.5, y: 0.5 }],
+      Array.from({ length: 65 }, (_, k) => [k + 1, 0.5, 0.5]),
+      "1,0.5,0.5",
+      null,
+    ])
+      expect(parseSceneMessage({ type: "fc-scene-anchors", v, anchors })).toBeNull();
+    expect(
+      parseSceneMessage({ type: "fc-scene-anchors", v: 1, anchors: [[1, 0.5, 0.5]] }),
+    ).toBeNull();
   });
 });

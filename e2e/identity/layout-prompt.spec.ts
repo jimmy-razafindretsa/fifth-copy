@@ -1,21 +1,19 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { LANDING, expect, expectNoA11yViolations, test } from "../fixtures";
+import { expect, expectNoA11yViolations, test } from "../fixtures";
+import { createLobby } from "../race/helpers";
 import { HYDRATION_WAIT } from "../timeouts";
 
 // #70 C1, C2: the first-race keyboard prompt on a lobby page. Tagged @layout-prompt: every other spec
 // keeps it snoozed (e2e/fixtures.ts).
 
-const LOBBY_PATH = /^\/lobby\/[A-HJ-NP-Z]{3}-[0-9]{4}$/;
 const TITLE = "WHICH KEYBOARD IS ON YOUR DESK?";
 
 const prompt = (page: Page) => page.getByRole("dialog", { name: TITLE });
 
 /** A fresh guest creates a private race and lands in its lobby (no layout on file yet). */
 async function openLobby(page: Page): Promise<string> {
-  await page.goto(LANDING);
-  await page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }).click();
-  await page.waitForURL((url) => LOBBY_PATH.test(url.pathname));
-  return new URL(page.url()).pathname;
+  // a phone's landing has no race entry (#999 C15): the helper opens the room at a desk's width
+  return `/lobby/${await createLobby(page)}`;
 }
 
 /** The same guest (cookies) in a new browser session (fresh sessionStorage). */

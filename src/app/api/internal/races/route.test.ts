@@ -124,6 +124,8 @@ describe.skipIf(!testDatabaseUrl)(
       expect(stored).toHaveLength(1);
       expect(stored[0]).toMatchObject({
         lobbyId: lobby.id,
+        // the host at start fixes the audience of other players' curves (ADR 0027)
+        hostUserId: body.hostUserId,
         textContent: answer.text.content,
         textLanguage: "FR",
         textWordCount: 50,

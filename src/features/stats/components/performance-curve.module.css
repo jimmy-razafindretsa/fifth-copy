@@ -101,6 +101,15 @@
   stroke-width: 2px;
   stroke-dasharray: 10 7;
 }
+/* the 7-day average (#999 C45): a 2.5px ink line of round dots, apart from the trend's dashes */
+.week {
+  fill: none;
+  stroke: var(--color-fg);
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 0 6;
+}
 /* the unit beside a smoothed line's latest point: right-aligned on it, above or below the line */
 .endLabel {
   position: absolute;
@@ -188,4 +197,10 @@
   width: 18px;
   height: 0;
   border-top: 2px dashed var(--color-fg);
+}
+.weekSwatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 3px dotted var(--color-fg);
 }

@@ -165,6 +165,8 @@ export async function startRace(
   request: APIRequestContext,
   lobby: { lobbyId: string; hostUserId: string },
   desks: Desk[],
+  /** #999 C43: the text's language and length (default English, 20 words: a short text). */
+  text: { language?: "en" | "fr"; wordCount?: number } = {},
 ) {
   const raceId = randomUUID();
   await postSigned(request, "/api/internal/races", {
@@ -172,7 +174,7 @@ export async function startRace(
     raceId,
     lobbyId: lobby.lobbyId,
     hostUserId: lobby.hostUserId,
-    settings: { ...DEFAULT_RACE_SETTINGS, language: "en", wordCount: 20 },
+    settings: { ...DEFAULT_RACE_SETTINGS, language: "en", wordCount: 20, ...text },
     desks: desks.map((d) => ({
       desk: d.desk,
       userId: d.isBot ? null : (d.userId ?? null),

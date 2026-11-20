@@ -8,6 +8,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #215 (the parent of #558 and #559): the whole typing path over the race server
@@ -47,7 +48,7 @@ async function startedRace(
 ) {
   const room = await hostRoom(browser, opened, { before: recordRaceTokens });
   await setHostSettings(room.host, { wordCount: 10 });
-  await page.goto(`/race/${room.lobbyId}`);
+  await openRace(page, room);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^SEAT VIEW · DESK \d{2}$/);
   await expect(startButton(room.host)).toBeEnabled();
   await warmRace(room.host, room.lobbyId);
@@ -93,6 +94,34 @@ test.describe("#215 typing path: telex strip, typed sheet, local prediction", ()
     expect(await stripText(host)).toBe(text);
 
     await Promise.all([typeAll(page, text), typeAll(host, text)]);
+  });
+
+  // #999 C40 (R26, bible 4): the Special Elite intercepted-cable header frames the race text above the
+  // tape and is never part of it: not one of the strip's chars, not in the typed sheet, and typing the
+  // strip's chars alone finishes the copy.
+  test("#999 C40 the intercepted-cable header frames the text and is never typed", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(scaled(90_000));
+    const host = await startedRace(page, browser, opened);
+    const cable = page.locator("[data-telex] [data-cable]");
+    await expect(cable).toHaveText(/^INTERCEPTED CABLE · № [1-9]\d{3} · [A-Z :]+$/);
+    const header = (await cable.textContent())!;
+    // one race, one header: the host's desk reads the same cable
+    await expect(host.locator("[data-telex] [data-cable]")).toHaveText(header);
+    expect(await cable.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(
+      /Special[_ ]Elite/,
+    );
+    // outside the typed chars: no char state inside it, not in the tape, not in the sheet
+    await expect(cable.locator("[data-state]")).toHaveCount(0);
+    const text = await stripText(page);
+    expect(text).not.toContain("INTERCEPTED");
+    expect(text).not.toContain(header.slice(0, 12));
+    expect((await sheet(page).allTextContents()).join("")).not.toContain("INTERCEPTED");
+    // the strip's chars alone finish the copy; the header stays, untouched
+    await typeAll(page, text);
+    await expect(cable).toHaveText(header);
   });
 
   test("C2 under reduced motion the next cell is solid red and the newest char does not pop", async ({

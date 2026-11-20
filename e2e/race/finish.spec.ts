@@ -9,6 +9,7 @@ import {
   setHostSettings,
   startButton,
   warmRace,
+  openRace,
 } from "./helpers";
 
 // Contract of #240 C2, C3 and C4 over the race server playwright.config.ts starts. Host (English) and
@@ -54,7 +55,7 @@ test.describe("#240 race timer and finished waiting view", () => {
     await page
       .context()
       .addCookies([{ name: "locale", value: "fr", url: test.info().project.use.baseURL! }]);
-    await page.goto(`/race/${room.lobbyId}`);
+    await openRace(page, room);
     await expect(SEAT_HUD.kicker(page)).toHaveText(/\d{2}$/);
     await expect(startButton(room.host)).toBeEnabled();
     const guestDesk = await deskOf(page);

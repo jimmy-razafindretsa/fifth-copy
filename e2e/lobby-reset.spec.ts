@@ -126,13 +126,7 @@ test.describe("teacher password reset docket (#790)", () => {
     await signIn(page, host);
     const code = await createLobby(page);
     await live(page);
-    if (test.info().project.name === "mobile") {
-      // phones watch (bible 14.3, 18): rendered for the host, hidden with the settings docket
-      const section = page.locator('section[aria-label="PASSWORD RESET"]');
-      await expect(section).toHaveCount(1);
-      await expect(section).toBeHidden();
-      return;
-    }
+    // a host keeps every control on a phone (bible 14.3 "Lobby layout", #999 C14)
     await expect(docket(page)).toBeVisible();
     await expect(docket(page)).toContainText("FORM 5-R");
     await expect(student(page)).toBeVisible();
@@ -144,7 +138,10 @@ test.describe("teacher password reset docket (#790)", () => {
     const box = async (l: ReturnType<typeof docket>) => (await l.boundingBox())!;
     const [s, r, st] = [await box(room), await box(docket(page)), await box(start)];
     expect(r.y).toBeGreaterThanOrEqual(s.y + s.height);
-    expect(st.y).toBeGreaterThanOrEqual(r.y + r.height);
+    if (test.info().project.name === "mobile") {
+      // a phone host's dockets follow START with the settings docket (bible 14.3 "Lobby layout", #999 C14)
+      expect(r.y).toBeGreaterThanOrEqual(st.y + st.height);
+    } else expect(st.y).toBeGreaterThanOrEqual(r.y + r.height);
 
     // a player account in the same room, even a teacher, never gets it
     const player = await joinAs(browser, opened, await account(STEM, true), code);

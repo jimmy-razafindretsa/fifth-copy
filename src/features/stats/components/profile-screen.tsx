@@ -6,9 +6,16 @@ import type { Locale } from "@/i18n/locale";
 import { cn } from "@/lib/cn";
 import type { Census } from "../view/census";
 import type { KeyFile } from "../view/key-file";
+import type { MedalShelf } from "../view/medals";
 import { type KeyboardLayoutKeys, keyboardMapOf } from "../view/keyboard-map";
-import { CURVE_MIN_RACES, CURVE_RACES, TREND_MIN_POINTS } from "../view/performance-curve";
-import type { Profile } from "../view/profile";
+import { type BestInput, bestsView } from "../view/bests";
+import {
+  CURVE_MIN_RACES,
+  CURVE_RACES,
+  signedGain,
+  TREND_MIN_POINTS,
+} from "../view/performance-curve";
+import { GAIN_MIN_RESULTS, type Profile } from "../view/profile";
 import {
   BLANK_BELOW,
   BLANK_TUBE,
@@ -21,13 +28,19 @@ import {
   tubes,
 } from "../view/profile-figures";
 import { rankFor } from "../view/rank";
+import type { Callout } from "../callouts/rule";
+import { AccentsRow } from "./accents-row";
 import { AttendanceRegister } from "./attendance-register";
+import { Bests } from "./bests";
+import { Callouts } from "./callouts";
 import { CensusSlot } from "./census-slot";
 import { GradeLadder } from "./grade-ladder";
 import { KeyInventory } from "./key-inventory";
 import { KeyProgress } from "./key-progress";
+import type { PractiseAction } from "./key-sheet";
 import { KeySheetSection } from "./key-sheet-section";
 import { KeyboardMap } from "./keyboard-map";
+import { Medals } from "./medals";
 import { PerformanceCurve } from "./performance-curve";
 import { ArchiveSection, StreaksDocket } from "./profile-records";
 import { ProfileStage } from "./profile-stage";
@@ -104,6 +117,27 @@ export type ProfileScreenProps = {
    * key data) the section draws after the key inventory. Absent: no section.
    */
   keyboard?: ProfileKeyboard;
+  /**
+   * The viewer's enamel pins (#999 C36, `getMedals`): the whole catalogue, earned, new or locked, on
+   * every file with a viewer (a blank file too: none earned yet). Absent or null: no section.
+   */
+  medals?: MedalShelf | null;
+  /**
+   * The viewer's stored personal bests (#999 C43, `getPersonalBests`): with them the "Personal bests"
+   * section follows the clean streaks on every file with a viewer, a blank one too (its none state).
+   * Absent or null: no section.
+   */
+  bests?: readonly BestInput[] | null;
+  /**
+   * The viewer's improvement callouts (#999 C48, `getCallouts`): from 3 counted races, at least one
+   * makes the "Weekly bulletin" after the census. Absent, null or empty: no section.
+   */
+  callouts?: readonly Callout[] | null;
+  /**
+   * The practice lobby's action (#999 C47, lobby's `createPracticeLobby`, passed in by the route):
+   * the key sheet's "Practise this letter". Absent (`/design`): no button.
+   */
+  practise?: PractiseAction;
 };
 
 type Heading = "h1" | "h2" | "h3" | "h4";
@@ -119,13 +153,17 @@ export const PROFILE_SECTIONS = [
   "service",
   "blank",
   "dockets",
+  "bests",
   "census",
+  "callouts",
   "keyProgress",
   "curve",
   "keySheet",
   "keyInventory",
   "keyboardMap",
+  "accents",
   "attendance",
+  "medals",
   "archive",
 ] as const;
 
@@ -136,9 +174,12 @@ export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
  * draws a `Profile` and the viewer's identity: the hero (stage, file side, four tubes, the grade ladder
  * of #337), the ink band, the folder tabs, then the sections of `PROFILE_SECTIONS` in that order (#970):
  * the service record, under three races the blank block, from three races the clean streaks (#936)
- * beside the suspect letter pairs (#965), the typist census (#967), the progress by key (#962), the
- * output curve (#933), the key sheet (#963), the key inventory (#964), the keyboard map (#324), the
- * attendance register (#330) and the race archives (#936). Each section carries its `data-section`
+ * then the personal bests (#999 C43, on every file with a viewer; the 7-day line and gain headline of
+ * #999 C45 are in the output curve)
+ * beside the suspect letter pairs (#965), the typist census (#967), the weekly callouts (#999 C49), the
+ * progress by key (#962), the output curve (#933), the key sheet (#963, with "Practise this letter",
+ * #999 C47), the key inventory (#964), the keyboard map (#324), the accents row (#999 C55), the
+ * attendance register (#330), the enamel pins (#999 C36) and the race archives (#936). Each section carries its `data-section`
  * marker. Server-rendered; the stage and the interactive plots are client leaves.
  */
 export function ProfileScreen({
@@ -154,6 +195,10 @@ export function ProfileScreen({
   census,
   keyFile,
   keyboard,
+  medals,
+  bests,
+  callouts,
+  practise,
 }: ProfileScreenProps) {
   const ids = {
     name: `${idPrefix}-name`,
@@ -170,6 +215,10 @@ export function ProfileScreen({
     keyInventory: `${idPrefix}-key-inventory`,
     suspectPairs: `${idPrefix}-suspect-pairs`,
     keyboardMap: `${idPrefix}-keyboard-map`,
+    medals: `${idPrefix}-medals`,
+    bests: `${idPrefix}-bests`,
+    callouts: `${idPrefix}-callouts`,
+    accents: `${idPrefix}-accents`,
   };
   const Title = `h${level}` as Heading;
   const Section = `h${level + 1}` as Heading;
@@ -180,7 +229,8 @@ export function ProfileScreen({
   // the curve's points: the latest 40, only what the client leaf draws
   const curvePoints = profile.progress.series
     .slice(-CURVE_RACES)
-    .map((p) => ({ cleanWpm: p.cleanWpm, accuracy: p.accuracy }));
+    .map((p) => ({ cleanWpm: p.cleanWpm, accuracy: p.accuracy, avg7: p.avg7 }));
+  const gain = profile.progress.gain;
   const state = races === 0 ? "blank" : races < BLANK_BELOW ? "almost" : "populated";
   const serviceLine = [
     since ? fill(labels.since, { date: serviceDate(since, locale) }) : null,
@@ -257,6 +307,15 @@ export function ProfileScreen({
         ) : null}
       </div>
     ) : null,
+    bests: bests ? (
+      <Bests
+        view={bestsView(bests, profile.languages)}
+        labels={labels.bests}
+        locale={locale}
+        id={ids.bests}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
     census:
       census && counted ? (
         <Suspense fallback={null}>
@@ -268,6 +327,16 @@ export function ProfileScreen({
             heading={Section as "h2" | "h3" | "h4"}
           />
         </Suspense>
+      ) : null,
+    callouts:
+      counted && callouts && callouts.length > 0 ? (
+        <Callouts
+          callouts={callouts}
+          labels={labels.callouts}
+          locale={locale}
+          id={ids.callouts}
+          heading={Section as "h2" | "h3" | "h4"}
+        />
       ) : null,
     keyProgress: keyed ? (
       <KeyProgress
@@ -288,10 +357,23 @@ export function ProfileScreen({
                 {labels.curve.title}
               </Section>
             </div>
-            <p className={styles.intro}>
-              {fill(labels.curve.intro, { count: curvePoints.length })}
-              {curvePoints.length >= TREND_MIN_POINTS ? ` ${labels.curve.introTrend}` : null}
-            </p>
+            <div className={styles.headSide}>
+              <p className={styles.intro}>
+                {fill(labels.curve.intro, { count: curvePoints.length })}
+                {curvePoints.length >= TREND_MIN_POINTS ? ` ${labels.curve.introTrend}` : null}
+                {gain === null
+                  ? ` ${fill(labels.curve.gainSoon, { count: GAIN_MIN_RESULTS })}`
+                  : null}
+              </p>
+              {gain === null ? null : (
+                <p className={styles.gain} data-curve-gain={gain}>
+                  <strong className={styles.gainFigure}>
+                    {fill(labels.curve.gain, { gain: signedGain(gain) })}
+                  </strong>{" "}
+                  {labels.curve.gainSince}
+                </p>
+              )}
+            </div>
           </div>
           <PerformanceCurve points={curvePoints} labels={labels.curve} locale={locale} />
         </section>
@@ -303,6 +385,7 @@ export function ProfileScreen({
         locale={locale}
         id={ids.keySheet}
         heading={Section as "h2" | "h3" | "h4"}
+        practise={practise}
       />
     ) : null,
     keyInventory: keyed ? (
@@ -329,12 +412,31 @@ export function ProfileScreen({
           heading={Section as "h2" | "h3" | "h4"}
         />
       ) : null,
+    accents: keyed ? (
+      <AccentsRow
+        byChar={keyed.byChar}
+        labels={labels.accents}
+        mapLabels={labels.keyboardMap}
+        locale={locale}
+        id={ids.accents}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
     attendance: counted ? (
       <AttendanceRegister
         attendance={profile.attendance}
         labels={labels.attendance}
         locale={locale}
         id={ids.attendance}
+        heading={Section as "h2" | "h3" | "h4"}
+      />
+    ) : null,
+    medals: medals ? (
+      <Medals
+        shelf={medals}
+        labels={labels.medals}
+        locale={locale}
+        id={ids.medals}
         heading={Section as "h2" | "h3" | "h4"}
       />
     ) : null,

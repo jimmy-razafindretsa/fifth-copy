@@ -11,6 +11,7 @@ import {
   startButton,
   warmRace,
   type SimulatedPlayer,
+  openRace,
 } from "./helpers";
 
 // Contract of #926 (ARCHITECTURE 7.1 "Loading", bible 7.4 "Scene loading card"): after START the room
@@ -168,7 +169,7 @@ test.describe("#926 the shared pre-race loading", () => {
         await route.continue().catch(() => undefined);
       });
       try {
-        await page.goto(`/race/${room.lobbyId}`);
+        await openRace(page, room);
         await expect(
           page.getByRole("status").filter({ hasText: "WAITING FOR THE HOST" }),
         ).toBeVisible({ timeout: HYDRATION_WAIT });

@@ -56,6 +56,28 @@ export type PersonalLabels = {
     title: string;
     summary: { zero: string; one: string; other: string };
     noTrace: string;
+    /**
+     * The other lines (#999 C52): the toggle's legend, the viewer's own line, another desk's
+     * (`{place}`, `{name}`, `{wpm}`), a bot's tag, and the image's name without a line of one's own.
+     */
+    lines: string;
+    you: string;
+    line: string;
+    simulated: string;
+    others: { one: string; other: string };
+  };
+  /**
+   * The compact keyboard heatmap (#999 C54): its row label, the board's sentence (`{layout}`, `{keys}`
+   * of `key` entries, or `clean`), the legend, and the layouts' settings names.
+   */
+  heatmap: {
+    title: string;
+    board: string;
+    key: string;
+    clean: string;
+    legendClean: string;
+    legendHeat: string;
+    layouts: Record<string, string>;
   };
   /** Errors by key (#867): its row label, `NONE`, the space's name; `noTrace` is the graph's. */
   keys: { title: string; none: string; space: string };
@@ -67,12 +89,15 @@ export type PersonalLabels = {
 };
 
 /** The catalog's strings as the personal card's labels: its own, the podium's figures, the tray's names. */
-export function personalLabels(t: Pick<Messages, "results" | "race" | "header">): PersonalLabels {
+export function personalLabels(
+  t: Pick<Messages, "results" | "race" | "header" | "settings">,
+): PersonalLabels {
   const { place, wpm, accuracy, underReview } = t.results.podium;
   const { cards } = t.race.sabotageTray;
   return {
     ...t.results.personal,
     tip: { ...t.results.personal.tip, guide: t.header.guide },
+    heatmap: { ...t.results.personal.heatmap, layouts: t.settings.layout.names },
     place,
     wpm,
     accuracy,

@@ -49,7 +49,7 @@ function replay(race: StoredRace, lobbyId: string): StartRaceResult {
  * Starts a race durably (ADR 0006 point 6, ADR 0008): the only writer of `Race` at start. Checks the
  * lobby (missing or closed: `not-found`; another host: `conflict`), generates the text from the
  * validated settings through the corpus provider (#346: the `Text` rows, or the content files) and
- * stores it with the settings, desk count and versions. Idempotent on `raceId`: a repeated id
+ * stores it with the settings, desk count, versions and the host at start (`Race.hostUserId`). Idempotent on `raceId`: a repeated id
  * answers the stored text unchanged, also under concurrent calls (P2002).
  */
 export async function startRace(
@@ -73,6 +73,8 @@ export async function startRace(
       data: {
         id: request.raceId,
         lobbyId: request.lobbyId,
+        // the audience of other players' curves is fixed at race time (ADR 0027)
+        hostUserId: request.hostUserId,
         textContent: text.content,
         textLanguage: TO_DB[text.language],
         textWordCount: text.wordCount,

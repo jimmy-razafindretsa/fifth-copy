@@ -103,6 +103,20 @@
   background: var(--color-surface);
 }
 
+/* a special character's key links to its guide entry (#999 C29): the cap underlined, as a link */
+.guideKey {
+  text-decoration: none;
+}
+
+.guideKey .cap {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.guideKey:hover {
+  background: var(--color-surface);
+}
+
 .cap {
   position: absolute;
   top: 3px;

@@ -121,10 +121,16 @@ export function InviteLinkRow({
   code,
   labels,
   errors,
+  issue = createInvite,
 }: {
   code: string;
   labels: LinkLabels;
   errors: EntryErrors;
+  /**
+   * The issuing action: `createInvite` (the single-use `LINK` row), or `createSpectatorLink` for the
+   * `WATCH` row (#999 C12: a reusable link a projector or a phone watches through, never seated).
+   */
+  issue?: (input: { code: string }) => Promise<CreateInviteResult>;
 }) {
   const id = useId();
   const urlId = `${id}-url`;
@@ -143,7 +149,7 @@ export function InviteLinkRow({
     setState((s) => ({ ...s, pending: true, error: null }));
     let result: CreateInviteResult;
     try {
-      result = await createInvite({ code });
+      result = await issue({ code });
     } catch {
       result = { ok: false, error: "unavailable" };
     }

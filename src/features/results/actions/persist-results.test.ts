@@ -356,3 +356,145 @@ describe("persistRaceResults overlay (#623 C3)", () => {
     ]);
   });
 });
+
+describe("persistRaceResults speed curve and after-save steps (#999 C53, C35, C41, ADR 0027)", () => {
+  const typed: Keystroke[] = [..."bonjour"].map((key, i) => ({ t: i * 400, key }));
+  const setup = () => {
+    const created: { desk: number; wpmSeries: unknown }[] = [];
+    const calls: { tx: unknown; filed: unknown }[] = [];
+    const tx = {
+      race: { updateMany: async () => ({ count: 1 }) },
+      raceResult: {
+        upsert: async ({ create }: { create: (typeof created)[number] }) =>
+          void created.push(create),
+      },
+      raceKeystrokes: { upsert: async () => undefined },
+    };
+    const db = {
+      race: {
+        findUnique: async () => ({
+          textContent: "bonjour",
+          textLanguage: "FR",
+          textWordCount: 1,
+          settings: { language: "fr", textType: "words", errorMode: "continue", backspace: true },
+        }),
+      },
+      user: { findMany: async () => [{ id: "usr_1" }, { id: "usr_2" }, { id: "usr_4" }] },
+      $transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx),
+    };
+    return { created, calls, tx, db };
+  };
+  const result = (desk: number, over: Partial<InternalRaceResult> = {}): InternalRaceResult => ({
+    desk,
+    userId: `usr_${desk}`,
+    name: `Clerk ${desk}`,
+    isBot: false,
+    place: desk,
+    status: "finished",
+    wpm: 10,
+    rawWpm: 10,
+    cleanWpm: 10,
+    adjustedWpm: 10,
+    accuracy: 1,
+    progress: 1,
+    correct: 7,
+    errors: 0,
+    total: 7,
+    durationMs: 2_400,
+    finishedAtMs: 2_400,
+    bonusesSent: 0,
+    bonusesReceived: 0,
+    bonusLog: [],
+    overlay: null,
+    flags: [],
+    engineVersion: ENGINE_VERSION,
+    trace: trace(typed, typed.length),
+    ...over,
+  });
+  const request = (results: InternalRaceResult[]): RaceResultsRequest => ({
+    v: PROTOCOL_VERSION,
+    raceId: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+    endedAt: 1_767_225_660_000,
+    reason: "all-finished",
+    lobbySize: 4,
+    results,
+  });
+
+  it("stores [t, cleanWpm] points for a human desk with a trace, ending at the scored clean WPM", async () => {
+    const { created, db } = setup();
+    expect((await persistRaceResults(request([result(1)]), { db: db as never })).ok).toBe(true);
+    const series = created[0]!.wpmSeries as [number, number][];
+    expect(series).toHaveLength(2);
+    expect(series.at(-1)![0]).toBe(2_400);
+    // 7 correct characters in 2.4 s: (7 / 5) / (2.4 / 60) = 35 WPM
+    expect(series.at(-1)![1]).toBe(35);
+    expect(series.every(([t, w]) => Number.isInteger(t) && w >= 0)).toBe(true);
+  });
+
+  it("stores no curve (DbNull) for a bot, a flagged desk, an empty trace", async () => {
+    const { created, db } = setup();
+    const flagged = result(2, { flags: [{ code: "uniform-timing" }] });
+    const bot = result(3, { userId: null, isBot: true, name: "Bot", trace: trace([], 0) });
+    const empty = result(4, { trace: trace([], 0) });
+    expect((await persistRaceResults(request([flagged, bot, empty]), { db: db as never })).ok).toBe(
+      true,
+    );
+    expect(created.map((c) => c.wpmSeries)).toEqual([Prisma.DbNull, Prisma.DbNull, Prisma.DbNull]);
+  });
+
+  it("runs every after-save step once, in the transaction, with the race facts and the stored human results", async () => {
+    const { calls, tx, db } = setup();
+    const step = async (t: unknown, filed: unknown) => void calls.push({ tx: t, filed });
+    const flagged = result(2, { flags: [{ code: "uniform-timing" }], place: 2 });
+    const bot = result(3, { userId: null, isBot: true, name: "Bot", trace: trace([], 0) });
+    const outcome = await persistRaceResults(request([result(1), flagged, bot]), {
+      db: db as never,
+      afterSave: [step, step],
+    });
+    expect(outcome.ok).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.tx).toBe(tx);
+    expect(calls[0]!.filed).toEqual({
+      race: {
+        id: "6f1c2a4e-8b9d-4c3e-9f0a-1b2c3d4e5f60",
+        textLanguage: "FR",
+        textWordCount: 1,
+        settings: { language: "fr", textType: "words", errorMode: "continue", backspace: true },
+        lobbySize: 4,
+        endedAt: new Date(1_767_225_660_000),
+      },
+      results: [
+        {
+          userId: "usr_1",
+          desk: 1,
+          isBot: false,
+          place: 1,
+          status: "FINISHED",
+          cleanWpm: 10,
+          accuracy: 1,
+          suspicious: false,
+        },
+        {
+          userId: "usr_2",
+          desk: 2,
+          isBot: false,
+          place: 2,
+          status: "FINISHED",
+          cleanWpm: 10,
+          accuracy: 1,
+          suspicious: true,
+        },
+      ],
+    });
+  });
+
+  it("a failing after-save step fails the filing (the transaction rolls back, the race server retries)", async () => {
+    const { db } = setup();
+    const boom = async () => {
+      throw new Error("boom");
+    };
+    await expect(
+      persistRaceResults(request([result(1)]), { db: db as never, afterSave: [boom] }),
+    ).rejects.toThrow("boom");
+  });
+});

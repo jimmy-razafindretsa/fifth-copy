@@ -20,7 +20,12 @@ type Props = {
   entries: React.ReactNode;
   /** The open-rooms docket under the code join (#807): `OpenRooms` fed by the lobby's query. */
   rooms: React.ReactNode;
-  /** The inverted QUICK RACE on the final-call band. */
+  /**
+   * The phone watch entry (#999 C15, lobby feature): phones watch, so at 480px and under it replaces
+   * QUICK RACE and the private-race entries (CSS); optional for pages without one.
+   */
+  watch?: React.ReactNode;
+  /** The inverted QUICK RACE on the final-call band (a desk's action: not shown on phones, #999 C15). */
   finalAction: React.ReactNode;
   /** The header's grade read (#969), handed in by the route. */
   grade?: GradeSource | undefined;
@@ -30,7 +35,7 @@ type Props = {
  * The landing in the bible's order (14.1): header, hero, ticker, story, clerk, history, how, final, medal,
  * footer. It always opens on paper: `data-default-theme` makes tokens.css ignore a dark OS (bible 3.2, #651).
  */
-export async function LandingPage({ primary, entries, rooms, finalAction, grade }: Props) {
+export async function LandingPage({ primary, entries, rooms, watch, finalAction, grade }: Props) {
   const [t, viewer] = await Promise.all([getT(), getViewer()]);
   const name = viewer ? fill(t.header.honorific, { name: viewer.name }) : null;
   // The saved clerk outfit (#687): read and saved only for a viewer; an anonymous visitor gets neither.
@@ -39,7 +44,7 @@ export async function LandingPage({ primary, entries, rooms, finalAction, grade 
     <div className={styles.page} data-default-theme="light">
       <LandingHeader current="landing" grade={grade} />
       <main className="flex flex-1 flex-col">
-        <LandingHero primary={primary} entries={entries} rooms={rooms} />
+        <LandingHero primary={primary} entries={entries} rooms={rooms} watch={watch} />
         <TickerBand />
         <StorySection />
         <ClerkSection

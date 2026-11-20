@@ -258,3 +258,9 @@
 .seat[data-osk="open"] .sheet {
   margin-bottom: 0;
 }
+
+/* the intercepted-cable header (#999 C40) is flavour: it folds away with the machine, so the tape and the
+   sheet's next line keep the room above the keyboard */
+.seat[data-osk="open"] [data-cable] {
+  display: none;
+}

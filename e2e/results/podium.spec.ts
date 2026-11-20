@@ -35,6 +35,15 @@ const frameStates = (page: Page) =>
 const hasWebGL2 = (page: Page) =>
   page.evaluate(() => !!document.createElement("canvas").getContext("webgl2"));
 
+/** Each plinth frame's pinning report (bible 10.3 "Pinning", #999 C37). */
+const pins = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLIFrameElement>("[data-plinth] iframe")].map((f) => {
+      const d = f.contentDocument?.documentElement?.dataset;
+      return { pin: d?.pin, mode: d?.pinMode, at: Number(d?.pinnedAt ?? NaN) };
+    }),
+  );
+
 /** Bring every plinth near the viewport once (the near-viewport mount latches), then back to the top. */
 async function visitPlinths(page: Page) {
   for (const n of [3, 2, 1]) await plinth(page, n).scrollIntoViewIfNeeded();
@@ -174,6 +183,44 @@ test.describe("Dawn report podium (#300)", () => {
       await expect(title).not.toHaveAttribute("title", /drag|spin/i);
     }
     await expect(clerkDoc(page, 1)).toHaveAttribute("data-motion", "full");
+
+    // #999 C37: the Major's hand pins each medal, gold, then silver, then bronze (the stagger's order)
+    await expect
+      .poll(async () => (await pins(page)).map((p) => `${p.pin}/${p.mode}`).join(" "), {
+        timeout: scaled(60_000),
+      })
+      .toBe("pinned/major pinned/major pinned/major");
+    const [gold, silver, bronze] = (await pins(page)).map((p) => p.at);
+    expect(gold).toBeLessThan(silver ?? NaN);
+    expect(silver).toBeLessThan(bronze ?? NaN);
+  });
+
+  test("C37 under reduced motion the medals are already pinned: no Major, no animation", async ({
+    page,
+    request,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const lobby = await seedLobby(page);
+    const desks = six(lobby.hostUserId).slice(0, 3);
+    const raceId = await startRace(request, lobby, desks);
+    await postResults(request, raceId, desks);
+    await page.goto(`/results/${raceId}`);
+    test.skip(
+      !(await hasWebGL2(page)),
+      "no WebGL2 in this browser (the no-WebGL path has its own test)",
+    );
+    await expect(plinths(page)).toHaveCount(3, { timeout: HYDRATION_WAIT });
+    await visitPlinths(page);
+    await expect
+      .poll(async () => JSON.stringify(await frameStates(page)), { timeout: scaled(30_000) })
+      .toBe(JSON.stringify([1, 2, 3].map(() => ({ mounted: true, ready: true }))));
+    // set before the first drawn frame (the #688 static state), never brought in by the Major's hand
+    for (const n of [1, 2, 3]) {
+      const doc = clerkDoc(page, n);
+      await expect(doc).toHaveAttribute("data-motion", "reduce");
+      await expect(doc).toHaveAttribute("data-pin", "pinned");
+      await expect(doc).toHaveAttribute("data-pin-mode", "set");
+    }
   });
 
   test("C6 podium clerk under reduced motion: fc-motion crosses the frame, same layout", async ({

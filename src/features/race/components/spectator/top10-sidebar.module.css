@@ -1,0 +1,121 @@
+/*
+ * The projector's top-10 sidebar (#999 C3, C7; bible 14.3 "Projector view", 7.4, 7.4a): the 7.4 docket of
+ * hud-docket.module.css at the projector scale. Every size is given at 1920x1080 and grows with the
+ * screen, `max(N, min(N/1920 of the width, N/1080 of the height))`: twice as big at 3840x2160, never
+ * smaller than at 1080p. Rows at 28px (the back of a classroom), the header at 20px. Ten rows always fit
+ * the frame, so the list never scrolls. No motion.
+ */
+
+@reference "../../../../app/globals.css";
+
+.sidebar {
+  --_row: max(28px, min(calc(100vw * 28 / 1920), calc(100vh * 28 / 1080)));
+  --_head: max(20px, min(calc(100vw * 20 / 1920), calc(100vh * 20 / 1080)));
+  --_pad: max(12px, min(calc(100vw * 12 / 1920), calc(100vh * 12 / 1080)));
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* #999 C10: the phone spectator's scale (bible 14.3 "Phone spectator"): the finished view's roll rows */
+.sidebar.compact {
+  --_row: 15px;
+  --_head: 13px;
+  --_pad: 12px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px var(--_pad);
+  padding: calc(var(--_pad) * 0.75) var(--_pad);
+  border-bottom: 2px solid var(--color-fg);
+}
+
+/* the 7.4 ink tag at 20px */
+.tag {
+  @apply type-label;
+  font-size: var(--_head);
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 0 0.4em;
+  white-space: nowrap;
+}
+
+.count {
+  @apply type-typing;
+  font-size: var(--_head);
+  line-height: normal;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* a 7.4 roll row: place | marker | name | figure, dashed separators */
+.row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 calc(var(--_pad) * 0.75);
+  padding: calc(var(--_pad) * 0.6) var(--_pad);
+  font-size: var(--_row);
+  line-height: 1.25;
+}
+
+.row + .row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-fg) 30%, transparent);
+}
+
+.place {
+  @apply type-typing;
+  font-size: var(--_row);
+  line-height: inherit;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the rival marker (7.4a), 28px square: its shape in its ink */
+.mark {
+  display: flex;
+}
+
+.mark > svg {
+  width: 1em;
+  height: 1em;
+}
+
+.name {
+  @apply type-typing;
+  font-size: var(--_row);
+  line-height: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  @apply type-typing;
+  font-size: var(--_row);
+  line-height: inherit;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* the 7.4a status word, at the row size */
+.status {
+  @apply type-label;
+  font-size: var(--_row);
+  line-height: inherit;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}

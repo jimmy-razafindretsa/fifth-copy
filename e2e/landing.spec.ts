@@ -142,10 +142,10 @@ test.describe("landing page (#497)", () => {
     const header = page.locator("header");
     await expect(header.getByRole("link", { name: "FIFTH COPY" })).toHaveAttribute("href", "/");
     const nav = header.getByRole("navigation", { name: "Site" });
-    // on the landing the guide is the in-page anchor; elsewhere it names `/welcome#how` (#899, #943)
+    // the guide is its own page, from every page (#999 C28)
     await expect(nav.getByRole("link", { name: "HOW TO TYPE É Ç « »" })).toHaveAttribute(
       "href",
-      "#how",
+      "/guide",
     );
     const language = nav.getByRole("group", { name: "Language" });
     await expect(language.getByRole("button", { name: "EN", exact: true })).toHaveAttribute(
@@ -178,7 +178,11 @@ test.describe("landing page (#497)", () => {
       "aria-pressed",
       "true",
     );
-    await expect(page.getByRole("button", { name: "COURSE RAPIDE" }).first()).toBeVisible();
+    // a phone's hero holds the watch entry, a desk's the race entries (#999 C15)
+    const phone = (page.viewportSize()?.width ?? 1280) <= 480;
+    await expect(
+      page.getByRole("button", { name: phone ? "REGARDER →" : "COURSE RAPIDE" }).first(),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "QUART DE NUIT" })).toBeVisible();
     // one language at a time (bible 2): no English section heading is left
     await expect(page.getByRole("heading", { level: 2, name: STORY })).toHaveCount(0);
@@ -375,8 +379,10 @@ test.describe("landing page (#497)", () => {
 
     const final = page.locator("[aria-labelledby='final-title']");
     expect(await final.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(primary);
-    await expect(final.getByRole("button", { name: QUICK })).toBeVisible();
-    await expect(page.getByRole("button", { name: QUICK })).toHaveCount(2);
+    // #999 C15: phones watch, so a phone's landing has no QUICK RACE (hero or final band)
+    const onPhone = (page.viewportSize()?.width ?? 1280) <= 480;
+    await expect(final.getByRole("button", { name: QUICK })).toHaveCount(onPhone ? 0 : 1);
+    await expect(page.getByRole("button", { name: QUICK })).toHaveCount(onPhone ? 0 : 2);
 
     const footer = page.locator("footer");
     // #875: a link appears when its route ships (AEGIS CORP. holds privacy, #76; LEARN the file, #932);
@@ -455,6 +461,75 @@ test.describe("landing page (#497)", () => {
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
   }
+});
+
+// Contract of #999 C15 (bible 14.3 "Phone spectator"): at 480 px and under the landing swaps QUICK
+// RACE and the private-race entries for a watch entry (a room code or a spectator link); wider, nothing
+// changes. A wrong entry is refused before any request.
+test.describe("phones watch: the landing's watch entry (#999 C15)", () => {
+  test.beforeEach(() => test.slow());
+  const watch = (page: Page) => page.getByRole("form", { name: "Watch a race" });
+  const raceEntries = (page: Page) => [
+    page.getByRole("button", { name: QUICK, exact: true }),
+    page.getByRole("button", { name: "CREATE PRIVATE RACE", exact: true }),
+    page.getByRole("button", { name: /^PRACTI/ }),
+    page.getByRole("form", { name: "Join with code" }),
+  ];
+
+  const EMPTY_DESK = "NO OPEN ROOM · PRESS QUICK RACE";
+  const EMPTY_PHONE = "NO OPEN ROOM · WATCH WITH A CODE OR LINK";
+  /**
+   * The open-rooms docket's empty row, when it is empty (parallel workers open public rooms, so it may
+   * list one): its one visible statement is `text`.
+   */
+  async function expectEmptyRow(page: Page, text: string) {
+    const docket = page.locator("section[data-open-rooms]");
+    await expect(docket.locator("[aria-busy='true']")).toHaveCount(0, { timeout: ACTION_WAIT });
+    if ((await docket.getByRole("list").count()) > 0) return;
+    await expect(docket.getByText(text, { exact: true })).toBeVisible();
+  }
+
+  test("C15 at 360 to 480 px: the watch entry, no race entry, no horizontal scroll; wider: the race entries", async ({
+    page,
+  }) => {
+    for (const width of [360, 430, 480]) {
+      await page.setViewportSize({ width, height: 812 });
+      await ready(page);
+      await expect(watch(page)).toBeVisible();
+      await expect(watch(page).getByLabel("WATCH WITH CODE OR LINK")).toBeVisible();
+      for (const entry of raceEntries(page)) await expect(entry).toHaveCount(0);
+      // the open rooms' empty row never points a phone at QUICK RACE: it points at the watch entry
+      await expect(page.getByText(EMPTY_DESK, { exact: true })).toBeHidden();
+      await expectEmptyRow(page, EMPTY_PHONE);
+      expect(await overflow(page), `${width}: horizontal scroll`).toBeLessThanOrEqual(0);
+    }
+    await expectNoA11yViolations(page);
+    await page.setViewportSize({ width: 481, height: 812 });
+    await expect(watch(page)).toBeHidden();
+    for (const entry of raceEntries(page)) await expect(entry.first()).toBeVisible();
+    await expect(page.getByText(EMPTY_PHONE, { exact: true })).toBeHidden();
+    await expectEmptyRow(page, EMPTY_DESK);
+  });
+
+  test("C15 a wrong entry is refused on the spot; a spectator link opens its watch page", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await ready(page);
+    const field = watch(page).getByLabel("WATCH WITH CODE OR LINK");
+    await field.fill("hello");
+    await watch(page).getByRole("button", { name: "WATCH →" }).click();
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Enter a code like KGB-4821 or paste a watch link" }),
+    ).toBeVisible();
+    // an unknown link still goes to its page, which refuses it (#999 C12)
+    await field.fill(`https://example.test/watch/${"x".repeat(43)}`);
+    await watch(page).getByRole("button", { name: "WATCH →" }).click();
+    await page.waitForURL(`**/watch/${"x".repeat(43)}`);
+    await expect(page.getByText("LINK USED OR EXPIRED", { exact: true })).toBeVisible();
+  });
 });
 
 // Contract of #651 (bible 3.2): the landing always opens on paper, even under a dark OS, on first
@@ -715,6 +790,10 @@ const codeField = (page: Page) => joinForm(page).getByLabel(JOIN_FIELD, { exact:
 const joinButton = (page: Page) => joinForm(page).getByRole("button", { name: JOIN, exact: true });
 
 test.describe("landing lobby entries (#99)", () => {
+  test.skip(
+    ({ viewport }) => (viewport?.width ?? 1280) <= 480,
+    "phones watch: the race entries are a desk's (#999 C15)",
+  );
   test("C1 create and join forms are siblings in the wrapping row after the pitch", async ({
     page,
   }) => {
@@ -1084,10 +1163,9 @@ test.describe("site header at phone width (#696)", () => {
   });
 
   test("C1 C2 landing with a guest docket", async ({ page }) => {
-    await ready(page);
-    // any entry files the guest; QUICK RACE would seat it in another test's open room (#128)
-    await hero(page).getByRole("button", { name: CREATE, exact: true }).click();
-    await page.waitForURL(/\/lobby\/[A-Z]{3}-\d{4}$/);
+    // any entry files the guest; QUICK RACE would seat it in another test's open room (#128);
+    // `createLobby` widens a phone for the desk's entry (#999 C15)
+    await createLobby(page);
     await ready(page);
     await expectTwoRowHeader(page, { docket: true });
   });

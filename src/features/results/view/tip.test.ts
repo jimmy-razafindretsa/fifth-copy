@@ -14,7 +14,18 @@ const k = (char: string, count: number): MissedKey => ({ char, count });
 
 describe("pickTip (#867 C2)", () => {
   it("the closed list, in priority order", () => {
-    expect(TIP_IDS).toEqual(["clean", "special", "key", "accuracy", "steady"]);
+    expect(TIP_IDS).toEqual([
+      "clean",
+      "special",
+      "space",
+      "capital",
+      "punctuation",
+      "digit",
+      "key",
+      "spread",
+      "accuracy",
+      "steady",
+    ]);
   });
 
   it("clean: no error in the trace, whatever the accuracy", () => {
@@ -38,11 +49,38 @@ describe("pickTip (#867 C2)", () => {
       char: "t",
       count: 4,
     });
-    expect(pickTip({ accuracy: 0.99, missed: [k(" ", 3)] })).toEqual({
+    expect(pickTip({ accuracy: 0.99, missed: [k("q", 3)] })).toEqual({
       id: "key",
-      char: " ",
+      char: "q",
       count: 3,
     });
+  });
+
+  // #999 C40: the library keyed to error patterns (#381), extending the five of #867
+  it("space, capital, punctuation, digit: the pattern of the most-missed key, 3 times or more", () => {
+    const cases = [
+      [" ", "space"],
+      ["T", "capital"],
+      [",", "punctuation"],
+      ["’", "punctuation"],
+      ["?", "punctuation"],
+      ["7", "digit"],
+    ] as const;
+    for (const [char, id] of cases) {
+      expect(pickTip({ accuracy: 0.8, missed: [k(char, 3), k("t", 2)] }), char).toEqual({
+        id,
+        char,
+        count: 3,
+      });
+    }
+    // a capital accented letter is still the guide's (special)
+    expect(pickTip({ accuracy: 0.8, missed: [k("É", 3)] }).id).toBe("special");
+  });
+
+  it("spread: no key missed 3 times, but 5 different keys or more missed", () => {
+    const missed = ["a", "b", "c", "d", "e"].map((c) => k(c, 1));
+    expect(pickTip({ accuracy: 0.95, missed })).toEqual({ id: "spread", count: 5 });
+    expect(pickTip({ accuracy: 0.95, missed: missed.slice(0, 4) })).toEqual({ id: "steady" });
   });
 
   it("accuracy: no key missed 3 times and accuracy under 90 %", () => {

@@ -69,6 +69,19 @@ export const fr = {
       join: "ENTRER →",
       joining: "ENTRÉE…",
     },
+    /**
+     * L'entrée spectateur de l'accueil sur cellulaire (#999 C15, bible 14.3) : à 480 px et moins elle
+     * remplace COURSE RAPIDE et les entrées de course privée.
+     */
+    watch: {
+      formName: "Regarder une course",
+      label: "REGARDER AVEC CODE OU LIEN",
+      placeholder: "KGB-4821",
+      submit: "REGARDER →",
+      pending: "OUVERTURE…",
+      note: "Les cellulaires regardent du fond de la salle. On tape à un bureau.",
+      invalid: "Entrez un code comme KGB-4821 ou collez un lien de spectateur",
+    },
     /** Le registre des salles ouvertes sous le code (#807, bible 14.1). */
     rooms: {
       title: "SALLES OUVERTES",
@@ -81,6 +94,7 @@ export const fr = {
       join: "REJOINDRE →",
       joinName: "Rejoindre la salle {code}",
       empty: "AUCUNE SALLE OUVERTE · APPUIE SUR COURSE RAPIDE",
+      emptyPhone: "AUCUNE SALLE OUVERTE · REGARDE AVEC UN CODE OU UN LIEN",
     },
     errors: {
       prefix: "RETOURNÉ ·",
@@ -278,6 +292,58 @@ export const fr = {
     rulesUpdated: "RÈGLES MISES À JOUR · {date}",
     backToTop: "RETOUR EN HAUT ↑",
   },
+  guide: {
+    title: "COMMENT LE TAPER",
+    kicker: "MINISTÈRE DE LA DACTYLO · GUIDE DE FRAPPE",
+    heading: "COMMENT LE TAPER",
+    intro:
+      "Chaque accent et chaque signe d'une course, touche par touche. Choisis ton clavier et ton système.",
+    deskTag: "TON BUREAU",
+    layout: "CLAVIER",
+    os: "SYSTÈME",
+    osNames: { windows: "WINDOWS", mac: "MACOS", chromeos: "CHROMEOS" },
+    detected: "DÉTECTÉ SUR CET APPAREIL",
+    chosen: "CHOISI PAR TOI",
+    unknown: "SYSTÈME NON DÉTECTÉ · CHOISIS LE TIEN",
+    indexLabel: "Caractères",
+    indexTag: "CARACTÈRES",
+    unverifiedTag: "PAS ENCORE VÉRIFIÉ",
+    unverifiedPair:
+      "Personne ne les a encore tapés sur un vrai clavier {layout} sous {os}. Le Ministère ne classe que ce qu'il a essayé.",
+    unverifiedLayout:
+      "Personne ne les a encore tapés sur un vrai clavier {layout}. Le Ministère ne classe que ce qu'il a essayé.",
+    then: "puis",
+    keys: {
+      shift: "Maj",
+      alt: "Alt",
+      altgr: "AltGr",
+      option: "Option",
+      ctrl: "Ctrl",
+      cmd: "Cmd",
+      space: "Espace",
+      numpad: "pavé num.",
+    },
+    chars: {
+      "e-acute": "e accent aigu",
+      "e-grave": "e accent grave",
+      "e-circumflex": "e accent circonflexe",
+      "e-diaeresis": "e tréma",
+      "a-grave": "a accent grave",
+      "a-circumflex": "a accent circonflexe",
+      "c-cedilla": "c cédille",
+      "u-grave": "u accent grave",
+      "u-circumflex": "u accent circonflexe",
+      "o-circumflex": "o accent circonflexe",
+      "i-circumflex": "i accent circonflexe",
+      "i-diaeresis": "i tréma",
+      "oe-ligature": "e dans l'o",
+      "ae-ligature": "e dans l'a",
+      "guillemet-open": "guillemet ouvrant",
+      "guillemet-close": "guillemet fermant",
+      euro: "symbole euro",
+    },
+    backToTop: "RETOUR EN HAUT ↑",
+  },
   invite: {
     kicker: "MINISTÈRE DE LA DACTYLOGRAPHIE · INVITATION",
     title: "ON T'ATTEND",
@@ -318,6 +384,8 @@ export const fr = {
       bot: "B",
     },
     waitingForHost: "EN ATTENTE DE L'HÔTE",
+    /** #999 C9: the still notice row of a phone watching the lobby on a spectator token (bible 14.3). */
+    phonesWatch: "LES CELLULAIRES REGARDENT DU FOND DE LA SALLE",
     hostWatching: "L'HÔTE REGARDE",
     autoStart: {
       status: "DÉPART DANS {n} S",
@@ -484,10 +552,37 @@ export const fr = {
       selectedStatus: "Lien d'invitation sélectionné : copie-le avec ton clavier",
       notHost: "Seul l'hôte peut émettre un lien.",
     },
+    watchLinks: {
+      label: "REGARDER",
+      newLink: "NOUVEAU LIEN SPECTATEUR",
+      issuing: "ÉMISSION…",
+      urlName: "Lien spectateur",
+      copy: "COPIER",
+      copied: "COPIÉ",
+      copiedStatus: "Lien spectateur copié",
+      selectedStatus: "Lien spectateur sélectionné : copie-le avec ton clavier",
+      notHost: "Seul l'hôte peut émettre un lien.",
+    },
   },
   race: {
+    codeGate: {
+      kicker: "MINISTÈRE DE LA DACTYLOGRAPHIE · CODE DE SALLE",
+      title: "TON CODE, S'IL TE PLAÎT",
+      body: "Cette salle s'ouvre avec son code. Tape-le pour prendre ta place ou regarder la course.",
+      formName: "Code de la salle",
+    },
     kicker: { seat: "VUE DE TA PLACE", desk: "VUE DE TA PLACE · BUREAU {n}" },
-    telex: { strip: "Texte à taper" },
+    telex: {
+      strip: "Texte à taper",
+      cables: [
+        "CÂBLE INTERCEPTÉ · № {n} · COPIE CONFORME",
+        "CÂBLE INTERCEPTÉ · № {n} · PRIORITÉ : URGENT",
+        "CÂBLE INTERCEPTÉ · № {n} · POUR LA CINQUIÈME COPIE",
+        "CÂBLE INTERCEPTÉ · № {n} · ORIGINE INCONNUE",
+        "CÂBLE INTERCEPTÉ · № {n} · À CLASSER AVANT L'AUBE",
+        "CÂBLE INTERCEPTÉ · № {n} · NE PAS PLIER",
+      ],
+    },
     countdown: { major: "НАЧАЛИ", go: "PARTEZ" },
     /** The overtake stamps (#232, bible 2, 7.3): the dual in-world headline, Russian then this language. */
     stamps: {
@@ -586,6 +681,20 @@ export const fr = {
       "Tes meilleures vitesses et ta moyenne sont classées dans ton dossier après chaque course.",
       "Soixante secondes sans toucher une touche et le Major te renvoie chez toi.",
     ],
+    /** The projector view (#999, bible 14.3 "Projector view"): a spectator page, no desk. */
+    phone: {
+      kicker: "VUE SPECTATEUR",
+    },
+    projector: {
+      kicker: "VUE PROJECTEUR",
+      connecting: "Connexion à la salle…",
+      top: "TOP 10",
+      typists: "{n} DACTYLOS",
+      standings: "Classement, 10 premiers",
+      noPlace: "··",
+      scene: "La salle, vue d'en haut",
+      plaqueDesk: "BUREAU {n}",
+    },
     sceneDrop: {
       "no-webgl2": "Ce navigateur n'a pas WebGL2 : la salle en 3D ne peut pas tourner ici.",
       "benchmark-low":
@@ -605,6 +714,8 @@ export const fr = {
       "no-scene": "PAS D'IMAGE DE LA SALLE · CONTINUE DE TAPER",
       phones: "LES CELLULAIRES REGARDENT DU FOND DE LA SALLE",
     },
+    /** The stuck hint (#999 C31, bible 7.4 notice row): `{char}` is the character the typist keeps missing. */
+    stuckHint: { stuck: "BLOQUÉ SUR {char} ?", how: "VOICI COMMENT →" },
     /** Presence (#235, bible 7.4 notice row): the room went away under a seated page (#204). */
     presence: {
       roomLost: "LA SALLE EST PERDUE",
@@ -736,6 +847,22 @@ export const fr = {
           other: "Pointe à {peak} MPM, arrivée à {final} MPM, {n} bonus reçus.",
         },
         noTrace: "AUCUNE TRACE AU DOSSIER",
+        lines: "COURBES AFFICHÉES",
+        you: "TOI",
+        line: "№ {place} · {name} · {wpm} MPM",
+        simulated: "SIMULÉ",
+        others: {
+          one: "MPM au fil de la course, {n} courbe affichée.",
+          other: "MPM au fil de la course, {n} courbes affichées.",
+        },
+      },
+      heatmap: {
+        title: "CARTE DES FAUTES",
+        board: "Carte des fautes, {layout} : {keys}.",
+        key: "{key} × {n}",
+        clean: "Carte des fautes, {layout} : aucune faute au clavier.",
+        legendClean: "papier : aucune faute",
+        legendHeat: "de l'or au rouge : de moins en plus de fautes",
       },
       keys: {
         title: "ERREURS PAR TOUCHE",
@@ -747,6 +874,16 @@ export const fr = {
         clean: "Aucune faute au dossier : garde ce rythme et la vitesse suivra.",
         special: "La touche {key} t'a échappé {n} fois : le guide montre comment la taper.",
         key: "La touche {key} t'a échappé {n} fois : ralentis dessus à la prochaine course, le reste suivra.",
+        space:
+          "La barre d'espace t'a échappé {n} fois : une seule espace nette après chaque mot, jamais deux, jamais aucune.",
+        capital:
+          "La majuscule {key} t'a échappé {n} fois : tiens d'abord Maj de l'autre main, puis frappe la lettre.",
+        punctuation:
+          "La touche {key} t'a échappé {n} fois : la ponctuation compte aussi, repère-la avant d'arriver au bout du mot.",
+        digit:
+          "La touche {key} t'a échappé {n} fois : les chiffres sont sur la rangée du haut, va les chercher sans baisser les yeux.",
+        spread:
+          "Tes fautes sont réparties sur {n} touches : un rythme plus régulier, un peu plus lent, en corrige la plupart.",
         accuracy:
           "La vitesse, c'est bien, la précision, c'est mieux : ralentis un peu et fais compter chaque touche.",
         steady:
@@ -1091,6 +1228,61 @@ export const fr = {
   },
   /** Le Dossier du personnel sur /profile (#932, bible 14.3, référence Profil.dc.html). */
   profile: {
+    medals: {
+      kicker: "DÉCORATIONS · ÉPINGLETTES",
+      title: "Médailles",
+      intro:
+        "Épinglées à ton dossier pour de bon. Une épinglette verrouillée montre ce que le Ministère attend encore de toi.",
+      count: "{n} / {total} ÉPINGLÉES",
+      none: "Aucune épinglette à ton dossier pour l'instant. Gagne une course, ou finis-en une sans une seule faute, et le Ministère épingle ta première.",
+      list: "Épinglettes",
+      awarded: "ÉPINGLÉE LE {date}",
+      locked: "VERROUILLÉ",
+      new: "NOUVEAU",
+      pins: {
+        "first-win": {
+          name: "Ordre de la première copie",
+          description: "Gagne une course contre au moins un autre bureau.",
+        },
+        "wpm-50-club": {
+          name: "Club des cinquante",
+          description: "Termine une course à 50 mots par minute nets ou plus.",
+        },
+        "accuracy-100": {
+          name: "Copie sans tache",
+          description: "Termine une course sans une seule faute.",
+        },
+        "accent-master": {
+          name: "Maître des accents",
+          description: "Termine un texte à accents avec 95 % de précision ou plus.",
+        },
+        "streak-7-days": {
+          name: "Semaine de service",
+          description: "Fais une course sept jours de suite.",
+        },
+      },
+    },
+    callouts: {
+      kicker: "BULLETIN DE LA SEMAINE",
+      title: "Cette semaine à ton bureau",
+      faster: "Ton {key} est {pct} % plus rapide que la semaine dernière.",
+      slower:
+        "Ton {key} est {pct} % plus lent que la semaine dernière : un court entraînement le remettra en forme.",
+      cleaner: "Tu as raté le {key} {pct} % moins souvent que la semaine dernière.",
+      messier:
+        "Tu as raté le {key} {pct} % plus souvent que la semaine dernière : ralentis dessus, ça va se placer.",
+      steady: "Ton {key} a gardé sa vitesse cette semaine. Du travail régulier.",
+      intro: "Semaine après semaine, touche par touche, d'après tes courses comptées.",
+      list: "Les remarques de la semaine",
+    },
+    accents: {
+      kicker: "ACCENTS ET CARACTÈRES SPÉCIAUX",
+      title: "Rangée des accents",
+      intro:
+        "Les accents et caractères spéciaux du français, chacun sa touche. Choisis-en une pour voir comment la taper.",
+      row: "Rangée des accents",
+      legendSize: "taille du cercle : fréquence de frappe, par rapport au reste de la rangée",
+    },
     ladder: {
       label: "ÉCHELLE DES GRADES · SELON TA MOYENNE",
       next: "{wpm} / {next} MPM → {rank}",
@@ -1153,6 +1345,43 @@ export const fr = {
       firstPlace: "1RE PLACE",
       top3: "TOP 3",
     },
+    bests: {
+      kicker: "RECORDS PERSONNELS · PAR CATÉGORIE",
+      title: "Records personnels",
+      intro:
+        "Ta meilleure vitesse nette par langue, type de texte et longueur. Seule une course comptée peut en établir un.",
+      none: "Aucun record au dossier. Termine une course et le Ministère y classe ta plus rapide, par langue, type de texte et longueur.",
+      languages: { FR: "FRANÇAIS", EN: "ANGLAIS" },
+      compare: {
+        title: "FRANÇAIS CONTRE ANGLAIS",
+        tag: "VITESSE NETTE",
+        caption: "Français contre anglais : courses, record et vitesse nette moyenne par langue",
+        language: "LANGUE",
+        races: "COURSES",
+        best: "RECORD",
+        mean: "MOYENNE",
+        faster: "En français, tu tapes {diff} MPM plus vite qu'en anglais, en moyenne.",
+        slower: "En français, tu tapes {diff} MPM moins vite qu'en anglais, en moyenne.",
+        even: "Même vitesse moyenne en français et en anglais.",
+        only: {
+          FR: "Seulement du français au dossier. Fais une course en anglais pour comparer.",
+          EN: "Seulement de l'anglais au dossier. Fais une course en français pour comparer.",
+        },
+      },
+      table: {
+        title: "PAR TYPE ET LONGUEUR",
+        tag: "MPM NET",
+        caption: "Records personnels par langue, type de texte et longueur",
+        region: "Records personnels, défilement horizontal",
+        language: "LANGUE",
+        text: "TEXTE",
+        best: "RECORD",
+        accuracy: "PRÉCISION",
+        date: "ÉTABLI LE",
+        types: { SENTENCES: "PHRASES", WORDS: "MOTS", SPECIAL_CHARACTERS: "CARACTÈRES SPÉCIAUX" },
+        lengths: { SHORT: "COURT", MEDIUM: "MOYEN", LONG: "LONG" },
+      },
+    },
     curve: {
       kicker: "COURBE DE RENDEMENT",
       title: "Vitesse au fil des courses",
@@ -1163,10 +1392,15 @@ export const fr = {
         speed: "vitesse (MPM, gauche)",
         accuracy: "précision (%, droite)",
         trend: "tendance",
+        week: "moyenne sur 7 jours",
       },
       units: { speed: "MPM", accuracy: "%" },
       summary:
-        "{count} courses : vitesse de {speedFrom} à {speedTo} MPM, précision de {accuracyFrom} à {accuracyTo} %{trend}.",
+        "{count} courses : vitesse de {speedFrom} à {speedTo} MPM, précision de {accuracyFrom} à {accuracyTo} %{trend}{week}.",
+      week: ", moyenne sur 7 jours de {wpm} MPM",
+      gain: "{gain} MPM",
+      gainSince: "depuis tes débuts",
+      gainSoon: "Ton gain depuis tes débuts s'affiche à partir de {count} courses.",
       trend: {
         up: ", tendance à la hausse",
         down: ", tendance à la baisse",
@@ -1260,6 +1494,10 @@ export const fr = {
       notReached: "objectif de {goal} MPM pas encore atteint",
       legendSpeed: "vitesse sur la touche {key}",
       legendGoal: "objectif {goal} MPM",
+      practise: "ENTRAÎNER CETTE LETTRE · {key}",
+      practising: "OUVERTURE DU BUREAU…",
+      practiseFailed: "La salle d'entraînement ne s'est pas ouverte. Réessaie.",
+      returned: "RETOURNÉ ·",
     },
     keyInventory: {
       kicker: "INVENTAIRE DES TOUCHES",
@@ -1300,6 +1538,7 @@ export const fr = {
       },
       key: "{key} : {strokes} des frappes, {errors} de fautes",
       untyped: "{key} : jamais frappée",
+      guide: "{name} · comment la taper",
       legendSize: "taille du cercle : fréquence de frappe",
       legendCore: "cœur rouge : part des fautes",
     },

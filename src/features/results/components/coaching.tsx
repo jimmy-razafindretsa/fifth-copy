@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { fill } from "@/i18n/format";
 import type { MissedKey } from "../view/keys";
 import type { PersonalLabels } from "../view/report-labels";
@@ -13,9 +14,8 @@ export function keyName(char: string, labels: PersonalLabels): string {
 /** The tip's one sentence, its key named as the list names it. */
 export function tipSentence(tip: Tip, labels: PersonalLabels): string {
   const template = labels.tip[tip.id];
-  return "char" in tip
-    ? fill(template, { key: keyName(tip.char, labels), n: tip.count })
-    : template;
+  if ("char" in tip) return fill(template, { key: keyName(tip.char, labels), n: tip.count });
+  return "count" in tip ? fill(template, { n: tip.count }) : template;
 }
 
 /**
@@ -29,9 +29,12 @@ export function tipSentence(tip: Tip, labels: PersonalLabels): string {
 export function CoachingSections({
   coaching,
   labels,
+  between,
 }: {
   coaching: Coaching;
   labels: PersonalLabels;
+  /** A section between the errors by key and the tip (#999 C54: the keyboard heatmap). */
+  between?: ReactNode;
 }) {
   return (
     <>
@@ -49,6 +52,7 @@ export function CoachingSections({
           <KeyList keys={coaching.keys} labels={labels} />
         )}
       </div>
+      {between}
       <div className={styles.section} data-section="tip" data-tip={coaching.tip.id}>
         <h3 className={styles.tag}>{labels.tip.tag}</h3>
         <p className={styles.sentence} data-field="tip">

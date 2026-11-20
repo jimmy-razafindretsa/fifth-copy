@@ -335,6 +335,7 @@ async function renderAll(
       census={async () => censusFixtures.middle!}
       keyFile={keyFileFixtures.twoWeeks}
       keyboard={KEYBOARD}
+      callouts={[{ kind: "faster", char: "ç", pct: 30 }]}
       {...over}
     />,
     // the census boundary inline, where it streams in (a large boundary is otherwise outlined to the end)
@@ -358,13 +359,17 @@ describe("ProfileScreen reference order (#970 C1)", () => {
       "service",
       "blank",
       "dockets",
+      "bests",
       "census",
+      "callouts",
       "keyProgress",
       "curve",
       "keySheet",
       "keyInventory",
       "keyboardMap",
+      "accents",
       "attendance",
+      "medals",
       "archive",
     ]);
   });
@@ -379,11 +384,13 @@ describe("ProfileScreen reference order (#970 C1)", () => {
       "streaks",
       "suspect-pairs",
       "census",
+      "callouts",
       "key-progress",
       "curve",
       "key-sheet",
       "key-inventory",
       "keyboard-map",
+      "accents",
       "attendance",
       "archive",
     ]);
@@ -404,11 +411,13 @@ describe("ProfileScreen reference order (#970 C1)", () => {
       "SÉRIES SANS FAUTE",
       "COMBINAISONS SUSPECTES",
       "TA PLACE AU MINISTÈRE",
+      "CETTE SEMAINE À TON BUREAU",
       "PROGRESSION PAR TOUCHE",
       "VITESSE AU FIL DES COURSES",
       "FICHE PAR TOUCHE",
       "VITESSE, FRAPPES ET FAUTES",
       "CARTE DU CLAVIER",
+      "RANGÉE DES ACCENTS",
       "REGISTRE DE PRÉSENCE",
       "ARCHIVES DES COURSES",
     ]);

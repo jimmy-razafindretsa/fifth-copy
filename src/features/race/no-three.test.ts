@@ -65,7 +65,7 @@ describe("the race route ships no three.js (#561 C7, C9)", () => {
     });
   }
 
-  it("src/app/race composes only @/features/race, @/features/lobby and @/features/identity (the viewer's preferences, #638; race-3d lazily, #563), through their index", () => {
+  it("src/app/race composes only @/features/race, @/features/lobby and @/features/identity (the viewer's preferences, #638; race-3d lazily, #563), through their index or the lobby's light client door (ADR 0026: the projector's seat ring, #999)", () => {
     const features = ROUTE_FILES.flatMap((f) =>
       specifiers(readFileSync(f, "utf8")).filter((s) => s.spec.startsWith("@/features/")),
     );
@@ -73,7 +73,13 @@ describe("the race route ships no three.js (#561 C7, C9)", () => {
     for (const { spec, dynamic } of features) {
       if (spec === "@/features/race-3d")
         expect(dynamic, "race-3d only through import()").toBe(true);
-      else expect(["@/features/race", "@/features/lobby", "@/features/identity"]).toContain(spec);
+      else
+        expect([
+          "@/features/race",
+          "@/features/lobby",
+          "@/features/lobby/client",
+          "@/features/identity",
+        ]).toContain(spec);
     }
   });
 

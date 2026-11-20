@@ -501,6 +501,13 @@
 }
 
 /* ---- tablet and desktop: the menu column on the left, the stage on the right half ---- */
+/* #999 C15 phones watch: the race entries are a desk's (the menu drops them once hydrated) */
+@media (max-width: 480px) {
+  .entries li:has(> [data-desk-only]) {
+    display: none;
+  }
+}
+
 @media (min-width: 768px) {
   .screen {
     display: grid;

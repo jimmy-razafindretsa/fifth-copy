@@ -16,6 +16,11 @@ export type LoadingCardProps = {
   labels: SceneLabels;
   /** One line of `race.didYouKnow` (#383 fills the list); `null` hides the row. */
   tip: string | null;
+  /**
+   * #999 C6: the READY count row (`READY | 03 / 05`, desks ready over desks in the race) the projector
+   * shows while the room loads (#926); omitted = none.
+   */
+  ready?: { label: string; value: string } | null;
 };
 
 /**
@@ -25,7 +30,7 @@ export type LoadingCardProps = {
  * polite busy status until the scene's first frame is in; the caller removes it then. While the room
  * loads (#926) the waiting room (#937) stands in its place.
  */
-export function LoadingCard({ labels, tip }: LoadingCardProps) {
+export function LoadingCard({ labels, tip, ready = null }: LoadingCardProps) {
   return (
     <div
       role="status"
@@ -44,6 +49,12 @@ export function LoadingCard({ labels, tip }: LoadingCardProps) {
           lines={[labels.loading]}
         />
       </div>
+      {ready ? (
+        <p data-ready className={docket.row}>
+          <span className={docket.label}>{ready.label}</span>
+          <span className={docket.mono}>{ready.value}</span>
+        </p>
+      ) : null}
       {tip ? (
         <p data-did-you-know className={`${docket.row} ${styles.tip}`}>
           <span className={docket.label}>{labels.didYouKnow}</span>

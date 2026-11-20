@@ -42,7 +42,7 @@ describe("connectSeat (#561 C4)", () => {
       load: async () => ({ connectToRoom }),
     });
     await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalledTimes(1));
-    expect(mint).toHaveBeenCalledWith({ code: "KGB-4821" });
+    expect(mint).toHaveBeenCalledWith({ code: "KGB-4821", lobbyId: LOBBY });
     const [url, token] = connectToRoom.mock.calls[0] as unknown as [string, () => string];
     expect(url).toBe("http://r");
     // the token is read before every handshake (#235 C6: a re-mint replaces it)
@@ -68,6 +68,25 @@ describe("connectSeat (#561 C4)", () => {
       });
       await vi.waitFor(() => expect(dispatch).toHaveBeenCalled());
       expect(dispatch).toHaveBeenCalledWith({ type: "token-error", error });
+      expect(connectToRoom).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["rate-limited", "unavailable"] as const)(
+    "#999: a %s mint is the generic token error, no socket",
+    async (error) => {
+      const connectToRoom = vi.fn();
+      const dispatch = vi.fn();
+      connectSeat({
+        code: null,
+        lobbyId: LOBBY,
+        spectator: true,
+        mint: async () => ({ ok: false, error }),
+        dispatch,
+        load: async () => ({ connectToRoom }),
+      });
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalled());
+      expect(dispatch).toHaveBeenCalledWith({ type: "token-error", error: "generic" });
       expect(connectToRoom).not.toHaveBeenCalled();
     },
   );
@@ -367,5 +386,54 @@ describe("connectSeat's socket hook (#559)", () => {
     minted.resolve({ ok: true, token: "t", url: "u" });
     await new Promise((r) => setTimeout(r, 0));
     expect(onSocket).not.toHaveBeenCalled();
+  });
+});
+
+// #999 C1 (the projector's connection, unit-level): a spectator join mints a `spectator` token (and
+// re-mints one on expiry), sends no resume key, never hands the socket to a typing path (`onSocket`),
+// and leaves any parked waiting-room socket of this tab alone.
+describe("connectSeat as a spectator (#999 C1)", () => {
+  it("mints a spectator token, connects with no resume key, never calls onSocket", async () => {
+    const { room } = fakeRoom();
+    const connectToRoom = vi.fn(() => room);
+    const mint = vi.fn<MintRaceToken>(async () => ({ ok: true, token: "tok", url: "http://r" }));
+    const onSocket = vi.fn(() => () => {});
+    const parked = { close: vi.fn() };
+    parkSocket(LOBBY, parked);
+    const stop = connectSeat({
+      code: "KGB-4821",
+      lobbyId: LOBBY,
+      mint,
+      dispatch: vi.fn(),
+      load: async () => ({ connectToRoom }),
+      onSocket,
+      spectator: true,
+    });
+    await vi.waitFor(() => expect(connectToRoom).toHaveBeenCalledTimes(1));
+    expect(mint).toHaveBeenCalledWith({ code: "KGB-4821", spectator: true, lobbyId: LOBBY });
+    const opts = (
+      connectToRoom.mock.calls[0] as unknown as [
+        string,
+        () => string,
+        { resumeKey: () => string | null },
+      ]
+    )[2];
+    expect(opts.resumeKey()).toBeNull();
+    expect(onSocket).not.toHaveBeenCalled();
+    // the store's binding and the issued-key memory only: no handoff release
+    expect(room.onWelcome).toHaveBeenCalledTimes(2);
+    room.deliver("welcome", {
+      resumeKey: null,
+      room: { phase: "waiting" },
+      serverNow: 0,
+      race: null,
+    });
+    expect(parked.close).not.toHaveBeenCalled();
+    // an expired token re-mints a spectator one
+    room.deliver("connectError", "bad-token");
+    await vi.waitFor(() => expect(mint).toHaveBeenCalledTimes(2));
+    expect(mint).toHaveBeenLastCalledWith({ code: "KGB-4821", spectator: true, lobbyId: LOBBY });
+    stop();
+    releaseParkedSocket(LOBBY);
   });
 });

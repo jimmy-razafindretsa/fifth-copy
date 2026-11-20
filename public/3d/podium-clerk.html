@@ -23,6 +23,8 @@
 // `Fifth Copy Medal.html` (disc, rim, star, boss, loop, ribbon, clasp, the metal pairs of 13) at chest-pin
 // scale with plain metal faces (no text in WebGL, bible 9). No orbit camera, no tone mapping (the clerk's
 // own look), no studio on the scene: the pin's two metals alone reflect the medal's locally built studio.
+// The Major pins it (bible 10.3 "Pinning", #999 C37): his sleeve and hand bring the pin in from the right, it
+// goes on at the end of the press, he withdraws, the clerk salutes; reduced motion = the pin already on.
 // Flags: ?embed=1 (pixel ratio 1), ?cfg=<outfit JSON> (first frame), ?variant=gold|silver|bronze.
 // Messages (bible 15), from the parent at this origin only: fc-setcfg {cfg}, fc-medal-variant {variant},
 // fc-motion {reduce}; posts fc-clerk {cfg} to the parent after each build is first drawn.
@@ -267,6 +269,43 @@ const pin = new THREE.Group();
 const PIN = { scale: 0.09, x: 0.105, y: 0.4, z: 0.272, turn: 0.34, tip: -0.24 };
 pin.scale.setScalar(PIN.scale); pin.position.set(PIN.x, PIN.y, PIN.z); pin.rotation.set(PIN.tip, PIN.turn, 0);
 
+// ---- the Major pins the medal (10.3 "Pinning", 14.4; #999 C37): only his sleeve and hand enter the frame ----
+const MAJOR = { tunic: 0x5B5E3C, cuff: 0xE2B23A, skin: 0xEBC09C };
+// seconds from the first drawn frame: wait, reach in, press, withdraw (about 2.5 s)
+const PINNING = { wait: 0.4, reach: 0.9, press: 0.35, back: 0.8 };
+// the hand holds the pin HOLD to its left; it starts off frame right, a little toward the camera
+const HOLD = new THREE.Vector3(0.09, 0.01, 0.005);
+const REACH_TO = new THREE.Vector3(PIN.x, PIN.y, PIN.z).add(HOLD), REACH_FROM = REACH_TO.clone().add(new THREE.Vector3(0.75, 0.12, 0.3));
+function pinPhase(u, o) {
+  const a = PINNING.wait, b = a + PINNING.reach, c = b + PINNING.press, d = c + PINNING.back;
+  o.reach = 0; o.press = 0; o.pinned = u >= c; o.done = u >= d;
+  if (u >= a && u < b) o.reach = sm((u - a) / PINNING.reach);
+  else if (u >= b && u < c) { o.reach = 1; o.press = Math.sin(Math.PI * (u - b) / PINNING.press); }
+  else if (u >= c && u < d) o.reach = 1 - sm((u - c) / PINNING.back);
+  return o;
+}
+let pinMode = null, major = null;
+// sleeve (his 1.12x of the clerk's arm) along +x, the gold cuff, the hand pinching the pin: one merged mesh
+function majorArm() {
+  const g = new THREE.Group(), part = (geo, col, x, y, z) => { const m = new THREE.Mesh(geo); m.userData.col = col; m.position.set(x, y, z); g.add(m); return m; };
+  part(CAP(0.07, 0.62), MAJOR.tunic, 0.47, 0, 0).rotation.z = Math.PI / 2;
+  part(C(0.078, 0.078, 0.06, 10), MAJOR.cuff, 0.12, 0, 0).rotation.z = Math.PI / 2;
+  part(S(0.065, 8, 6), MAJOR.skin, 0, 0, 0).scale.set(1.15, 0.85, 0.9);
+  part(CAP(0.02, 0.04), MAJOR.skin, -0.05, 0.03, 0.02).rotation.z = 0.9;
+  major = new THREE.Mesh(merge(g), mat);
+}
+majorArm(); major.position.copy(REACH_FROM); scene.add(major);
+major.add(pin); pin.position.copy(HOLD).negate();
+root.dataset.pin = 'held';
+function majorOut() { if (!major) return; scene.remove(major); major.geometry.dispose(); major = null; }
+// the pin goes on the body at its 13 place (same pose it had in the hand at the end of the press: no jump)
+function pinOn(mode) {
+  pinMode = mode; C0.body.add(pin); pin.position.set(PIN.x, PIN.y, PIN.z); pin.rotation.set(PIN.tip, PIN.turn, 0);
+  root.dataset.pin = 'pinned'; root.dataset.pinMode = mode; root.dataset.pinnedAt = String(Math.round(performance.timeOrigin + performance.now()));
+  if (mode === 'set') { majorOut(); nextIdle = t + 0.6; }
+}
+const ph = { reach: 0, press: 0, pinned: false, done: false };
+
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let pageReduce = false;
 const reduced = () => motionQuery.matches || pageReduce;
@@ -287,7 +326,7 @@ function issue(given) {
   C0 = { body: M(root), head: M(hd), eyes: M(ey), lids: M(ld), armL: M(aL), armR: M(aR), sh: { '-1': sL, '1': sR } };
   C0.armL.position.copy(sL); C0.armR.position.copy(sR);
   C0.head.position.copy(piv); C0.head.add(C0.eyes, C0.lids); C0.lids.visible = false;
-  C0.body.add(pin);
+  if (pinMode) C0.body.add(pin);
   char.add(C0.body, C0.head, C0.armL, C0.armR);
   worn = c; Object.keys(CATS).forEach(k => { document.documentElement.dataset[k] = c[k]; });
   // fc-clerk waits for the build's first drawn frame (the loop posts it): it is the plinth's ready signal
@@ -326,8 +365,8 @@ const ACTS = {
   tryon: { d: 0.55, f(u, o) { o.sy = 1 - 0.09 * bell(u, 0, 0.22) + 0.07 * bell(u, 0.22, 0.55); o.sx = 2 - o.sy; o.y = 0.05 * bell(u, 0.2, 0.5); } },
 };
 const IDLE = ['wave', 'stretch', 'look', 'salute', 'scratch'];
-// the salute opens within a second of the first frame (14.4), then the idle set every 3-6 s (10.2)
-let act = null, actT = 0, nextIdle = 0.6, actState = {}, saluted = false;
+// the salute answers the Major's pinning (14.4: no gesture while his hand is in), then the idle set every 3-6 s (10.2)
+let act = null, actT = 0, nextIdle = Infinity, actState = {}, saluted = false;
 function play(name) { act = name; actT = 0; actState = {}; }
 
 const same = (a, b) => !!a && !!b && Object.keys(a).every(k => a[k] === b[k]);
@@ -352,6 +391,18 @@ function loop(now) {
   if (still) act = null;
   else if (!act && t > nextIdle) { play(saluted ? IDLE[Math.floor(Math.random() * IDLE.length)] : 'salute'); saluted = true; }
   if (act) { ACTS[act].f(actT, o); actT += dt; if (actT > ACTS[act].d) { act = null; nextIdle = t + 3 + Math.random() * 3; } }
+  // the Major's pinning (10.3): under reduced motion the pin is set at once, else his hand brings it in
+  if (!pinMode && still) pinOn('set');
+  if (major) {
+    pinPhase(t, ph);
+    if (ph.reach > 0 && root.dataset.pin === 'held') root.dataset.pin = 'pinning';
+    if (ph.pinned && !pinMode) pinOn('major');
+    major.position.lerpVectors(REACH_FROM, REACH_TO, ph.reach);
+    major.position.y += Math.sin(Math.PI * ph.reach) * 0.06; major.position.z -= 0.012 * ph.press;
+    // the clerk looks down at the pin while the hand is in the frame
+    o.hx += 0.3 * ph.reach; o.hy += 0.22 * ph.reach; o.lock = Math.max(o.lock, ph.reach);
+    if (ph.done) { majorOut(); nextIdle = t + 0.2; }
+  }
   aim(-1, tgt[-1]); aim(1, tgt[1]);
   char.position.y = o.y; char.scale.set(o.sx, o.sy, o.sx);
   hx += (0 - hx) * k; hy += (0 - hy) * k;

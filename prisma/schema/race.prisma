@@ -1,7 +1,7 @@
 // Race domain (ADR 0008): the durable record of a race, owned by src/features/results.
 // The race server is database-less; the web app writes these rows through /api/internal/* (#199, #189).
 // Extension points (additive migrations, later cards): stats.prisma (CharStatDaily, BigramStatDaily,
-// later PersonalBest, Achievement) relates to Race.id / User.id. texts.prisma (#346) holds the corpus with no relation
+// PersonalBest, Achievement) relates to Race.id / User.id. texts.prisma (#346) holds the corpus with no relation
 // from Race: the race keeps its own text snapshot.
 
 enum RaceLanguage {
@@ -35,6 +35,12 @@ model Race {
   /// cascade from deleting its host User) keeps the race and every other player's rows.
   lobbyId         String?
   lobby           Lobby?           @relation(fields: [lobbyId], references: [id], onDelete: SetNull)
+  /// The lobby's host when the race started (#999, ADR 0027), written once by `startRace`: the
+  /// audience of other players' speed curves is fixed at race time, so a member who inherits the
+  /// host role later is not part of it. Null for races started before #999 (typists only) and
+  /// after that host's account is deleted (SetNull).
+  hostUserId      String?
+  host            User?            @relation("RaceHost", fields: [hostUserId], references: [id], onDelete: SetNull)
   /// Exact text snapshot typed in this race.
   textContent     String
   textLanguage    RaceLanguage
@@ -54,8 +60,10 @@ model Race {
   createdAt       DateTime         @default(now())
   results         RaceResult[]
   keystrokes      RaceKeystrokes[]
+  personalBests   PersonalBest[]
 
   @@index([lobbyId])
+  @@index([hostUserId])
 }
 
 /// One row per desk (human or bot). Suspicious rows are stored but excluded by consumers (ADR 0008).
@@ -96,10 +104,17 @@ model RaceResult {
   suspicious       Boolean      @default(false)
   suspiciousReason String?
   engineVersion    String
+  /// The desk's clean WPM through the race (#952, #999 C53, ADR 0027): at most 60 `[t, cleanWpm]`
+  /// points (t = ms since GO, the engine's `wpmSeries`), written once by the filing route from the
+  /// trace it receives. Null for bots, flagged rows, an empty trace, rows filed before #999, and
+  /// after the 30-day purge (`stats.purge`, docs/privacy/retention.md).
+  wpmSeries        Json?
   createdAt        DateTime     @default(now())
 
   @@unique([raceId, desk])
   @@index([userId])
+  /// The 30-day purge of `wpmSeries` (#999, ADR 0027).
+  @@index([createdAt])
 }
 
 /// Raw keystrokes of one human desk: gzip of the JSON Keystroke[] (@fifth-copy/engine), kept 30 days.

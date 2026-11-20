@@ -61,7 +61,7 @@ async function init(page: Page, stall: boolean) {
   await page.evaluate(
     ({ stall, after, ms }) => {
       postMessage(
-        { v: 1, type: "fc-race-init", view: {}, preset: "auto", motion: "full" },
+        { v: 2, type: "fc-race-init", view: {}, preset: "auto", motion: "full" },
         location.origin,
       );
       if (stall)

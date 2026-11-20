@@ -308,20 +308,42 @@ export const en = {
     unknown: "SYSTEM NOT DETECTED · PICK YOURS",
     indexLabel: "Characters",
     indexTag: "CHARACTERS",
-    unverifiedTag: "NOT CHECKED YET",
-    unverifiedPair:
-      "Nobody has typed these on a real {layout} keyboard under {os} yet. The Ministry files only what it has tried.",
-    unverifiedLayout:
-      "Nobody has typed these on a real {layout} keyboard yet. The Ministry files only what it has tried.",
+    undocumentedTag: "NOT IN THE PUBLISHED LAYOUT DATA",
+    undocumentedPair:
+      "Neither the vendor nor Unicode CLDR publishes key data for a {layout} keyboard under {os}. The Ministry files only what is published.",
+    undocumentedLayout:
+      "Neither the vendor nor Unicode CLDR publishes key data for a {layout} keyboard. The Ministry files only what is published.",
+    sourceLabel: "SOURCE",
+    sourceNote:
+      "FROM THE VENDOR'S OR UNICODE CLDR'S PUBLISHED LAYOUT DATA · NOT YET TRIED ON A REAL MACHINE",
+    sourceNames: {
+      windowsCsa: "Microsoft · Canadian Multilingual Standard layout",
+      windowsFrCa: "Microsoft · Canadian French layout",
+      windowsAzerty: "Microsoft · French (Legacy, AZERTY) layout",
+      windowsAltCodes: "Microsoft · Alt codes on the numeric keypad",
+      macUs: "Unicode CLDR · macOS U.S. layout",
+      macCsa: "Unicode CLDR · macOS Canadian - CSA layout",
+      macAzerty: "Unicode CLDR · macOS French layout",
+      macAccents: "Apple · Enter characters with accent marks on Mac",
+      macCharacterViewer: "Apple · Use emoji and symbols on Mac",
+      chromeosCsa: "xkeyboard-config · Canadian (CSA) layout, ChromeOS's Canadian Multilingual",
+      chromeosFrCa: "Unicode CLDR · ChromeOS Canada layout",
+      chromeosAzerty: "Unicode CLDR · ChromeOS France layout",
+      chromebookAccents: "Google · Accent marks (turn on Show accent marks and special characters)",
+    },
     then: "then",
+    or: "or",
     keys: {
       shift: "Shift",
       alt: "Alt",
       altgr: "AltGr",
       option: "Option",
       ctrl: "Ctrl",
+      rctrl: "Right Ctrl",
       cmd: "Cmd",
+      fn: "Fn/Globe",
       space: "Space",
+      hold: "hold",
       numpad: "keypad",
     },
     chars: {

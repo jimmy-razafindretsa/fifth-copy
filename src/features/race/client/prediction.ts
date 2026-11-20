@@ -51,7 +51,10 @@ export type Prediction = {
    * (a reconcile replaying unacked keys counts nothing again); the stuck hint reads it.
    */
   readonly errorsByChar: ReadonlyMap<string, number>;
-  /** Applies a key locally and queues it; the same prediction when the engine refuses it. */
+  /**
+   * Applies a key locally and queues it; the same prediction when the engine refuses it. Throws on a key
+   * that is not one character or `Backspace` (#1001 C6: never `"Dead"`).
+   */
   push(keystroke: Keystroke): Prediction;
   /** `count` more keys left for the server (a batch went out). */
   markSent(count: number): Prediction;
@@ -148,6 +151,22 @@ function countError(
   return next;
 }
 
+/**
+ * #1001 C6: the engine only ever sees a committed character or `Backspace`; a dead key (`"Dead"`), a
+ * named key or a multi-unit string reaching the prediction is a bug in the input path (`composeKeys`).
+ */
+export function isEngineKey(key: string): boolean {
+  return key === "Backspace" || (key !== "Dead" && key.length === 1);
+}
+
+function assertEngineKey(key: string): void {
+  if (!isEngineKey(key)) {
+    throw new Error(
+      `prediction.push: not a committed character or Backspace: ${JSON.stringify(key)}`,
+    );
+  }
+}
+
 const clamp = (n: number, max: number) => Math.max(0, Math.min(max, Math.floor(n)));
 
 /** What the engine's numbers say about the last key it took (#220): struck, and the pop stamp. */
@@ -193,6 +212,7 @@ export function createPrediction({
       typedAt: mark.typedAt,
       errorsByChar,
       push(keystroke) {
+        assertEngineKey(keystroke.key);
         const next = step(state, keystroke);
         if (next === state) return self;
         const m = markOf(state, next, keystroke.t, mark);

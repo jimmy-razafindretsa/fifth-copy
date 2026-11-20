@@ -1,0 +1,44 @@
+{
+  "os": "windows",
+  "browser": "firefox",
+  "layout": "csa",
+  "case": "c-cedilla",
+  "source": "docs",
+  "ref": "https://www.w3.org/TR/uievents/#keys-cancelable-keys",
+  "row": "W4",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "ç",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ç",
+      "inputType": "insertText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ç",
+      "inputType": "insertText"
+    },
+    {
+      "type": "keyup",
+      "key": "ç",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "ç"
+}

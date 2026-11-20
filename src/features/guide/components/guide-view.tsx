@@ -10,11 +10,14 @@ import {
   GUIDE_LAYOUTS,
   GUIDE_MODIFIERS,
   GUIDE_OSES,
-  pairVerified,
+  GUIDE_SOURCES,
+  pairDocumented,
   shownCombination,
+  sourcesFor,
   type GuideCombination,
   type GuideEntry,
   type GuideOs,
+  type GuideStroke,
 } from "../content";
 import styles from "./guide.module.css";
 
@@ -47,7 +50,7 @@ function deskHref(layout: KeyboardLayoutId, os: GuideOs | null): string {
 }
 
 function keyLabel(key: string, labels: GuideLabels): string {
-  if ((GUIDE_MODIFIERS as readonly string[]).includes(key)) {
+  if (key !== "hold" && (GUIDE_MODIFIERS as readonly string[]).includes(key)) {
     return labels.keys[key as keyof GuideLabels["keys"]];
   }
   const numpad = /^numpad(\d+)$/.exec(key);
@@ -55,23 +58,38 @@ function keyLabel(key: string, labels: GuideLabels): string {
   return key.length > 1 ? key.toUpperCase() : key;
 }
 
-/** The strokes as key caps: `[Option]+[E]` then `[E]`. */
+/** One way to type it: key caps, `+` between keys held together, `then` between strokes; `hold` is a word. */
+function Strokes({ strokes, labels }: { strokes: readonly GuideStroke[]; labels: GuideLabels }) {
+  return strokes.map((stroke, i) => (
+    <span key={i} className={styles.stroke}>
+      {i > 0 ? <span className={styles.then}>{labels.then}</span> : null}
+      {stroke.map((key, k) => (
+        <span key={k} className={styles.strokeKeys}>
+          {k > 0 && stroke[k - 1] !== "hold" ? (
+            <span className={styles.plus} aria-hidden="true">
+              +
+            </span>
+          ) : null}
+          {key === "hold" ? (
+            <span className={styles.then}>{labels.keys.hold}</span>
+          ) : (
+            <kbd className={styles.cap}>{keyLabel(key, labels)}</kbd>
+          )}
+        </span>
+      ))}
+    </span>
+  ));
+}
+
+/** The strokes as key caps: `[Option]+[E]` then `[E]`, then each documented alternative after `or`. */
 function Keys({ combination, labels }: { combination: GuideCombination; labels: GuideLabels }) {
   return (
     <kbd className={styles.keys} data-guide-keys="">
-      {combination.strokes.map((stroke, i) => (
+      <Strokes strokes={combination.strokes} labels={labels} />
+      {combination.alternatives?.map((strokes, i) => (
         <span key={i} className={styles.stroke}>
-          {i > 0 ? <span className={styles.then}>{labels.then}</span> : null}
-          {stroke.map((key, k) => (
-            <span key={k} className={styles.strokeKeys}>
-              {k > 0 ? (
-                <span className={styles.plus} aria-hidden="true">
-                  +
-                </span>
-              ) : null}
-              <kbd className={styles.cap}>{keyLabel(key, labels)}</kbd>
-            </span>
-          ))}
+          <span className={styles.then}>{labels.or}</span>
+          <Strokes strokes={strokes} labels={labels} />
         </span>
       ))}
     </kbd>
@@ -115,13 +133,19 @@ function Segments<T extends string>({
 /**
  * "How to type it" (#999 C26, bible 14.3 "How to type special characters"): the privacy page's form file
  * (kicker, H1, intro) with the desk docket (keyboard and system as 7.1 segmented links), then on paper the
- * characters' index docket and one 7.4 docket per character, anchored `#c-cedilla`. A combination shows
- * only when checked on a real machine (C27); every other pair reads `NOT CHECKED YET`. Pure: the page
- * hands in the desk it read.
+ * characters' index docket and one 7.4 docket per character, anchored `#c-cedilla`. Every combination
+ * comes from the vendor's or Unicode CLDR's published layout data (#1001 C7): the desk docket's source
+ * row says so and links the exact layout files; a pair no source documents reads `NOT IN THE PUBLISHED
+ * LAYOUT DATA`, never a guess. Pure: the page hands in the desk it read.
  */
 export function GuideView({ labels, layoutNames, content, desk, header }: GuideViewProps) {
   const oses = desk.os ? [desk.os] : GUIDE_OSES;
-  const verified = oses.some((os) => pairVerified(content, desk.layout, os));
+  const documented = oses.some((os) => pairDocumented(content, desk.layout, os));
+  const sources = sourcesFor(content, desk.layout, oses);
+  const sourceKey = (url: string) =>
+    (Object.keys(GUIDE_SOURCES) as (keyof typeof GUIDE_SOURCES)[]).find(
+      (k) => GUIDE_SOURCES[k] === url,
+    )!;
   const layoutName = layoutNames[desk.layout];
   return (
     <>
@@ -178,6 +202,25 @@ export function GuideView({ labels, layoutNames, content, desk, header }: GuideV
                 </p>
               </div>
             </div>
+            {sources.length > 0 ? (
+              <div className={styles.deskRow} data-guide-sources="">
+                <span className={styles.deskLabel}>{labels.sourceLabel}</span>
+                <div className={styles.deskValue}>
+                  <p className={styles.sourceNote} data-guide-source-note="">
+                    {labels.sourceNote}
+                  </p>
+                  <ul className={styles.sourceList}>
+                    {sources.map((url) => (
+                      <li key={url}>
+                        <a href={url} className={styles.sourceLink} rel="noopener noreferrer">
+                          {labels.sourceNames[sourceKey(url)]}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -201,11 +244,11 @@ export function GuideView({ labels, layoutNames, content, desk, header }: GuideV
             </ul>
           </nav>
 
-          {verified ? null : (
+          {documented ? null : (
             <EmptyState
               className={styles.empty}
-              title={labels.unverifiedTag}
-              description={fill(desk.os ? labels.unverifiedPair : labels.unverifiedLayout, {
+              title={labels.undocumentedTag}
+              description={fill(desk.os ? labels.undocumentedPair : labels.undocumentedLayout, {
                 layout: layoutName,
                 os: desk.os ? labels.osNames[desk.os] : "",
               })}
@@ -246,8 +289,8 @@ export function GuideView({ labels, layoutNames, content, desk, header }: GuideV
                             {shown ? (
                               <Keys combination={shown} labels={labels} />
                             ) : (
-                              <span className={styles.unchecked} data-guide-unchecked="">
-                                {labels.unverifiedTag}
+                              <span className={styles.unchecked} data-guide-undocumented="">
+                                {labels.undocumentedTag}
                               </span>
                             )}
                           </dd>

@@ -307,20 +307,44 @@ export const fr = {
     unknown: "SYSTÈME NON DÉTECTÉ · CHOISIS LE TIEN",
     indexLabel: "Caractères",
     indexTag: "CARACTÈRES",
-    unverifiedTag: "PAS ENCORE VÉRIFIÉ",
-    unverifiedPair:
-      "Personne ne les a encore tapés sur un vrai clavier {layout} sous {os}. Le Ministère ne classe que ce qu'il a essayé.",
-    unverifiedLayout:
-      "Personne ne les a encore tapés sur un vrai clavier {layout}. Le Ministère ne classe que ce qu'il a essayé.",
+    undocumentedTag: "ABSENT DES DONNÉES DE DISPOSITION PUBLIÉES",
+    undocumentedPair:
+      "Ni le fabricant ni Unicode CLDR ne publient de données de touches pour un clavier {layout} sous {os}. Le Ministère ne classe que ce qui est publié.",
+    undocumentedLayout:
+      "Ni le fabricant ni Unicode CLDR ne publient de données de touches pour un clavier {layout}. Le Ministère ne classe que ce qui est publié.",
+    sourceLabel: "SOURCE",
+    sourceNote:
+      "D'APRÈS LES DONNÉES DE DISPOSITION PUBLIÉES PAR LE FABRICANT OU UNICODE CLDR · PAS ENCORE ESSAYÉ SUR UNE VRAIE MACHINE",
+    sourceNames: {
+      windowsCsa: "Microsoft · disposition multilingue canadienne normalisée",
+      windowsFrCa: "Microsoft · disposition français canadien",
+      windowsAzerty: "Microsoft · disposition français (hérité, AZERTY)",
+      windowsAltCodes: "Microsoft · codes Alt sur le pavé numérique",
+      macUs: "Unicode CLDR · disposition macOS U.S.",
+      macCsa: "Unicode CLDR · disposition macOS Canadien - CSA",
+      macAzerty: "Unicode CLDR · disposition macOS Français",
+      macAccents: "Apple · accents sur Mac (maintenir la lettre)",
+      macCharacterViewer: "Apple · visualiseur de caractères sur Mac",
+      chromeosCsa:
+        "xkeyboard-config · disposition Canadian (CSA), multilingue canadien de ChromeOS",
+      chromeosFrCa: "Unicode CLDR · disposition ChromeOS Canada",
+      chromeosAzerty: "Unicode CLDR · disposition ChromeOS France",
+      chromebookAccents:
+        "Google · accents (activer Afficher les accents et les caractères spéciaux)",
+    },
     then: "puis",
+    or: "ou",
     keys: {
       shift: "Maj",
       alt: "Alt",
       altgr: "AltGr",
       option: "Option",
       ctrl: "Ctrl",
+      rctrl: "Ctrl droite",
       cmd: "Cmd",
+      fn: "Fn/Globe",
       space: "Espace",
+      hold: "maintiens",
       numpad: "pavé num.",
     },
     chars: {

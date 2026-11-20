@@ -2,10 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { en } from "@/i18n/en";
 import { fr } from "@/i18n/fr";
-import { GUIDE_CONTENT, withChecks } from "../content";
+import { GUIDE_CONTENT, GUIDE_SOURCES } from "../content";
 import { GuideView, type GuideDesk } from "./guide-view";
 
-// #999 C26 states (default, unknown OS, unverified pair) and C27 (only a checked pair shows keys).
+// #999 C26 states (default, unknown OS, a pair with nothing documented) and #1001 C7 (every documented
+// pair shows its keys and the published-layout-data note with its source links; an undocumented pair
+// says so, never a guess).
 
 function render(desk: GuideDesk, content = GUIDE_CONTENT, t = en) {
   return renderToStaticMarkup(
@@ -19,16 +21,7 @@ function render(desk: GuideDesk, content = GUIDE_CONTENT, t = en) {
   );
 }
 
-const checkedCedilla = GUIDE_CONTENT.map((entry) =>
-  entry.char === "ç"
-    ? {
-        ...entry,
-        pairs: withChecks(entry.pairs, "ç", { ç: { CSA: { windows: { check: "G1" } } } }),
-      }
-    : entry,
-);
-
-describe("GuideView (#999 C26, C27)", () => {
+describe("GuideView (#999 C26, #1001 C7)", () => {
   it("one anchored section per character, the index linking each anchor", () => {
     const html = render({ layout: "CSA", os: "windows", osSource: "detected" });
     for (const entry of GUIDE_CONTENT) {
@@ -65,38 +58,115 @@ describe("GuideView (#999 C26, C27)", () => {
     }
     expect(html).not.toMatch(/aria-current="true"[^>]*data-guide-os-option/);
     expect(html).toContain(en.guide.unknown);
-    expect(html).toContain("Nobody has typed these on a real US QWERTY keyboard yet.");
+    // US QWERTY is documented on every system: no empty state; ChromeOS's accents menu has no œ æ « » €
+    expect(html).not.toContain("Neither the vendor nor Unicode CLDR");
+    expect(html.match(/data-guide-keys=""/g)).toHaveLength(3 * GUIDE_CONTENT.length - 5);
+    expect(html.match(/data-guide-undocumented=""/g)).toHaveLength(5);
   });
 
-  it("C27 an unverified pair shows the empty state and no key cap, never the candidate", () => {
+  it("C7 a documented pair shows its keys for every character, with the note and its sources", () => {
     const html = render({ layout: "US_QWERTY", os: "mac", osSource: "detected" });
-    expect(html).not.toContain("data-guide-keys");
-    expect(html.match(/data-guide-unchecked=""/g)).toHaveLength(GUIDE_CONTENT.length);
-    expect(html).toContain("Nobody has typed these on a real US QWERTY keyboard under MACOS yet.");
-    expect(html).not.toContain("Option");
+    expect(html.match(/data-guide-keys=""/g)).toHaveLength(GUIDE_CONTENT.length);
+    expect(html).not.toContain("data-guide-undocumented");
+    expect(html).toContain("FROM THE VENDOR&#x27;S OR UNICODE CLDR&#x27;S PUBLISHED LAYOUT DATA");
+    expect(html).toContain(`href="${GUIDE_SOURCES.macUs}"`);
+    expect(html).not.toContain(`href="${GUIDE_SOURCES.chromebookAccents}"`);
+    expect(html).toMatch(
+      /id="e-circumflex"[\s\S]*?<kbd[^>]*>Option<\/kbd>[\s\S]*?<kbd[^>]*>i<\/kbd>/,
+    );
   });
 
-  it("C27 a checked pair shows its keys; the rest of the pair stays empty", () => {
-    const html = render({ layout: "CSA", os: "windows", osSource: "detected" }, checkedCedilla);
-    expect(html.match(/data-guide-keys=""/g)).toHaveLength(1);
-    expect(html).toMatch(/id="c-cedilla"[\s\S]*data-guide-keys=""[\s\S]*<kbd[^>]*>ç<\/kbd>/);
-    expect(html.match(/data-guide-unchecked=""/g)).toHaveLength(GUIDE_CONTENT.length - 1);
-    // the pair-level empty state goes once one character of the pair is checked
-    expect(html).not.toContain("Nobody has typed these");
+  it("C7 the Windows CSA pair: its own keys, dead keys, AltGr and right Ctrl, the AltGr dead grave after or", () => {
+    const html = render({ layout: "CSA", os: "windows", osSource: "detected" });
+    expect(html.match(/data-guide-keys=""/g)).toHaveLength(GUIDE_CONTENT.length);
+    expect(html).toMatch(/id="c-cedilla"[\s\S]*?data-guide-keys=""[\s\S]*?<kbd[^>]*>ç<\/kbd>/);
+    expect(html).toMatch(
+      /id="guillemet-open"[\s\S]*?<kbd[^>]*>AltGr<\/kbd>[\s\S]*?<kbd[^>]*>z<\/kbd>/,
+    );
+    expect(html).toMatch(
+      /id="oe-ligature"[\s\S]*?<kbd[^>]*>Right Ctrl<\/kbd>[\s\S]*?<kbd[^>]*>e<\/kbd>/,
+    );
+    expect(html).toMatch(/id="euro"[\s\S]*?<kbd[^>]*>AltGr<\/kbd>[\s\S]*?<kbd[^>]*>e<\/kbd>/);
+    expect(html).toMatch(
+      /id="e-grave"[\s\S]*?<kbd[^>]*>è<\/kbd>[\s\S]*?>or<[\s\S]*?<kbd[^>]*>AltGr<\/kbd>[\s\S]*?<kbd[^>]*>\^<\/kbd>[\s\S]*?then[\s\S]*?<kbd[^>]*>e<\/kbd>/,
+    );
+    expect(html).toContain(`href="${GUIDE_SOURCES.windowsCsa}"`);
+    expect(html).not.toContain(`href="${GUIDE_SOURCES.windowsAltCodes}"`);
+  });
+
+  it("C7 Windows US: the Alt codes as Microsoft's page lists them", () => {
+    const html = render({ layout: "US_QWERTY", os: "windows", osSource: "detected" });
+    expect(html).toMatch(/id="e-acute"[\s\S]*?<kbd[^>]*>Alt<\/kbd>[\s\S]*?130 \(keypad\)/);
+    expect(html).toContain(`href="${GUIDE_SOURCES.windowsAltCodes}"`);
+  });
+
+  it("C7 ChromeOS US: hold the letter (Google's accents menu), a word, not a key cap", () => {
+    const html = render(
+      { layout: "US_QWERTY", os: "chromeos", osSource: "chosen" },
+      GUIDE_CONTENT,
+      fr,
+    );
+    expect(html).toMatch(
+      /id="e-circumflex"[\s\S]*?>maintiens<\/span>[\s\S]*?<kbd[^>]*>e<\/kbd>[\s\S]*?puis[\s\S]*?<kbd[^>]*>ê<\/kbd>/,
+    );
+    expect(html).not.toContain(">maintiens</kbd>");
+    expect(html).toContain(`href="${GUIDE_SOURCES.chromebookAccents}"`);
+  });
+
+  it("C7 macOS Canadian French: Apple's accent menu (hold, a word) and Character Viewer (Fn/Globe+E)", () => {
+    const html = render({ layout: "FR_CA", os: "mac", osSource: "detected" });
+    expect(html.match(/data-guide-keys=""/g)).toHaveLength(GUIDE_CONTENT.length);
+    expect(html).not.toContain("data-guide-undocumented");
+    expect(html).toMatch(
+      /id="oe-ligature"[\s\S]*?>hold<\/span>[\s\S]*?<kbd[^>]*>o<\/kbd>[\s\S]*?then[\s\S]*?<kbd[^>]*>œ<\/kbd>/,
+    );
+    expect(html).toMatch(
+      /id="euro"[\s\S]*?<kbd[^>]*>Fn\/Globe<\/kbd>[\s\S]*?<kbd[^>]*>e<\/kbd>[\s\S]*?then[\s\S]*?<kbd[^>]*>€<\/kbd>/,
+    );
+    expect(html).toContain(`href="${GUIDE_SOURCES.macAccents}"`);
+    expect(html).toContain(`href="${GUIDE_SOURCES.macCharacterViewer}"`);
+  });
+
+  it("C7 ChromeOS CSA: xkeyboard-config's ca(multix), the same keys as the Windows CSA pair", () => {
+    const html = render({ layout: "CSA", os: "chromeos", osSource: "chosen" });
+    expect(html.match(/data-guide-keys=""/g)).toHaveLength(GUIDE_CONTENT.length);
+    expect(html).toMatch(
+      /id="oe-ligature"[\s\S]*?<kbd[^>]*>Right Ctrl<\/kbd>[\s\S]*?<kbd[^>]*>e<\/kbd>/,
+    );
+    expect(html).toContain(`href="${GUIDE_SOURCES.chromeosCsa}"`);
+  });
+
+  it("C7 a pair no source documents says so, with the empty state, never a key cap", () => {
+    // every pair is documented today: the state is drawn from content with CSA/ChromeOS emptied
+    const empty = GUIDE_CONTENT.map((entry) => ({
+      ...entry,
+      pairs: {
+        ...entry.pairs,
+        CSA: {
+          ...entry.pairs.CSA,
+          chromeos: {
+            strokes: [],
+            source: GUIDE_SOURCES.chromeosCsa,
+            verifiedBy: "docs",
+            undocumented: true,
+          } as const,
+        },
+      },
+    }));
+    const html = render({ layout: "CSA", os: "chromeos", osSource: "chosen" }, empty);
+    expect(html).not.toContain("data-guide-keys");
+    expect(html.match(/data-guide-undocumented=""/g)).toHaveLength(GUIDE_CONTENT.length);
+    expect(html).toContain(
+      "Neither the vendor nor Unicode CLDR publishes key data for a CANADIAN FRENCH (CSA) keyboard under CHROMEOS.",
+    );
+    expect(html).not.toContain("data-guide-sources");
   });
 
   it("names modifiers in the reader's language", () => {
-    const checked = GUIDE_CONTENT.map((entry) =>
-      entry.char === "ë"
-        ? {
-            ...entry,
-            pairs: withChecks(entry.pairs, "ë", { ë: { AZERTY: { windows: { check: "G3" } } } }),
-          }
-        : entry,
-    );
-    const html = render({ layout: "AZERTY", os: "windows", osSource: "chosen" }, checked, fr);
+    const html = render({ layout: "AZERTY", os: "windows", osSource: "chosen" }, GUIDE_CONTENT, fr);
     expect(html).toMatch(
-      /<kbd[^>]*>Maj<\/kbd>[\s\S]*<kbd[^>]*>\^<\/kbd>[\s\S]*puis[\s\S]*<kbd[^>]*>e<\/kbd>/,
+      /id="e-diaeresis"[\s\S]*?<kbd[^>]*>Maj<\/kbd>[\s\S]*?<kbd[^>]*>\^<\/kbd>[\s\S]*?puis[\s\S]*?<kbd[^>]*>e<\/kbd>/,
     );
+    expect(html).toContain(fr.guide.sourceNote.replaceAll("'", "&#x27;"));
   });
 });

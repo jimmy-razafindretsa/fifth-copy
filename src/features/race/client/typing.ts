@@ -1,6 +1,6 @@
 import { keystrokeSchema, MAX_RACE_MS } from "@fifth-copy/protocol";
 import { createKeyBatcher, type KeyBatcher } from "./key-batcher";
-import type { Keystroke } from "./prediction";
+import { isEngineKey, type Keystroke } from "./prediction";
 import { selectCanType, type RaceStore, type RaceTimer } from "./store";
 
 const deviceTimer: RaceTimer = {
@@ -70,6 +70,8 @@ export function createTyping({ store, send, timer = deviceTimer, flushMs }: Typi
       const keystroke = { t, key };
       // the prediction only takes what the server can be told (#645 C4)
       if (!keystrokeSchema.safeParse(keystroke).success) return;
+      // the engine takes one UTF-16 character or Backspace (#1001 C6, the prediction asserts it)
+      if (!isEngineKey(key)) return;
       store.dispatch({ type: "key", keystroke });
       const after = store.getState().prediction;
       // the engine refused it (the store kept the same prediction): nothing to tell the server

@@ -1,8 +1,20 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
+import {
+  DEFAULT_RACE_SETTINGS,
+  PROTOCOL_VERSION,
+  roomCodeSchema,
+  type Welcome,
+} from "@fifth-copy/protocol";
 import { describe, expect, it } from "vitest";
-import { isPlayKey, keyOf, RaceInput, TYPING_SURFACE } from "./race-input";
+import { createKeyComposer } from "../client/input/compose-keys";
+import { loadFixtures } from "../client/input/fixtures";
+import type { Keystroke } from "../client/prediction";
+import { createRaceStore, type RaceTimer } from "../client/store";
+import { createTyping } from "../client/typing";
+import { selectMachineProps } from "../view/machine-props";
+import { isPlayKey, keyOf, RaceInput, routeInputEvent, TYPING_SURFACE } from "./race-input";
 
 // #559 C4, the markup and the key filter (the focus, the lock and the clipboard live in a browser:
 // e2e/race/input.spec.ts).
@@ -134,5 +146,133 @@ describe("RaceInput play key (#951: Option/Alt + the card's letter)", () => {
   it("Enter no longer plays and types nothing", () => {
     expect(isPlayKey(press("Enter", "Enter"), "K")).toBe(false);
     expect(keyOf(press("Enter", "Enter"))).toBeNull();
+  });
+});
+
+// Contract of #1001 C4: RaceInput routes every event through `composeKeys`. During a composition or a
+// pending dead key the machine shows no `data-wrong` and the prediction receives nothing; at the commit
+// one keystroke per committed NFC character is pushed and batched. (The DOM half: e2e/race/dead-keys.)
+describe("RaceInput through composeKeys (#1001 C4)", () => {
+  const SERVER_NOW = 1_767_225_600_000;
+
+  /** A running Block race on `text`, typed through `createTyping` with a fake clock. */
+  function race(text: string) {
+    let now = SERVER_NOW;
+    const due = new Map<number, { at: number; fn: () => void }>();
+    let next = 0;
+    const timer: RaceTimer = {
+      now: () => now,
+      setTimeout: (fn, ms) => {
+        due.set(++next, { at: now + ms, fn });
+        return next;
+      },
+      clearTimeout: (handle) => void due.delete(handle as number),
+    };
+    const advance = (ms: number) => {
+      now += ms;
+      for (const [id, job] of [...due].sort(([, a], [, b]) => a.at - b.at)) {
+        if (job.at > now) continue;
+        due.delete(id);
+        job.fn();
+      }
+    };
+    const store = createRaceStore();
+    const welcome: Welcome = {
+      v: PROTOCOL_VERSION,
+      role: "player",
+      you: 2,
+      room: { code: roomCodeSchema.parse("KGB-4821"), phase: "waiting" },
+      members: [],
+      settings: { ...DEFAULT_RACE_SETTINGS, errorMode: "block" },
+      race: null,
+      state: null,
+      overlay: null,
+      bonus: null,
+      resumeKey: null,
+      serverNow: SERVER_NOW,
+      autoStartAt: null,
+      pending: null,
+    };
+    store.dispatch({ type: "welcome", payload: welcome, receivedAt: now });
+    const raceInfo = {
+      raceId: "3b241101-e2bb-4255-8caf-4136c566a962",
+      text,
+      language: "fr" as const,
+      wordCount: 1,
+      t0: SERVER_NOW + 1_000,
+      timerS: null,
+    };
+    store.dispatch({ type: "countdown", payload: { v: PROTOCOL_VERSION, race: raceInfo } });
+    advance(1_000);
+    store.dispatch({ type: "go" });
+    advance(200);
+    const sent: Keystroke[][] = [];
+    const typing = createTyping({ store, send: (batch) => sent.push(batch), timer });
+    const composer = createKeyComposer();
+    const pushed: string[] = [];
+    const onKey = (key: string) => {
+      pushed.push(key);
+      typing.press(key);
+    };
+    return { store, composer, onKey, pushed, sent, advance };
+  }
+
+  const fixtures = loadFixtures().filter(({ fixture }) => fixture.case === "circumflex-e");
+
+  it.each(fixtures.map(({ file, fixture }) => [file, fixture] as const))(
+    "%s: nothing before the commit, one keystroke ê after it, batched",
+    (_file, fixture) => {
+      const { store, composer, onKey, pushed, sent, advance } = race("être");
+      const before = store.getState().prediction;
+      const commit = fixture.events.findIndex(
+        (e) =>
+          e.type === "compositionend" || (e.type === "beforeinput" && e.inputType === "insertText"),
+      );
+      expect(commit).toBeGreaterThan(0);
+      for (const event of fixture.events.slice(0, commit)) {
+        routeInputEvent(composer, event, onKey);
+        const state = store.getState();
+        expect(state.prediction, event.type).toBe(before);
+        expect(selectMachineProps(state).wrong, event.type).toBeNull();
+        expect(selectMachineProps(state).pressed, event.type).toBeNull();
+      }
+      expect(composer.pending).toBe(true);
+      for (const event of fixture.events.slice(commit)) routeInputEvent(composer, event, onKey);
+      expect(pushed).toEqual(["ê"]);
+      const state = store.getState();
+      expect(state.prediction?.state.cursor).toBe(1);
+      expect(state.prediction?.state.errors).toBe(0);
+      expect(selectMachineProps(state).wrong).toBeNull();
+      expect(sent).toEqual([]);
+      advance(60);
+      expect(sent.flat().map((k) => k.key)).toEqual(["ê"]);
+    },
+  );
+
+  it("a decomposed commit (e + U+0302) is one NFC keystroke", () => {
+    const { composer, onKey, pushed, store } = race("être");
+    const ev = { key: null, code: null, isComposing: null, inputType: null } as const;
+    routeInputEvent(composer, { ...ev, type: "compositionstart", data: "" }, onKey);
+    routeInputEvent(composer, { ...ev, type: "compositionend", data: "e\u0302" }, onKey);
+    expect(pushed).toEqual(["ê"]);
+    expect(store.getState().prediction?.state.cursor).toBe(1);
+  });
+
+  it("c then a composed ç: one wrong keystroke, then one correct", () => {
+    const { composer, onKey, store, advance, sent } = race("ça");
+    const kd = { code: null, data: null, inputType: null, isComposing: false } as const;
+    expect(routeInputEvent(composer, { ...kd, type: "keydown", key: "c" }, onKey)).toBe(true);
+    expect(store.getState().prediction?.state.errors).toBe(1);
+    expect(selectMachineProps(store.getState()).wrong).toBe("c");
+    const ev = { key: null, code: null, isComposing: null, inputType: null } as const;
+    routeInputEvent(composer, { ...ev, type: "compositionstart", data: "" }, onKey);
+    routeInputEvent(composer, { ...ev, type: "compositionupdate", data: "¸" }, onKey);
+    routeInputEvent(composer, { ...ev, type: "compositionend", data: "ç" }, onKey);
+    const after = store.getState().prediction!;
+    expect(after.state.cursor).toBe(1);
+    expect(after.state.errors).toBe(1);
+    expect(after.state.correct).toBe(1);
+    advance(60);
+    expect(sent.flat().map((k) => k.key)).toEqual(["c", "ç"]);
   });
 });

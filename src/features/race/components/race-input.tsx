@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  createKeyComposer,
+  keyOf,
+  type KeyComposer,
+  type KeyEventLike,
+} from "../client/input/compose-keys";
 import styles from "./race-input.module.css";
 
 /** The typing surface (bible 7.7a): the telex strip, the typed sheet and the machine. */
@@ -12,20 +18,29 @@ export type KeydownLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "a
   shiftKey?: boolean;
   /** The physical key (`KeyK`): the play shortcut is matched on it (#951). */
   code?: string;
+  keyCode?: number;
 };
 
+/** The key a `keydown` types by itself (#559 C4); dead keys and composition: `composeKeys` (#1001). */
+export { keyOf };
+
 /**
- * The key a `keydown` types, or `null` for anything else (#559 C4): `Backspace`, or one printable
- * character as the layout produced it (`e.key`, AltGr and Option combinations included). Shortcuts
- * (Ctrl or Cmd without Alt), named keys (Shift, Enter, Tab, arrows), dead keys and composition are not
- * keystrokes.
+ * One DOM event through the composer (#1001 C4): its keystrokes go to `onKey` (one per committed NFC
+ * character), and the return says whether the caller cancels the event's default. During a composition
+ * or a pending dead key nothing reaches `onKey`, so the prediction, the strip and the machine (no
+ * `data-wrong`) do not move until the character is committed.
  */
-export function keyOf(e: KeydownLike): string | null {
-  if (e.isComposing) return null;
-  if (e.key === "Backspace") return "Backspace";
-  if (e.metaKey || (e.ctrlKey && !e.altKey)) return null;
-  return Array.from(e.key).length === 1 ? e.key : null;
+export function routeInputEvent(
+  composer: KeyComposer,
+  event: KeyEventLike,
+  onKey: (key: string) => void,
+): boolean {
+  const { keys, preventDefault } = composer.feed(event);
+  for (const key of keys) onKey(key);
+  return preventDefault;
 }
+
+const EMPTY = { key: null, code: null, isComposing: null, data: null, inputType: null } as const;
 
 /**
  * The play shortcut (#951, was a bare Enter in #236): Option (macOS) or Alt (Windows, Linux) plus this
@@ -72,9 +87,11 @@ export type RaceInputProps = {
  * The race's key capture (#559 C4, bible 7.7: an invisible input takes the typing, paste is disabled in
  * races; ARCHITECTURE 7.7: the client half of the anti-cheat). A visually hidden `<input>` with every
  * browser aid off (autocomplete, autocorrect, autocapitalize, spellcheck); focused at GO and on any press
- * inside the typing surface. Printable characters and `Backspace` reach `onKey`, from `keydown` or, where
- * a virtual keyboard sends no key (`Unidentified`), from `beforeinput`; nothing is ever written into the
- * field. Paste, drop, and copying from the surface give nothing. Presentational: the seat view hands it
+ * inside the typing surface. Every keydown, insert and composition event goes through one `composeKeys`
+ * composer (#1001): printable characters and `Backspace` reach `onKey` from `keydown`, from `beforeinput`
+ * where a virtual keyboard sends no key (`Unidentified`) or after a dead key, and from `compositionend`
+ * for an IME or macOS dead key, one keystroke per committed NFC character; a dead key alone or a key
+ * inside a composition types nothing. Nothing stays in the field. Paste, drop, and copying from the surface give nothing. Presentational: the seat view hands it
  * the lock and the key sink (the store, the engine and the socket stay out of components), and the live
  * error settings and errors it carries as data for tests and later cards (#220 C6). A bare Enter plays the
  * Sabotage card (#236, `onPlay`); Space and every printable key stay keystrokes.
@@ -90,6 +107,8 @@ export function RaceInput({
   playKey = null,
 }: RaceInputProps) {
   const input = useRef<HTMLInputElement>(null);
+  // one composer per input (#1001): a dead key or a composition spans several events
+  const [composer] = useState(createKeyComposer);
   const sink = useRef(onKey);
   useEffect(() => {
     sink.current = onKey;
@@ -128,22 +147,37 @@ export function RaceInput({
     const refuse = (e: Event) => {
       if (e.target === el || inSurface(e.target as Node)) e.preventDefault();
     };
-    // the virtual keyboards that send `Unidentified` keydowns type through here
+    const route = (event: KeyEventLike) =>
+      routeInputEvent(composer, event, (key) => sink.current(key));
+    // inserts: virtual keyboards (`Unidentified` keydowns) and the letter after a dead key type here;
+    // a composition's inserts are the IME's, left alone (#1001)
     const onBeforeInput = (e: InputEvent) => {
-      if (e.inputType.startsWith("insertComposition")) return; // dead keys and IMEs: #567
-      e.preventDefault();
-      if (e.inputType === "insertText" && e.data) for (const ch of e.data) sink.current(ch);
-      else if (e.inputType === "deleteContentBackward") sink.current("Backspace");
-    };
-    const clear = () => {
-      el.value = "";
+      const cancel = route({
+        ...EMPTY,
+        type: "beforeinput",
+        inputType: e.inputType,
+        data: e.data,
+        isComposing: e.isComposing,
+      });
+      if (cancel) e.preventDefault();
     };
     // text that reached the field anyway (an insert with no cancelable beforeinput) is typed, then cleared
     const onInput = (e: Event) => {
-      if ((e as InputEvent).isComposing) return;
-      const typed = el.value;
-      el.value = "";
-      for (const ch of typed) sink.current(ch);
+      const event = e as InputEvent;
+      const composing = event.isComposing === true;
+      route({
+        ...EMPTY,
+        type: "input",
+        inputType: event.inputType ?? "insertText",
+        data: el.value,
+        isComposing: composing,
+      });
+      if (!composing) el.value = "";
+    };
+    const onComposition = (e: CompositionEvent) => {
+      const type = e.type as "compositionstart" | "compositionupdate" | "compositionend";
+      route({ ...EMPTY, type, data: e.data });
+      if (type === "compositionend") el.value = "";
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("copy", onCopy);
@@ -152,7 +186,9 @@ export function RaceInput({
     document.addEventListener("drop", refuse);
     el.addEventListener("beforeinput", onBeforeInput);
     el.addEventListener("paste", refuse);
-    el.addEventListener("compositionend", clear);
+    el.addEventListener("compositionstart", onComposition);
+    el.addEventListener("compositionupdate", onComposition);
+    el.addEventListener("compositionend", onComposition);
     el.addEventListener("input", onInput);
     return () => {
       document.removeEventListener("mousedown", onDown);
@@ -162,10 +198,12 @@ export function RaceInput({
       document.removeEventListener("drop", refuse);
       el.removeEventListener("beforeinput", onBeforeInput);
       el.removeEventListener("paste", refuse);
-      el.removeEventListener("compositionend", clear);
+      el.removeEventListener("compositionstart", onComposition);
+      el.removeEventListener("compositionupdate", onComposition);
+      el.removeEventListener("compositionend", onComposition);
       el.removeEventListener("input", onInput);
     };
-  }, []);
+  }, [composer]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     const like: KeydownLike = {
@@ -182,10 +220,22 @@ export function RaceInput({
       onPlay();
       return;
     }
-    const key = keyOf(like);
-    if (key === null) return;
-    e.preventDefault();
-    onKey(key);
+    const cancel = routeInputEvent(
+      composer,
+      {
+        ...EMPTY,
+        type: "keydown",
+        key: e.key,
+        code: e.code,
+        isComposing: e.nativeEvent.isComposing,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        altKey: e.altKey,
+        keyCode: e.keyCode,
+      },
+      onKey,
+    );
+    if (cancel) e.preventDefault();
   };
 
   return (

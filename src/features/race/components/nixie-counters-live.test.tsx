@@ -39,7 +39,8 @@ type RaceStore = import("../client/store").RaceStore;
 const SERVER_NOW = 1_767_225_600_000;
 const SKEW = 1_500;
 const T0 = SERVER_NOW + 3_000;
-const TEXT = "the quick brown fox jumps over the lazy dog and keeps on running far away";
+// long enough for every key `typeOneSecond` presses (81): #1001 C6 asserts each pushed key is a character
+const TEXT = "the quick brown fox jumps over the lazy dog and keeps on running far away until dawn";
 
 const member = (desk: number): Member => ({
   desk,

@@ -1,0 +1,61 @@
+{
+  "os": "windows",
+  "browser": "edge",
+  "layout": "csa",
+  "case": "circumflex-e",
+  "source": "docs",
+  "ref": "assumption",
+  "note": "Dead key without composition events (keydown Dead, keydown of the composed letter, insertText): the shape of UI Events 4.3.4's French-mapping example, but no source documents this sequence producing the accented letter on Windows.",
+  "row": "W1",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "Dead",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "keyup",
+      "key": "Dead",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "keydown",
+      "key": "ê",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ê",
+      "inputType": "insertText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ê",
+      "inputType": "insertText"
+    },
+    {
+      "type": "keyup",
+      "key": "e",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "ê"
+}

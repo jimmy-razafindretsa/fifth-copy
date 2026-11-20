@@ -1,0 +1,44 @@
+{
+  "os": "windows",
+  "browser": "chrome",
+  "layout": "csa",
+  "case": "e-grave",
+  "source": "docs",
+  "ref": "https://www.w3.org/TR/uievents/#keys-cancelable-keys",
+  "row": "W2",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "è",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "è",
+      "inputType": "insertText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "è",
+      "inputType": "insertText"
+    },
+    {
+      "type": "keyup",
+      "key": "è",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "è"
+}

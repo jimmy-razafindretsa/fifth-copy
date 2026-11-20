@@ -1,0 +1,127 @@
+{
+  "os": "macos",
+  "browser": "safari",
+  "layout": "us",
+  "case": "e-grave",
+  "source": "docs",
+  "ref": "assumption",
+  "note": "Composition ending in deleteCompositionText then insertFromComposition; the current Input Events Level 2 no longer defines these input types and no source documents Safari's sequence.",
+  "row": "M5",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "Dead",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null,
+      "altKey": true
+    },
+    {
+      "type": "compositionstart",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "",
+      "inputType": null
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "`",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "`",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "`",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "keyup",
+      "key": "Dead",
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "keydown",
+      "key": "è",
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": null,
+      "keyCode": 229
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "è",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": "deleteCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": "deleteCompositionText"
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "è",
+      "inputType": "insertFromComposition"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "è",
+      "inputType": "insertFromComposition"
+    },
+    {
+      "type": "compositionend",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "è",
+      "inputType": null
+    },
+    {
+      "type": "keyup",
+      "key": "e",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "è"
+}

@@ -113,8 +113,47 @@ describe("GuideView (#999 C26, #1001 C7)", () => {
     expect(html).toContain(`href="${GUIDE_SOURCES.chromebookAccents}"`);
   });
 
-  it("C7 a pair no source documents says so, with the empty state, never a key cap", () => {
+  it("C7 macOS Canadian French: Apple's accent menu (hold, a word) and Character Viewer (Fn/Globe+E)", () => {
+    const html = render({ layout: "FR_CA", os: "mac", osSource: "detected" });
+    expect(html.match(/data-guide-keys=""/g)).toHaveLength(GUIDE_CONTENT.length);
+    expect(html).not.toContain("data-guide-undocumented");
+    expect(html).toMatch(
+      /id="oe-ligature"[\s\S]*?>hold<\/span>[\s\S]*?<kbd[^>]*>o<\/kbd>[\s\S]*?then[\s\S]*?<kbd[^>]*>œ<\/kbd>/,
+    );
+    expect(html).toMatch(
+      /id="euro"[\s\S]*?<kbd[^>]*>Fn\/Globe<\/kbd>[\s\S]*?<kbd[^>]*>e<\/kbd>[\s\S]*?then[\s\S]*?<kbd[^>]*>€<\/kbd>/,
+    );
+    expect(html).toContain(`href="${GUIDE_SOURCES.macAccents}"`);
+    expect(html).toContain(`href="${GUIDE_SOURCES.macCharacterViewer}"`);
+  });
+
+  it("C7 ChromeOS CSA: xkeyboard-config's ca(multix), the same keys as the Windows CSA pair", () => {
     const html = render({ layout: "CSA", os: "chromeos", osSource: "chosen" });
+    expect(html.match(/data-guide-keys=""/g)).toHaveLength(GUIDE_CONTENT.length);
+    expect(html).toMatch(
+      /id="oe-ligature"[\s\S]*?<kbd[^>]*>Right Ctrl<\/kbd>[\s\S]*?<kbd[^>]*>e<\/kbd>/,
+    );
+    expect(html).toContain(`href="${GUIDE_SOURCES.chromeosCsa}"`);
+  });
+
+  it("C7 a pair no source documents says so, with the empty state, never a key cap", () => {
+    // every pair is documented today: the state is drawn from content with CSA/ChromeOS emptied
+    const empty = GUIDE_CONTENT.map((entry) => ({
+      ...entry,
+      pairs: {
+        ...entry.pairs,
+        CSA: {
+          ...entry.pairs.CSA,
+          chromeos: {
+            strokes: [],
+            source: GUIDE_SOURCES.chromeosCsa,
+            verifiedBy: "docs",
+            undocumented: true,
+          } as const,
+        },
+      },
+    }));
+    const html = render({ layout: "CSA", os: "chromeos", osSource: "chosen" }, empty);
     expect(html).not.toContain("data-guide-keys");
     expect(html.match(/data-guide-undocumented=""/g)).toHaveLength(GUIDE_CONTENT.length);
     expect(html).toContain(

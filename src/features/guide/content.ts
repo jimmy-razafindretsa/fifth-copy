@@ -8,10 +8,17 @@ import { GUIDE_CHARS, type GuideChar } from "./chars";
  * macOS and ChromeOS, Microsoft's Alt-code page for a character a Windows layout has no key for, and
  * Google's accents menu for the ChromeOS US layout. Static data, no I/O.
  *
+ * ChromeOS CSA: Chromium maps ChromeOS's Canadian Multilingual input to the XKB layout `ca(multix)`
+ * (https://chromium.googlesource.com/chromium/src/+/main/chromeos/ime/input_methods.txt, line
+ * `xkb:ca:multix:fra ca(multix) fr,fr-CA CA login`); its keys are read from xkeyboard-config's
+ * `symbols/ca`, variant `multix` ("Canadian (CSA)"): level 3 = AltGr (`level3(ralt_switch)`), level 5 =
+ * right Ctrl (`level5(rctrl_switch)`). macOS Canadian French: Apple publishes no layout file and CLDR has
+ * none, so its pairs use Apple's own layout-independent methods: the press-and-hold accent menu for the
+ * letters (`hold+<letter>, <char>`) and the Character Viewer (Fn/Globe+E, then pick) for « » €.
+ *
  * The rule of this file: every pair carries the `source` URL of the exact layout it was read from and
- * `verifiedBy: "docs"`. A pair no source documents (no CLDR file for the Canadian French macOS or the CSA
- * ChromeOS layout; a character a layout has no key for and no fallback) is filed as `undocumented`, with
- * the source that was searched, and the page says so: never a guess. Key names in the sources are physical
+ * `verifiedBy: "docs"`. A pair no source documents (a character a layout has no key for and no fallback)
+ * is filed as `undocumented`, with the source that was searched, and the page says so: never a guess. Key names in the sources are physical
  * positions (Windows virtual keys, the US-QWERTY key at the same ISO position); here they are the key cap
  * a user of that layout sees, the character the key types unmodified. `work/log/1001.md` "Guide sources"
  * lists the sources per layout and OS; a real-device check is a separate follow-up card.
@@ -20,8 +27,8 @@ import { GUIDE_CHARS, type GuideChar } from "./chars";
  * kbdfrna, differs (é è à on their own keys, ç ù œ æ on AltGr): https://learn.microsoft.com/en-us/globalization/keyboards/kbdfrna.html
  *
  * Keys are written as `"option+e, e"`: `+` joins keys held together, `, ` separates the strokes typed one
- * after the other. Modifier tokens (`shift`, `alt`, `altgr`, `option`, `ctrl`, `rctrl`, `cmd`, `space`,
- * `hold`) are named in the reader's language by the page (`hold` is a word, not a key: hold the next key
+ * after the other. Modifier tokens (`shift`, `alt`, `altgr`, `option`, `ctrl`, `rctrl`, `cmd`, `fn`,
+ * `space`, `hold`) are named in the reader's language by the page (`hold` is a word, not a key: hold the next key
  * down); `numpad130` is the Windows Alt code typed on the numeric keypad; anything else is the key cap as
  * printed (`^`, `é`, `` ` ``, `¸`).
  */
@@ -53,6 +60,7 @@ export const GUIDE_MODIFIERS = [
   "ctrl",
   "rctrl",
   "cmd",
+  "fn",
   "space",
   "hold",
 ] as const;
@@ -81,14 +89,19 @@ export const GUIDE_SOURCES = {
   macCsa: `${CLDR}/osx/fr-CA-t-k0-osx.xml`,
   /** Unicode CLDR: macOS "French" (AZERTY). */
   macAzerty: `${CLDR}/osx/fr-t-k0-osx.xml`,
-  /** Unicode CLDR: the macOS layouts (searched: no Canadian French file). */
-  macLayouts: "https://github.com/unicode-org/cldr/tree/release-41/keyboards/osx",
+  /** Apple: "Enter characters with accent marks on Mac" (hold the letter, pick the accent). */
+  macAccents:
+    "https://support.apple.com/guide/mac-help/enter-characters-with-accent-marks-on-mac-mh27474/mac",
+  /** Apple: "Use emoji and symbols on Mac" (Fn/Globe+E opens the Character Viewer, pick the symbol). */
+  macCharacterViewer:
+    "https://support.apple.com/guide/mac-help/use-emoji-and-symbols-on-mac-mchlp1560/mac",
+  /** xkeyboard-config: `symbols/ca` variant `multix` "Canadian (CSA)", ChromeOS's Canadian Multilingual. */
+  chromeosCsa:
+    "https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config/-/raw/master/symbols/ca",
   /** Unicode CLDR: ChromeOS "Canada" (Canadian French). */
   chromeosFrCa: `${CLDR}/chromeos/fr-CA-t-k0-chromeos.xml`,
   /** Unicode CLDR: ChromeOS "France" (AZERTY). */
   chromeosAzerty: `${CLDR}/chromeos/fr-t-k0-chromeos.xml`,
-  /** Unicode CLDR: the ChromeOS layouts (searched: no CSA file). */
-  chromeosLayouts: "https://github.com/unicode-org/cldr/tree/release-41/keyboards/chromeos",
   /** Google: the accents menu (turn on "Show accent marks and special characters", hold the letter). */
   chromebookAccents: "https://support.google.com/chromebook/answer/1059492",
 } as const;
@@ -167,6 +180,8 @@ type Layout = {
   source: GuideSource;
   keys: Partial<Record<GuideChar, string>>;
   also?: Partial<Record<GuideChar, readonly string[]>>;
+  /** A character read from another source than the layout's own. */
+  sourceOf?: Partial<Record<GuideChar, GuideSource>>;
 };
 
 /** The circumflex and diaeresis letters, typed after the layout's dead key. */
@@ -228,8 +243,33 @@ const WINDOWS: Partial<Record<KeyboardLayoutId, Layout>> = {
   },
 };
 
-/** macOS, from the CLDR files of Apple's layouts. */
-const MAC: Partial<Record<KeyboardLayoutId, Layout>> = {
+/** A menu that opens on holding a letter: hold the base letter, then pick the character. */
+const holdMenu = (
+  chars: readonly GuideChar[],
+  base: Partial<Record<GuideChar, string>> = {},
+): Partial<Record<GuideChar, string>> =>
+  Object.fromEntries(
+    chars.map((char) => [char, `hold+${base[char] ?? char.normalize("NFD")[0]!}, ${char}`]),
+  );
+
+/** The accented letters both accent menus (Apple's and Google's) document. */
+const MENU_LETTERS = ["é", "è", "ê", "ë", "à", "â", "ç", "ù", "û", "ô", "î", "ï"] as const;
+
+/** Apple's Character Viewer: Fn/Globe+E opens it, then pick the symbol (search it by name). */
+const CHARACTER_VIEWER = ["«", "»", "€"] as const;
+
+/** macOS, from the CLDR files of Apple's layouts, and Apple's own help pages for Canadian French. */
+const MAC: Record<KeyboardLayoutId, Layout> = {
+  FR_CA: {
+    source: GUIDE_SOURCES.macAccents,
+    keys: {
+      ...holdMenu([...MENU_LETTERS, "œ", "æ"], { œ: "o", æ: "a" }),
+      ...Object.fromEntries(CHARACTER_VIEWER.map((char) => [char, `fn+e, ${char}`])),
+    },
+    sourceOf: Object.fromEntries(
+      CHARACTER_VIEWER.map((char) => [char, GUIDE_SOURCES.macCharacterViewer]),
+    ),
+  },
   US_QWERTY: {
     source: GUIDE_SOURCES.macUs,
     keys: {
@@ -280,16 +320,30 @@ const MAC: Partial<Record<KeyboardLayoutId, Layout>> = {
   },
 };
 
-/** The accented letters of Google's accents menu: hold the base letter, then pick the character. */
-const ACCENTS_MENU: Partial<Record<GuideChar, string>> = Object.fromEntries(
-  (["é", "è", "ê", "ë", "à", "â", "ç", "ù", "û", "ô", "î", "ï"] as const).map((char) => [
-    char,
-    `hold+${char.normalize("NFD")[0]!}, ${char}`,
-  ]),
-);
-
-/** ChromeOS, from the CLDR files of Google's layouts, and Google's accents menu for US. */
-const CHROMEOS: Partial<Record<KeyboardLayoutId, Layout>> = {
+/**
+ * ChromeOS, from the CLDR files of Google's layouts, xkeyboard-config's `ca(multix)` for CSA (the layout
+ * Chromium maps ChromeOS's Canadian Multilingual to), and Google's accents menu for US.
+ */
+const CHROMEOS: Record<KeyboardLayoutId, Layout> = {
+  CSA: {
+    // multix: AB10 é, AC11 è, BKSL à, LSGT ù, AD12 ç; AD11 dead circumflex, shifted dead diaeresis, on
+    // AltGr dead grave; AltGr+E/Z/X € « »; right Ctrl (level 5)+E/A œ æ
+    source: GUIDE_SOURCES.chromeosCsa,
+    keys: {
+      é: "é",
+      è: "è",
+      à: "à",
+      ç: "ç",
+      ù: "ù",
+      ...deadKeys("^", "shift+^"),
+      œ: "rctrl+e",
+      æ: "rctrl+a",
+      "«": "altgr+z",
+      "»": "altgr+x",
+      "€": "altgr+e",
+    },
+    also: { è: ["altgr+^, e"], à: ["altgr+^, a"], ù: ["altgr+^, u"] },
+  },
   FR_CA: {
     source: GUIDE_SOURCES.chromeosFrCa,
     keys: {
@@ -303,7 +357,7 @@ const CHROMEOS: Partial<Record<KeyboardLayoutId, Layout>> = {
       "»": "shift+«",
     },
   },
-  US_QWERTY: { source: GUIDE_SOURCES.chromebookAccents, keys: ACCENTS_MENU },
+  US_QWERTY: { source: GUIDE_SOURCES.chromebookAccents, keys: holdMenu(MENU_LETTERS) },
   AZERTY: {
     source: GUIDE_SOURCES.chromeosAzerty,
     keys: {
@@ -329,7 +383,9 @@ function fromLayout(
   fallback?: () => GuidePair,
 ): GuidePair {
   const keys = layout?.keys[char];
-  if (layout && keys) return documented(keys, layout.source, layout.also?.[char]);
+  if (layout && keys) {
+    return documented(keys, layout.sourceOf?.[char] ?? layout.source, layout.also?.[char]);
+  }
   if (fallback) return fallback();
   return undocumented(layout?.source ?? searched);
 }
@@ -340,13 +396,13 @@ const windowsPair = (layout: KeyboardLayoutId, char: GuideChar): GuidePair =>
     documented(`alt+numpad${ALT_CODE[char]}`, GUIDE_SOURCES.windowsAltCodes),
   );
 
-/** macOS: CLDR has no file for Canadian French: undocumented. */
+/** macOS: CLDR's file of each layout; Canadian French (no file): Apple's accent menu and Character Viewer. */
 const macPair = (layout: KeyboardLayoutId, char: GuideChar): GuidePair =>
-  fromLayout(MAC[layout], char, GUIDE_SOURCES.macLayouts);
+  fromLayout(MAC[layout], char, MAC[layout].source);
 
-/** ChromeOS: CLDR has no CSA file and Google no page for it: undocumented. */
+/** ChromeOS: each layout's file (CSA: xkeyboard-config's ca(multix)); a character with no key: undocumented. */
 const chromeosPair = (layout: KeyboardLayoutId, char: GuideChar): GuidePair =>
-  fromLayout(CHROMEOS[layout], char, GUIDE_SOURCES.chromeosLayouts);
+  fromLayout(CHROMEOS[layout], char, CHROMEOS[layout].source);
 
 function pairsFor(char: GuideChar): GuidePairs {
   const pairs = {} as GuidePairs;

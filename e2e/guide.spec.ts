@@ -155,13 +155,44 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);
 
-      // no published data for Canadian French on macOS: stated, never a guess
+      // Canadian French on macOS (no layout file): Apple's accent menu and Character Viewer pages
       await page.goto("/guide?layout=FR_CA&os=mac");
-      await expect(page.locator("[data-guide-undocumented]").first()).toHaveText(
-        "ABSENT DES DONNÉES DE DISPOSITION PUBLIÉES",
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
+      await expect(page.locator("[data-guide-undocumented]")).toHaveCount(0);
+      await expect(page.locator("#oe-ligature [data-guide-keys]")).toHaveText(
+        /maintiens\s*o\s*puis\s*œ/,
       );
-      await expect(page.locator("[data-guide-keys]")).toHaveCount(0);
-      await expect(page.locator("[data-guide-sources]")).toHaveCount(0);
+      await expect(page.locator("#guillemet-open [data-guide-keys]")).toHaveText(
+        /Fn\/Globe\s*\+\s*e\s*puis\s*«/,
+      );
+      await expect(
+        page.getByRole("link", { name: "Apple · visualiseur de caractères sur Mac" }),
+      ).toHaveAttribute(
+        "href",
+        "https://support.apple.com/guide/mac-help/use-emoji-and-symbols-on-mac-mchlp1560/mac",
+      );
+      await expectNoA11yViolations(page);
+    });
+
+    test("C7 ChromeOS CSA: xkeyboard-config's ca(multix), ChromeOS's Canadian Multilingual", async ({
+      page,
+    }) => {
+      await page.goto("/guide?layout=CSA&os=chromeos");
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
+      await expect(page.locator("[data-guide-undocumented]")).toHaveCount(0);
+      await expect(page.locator("#u-grave [data-guide-keys]")).toHaveText(/^ù/);
+      await expect(page.locator("#ae-ligature [data-guide-keys]")).toHaveText(
+        /Right Ctrl\s*\+\s*a/,
+      );
+      await expect(page.locator("#guillemet-close [data-guide-keys]")).toHaveText(/AltGr\s*\+\s*x/);
+      await expect(
+        page.getByRole("link", {
+          name: "xkeyboard-config · Canadian (CSA) layout, ChromeOS's Canadian Multilingual",
+        }),
+      ).toHaveAttribute(
+        "href",
+        "https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config/-/raw/master/symbols/ca",
+      );
       await expectNoA11yViolations(page);
     });
   });

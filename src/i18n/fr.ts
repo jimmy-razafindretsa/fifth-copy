@@ -323,10 +323,12 @@ export const fr = {
       macUs: "Unicode CLDR · disposition macOS U.S.",
       macCsa: "Unicode CLDR · disposition macOS Canadien - CSA",
       macAzerty: "Unicode CLDR · disposition macOS Français",
-      macLayouts: "Unicode CLDR · dispositions macOS",
+      macAccents: "Apple · accents sur Mac (maintenir la lettre)",
+      macCharacterViewer: "Apple · visualiseur de caractères sur Mac",
+      chromeosCsa:
+        "xkeyboard-config · disposition Canadian (CSA), multilingue canadien de ChromeOS",
       chromeosFrCa: "Unicode CLDR · disposition ChromeOS Canada",
       chromeosAzerty: "Unicode CLDR · disposition ChromeOS France",
-      chromeosLayouts: "Unicode CLDR · dispositions ChromeOS",
       chromebookAccents:
         "Google · accents (activer Afficher les accents et les caractères spéciaux)",
     },
@@ -340,6 +342,7 @@ export const fr = {
       ctrl: "Ctrl",
       rctrl: "Ctrl droite",
       cmd: "Cmd",
+      fn: "Fn/Globe",
       space: "Espace",
       hold: "maintiens",
       numpad: "pavé num.",

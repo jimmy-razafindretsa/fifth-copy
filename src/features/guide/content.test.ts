@@ -155,11 +155,37 @@ describe("guide from vendor documentation (#1001 C7)", () => {
     expect(keys("€", "AZERTY", "mac")).toEqual([["option", "$"]]);
   });
 
+  it("macOS Canadian French, from Apple's accent menu and Character Viewer pages (no layout file)", () => {
+    expect(keys("é", "FR_CA", "mac")).toEqual([["hold", "e"], ["é"]]);
+    expect(keys("ç", "FR_CA", "mac")).toEqual([["hold", "c"], ["ç"]]);
+    expect(keys("œ", "FR_CA", "mac")).toEqual([["hold", "o"], ["œ"]]);
+    expect(keys("æ", "FR_CA", "mac")).toEqual([["hold", "a"], ["æ"]]);
+    for (const char of ["«", "»", "€"]) {
+      expect(keys(char, "FR_CA", "mac"), char).toEqual([["fn", "e"], [char]]);
+    }
+    expect(sourcesFor(GUIDE_CONTENT, "FR_CA", ["mac"])).toEqual([
+      GUIDE_SOURCES.macAccents,
+      GUIDE_SOURCES.macCharacterViewer,
+    ]);
+  });
+
   it("ChromeOS, from the CLDR files of Google's Canada and France layouts, and the accents menu for US", () => {
     expect(keys("è", "FR_CA", "chromeos")).toEqual([["`"], ["e"]]);
     expect(keys("»", "FR_CA", "chromeos")).toEqual([["shift", "«"]]);
     expect(keys("€", "AZERTY", "chromeos")).toEqual([["altgr", "e"]]);
     expect(keys("ê", "US_QWERTY", "chromeos")).toEqual([["hold", "e"], ["ê"]]);
+    // CSA: xkeyboard-config's ca(multix), the layout Chromium maps ChromeOS's Canadian Multilingual to
+    expect(keys("é", "CSA", "chromeos")).toEqual([["é"]]);
+    expect(keys("ù", "CSA", "chromeos")).toEqual([["ù"]]);
+    expect(keys("ê", "CSA", "chromeos")).toEqual([["^"], ["e"]]);
+    expect(keys("ë", "CSA", "chromeos")).toEqual([["shift", "^"], ["e"]]);
+    expect(keys("€", "CSA", "chromeos")).toEqual([["altgr", "e"]]);
+    expect(keys("«", "CSA", "chromeos")).toEqual([["altgr", "z"]]);
+    expect(keys("»", "CSA", "chromeos")).toEqual([["altgr", "x"]]);
+    expect(keys("œ", "CSA", "chromeos")).toEqual([["rctrl", "e"]]);
+    expect(keys("æ", "CSA", "chromeos")).toEqual([["rctrl", "a"]]);
+    const grave = GUIDE_CONTENT.find((e) => e.char === "à")!.pairs.CSA.chromeos;
+    expect(!grave.undocumented && grave.alternatives).toEqual([[["altgr", "^"], ["a"]]]);
     for (const char of ["œ", "æ", "«", "»", "€"]) {
       expect(keys(char, "US_QWERTY", "chromeos"), char).toEqual([]);
     }
@@ -173,17 +199,16 @@ describe("guide from vendor documentation (#1001 C7)", () => {
     }
   });
 
-  it("the pairs with no published data are undocumented, stated not invented", () => {
-    expect(pairDocumented(GUIDE_CONTENT, "FR_CA", "mac")).toBe(false);
-    expect(pairDocumented(GUIDE_CONTENT, "CSA", "chromeos")).toBe(false);
+  it("every layout and OS is documented; a character with no published key is undocumented, not invented", () => {
     for (const layout of keyboardLayoutIds) {
-      expect(pairDocumented(GUIDE_CONTENT, layout, "windows"), layout).toBe(true);
+      for (const os of GUIDE_OSES) {
+        expect(pairDocumented(GUIDE_CONTENT, layout, os), `${layout} ${os}`).toBe(true);
+      }
     }
-    for (const layout of ["CSA", "US_QWERTY", "AZERTY"] as const) {
-      expect(pairDocumented(GUIDE_CONTENT, layout, "mac"), layout).toBe(true);
-    }
-    for (const layout of ["FR_CA", "US_QWERTY", "AZERTY"] as const) {
-      expect(pairDocumented(GUIDE_CONTENT, layout, "chromeos"), layout).toBe(true);
+    // Canadian French on macOS and CSA on ChromeOS: all 17 characters
+    for (const entry of GUIDE_CONTENT) {
+      expect(entry.pairs.FR_CA.mac.undocumented, entry.char).toBeFalsy();
+      expect(entry.pairs.CSA.chromeos.undocumented, entry.char).toBeFalsy();
     }
     // a character a layout has no key for: Canadian French on ChromeOS has no œ æ €
     for (const char of ["œ", "æ", "€"]) expect(keys(char, "FR_CA", "chromeos"), char).toEqual([]);
@@ -196,7 +221,7 @@ describe("guide from vendor documentation (#1001 C7)", () => {
       GUIDE_SOURCES.windowsFrCa,
       GUIDE_SOURCES.windowsAltCodes,
     ]);
-    expect(sourcesFor(GUIDE_CONTENT, "CSA", ["chromeos"])).toEqual([]);
+    expect(sourcesFor(GUIDE_CONTENT, "CSA", ["chromeos"])).toEqual([GUIDE_SOURCES.chromeosCsa]);
     for (const url of Object.values(GUIDE_SOURCES)) {
       expect(url).not.toBe(
         "https://learn.microsoft.com/en-us/globalization/windows-keyboard-layouts",

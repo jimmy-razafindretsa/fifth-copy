@@ -1,7 +1,7 @@
 ---
 id: "0027"
 title: Other players' race speed curves are stored per result and shown only to the race's participants and host
-status: proposed
+status: accepted
 category: data
 scope: ["src/features/results/**", "src/app/api/internal/races/**", "src/features/stats/jobs/purge-keystrokes.ts", "prisma/schema/race.prisma", "docs/privacy/**"]
 supersedes: []

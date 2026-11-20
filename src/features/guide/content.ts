@@ -3,19 +3,27 @@ import { GUIDE_CHARS, type GuideChar } from "./chars";
 
 /**
  * The guide's content (#999 C26, #1001 C7): character x layout x OS -> the keys that type it, taken from
- * the vendor's published layout documentation (Microsoft's keyboard layouts and Alt codes, Apple's accent
- * and Keyboard Viewer pages, Google's Chromebook shortcuts). Static data, no I/O.
+ * published layout data, fetched and checked on 2026-11-20: Microsoft's own layout diagrams for Windows,
+ * Unicode CLDR release-41 keyboard files (machine-readable layouts generated from Apple's and Google's) for
+ * macOS and ChromeOS, Microsoft's Alt-code page for a character a Windows layout has no key for, and
+ * Google's accents menu for the ChromeOS US layout. Static data, no I/O.
  *
- * The rule of this file (#1001 C7, replacing #999 C27's real-machine checks): every pair carries the
- * `source` URL that documents it and `verifiedBy: "docs"`. A pair the vendor does not document (Apple
- * publishes no key chart for the Canadian and French input sources) is filed as `undocumented`, with the
- * page that was searched, and the page says so: never a guess. `work/log/1001.md` "Guide sources" lists
- * the sources per layout and OS; a real-device check is a separate follow-up card.
+ * The rule of this file: every pair carries the `source` URL of the exact layout it was read from and
+ * `verifiedBy: "docs"`. A pair no source documents (no CLDR file for the Canadian French macOS or the CSA
+ * ChromeOS layout; a character a layout has no key for and no fallback) is filed as `undocumented`, with
+ * the source that was searched, and the page says so: never a guess. Key names in the sources are physical
+ * positions (Windows virtual keys, the US-QWERTY key at the same ISO position); here they are the key cap
+ * a user of that layout sees, the character the key types unmodified. `work/log/1001.md` "Guide sources"
+ * lists the sources per layout and OS; a real-device check is a separate follow-up card.
+ *
+ * "AZERTY" on Windows is French (Legacy), kbdfr, the most common. Windows 11's French (Standard) layout,
+ * kbdfrna, differs (é è à on their own keys, ç ù œ æ on AltGr): https://learn.microsoft.com/en-us/globalization/keyboards/kbdfrna.html
  *
  * Keys are written as `"option+e, e"`: `+` joins keys held together, `, ` separates the strokes typed one
- * after the other. Modifier tokens (`shift`, `alt`, `altgr`, `option`, `ctrl`, `cmd`, `space`) are named
- * in the reader's language by the page; `numpad0233` is the Windows Alt code typed on the numeric keypad;
- * anything else is the key cap as printed (`^`, `é`, `` ` ``, `¸`) or a hexadecimal code (`e9`).
+ * after the other. Modifier tokens (`shift`, `alt`, `altgr`, `option`, `ctrl`, `rctrl`, `cmd`, `space`,
+ * `hold`) are named in the reader's language by the page (`hold` is a word, not a key: hold the next key
+ * down); `numpad130` is the Windows Alt code typed on the numeric keypad; anything else is the key cap as
+ * printed (`^`, `é`, `` ` ``, `¸`).
  */
 
 export const GUIDE_OSES = ["windows", "mac", "chromeos"] as const;
@@ -37,41 +45,69 @@ export const GUIDE_LAYOUTS = (Object.keys(LAYOUT_ORDER) as KeyboardLayoutId[]).s
 export type GuideOs = (typeof GUIDE_OSES)[number];
 
 /** The modifier tokens the page names per locale; every other token is a printed key cap. */
-export const GUIDE_MODIFIERS = ["shift", "alt", "altgr", "option", "ctrl", "cmd", "space"] as const;
+export const GUIDE_MODIFIERS = [
+  "shift",
+  "alt",
+  "altgr",
+  "option",
+  "ctrl",
+  "rctrl",
+  "cmd",
+  "space",
+  "hold",
+] as const;
 export type GuideModifier = (typeof GUIDE_MODIFIERS)[number];
 
 /** One stroke: the keys held together. */
 export type GuideStroke = readonly string[];
 
-/** The vendor documentation a pair is filed from (#1001 C7). */
+const CLDR = "https://github.com/unicode-org/cldr/blob/release-41/keyboards";
+const MS = "https://learn.microsoft.com/en-us/globalization/keyboards";
+
+/** The published layout data a pair is filed from (#1001 C7), one URL per layout. */
 export const GUIDE_SOURCES = {
-  /** Microsoft: the Windows keyboard layouts (Canadian Multilingual Standard, Canadian French, French, US). */
-  windowsLayouts: "https://learn.microsoft.com/en-us/globalization/windows-keyboard-layouts",
-  /** Microsoft: Alt + the decimal code on the numeric keypad. */
+  /** Microsoft: Canadian Multilingual Standard (KLID 00011009), the CSA layout. */
+  windowsCsa: `${MS}/kbdcan.html`,
+  /** Microsoft: Canadian French (KLID 00001009). */
+  windowsFrCa: `${MS}/kbdca.html`,
+  /** Microsoft: French (Legacy, AZERTY) (KLID 0000040C). */
+  windowsAzerty: `${MS}/kbdfr.html`,
+  /** Microsoft: Alt + the code on the numeric keypad (the codes as the page lists them). */
   windowsAltCodes:
     "https://support.microsoft.com/en-us/office/insert-ascii-or-unicode-latin-based-symbols-and-characters-d13f58d3-7bcb-44a7-a4d5-972ee12e50e0",
-  /** Apple: accent marks with the Option dead keys. */
-  macAccents:
-    "https://support.apple.com/guide/mac-help/enter-characters-with-accent-marks-on-mac-mh27474/mac",
-  /** Apple: the Keyboard Viewer (the input source's keys with Option and Shift). */
-  macViewer: "https://support.apple.com/guide/mac-help/use-the-keyboard-viewer-mchlp1015/mac",
-  /** Google: Chromebook keyboard shortcuts (Unicode entry: Ctrl + Shift + U, the code, Space). */
-  chromebook: "https://support.google.com/chromebook/answer/183101",
+  /** Unicode CLDR: macOS "U.S.". */
+  macUs: `${CLDR}/osx/en-t-k0-osx.xml`,
+  /** Unicode CLDR: macOS "Canadian - CSA". */
+  macCsa: `${CLDR}/osx/fr-CA-t-k0-osx.xml`,
+  /** Unicode CLDR: macOS "French" (AZERTY). */
+  macAzerty: `${CLDR}/osx/fr-t-k0-osx.xml`,
+  /** Unicode CLDR: the macOS layouts (searched: no Canadian French file). */
+  macLayouts: "https://github.com/unicode-org/cldr/tree/release-41/keyboards/osx",
+  /** Unicode CLDR: ChromeOS "Canada" (Canadian French). */
+  chromeosFrCa: `${CLDR}/chromeos/fr-CA-t-k0-chromeos.xml`,
+  /** Unicode CLDR: ChromeOS "France" (AZERTY). */
+  chromeosAzerty: `${CLDR}/chromeos/fr-t-k0-chromeos.xml`,
+  /** Unicode CLDR: the ChromeOS layouts (searched: no CSA file). */
+  chromeosLayouts: "https://github.com/unicode-org/cldr/tree/release-41/keyboards/chromeos",
+  /** Google: the accents menu (turn on "Show accent marks and special characters", hold the letter). */
+  chromebookAccents: "https://support.google.com/chromebook/answer/1059492",
 } as const;
 export type GuideSource = (typeof GUIDE_SOURCES)[keyof typeof GUIDE_SOURCES];
 
-/** The vendor documents these keys for this layout and OS. */
+/** The source documents these keys for this layout and OS. */
 export type GuideCombination = {
   readonly strokes: readonly GuideStroke[];
+  /** Other documented ways, shown after "or". */
+  readonly alternatives?: readonly (readonly GuideStroke[])[];
   readonly source: GuideSource;
   readonly verifiedBy: "docs";
   readonly undocumented?: false;
 };
 
-/** The vendor documents no way to type it on this layout and OS: stated, never invented. */
+/** No source documents a way to type it on this layout and OS: stated, never invented. */
 export type GuideUndocumented = {
   readonly strokes: readonly [];
-  /** The page that was searched. */
+  /** The source that was searched. */
   readonly source: GuideSource;
   readonly verifiedBy: "docs";
   readonly undocumented: true;
@@ -88,8 +124,13 @@ export function parseKeys(keys: string): GuideStroke[] {
   return keys.split(", ").map((stroke) => stroke.split("+"));
 }
 
-const documented = (keys: string, source: GuideSource): GuideCombination => ({
+const documented = (
+  keys: string,
+  source: GuideSource,
+  alternatives: readonly string[] = [],
+): GuideCombination => ({
   strokes: parseKeys(keys),
+  ...(alternatives.length > 0 ? { alternatives: alternatives.map(parseKeys) } : {}),
   source,
   verifiedBy: "docs",
 });
@@ -100,20 +141,20 @@ const undocumented = (source: GuideSource): GuideUndocumented => ({
   undocumented: true,
 });
 
-/** Windows Alt codes (hold Alt, type the code on the numeric keypad), for any layout. */
+/** The Alt codes as Microsoft's page lists them (hold Alt, type the code on the numeric keypad). */
 const ALT_CODE: Record<GuideChar, string> = {
-  é: "0233",
-  è: "0232",
-  ê: "0234",
-  ë: "0235",
-  à: "0224",
-  â: "0226",
-  ç: "0231",
-  ù: "0249",
-  û: "0251",
-  ô: "0244",
-  î: "0238",
-  ï: "0239",
+  é: "130",
+  è: "138",
+  ê: "136",
+  ë: "137",
+  à: "133",
+  â: "131",
+  ç: "135",
+  ù: "151",
+  û: "150",
+  ô: "147",
+  î: "140",
+  ï: "139",
   œ: "0156",
   æ: "0230",
   "«": "0171",
@@ -121,114 +162,191 @@ const ALT_CODE: Record<GuideChar, string> = {
   "€": "0128",
 };
 
-/** ChromeOS Unicode entry (Ctrl+Shift+U, the code point, Space), for any layout. */
-const UNICODE: Record<GuideChar, string> = {
-  é: "e9",
-  è: "e8",
-  ê: "ea",
-  ë: "eb",
-  à: "e0",
-  â: "e2",
-  ç: "e7",
-  ù: "f9",
-  û: "fb",
-  ô: "f4",
-  î: "ee",
-  ï: "ef",
-  œ: "153",
-  æ: "e6",
-  "«": "ab",
-  "»": "bb",
-  "€": "20ac",
+/** A layout's keys per character, read from one source; a missing character has no key there. */
+type Layout = {
+  source: GuideSource;
+  keys: Partial<Record<GuideChar, string>>;
+  also?: Partial<Record<GuideChar, readonly string[]>>;
 };
 
-/** The base letter under an accent (`ê` -> `e`), for the dead-key strokes. */
-const base = (char: GuideChar) => char.normalize("NFD")[0]!;
+/** The circumflex and diaeresis letters, typed after the layout's dead key. */
+const deadKeys = (circ: string, diaer: string): Partial<Record<GuideChar, string>> => ({
+  ê: `${circ}, e`,
+  â: `${circ}, a`,
+  û: `${circ}, u`,
+  ô: `${circ}, o`,
+  î: `${circ}, i`,
+  ë: `${diaer}, e`,
+  ï: `${diaer}, i`,
+});
 
-/** macOS U.S. input source: Apple's Option dead keys, then the letter. */
-const MAC_US_DEAD: Partial<Record<GuideChar, string>> = {
-  é: "option+e, e",
-  è: "option+`, e",
-  ê: "option+i, e",
-  ë: "option+u, e",
-  à: "option+`, a",
-  â: "option+i, a",
-  ù: "option+`, u",
-  û: "option+i, u",
-  ô: "option+i, o",
-  î: "option+i, i",
-  ï: "option+u, i",
+/** Windows, from Microsoft's layout diagrams (rctrl = the right-Ctrl level the CSA diagram shows). */
+const WINDOWS: Partial<Record<KeyboardLayoutId, Layout>> = {
+  CSA: {
+    source: GUIDE_SOURCES.windowsCsa,
+    keys: {
+      é: "é",
+      è: "è",
+      à: "à",
+      ç: "ç",
+      ù: "ù",
+      ...deadKeys("^", "shift+^"),
+      œ: "rctrl+e",
+      æ: "rctrl+a",
+      "«": "altgr+z",
+      "»": "altgr+x",
+      "€": "altgr+e",
+    },
+    // the AltGr dead grave of the same key
+    also: { è: ["altgr+^, e"], à: ["altgr+^, a"], ù: ["altgr+^, u"] },
+  },
+  FR_CA: {
+    source: GUIDE_SOURCES.windowsFrCa,
+    keys: {
+      é: "é",
+      è: "`, e",
+      à: "`, a",
+      ù: "`, u",
+      ç: "¸, c",
+      ...deadKeys("^", "shift+¸"),
+      "«": "«",
+      "»": "shift+«",
+      "€": "altgr+e",
+    },
+  },
+  AZERTY: {
+    source: GUIDE_SOURCES.windowsAzerty,
+    keys: {
+      é: "é",
+      è: "è",
+      à: "à",
+      ç: "ç",
+      ù: "ù",
+      ...deadKeys("^", "shift+^"),
+      "€": "altgr+e",
+    },
+  },
 };
 
-/** macOS U.S. input source: the Option keys the Keyboard Viewer shows for the rest. */
-const MAC_US_OPTION: Partial<Record<GuideChar, string>> = {
-  ç: "option+c",
-  œ: "option+q",
-  æ: "option+'",
-  "«": "option+\\",
-  "»": "option+shift+\\",
-  "€": "option+shift+2",
+/** macOS, from the CLDR files of Apple's layouts. */
+const MAC: Partial<Record<KeyboardLayoutId, Layout>> = {
+  US_QWERTY: {
+    source: GUIDE_SOURCES.macUs,
+    keys: {
+      é: "option+e, e",
+      è: "option+`, e",
+      à: "option+`, a",
+      ù: "option+`, u",
+      ...deadKeys("option+i", "option+u"),
+      ç: "option+c",
+      œ: "option+q",
+      æ: "option+'",
+      "«": "option+\\",
+      "»": "option+shift+\\",
+      "€": "option+shift+2",
+    },
+  },
+  CSA: {
+    source: GUIDE_SOURCES.macCsa,
+    keys: {
+      é: "é",
+      è: "è",
+      à: "à",
+      ç: "ç",
+      ù: "ù",
+      ...deadKeys("^", "shift+^"),
+      œ: "option+q",
+      æ: "option+a",
+      "«": "option+z",
+      "»": "option+x",
+      "€": "option+4",
+    },
+  },
+  AZERTY: {
+    source: GUIDE_SOURCES.macAzerty,
+    keys: {
+      é: "é",
+      è: "è",
+      à: "à",
+      ç: "ç",
+      ù: "ù",
+      ...deadKeys("^", "shift+^"),
+      œ: "option+o",
+      æ: "option+a",
+      "«": "option+è",
+      "»": "option+shift+è",
+      "€": "option+$",
+    },
+  },
 };
 
-/** Letters with their own key on the Windows layout (Microsoft's layout pages). */
-const DIRECT: Partial<Record<KeyboardLayoutId, readonly GuideChar[]>> = {
-  CSA: ["é", "è", "à", "ç", "ù"],
-  FR_CA: ["é"],
-  AZERTY: ["é", "è", "ç", "à", "ù"],
+/** The accented letters of Google's accents menu: hold the base letter, then pick the character. */
+const ACCENTS_MENU: Partial<Record<GuideChar, string>> = Object.fromEntries(
+  (["é", "è", "ê", "ë", "à", "â", "ç", "ù", "û", "ô", "î", "ï"] as const).map((char) => [
+    char,
+    `hold+${char.normalize("NFD")[0]!}, ${char}`,
+  ]),
+);
+
+/** ChromeOS, from the CLDR files of Google's layouts, and Google's accents menu for US. */
+const CHROMEOS: Partial<Record<KeyboardLayoutId, Layout>> = {
+  FR_CA: {
+    source: GUIDE_SOURCES.chromeosFrCa,
+    keys: {
+      é: "é",
+      è: "`, e",
+      à: "`, a",
+      ù: "`, u",
+      ç: "¸, c",
+      ...deadKeys("^", "shift+¸"),
+      "«": "«",
+      "»": "shift+«",
+    },
+  },
+  US_QWERTY: { source: GUIDE_SOURCES.chromebookAccents, keys: ACCENTS_MENU },
+  AZERTY: {
+    source: GUIDE_SOURCES.chromeosAzerty,
+    keys: {
+      é: "é",
+      è: "è",
+      à: "à",
+      ç: "ç",
+      ù: "ù",
+      ...deadKeys("^", "shift+^"),
+      æ: "altgr+a",
+      "«": "altgr+z",
+      "»": "altgr+x",
+      "€": "altgr+e",
+    },
+  },
 };
 
-type Accent = "circ" | "diaer" | "grave" | "cedil";
-
-/** The Windows layout's dead key for each accent (circumflex `^`; diaeresis; grave; cedilla). */
-const DEAD: Partial<Record<KeyboardLayoutId, Partial<Record<Accent, string>>>> = {
-  CSA: { circ: "^", diaer: "shift+^" },
-  FR_CA: { circ: "^", diaer: "shift+¸", grave: "`", cedil: "¸" },
-  AZERTY: { circ: "^", diaer: "shift+^" },
-};
-
-const ACCENT: Partial<Record<GuideChar, Accent>> = {
-  ê: "circ",
-  â: "circ",
-  û: "circ",
-  ô: "circ",
-  î: "circ",
-  ë: "diaer",
-  ï: "diaer",
-  è: "grave",
-  à: "grave",
-  ù: "grave",
-  ç: "cedil",
-};
-
-/** AltGr keys on the Windows layout (the right Alt key). */
-const ALTGR: Partial<Record<KeyboardLayoutId, Partial<Record<GuideChar, string>>>> = {
-  CSA: { "«": "altgr+z", "»": "altgr+x" },
-  AZERTY: { "€": "altgr+e" },
-};
-
-/** Windows: the layout's own key, dead key or AltGr key, else the Alt code (any layout). */
-function windowsPair(layout: KeyboardLayoutId, char: GuideChar): GuideCombination {
-  const layouts = GUIDE_SOURCES.windowsLayouts;
-  if (DIRECT[layout]?.includes(char)) return documented(char, layouts);
-  const accent = ACCENT[char];
-  const dead = accent ? DEAD[layout]?.[accent] : undefined;
-  if (dead) return documented(`${dead}, ${base(char)}`, layouts);
-  const altGr = ALTGR[layout]?.[char];
-  if (altGr) return documented(altGr, layouts);
-  return documented(`alt+numpad${ALT_CODE[char]}`, GUIDE_SOURCES.windowsAltCodes);
+/** A pair from a layout's data; `fallback` when the layout has no key for the character. */
+function fromLayout(
+  layout: Layout | undefined,
+  char: GuideChar,
+  searched: GuideSource,
+  fallback?: () => GuidePair,
+): GuidePair {
+  const keys = layout?.keys[char];
+  if (layout && keys) return documented(keys, layout.source, layout.also?.[char]);
+  if (fallback) return fallback();
+  return undocumented(layout?.source ?? searched);
 }
 
-/** macOS: Apple documents the U.S. input source only; the other input sources have no published chart. */
-function macPair(layout: KeyboardLayoutId, char: GuideChar): GuidePair {
-  if (layout !== "US_QWERTY") return undocumented(GUIDE_SOURCES.macViewer);
-  const dead = MAC_US_DEAD[char];
-  if (dead) return documented(dead, GUIDE_SOURCES.macAccents);
-  return documented(MAC_US_OPTION[char]!, GUIDE_SOURCES.macViewer);
-}
+/** Windows: the layout's own key, dead key, AltGr or right-Ctrl key, else the Alt code (US: Alt codes only). */
+const windowsPair = (layout: KeyboardLayoutId, char: GuideChar): GuidePair =>
+  fromLayout(WINDOWS[layout], char, GUIDE_SOURCES.windowsAltCodes, () =>
+    documented(`alt+numpad${ALT_CODE[char]}`, GUIDE_SOURCES.windowsAltCodes),
+  );
 
-/** ChromeOS: Google documents Unicode entry for any layout (no per-layout key chart is published). */
-const chromeosPair = (char: GuideChar): GuideCombination =>
-  documented(`ctrl+shift+u, ${UNICODE[char]}, space`, GUIDE_SOURCES.chromebook);
+/** macOS: CLDR has no file for Canadian French: undocumented. */
+const macPair = (layout: KeyboardLayoutId, char: GuideChar): GuidePair =>
+  fromLayout(MAC[layout], char, GUIDE_SOURCES.macLayouts);
+
+/** ChromeOS: CLDR has no CSA file and Google no page for it: undocumented. */
+const chromeosPair = (layout: KeyboardLayoutId, char: GuideChar): GuidePair =>
+  fromLayout(CHROMEOS[layout], char, GUIDE_SOURCES.chromeosLayouts);
 
 function pairsFor(char: GuideChar): GuidePairs {
   const pairs = {} as GuidePairs;
@@ -236,13 +354,13 @@ function pairsFor(char: GuideChar): GuidePairs {
     pairs[layout] = {
       windows: windowsPair(layout, char),
       mac: macPair(layout, char),
-      chromeos: chromeosPair(char),
+      chromeos: chromeosPair(layout, char),
     };
   }
   return pairs;
 }
 
-/** Every entry, in the page's order, each layout/OS pair from the vendor's documentation (#1001 C7). */
+/** Every entry, in the page's order, each layout/OS pair from its published layout data (#1001 C7). */
 export const GUIDE_CONTENT: readonly GuideEntry[] = GUIDE_CHARS.map(({ char, anchor }) => ({
   char,
   anchor,
@@ -259,7 +377,7 @@ export function shownCombination(
   return pair && !pair.undocumented ? pair : null;
 }
 
-/** True when the vendor documents at least one character for this layout and OS. */
+/** True when the sources document at least one character for this layout and OS. */
 export function pairDocumented(
   content: readonly GuideEntry[],
   layout: KeyboardLayoutId,

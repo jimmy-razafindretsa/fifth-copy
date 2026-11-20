@@ -3,9 +3,8 @@ import { expect, expectNoA11yViolations, test } from "./fixtures";
 import { guest, locale, withDb } from "./landing/home-helpers";
 
 // #999 C26 (the "How to type it" page: entries, layout and OS, anchors, states, every viewport, both
-// themes, axe), #1001 C7 (every documented layout/OS pair shows its keys with the "from the vendor's
-// layout documentation" note and its source links; a pair the vendor does not document says so, never a
-// guess) and #999 C28 (its own route; the header's guide link and the footer's point at it). Runs on all
+// themes, axe), #1001 C7 (every documented layout/OS pair shows its keys with the "published layout
+// data" note and its exact source links; a pair no source documents says so, never a guess) and #999 C28 (its own route; the header's guide link and the footer's point at it). Runs on all
 // three viewports.
 
 const CHARS = ["é", "è", "ê", "ë", "à", "â", "ç", "ù", "û", "ô", "î", "ï", "œ", "æ", "«", "»", "€"];
@@ -51,15 +50,20 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await expect(page.getByText("DETECTED ON THIS DEVICE")).toBeVisible();
       await expect(page.locator('[data-guide-pair="US_QWERTY/mac"]')).toHaveCount(CHARS.length);
 
-      // #1001 C7: Apple documents the U.S. input source: every character shows its keys, with the note
+      // #1001 C7: CLDR's file of Apple's U.S. layout: every character shows its keys, with the note
       await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
       await expect(page.locator("[data-guide-undocumented]")).toHaveCount(0);
       await expect(
-        page.getByText("FROM THE VENDOR'S LAYOUT DOCUMENTATION · NOT YET TRIED ON A REAL MACHINE"),
+        page.getByText(
+          "FROM THE VENDOR'S OR UNICODE CLDR'S PUBLISHED LAYOUT DATA · NOT YET TRIED ON A REAL MACHINE",
+        ),
       ).toBeVisible();
       await expect(
-        page.getByRole("link", { name: "Apple · Enter characters with accent marks" }),
-      ).toHaveAttribute("href", /^https:\/\/support\.apple\.com\//);
+        page.getByRole("link", { name: "Unicode CLDR · macOS U.S. layout" }),
+      ).toHaveAttribute(
+        "href",
+        "https://github.com/unicode-org/cldr/blob/release-41/keyboards/osx/en-t-k0-osx.xml",
+      );
       await expect(page.locator("#e-circumflex [data-guide-keys]")).toHaveText(
         /Option\s*\+\s*i\s*then\s*e/,
       );
@@ -80,13 +84,15 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await segment(page, "KEYBOARD", "AZERTY").click();
       await expect(page).toHaveURL(/\/guide\?layout=AZERTY&os=chromeos$/);
       await expect(page.locator('[data-guide-pair="AZERTY/chromeos"]')).toHaveCount(CHARS.length);
-      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
+      // CLDR's France layout has no œ key: stated, not invented
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length - 1);
+      await expect(page.locator("#oe-ligature [data-guide-undocumented]")).toBeVisible();
       await expect(
-        page.getByRole("link", { name: "Google · Chromebook keyboard shortcuts" }),
+        page.getByRole("link", { name: "Unicode CLDR · ChromeOS France layout" }),
       ).toBeVisible();
     });
 
-    test("C7 Windows CSA: the layout's own keys, its AltGr keys and the Alt code, from Microsoft's pages", async ({
+    test("C7 Windows CSA: the layout's own keys, its AltGr and right-Ctrl keys, from Microsoft's diagram", async ({
       page,
     }) => {
       await page.goto("/guide?layout=CSA&os=windows");
@@ -94,9 +100,16 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await expect(page.locator("#c-cedilla [data-guide-keys]")).toHaveText("ç");
       await expect(page.locator("#guillemet-open [data-guide-keys]")).toHaveText(/AltGr\s*\+\s*z/);
       await expect(page.locator("#e-circumflex [data-guide-keys]")).toHaveText(/\^\s*then\s*e/);
+      await expect(page.locator("#oe-ligature [data-guide-keys]")).toHaveText(
+        /Right Ctrl\s*\+\s*e/,
+      );
+      await expect(page.locator("#euro [data-guide-keys]")).toHaveText(/AltGr\s*\+\s*e/);
       await expect(
-        page.getByRole("link", { name: "Microsoft · Windows keyboard layouts" }),
-      ).toBeVisible();
+        page.getByRole("link", { name: "Microsoft · Canadian Multilingual Standard layout" }),
+      ).toHaveAttribute(
+        "href",
+        "https://learn.microsoft.com/en-us/globalization/keyboards/kbdcan.html",
+      );
       await expectNoA11yViolations(page);
     });
 
@@ -134,13 +147,21 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
         "true",
       );
       await expect(page.locator("#c-cedilla h2")).toHaveText("ç · c cédille");
-      // Apple publishes no chart for the Canadian CSA input source: stated, never a guess
+      // CLDR's Canadian - CSA macOS layout: every character, with the French note
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
+      await expect(page.locator("[data-guide-source-note]")).toHaveText(
+        "D'APRÈS LES DONNÉES DE DISPOSITION PUBLIÉES PAR LE FABRICANT OU UNICODE CLDR · PAS ENCORE ESSAYÉ SUR UNE VRAIE MACHINE",
+      );
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+      await expectNoA11yViolations(page);
+
+      // no published data for Canadian French on macOS: stated, never a guess
+      await page.goto("/guide?layout=FR_CA&os=mac");
       await expect(page.locator("[data-guide-undocumented]").first()).toHaveText(
-        "ABSENT DE LA DOCUMENTATION DU FABRICANT",
+        "ABSENT DES DONNÉES DE DISPOSITION PUBLIÉES",
       );
       await expect(page.locator("[data-guide-keys]")).toHaveCount(0);
       await expect(page.locator("[data-guide-sources]")).toHaveCount(0);
-      expect(await overflow(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);
     });
   });
@@ -159,7 +180,8 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await expect(
         page.getByRole("group", { name: "SYSTEM", exact: true }).locator('[aria-current="true"]'),
       ).toHaveCount(0);
-      await expect(page.locator("[data-guide-keys]")).toHaveCount(3 * CHARS.length);
+      // ChromeOS's accents menu documents no œ æ « » €
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(3 * CHARS.length - 5);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);
     });

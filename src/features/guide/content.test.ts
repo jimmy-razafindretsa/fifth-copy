@@ -14,8 +14,9 @@ import {
   sourcesFor,
 } from "./content";
 
-// #1001 C7: every layout/OS pair is filed for every character from the vendor's layout documentation,
-// with its source URL and `verifiedBy: "docs"`; a pair the vendor does not document is stated as such.
+// #1001 C7: every layout/OS pair is filed for every character from published layout data (Microsoft's
+// diagrams, Unicode CLDR's files of Apple's and Google's layouts, Microsoft's Alt codes, Google's accents
+// menu), with the exact source URL and `verifiedBy: "docs"`; a pair no source documents is stated as such.
 // #999 C26: one entry per character, anchors.
 
 const LOG = readFileSync(path.join(process.cwd(), "work/log/1001.md"), "utf8");
@@ -77,8 +78,7 @@ describe("guide content (#999 C26)", () => {
             for (const key of stroke) {
               const ok =
                 (GUIDE_MODIFIERS as readonly string[]).includes(key) ||
-                /^numpad\d{4}$/.test(key) ||
-                /^[0-9a-f]{2,4}$/.test(key) ||
+                /^numpad\d{3,4}$/.test(key) ||
                 [...key].length === 1;
               expect(ok, `${entry.char} ${layout} ${os}: "${key}"`).toBe(true);
             }
@@ -119,37 +119,89 @@ describe("guide from vendor documentation (#1001 C7)", () => {
     }
   });
 
-  it("the vendors' own combinations: Windows layouts, Apple's Option keys, Google's Unicode entry", () => {
-    const keys = (
-      char: string,
-      layout: (typeof keyboardLayoutIds)[number],
-      os: (typeof GUIDE_OSES)[number],
-    ) => GUIDE_CONTENT.find((e) => e.char === char)!.pairs[layout][os].strokes;
+  const keys = (
+    char: string,
+    layout: (typeof keyboardLayoutIds)[number],
+    os: (typeof GUIDE_OSES)[number],
+  ) => GUIDE_CONTENT.find((e) => e.char === char)!.pairs[layout][os].strokes;
+
+  it("Windows, from Microsoft's layout diagrams (kbdcan, kbdca, kbdfr) and Alt codes as its page lists them", () => {
     expect(keys("é", "CSA", "windows")).toEqual([["é"]]);
-    expect(keys("ê", "AZERTY", "windows")).toEqual([["^"], ["e"]]);
+    expect(keys("ê", "CSA", "windows")).toEqual([["^"], ["e"]]);
+    expect(keys("€", "CSA", "windows")).toEqual([["altgr", "e"]]);
+    expect(keys("œ", "CSA", "windows")).toEqual([["rctrl", "e"]]);
+    expect(keys("æ", "CSA", "windows")).toEqual([["rctrl", "a"]]);
+    const grave = GUIDE_CONTENT.find((e) => e.char === "è")!.pairs.CSA.windows;
+    expect(!grave.undocumented && grave.alternatives).toEqual([[["altgr", "^"], ["e"]]]);
+    expect(keys("«", "FR_CA", "windows")).toEqual([["«"]]);
+    expect(keys("»", "FR_CA", "windows")).toEqual([["shift", "«"]]);
+    expect(keys("€", "FR_CA", "windows")).toEqual([["altgr", "e"]]);
     expect(keys("ç", "FR_CA", "windows")).toEqual([["¸"], ["c"]]);
+    expect(keys("ê", "AZERTY", "windows")).toEqual([["^"], ["e"]]);
     expect(keys("€", "AZERTY", "windows")).toEqual([["altgr", "e"]]);
-    expect(keys("é", "US_QWERTY", "windows")).toEqual([["alt", "numpad0233"]]);
-    expect(keys("ê", "US_QWERTY", "mac")).toEqual([["option", "i"], ["e"]]);
-    expect(keys("ç", "US_QWERTY", "mac")).toEqual([["option", "c"]]);
-    expect(keys("œ", "AZERTY", "chromeos")).toEqual([["ctrl", "shift", "u"], ["153"], ["space"]]);
+    expect(keys("œ", "AZERTY", "windows")).toEqual([["alt", "numpad0156"]]);
+    expect(keys("é", "US_QWERTY", "windows")).toEqual([["alt", "numpad130"]]);
+    expect(keys("€", "US_QWERTY", "windows")).toEqual([["alt", "numpad0128"]]);
   });
 
-  it("macOS outside the U.S. input source is undocumented (Apple publishes no chart), stated not invented", () => {
-    for (const layout of ["CSA", "FR_CA", "AZERTY"] as const) {
-      expect(pairDocumented(GUIDE_CONTENT, layout, "mac"), layout).toBe(false);
+  it("macOS, from the CLDR files of Apple's U.S., Canadian - CSA and French layouts", () => {
+    expect(keys("ê", "US_QWERTY", "mac")).toEqual([["option", "i"], ["e"]]);
+    expect(keys("è", "US_QWERTY", "mac")).toEqual([["option", "`"], ["e"]]);
+    expect(keys("ç", "US_QWERTY", "mac")).toEqual([["option", "c"]]);
+    expect(keys("è", "CSA", "mac")).toEqual([["è"]]);
+    expect(keys("«", "CSA", "mac")).toEqual([["option", "z"]]);
+    expect(keys("€", "CSA", "mac")).toEqual([["option", "4"]]);
+    expect(keys("œ", "AZERTY", "mac")).toEqual([["option", "o"]]);
+    expect(keys("€", "AZERTY", "mac")).toEqual([["option", "$"]]);
+  });
+
+  it("ChromeOS, from the CLDR files of Google's Canada and France layouts, and the accents menu for US", () => {
+    expect(keys("è", "FR_CA", "chromeos")).toEqual([["`"], ["e"]]);
+    expect(keys("»", "FR_CA", "chromeos")).toEqual([["shift", "«"]]);
+    expect(keys("€", "AZERTY", "chromeos")).toEqual([["altgr", "e"]]);
+    expect(keys("ê", "US_QWERTY", "chromeos")).toEqual([["hold", "e"], ["ê"]]);
+    for (const char of ["œ", "æ", "«", "»", "€"]) {
+      expect(keys(char, "US_QWERTY", "chromeos"), char).toEqual([]);
+    }
+    // no Ctrl+Shift+U anywhere: Google's pages do not document it
+    for (const entry of GUIDE_CONTENT) {
+      for (const byOs of Object.values(entry.pairs)) {
+        for (const pair of Object.values(byOs)) {
+          for (const stroke of pair.strokes) expect(stroke.join("+")).not.toBe("ctrl+shift+u");
+        }
+      }
+    }
+  });
+
+  it("the pairs with no published data are undocumented, stated not invented", () => {
+    expect(pairDocumented(GUIDE_CONTENT, "FR_CA", "mac")).toBe(false);
+    expect(pairDocumented(GUIDE_CONTENT, "CSA", "chromeos")).toBe(false);
+    for (const layout of keyboardLayoutIds) {
       expect(pairDocumented(GUIDE_CONTENT, layout, "windows"), layout).toBe(true);
+    }
+    for (const layout of ["CSA", "US_QWERTY", "AZERTY"] as const) {
+      expect(pairDocumented(GUIDE_CONTENT, layout, "mac"), layout).toBe(true);
+    }
+    for (const layout of ["FR_CA", "US_QWERTY", "AZERTY"] as const) {
       expect(pairDocumented(GUIDE_CONTENT, layout, "chromeos"), layout).toBe(true);
     }
-    expect(pairDocumented(GUIDE_CONTENT, "US_QWERTY", "mac")).toBe(true);
+    // a character a layout has no key for: Canadian French on ChromeOS has no œ æ €
+    for (const char of ["œ", "æ", "€"]) expect(keys(char, "FR_CA", "chromeos"), char).toEqual([]);
   });
 
-  it("the sources a layout cites, per system", () => {
-    expect(sourcesFor(GUIDE_CONTENT, "US_QWERTY", ["mac"])).toEqual([
-      GUIDE_SOURCES.macAccents,
-      GUIDE_SOURCES.macViewer,
+  it("every pair cites the exact per-layout source, never a generic index", () => {
+    expect(sourcesFor(GUIDE_CONTENT, "US_QWERTY", ["mac"])).toEqual([GUIDE_SOURCES.macUs]);
+    expect(sourcesFor(GUIDE_CONTENT, "CSA", ["windows"])).toEqual([GUIDE_SOURCES.windowsCsa]);
+    expect(sourcesFor(GUIDE_CONTENT, "FR_CA", ["windows"])).toEqual([
+      GUIDE_SOURCES.windowsFrCa,
+      GUIDE_SOURCES.windowsAltCodes,
     ]);
-    expect(sourcesFor(GUIDE_CONTENT, "CSA", ["mac"])).toEqual([]);
+    expect(sourcesFor(GUIDE_CONTENT, "CSA", ["chromeos"])).toEqual([]);
+    for (const url of Object.values(GUIDE_SOURCES)) {
+      expect(url).not.toBe(
+        "https://learn.microsoft.com/en-us/globalization/windows-keyboard-layouts",
+      );
+    }
   });
 
   it('work/log/1001.md "Guide sources" lists every source and every layout/OS pair', () => {

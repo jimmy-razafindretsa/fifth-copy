@@ -4,7 +4,8 @@
   "layout": "us",
   "case": "u-grave",
   "source": "docs",
-  "ref": "https://support.apple.com/guide/mac-help/enter-characters-with-accent-marks-on-mac-mh27474/mac",
+  "ref": "assumption",
+  "note": "Composition as UI Events 4.3.2, but the last input fires after compositionend; no source documents this order for Firefox.",
   "row": "M3",
   "events": [
     {

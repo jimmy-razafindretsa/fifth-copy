@@ -4,7 +4,7 @@
   "layout": "us",
   "case": "c-cedilla",
   "source": "docs",
-  "ref": "https://www.w3.org/TR/input-events-2/",
+  "ref": "https://www.w3.org/TR/uievents/#keys-cancelable-keys",
   "row": "M6",
   "events": [
     {

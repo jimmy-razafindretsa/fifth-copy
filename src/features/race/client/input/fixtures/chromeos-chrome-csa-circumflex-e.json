@@ -4,7 +4,7 @@
   "layout": "csa",
   "case": "circumflex-e",
   "source": "docs",
-  "ref": "https://www.w3.org/TR/uievents/",
+  "ref": "https://www.w3.org/TR/uievents/#keys-dead",
   "row": "C1",
   "events": [
     {
@@ -28,7 +28,7 @@
       "key": null,
       "code": null,
       "isComposing": null,
-      "data": "^",
+      "data": "̂",
       "inputType": null
     },
     {
@@ -36,7 +36,7 @@
       "key": null,
       "code": null,
       "isComposing": true,
-      "data": "^",
+      "data": "̂",
       "inputType": "insertCompositionText"
     },
     {
@@ -44,7 +44,7 @@
       "key": null,
       "code": null,
       "isComposing": true,
-      "data": "^",
+      "data": "̂",
       "inputType": "insertCompositionText"
     },
     {

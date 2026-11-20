@@ -4,7 +4,8 @@
   "layout": "csa",
   "case": "circumflex-e",
   "source": "docs",
-  "ref": "https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input",
+  "ref": "assumption",
+  "note": "Dead key without composition events (keydown Dead, keydown of the composed letter, insertText): the shape of UI Events 4.3.4's French-mapping example, but no source documents this sequence producing the accented letter on Windows.",
   "row": "W3",
   "events": [
     {

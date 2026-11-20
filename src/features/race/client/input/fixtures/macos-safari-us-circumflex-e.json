@@ -4,7 +4,8 @@
   "layout": "us",
   "case": "circumflex-e",
   "source": "docs",
-  "ref": "https://support.apple.com/guide/mac-help/enter-characters-with-accent-marks-on-mac-mh27474/mac",
+  "ref": "assumption",
+  "note": "Composition ending in deleteCompositionText then insertFromComposition; the current Input Events Level 2 no longer defines these input types and no source documents Safari's sequence.",
   "row": "M5",
   "events": [
     {

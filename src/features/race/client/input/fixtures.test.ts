@@ -1,12 +1,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { FIXTURE_CASE_IDS, FIXTURE_CASES, keyEventFixtureSchema } from "./fixture";
+import { ASSUMPTION_REF, FIXTURE_CASE_IDS, FIXTURE_CASES, keyEventFixtureSchema } from "./fixture";
 import { FIXTURE_DIR, loadFixtures } from "./fixtures";
 
 // Contract of #1001 C2: one fixture per documented OS/browser event model and case, written by hand from
 // the "Documented event sequences" rows of work/log/1001.md, each validated by `keyEventFixtureSchema`
-// with `source: "docs"`, a `ref` URL and the `expected` characters; never claimed as recorded.
+// with `source: "docs"`, a `ref` URL and the `expected` characters; never claimed as recorded. A sequence
+// no source documents carries `ref: "assumption"` and a note, and its row says "undocumented: assumption".
 
 const LOG = readFileSync(path.join(process.cwd(), "work/log/1001.md"), "utf8");
 const table = LOG.split(/^## Documented event sequences/m)[1]?.split(/^## /m)[0] ?? "";
@@ -24,20 +25,22 @@ describe("dead-key fixtures from the docs (#1001 C2)", () => {
     }
   });
 
-  it("each is from the docs, never a recording: source docs, an https ref, the case's expected characters", () => {
+  it("each is from the docs, never a recording: source docs, an https ref or a stated assumption, the case's expected characters", () => {
     for (const { file, fixture } of loadFixtures()) {
       expect(fixture.source, file).toBe("docs");
-      expect(fixture.ref, file).toMatch(/^https:\/\//);
+      if (fixture.ref === ASSUMPTION_REF) expect(fixture.note, file).toBeTruthy();
+      else expect(fixture.ref, file).toMatch(/^https:\/\//);
       expect(fixture.expected, file).toBe(FIXTURE_CASES[fixture.case]);
       expect(JSON.stringify(fixture), file).not.toMatch(/record/i);
     }
   });
 
-  it("each names a row of the log's table, and the row cites the fixture's ref", () => {
+  it("each names a row of the log's table; the row cites the ref, or says the sequence is an assumption", () => {
     for (const { file, fixture } of loadFixtures()) {
       const row = table.split("\n").find((line) => line.startsWith(`| ${fixture.row} |`));
       expect(row, `${file}: row ${fixture.row}`).toBeDefined();
-      expect(table, `${file}: ${fixture.ref}`).toContain(fixture.ref);
+      if (fixture.ref === ASSUMPTION_REF) expect(row, file).toContain("undocumented: assumption");
+      else expect(row, `${file}: ${fixture.ref}`).toContain(fixture.ref);
     }
   });
 
@@ -81,6 +84,8 @@ describe("dead-key fixtures from the docs (#1001 C2)", () => {
       { ...good, source: "recorded" },
       { ...good, ref: undefined },
       { ...good, ref: "http://example.com" },
+      { ...good, ref: ASSUMPTION_REF, note: undefined },
+      { ...good, note: "a note without an assumption" },
       { ...good, expected: "" },
       { ...good, events: [] },
       { ...good, extra: 1 },

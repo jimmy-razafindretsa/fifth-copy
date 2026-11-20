@@ -4,7 +4,7 @@
   "layout": "us",
   "case": "u-grave",
   "source": "docs",
-  "ref": "https://support.apple.com/guide/mac-help/enter-characters-with-accent-marks-on-mac-mh27474/mac",
+  "ref": "https://www.w3.org/TR/uievents/#keys-dead",
   "row": "M1",
   "events": [
     {
@@ -29,7 +29,7 @@
       "key": null,
       "code": null,
       "isComposing": null,
-      "data": "`",
+      "data": "̀",
       "inputType": null
     },
     {
@@ -37,7 +37,7 @@
       "key": null,
       "code": null,
       "isComposing": true,
-      "data": "`",
+      "data": "̀",
       "inputType": "insertCompositionText"
     },
     {
@@ -45,7 +45,7 @@
       "key": null,
       "code": null,
       "isComposing": true,
-      "data": "`",
+      "data": "̀",
       "inputType": "insertCompositionText"
     },
     {

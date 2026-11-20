@@ -4,7 +4,7 @@
   "layout": "csa",
   "case": "u-grave",
   "source": "docs",
-  "ref": "https://www.w3.org/TR/uievents-key/",
+  "ref": "https://www.w3.org/TR/uievents/#keys-cancelable-keys",
   "row": "W2",
   "events": [
     {

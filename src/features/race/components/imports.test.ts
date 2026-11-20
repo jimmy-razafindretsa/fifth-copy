@@ -71,6 +71,15 @@ const STORE_READERS: Record<string, string> = {
 };
 
 /**
+ * #1001 C4: the race input routes its events through the dead-key composer, a pure zod-free module of the
+ * client folder (no socket, no store, no engine): the one client import a component other than a store
+ * reader may make.
+ */
+const PURE_CLIENT: Record<string, string> = {
+  [path.join(components, "race-input.tsx")]: "../client/input/compose-keys",
+};
+
+/**
  * #564 C7: the race card's view model projects the snapshot with the engine's own `progress` (ADR 0007)
  * and reads the protocol's status codes; it still imports no client (the store reaches it structurally)
  * and no reducer (#559 C8 below). Every other module of FILES stays free of both packages.
@@ -105,7 +114,7 @@ describe("typing surface imports (#558 C10)", () => {
     const what = pure.length ? "socket client" : "socket client, engine or protocol";
     it(`${path.relative(root, file)} imports no ${what}`, () => {
       for (const s of specifiers(readFileSync(file, "utf8"))) {
-        if (s === STORE_READERS[file]) continue;
+        if (s === STORE_READERS[file] || s === PURE_CLIENT[file]) continue;
         expect(s, file).not.toMatch(/(^|\/)client(\/|$)/);
         expect(s, file).not.toMatch(/^socket\.io/);
         if (pure.includes(s)) continue;

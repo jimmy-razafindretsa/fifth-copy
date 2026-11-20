@@ -103,8 +103,15 @@ export function createKeyComposer(): KeyComposer {
   let dead = false;
   /** The keydown after a dead key was seen: its insert (not its key) types. */
   let deadResolving = false;
-  /** A keydown typed itself: the insert a replayed stream shows for it is the same key. */
-  let insertTyped = false;
+  /**
+   * The key a keydown typed itself, until its keyup: live, the caller cancelled its insert; in a replayed
+   * stream the insert of that same key follows and is not typed again.
+   */
+  let typedKey: string | null = null;
+  const isTwin = (e: KeyEventLike) =>
+    typedKey !== null &&
+    ((e.inputType === "insertText" && e.data === typedKey) ||
+      (e.inputType === "deleteContentBackward" && typedKey === "Backspace"));
   /** The last `beforeinput` was read: its `input` twin is not read again. */
   let beforeInputRead = false;
   /** What the last composition committed: one stray keydown for it after `compositionend` is not a key. */
@@ -113,6 +120,7 @@ export function createKeyComposer(): KeyComposer {
   const feed = (e: KeyEventLike): ComposeStep => {
     switch (e.type) {
       case "keyup":
+        typedKey = null;
         return NONE;
       case "compositionstart":
         composing = true;
@@ -126,7 +134,7 @@ export function createKeyComposer(): KeyComposer {
         composing = false;
         dead = false;
         deadResolving = false;
-        insertTyped = false;
+        typedKey = null;
         const keys = committedKeys(e.data);
         committed = e.data ? e.data.normalize("NFC") : null;
         return step(keys, false);
@@ -134,7 +142,7 @@ export function createKeyComposer(): KeyComposer {
       case "keydown": {
         const key = e.key ?? "";
         beforeInputRead = false;
-        insertTyped = false;
+        typedKey = null;
         const stray =
           committed !== null && (key === committed || key === "Process" || e.keyCode === 229);
         committed = null;
@@ -170,16 +178,13 @@ export function createKeyComposer(): KeyComposer {
           isComposing: false,
         });
         if (typed === null) return NONE;
-        insertTyped = true;
+        typedKey = typed;
         return step([typed], true);
       }
       case "beforeinput": {
         beforeInputRead = true;
         if (composing || isCompositionInput(e.inputType)) return NONE;
-        if (insertTyped) {
-          insertTyped = false;
-          return step([], true);
-        }
+        if (isTwin(e)) return step([], true);
         if (e.inputType === "insertText" && e.data) {
           deadResolving = false;
           dead = false;
@@ -198,8 +203,8 @@ export function createKeyComposer(): KeyComposer {
         const read = beforeInputRead;
         beforeInputRead = false;
         if (composing || e.isComposing || isCompositionInput(e.inputType)) return NONE;
-        if (insertTyped) {
-          insertTyped = false;
+        if (isTwin(e)) {
+          typedKey = null;
           return NONE;
         }
         if (read) return NONE;

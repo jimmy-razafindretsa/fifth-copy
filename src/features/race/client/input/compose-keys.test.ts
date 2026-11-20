@@ -158,3 +158,28 @@ describe("composeKeys, plain keys", () => {
     expect(keyOf({ key: "œ", altKey: true })).toBe("œ");
   });
 });
+
+describe("composeKeys, live order (the keydown's insert was cancelled)", () => {
+  it("an insert with no keydown after a typed key's keyup types (Playwright's ç, a virtual key)", () => {
+    expect(composeKeys([kd("r"), ev("keyup", { key: "r" }), ...insert("ç"), kd("a")])).toEqual([
+      "r",
+      "ç",
+      "a",
+    ]);
+  });
+
+  it("an insert of another character right after a typed keydown still types", () => {
+    expect(composeKeys([kd("r"), ...insert("ç")])).toEqual(["r", "ç"]);
+  });
+});
+
+describe("compose-keys stays pure", () => {
+  it("imports nothing (no zod, no socket, no store, no engine): the client input bundles it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(
+      `${process.cwd()}/src/features/race/client/input/compose-keys.ts`,
+      "utf8",
+    );
+    expect(source).not.toMatch(/^\s*import\s/m);
+  });
+});

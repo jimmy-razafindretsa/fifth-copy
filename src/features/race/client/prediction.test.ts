@@ -1,7 +1,7 @@
 import { applyKeystroke, initialState, mulberry32, type PlayerState } from "@fifth-copy/engine";
 import { MAX_LAG_MS } from "@fifth-copy/protocol";
 import { describe, expect, it, vi } from "vitest";
-import { createPrediction, typedText, type Keystroke } from "./prediction";
+import { createPrediction, isEngineKey, typedText, type Keystroke } from "./prediction";
 
 // Contract of #559 C1: the local prediction is pure (no clock, no socket, no DOM). `push` applies a key
 // through the engine and queues it; `reconcile(server, acked)` drops the acked keys and, when the
@@ -485,5 +485,30 @@ describe("errorsByChar (#999 C30)", () => {
     expect(p.errorsByChar.get("ç")).toBe(2);
     p = p.withText(`${TEXT} !`);
     expect(p.errorsByChar.get("ç")).toBe(2);
+  });
+});
+
+// Contract of #1001 C6: the engine is never called with `key === "Dead"` or `key.length !== 1` except
+// `"Backspace"`: `prediction.push` asserts it before the reducer runs.
+describe("prediction.push key assertion (#1001 C6)", () => {
+  const SETTINGS_1001 = { errorMode: "continue", backspace: true } as const;
+
+  it("throws on Dead, named keys and multi-unit strings, and the engine is never called", () => {
+    const apply = vi.fn((s: PlayerState) => s);
+    const p = createPrediction({ text: "être", settings: SETTINGS_1001, apply });
+    for (const key of ["Dead", "Shift", "Unidentified", "Process", "ê̂", "ê", "ab", "𝔸", ""]) {
+      expect(() => p.push({ t: 1, key }), JSON.stringify(key)).toThrow(/committed character/);
+    }
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("takes one character or Backspace", () => {
+    const p = createPrediction({ text: "être", settings: SETTINGS_1001 });
+    const typed = p.push({ t: 1, key: "ê" });
+    expect(typed.state.cursor).toBe(1);
+    expect(typed.push({ t: 2, key: "Backspace" }).state.cursor).toBe(0);
+    expect(isEngineKey("Dead")).toBe(false);
+    expect(isEngineKey("Backspace")).toBe(true);
+    expect(isEngineKey("«")).toBe(true);
   });
 });

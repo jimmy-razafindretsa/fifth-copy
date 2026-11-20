@@ -346,7 +346,8 @@ WPM, raw WPM, accuracy, place, lobby size, language, text type, settings, durati
 - A **"How to type it"** page: for each special character (é, è, ê, ë, à, â, ç, ù, û, ô, î, ï, œ, æ, « », €, …) show the key combination **per keyboard layout** and OS (Windows / macOS / ChromeOS).
 - Linked from the heatmap and from errors on special characters during a race ("Stuck on ç? Here's how").
 - A "Special characters" text type in host settings for drilling (§8).
-- Built in #999 (bible 14.3 "How to type special characters"): `/guide`; a combination shows only once checked on a real machine for that layout and OS (`work/log/999.md` "Guide checks"), every other pair shows an honest empty state. The race hint appears after three wrong presses on one special character. Dead-key input handling (#247, #566) stays post-v1.
+- Built in #999 (bible 14.3 "How to type special characters"): `/guide`; a combination shows only once checked on a real machine for that layout and OS (`work/log/999.md` "Guide checks"), every other pair shows an honest empty state. The race hint appears after three wrong presses on one special character.
+- Rebuilt in #1001 (owner decision 2026-11-20: documented behaviour, no hardware recordings): the guide files every layout and OS pair from the vendor's own layout documentation (Microsoft, Apple, Google; each pair carries its source URL, `verifiedBy: "docs"`), shows the combination with the note "from the vendor's layout documentation" and its source links, and states a pair the vendor does not document as such (`work/log/1001.md` "Guide sources"). French dead keys and accents now type in a race: a dead key or a composition types one keystroke per committed character (`composeKeys`, ADR 0007 amendment; event sequences in `work/log/1001.md`). A real-device check is a follow-up card.
 
 ---
 
@@ -355,6 +356,7 @@ WPM, raw WPM, accuracy, place, lobby size, language, text type, settings, durati
 - Full UI in **French and English** (toggle in the header, remembered per user).
 - Race language is **independent** from UI language (an English UI can host a French race).
 - All in-world labels have both versions (e.g. "ОБГОН! · OVERTAKE / DÉPASSEMENT").
+- Typing accents (#1001): a French race takes accented characters however the OS produces them: a direct key (`é` on CSA / AZERTY), a dead key then a letter (`^` then `e`), or an input-method composition (macOS Option keys); each committed character is one keystroke. The guide's vendor-documentation note and its undocumented state exist in both languages.
 
 ---
 

@@ -3,8 +3,10 @@ import { expect, expectNoA11yViolations, test } from "./fixtures";
 import { guest, locale, withDb } from "./landing/home-helpers";
 
 // #999 C26 (the "How to type it" page: entries, layout and OS, anchors, states, every viewport, both
-// themes, axe), C27 (no pair is verified on main: every pair renders the empty state, never a key) and
-// C28 (its own route; the header's guide link and the footer's point at it). Runs on all three viewports.
+// themes, axe), #1001 C7 (every documented layout/OS pair shows its keys with the "from the vendor's
+// layout documentation" note and its source links; a pair the vendor does not document says so, never a
+// guess) and #999 C28 (its own route; the header's guide link and the footer's point at it). Runs on all
+// three viewports.
 
 const CHARS = ["é", "è", "ê", "ë", "à", "â", "ç", "ù", "û", "ô", "î", "ï", "œ", "æ", "«", "»", "€"];
 const UA = {
@@ -26,7 +28,7 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
   test.describe("macOS browser", () => {
     test.use({ userAgent: UA.mac });
 
-    test("C26 C27 default: every character anchored, the locale's layout, the detected OS, all empty", async ({
+    test("C26 C7 default: every character anchored, the locale's layout, the detected OS, every pair documented", async ({
       page,
     }) => {
       const response = await page.goto("/guide");
@@ -49,14 +51,16 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await expect(page.getByText("DETECTED ON THIS DEVICE")).toBeVisible();
       await expect(page.locator('[data-guide-pair="US_QWERTY/mac"]')).toHaveCount(CHARS.length);
 
-      // C27: nothing is verified on a real machine yet: no key cap, the empty state everywhere
-      await expect(page.locator("[data-guide-keys]")).toHaveCount(0);
-      await expect(page.locator("[data-guide-unchecked]")).toHaveCount(CHARS.length);
+      // #1001 C7: Apple documents the U.S. input source: every character shows its keys, with the note
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
+      await expect(page.locator("[data-guide-undocumented]")).toHaveCount(0);
       await expect(
-        page.getByText("Nobody has typed these on a real US QWERTY keyboard under MACOS yet.", {
-          exact: false,
-        }),
+        page.getByText("FROM THE VENDOR'S LAYOUT DOCUMENTATION · NOT YET TRIED ON A REAL MACHINE"),
       ).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: "Apple · Enter characters with accent marks" }),
+      ).toHaveAttribute("href", /^https:\/\/support\.apple\.com\//);
+      await expect(page.locator("#e-circumflex [data-guide-keys]")).toHaveText(/Option\s*\+\s*i\s*then\s*e/);
 
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);
@@ -74,7 +78,24 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await segment(page, "KEYBOARD", "AZERTY").click();
       await expect(page).toHaveURL(/\/guide\?layout=AZERTY&os=chromeos$/);
       await expect(page.locator('[data-guide-pair="AZERTY/chromeos"]')).toHaveCount(CHARS.length);
-      await expect(page.locator("[data-guide-keys]")).toHaveCount(0);
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
+      await expect(
+        page.getByRole("link", { name: "Google · Chromebook keyboard shortcuts" }),
+      ).toBeVisible();
+    });
+
+    test("C7 Windows CSA: the layout's own keys, its AltGr keys and the Alt code, from Microsoft's pages", async ({
+      page,
+    }) => {
+      await page.goto("/guide?layout=CSA&os=windows");
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(CHARS.length);
+      await expect(page.locator("#c-cedilla [data-guide-keys]")).toHaveText("ç");
+      await expect(page.locator("#guillemet-open [data-guide-keys]")).toHaveText(/AltGr\s*\+\s*z/);
+      await expect(page.locator("#e-circumflex [data-guide-keys]")).toHaveText(/\^\s*then\s*e/);
+      await expect(
+        page.getByRole("link", { name: "Microsoft · Windows keyboard layouts" }),
+      ).toBeVisible();
+      await expectNoA11yViolations(page);
     });
 
     test("C26 a deep link lands on its character", async ({ page }) => {
@@ -111,7 +132,12 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
         "true",
       );
       await expect(page.locator("#c-cedilla h2")).toHaveText("ç · c cédille");
-      await expect(page.locator("[data-guide-unchecked]").first()).toHaveText("PAS ENCORE VÉRIFIÉ");
+      // Apple publishes no chart for the Canadian CSA input source: stated, never a guess
+      await expect(page.locator("[data-guide-undocumented]").first()).toHaveText(
+        "ABSENT DE LA DOCUMENTATION DU FABRICANT",
+      );
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(0);
+      await expect(page.locator("[data-guide-sources]")).toHaveCount(0);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);
     });
@@ -131,7 +157,7 @@ test.describe("special-characters guide (#999 C26-C28)", () => {
       await expect(
         page.getByRole("group", { name: "SYSTEM", exact: true }).locator('[aria-current="true"]'),
       ).toHaveCount(0);
-      await expect(page.locator("[data-guide-keys]")).toHaveCount(0);
+      await expect(page.locator("[data-guide-keys]")).toHaveCount(3 * CHARS.length);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
       await expectNoA11yViolations(page);
     });

@@ -1,0 +1,110 @@
+{
+  "os": "macos",
+  "browser": "firefox",
+  "layout": "us",
+  "case": "u-grave",
+  "source": "docs",
+  "ref": "https://support.apple.com/guide/mac-help/enter-characters-with-accent-marks-on-mac-mh27474/mac",
+  "row": "M3",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "Dead",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null,
+      "altKey": true
+    },
+    {
+      "type": "compositionstart",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "",
+      "inputType": null
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "`",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "`",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "`",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "keyup",
+      "key": "Dead",
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "keydown",
+      "key": "ù",
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": null,
+      "keyCode": 229
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "ù",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "ù",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "compositionend",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "ù",
+      "inputType": null
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ù",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "keyup",
+      "key": "u",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "ù"
+}

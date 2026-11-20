@@ -1,0 +1,109 @@
+{
+  "os": "chromeos",
+  "browser": "chrome",
+  "layout": "csa",
+  "case": "circumflex-e",
+  "source": "docs",
+  "ref": "https://www.w3.org/TR/uievents/",
+  "row": "C1",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "Dead",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "compositionstart",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "",
+      "inputType": null
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "^",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "^",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "^",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "keyup",
+      "key": "Dead",
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "keydown",
+      "key": "ê",
+      "code": null,
+      "isComposing": true,
+      "data": null,
+      "inputType": null,
+      "keyCode": 229
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "ê",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "ê",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": true,
+      "data": "ê",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "compositionend",
+      "key": null,
+      "code": null,
+      "isComposing": null,
+      "data": "ê",
+      "inputType": null
+    },
+    {
+      "type": "keyup",
+      "key": "e",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "ê"
+}

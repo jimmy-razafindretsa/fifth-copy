@@ -1,0 +1,60 @@
+{
+  "os": "windows",
+  "browser": "chrome",
+  "layout": "csa",
+  "case": "circumflex-e",
+  "source": "docs",
+  "ref": "https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input",
+  "row": "W1",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "Dead",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "keyup",
+      "key": "Dead",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "keydown",
+      "key": "ê",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ê",
+      "inputType": "insertText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ê",
+      "inputType": "insertText"
+    },
+    {
+      "type": "keyup",
+      "key": "e",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "ê"
+}

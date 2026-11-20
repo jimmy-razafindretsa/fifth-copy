@@ -1,0 +1,44 @@
+{
+  "os": "windows",
+  "browser": "firefox",
+  "layout": "csa",
+  "case": "u-grave",
+  "source": "docs",
+  "ref": "https://www.w3.org/TR/uievents-key/",
+  "row": "W4",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "ù",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ù",
+      "inputType": "insertText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "ù",
+      "inputType": "insertText"
+    },
+    {
+      "type": "keyup",
+      "key": "ù",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null
+    }
+  ],
+  "expected": "ù"
+}

@@ -1,0 +1,80 @@
+{
+  "os": "macos",
+  "browser": "firefox",
+  "layout": "us",
+  "case": "guillemets",
+  "source": "docs",
+  "ref": "https://www.w3.org/TR/uievents/",
+  "row": "M4",
+  "events": [
+    {
+      "type": "keydown",
+      "key": "«",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null,
+      "altKey": true
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "«",
+      "inputType": "insertText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "«",
+      "inputType": "insertText"
+    },
+    {
+      "type": "keyup",
+      "key": "«",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null,
+      "altKey": true
+    },
+    {
+      "type": "keydown",
+      "key": "»",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null,
+      "altKey": true
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "»",
+      "inputType": "insertText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "isComposing": false,
+      "data": "»",
+      "inputType": "insertText"
+    },
+    {
+      "type": "keyup",
+      "key": "»",
+      "code": null,
+      "isComposing": false,
+      "data": null,
+      "inputType": null,
+      "altKey": true
+    }
+  ],
+  "expected": "«»"
+}

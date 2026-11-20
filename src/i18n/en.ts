@@ -308,11 +308,20 @@ export const en = {
     unknown: "SYSTEM NOT DETECTED · PICK YOURS",
     indexLabel: "Characters",
     indexTag: "CHARACTERS",
-    unverifiedTag: "NOT CHECKED YET",
-    unverifiedPair:
-      "Nobody has typed these on a real {layout} keyboard under {os} yet. The Ministry files only what it has tried.",
-    unverifiedLayout:
-      "Nobody has typed these on a real {layout} keyboard yet. The Ministry files only what it has tried.",
+    undocumentedTag: "NOT IN THE VENDOR'S DOCUMENTATION",
+    undocumentedPair:
+      "The vendor publishes no key chart for a {layout} keyboard under {os}. The Ministry files only what the vendor documents.",
+    undocumentedLayout:
+      "The vendor publishes no key chart for a {layout} keyboard. The Ministry files only what the vendor documents.",
+    sourceLabel: "SOURCE",
+    sourceNote: "FROM THE VENDOR'S LAYOUT DOCUMENTATION · NOT YET TRIED ON A REAL MACHINE",
+    sourceNames: {
+      windowsLayouts: "Microsoft · Windows keyboard layouts",
+      windowsAltCodes: "Microsoft · Alt codes on the numeric keypad",
+      macAccents: "Apple · Enter characters with accent marks",
+      macViewer: "Apple · Use the Keyboard Viewer",
+      chromebook: "Google · Chromebook keyboard shortcuts",
+    },
     then: "then",
     keys: {
       shift: "Shift",

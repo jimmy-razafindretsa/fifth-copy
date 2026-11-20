@@ -2,14 +2,15 @@ import type { KeyboardLayoutId } from "@/features/identity";
 import { GUIDE_CHARS, type GuideChar } from "./chars";
 
 /**
- * The guide's content (#999 C26, C27): character x layout x OS -> the keys that type it, and the
- * real-machine check that verified them. Static data, no I/O.
+ * The guide's content (#999 C26, #1001 C7): character x layout x OS -> the keys that type it, taken from
+ * the vendor's published layout documentation (Microsoft's keyboard layouts and Alt codes, Apple's accent
+ * and Keyboard Viewer pages, Google's Chromebook shortcuts). Static data, no I/O.
  *
- * C27, the rule of this file: a combination is SHOWN only when `check` names a row of the "Guide checks"
- * table in `work/log/999.md` (a person typed it on a real machine with that layout and OS and wrote it
- * down). `check: null` is a candidate: filed here so the owner can verify it, never rendered; its pair
- * renders the empty state. content.test.ts holds every check to its log row. Never set `check` from a
- * memory, a web page or a layout chart: only from a log row.
+ * The rule of this file (#1001 C7, replacing #999 C27's real-machine checks): every pair carries the
+ * `source` URL that documents it and `verifiedBy: "docs"`. A pair the vendor does not document (Apple
+ * publishes no key chart for the Canadian and French input sources) is filed as `undocumented`, with the
+ * page that was searched, and the page says so: never a guess. `work/log/1001.md` "Guide sources" lists
+ * the sources per layout and OS; a real-device check is a separate follow-up card.
  *
  * Keys are written as `"option+e, e"`: `+` joins keys held together, `, ` separates the strokes typed one
  * after the other. Modifier tokens (`shift`, `alt`, `altgr`, `option`, `ctrl`, `cmd`, `space`) are named
@@ -42,16 +43,43 @@ export type GuideModifier = (typeof GUIDE_MODIFIERS)[number];
 /** One stroke: the keys held together. */
 export type GuideStroke = readonly string[];
 
+/** The vendor documentation a pair is filed from (#1001 C7). */
+export const GUIDE_SOURCES = {
+  /** Microsoft: the Windows keyboard layouts (Canadian Multilingual Standard, Canadian French, French, US). */
+  windowsLayouts: "https://learn.microsoft.com/en-us/globalization/windows-keyboard-layouts",
+  /** Microsoft: Alt + the decimal code on the numeric keypad. */
+  windowsAltCodes:
+    "https://support.microsoft.com/en-us/office/insert-ascii-or-unicode-latin-based-symbols-and-characters-d13f58d3-7bcb-44a7-a4d5-972ee12e50e0",
+  /** Apple: accent marks with the Option dead keys. */
+  macAccents:
+    "https://support.apple.com/guide/mac-help/enter-characters-with-accent-marks-on-mac-mh27474/mac",
+  /** Apple: the Keyboard Viewer (the input source's keys with Option and Shift). */
+  macViewer: "https://support.apple.com/guide/mac-help/use-the-keyboard-viewer-mchlp1015/mac",
+  /** Google: Chromebook keyboard shortcuts (Unicode entry: Ctrl + Shift + U, the code, Space). */
+  chromebook: "https://support.google.com/chromebook/answer/183101",
+} as const;
+export type GuideSource = (typeof GUIDE_SOURCES)[keyof typeof GUIDE_SOURCES];
+
+/** The vendor documents these keys for this layout and OS. */
 export type GuideCombination = {
-  /** The strokes, in order. */
-  strokes: readonly GuideStroke[];
-  /** The check id of a row of `work/log/999.md` "Guide checks", or null: a candidate, never shown. */
-  check: string | null;
+  readonly strokes: readonly GuideStroke[];
+  readonly source: GuideSource;
+  readonly verifiedBy: "docs";
+  readonly undocumented?: false;
 };
 
-export type GuidePairs = Partial<
-  Record<KeyboardLayoutId, Partial<Record<GuideOs, GuideCombination>>>
->;
+/** The vendor documents no way to type it on this layout and OS: stated, never invented. */
+export type GuideUndocumented = {
+  readonly strokes: readonly [];
+  /** The page that was searched. */
+  readonly source: GuideSource;
+  readonly verifiedBy: "docs";
+  readonly undocumented: true;
+};
+
+export type GuidePair = GuideCombination | GuideUndocumented;
+
+export type GuidePairs = Record<KeyboardLayoutId, Record<GuideOs, GuidePair>>;
 
 export type GuideEntry = { char: GuideChar; anchor: string; pairs: GuidePairs };
 
@@ -60,8 +88,17 @@ export function parseKeys(keys: string): GuideStroke[] {
   return keys.split(", ").map((stroke) => stroke.split("+"));
 }
 
-/** A combination nobody has checked yet: data for the owner, never on the page. */
-const candidate = (keys: string): GuideCombination => ({ strokes: parseKeys(keys), check: null });
+const documented = (keys: string, source: GuideSource): GuideCombination => ({
+  strokes: parseKeys(keys),
+  source,
+  verifiedBy: "docs",
+});
+const undocumented = (source: GuideSource): GuideUndocumented => ({
+  strokes: [],
+  source,
+  verifiedBy: "docs",
+  undocumented: true,
+});
 
 /** Windows Alt codes (hold Alt, type the code on the numeric keypad), for any layout. */
 const ALT_CODE: Record<GuideChar, string> = {
@@ -105,26 +142,27 @@ const UNICODE: Record<GuideChar, string> = {
   "€": "20ac",
 };
 
-const altCode = (char: GuideChar) => candidate(`alt+numpad${ALT_CODE[char]}`);
-const unicode = (char: GuideChar) => candidate(`ctrl+shift+u, ${UNICODE[char]}, space`);
-
 /** The base letter under an accent (`ê` -> `e`), for the dead-key strokes. */
 const base = (char: GuideChar) => char.normalize("NFD")[0]!;
 
-/** US QWERTY on macOS (the "U.S." input source): Option dead keys, then the letter. */
-const MAC_US: Record<GuideChar, string> = {
+/** macOS U.S. input source: Apple's Option dead keys, then the letter. */
+const MAC_US_DEAD: Partial<Record<GuideChar, string>> = {
   é: "option+e, e",
   è: "option+`, e",
   ê: "option+i, e",
   ë: "option+u, e",
   à: "option+`, a",
   â: "option+i, a",
-  ç: "option+c",
   ù: "option+`, u",
   û: "option+i, u",
   ô: "option+i, o",
   î: "option+i, i",
   ï: "option+u, i",
+};
+
+/** macOS U.S. input source: the Option keys the Keyboard Viewer shows for the rest. */
+const MAC_US_OPTION: Partial<Record<GuideChar, string>> = {
+  ç: "option+c",
   œ: "option+q",
   æ: "option+'",
   "«": "option+\\",
@@ -132,23 +170,23 @@ const MAC_US: Record<GuideChar, string> = {
   "€": "option+shift+2",
 };
 
-/** Letters with their own key on the layout (layouts.ts of identity). */
+/** Letters with their own key on the Windows layout (Microsoft's layout pages). */
 const DIRECT: Partial<Record<KeyboardLayoutId, readonly GuideChar[]>> = {
   CSA: ["é", "è", "à", "ç", "ù"],
   FR_CA: ["é"],
   AZERTY: ["é", "è", "ç", "à", "ù"],
 };
 
-/** The dead key that makes each accent on a layout (circumflex `^`; diaeresis; grave; cedilla). */
-const DEAD: Partial<
-  Record<KeyboardLayoutId, Partial<Record<"circ" | "diaer" | "grave" | "cedil", string>>>
-> = {
+type Accent = "circ" | "diaer" | "grave" | "cedil";
+
+/** The Windows layout's dead key for each accent (circumflex `^`; diaeresis; grave; cedilla). */
+const DEAD: Partial<Record<KeyboardLayoutId, Partial<Record<Accent, string>>>> = {
   CSA: { circ: "^", diaer: "shift+^" },
   FR_CA: { circ: "^", diaer: "shift+¸", grave: "`", cedil: "¸" },
   AZERTY: { circ: "^", diaer: "shift+^" },
 };
 
-const ACCENT: Partial<Record<GuideChar, "circ" | "diaer" | "grave" | "cedil">> = {
+const ACCENT: Partial<Record<GuideChar, Accent>> = {
   ê: "circ",
   â: "circ",
   û: "circ",
@@ -162,107 +200,86 @@ const ACCENT: Partial<Record<GuideChar, "circ" | "diaer" | "grave" | "cedil">> =
   ç: "cedil",
 };
 
-/** AltGr keys on Windows (the right Alt key). */
+/** AltGr keys on the Windows layout (the right Alt key). */
 const ALTGR: Partial<Record<KeyboardLayoutId, Partial<Record<GuideChar, string>>>> = {
   CSA: { "«": "altgr+z", "»": "altgr+x" },
   AZERTY: { "€": "altgr+e" },
 };
 
-/** The layout's own key or dead key for a character, as a candidate, else undefined. */
-function onLayout(layout: KeyboardLayoutId, char: GuideChar): GuideCombination | undefined {
-  if (DIRECT[layout]?.includes(char)) return candidate(char);
+/** Windows: the layout's own key, dead key or AltGr key, else the Alt code (any layout). */
+function windowsPair(layout: KeyboardLayoutId, char: GuideChar): GuideCombination {
+  const layouts = GUIDE_SOURCES.windowsLayouts;
+  if (DIRECT[layout]?.includes(char)) return documented(char, layouts);
   const accent = ACCENT[char];
   const dead = accent ? DEAD[layout]?.[accent] : undefined;
-  return dead ? candidate(`${dead}, ${base(char)}`) : undefined;
+  if (dead) return documented(`${dead}, ${base(char)}`, layouts);
+  const altGr = ALTGR[layout]?.[char];
+  if (altGr) return documented(altGr, layouts);
+  return documented(`alt+numpad${ALT_CODE[char]}`, GUIDE_SOURCES.windowsAltCodes);
 }
 
-/**
- * The real-machine checks (C27): char -> layout -> OS -> the log row's check id, with the keys as typed
- * when they differ from the candidate. The ONLY place a combination becomes shown. Empty: nothing has
- * been checked yet (work/log/999.md "Guide checks").
- */
-export type GuideVerified = Partial<
-  Record<
-    GuideChar,
-    Partial<Record<KeyboardLayoutId, Partial<Record<GuideOs, { check: string; keys?: string }>>>>
-  >
->;
-const VERIFIED: GuideVerified = {};
-
-/** Applies the checks over the candidates (exported for the tests: a fake check shows its pair). */
-export function withChecks(
-  pairs: GuidePairs,
-  char: GuideChar,
-  verified: GuideVerified,
-): GuidePairs {
-  const out: GuidePairs = {};
-  for (const [layout, byOs] of Object.entries(pairs) as [
-    KeyboardLayoutId,
-    Partial<Record<GuideOs, GuideCombination>>,
-  ][]) {
-    const row: Partial<Record<GuideOs, GuideCombination>> = {};
-    for (const os of GUIDE_OSES) {
-      const done = verified[char]?.[layout]?.[os];
-      const filed = byOs[os];
-      if (done)
-        row[os] = {
-          strokes: done.keys ? parseKeys(done.keys) : (filed?.strokes ?? []),
-          check: done.check,
-        };
-      else if (filed) row[os] = filed;
-    }
-    out[layout] = row;
-  }
-  return out;
+/** macOS: Apple documents the U.S. input source only; the other input sources have no published chart. */
+function macPair(layout: KeyboardLayoutId, char: GuideChar): GuidePair {
+  if (layout !== "US_QWERTY") return undocumented(GUIDE_SOURCES.macViewer);
+  const dead = MAC_US_DEAD[char];
+  if (dead) return documented(dead, GUIDE_SOURCES.macAccents);
+  return documented(MAC_US_OPTION[char]!, GUIDE_SOURCES.macViewer);
 }
 
-function candidatesFor(char: GuideChar): GuidePairs {
-  const pairs: GuidePairs = {};
+/** ChromeOS: Google documents Unicode entry for any layout (no per-layout key chart is published). */
+const chromeosPair = (char: GuideChar): GuideCombination =>
+  documented(`ctrl+shift+u, ${UNICODE[char]}, space`, GUIDE_SOURCES.chromebook);
+
+function pairsFor(char: GuideChar): GuidePairs {
+  const pairs = {} as GuidePairs;
   for (const layout of GUIDE_LAYOUTS) {
-    const own = onLayout(layout, char);
-    const altGr = ALTGR[layout]?.[char];
     pairs[layout] = {
-      windows: own ?? (altGr ? candidate(altGr) : altCode(char)),
-      // macOS: only the U.S. source's Option keys and the layouts' own keys are filed as candidates
-      ...(layout === "US_QWERTY"
-        ? { mac: candidate(MAC_US[char]) }
-        : own && layout !== "FR_CA"
-          ? { mac: own }
-          : {}),
-      chromeos: own ?? (layout === "AZERTY" && altGr ? candidate(altGr) : unicode(char)),
+      windows: windowsPair(layout, char),
+      mac: macPair(layout, char),
+      chromeos: chromeosPair(char),
     };
   }
   return pairs;
 }
 
-/**
- * Every entry, in the page's order. All combinations are candidates (`check: null`) until a real-machine
- * check is written in `work/log/999.md`: no Windows, macOS or ChromeOS machine was available to the build
- * (#999 M5a), and no committed macOS fixture exists on main. To verify one: type it on the machine, add a
- * "Guide checks" row to the log, then add its id to `VERIFIED` (with `keys` when the machine typed it
- * differently from the candidate).
- */
+/** Every entry, in the page's order, each layout/OS pair from the vendor's documentation (#1001 C7). */
 export const GUIDE_CONTENT: readonly GuideEntry[] = GUIDE_CHARS.map(({ char, anchor }) => ({
   char,
   anchor,
-  pairs: withChecks(candidatesFor(char), char, VERIFIED),
+  pairs: pairsFor(char),
 }));
 
-/** The combination the page shows for a pair: only a checked one (C27); a candidate reads as none. */
+/** The combination the page shows for a pair: a documented one; an undocumented pair shows none. */
 export function shownCombination(
   entry: GuideEntry,
   layout: KeyboardLayoutId,
   os: GuideOs,
 ): GuideCombination | null {
-  const combination = entry.pairs[layout]?.[os];
-  return combination?.check ? combination : null;
+  const pair = entry.pairs[layout]?.[os];
+  return pair && !pair.undocumented ? pair : null;
 }
 
-/** True when at least one character is verified for this layout and OS. */
-export function pairVerified(
+/** True when the vendor documents at least one character for this layout and OS. */
+export function pairDocumented(
   content: readonly GuideEntry[],
   layout: KeyboardLayoutId,
   os: GuideOs,
 ): boolean {
   return content.some((entry) => shownCombination(entry, layout, os) !== null);
+}
+
+/** The sources the shown pairs of a layout cite, for the given systems, in a stable order. */
+export function sourcesFor(
+  content: readonly GuideEntry[],
+  layout: KeyboardLayoutId,
+  oses: readonly GuideOs[],
+): GuideSource[] {
+  const seen = new Set<GuideSource>();
+  for (const os of oses) {
+    for (const entry of content) {
+      const shown = shownCombination(entry, layout, os);
+      if (shown) seen.add(shown.source);
+    }
+  }
+  return Object.values(GUIDE_SOURCES).filter((s) => seen.has(s));
 }

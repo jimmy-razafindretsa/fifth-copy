@@ -10,8 +10,10 @@ import {
   GUIDE_LAYOUTS,
   GUIDE_MODIFIERS,
   GUIDE_OSES,
-  pairVerified,
+  GUIDE_SOURCES,
+  pairDocumented,
   shownCombination,
+  sourcesFor,
   type GuideCombination,
   type GuideEntry,
   type GuideOs,
@@ -115,13 +117,19 @@ function Segments<T extends string>({
 /**
  * "How to type it" (#999 C26, bible 14.3 "How to type special characters"): the privacy page's form file
  * (kicker, H1, intro) with the desk docket (keyboard and system as 7.1 segmented links), then on paper the
- * characters' index docket and one 7.4 docket per character, anchored `#c-cedilla`. A combination shows
- * only when checked on a real machine (C27); every other pair reads `NOT CHECKED YET`. Pure: the page
- * hands in the desk it read.
+ * characters' index docket and one 7.4 docket per character, anchored `#c-cedilla`. Every combination
+ * comes from the vendor's layout documentation (#1001 C7): the desk docket's source row says so and links
+ * the pages; a pair the vendor does not document reads `NOT IN THE VENDOR'S DOCUMENTATION`, never a
+ * guess. Pure: the page hands in the desk it read.
  */
 export function GuideView({ labels, layoutNames, content, desk, header }: GuideViewProps) {
   const oses = desk.os ? [desk.os] : GUIDE_OSES;
-  const verified = oses.some((os) => pairVerified(content, desk.layout, os));
+  const documented = oses.some((os) => pairDocumented(content, desk.layout, os));
+  const sources = sourcesFor(content, desk.layout, oses);
+  const sourceKey = (url: string) =>
+    (Object.keys(GUIDE_SOURCES) as (keyof typeof GUIDE_SOURCES)[]).find(
+      (k) => GUIDE_SOURCES[k] === url,
+    )!;
   const layoutName = layoutNames[desk.layout];
   return (
     <>
@@ -178,6 +186,25 @@ export function GuideView({ labels, layoutNames, content, desk, header }: GuideV
                 </p>
               </div>
             </div>
+            {sources.length > 0 ? (
+              <div className={styles.deskRow} data-guide-sources="">
+                <span className={styles.deskLabel}>{labels.sourceLabel}</span>
+                <div className={styles.deskValue}>
+                  <p className={styles.sourceNote} data-guide-source-note="">
+                    {labels.sourceNote}
+                  </p>
+                  <ul className={styles.sourceList}>
+                    {sources.map((url) => (
+                      <li key={url}>
+                        <a href={url} className={styles.sourceLink} rel="noopener noreferrer">
+                          {labels.sourceNames[sourceKey(url)]}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -201,11 +228,11 @@ export function GuideView({ labels, layoutNames, content, desk, header }: GuideV
             </ul>
           </nav>
 
-          {verified ? null : (
+          {documented ? null : (
             <EmptyState
               className={styles.empty}
-              title={labels.unverifiedTag}
-              description={fill(desk.os ? labels.unverifiedPair : labels.unverifiedLayout, {
+              title={labels.undocumentedTag}
+              description={fill(desk.os ? labels.undocumentedPair : labels.undocumentedLayout, {
                 layout: layoutName,
                 os: desk.os ? labels.osNames[desk.os] : "",
               })}
@@ -246,8 +273,8 @@ export function GuideView({ labels, layoutNames, content, desk, header }: GuideV
                             {shown ? (
                               <Keys combination={shown} labels={labels} />
                             ) : (
-                              <span className={styles.unchecked} data-guide-unchecked="">
-                                {labels.unverifiedTag}
+                              <span className={styles.unchecked} data-guide-undocumented="">
+                                {labels.undocumentedTag}
                               </span>
                             )}
                           </dd>

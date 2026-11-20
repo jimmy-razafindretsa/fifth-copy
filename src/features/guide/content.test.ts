@@ -7,36 +7,19 @@ import {
   GUIDE_LAYOUTS as keyboardLayoutIds,
   GUIDE_MODIFIERS,
   GUIDE_OSES,
-  pairVerified,
+  GUIDE_SOURCES,
+  pairDocumented,
   parseKeys,
   shownCombination,
-  withChecks,
+  sourcesFor,
 } from "./content";
 
-// #999 C27: a combination is shown only when a real-machine check in work/log/999.md verifies it; every
-// other layout/OS pair renders the empty state, never a guess. C26: one entry per character, anchors.
+// #1001 C7: every layout/OS pair is filed for every character from the vendor's layout documentation,
+// with its source URL and `verifiedBy: "docs"`; a pair the vendor does not document is stated as such.
+// #999 C26: one entry per character, anchors.
 
-const LOG = readFileSync(path.join(process.cwd(), "work/log/999.md"), "utf8");
-
-/** The "Guide checks" table of the log: `| G1 | CSA | windows | 2026-11-20 | <machine> | é è |`. */
-function logChecks(): Map<string, { layout: string; os: string; date: string; chars: string[] }> {
-  const start = LOG.indexOf("## Guide checks");
-  expect(start, "work/log/999.md has a `## Guide checks` section").toBeGreaterThanOrEqual(0);
-  const section = LOG.slice(start).split(/\n## /)[0]!;
-  const rows = new Map<string, { layout: string; os: string; date: string; chars: string[] }>();
-  for (const line of section.split("\n")) {
-    const cells = line.split("|").map((c) => c.trim());
-    // a row: | id | layout | os | date | machine | characters |
-    if (cells.length < 8 || !/^G\d+$/.test(cells[1]!)) continue;
-    rows.set(cells[1]!, {
-      layout: cells[2]!,
-      os: cells[3]!,
-      date: cells[4]!,
-      chars: cells[6]!.split(/\s+/).filter(Boolean),
-    });
-  }
-  return rows;
-}
+const LOG = readFileSync(path.join(process.cwd(), "work/log/1001.md"), "utf8");
+const guideSources = LOG.split(/^## Guide sources/m)[1]?.split(/^## /m)[0] ?? "";
 
 const REQUIRED = [
   "é",
@@ -85,8 +68,9 @@ describe("guide content (#999 C26)", () => {
     for (const entry of GUIDE_CONTENT) {
       for (const [layout, byOs] of Object.entries(entry.pairs)) {
         expect(keyboardLayoutIds as readonly string[]).toContain(layout);
-        for (const [os, combination] of Object.entries(byOs ?? {})) {
+        for (const [os, combination] of Object.entries(byOs)) {
           expect(GUIDE_OSES as readonly string[]).toContain(os);
+          if (combination.undocumented) continue;
           expect(combination.strokes.length, `${entry.char} ${layout} ${os}`).toBeGreaterThan(0);
           for (const stroke of combination.strokes) {
             expect(stroke.length).toBeGreaterThan(0);
@@ -105,66 +89,75 @@ describe("guide content (#999 C26)", () => {
   });
 });
 
-describe("guide verification (#999 C27)", () => {
-  it("every shown combination cites a Guide checks row of work/log/999.md for its own pair and char", () => {
-    const checks = logChecks();
+describe("guide from vendor documentation (#1001 C7)", () => {
+  it("every character is filed for every layout and OS, each pair with its source URL and verifiedBy docs", () => {
+    const sources = Object.values(GUIDE_SOURCES) as string[];
     for (const entry of GUIDE_CONTENT) {
       for (const layout of keyboardLayoutIds) {
         for (const os of GUIDE_OSES) {
-          const shown = shownCombination(entry, layout, os);
-          if (!shown) continue;
-          const row = checks.get(shown.check!);
-          expect(
-            row,
-            `${entry.char} ${layout} ${os}: check ${shown.check} in the log`,
-          ).toBeDefined();
-          expect(row!.layout).toBe(layout);
-          expect(row!.os).toBe(os);
-          expect(row!.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-          expect(row!.chars).toContain(entry.char);
+          const pair = entry.pairs[layout][os];
+          const where = `${entry.char} ${layout} ${os}`;
+          expect(pair, where).toBeDefined();
+          expect(pair.verifiedBy, where).toBe("docs");
+          expect(sources, where).toContain(pair.source);
+          expect(pair.source, where).toMatch(/^https:\/\//);
+          if (pair.undocumented) expect(pair.strokes, where).toEqual([]);
+          else expect(pair.strokes.length, where).toBeGreaterThan(0);
         }
       }
     }
   });
 
-  it("a candidate (no check) is never shown: its pair reads the empty state", () => {
+  it("a documented pair is shown; an undocumented one never is", () => {
     for (const entry of GUIDE_CONTENT) {
       for (const layout of keyboardLayoutIds) {
         for (const os of GUIDE_OSES) {
-          const filed = entry.pairs[layout]?.[os];
-          if (filed && filed.check === null) {
-            expect(shownCombination(entry, layout, os)).toBeNull();
-          }
+          const pair = entry.pairs[layout][os];
+          expect(shownCombination(entry, layout, os)).toBe(pair.undocumented ? null : pair);
         }
       }
     }
   });
 
-  it("a check id turns exactly its own pair on, with the keys the machine typed", () => {
-    const entry = GUIDE_CONTENT.find((e) => e.char === "ç")!;
-    const pairs = withChecks(entry.pairs, "ç", {
-      ç: {
-        CSA: { windows: { check: "G1" } },
-        US_QWERTY: { mac: { check: "G2", keys: "option+c" } },
-      },
-    });
-    const checked = { ...entry, pairs };
-    expect(shownCombination(checked, "CSA", "windows")).toEqual({ strokes: [["ç"]], check: "G1" });
-    expect(shownCombination(checked, "US_QWERTY", "mac")).toEqual({
-      strokes: [["option", "c"]],
-      check: "G2",
-    });
-    expect(shownCombination(checked, "CSA", "mac")).toBeNull();
-    expect(pairVerified([checked], "CSA", "windows")).toBe(true);
-    expect(pairVerified([checked], "AZERTY", "windows")).toBe(false);
+  it("the vendors' own combinations: Windows layouts, Apple's Option keys, Google's Unicode entry", () => {
+    const keys = (
+      char: string,
+      layout: (typeof keyboardLayoutIds)[number],
+      os: (typeof GUIDE_OSES)[number],
+    ) => GUIDE_CONTENT.find((e) => e.char === char)!.pairs[layout][os].strokes;
+    expect(keys("é", "CSA", "windows")).toEqual([["é"]]);
+    expect(keys("ê", "AZERTY", "windows")).toEqual([["^"], ["e"]]);
+    expect(keys("ç", "FR_CA", "windows")).toEqual([["¸"], ["c"]]);
+    expect(keys("€", "AZERTY", "windows")).toEqual([["altgr", "e"]]);
+    expect(keys("é", "US_QWERTY", "windows")).toEqual([["alt", "numpad0233"]]);
+    expect(keys("ê", "US_QWERTY", "mac")).toEqual([["option", "i"], ["e"]]);
+    expect(keys("ç", "US_QWERTY", "mac")).toEqual([["option", "c"]]);
+    expect(keys("œ", "AZERTY", "chromeos")).toEqual([["ctrl", "shift", "u"], ["153"], ["space"]]);
   });
 
-  it("the log lists every unverified pair for the owner to check", () => {
+  it("macOS outside the U.S. input source is undocumented (Apple publishes no chart), stated not invented", () => {
+    for (const layout of ["CSA", "FR_CA", "AZERTY"] as const) {
+      expect(pairDocumented(GUIDE_CONTENT, layout, "mac"), layout).toBe(false);
+      expect(pairDocumented(GUIDE_CONTENT, layout, "windows"), layout).toBe(true);
+      expect(pairDocumented(GUIDE_CONTENT, layout, "chromeos"), layout).toBe(true);
+    }
+    expect(pairDocumented(GUIDE_CONTENT, "US_QWERTY", "mac")).toBe(true);
+  });
+
+  it("the sources a layout cites, per system", () => {
+    expect(sourcesFor(GUIDE_CONTENT, "US_QWERTY", ["mac"])).toEqual([
+      GUIDE_SOURCES.macAccents,
+      GUIDE_SOURCES.macViewer,
+    ]);
+    expect(sourcesFor(GUIDE_CONTENT, "CSA", ["mac"])).toEqual([]);
+  });
+
+  it('work/log/1001.md "Guide sources" lists every source and every layout/OS pair', () => {
+    for (const url of Object.values(GUIDE_SOURCES)) expect(guideSources, url).toContain(url);
     for (const layout of keyboardLayoutIds) {
       for (const os of GUIDE_OSES) {
-        if (pairVerified(GUIDE_CONTENT, layout, os)) continue;
-        expect(LOG, `${layout} / ${os} listed as unverified`).toMatch(
-          new RegExp(`\\| ${layout} \\| ${os} \\| unverified`),
+        expect(guideSources, `${layout} / ${os}`).toMatch(
+          new RegExp(`\\| ${layout} \\| ${os} \\|`),
         );
       }
     }

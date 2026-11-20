@@ -307,11 +307,20 @@ export const fr = {
     unknown: "SYSTÈME NON DÉTECTÉ · CHOISIS LE TIEN",
     indexLabel: "Caractères",
     indexTag: "CARACTÈRES",
-    unverifiedTag: "PAS ENCORE VÉRIFIÉ",
-    unverifiedPair:
-      "Personne ne les a encore tapés sur un vrai clavier {layout} sous {os}. Le Ministère ne classe que ce qu'il a essayé.",
-    unverifiedLayout:
-      "Personne ne les a encore tapés sur un vrai clavier {layout}. Le Ministère ne classe que ce qu'il a essayé.",
+    undocumentedTag: "ABSENT DE LA DOCUMENTATION DU FABRICANT",
+    undocumentedPair:
+      "Le fabricant ne publie aucun plan de touches pour un clavier {layout} sous {os}. Le Ministère ne classe que ce que le fabricant documente.",
+    undocumentedLayout:
+      "Le fabricant ne publie aucun plan de touches pour un clavier {layout}. Le Ministère ne classe que ce que le fabricant documente.",
+    sourceLabel: "SOURCE",
+    sourceNote: "D'APRÈS LA DOCUMENTATION DU FABRICANT · PAS ENCORE ESSAYÉ SUR UNE VRAIE MACHINE",
+    sourceNames: {
+      windowsLayouts: "Microsoft · dispositions de clavier Windows",
+      windowsAltCodes: "Microsoft · codes Alt sur le pavé numérique",
+      macAccents: "Apple · saisir des caractères accentués",
+      macViewer: "Apple · utiliser le Visualiseur de clavier",
+      chromebook: "Google · raccourcis clavier du Chromebook",
+    },
     then: "puis",
     keys: {
       shift: "Maj",

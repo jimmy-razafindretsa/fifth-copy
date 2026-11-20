@@ -357,3 +357,32 @@
     padding-top: 0;
   }
 }
+
+/* #1001 C7: the desk docket's source row, the 7.1 state line's label recipe, then the vendor pages */
+.sourceNote {
+  margin: 0;
+  padding-top: 14px;
+  @apply type-label;
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  color: var(--color-fg-muted);
+}
+
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sourceLink {
+  @apply type-body;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-link);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}

@@ -46,20 +46,20 @@ export const ASSUMPTION_REF = "assumption";
 
 export const keyEventFixtureSchema = z
   .strictObject({
-  os: z.enum(FIXTURE_OSES),
-  browser: z.enum(FIXTURE_BROWSERS),
-  layout: z.enum(FIXTURE_LAYOUTS),
-  case: z.enum(FIXTURE_CASE_IDS),
-  /** Written by hand from the documentation, never recorded on a device. */
-  source: z.literal("docs"),
-  /** The specification that shows this sequence (a row of the log cites it too), or `"assumption"`. */
-  ref: z.union([z.url({ protocol: /^https$/ }), z.literal(ASSUMPTION_REF)]),
-  /** Required with `ref: "assumption"`: what is assumed and why no source settles it. */
-  note: z.string().min(1).optional(),
-  /** The log row it comes from (`W1` .. `C2`). */
-  row: z.string().regex(/^[A-Z]\d+$/),
-  events: z.array(keyEventSchema).min(1),
-  expected: z.string().min(1),
+    os: z.enum(FIXTURE_OSES),
+    browser: z.enum(FIXTURE_BROWSERS),
+    layout: z.enum(FIXTURE_LAYOUTS),
+    case: z.enum(FIXTURE_CASE_IDS),
+    /** Written by hand from the documentation, never recorded on a device. */
+    source: z.literal("docs"),
+    /** The specification that shows this sequence (a row of the log cites it too), or `"assumption"`. */
+    ref: z.union([z.url({ protocol: /^https$/ }), z.literal(ASSUMPTION_REF)]),
+    /** Required with `ref: "assumption"`: what is assumed and why no source settles it. */
+    note: z.string().min(1).optional(),
+    /** The log row it comes from (`W1` .. `C2`). */
+    row: z.string().regex(/^[A-Z]\d+$/),
+    events: z.array(keyEventSchema).min(1),
+    expected: z.string().min(1),
   })
   .refine((f) => (f.ref === ASSUMPTION_REF) === (f.note !== undefined), {
     message: 'a note is required with ref "assumption", and only then',

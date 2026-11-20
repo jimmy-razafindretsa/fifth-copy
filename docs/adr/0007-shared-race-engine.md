@@ -30,7 +30,7 @@ Typing must feel instant (every keystroke renders on the next frame) while the s
 - Bots and load tests cost no browser.
 
 ## Amendments
-- 2026-11-20, #1001 (proposed in the card's PR; Deliver accepts): dead keys and composition are handled client-side in `composeKeys` (`src/features/race/client/input/compose-keys.ts`, pure, zod-free): a composition (`compositionstart` .. `compositionend`) or a `Dead` keydown types nothing until its commit, then the engine receives one keystroke per committed NFC character, never `Dead`; Backspace inside a composition edits it and is no keystroke. `prediction.push` asserts every key is one character or `Backspace`. No race rule changes; the rest of this ADR is unchanged.
+- 2026-11-20, #1001 (accepted by Deliver in the card's PR, consistent with ARCHITECTURE 7.3 and ADR 0007: input normalisation before the engine, no rule change): dead keys and composition are handled client-side in `composeKeys` (`src/features/race/client/input/compose-keys.ts`, pure, zod-free): a composition (`compositionstart` .. `compositionend`) or a `Dead` keydown types nothing until its commit, then the engine receives one keystroke per committed NFC character, never `Dead`; Backspace inside a composition edits it and is no keystroke. `prediction.push` asserts every key is one character or `Backspace`. No race rule changes; the rest of this ADR is unchanged.
 
 ## Alternatives considered
 - **Server-only rules, client just renders snapshots:** simplest, but 100 ms+ of visible lag on every keystroke on school Wi-Fi. Rejected.
